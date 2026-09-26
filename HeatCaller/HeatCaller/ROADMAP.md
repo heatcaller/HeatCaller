@@ -2,203 +2,284 @@
 
 *(Storage lives in `%AppData%\HeatCaller`. Older installs are moved there
 once, on first launch, by AppDataMigration - see that file before touching
-any folder name.)
+any folder name.)*
 
-Last rewritten after the session that completed Tiers 1 and 2. The previous
-version predated all of that and had become actively misleading, which is
-worth remembering: a stale roadmap is worse than none, because it gets
-trusted.
-
-**Where things stand:** 30 pages, 118 source files. Tier 1 complete and
-verified against real data. Tier 2 complete, lightly used, not yet through a
-full race day.
+Rewritten on 26 Sep 2026. The previous version said 118 source files, an
+I-Lap "on order" and store saves with no error handling - all long untrue.
+Its own warning still stands: a stale roadmap is worse than none, because
+it gets trusted. **Update this file in the same commit as anything that
+makes it wrong.**
 
 ---
 
-## Done - Tier 1
+## What HeatCaller is
 
-All five verified with real sessions, not just built.
+**A club race-timing system in its own right** (decided 26 Sep 2026). It
+began as a companion that spoke for Next Level Timing; that connection was
+retired in 0.50.0, and HeatCaller now reads the decoder itself, runs the
+race, keeps the results and publishes them. The announcer, commentary and
+soundscapes are what set it apart, but the timing is what a club trusts it
+with, so the timing path comes first when choosing what to work on.
 
-| Feature | Notes |
+What follows from that:
+
+- **The decoder is a core dependency, not an integration.** EasyLap (USB
+  HID, `DirectDecoderClient`) and I-Lap (serial, `ILapClient`) must be as
+  tested and as recoverable as the results store.
+- **Correct results beat new features.** Qualifying, mains, corrections and
+  saving are covered by tests; anything that changes them needs a test.
+- **Next Level Timing is history.** Leftover mentions in code comments
+  (for example `RoundModels.cs`, the class notes on `RaceControlControl` and
+  `AnnouncementService`) describe how things used to be and should be
+  corrected when those files are next touched.
+
+## Where things stand
+
+| | |
 |---|---|
-| Best-N-consecutive qualifying | Sliding window over lap times, per class. Verified by hand against the lap chart. |
-| Bump-up mains | Tiered A/B/C, lowest tier runs first so bump-ups are possible. |
-| Multi-round qualifying with drop scores | "Best 2 of 3" - dropped heats are named, with the figure they lost on. |
-| Jump-start detection | Passes during staging/countdown. Per class, optional auto-penalty, flag-only by default. |
-| Corner marshal assignments | Previous heat marshals the next. Uncovered posts flagged in red. |
+| Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
+| App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
+| Tests | `HeatCaller.Tests`: 18 test classes, 180 tests, all passing on 26 Sep |
+| Relay | TypeScript on Fly.io (`relay\`), 26 test files |
+| Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
+| Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
 
-**Verified edge cases** worth not re-breaking:
+---
+
+## The rule for now: feature freeze
+
+**No new features until two real race nights have run clean.** Only
+fixes for what those nights show up, and the jobs listed under "Next".
+
+A night is **clean** when, from the first heat to the last result:
+
+- no race was lost, wrongly saved or needed fixing by hand;
+- qualifying, mains and bump-ups came out as the race director expected;
+- the decoder never needed restarting the app to recover;
+- nothing crashed, froze, or put up a message nobody understood;
+- the announcer never called a wrong position, name or result.
+
+Anything that fails one of these is a bug to fix before the next night,
+and that night does not count.
+
+| Night | Date | Clean? | What went wrong |
+|---|---|---|---|
+| 1 | | | |
+| 2 | | | |
+
+---
+
+## Next, in order
+
+1. **Two clean race nights** (above).
+2. **Off-site copy on GitHub.** A private repository, pushed after every
+   commit; `.github\workflows\check.yml` runs `check.cmd` on every push.
+3. **I-Lap on real hardware.** `ILapClient` was written before a unit was
+   on the bench. With one connected: read the raw capture
+   (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn the capture
+   into tests.
+4. **Tests for the decoder path.** Neither decoder's parsing is tested yet;
+   the raw captures are the test data.
+5. **An installer** (MSIX or Inno Setup), so a club can install and update
+   without the command line.
+6. **Split the two remaining giant methods.** `PopulateTabs`
+   (`MainForm.Pages.cs`, ~1,750 lines) and `BuildLayout`
+   (`RaceControlControl.Layout.cs`, ~1,000 lines) each build many pages or
+   panels in one method. Split them page by page, one per commit, each
+   checked by running the app.
+
+---
+
+## What exists
+
+**Timing and race control:** EasyLap and I-Lap decoders; staging,
+countdown, flags and the race clock; standard, staggered, reverse,
+handicap and hand-released starts; jump-start detection; warnings and the
+black flag; practice mode; a crash journal that offers a race back; result
+corrections with a log; race replay; the Big Screen window.
+
+**Race day:** race days and club nights as explicit sets of rounds;
+check-in at the desk, on the laptop's Wi-Fi and online; tech inspection;
+rental transponders; qualifying by total laps, best-N-consecutive, or best
+rounds of several; tiered mains with bump-ups; heat balancing; marshal
+rotation; the timetable; the Next Steps page; a race-day manager for phones.
+
+**Season and club:** championships and seasons with sanctioning presets,
+handicaps (applied when shown, never to recorded laps), venues, sponsors,
+driver profiles, garage and chassis sheets, batteries, achievements and
+rivalries, analytics, ghost cars, demo mode.
+
+**Announcer and sound:** ElevenLabs with the club's own key, the
+HeatCaller voice (ElevenLabs through the relay), and the Windows voice as a
+stand-in; lines prepared before the night; commentary written by a local
+model (Ollama); five sound packs, ambience, music, soundscapes, a mixer and
+lap beeps.
+
+**Online:** the relay publishes live timing, the schedule, results with
+share cards, standings, badges and tracks; check-in with staff and personal
+PINs; driver sign-ups; the race-day manager, signed with the Manager PIN.
+Race control is never offered over the internet. See
+`claude/relay-deployment.md` in the project notes, and `relay\README.md`.
+
+**Laptop Wi-Fi server:** live results, the phone remote (one command at a
+time, rate-limited), check-in and the race-day manager, local network only.
+
+### Covered by tests, and not
+
+Covered: qualifying (including the best-N window), mains and bump-ups,
+result corrections, saving a race and stores that fail, the round picker,
+"no race day" answers, network and check-in rules, remote-command limits,
+restored-backup addresses, PIN hashing (shared vectors with the relay),
+sound-effect settings, achievement grid positions, driver photos.
+
+Not yet: the decoders, handicaps, tech inspection, rentals, multi-day
+events, championships, the announcer's queueing, and anything on screen.
+
+### Edge cases worth not re-breaking
 
 - A driver with fewer laps than the consecutive window sorts to the BOTTOM,
   greyed, not to the top on a zero.
-- Bump-ups take demotions from the original roster before adding promotions.
-  Doing it in one loop promoted a driver then immediately dropped them again.
+- Bump-ups take demotions from the original roster before adding
+  promotions. Doing it in one loop promoted a driver then immediately
+  dropped them again.
 - Heats with no valid window are dropped first under drop-scores.
 - Only the first jump-start pass per driver counts - a car on the line can
   trigger the decoder repeatedly.
+- Qualifying counts one race day's rounds, and nothing at all when no race
+  day is open. Event membership is an explicit set of round ids, not a date
+  range: dates break on events past midnight, practice days and shared
+  track dates.
+
+### Decisions worth keeping
+
+- **Handicaps are applied when shown, never to recorded data.** A handicap
+  is a scoring decision, not a measurement; baking it into lap times would
+  make personal bests and track records meaningless.
+- **Battery tracking is deliberately minimal** - one pack choice per
+  session and a pace comparison, no charge logging. A full maintenance log
+  needs discipline that lapses after two race days, and stale data is worse
+  than none.
+- **Lap beeps differ in shape as well as pitch** (single, double, rising,
+  falling, warble), because pitch alone doesn't carry over track noise.
+- **The laptop is the source of truth.** The relay never calls the laptop,
+  nothing in a race waits on the network, and race control is refused
+  online by design.
 
 ---
 
-## Done - Tier 2
+## Known open issues
 
-Complete, lightly used. Not yet through a full race day, so expect these to
-shake out in real use rather than in code review.
+From `website\KNOWN-ISSUES.md`, where the full wording lives:
 
-| Feature | Notes |
-|---|---|
-| Rental transponder tracking | Deposits recorded, double-issue refused, sidebar count badge. |
-| Tech inspection | Per-class checklists, three-state checks, "who's outstanding". |
-| Announcer view | Generated talking points, driver spotlight vs all-time best. |
-| Full event report | Self-contained HTML. Outstanding rentals lead, not buried. |
-| Results export | Results CSV, lap CSV, JSON. |
-
----
+- No installer yet (see "Next").
+- The Windows voice gets the classic SAPI voices only.
+- Low: a move-driver or bump-up undo on the Program tab restores the whole
+  heat roster, even onto a heat that has since been run.
+- The HeatCaller voice: no way to hear a voice before choosing it; a bad
+  take can't be re-rolled; "shorten published names" doesn't reach spoken
+  lines; the allowance figure goes stale on an open page; no per-line cost
+  breakdown; no stand-in on a PC with no Windows voice.
 
 ## Parked
 
-**Split / sector timing.** Needs more than one decoder loop and the current
-setup has one. The EasyLap `DirectLapEvent` carries no gate identifier; the
-Next Level Timing client DOES parse `gate` and `gate_type`, but the app
-hardcodes `Gate = "1"` because there has only ever been one.
-
-An iLap system has been ordered. Revisit once its protocol is known - see
-Tier 3.
-
----
-
-## Outstanding
+**Split / sector timing.** Needs more than one timing loop. Every pass is
+recorded as gate "1" (`OnLapProcessed` in `RaceControlControl.RaceEvents.cs`)
+because there has only ever been one loop. Revisit if a club has a decoder
+with several loops.
 
 **Chassis diagram callout defaults.** The generic 1/28 chassis drawing is
-proportioned from Kyosho's published MR-03EVO figures (length 123.5mm, width
-70-80mm, wheelbase 98.0mm, tread 61.5mm, tyres 25mm x 8.5/11mm) with plate
-widths measured off a real chassis photo. The default callout list and
-positions still need specifying by someone who knows the parts - that was
-explicitly deferred.
-
-Anyone with a chassis in front of them should skip the built-in drawing
-entirely: Chassis Sheets -> Set Diagram Image, then drag callouts onto the
+proportioned from Kyosho's published MR-03EVO figures; the default callout
+list and positions still need specifying by someone who knows the parts.
+Anyone with a chassis in front of them should edit the chassis template
+from the Garage page, use **Set Diagram Image...**, and drag callouts onto a
 real photo.
 
 ---
 
-## Tier 3
+## Finding your way around
 
-**Done, untested:** driver handicaps, multi-day events, battery packs,
-per-driver lap beeps. All four built in one go and none exercised at an
-event yet.
+**The three biggest classes are split into partial files by area**
+(26 Sep 2026). The main file of each holds the fields, the constructor and
+what didn't fit an area:
 
-**Remaining:**
+| Class | Parts |
+|---|---|
+| `MainForm` | `MainForm.cs`, `.Audio`, `.Chrome`, `.Connection`, `.Console`, `.Ghosts`, `.Keyboard`, `.Navigation`, `.Pages`, `.RaceSetup`, `.Relay`, plus `MainForm.Designer.cs` |
+| `AnnouncementService` | `AnnouncementService.cs`, `.DriverRelease`, `.HeatCallerVoice`, `.LapCalls`, `.Playback`, `.PreparedLines`, `.RaceEvents`, `.Sounds`, `.Synthesis`, `.VoiceQueue` |
+| `RaceControlControl` | `RaceControlControl.cs`, `.AfterRace`, `.Layout`, `.Leaderboard`, `.NextUp`, `.RaceEvents`, `.StartSequence`, plus `RaceControlShortcuts.cs` and `RaceControlWarnings.cs` |
 
-1. **iLap decoder integration.** When it arrives, capture: how it connects
-   (USB HID, serial, network), whether bundled software exposes a documented
-   output, and raw output with a transponder crossing. `DirectDecoderClient`
-   was reverse-engineered from exactly that for the EasyLap - same approach
-   applies. If iLap supports multiple loops, sector timing unparks with it.
-
-### Notes on what was built
-
-**Multi-day events fixed a real bug**, not just added a feature: qualifying
-counted every recorded round for a class with no boundary, so a second race
-day would have seeded its mains from both days mixed together. Event
-membership is an explicit set of round IDs rather than a date range - dates
-break on events past midnight, practice days, and shared track dates.
-
-**Handicaps are applied at presentation, never to recorded data.** A handicap
-is a scoring decision, not a measurement; baking it into lap times would make
-personal bests and track records meaningless.
-
-**Battery tracking is deliberately minimal** - one pack choice per session and
-a pace comparison, no charge logging. A full maintenance log needs discipline
-that lapses after two race days, and stale data is worse than none.
-
-**Lap beeps differ in shape as well as pitch** (single, double, rising,
-falling, warble), because pitch alone doesn't carry over track noise.
-
----
-
-## Extension points
-
-Where to hook new work in, rather than rediscovering it.
+### Extension points
 
 | Need | Use |
 |---|---|
 | Structured per-chassis data | `ChassisTemplate` / `SetupField` - sections, field kinds, editable option lists |
-| Leaderboard / web / big screen columns | `KpiCatalog`, `KpiTracker` - one definition drives all four surfaces |
+| Leaderboard / web / big screen columns | `KpiCatalog`, `KpiTracker` - one definition drives every surface |
 | Chart or card colours for export | `ChartPalette` - screen, print, monochrome |
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
-| A count on a nav item | `SidebarNavList.SetBadge(name, count)` - generic, works for any page |
+| A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `AppTheme.LayoutButtonRow` - measures each label, returns the right edge |
-| Reversible destructive action | `UndoService.Capture` - 3-level stack, 19 actions wired |
-| A new page | Declare the `Panel` in `MainForm.cs`, call `ConfigurePage`, add to the nav list. Do NOT touch the Designer. |
+| Reversible destructive action | `UndoService.Capture` - 25 levels |
+| Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
+| A data path | `AppPaths` - the one root, redirected to a temp folder under test |
+| A new page | Declare the `Panel` in `MainForm.cs`, call `ConfigurePage`, add it to the nav list. Do NOT touch the Designer. |
 
 ---
 
 ## Gotchas - read this before making changes
 
-Every one of these cost real time this session, several more than once.
+**Run `check.cmd` before accepting any change.** If it doesn't end ALL
+GREEN, the change isn't done. Then commit.
 
-**The Designer file is a transfer hazard.** Page panels are now declared in
-`MainForm.cs` specifically so adding a page touches one file. Keep it that
-way.
+**In a partial class, fields with initializers stay in the main file.**
+Initializers run in file order within a file, but the order across partial
+files isn't guaranteed. The 26 Sep split kept every field whose initializer
+could depend on order (for example `_achievements = AchievementStore.Load()`)
+in the main file; keep it that way.
 
-**Deleted files are never removed by an update.** A stale `RaceControlForm.cs`
-sat in the working copy breaking builds long after it was superseded. If the
-build references something that doesn't exist in source, look for an orphan
-file before assuming a code bug.
+**The relay goes first when a PIN hash or the manager signing changes.**
+The relay accepts old and new; the laptop doesn't wait for it.
+
+**The Designer file is a transfer hazard.** Page panels are declared in
+`MainForm.cs` so adding a page touches one file. Keep it that way.
+
+**Deleted files are never removed by an update.** A stale file in the
+working copy can break builds long after it was superseded. If the build
+references something that doesn't exist in source, look for an orphan file
+before assuming a code bug. `git status` shows them now.
 
 **Assert every string replacement.** A no-op replace looks identical to a
-successful one. Two separate build breaks this session were edits that
-silently didn't apply - button positions and a missing field declaration.
+successful one.
 
-**Check brace DEPTH, not totals.** Totals balance while structure is broken -
-an extra `}` in one place masks a missing one elsewhere. Walk the file and
-flag where depth goes negative.
+**Check brace DEPTH, not totals.** Totals balance while structure is
+broken - an extra `}` in one place masks a missing one elsewhere.
 
-**Never hardcode button widths.** The theme font is wider than it looks;
-`Apply Bump-Ups...` clipped at a width that looked generous. Use
-`AppTheme.LayoutButtonRow`.
+**Never hardcode button widths.** Use `AppTheme.LayoutButtonRow`.
 
-**Never rebuild an object on save.** The class editor built a fresh
-`RaceClass` listing each property by hand, so the tech checklist - edited in
-its own dialog - was silently discarded on Save. Assign onto the existing
-object: a new property is then preserved by default rather than lost by
-default.
+**Never rebuild an object on save.** Assign onto the existing object, so a
+new property is preserved by default rather than lost by default.
 
-**Widening a shared event signature breaks every subscriber.** Adding a
-fourth argument to `LapProcessed` forced edits across six files and broke the
-build when one didn't transfer. Add a separate event instead - only
-interested parties subscribe.
+**Widening a shared event signature breaks every subscriber.** Add a
+separate event instead - only interested parties subscribe.
 
-**Guard `BeginInvoke` with `IsHandleCreated`.** Constructors that add checked
-list items raise events before the handle exists.
+**Guard `BeginInvoke` with `IsHandleCreated`.** Constructors that add
+checked list items raise events before the handle exists.
 
-**Silent failure costs hours.** `UndoService` swallowed exceptions, so a
-broken undo looked like nothing happening. Both silent skips in the session
-save path made a heat-linking bug take four rounds to find. Log the reason,
-always.
+**Silent failure costs hours.** Log the reason, always.
 
 **Set `ForeColor` alongside `BackColor` on dialogs**, or children inherit
-system-default black - unreadable on the dark themes at about 1.3:1.
+system-default black - unreadable on the dark themes.
 
 **All drawing loops must be bounded.** A `while` loop with a shrinking step
 in the animated header once hung the app.
 
 **Check that new code is actually CALLED.** `HandicapCalculator.Apply` was
-built, tested in isolation, and never wired to anything - the whole feature
-was inert until a later audit. Static checks find crashes, not dead code;
-after building a feature, grep for its entry point.
-
-**Store `Save()` methods have no error handling.** All 23 write to
-`%AppData%`, which is reliable, and every `Load()` is guarded - but a locked
-or full disk on save would throw and crash. Worth a shared helper as a
-focused job; not worth touching 24 files casually.
+once built, tested in isolation and wired to nothing. After building a
+feature, grep for its entry point.
 
 **Enums persist as integers.** Reordering `HandicapMode`, `TechResult`,
-`RoundKind` or any other stored enum silently corrupts saved data. Switching
-to string serialisation is a one-way door needing a migration for existing
-files. Add new members at the END only.
+`RoundKind` or any other stored enum silently corrupts saved data. Add new
+members at the END only.
 
 **Class identity is by name.** Rounds, profiles, handicap modes and the
 auto-advance pin all key on `ClassName`. Renaming a class orphans all of
-them. Pre-existing design, not new - but don't add a fifth thing keyed the
-same way without knowing.
+them. Don't add another thing keyed the same way without knowing.
