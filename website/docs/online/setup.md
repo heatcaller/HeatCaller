@@ -40,8 +40,8 @@ The token is a password for publishing as your club. Anyone who has it can publi
 ### Address rules
 
 - The address must start with `https://`. The token goes with every request, and HeatCaller won't send it unencrypted over the internet.
-- Plain `http://` is allowed only for a relay on this laptop or your own network: `localhost`, a name ending in `.local`, `.lan` or `.home.arpa`, or a private IP address (such as `192.168.x.x` or `10.x.x.x`). A bare one-word computer name isn't accepted over plain http.
-- If you leave off `http://` or `https://`, HeatCaller adds `https://`, or `http://` for a local-network address.
+- Plain `http://` is allowed only for a relay on this laptop (`localhost`) or at a private IP address (such as `192.168.x.x` or `10.x.x.x`). A name - a bare computer name, or one ending in `.local`, `.lan` or `.home.arpa` - needs `https://`, because any device on the Wi-Fi can answer to a name and would be handed the token.
+- If you leave off `http://` or `https://`, HeatCaller adds `https://`, or `http://` for `localhost` or a private IP address.
 - You can paste a page link instead of the bare address, such as your club's live page or a QR check-in link. HeatCaller trims it back to the relay's address, and the box shows the tidied address after a successful test.
 
 ### Club id rules
@@ -142,6 +142,8 @@ The race-day manager - entries, the programme and results, run from a phone - li
 
 However it's reached, the manager can never start a race or throw a flag; that stays on the venue's own network, from the laptop or the phone remote. Wrong guesses at the Manager PIN over the relay are rate-limited and tracked separately from the check-in PIN's own count; see [PINs and rate limits](../admin/security-and-privacy.md#pins-and-rate-limits).
 
+Signing in with the Manager PIN is all a phone needs. The phone signs every request with a key made from that PIN, and the laptop checks it before running anything, so there's nothing to set up at the desk. After you change the Manager PIN, phones have to sign out and sign in again with the new one. See [Race-day manager PIN](../admin/security-and-privacy.md#race-day-manager-pin).
+
 On the relay's manager page, the **Manager PIN** box shows dots and is emptied after every sign-in answer, right or wrong. Over the relay, a Manager PIN can be 6 to 32 digits long. Messages appear in a box at the foot of the screen: good news clears itself after 4 seconds, and an error stays until your next tap or a change of tab. On the sign-in screen, the message is a line under **Sign in** instead. As on the Wi-Fi page, results show the winner's name under a small "Winner" caption, and on **Program** the class list has the full width, with **Seed Mains** and **Bump Ups** sharing the line below.
 
 The relay keeps a separate allowance for the manager's requests and answers, so a busy manager never gets in the way of publishing results (see [How long results stay online](index.md#how-long-results-stay-online)). If requests pile up because the laptop isn't collecting them, the page says "The race-day manager is busy - the laptop has not caught up with recent requests yet. Try again shortly." Check that HeatCaller is running with publishing on.
@@ -164,6 +166,7 @@ The **Status** group updates every second.
 |---|---|
 | **Not publishing** | **Publish to the relay** is unticked. |
 | **Not configured** | An address, a club id and a publish token are all needed (and a valid club id). |
+| **Check these settings** | The relay settings came from a restored backup, with an address this laptop hadn't used. Nothing is published or collected until you check the address and press **Save** or **Test Connection**. See [Addresses in a restored backup](../admin/security-and-privacy.md#addresses-in-a-restored-backup). |
 | **Waiting for the first publish** | Set up, but nothing has got through yet. |
 | **Publishing** | The last attempt reached the relay and was accepted. |
 | **Offline** | Something got through earlier, but the last attempt failed. HeatCaller keeps trying, waiting a little longer each time, up to 30 seconds between attempts. |

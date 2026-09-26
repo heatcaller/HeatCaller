@@ -473,7 +473,7 @@ npm start
 
 The relay reads `./relay.config.json`, listens on port 8787 and keeps its data in `./data`. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops it; it lets any publish in progress finish first. Restart it after every mint, because the config is read once, at start.
 
-In HeatCaller, use `http://localhost:8787` as the **Address**. Plain `http://` is allowed only for addresses on the laptop itself or your own network: `localhost`, private IP addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x), and names ending in `.local`, `.lan` or `.home.arpa`. Anywhere else, HeatCaller insists on `https://` so the token is never sent unencrypted.
+In HeatCaller, use `http://localhost:8787` as the **Address**. Plain `http://` is allowed only for `localhost` and private IP addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x). For a relay on another machine on your network, use its IP address; a name ending in `.local`, `.lan` or `.home.arpa` needs `https://`, because any device on the Wi-Fi can answer to such a name. Anywhere else, HeatCaller insists on `https://` so the token is never sent unencrypted.
 
 Check it with `probe.cmd` and `published.cmd`, which default to `http://localhost:8787`:
 

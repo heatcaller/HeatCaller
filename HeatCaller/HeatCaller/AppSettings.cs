@@ -782,20 +782,13 @@ public sealed class AppSettings
     [JsonIgnore]
     public string SmtpPassword { get; set; } = string.Empty;
 
-    // --- The race-day manager's enrolled phones -------------------------
+    // --- The race-day manager's phones -----------------------------------
 
-    /// <summary>
-    /// The phones allowed to drive the race-day manager through the relay,
-    /// each with the key it signs its requests with. Sealed with the other
-    /// secrets: these keys are the whole of what stops a relay forging a
-    /// request, so a copy in plain text on disk would give it all away.
-    ///
-    /// Empty means no phone has been enrolled and the tunnel behaves as it
-    /// always has. The FIRST enrolment is what turns the proof on - see
-    /// RelayPublisher.CollectManageRequests and RelayManagerDevices.
-    /// </summary>
-    [JsonIgnore]
-    public List<ManagerDevice> ManagerDevices { get; set; } = new();
+    // The phones enrolled by QR code for the race-day manager (25 Sep) are
+    // gone: a manager phone signs with a key made from the Manager PIN now
+    // (RelayManagerDevices). A sealed file that still carries their keys is
+    // read without them - the field is simply not looked for - and the next
+    // save leaves them out.
 
     // --- Backups --------------------------------------------------------
 
@@ -837,7 +830,6 @@ public sealed class AppSettings
         public string? SmtpPassword { get; set; }
         public string? BackupPassword { get; set; }
         public Dictionary<string, string>? RacerPins { get; set; }
-        public List<ManagerDevice>? ManagerDevices { get; set; }
     }
 
     internal SecretFields CaptureSecrets() => new()
@@ -854,20 +846,6 @@ public sealed class AppSettings
         SmtpPassword = SmtpPassword,
         BackupPassword = BackupPassword,
         RacerPins = new Dictionary<string, string>(RacerPins, StringComparer.OrdinalIgnoreCase),
-
-        // Copied, not handed over: the sealed value is serialised from this
-        // and the live list goes on being edited while that happens.
-        ManagerDevices = ManagerDevices.Select(CopyOf).ToList(),
-    };
-
-    /// <summary>A detached copy of one enrolled phone - see CaptureSecrets.</summary>
-    private static ManagerDevice CopyOf(ManagerDevice device) => new()
-    {
-        Id = device.Id,
-        Name = device.Name,
-        KeyHex = device.KeyHex,
-        EnrolledUtc = device.EnrolledUtc,
-        LastSeenUtc = device.LastSeenUtc,
     };
 
     /// <summary>
@@ -890,15 +868,6 @@ public sealed class AppSettings
         RacerPins = fields.RacerPins is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, string>(fields.RacerPins, StringComparer.OrdinalIgnoreCase);
-
-        // Rows with no id or no usable key are dropped rather than kept:
-        // one of those can never verify anything, and left in the list it
-        // would count towards "a phone is enrolled" and so lock the manager
-        // out of a tunnel nothing could then open.
-        ManagerDevices = (fields.ManagerDevices ?? new List<ManagerDevice>())
-            .Where(d => !string.IsNullOrWhiteSpace(d.Id) && d.KeyHex.Length == RelayManagerDevices.KeyBytes * 2)
-            .Select(CopyOf)
-            .ToList();
 
         if (includeBackupPassword)
         {
@@ -929,8 +898,7 @@ public sealed class AppSettings
         || !string.IsNullOrEmpty(RelayCheckInSecret)
         || !string.IsNullOrEmpty(SmtpPassword)
         || !string.IsNullOrEmpty(BackupPassword)
-        || RacerPins.Count > 0
-        || ManagerDevices.Count > 0;
+        || RacerPins.Count > 0;
 
     /// <summary>
     /// The secrets, sealed. Only the JSON serializer should touch this:

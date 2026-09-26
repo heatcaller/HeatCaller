@@ -66,7 +66,7 @@ A publish token (`hg_...`) is what lets the laptop publish a club's pages.
 - **What it can do.** Publish that club's documents, collect that club's check-in taps, check itself (the **Test Connection** button), erase everything the club has published (**Delete Everything Published**), and — if the relay has been set up for it — ask for a line to be spoken in the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice), against that club's own monthly allowance. Nothing else.
 - **Stored as a hash.** The relay's config holds the SHA-256 of each token, never the token. The token is shown once, when it is minted. Tokens are compared in constant time, so response timing reveals nothing about a guess.
 - **Held in a secret.** On Fly.io, the config lives in a Fly secret, not in the image or on the data volume.
-- **Only over https.** HeatCaller refuses to send the token to an `http://` address unless it is on the laptop itself or your own network (`localhost`, a private IP address, or a name ending `.local`, `.lan` or `.home.arpa`). Otherwise it says: `The relay address must start with https:// - the token is never sent unencrypted over the internet.`
+- **Only over https.** HeatCaller refuses to send the token to an `http://` address unless it is the laptop itself (`localhost`) or a private IP address, such as `192.168.1.20`. A name ending `.local`, `.lan` or `.home.arpa` needs `https://`: any device on the Wi-Fi can answer to such a name, and it would be handed the token. Otherwise it says: `The relay address must start with https:// - the token is never sent unencrypted.`
 - **Redirects are never followed.** If an address answers "go somewhere else", HeatCaller doesn't go, because its token would go with it. This is why moving the relay means changing the address on the **Club Website** page, not relying on the forwarder.
 - **Bounded answers.** HeatCaller waits at most 8 seconds for the relay and reads at most 1 MB of any answer, so a wrong address can't hang or flood it.
 
@@ -81,7 +81,9 @@ There are two kinds, typed into the same box on the club's online check-in page:
 - **The staff PIN** (6 to 8 digits) opens the whole check-in list. It's meant for a tablet on the check-in desk. A 4- or 5-digit staff PIN set before 0.46.0 still works, but the **Club Website** page warns that it can be guessed.
 - **Personal PINs** (6 digits, a different one for every racer) open only that racer's own entry.
 
-Neither PIN is ever sent to the relay. The laptop publishes a SHA-256 hash of each one, mixed with the club id and a prefix that's different for staff and racer PINs, so a hash from one club says nothing about another and a racer's PIN can never open the staff list. The relay never sends a racer's PIN hash back out. If two racers somehow had the same PIN, it opens neither.
+Neither PIN is ever sent to the relay. The laptop publishes a hash of each one, made with PBKDF2-SHA256 at 100,000 rounds and mixed with the club id, a random salt of the club's own, and a prefix that's different for staff and racer PINs. A hash from one club says nothing about another, and a racer's PIN can never open the staff list. The relay never sends a racer's PIN hash back out. If two racers somehow had the same PIN, it opens neither.
+
+The slow, salted hash makes each guess expensive for anyone who gets a copy of the relay's stored data, but a six-digit PIN is still only a million guesses. See [Known limitations](#known-limitations).
 
 On the laptop, the PINs themselves are kept with the other secrets, encrypted with DPAPI.
 
@@ -126,9 +128,11 @@ Over the relay a Manager PIN is 6 to 32 digits; anything else typed is counted a
 
 This is entirely separate from the Wi-Fi manager page's own PIN limits, described under [The laptop's Wi-Fi server](#the-laptops-wi-fi-server).
 
+**Every request is signed with the PIN.** When you sign in on the relay's manager page, the phone makes a key from the PIN you typed, and signs every request with it. The laptop makes the same key from its own copy of the PIN and runs nothing that isn't signed with it, so the relay can't make up a request on its own. The key is never sent anywhere; the relay holds only the PIN's hash, which is made differently. Nothing needs setting up at the desk. After the Manager PIN changes, phones must sign out and sign in again with the new one; until they do, the laptop refuses their requests and the phone says "That request was not signed with this club's manager PIN, so it has not been run."
+
 ### Driver sign-up codes
 
-An invite to [sign up online](../online/sign-up.md) is an eight-digit code that works once, for 14 days. The laptop keeps the codes in a file of their own, sealed with Windows DPAPI like its other secrets, and publishes only a hash of each (SHA-256 with its own prefix, so a code can never match a check-in, racer or manager PIN). Wrong codes have their own limits - ten per connection in ten minutes, and fifty across the club before code sign-in closes, for longer each time - kept apart from check-in's and the manager's, so guessing at one never closes the others. Cancelling every open invite and making new ones reopens it at once.
+An invite to [sign up online](../online/sign-up.md) is an eight-digit code that works once, for 14 days. The laptop keeps the codes in a file of their own, sealed with Windows DPAPI like its other secrets, and publishes only a hash of each (salted and slow like the PIN hashes, with its own prefix, so a code can never match a check-in, racer or manager PIN). Wrong codes have their own limits - ten per connection in ten minutes, and fifty across the club before code sign-in closes, for longer each time - kept apart from check-in's and the manager's, so guessing at one never closes the others. Cancelling every open invite and making new ones reopens it at once.
 
 A sign-up does nothing by itself: the desk approves every one. Until it does, the relay holds what the driver typed - including a transponder number, the one place the relay ever holds one - and forgets it once the laptop has answered, or after 14 days.
 
@@ -177,7 +181,9 @@ The **Local Screens** server lets phones on the venue Wi-Fi see live results, ch
 - **The manager PIN is separate again.** **Manager PIN**, set on the same page, guards the race-day manager - entries, the programme and saved results. Blank, or shorter than six digits, and the manager refuses every request instead of opening up, unlike a blank check-in PIN. If the club also turns on **Let the race-day manager be reached through the relay** on the **Club Website** page, the same PIN guards it there too, with its own separate limits - see [Race-day manager PIN](#race-day-manager-pin).
 - **Wrong PINs are limited.** Ten wrong PINs from one device in five minutes locks that device out for a while (`Too many wrong PINs. Wait a few minutes.`). Each device is counted by its full address, IPv6 included. The remote, the check-in page and the manager count separately, so a driver fumbling the check-in PIN can't lock you out of the remote or the manager.
 - **Guessing from many devices is limited too.** Fifty wrong tries at the remote or manager PIN (200 at the check-in PIN, which is on the wall) in five minutes, from anywhere, and that PIN is refused for five minutes on every device that hasn't entered it yet (`Too many wrong PINs on this Wi-Fi. The PIN is not being accepted for five minutes.`). A device that entered it correctly in the last 12 hours keeps working. The console shows a `[web] WARNING: ...` line.
-- **Check-in changes are limited** to 30 a minute per device.
+- **Check-in changes are limited** to 30 a minute per device, and 120 a minute from every device together. Scanning a QR check-in counts even when the driver is already checked in, so the page can't be used to test, for free, whether a given car is here tonight.
+- **Check-in closes while the saved PINs are locked.** After a backup is restored onto another PC, the laptop's saved PINs can't be read until they're unlocked or entered again. Until then the check-in page is closed rather than open to everyone, and says "Check-in is closed: this laptop's saved PINs are locked (usually a backup restored onto another PC). Unlock them on the laptop, or set the check-in PIN again on the Local Screens page."
+- **Remote commands are limited.** The laptop carries out one remote command at a time; a second press while one is going out is answered "NOT sent - the laptop is still carrying out RED." (with whichever command it is). Each phone can send 20 commands a minute, and all phones together 60.
 - **PINs travel in a request header**, never in the address, so they don't end up in browser history.
 - **Changes need POST plus the app's own header.** A request that throws a flag or checks someone in must be a POST carrying a custom header that only HeatCaller's own pages send. Another website a phone happens to open can't forge it.
 - **Host allowlist (DNS rebinding protection).** The server only answers requests addressed to an IP address, `localhost`, the PC's own name, or a local-only name (a single word, or ending in `.local`, `.lan`, `.home`, `.internal`, `.localdomain` or `.home.arpa`). Anything addressed to a public domain name gets HTTP 421 and `This address is not served here.`
@@ -208,6 +214,16 @@ Pictures are sized from their header before they're ever opened, so a picture to
 - **Pictures already stored** that are over the limits, for example planted in a backup, are left unopened, and nothing is deleted: a sponsor slide is skipped on the Big Screen and its preview stays blank, a track photo isn't shown, a chassis sheet shows the built-in outline, the Track Designer opens without its traced photo and says why, and a driver gets the initials disc. A logo file HeatCaller didn't make is ignored.
 - **The Wi-Fi pages** only serve sponsor images that pass the same check, and label each one by what the picture really is, not by its file extension.
 
+### Addresses in a restored backup
+
+A backup can't carry your secrets onto the laptop that made it without the backup password, but it does carry plain addresses: the relay's, the voice relay's and the mail server's. Restoring a backup whose address this laptop wasn't already using would have sent this laptop's own sealed token, or mailbox password and racers' PINs, to that address. So after a restore, a new address is held back until you check it on the page where it's shown:
+
+- **The relay:** the **Club Website** page shows **Check these settings** and publishes nothing until you press **Save** or **Test Connection**.
+- **The voice relay:** nothing is asked of it until you click in its address box on **Voice Settings** and press <kbd>Enter</kbd>.
+- **The mail server:** nothing is emailed until **Send Test Email** goes through, or you choose or type the server again. Gmail, iCloud and Outlook.com are never held back.
+
+Restoring your own backup on your own laptop, with the same addresses, asks nothing. The console log says what's held back when HeatCaller starts.
+
 See [Backups](backups.md) for the restore steps.
 
 ## Known limitations
@@ -219,6 +235,7 @@ See [Backups](backups.md) for the restore steps.
 - **The Local Screens server is plain http**, as described above.
 - **Rate limits live in memory on the relay.** A relay restart (or a deploy) forgets the counts, giving a guesser a fresh allowance.
 - **Club ids aren't secret.** They go on posters and in every address. Treat them as names, not passwords.
+- **A leaked relay can reveal a PIN, given time.** The relay only ever holds slow, salted hashes of the check-in, racer and manager PINs, but a six-digit PIN has a million possibilities. Someone who got hold of the relay's stored data could work one out in minutes with a graphics card. They could then use the manager PIN from anywhere through the relay, though never to start a race or throw a flag. If you ever suspect the relay host, change the Manager PIN and the staff PIN.
 
 ## Good practice
 

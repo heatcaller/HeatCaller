@@ -156,9 +156,11 @@ If a race is already running on **Race Control**, HeatCaller asks "Abandon the r
 
 When auto-advance is off and no round is selected, the race is saved to history but isn't tied to any heat.
 
+Auto-advance only picks from the open race day's rounds. With no race day open it picks nothing, since the only rounds left would be unrun ones from an earlier meeting; the race is saved but not tied to a heat, and the console says why. Open the race day, or pick the round in the **Round:** box before the start.
+
 ## How qualifying ranks drivers
 
-Qualifying is worked out from a class's **recorded qualifying heats** in the active race day — even on a brand-new race day, earlier days' heats aren't used (if no race day is active, every recorded qualifier for the class counts). The same today-only results feed seeding, standings and ranking. Each class's rules come from its settings on the **Classes** page. Ghost cars are never counted.
+Qualifying is worked out from a class's **recorded qualifying heats** in the active race day — even on a brand-new race day, earlier days' heats aren't used. With no race day open, nothing counts: **Standings...** and seeding the mains say "No race day is open, so there are no standings to show - qualifying counts one race day's heats. Open the race day, or start tonight's, to see them." instead of ranking every heat the class has ever run. The same today-only results feed seeding, standings and ranking. Each class's rules come from its settings on the **Classes** page. Ghost cars are never counted.
 
 ### Most laps, then lowest time
 

@@ -118,6 +118,8 @@ The remote asks before doing anything that would wipe a race in progress:
 - **STAGE** or **COUNTDOWN** while a race is running: the laptop doesn't act on it. The phone asks "A race is running - this would wipe its standings. Carry on?" (over a demo, "A demo is running - this would end it. Carry on?"), and sends the command again only on a "yes". A "no" shows "STAGE cancelled. Nothing was changed." The question comes from the laptop, so it is asked about the race as it is at that moment - including one that went green while the command was on its way.
 - During practice nothing is asked: the laptop refuses **STAGE** and **COUNTDOWN** with "Practice is running - stop it on the Practice page first."
 
+The laptop carries out one command at a time. A second press while one is still going out - two marshals pressing **RED** together, say - is answered "NOT sent - the laptop is still carrying out RED." Check the flag, and press again if it's still needed. Each phone can send 20 commands a minute and all phones together 60; past that, the phone shows "NOT sent - too many commands in the last minute."
+
 The remote works only with the remote PIN set on the laptop. If it isn't, the phone shows "The remote needs a PIN. Set one on the laptop's Local Screens page first." or "The remote PIN on the laptop is too short. Make it four digits or more on the Local Screens page."
 
 ### Driver check-in

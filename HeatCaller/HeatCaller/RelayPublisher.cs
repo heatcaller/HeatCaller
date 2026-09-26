@@ -2380,9 +2380,9 @@ public sealed class RelayPublisher : IDisposable
     /// One request as the relay offers it, with the phone's proof beside it.
     ///
     /// Payload, DeviceId, SentAt and Mac are empty on anything posted by a
-    /// phone that has not enrolled, and on everything at all until the relay
-    /// carrying them is deployed - which is why they are read as optional
-    /// and judged in RunnableBody rather than required here.
+    /// phone that did not sign - a manager page from before PIN signing, or a
+    /// request the relay made up - which is why they are read as optional
+    /// here and judged, and refused, in RunnableBody.
     /// </summary>
     private readonly record struct ManageInboxItem(
         string ReqId,

@@ -4,6 +4,22 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+**Safer race nights (26 Sep)**
+
+- **A race that couldn't be saved is never lost.** If the race history can't be written, the heat stays unrun, the crash copy of the race is kept, and a box says so. The next start offers the race back. A settings or data file that couldn't be read when HeatCaller started is never written over that session.
+- **No race day open means no qualifying.** With no race day open, **Standings...** and seeding the mains say so, instead of ranking every heat the class has ever run, and a race isn't filed against a leftover round from an earlier meeting.
+- **The finish call can't stop the save.** If anything goes wrong announcing the finish, the race is still saved.
+- **Grid badges count real cars.** **Converted**, **Charge** and the other start-position badges no longer count a ghost car on the grid.
+- **The phone remote carries out one command at a time,** with a limit per phone and for all phones together. See [Phone remote](screens/phone-and-web.md).
+- **After restoring a backup,** a relay, voice relay or mail server address this laptop hadn't used is held back until you check it. See [Addresses in a restored backup](admin/security-and-privacy.md#addresses-in-a-restored-backup).
+- **Check-in stays closed** while the laptop's saved PINs are locked after a restore, and scanning a QR check-in always counts towards the phone's limit.
+- **The relay token never goes over plain http to a `.local` or `.lan` name.** Use `https://`, or the relay's IP address. See [Address rules](online/setup.md#address-rules).
+- **PINs on the relay are salted and slow to guess.** See [Online check-in PINs](admin/security-and-privacy.md#online-check-in-pins).
+- **Manager phones sign in with the Manager PIN, and nothing else.** Every request is signed with it and checked by the laptop; the **Manager Phones** QR enrolment is gone. See [Race-day manager PIN](admin/security-and-privacy.md#race-day-manager-pin).
+
+!!! note "Club admins: relay first"
+    Deploy the relay before running this version: the new relay understands both the old and new PIN hashes, the old one doesn't. Afterwards, everyone signs in once more - staff and racers on check-in, and managers on the manager page.
+
 **New name: HeatCaller**
 
 - **The app is now called HeatCaller**, everywhere: the window, the startup screen, printed sheets, the phone pages and the online pages. The program file is `HeatCaller.exe`.
