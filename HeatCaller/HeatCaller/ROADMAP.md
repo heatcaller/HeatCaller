@@ -121,13 +121,127 @@ with the notes and the console log brought back after each.
    into tests.
 4. **Tests for the decoder path.** Neither decoder's parsing is tested yet;
    the raw captures are the test data.
-5. **An installer** (MSIX or Inno Setup), so a club can install and update
-   without the command line.
+5. **Beta readiness** - everything in the next section, in its order.
 6. **Split the two remaining giant methods.** `PopulateTabs`
    (`MainForm.Pages.cs`, ~1,750 lines) and `BuildLayout`
    (`RaceControlControl.Layout.cs`, ~1,000 lines) each build many pages or
    panels in one method. Split them page by page, one per commit, each
    checked by running the app.
+
+---
+
+## Beta readiness - before a club runs a night on it
+
+Written 26 Sep 2026. The steps between two clean solo rehearsals and handing
+HeatCaller to a club to beta test. Do 1 to 4 in order - the first question
+decides whether a club can use HeatCaller at all. 6 to 8 run alongside them,
+and all must be done before 5, which is the beta itself.
+
+### 1. The beta club's timing system - find out first
+
+HeatCaller reads **EasyLap** (tested) and **I-Lap** (written, never on a
+real unit). Many clubs run **MyLaps / AMB (RC4)**, which HeatCaller cannot
+read at all.
+
+- [ ] Find clubs with the beta application: a Google Form that screens for
+      the right decoder, a Windows laptop, a backup timing system and a
+      technically confident person at the desk, posted to RC groups on
+      Facebook. The questions, scoring guide, post and reply templates are in
+      the project doc "HeatCaller beta club application".
+- [ ] Pick the first beta club, and find out which decoder it uses.
+- [ ] If it is I-Lap: bench-test `ILapClient` on a real unit first (Next, 3).
+- [ ] If it is MyLaps: MyLaps support becomes a beta requirement, and a job
+      of its own - capture its output the way the EasyLap's was captured.
+
+### 2. A night you can support from somewhere else
+
+Today the console exists only while the app is open; only crashes are
+written to disk (crash.log).
+
+- [ ] **A saved race-night log**: every console line written to a dated
+      file in the data folder, kept for a few weeks, capped in size.
+- [ ] **A "send support info" button**: zips the night's log, crash.log, the
+      version and the settings that matter - no driver names, emails, PINs
+      or tokens - for the club to email.
+- [ ] **A support channel** the club knows before the night (an email
+      address at heatcaller.com), and a plain answer to "what if it breaks
+      on Saturday": they switch to the fallback plan (section 5).
+
+### 3. Install, update, and undo
+
+- [ ] **Self-contained build**: `dotnet publish` with the .NET runtime
+      included, so a club installs nothing else. Fonts, sound packs and
+      music travel with it.
+- [ ] **Installer**: Inno Setup or MSIX - a Start menu entry, an uninstaller
+      that never deletes `%AppData%\HeatCaller`, and the rehearsal copy as
+      its own shortcut.
+- [ ] **Code signing certificate**, so Windows SmartScreen doesn't greet the
+      club with "unknown publisher".
+- [ ] **Auto-update**: check a version feed (heatcaller.com or GitHub
+      Releases), download, check the signature, and install only when no
+      race day is open and nothing is on track - never mid-meeting. The
+      club can always say "not now".
+- [ ] **Undo an update**: an automatic backup before a new version first
+      runs, and the previous installer kept so a bad release can be rolled
+      back.
+- [ ] **Release discipline**: `AppVersion` bumped with every release, the
+      release notes' "Unreleased" turned into a numbered version, and a beta
+      channel - so the version a club is on is always known.
+
+### 4. A smaller app for beta clubs
+
+The sidebar already has tiers (`NavTiers.cs`: Essentials, Club Tools).
+
+- [ ] A **beta tier**: only what has been through a rehearsal is shown.
+      Untested features - handicaps, batteries, championships, multi-day
+      events, the soundscape editor - are hidden or clearly marked "not yet
+      tested at a real event".
+- [ ] A **first-night guide**: one page - install, connect the decoder, set
+      up the classes, run a practice, the fallback plan, who to call.
+
+### 5. The first nights at the club
+
+- [ ] The club's current timing system is ready to take over, set up and
+      tested that evening. If its hardware allows, the first night runs
+      both and compares the results.
+- [ ] You are reachable during the night, and the notes and the log come
+      back afterwards - into the rehearsal table's format.
+
+### 6. The relay, for more than one club
+
+- [ ] **Setting up a club** (minting): a written checklist around
+      `npm run mint` and `fly-set-config.cmd`, and a safe way to get the
+      token to the club (not in an email body). Self-service can wait.
+- [ ] **Uptime check** that alerts you when the relay stops answering.
+- [ ] **Backups** of the relay's volume (published results, queues).
+- [ ] **Sized** for several clubs racing on the same night (one
+      shared-cpu machine today).
+- [ ] Re-mint the old `horizon-test` token (it appeared in a chat).
+
+### 7. The HeatCaller voice (ElevenLabs), as a business
+
+The metering is built: characters counted per club per month on the relay,
+a hard stop at the allowance, the Windows voice taking over so a flag call is
+never silent, and a warning at nine tenths. What remains is not code:
+
+- [ ] An ElevenLabs business account under their OEM terms, with the open
+      questions in the project's `elevenlabs-managed-voices` notes answered
+      in writing.
+- [ ] Two or three voices whose terms allow this use.
+- [ ] A real monthly allowance - 100,000 characters is a guess; measure a
+      rehearsal night.
+- [ ] A way for you to see each club's usage (today it is only in the
+      relay's data and each club's Voice Settings page).
+
+### 8. Terms and privacy
+
+- [ ] A **beta agreement**: no warranty, results are the club's
+      responsibility, and the club keeps its own fallback.
+- [ ] A **privacy notice**: driver names - some of them children's - go to
+      the relay and to ElevenLabs; what is kept, where, for how long, and
+      how a driver is removed.
+- [ ] The **terms ElevenLabs requires** clubs to be bound by.
+- [ ] An hour with a lawyer on the above. Claude is not one.
 
 ---
 
