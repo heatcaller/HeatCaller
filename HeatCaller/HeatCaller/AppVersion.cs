@@ -34,6 +34,8 @@ public static class AppVersion
     /// <summary>"BETA 0.18.0", for a title bar or an about line.</summary>
     public static string Short => $"{Stage} {Number}";
 
-    /// <summary>"HeatCaller - BETA 0.12.6", for anywhere that needs the name too.</summary>
-    public static string Full => $"HeatCaller - {Short}";
+    /// <summary>"HeatCaller - BETA 0.12.6", for anywhere that needs the name too. The rehearsal copy says so, in the title bar above all.</summary>
+    public static string Full => AppPaths.IsRehearsal
+        ? $"HeatCaller - {Short} - REHEARSAL (a practice copy, not the club's data)"
+        : $"HeatCaller - {Short}";
 }

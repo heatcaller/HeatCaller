@@ -39,7 +39,7 @@ What follows from that:
 |---|---|
 | Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
 | App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 18 test classes, 180 tests, all passing on 26 Sep |
+| Tests | `HeatCaller.Tests`: 20 test classes, including a whole race night (`RaceNightTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
@@ -48,10 +48,22 @@ What follows from that:
 
 ## The rule for now: feature freeze
 
-**No new features until two real race nights have run clean.** Only
-fixes for what those nights show up, and the jobs listed under "Next".
+**No new features until both of these are true.** Only fixes, and the
+jobs listed under "Next". (Changed 26 Sep 2026: the first version asked for
+two real club race nights, which a club of one cannot hold. Real nights are
+now the goal after the freeze, not the way out of it.)
 
-A night is **clean** when, from the first heat to the last result:
+1. **The race-night test passes** (`HeatCaller.Tests/RaceNightTests.cs`).
+   It runs a whole night on every build with no screen and no people: a
+   race day set up from the phone manager, check-in, two rounds of
+   qualifying, standings, seeding the mains, a bump-up, a crash in the
+   A-main recovered from the journal on a restarted laptop, and a result
+   corrected from the phone. Every expected answer is worked out by hand in
+   its comments.
+2. **Two solo rehearsal nights have run clean**, at home with the EasyLap,
+   real cars and the phone pages, on the rehearsal copy (below).
+
+A rehearsal night is **clean** when, from the first heat to the last result:
 
 - no race was lost, wrongly saved or needed fixing by hand;
 - qualifying, mains and bump-ups came out as the race director expected;
@@ -62,18 +74,47 @@ A night is **clean** when, from the first heat to the last result:
 Anything that fails one of these is a bug to fix before the next night,
 and that night does not count.
 
-| Night | Date | Clean? | What went wrong |
+| Rehearsal | Date | Clean? | What went wrong |
 |---|---|---|---|
 | 1 | | | |
 | 2 | | | |
+
+### The rehearsal copy
+
+Start HeatCaller with `--rehearsal` and it runs on a copy of the club's data
+in `%LocalAppData%\HeatCaller Rehearsal\Data` instead of the real
+`%AppData%\HeatCaller` (see `Rehearsal.cs`):
+
+```
+dotnet run --project HeatCaller\HeatCaller\HeatCaller.csproj -- --rehearsal
+```
+
+- The first rehearsal copies the club's data; later ones carry on from that
+  copy. Delete the `HeatCaller Rehearsal` folder to start again from the
+  club's data as it is now.
+- The title bar says REHEARSAL, and so does the console at startup.
+- Backups and results cards go to the rehearsal's own folder, never among
+  the club's. Nothing is emailed.
+- Publishing to the club website is switched off in the copy. Switch it on
+  (Club Website page) to rehearse online check-in or the phone manager - it
+  then publishes to the club's real website, with the rehearsal's results.
+- It shares the voice-line cache with the real app, so lines already paid
+  for aren't paid for again.
+
+### After the freeze
+
+Real club nights: one or two clubs willing to run HeatCaller for a night,
+with the notes and the console log brought back after each.
 
 ---
 
 ## Next, in order
 
-1. **Two clean race nights** (above).
-2. **Off-site copy on GitHub.** A private repository, pushed after every
-   commit; `.github\workflows\check.yml` runs `check.cmd` on every push.
+1. **Two clean solo rehearsals** (above) - the race-night test is already in.
+2. **Off-site copy on GitHub** - done 26 Sep 2026 (`asherizm/HeatCaller`).
+   Push after every commit; `.github\workflows\check.yml` runs `check.cmd`
+   on GitHub's Windows machine each time, and a red cross means that push
+   broke something.
 3. **I-Lap on real hardware.** `ILapClient` was written before a unit was
    on the bench. With one connected: read the raw capture
    (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn the capture
@@ -126,14 +167,18 @@ time, rate-limited), check-in and the race-day manager, local network only.
 
 ### Covered by tests, and not
 
-Covered: qualifying (including the best-N window), mains and bump-ups,
+Covered: a whole race night end to end (`RaceNightTests`: phone manager,
+check-in, qualifying, standings, seeding, bump-ups, crash recovery,
+corrections), the rehearsal copy, qualifying (including the best-N window),
+mains and bump-ups,
 result corrections, saving a race and stores that fail, the round picker,
 "no race day" answers, network and check-in rules, remote-command limits,
 restored-backup addresses, PIN hashing (shared vectors with the relay),
 sound-effect settings, achievement grid positions, driver photos.
 
-Not yet: the decoders, handicaps, tech inspection, rentals, multi-day
-events, championships, the announcer's queueing, and anything on screen.
+Not yet: the decoders (the race-night test feeds laps as race times, not
+decoder readings), handicaps, tech inspection, rentals, multi-day events,
+championships, the announcer's queueing, and anything on screen.
 
 ### Edge cases worth not re-breaking
 

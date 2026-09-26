@@ -676,6 +676,13 @@ public partial class MainForm : Form
             OnClientRawMessage(restoredNote);
         }
 
+        // Where this run's data is, when it is the rehearsal copy - and what
+        // a rehearsal does differently. See Rehearsal.
+        if (Rehearsal.StartupNote() is { } rehearsalNote)
+        {
+            OnClientRawMessage(rehearsalNote);
+        }
+
         // Driver sign-up online. Approving checks a driver in exactly as the
         // desk does, and a new driver gets their PIN the way any other does.
         _signupDesk = new RelaySignupDesk(_settings, _profiles, _checkInStore, _raceEvents, _raceClasses, _rentals, _relayPublisher, OnClientRawMessage)

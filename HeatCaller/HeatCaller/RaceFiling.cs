@@ -143,4 +143,51 @@ internal static class RaceFiling
 
         return Outcome.Saved;
     }
+
+    /// <summary>
+    /// A finished race's result rows, one per car, in the order given
+    /// (finishing order - the caller has already left the ghosts out). The
+    /// name and car come from the driver's profile, falling back to the
+    /// transponder for a car nobody has named.
+    ///
+    /// Moved here unchanged from RaceControlControl.SaveCompletedSessionToHistory
+    /// (26 Sep 2026), so the race-night test (RaceNightTests) files a race
+    /// with the very rows Race Control saves.
+    /// </summary>
+    public static List<SessionResultEntry> ResultsFrom(IReadOnlyList<RacerStanding> racers, ProfileStore profiles) =>
+        racers.Select((s, i) =>
+        {
+            var profile = profiles.Get(s.TransponderId);
+            return new SessionResultEntry
+            {
+                Position = i + 1,
+                Transponder = s.TransponderId,
+                DriverName = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : s.TransponderId,
+                CarModel = profile?.CarModel ?? string.Empty,
+                Laps = s.Laps,
+                FastLapMs = s.FastestLapMs,
+                ElapsedMs = s.ElapsedMs,
+                Status = "active",
+                LapTimesMs = s.LapTimesMs.ToList(),
+                RejectedLaps = s.RejectedLaps,
+                LapsLed = s.LapsLed,
+                StartPosition = s.StartPosition,
+
+                // Copies, not the live warnings. The board keeps its
+                // standings after the flag, and Clear Penalty there zeroes
+                // each warning's time - which, through the shared objects,
+                // quietly rewrote the saved result's warnings the next time
+                // the history was written, although the log says a change
+                // after the flag leaves the history alone.
+                Warnings = s.Warnings.Select(w => new RaceWarning
+                {
+                    AtUtc = w.AtUtc,
+                    RaceTimeMs = w.RaceTimeMs,
+                    Number = w.Number,
+                    Reason = w.Reason,
+                    Action = w.Action,
+                    PenaltyMs = w.PenaltyMs,
+                }).ToList(),
+            };
+        }).ToList();
 }

@@ -70,9 +70,30 @@ internal static class Program
         {
             ApplicationConfiguration.Initialize();
 
+            // HeatCaller.exe --rehearsal: the rehearsal copy - the club's data
+            // copied once into a folder of its own, for practising a race night
+            // without touching the real one. After the single-instance check,
+            // so the club's data is never copied while the real app is writing
+            // it. See Rehearsal.
+            if (Rehearsal.Wanted(Environment.GetCommandLineArgs()))
+            {
+                if (!Rehearsal.Start(out var problem))
+                {
+                    // Never carries on with the real data instead: somebody
+                    // who asked for a rehearsal is about to do things they
+                    // would not do to the club's results.
+                    MessageBox.Show(
+                        "The rehearsal copy couldn't be set up, so HeatCaller hasn't started.\r\n\r\n" + problem,
+                        "HeatCaller rehearsal", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
             // Before anything reads a file: data saved under the app's
-            // earlier names is moved into HeatCaller's folders, once.
-            if (!AppDataMigration.Run())
+            // earlier names is moved into HeatCaller's folders, once. Not
+            // in a rehearsal - it moves the REAL folders, and would move
+            // them into the rehearsal's.
+            if (!AppPaths.IsRehearsal && !AppDataMigration.Run())
             {
                 return;
             }

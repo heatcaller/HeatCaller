@@ -389,6 +389,14 @@ internal static class PinMailer
             Cancelled = cancelled,
         };
 
+        // A rehearsal copy never emails anybody. Its drivers are the club's
+        // real drivers, copied, so a PIN sent from a rehearsal is a real
+        // email to a real racer with a PIN that means nothing. See Rehearsal.
+        if (AppPaths.IsRehearsal)
+        {
+            return Finish(false, "Nothing was emailed - this is the rehearsal copy of HeatCaller, which never sends email.");
+        }
+
         if (!MailAddress.TryCreate(server.User, server.FromName, out var sender))
         {
             return Finish(false, "The club's email address isn't a valid address.");

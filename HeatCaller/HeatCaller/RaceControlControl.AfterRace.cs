@@ -534,41 +534,9 @@ public sealed partial class RaceControlControl
                 $"[session] Start time was missing - fell back to {AppTime.LogStamp(_sessionStartedAtUtc.Value.ToLocalTime())}.");
         }
 
-        var results = racers.Select((s, i) =>
-        {
-            var profile = _profiles.Get(s.TransponderId);
-            return new SessionResultEntry
-            {
-                Position = i + 1,
-                Transponder = s.TransponderId,
-                DriverName = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : s.TransponderId,
-                CarModel = profile?.CarModel ?? string.Empty,
-                Laps = s.Laps,
-                FastLapMs = s.FastestLapMs,
-                ElapsedMs = s.ElapsedMs,
-                Status = "active",
-                LapTimesMs = s.LapTimesMs.ToList(),
-                RejectedLaps = s.RejectedLaps,
-                LapsLed = s.LapsLed,
-                StartPosition = s.StartPosition,
-
-                // Copies, not the live warnings. The board keeps its
-                // standings after the flag, and Clear Penalty there zeroes
-                // each warning's time - which, through the shared objects,
-                // quietly rewrote the saved result's warnings the next time
-                // the history was written, although the log says a change
-                // after the flag leaves the history alone.
-                Warnings = s.Warnings.Select(w => new RaceWarning
-                {
-                    AtUtc = w.AtUtc,
-                    RaceTimeMs = w.RaceTimeMs,
-                    Number = w.Number,
-                    Reason = w.Reason,
-                    Action = w.Action,
-                    PenaltyMs = w.PenaltyMs,
-                }).ToList(),
-            };
-        }).ToList();
+        // The rows themselves - see RaceFiling.ResultsFrom, which the
+        // race-night test files races with too.
+        var results = RaceFiling.ResultsFrom(racers, _profiles);
 
         // The Round box's choice, or the round a restored race was run for.
         var round = RoundForThisRace();
@@ -855,7 +823,9 @@ public sealed partial class RaceControlControl
     {
         try
         {
-            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "HeatCaller Results");
+            // Documents\HeatCaller Results - or the rehearsal copy's own
+            // folder, so a rehearsal's cards never mix with the club's.
+            var folder = Rehearsal.DocumentsFolder("HeatCaller Results");
             Directory.CreateDirectory(folder);
 
             var safeLabel = string.Concat(record.Label.Select(c => char.IsLetterOrDigit(c) || c is ' ' or '-' or '_' ? c : '_')).Trim();

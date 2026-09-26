@@ -33,8 +33,46 @@ internal static class AppPaths
     /// <summary>The test folder everything is redirected to, or null for the real one.</summary>
     private static volatile string? _redirect;
 
-    /// <summary>%AppData%\HeatCaller - or, under test, the test folder's "Roaming".</summary>
-    public static string Root => _redirect is { } folder ? Path.Combine(folder, "Roaming") : RealRoot;
+    /// <summary>
+    /// The rehearsal copy's data folder, or null when this is the real app.
+    /// Set once at startup by Rehearsal.Start, from the --rehearsal switch.
+    /// </summary>
+    private static volatile string? _rehearsalRoot;
+
+    /// <summary>%AppData%\HeatCaller - or, under test, the test folder's "Roaming"; or, in a rehearsal, the rehearsal copy's data folder.</summary>
+    public static string Root => _redirect is { } folder
+        ? Path.Combine(folder, "Roaming")
+        : _rehearsalRoot ?? RealRoot;
+
+    /// <summary>True when this run is the rehearsal copy (started with --rehearsal). See Rehearsal.</summary>
+    public static bool IsRehearsal => _rehearsalRoot is not null;
+
+    /// <summary>The club's real data folder, whatever this run is using - for Rehearsal to copy from. Never written through.</summary>
+    internal static string RealDataRoot => RealRoot;
+
+    /// <summary>
+    /// Points the club's data - everything under Root - at the rehearsal
+    /// copy. LocalRoot is left alone: it holds only the voice-line cache and
+    /// its undo folder, a cache every line in which can be made again, and
+    /// sharing it means a rehearsal does not pay ElevenLabs again for lines
+    /// the club already has.
+    ///
+    /// Refuses a folder inside the real data folders, or one that contains
+    /// them - the same guard as RedirectForTests.
+    /// </summary>
+    internal static void UseRehearsalRoot(string folder)
+    {
+        var full = Path.GetFullPath(folder);
+
+        if (Overlaps(full, RealRoot) || Overlaps(full, RealLocalRoot))
+        {
+            throw new InvalidOperationException(
+                $"Refusing to use \"{full}\" for the rehearsal copy: it overlaps the real data folder.");
+        }
+
+        Directory.CreateDirectory(full);
+        _rehearsalRoot = full;
+    }
 
     /// <summary>%LocalAppData%\HeatCaller - or, under test, the test folder's "Local".</summary>
     public static string LocalRoot => _redirect is { } folder ? Path.Combine(folder, "Local") : RealLocalRoot;

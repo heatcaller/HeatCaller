@@ -48,8 +48,7 @@ public static class BackupService
     /// </summary>
     internal static Func<BackupSecrets?>? SecretsProvider { get; set; }
 
-    public static string DefaultBackupFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "HeatCaller Backups");
+    public static string DefaultBackupFolder => Rehearsal.DocumentsFolder("HeatCaller Backups");
 
     /// <summary>
     /// Where backups actually go, given whatever the Backups page has saved:
@@ -81,6 +80,16 @@ public static class BackupService
     /// </summary>
     public static string SafeBackupFolder(string? configured)
     {
+        // A rehearsal copy's backups stay in the rehearsal's own folder,
+        // whatever its copied settings say. In the club's folder they would
+        // sit among the real ones - and automatic-backup pruning, which
+        // keeps only the newest few, would delete the club's real backups
+        // to make room for the rehearsal's.
+        if (AppPaths.IsRehearsal)
+        {
+            return DefaultBackupFolder;
+        }
+
         if (string.IsNullOrWhiteSpace(configured) || PlainFileName.IsNetworkPath(configured))
         {
             return DefaultBackupFolder;
