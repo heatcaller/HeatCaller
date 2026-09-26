@@ -1,0 +1,119 @@
+# Driver sign-up
+
+Driver sign-up lets a new driver put themselves on your club's books from their own phone. You invite them, they fill in their name, class and transponder on your club's sign-up page, and the sign-up waits on the laptop for you to approve it. Approving it makes their driver profile, can add them to today's event and check them in, and emails them their own check-in PIN.
+
+Nobody can sign up without an invite. Each invite is a single-use eight-digit code for one person, emailed to them with a link, or read out to someone standing at the desk.
+
+## Before you start
+
+- Publishing to the relay must be set up and working. See [Setting up the Club Website page](setup.md).
+- The relay must be new enough to have sign-up. If it isn't, the **Online Sign-ups** window says "The relay answered "not found" for driver sign-up." Redeploy it (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
+- To email invites and PINs, set up the club mailbox. See [Emailing racer PINs](email.md). Without it you can still give out codes at the desk.
+- For a new driver to get a check-in card and their own PIN, [online check-in](check-in.md) must be on, with **Give every racer their own PIN** ticked.
+
+## Open Online Sign-ups
+
+Go to **Race Day → Entries** and click **Online Sign-ups** under the list. When sign-ups are waiting, the button shows how many, for example **Online Sign-ups (2)**, and so does a count beside **Race Day** in the sidebar.
+
+The window has three parts:
+
+- At the top, **Let new drivers sign up online with an invite**, and a line saying whether sign-up is working.
+- **Waiting for you**: sign-ups the desk hasn't answered yet.
+- **Invites**: every invite made, and where it stands.
+
+The window can stay open while you work. A sign-up made while it's open appears within about ten seconds.
+
+<!-- screenshot: Online Sign-ups window with one sign-up waiting and a few invites -->
+
+## Turn it on
+
+Tick **Let new drivers sign up online with an invite**. The line under it should say "Open", with how many invites are waiting to be used.
+
+Unticking it closes the sign-up page and takes every code off the relay. Invites you've already made aren't cancelled; they work again when you tick it again, as long as they haven't expired.
+
+## Invite drivers by email
+
+1. Click **Invite Drivers**.
+2. Type one email address per line. To remember who's who, add a note after a comma, for example `sam@example.com, Sam's dad`.
+3. Click **Send Invites**.
+
+Each person gets an email from the club mailbox, "Your invite to race with *club*", with a link to your sign-up page and their code. The link fills the code in for them. Their invite appears under **Invites** as "Waiting" once it's been emailed.
+
+To send one again, select it and click **Email Again**.
+
+## A code for someone at the desk
+
+For a driver standing in front of you with no invite:
+
+1. Click **Code for Someone Here**.
+2. Optionally type who it's for, then click **Make Code**.
+3. The code is shown on screen. Read it out, and point them at the sign-up page address shown with it.
+
+They sign up on their own phone and the sign-up appears under **Waiting for you**.
+
+## What the new driver does
+
+1. They open the link in their invite, or the sign-up page, and type their code if asked.
+2. They fill in **Driver's name**, **Class** (from today's event's classes, or all of your classes if the event names none), **Transponder**, **Car** (optional) and **Email**.
+3. For **Transponder** they choose **I have my own** and type the number, **I'd like to rent one from the club**, or **I don't know yet**.
+4. A parent or guardian signing up a younger driver ticks **I am a parent or guardian signing up a driver under 18**.
+5. They tap **Send to the timing desk**.
+
+Their phone then says their sign-up is with the timing desk, and updates by itself once you've answered. Until you do, they can tap **Change my details** and send it again.
+
+## Approve a sign-up
+
+1. Select the sign-up under **Waiting for you** and click **Approve** (or double-click it).
+2. Check the details. Everything they typed can be changed.
+3. Make sure **Transponder** is filled in:
+    - If they have their own, it's already there.
+    - If they asked to rent one, pick one of the club's rentals in **Lend a rental**. It's lent to them on the **Rentals** page when you approve.
+    - If they don't know yet, type it in once they're at the desk. Or click **Not Yet**: the sign-up keeps waiting until you approve it.
+4. Click **Approve**.
+5. HeatCaller asks "Add *name* to *event* and check them in?" (or "Check *name* in for today?" when no event is open). Click **Yes** to check them in now, or **No** to add them without checking them in.
+
+If their class isn't one of the event's classes, the question says so, and answering **Yes** adds the class to the event.
+
+When you approve, HeatCaller:
+
+- Adds their driver profile, marked "Signed up online." (or "Signed up online by a parent or guardian.") in **Notes**.
+- Checks them in, if you said **Yes**.
+- Gives them their own check-in PIN and emails it to them, if online check-in and personal PINs are on and the club mailbox is set up. This happens even if **Email automatically when PINs change** is off, because the sign-up page told them it would come.
+- Tells their phone. It shows "You are in!" and, when online check-in is on, a button to open their own check-in card, which checks them in at every meeting.
+
+A transponder that already belongs to another driver is refused, with the same message as adding a driver by hand. Change it, or click **Not Yet**.
+
+<!-- screenshot: Approve dialog for a driver who asked for a rental -->
+
+## Turn a sign-up down
+
+Select it, click **Turn Down**, optionally type why or what to do instead, and click **Turn Down**. Their phone shows "Not signed up" with your message.
+
+## Invites
+
+| Status | What it means |
+|---|---|
+| Waiting | Not used yet. It works until the date under **Works until**. |
+| Not emailed yet | Made, but the email didn't go. Select it and click **Email Again**. |
+| Signed up | Used, and you approved the sign-up. |
+| Turned down | Used, and you turned the sign-up down. |
+| Cancelled | Cancelled before it was used. |
+| Expired | Not used within 14 days. |
+
+- **Show Code** shows the selected invite's code, for reading it out.
+- **Cancel Invite** stops a code working at once. A sign-up already made with it is turned down.
+- An invite works once, for 14 days. Answered and expired invites drop off the list after 60 days.
+
+## Troubleshooting
+
+**The line at the top is red.**
+It says what's wrong. "Publishing to the relay is off" means the relay isn't set up on the **Club Website** page. A "not found" message means the relay needs redeploying.
+
+**A driver says their code doesn't work.**
+Check the invite under **Invites**. If it says "Expired" or "Cancelled", make them a new one. If sign-up is switched off, their phone says "Sign-up is not open right now."
+
+**"Sign-up codes are locked after too many wrong guesses".**
+Someone typed many wrong codes. The relay closes code sign-in for a while, longer each time it happens. Phones that already signed in keep working. To reopen it at once, cancel every open invite and make new ones.
+
+**A new driver didn't get their PIN email.**
+Check that online check-in and personal PINs are on and the Email group is set up, and that the email address in their profile is right. Then use **Email PINs** on the **Club Website** page. See [Emailing racer PINs](email.md).

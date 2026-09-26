@@ -1,0 +1,357 @@
+namespace HeatCaller;
+
+/// <summary>
+/// Assigns each driver a distinct lap cue.
+///
+/// The problem this solves: with several cars circulating, a single shared
+/// chime tells you a lap happened but not whose - useless to someone
+/// driving. A tone per driver means they can hear their own lap without
+/// looking up.
+/// </summary>
+public sealed class LapBeepControl : UserControl
+{
+    private readonly LapBeepStore _store;
+    private readonly ProfileStore _profiles;
+    private readonly SoundEffectsStore _sounds;
+    private readonly UndoService _undo;
+
+    private readonly CheckBox _chkEnabled = new();
+    private readonly DataGridView _grid = new();
+    private readonly Label _lblStatus = new();
+
+    public LapBeepControl(LapBeepStore store, ProfileStore profiles, SoundEffectsStore sounds, UndoService undo)
+    {
+        _store = store;
+        _profiles = profiles;
+        _sounds = sounds;
+        _undo = undo;
+
+        Dock = DockStyle.Fill;
+        Font = AppTheme.BodyFont;
+        ForeColor = AppTheme.TextDark;
+
+        Size = new Size(980, 560);
+        MinimumSize = new Size(900, 540);
+
+        BuildLayout();
+        RefreshAll();
+
+        // Undo changes the cues in the store, never on this page - see
+        // OnStoreRestored.
+        _store.Restored += OnStoreRestored;
+    }
+
+    private void OnStoreRestored()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        RefreshGrid();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _store.Restored -= OnStoreRestored;
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Puts an undo on the stack that gives these drivers back the cues they
+    /// have now (or none, for a driver who has none). Call BEFORE changing
+    /// them. Only these drivers are touched when it runs, so it never undoes
+    /// a cue set on anyone else since - the whole-file snapshot it replaces
+    /// did.
+    /// </summary>
+    private void CaptureCues(string description, IEnumerable<string> transponders)
+    {
+        var before = new Dictionary<string, DriverLapBeep?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var transponder in transponders)
+        {
+            before[transponder] = _store.Get(transponder) is { } beep ? LapBeepStore.Copy(beep) : null;
+        }
+
+        var store = _store;
+        _undo.Capture(description, () =>
+        {
+            store.PutBack(before);
+            store.NotifyRestored();
+        });
+    }
+
+    private string DriverName(string transponder) =>
+        _profiles.AllRaceable.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase))?.DriverName
+        ?? transponder;
+
+    private void BuildLayout()
+    {
+        var lblIntro = new Label
+        {
+            Text = "Gives each driver their own short cue when they cross the line, so they can hear their lap without "
+                 + "watching the screen. Cues differ in shape as well as pitch - pitch alone is hard to pick out over track noise.",
+            Location = new Point(12, 12),
+            AutoSize = true,
+            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _chkEnabled.Text = "Per-driver lap cues ON";
+        _chkEnabled.Location = new Point(12, 62);
+        _chkEnabled.AutoSize = true;
+        _chkEnabled.Font = AppTheme.BoldFont;
+        _chkEnabled.Checked = _store.Enabled;
+        _chkEnabled.CheckedChanged += (_, _) =>
+        {
+            _store.Enabled = _chkEnabled.Checked;
+            UpdateEnabledLook();
+        };
+
+        var lblEnabledHint = new Label
+        {
+            Text = "Off by default - a cue per lap per driver is a lot of noise if you didn't ask for it.",
+            Location = new Point(230, 63),
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        _grid.Location = new Point(12, 96);
+        _grid.Size = new Size(956, 368);
+        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
+        // grid downward on a taller window, painting over whatever sits
+        // below it and making those controls invisible.
+        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.RowHeadersVisible = false;
+        _grid.MultiSelect = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _grid.Columns.AddRange(
+            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 90 },
+            new DataGridViewTextBoxColumn { Name = "transponder", HeaderText = "Transponder", FillWeight = 60 },
+            new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 60 },
+            new DataGridViewTextBoxColumn { Name = "tone", HeaderText = "Cue", FillWeight = 70 },
+            new DataGridViewTextBoxColumn { Name = "state", HeaderText = "", FillWeight = 40 }
+        );
+        _grid.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { CycleTone(); } };
+
+        var btnTone = new Button { Text = "Change Cue", };
+        btnTone.Click += (_, _) => CycleTone();
+
+        var btnTest = new Button { Text = "Test Cue", };
+        btnTest.Click += (_, _) => TestSelected();
+
+        var btnToggle = new Button { Text = "Turn On / Off", };
+        btnToggle.Click += (_, _) => ToggleSelected();
+
+        var btnAuto = new Button { Text = "Auto-Assign All", };
+        btnAuto.Click += (_, _) => AutoAssign();
+
+        var btnClear = new Button { Text = "Clear All", };
+        btnClear.Click += (_, _) => ClearAll();
+
+        // NOT Bottom-anchored - the grid above is not either.
+        //
+        // The grid is Top|Left|Right at a fixed height, so its bottom edge
+        // never moves. These were anchored to the PAGE's bottom, which
+        // means on a window shorter than the height these literals assume
+        // they ride up and are drawn over the last rows of the grid. Same
+        // fault the Batteries page had.
+        //
+        // Placed from the grid instead, so the clearance is a fact.
+        var buttonsTop = UiLayout.Below(_grid, UiLayout.RowGap);
+        AppTheme.LayoutButtonRow(12, buttonsTop, 8, btnTone, btnTest, btnToggle, btnAuto, btnClear);
+
+        _lblStatus.Location = new Point(12, buttonsTop + UiLayout.ButtonHeight + UiLayout.RowGap);
+        _lblStatus.AutoSize = true;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+
+        Controls.AddRange(new Control[]
+        {
+            lblIntro, _chkEnabled, lblEnabledHint, _grid,
+            btnTone, btnTest, btnToggle, btnAuto, btnClear, _lblStatus,
+        });
+
+        UpdateEnabledLook();
+    }
+
+    private string? SelectedTransponder => _grid.CurrentRow?.Tag as string;
+
+    private void UpdateEnabledLook()
+    {
+        _chkEnabled.Text = _store.Enabled ? "Per-driver lap cues ON" : "Per-driver lap cues OFF";
+        _chkEnabled.ForeColor = _store.Enabled ? AppTheme.Success : AppTheme.TextMuted;
+    }
+
+    public void RefreshAll()
+    {
+        _chkEnabled.Checked = _store.Enabled;
+        UpdateEnabledLook();
+        RefreshGrid();
+    }
+
+    private void RefreshGrid()
+    {
+        var selected = SelectedTransponder;
+        _grid.Rows.Clear();
+
+        var drivers = _profiles.AllRaceable.OrderBy(p => p.DriverName).ToList();
+
+        foreach (var driver in drivers)
+        {
+            var beep = _store.Get(driver.Transponder);
+            var assigned = beep is not null;
+
+            var rowIndex = _grid.Rows.Add(
+                string.IsNullOrWhiteSpace(driver.DriverName) ? driver.Transponder : driver.DriverName,
+                driver.Transponder,
+                string.IsNullOrWhiteSpace(driver.ClassName) ? "-" : driver.ClassName,
+                assigned ? LapBeepStore.ToneNames[Math.Clamp(beep!.ToneIndex, 0, LapBeepStore.ToneNames.Length - 1)] : "-",
+                assigned ? (beep!.Enabled ? "on" : "off") : string.Empty);
+
+            _grid.Rows[rowIndex].Tag = driver.Transponder;
+
+            if (assigned && beep!.Enabled)
+            {
+                _grid.Rows[rowIndex].Cells[3].Style.ForeColor = AppTheme.Success;
+            }
+            else if (assigned)
+            {
+                _grid.Rows[rowIndex].DefaultCellStyle.ForeColor = AppTheme.TextMuted;
+            }
+
+            if (selected is not null && string.Equals(selected, driver.Transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                _grid.Rows[rowIndex].Selected = true;
+                _grid.CurrentCell = _grid.Rows[rowIndex].Cells[0];
+            }
+        }
+
+        // Two drivers sharing a cue defeats the point, so it's called out
+        // rather than left for someone to notice mid-race.
+        var duplicates = _store.All
+            .Where(b => b.Enabled)
+            .GroupBy(b => b.ToneIndex)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        var assignedCount = _store.All.Count(b => b.Enabled);
+
+        // Hoisted out of the line below so the verb can agree with it
+        // without summing the same groups twice.
+        var sharing = duplicates.Sum(g => g.Count());
+
+        _lblStatus.Text = duplicates.Count > 0
+            ? $"{Plural.Of(assignedCount, "driver")} with a cue - but {sharing} {(sharing == 1 ? "shares" : "share")} a cue with someone else."
+            : $"{assignedCount} of {Plural.Of(drivers.Count, "driver")} {(assignedCount == 1 ? "has" : "have")} a cue.";
+
+        _lblStatus.ForeColor = duplicates.Count > 0 ? AppTheme.Accent : AppTheme.TextMuted;
+    }
+
+    /// <summary>Steps to the next cue and plays it, so the choice is made by ear rather than by name.</summary>
+    private void CycleTone()
+    {
+        if (SelectedTransponder is not { } transponder)
+        {
+            AppDialog.Show(this, "Select a driver first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        CaptureCues($"Change lap cue for {DriverName(transponder)}", new[] { transponder });
+
+        var beep = _store.Get(transponder) ?? new DriverLapBeep { Transponder = transponder, ToneIndex = -1 };
+        beep.ToneIndex = (beep.ToneIndex + 1) % LapBeepStore.ToneNames.Length;
+        beep.Enabled = true;
+
+        _store.Upsert(beep);
+        RefreshGrid();
+
+        _ = ToneGenerator.PlayDriverLapAsync(beep.ToneIndex, (float)_sounds.Current.Volume);
+    }
+
+    private void TestSelected()
+    {
+        if (SelectedTransponder is not { } transponder)
+        {
+            return;
+        }
+
+        var beep = _store.Get(transponder);
+        if (beep is null)
+        {
+            AppDialog.Show(this, "This driver has no cue yet - use Change Cue to give them one.", "No cue",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _ = ToneGenerator.PlayDriverLapAsync(beep.ToneIndex, (float)_sounds.Current.Volume);
+    }
+
+    private void ToggleSelected()
+    {
+        if (SelectedTransponder is not { } transponder || _store.Get(transponder) is not { } beep)
+        {
+            return;
+        }
+
+        CaptureCues($"Turn lap cue {(beep.Enabled ? "off" : "on")} for {DriverName(transponder)}", new[] { transponder });
+
+        beep.Enabled = !beep.Enabled;
+        _store.Upsert(beep);
+        RefreshGrid();
+    }
+
+    private void AutoAssign()
+    {
+        var drivers = _profiles.AllRaceable.OrderBy(p => p.DriverName).Select(p => p.Transponder).ToList();
+
+        if (drivers.Count == 0)
+        {
+            return;
+        }
+
+        if (drivers.Count > LapBeepStore.ToneNames.Length
+            && AppDialog.Show(this,
+                $"There are {drivers.Count} drivers and only {LapBeepStore.ToneNames.Length} cues, so some will share.\r\n\r\n"
+                + "That's usually fine if the sharing drivers aren't on track together - assign those by hand afterwards.\r\n\r\nContinue?",
+                "More drivers than cues", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        CaptureCues($"Auto-assign lap cues ({Plural.Of(drivers.Count, "driver")})", drivers);
+
+        _store.AutoAssign(drivers);
+        RefreshGrid();
+    }
+
+    private void ClearAll()
+    {
+        if (_store.All.Count == 0)
+        {
+            return;
+        }
+
+        if (AppDialog.Show(this, $"Remove cues from all {Plural.Of(_store.All.Count, "driver")}?", "Clear cues",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        CaptureCues($"Clear lap cues ({Plural.Of(_store.All.Count, "driver")})", _store.All.Select(b => b.Transponder).ToList());
+
+        foreach (var beep in _store.All)
+        {
+            _store.Delete(beep.Transponder);
+        }
+
+        RefreshGrid();
+    }
+}

@@ -1,0 +1,112 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>HeatCaller</AssemblyName>
+    <RootNamespace>HeatCaller</RootNamespace>
+
+    <!-- The name Windows shows for the exe (Task Manager, file properties). -->
+    <Product>HeatCaller</Product>
+    <AssemblyTitle>HeatCaller</AssemblyTitle>
+    <ApplicationIcon></ApplicationIcon>
+
+    <!-- Every page here is laid out at fixed pixel coordinates. Under the
+         SDK default (SystemAware) those are scaled by the OS on a
+         high-DPI display, which blurs text and can clip controls whose
+         positions were measured at 100%. DpiUnaware keeps the layout
+         exactly as designed on every machine - slightly soft on a 4K
+         screen, but predictable rather than subtly broken. -->
+    <ApplicationHighDpiMode>DpiUnaware</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SocketIOClient was here for Next Level Timing's Neon Timing API.
+         That connection was retired in 0.50.0, and nothing else used it. -->
+
+    <!-- MP3 playback for ElevenLabs text-to-speech announcements. -->
+    <PackageReference Include="NAudio" Version="2.3.0" />
+
+    <!-- USB HID communication for the direct EasyLap decoder connection
+         (talks to the Silicon Labs CP2110 chip inside it), bypassing
+         Next Level Timing entirely. -->
+    <PackageReference Include="HidSharp" Version="2.1.0" />
+
+    <!-- Serial port access for the I-Lap decoder connection. WinForms on
+         .NET 8 no longer ships System.IO.Ports in the box. -->
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+
+    <!-- QR code generation for printable driver check-in badges. Only the
+         PngByteQRCode renderer is used, which emits PNG bytes directly
+         and avoids QRCoder's optional System.Drawing-dependent renderers. -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+
+    <!-- Windows DPAPI (ProtectedData), so API keys, the relay token and
+         PINs are sealed to this Windows account on disk instead of sitting
+         in settings.json as plain text. See SecretBox. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+
+    <!-- The free Windows voice (SAPI 5), for clubs with no ElevenLabs
+         account and as the stand-in when ElevenLabs can't speak a line.
+         Windows only, like the app, and no dependencies of its own. It
+         only talks to the speech voices already installed in Windows -
+         nothing is downloaded and no account is needed. See WindowsVoice. -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The test project (..\HeatCaller.Tests) reaches the app's internal
+         types - AppPaths.RedirectForTests above all, which keeps every test
+         away from the real %AppData%\HeatCaller. -->
+    <InternalsVisibleTo Include="HeatCaller.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The bundled soundtrack. Copied next to the executable on build and
+         then installed into %AppData%\HeatCaller\Music on first run
+         (see MusicStore) - the app plays from there, so a user's own
+         uploads and the built-in tracks live in one place. -->
+    <!-- Link preserves the folder structure. Without it MSBuild flattens
+         these next to the exe, and MusicStore.InstallBundledTracks - which
+         looks in <output>\Assets\Music - finds nothing and silently
+         installs no tracks at all. -->
+    <None Include="Assets\Music\*.wav" Link="Assets\Music\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- MP3 is still copied if present: the bundled soundtrack is WAV for
+         quality, but nothing stops a track being dropped in as MP3, and the
+         player accepts both. -->
+    <None Include="Assets\Music\*.mp3" Link="Assets\Music\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- The app's own typefaces, loaded at startup by FontLibrary rather
+         than installed on the machine, so a track PC nobody can install
+         software on still renders HeatCaller properly. Same Link trick as
+         the music above: without it MSBuild flattens these next to the exe
+         and FontLibrary - which looks in <output>\Assets\Fonts - finds an
+         empty folder and silently falls back to Segoe UI.
+
+         Only the Regular and Bold cuts of each family are wanted. GDI knows
+         four styles, so a file like Oxanium-SemiBold.ttf registers as its
+         OWN family ("Oxanium SemiBold") and would never be found by asking
+         for Oxanium with FontStyle.Bold. Variable-weight files
+         (Oxanium[wght].ttf) have the same problem - use the static cuts. -->
+    <!-- The built-in sound packs - Assets\SoundPacks\<Pack>\<Effect>.wav.
+         Played straight from beside the exe (see SoundPacks). Same Link
+         trick as the music, with %(RecursiveDir) so each pack keeps its
+         own folder instead of all eleven GoodLap.wav files landing on top
+         of each other. -->
+    <None Include="Assets\SoundPacks\**\*.wav" Link="Assets\SoundPacks\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
+    <None Include="Assets\Fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\Fonts\*.otf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Globbed, not named. A literal Include of a file that is not there
+         yet fails the copy task outright (MSB3030); a glob that matches
+         nothing is simply empty, so the project still builds on a clone
+         with no fonts dropped in. This carries the OFL licence files, which
+         have to travel with the fonts when the app is redistributed. -->
+    <None Include="Assets\Fonts\*.txt" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

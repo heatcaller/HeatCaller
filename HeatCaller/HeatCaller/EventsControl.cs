@@ -1,0 +1,559 @@
+namespace HeatCaller;
+
+/// <summary>
+/// Manages events - the grouping that keeps one race weekend's qualifying
+/// separate from the next.
+///
+/// The page answers two questions: which event are new rounds joining, and
+/// what has each event actually covered. The first matters during an event,
+/// the second afterwards.
+/// </summary>
+public sealed class EventsControl : UserControl
+{
+    private readonly RaceEventStore _events;
+    private readonly RoundDefinitionStore _rounds;
+    private readonly SessionHistoryStore _history;
+    private readonly UndoService _undo;
+
+    /// <summary>Both only for the shared delete - see RaceDayDeleter.</summary>
+    private readonly SeasonStore? _seasons;
+
+    private readonly TrackLayoutStore? _layouts;
+
+    /// <summary>
+    /// Raised when a new race day is wanted. The host routes it to The
+    /// Day's own command, so there is ONE way a race day is started and one
+    /// dialog that asks what kind of night it is - see
+    /// MainForm._startRaceDay. This page used to make one with a name and a
+    /// notes box and nothing else: no shape, no classes, and the check-in
+    /// rule left at its bare default. A day made here could not build a
+    /// programme until somebody went to The Day and finished it.
+    /// </summary>
+    public event Action? StartRaceDayRequested;
+
+    private readonly DataGridView _grid = new();
+    private readonly Label _lblActive = new();
+    private readonly Label _lblStatus = new();
+
+    public EventsControl(RaceEventStore events, RoundDefinitionStore rounds,
+        SessionHistoryStore history, UndoService undo,
+        SeasonStore? seasons = null, TrackLayoutStore? layouts = null)
+    {
+        _events = events;
+        _rounds = rounds;
+        _history = history;
+        _undo = undo;
+        _seasons = seasons;
+        _layouts = layouts;
+
+        Dock = DockStyle.Fill;
+        Font = AppTheme.BodyFont;
+        ForeColor = AppTheme.TextDark;
+
+        Size = new Size(980, 560);
+        MinimumSize = new Size(900, 540);
+
+        BuildLayout();
+        RefreshAll();
+    }
+
+    private void BuildLayout()
+    {
+        var lblIntro = new Label
+        {
+            Text = "Every race day the club has run, and the one it is running now. A race day groups the rounds that "
+                 + "belong together: without one, qualifying counts every heat ever recorded for a class, so a second "
+                 + "race day would seed its mains from both days mixed together.\r\n\r\n"
+                 + "The same days Race Day > Setup works on, and the same words - this page is where a club looks across all of "
+                 + "them and picks the one to work on.",
+            Location = new Point(12, 12),
+            AutoSize = true,
+            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        // MEASURED, not placed at a remembered number.
+        //
+        // The intro is two paragraphs and wraps to about five lines, which
+        // reaches y=107 - and the current-day line and the grid were pinned
+        // at 62 and 96, written when this text was one short sentence. The
+        // result was the intro drawn straight over the grid's header and
+        // first row. Parented before it is measured, because a label
+        // measures itself in the font it currently has and does not have
+        // this page's until it is added.
+        Controls.Add(lblIntro);
+
+        _lblActive.AutoSize = true;
+        _lblActive.Font = new Font(AppTheme.BodyFont.FontFamily, 12F, FontStyle.Bold);
+
+        Controls.Add(_lblActive);
+        _lblActive.Location = new Point(12, UiLayout.Below(lblIntro, UiLayout.RowGap));
+
+        _grid.Location = new Point(12, UiLayout.Below(_lblActive, UiLayout.RowGap));
+
+        // Down to the button row rather than a fixed 368. The grid is
+        // anchored on all four sides, so this is only its starting height -
+        // but a starting height taller than the space left runs it under
+        // the buttons at 476 before the first resize.
+        _grid.Size = new Size(956, Math.Max(160, 470 - _grid.Top));
+        // All four sides. The old warning against Bottom predates the
+        // buttons below being bottom-anchored; they are now, so the grid
+        // growing down fills exactly the gap that opens above them.
+        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.RowHeadersVisible = false;
+        // Ctrl-click for individual rows, Shift-click for a range, Ctrl+A
+        // for the lot - which DataGridView gives for free once MultiSelect
+        // is on. Only Delete Day acts on more than one; everything else
+        // here (rename, switch to, close, rounds) reads the current row,
+        // which is still exactly one whatever is selected.
+        _grid.MultiSelect = true;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _grid.Columns.AddRange(
+            new DataGridViewTextBoxColumn { Name = "name", HeaderText = "Race day", FillWeight = 90 },
+            new DataGridViewTextBoxColumn { Name = "state", HeaderText = "State", FillWeight = 45 },
+            new DataGridViewTextBoxColumn { Name = "started", HeaderText = "Started", FillWeight = 60 },
+            new DataGridViewTextBoxColumn { Name = "days", HeaderText = "Days run", FillWeight = 70 },
+            new DataGridViewTextBoxColumn { Name = "rounds", HeaderText = "Rounds", FillWeight = 40 },
+            new DataGridViewTextBoxColumn { Name = "recorded", HeaderText = "Recorded", FillWeight = 45 },
+            new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 90 }
+        );
+        // Double-click switches to the day, matching what selecting one in
+        // The Day's picker does. Not a rename: switching is the thing this
+        // page is for, and the one that is safe to do by accident - it is
+        // undoable and changes no stored day.
+        _grid.CellDoubleClick += (_, args) =>
+        {
+            if (args.RowIndex >= 0)
+            {
+                MakeActive();
+            }
+        };
+
+        // The same command The Day's button runs, through the host - not a
+        // second way to make a race day. See StartRaceDayRequested.
+        var btnNew = new Button { Text = "New Race Day...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnNew.Click += (_, _) => StartRaceDayRequested?.Invoke();
+
+        var btnEdit = new Button { Text = "Rename...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnEdit.Click += (_, _) => AddOrEdit(Selected());
+
+        var btnActive = new Button { Text = "Switch to This Day", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnActive.Click += (_, _) => MakeActive();
+
+        var btnClose = new Button { Text = "Close Day", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnClose.Click += (_, _) => CloseOrReopen();
+
+        var btnRounds = new Button { Text = "Rounds...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnRounds.Click += (_, _) => ShowRounds();
+
+        var btnDelete = new Button { Text = "Delete Day...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        btnDelete.Click += (_, _) => DeleteSelected();
+
+        AppTheme.LayoutButtonRow(12, 476, 8, btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete);
+
+        _lblStatus.Location = new Point(12, 516);
+        _lblStatus.AutoSize = true;
+        _lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+
+        Controls.AddRange(new Control[]
+        {
+            // lblIntro and _lblActive are already parented above - they had
+            // to be, to be measured.
+            _grid,
+            btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete, _lblStatus,
+        });
+    }
+
+    private RaceEvent? Selected() =>
+        _grid.CurrentRow?.Tag is string id ? _events.Get(id) : null;
+
+    public void RefreshAll() => RefreshGrid();
+
+    private void RefreshGrid()
+    {
+        var selectedId = _grid.CurrentRow?.Tag as string;
+        _grid.Rows.Clear();
+
+        var active = _events.Active;
+        _lblActive.Text = active switch
+        {
+            null => "No race day is open - rounds aren't being grouped",
+
+            // Said here as well as in the Status column, because a closed
+            // day can be the current one and "Current: Race Day 4 May" on
+            // its own reads as a day you can still race.
+            { IsOpen: false } shut => $"Current: {shut.DisplayName} (closed - nothing new joins it)",
+
+            { } open => $"Current: {open.DisplayName}",
+        };
+
+        _lblActive.ForeColor = active is { IsOpen: true } ? AppTheme.Success : AppTheme.TextMuted;
+
+        foreach (var raceEvent in _events.All)
+        {
+            var days = _events.DaysFor(raceEvent, _rounds, _history);
+            var recorded = raceEvent.RoundIds.Count(id => _rounds.Get(id)?.IsRecorded == true);
+
+            var daysText = days.Count switch
+            {
+                0 => "-",
+                1 => days[0].ToShortDateString(),
+                _ => $"{days[0].ToShortDateString()} - {days[^1].ToShortDateString()} ({days.Count})",
+            };
+
+            var isActive = active?.Id == raceEvent.Id;
+
+            var rowIndex = _grid.Rows.Add(
+                raceEvent.DisplayName + (isActive ? "   [CURRENT]" : string.Empty),
+                raceEvent.IsOpen ? "Open" : "Closed",
+                AppTime.DateAndTime(raceEvent.StartedUtc.ToLocalTime()),
+                daysText,
+                raceEvent.RoundIds.Count,
+                recorded,
+                raceEvent.Notes.Replace('\r', ' ').Replace('\n', ' '));
+
+            _grid.Rows[rowIndex].Tag = raceEvent.Id;
+
+            if (isActive)
+            {
+                _grid.Rows[rowIndex].Cells[0].Style.Font = AppTheme.BoldFont;
+                _grid.Rows[rowIndex].Cells[0].Style.ForeColor = AppTheme.Success;
+            }
+            else if (!raceEvent.IsOpen)
+            {
+                _grid.Rows[rowIndex].DefaultCellStyle.ForeColor = AppTheme.TextMuted;
+            }
+
+            if (selectedId == raceEvent.Id)
+            {
+                _grid.Rows[rowIndex].Selected = true;
+                _grid.CurrentCell = _grid.Rows[rowIndex].Cells[0];
+            }
+        }
+
+        _lblStatus.Text = $"{Plural.Of(_events.All.Count, "race day", "race days")}.";
+    }
+
+    /// <summary>
+    /// Every undo on this page puts back only what its own action changed.
+    ///
+    /// They used to restore a snapshot of every event, which also undid
+    /// whatever else had happened since - rounds generated into an event
+    /// dropped back out of it - and set the active event without telling
+    /// check-in, tech or the run sheet, which carried on showing the other
+    /// event. Editing was worse still: the snapshot was taken after the
+    /// dialog had already changed the event, so Undo put back the edit.
+    /// </summary>
+    /// <summary>
+    /// Renames a race day and edits its notes. Nothing else - everything
+    /// about how a day RUNS (what kind of night it is, which classes are
+    /// racing, the format, the check-in rule) is set on The Day, which is
+    /// the one place that edits those.
+    ///
+    /// The create half of this is gone. It made a race day out of a name
+    /// and a notes box, which is not a race day anybody can use: no shape,
+    /// no classes, the check-in rule left at its bare default, and nothing
+    /// carried over from the last one. New Race Day on this page now runs
+    /// the same command The Day's does - see StartRaceDayRequested.
+    /// </summary>
+    private void AddOrEdit(RaceEvent? existing)
+    {
+        if (existing is null)
+        {
+            AppDialog.Show(this, "Pick a race day in the list first.",
+                "Nothing picked", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            return;
+        }
+
+        // Taken BEFORE the dialog opens: its Save writes straight into the
+        // race day it was given.
+        var previousName = existing.Name;
+        var previousNotes = existing.Notes;
+
+        using var form = new EventEditForm(existing);
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var eventId = form.Result.Id;
+
+        _undo.Capture($"Rename {form.Result.DisplayName}", () =>
+        {
+            if (_events.Get(eventId) is { } target)
+            {
+                target.Name = previousName;
+                target.Notes = previousNotes;
+                _events.Upsert(target);
+            }
+
+            RefreshGrid();
+        });
+
+        _events.Upsert(form.Result);
+        RefreshGrid();
+    }
+
+    private void MakeActive()
+    {
+        if (Selected() is not { } raceEvent)
+        {
+            return;
+        }
+
+        // A closed day is switched to, not refused. This used to send the
+        // club away to reopen it first, while The Day's picker switched to
+        // a closed day without a word - the same gesture on two pages
+        // giving two answers. Pointing at a closed day is how its results,
+        // its standings and its run sheet are looked at, and Today answers
+        // it properly: the checklist shows "this day is closed" with
+        // "Start a Race Day" under it. Nothing can join a closed day
+        // wherever it is current, because every build refuses it by name.
+        var previousActiveId = _events.Active?.Id;
+        _undo.Capture("Switch to another race day", () =>
+        {
+            // SetActive, not a restore, so check-in, tech and the run sheet
+            // follow. A race day deleted since cannot be made current
+            // again; one closed since is left closed.
+            if (previousActiveId is null || _events.Get(previousActiveId) is { IsOpen: true })
+            {
+                _events.SetActive(previousActiveId);
+            }
+
+            RefreshGrid();
+        });
+
+        _events.SetActive(raceEvent.Id);
+        RefreshGrid();
+
+        _lblStatus.Text = raceEvent.IsOpen
+            ? $"New rounds will now join \"{raceEvent.DisplayName}\"."
+            : $"Now showing \"{raceEvent.DisplayName}\". It is closed, so nothing new joins it - "
+              + "reopen it to race, or start a new day.";
+    }
+
+    private void CloseOrReopen()
+    {
+        if (Selected() is not { } raceEvent)
+        {
+            return;
+        }
+
+        var eventId = raceEvent.Id;
+
+        if (raceEvent.IsOpen)
+        {
+            if (AppDialog.Show(this,
+                    $"Close \"{raceEvent.DisplayName}\"?\r\n\r\nIts rounds stay linked and its results stay reportable - "
+                    + "closing only stops new rounds joining it.",
+                    "Close day", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            // Closing the current day leaves none current.
+            var wasActive = _events.Active?.Id == eventId;
+
+            _undo.Capture($"Close {raceEvent.DisplayName}", () =>
+            {
+                _events.Reopen(eventId);
+
+                // Active again only if nothing else has been made active
+                // in the meantime - that later choice is not this undo's
+                // to take back.
+                if (wasActive && _events.Active is null && _events.Get(eventId) is not null)
+                {
+                    _events.SetActive(eventId);
+                }
+
+                RefreshGrid();
+            });
+
+            _events.Close(eventId);
+        }
+        else
+        {
+            var closedAtUtc = raceEvent.FinishedUtc;
+
+            _undo.Capture($"Reopen {raceEvent.DisplayName}", () =>
+            {
+                // Close rather than setting the date, so that an event made
+                // active since it was reopened stops being active - and
+                // with the time it was really closed, not now.
+                _events.Close(eventId, closedAtUtc);
+                RefreshGrid();
+            });
+
+            // Current again when nothing else is, the same as Reopen Day on
+            // Race Day - closing the active event leaves none active, so
+            // without this an event could be reopened and still have nothing
+            // pointed at it. An event reopened while tonight is running does
+            // not steal it. See RaceEventStore.Reopen.
+            _events.Reopen(eventId, makeCurrentIfNoneIs: true);
+        }
+
+        RefreshGrid();
+    }
+
+    /// <summary>Lists what's actually in an event, so its qualifying can be checked rather than trusted.</summary>
+    private void ShowRounds()
+    {
+        if (Selected() is not { } raceEvent)
+        {
+            return;
+        }
+
+        if (raceEvent.RoundIds.Count == 0)
+        {
+            AppDialog.Show(this,
+                $"\"{raceEvent.DisplayName}\" has no rounds yet.\r\n\r\n"
+                + "Make it active, then generate heats or mains on the Race Program page.",
+                "No rounds", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var lines = raceEvent.RoundIds
+            .Select(_rounds.Get)
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .OrderBy(r => r.ClassName)
+            .ThenBy(r => r.Order)
+            .Select(r => $"   {r.ClassName}  -  {r.RoundLabel}  ({(r.IsRecorded ? "recorded" : "not run")})");
+
+        AppDialog.Show(this,
+            $"{raceEvent.DisplayName}\r\n\r\n" + string.Join("\r\n", lines),
+            "Rounds on this race day", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// The SAME delete The Day runs - see RaceDayDeleter.
+    ///
+    /// This page had its own, and it did far less: it removed the race day
+    /// and left its rounds, its results, its track records and its badges
+    /// exactly where they were, with a message explaining that the rounds
+    /// would now be counted "alongside everything else" - which is the
+    /// unbounded qualifying race days exist to prevent, offered as a
+    /// footnote. Whichever page you reach a delete from, it now asks the
+    /// same questions and does the same things.
+    /// </summary>
+    private void DeleteSelected()
+    {
+        // Every row that is selected, not just the current one: Ctrl+A here
+        // selects the lot, which is how somebody clears out a season of test
+        // days without answering the same dialog forty times. The legacy
+        // holder is filtered out rather than refused - it is in the list,
+        // it will be caught by a select-all, and it is not a race day.
+        var chosen = _grid.SelectedRows
+            .Cast<DataGridViewRow>()
+            .Select(r => r.Tag as string)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => _events.Get(id!))
+            .Where(e => e is { IsLegacy: false })
+            .Select(e => e!)
+            .ToList();
+
+        if (chosen.Count == 0)
+        {
+            return;
+        }
+
+        if (_seasons is null || _layouts is null)
+        {
+            // Without them the delete cannot reach the championships and the
+            // track records, and a delete that silently does less than the
+            // one on the other page is the thing this replaced.
+            AppDialog.Show(this,
+                "Deleting a race day isn't available from here in this window. Use Delete Day on Race Day > Setup.",
+                "Not available here", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            return;
+        }
+
+        RaceDayDeleter.AskMany(this, chosen, _events, _rounds, _history, _seasons, _layouts, _undo, () =>
+        {
+            if (!IsDisposed)
+            {
+                RefreshGrid();
+            }
+        });
+    }
+}
+
+/// <summary>Renames a race day and edits its notes. Everything else about a day is set on Race Day &gt; The Day.</summary>
+public sealed class EventEditForm : Form
+{
+    private readonly TextBox _txtName = new();
+    private readonly TextBox _txtNotes = new();
+
+    public RaceEvent Result { get; }
+
+    public EventEditForm(RaceEvent? existing)
+    {
+        Result = existing ?? new RaceEvent();
+
+        Text = existing is null ? "New Event" : $"Edit {Result.DisplayName}";
+        StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(440, 260);
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        Font = AppTheme.BodyFont;
+        BackColor = AppTheme.Background;
+        ForeColor = AppTheme.TextDark;
+
+        var lblName = new Label { Text = "Name:", Location = new Point(16, 20), AutoSize = true };
+        _txtName.Location = new Point(100, 17);
+        _txtName.Width = 324;
+        _txtName.Text = Result.Name;
+        _txtName.PlaceholderText = "Spring Regional, Club Night 12 Sept...";
+
+        var lblHint = new Label
+        {
+            Text = "Rounds built while this race day is the current one belong to it. Qualifying and mains are then worked out "
+                 + "from those rounds alone.",
+            Location = new Point(100, 46),
+            AutoSize = true,
+            MaximumSize = new Size(324, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, 110), AutoSize = true };
+        _txtNotes.Location = new Point(100, 107);
+        _txtNotes.Size = new Size(324, 90);
+        _txtNotes.Multiline = true;
+        _txtNotes.ScrollBars = ScrollBars.Vertical;
+        _txtNotes.Text = Result.Notes;
+
+        var btnSave = new Button { Text = "Save" };
+        btnSave.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(_txtName.Text))
+            {
+                AppDialog.Show(this, "Give the race day a name.", "Missing name", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            Result.Name = _txtName.Text.Trim();
+            Result.Notes = _txtNotes.Text;
+            DialogResult = DialogResult.OK;
+            Close();
+        };
+
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        AppTheme.LayoutButtonRow(230, 214, 8, btnSave, btnCancel);
+
+        Controls.AddRange(new Control[] { lblName, _txtName, lblHint, lblNotes, _txtNotes, btnSave, btnCancel });
+
+        AcceptButton = btnSave;
+        CancelButton = btnCancel;
+
+        AppTheme.ApplyRecursively(this);
+    }
+}

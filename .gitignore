@@ -1,0 +1,29 @@
+# HeatCaller - what git keeps and what it leaves alone.
+#
+# Kept: the app, its tests, the relay's source, the docs site, the audio
+# tools. Left alone: anything a build makes (it can be made again), your
+# own Visual Studio state, and scratch folders. The club's DATA is not in
+# this folder at all - it lives in %AppData%\HeatCaller - so no driver,
+# result or PIN can end up in here by accident.
+
+# .NET build output and Visual Studio's own files
+bin/
+obj/
+.vs/
+*.user
+*.suo
+TestResults/
+
+# The relay's build output, packages and secrets are listed in
+# relay\.gitignore (node_modules, dist, data, relay.config.json, and the
+# voice-test key) - git reads that one too.
+
+# Scratch: files handed over from Claude sessions, and the candidate sound
+# effects that were auditioned. The sounds the app actually ships are under
+# HeatCaller\HeatCaller\Assets\SoundPacks and ARE kept.
+Claude outputs/
+HeatCaller Sound Options/
+
+# Python leftovers from audio-tools
+__pycache__/
+*.pyc

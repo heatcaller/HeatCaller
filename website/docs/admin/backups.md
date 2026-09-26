@@ -1,0 +1,218 @@
+# Backups
+
+A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, your own looks, the club logo and all your settings. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
+
+<!-- screenshot: Backup & Restore page, all four sections visible -->
+
+## What's in a backup
+
+A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, with every file and subfolder in it. That includes your music library and photos, so a backup can be large. See [Data files](data-files.md) for what each file is.
+
+Music tracks inside the data folder's music library are remembered by their place in that folder, so the library still works after a restore onto another PC or another Windows account.
+
+Keys, tokens and PINs are a special case. In the data folder they're encrypted so that only your Windows account on this PC can open them (see [Security and privacy](security-and-privacy.md#secrets-on-the-laptop)). A backup restored on the same PC gets them back as they were. For a backup to bring them to a **different** PC, you need a backup password: then each backup also carries a copy of them, encrypted with that password. See [The backup password](#the-backup-password).
+
+### Backup file names
+
+| Kind | File name |
+|---|---|
+| Made with **Back Up Now** | `HeatCaller-Backup-2026-09-21_19-30-05.zip` |
+| Made automatically | `HeatCaller-AutoBackup-2026-09-21_19-30-05.zip` |
+| Safety backup before a restore | `HeatCaller-Backup-...zip` in a `Pre-Restore Safety Backups` subfolder |
+
+The date and time in the name is when the backup was made. HeatCaller uses it, not the file's modified date, to decide which backups are newest, so copying backups between drives doesn't confuse it.
+
+## Making a backup by hand
+
+1. Open **Backup & Restore**.
+2. Under **Manual Backup & Restore**, click **Back Up Now**.
+
+The backup is written in the background, so the app keeps responding: the status line says `Backing up...` while it works. If another backup is already being written, it says `A backup is already being written - try again in a moment.` instead.
+
+When it's done, the status line under the list says `Backup created:` and the file name, and the new backup appears at the top of **Existing Backups**. **Last backup:** updates too.
+
+Backups go to the folder shown under **Automatic Backups** (by default, `HeatCaller Backups` in your Documents folder). **Open Backup Folder** opens it in File Explorer.
+
+A good habit is to click **Back Up Now** at the end of each race night and copy the newest file somewhere off the laptop: a USB stick, or a cloud drive.
+
+!!! note
+    **Back Up Now** also counts as the latest backup for the automatic schedule, so the next automatic backup is due one interval after it.
+
+If nothing has been saved yet (a brand-new install), the backup fails with `No saved data found to back up yet - nothing has been configured or raced yet.`
+
+## Automatic backups
+
+Automatic backups are on by default. HeatCaller checks when it starts and then every hour, and makes a backup whenever the interval has passed since the last one. If a backup fails, it notes it in the console and tries again at the next check; nothing else is interrupted.
+
+An automatic backup runs in the background, so the app keeps responding while it's written. It never starts while a race or practice is running: one that falls due then waits, and is made once the session has finished. It also waits if a **Back Up Now** backup is still being written, and is made at a later check.
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Automatically back up** | Turns automatic backups on or off. | On |
+| **every** *n* **day** / **days** | How long between automatic backups, from 1 to 30 days. | 1 day |
+| **Keep the last** *n* **automatic backups (older ones are deleted automatically)** | How many automatic backups to keep, from 1 to 200. | 14 |
+| **Folder:** | Where all backups go. Click **Change...** to pick another folder. | `Documents\HeatCaller Backups` |
+
+Changes save as soon as you make them.
+
+**Only automatic backups are ever deleted.** When there are more than your **Keep the last** number, HeatCaller deletes the oldest automatic ones. Backups made with **Back Up Now**, pre-restore safety backups, and any other files in the folder are never touched. This means you can safely point the folder at somewhere shared, like Documents.
+
+**Last backup:** shows when the most recent backup (manual or automatic) was made, or `never`.
+
+!!! tip
+    Point **Folder:** at a folder your cloud storage app syncs (OneDrive, Google Drive, Dropbox), and every automatic backup is copied off the laptop without you doing anything.
+
+## Copies in the cloud
+
+A backup on the laptop is lost with the laptop. HeatCaller can also put a copy of every backup in **Google Drive**, **iCloud Drive** or **OneDrive**, or all three.
+
+It uses each service's own Windows app, which you install and sign in to once:
+
+| Service | Install |
+|---|---|
+| Google Drive | Google Drive for desktop |
+| iCloud Drive | iCloud for Windows (from the Microsoft Store) |
+| OneDrive | Built into Windows. Sign in from the OneDrive icon by the clock. |
+
+Then, on **Backup & Restore**, under **Automatic Backups**, tick the services under **Also copy every backup to:**. A service that isn't installed and signed in on this PC is greyed out, and the line below says what to install. Press **Check Again** after installing it.
+
+- Every backup gets copied: automatic ones and **Back Up Now**.
+- Copies go in a **HeatCaller Backups** folder at the top of your Drive, iCloud Drive or OneDrive. The service's app uploads them whenever the laptop is online, so an offline race night is fine.
+- The same **Keep the last** count applies there: older automatic copies are deleted, and backups you made by hand are kept.
+- A copy that fails never affects the backup on the laptop. The reason shows on the page after **Back Up Now**, and in the Developer Console for automatic backups.
+- HeatCaller never signs in to your cloud account, and holds no password or token for it.
+
+To restore from a cloud copy, use **Restore from File...** and pick the zip in the **HeatCaller Backups** folder (on a new PC, install and sign in to the service's app first).
+
+!!! tip "Set a backup password"
+    Your keys, tokens and PINs are only in a backup, locked, when a backup password is set. Without one, a cloud copy holds your drivers, results and settings but no keys. See [The backup password](#the-backup-password).
+
+## The backup password
+
+<!-- screenshot: Backup Password section with the status line -->
+
+The **Backup Password** section decides whether backups carry your keys, tokens and PINs.
+
+- **With a password set**, the status line says `Keys and tokens travel with backups, locked with this password.` Each backup made from then on includes those secrets, encrypted with the password.
+- **With no password**, it says `No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.`
+
+The secrets a backup carries are: the ElevenLabs key, the relay publish token, the QR check-in key, the Local Screens PINs, the online staff PIN, every racer's personal PIN, and the email app password.
+
+The QR check-in key matters most. Every printed online QR check-in's QR code is made from it. Lose it, and every online QR check-in in every driver's box stops working and has to be reprinted.
+
+**Reissue All QR Check-ins** on the **Club Website** page replaces the QR check-in key on purpose (see [Reissue all QR check-ins](../online/check-in.md#reissue-all-qr-check-ins)). Make a fresh backup straight afterwards: restoring a backup made before the reissue puts the old key back, so the QR check-ins printed since stop scanning and the old ones work again.
+
+### Setting the password
+
+1. Type the password in **New password:** and again in **Type it again:**. It must be at least 8 characters. Spaces count, and it isn't trimmed.
+2. Click **Set Password**.
+
+HeatCaller confirms: backups made from now on carry the keys, tokens and QR check-in key, locked with the password. **Backups made before don't**, so make a fresh backup straight away.
+
+Write the password down and keep it away from the laptop. It can't be recovered. Anyone holding a backup file can try passwords at leisure, so choose a long one.
+
+To change the password, set a new one the same way. Each backup keeps the password it was made with.
+
+### Removing the password
+
+Click **Remove Password** and confirm. Backups made from then on don't carry keys. Backups already made keep the password they were made with.
+
+## Restoring a backup
+
+Restoring replaces your current data with the backup's. HeatCaller protects you from the most common mistakes:
+
+- **It checks the file first.** It must be a HeatCaller backup (it has settings or driver profiles in it), every file in it must belong inside the data folder, and it must not unpack to an unreasonable size (over 2 GB). If any check fails, nothing is restored, and the message says why.
+- **It takes a safety backup first.** Your current data is backed up into the `Pre-Restore Safety Backups` subfolder of your backup folder, so a restore can be undone by restoring that.
+- **It stops music, ambience and the I-Lap decoder first**, so the files they have open can be replaced.
+- **It unpacks to a separate folder, then moves the files into place**, so a damaged backup can't leave you with half the old data and half the new.
+- **It keeps going if a file is locked.** A music, audio or log file that's in use is left as it was, and the `Restore complete.` message lists it. If some data files couldn't be replaced, a **Restore incomplete** message lists them and names the safety backup, and HeatCaller still restarts.
+- **It clears the crash-recovery copy** of an unfinished race, unless the backup has one of its own, so a race from before the restore isn't offered back afterwards.
+- **It restarts HeatCaller** so everything loads from the restored files. From the moment the restore finishes, HeatCaller stops saving anything, so the old data in memory can't overwrite what was just restored.
+
+### Steps
+
+1. Open **Backup & Restore**.
+2. Either select a backup in **Existing Backups** and click **Restore Selected**, or click **Restore from File...** and pick a `.zip` anywhere on the PC.
+3. Read the confirmation and click **Yes**. Once your club has online QR check-ins, the confirmation also says what a restore does to them: `QR check-ins: the backup's QR check-in key comes back with it. QR check-ins printed with the key in this backup work; if you have used Reissue All QR Check-ins since it was made, QR check-ins printed after that stop working - print them again, or reissue again on the Club Website page.`
+4. The `Restore complete.` message shows where your previous data was saved. Click **OK**, and HeatCaller restarts.
+
+A restore is refused while a race or practice is running ("A race or practice is running. Restore a backup once it has finished - restoring restarts the app, which would end it.") and while a backup is being written ("A backup is being written - try again in a moment.").
+
+The **Existing Backups** list shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File...** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
+
+## Restoring on a new PC
+
+Moving to a new laptop? Install HeatCaller on it, copy your newest backup across, then restore it as above. What happens next depends on whether the backup was made with a backup password.
+
+### If the backup has a password
+
+After the restart, HeatCaller notices the keys came from another PC and asks for the backup password:
+
+<!-- screenshot: Backup password dialog, "Unlock the keys from this backup" -->
+
+1. Type the backup password and click **Unlock**. Unlocking takes a moment, on purpose.
+2. A **Keys recovered** message says `The keys, tokens and PINs from the backup are back, locked to this PC.` and that HeatCaller will now restart to load them. HeatCaller then restarts once more.
+
+When the backup had a QR check-in key, the message adds: `QR check-ins work as they did when the backup was made. If Reissue All QR Check-ins was used after that, restoring has undone it: QR check-ins printed since won't scan, and the ones it stopped work again. Print the newer ones again, or reissue again and print every QR check-in.`
+
+The password you typed becomes this PC's backup password too, so backups made here keep carrying the keys.
+
+If the password is wrong, the dialog says so and how many tries are left. You get **three tries**. After the third, or if you click **Skip**, HeatCaller carries on without the keys and tells you what to enter again (below). To try again later, restore the same backup again and enter the password when asked.
+
+### If the backup has no password (or you skipped)
+
+HeatCaller tells you, once, what needs entering again:
+
+- the relay token, for online results and check-in (**Club Website** page)
+- the ElevenLabs key (**Voice Announcements → Voice Settings**)
+- the email app password for racer PINs (**Club Website** page)
+- the Local Screens remote, check-in and manager PINs (**Local Screens** page)
+- racers' personal check-in PINs: make a new set (**Club Website** page)
+
+**The QR check-in key can't be recovered either, so QR check-ins printed on the old PC won't scan. Print new ones.** A new QR check-in key is made the next time one is needed.
+
+Everything else (drivers, classes, history, championships, tracks, sounds) comes across whether or not there was a password.
+
+!!! note
+    While HeatCaller is waiting to recover keys, it doesn't make automatic backups or new racer PINs. It picks up again once the recovery is dealt with.
+
+If you still have the old PC, its settings are untouched: the keys on it still open there.
+
+## Files kept as `.unreadable-` copies
+
+If HeatCaller can't read one of its data files when it starts (because another program had it locked, it was damaged, or it was saved by a newer version), it doesn't stop. It starts that part with defaults so the app still opens, but **first** it copies the original aside, next to it, with `.unreadable-` and the date and time added, for example:
+
+```
+profiles.json.unreadable-20260921-193005
+```
+
+The console says so, for example: `[storage] Couldn't read "profiles.json" (...). Started with defaults instead; the original was kept as "profiles.json.unreadable-20260921-193005".`
+
+Without that copy, the next save would write the empty defaults over your data. With it, nothing is lost. An earlier copy is never overwritten; a second one on the same second gets `-2` added.
+
+You'll also see a `settings.json.unreadable-...` copy after restoring onto a new PC. That one is expected: it's the settings file as it arrived, with keys only the old PC can open.
+
+To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of the data folder, then rename the copy back to the original file name, replacing the default one. <!-- TODO: confirm this recovery procedure is the recommended one --> If it still won't load, keep the copy and contact support with it.
+
+## Troubleshooting
+
+| Message | What it means | What to do |
+|---|---|---|
+| `That zip isn't a backup made by this app - it has no settings or driver profiles in it. Nothing has been restored.` | You picked a zip that isn't a HeatCaller backup. | Pick a `HeatCaller-...zip` file. |
+| `That backup tries to write outside the app's data folder (...)` | The zip has a file that would land outside the data folder. It wasn't made by HeatCaller. | Don't use that file. |
+| `That backup unpacks to far more than any real backup could. Nothing has been restored.` | The zip would unpack to over 2 GB. | Use a different backup. |
+| `The restore stopped partway through: ...` | Rare: something failed while moving files into place. HeatCaller restarts. | If things look wrong afterwards, restore the safety backup in the `Pre-Restore Safety Backups` folder. |
+| `The restore only partly worked. These files couldn't be put back...` | Another program had some data files open. They still hold the data from before the restore. | Close anything that might have them open and restore the same backup again, or restore the safety backup it names to go back. |
+| `Password too short` | The backup password is under 8 characters. | Use a longer one. |
+| `Passwords don't match` | The two boxes differ. | Type the same password in both. |
+| `That password doesn't open this backup.` | Wrong backup password on a new PC. | Check caps lock and try again; you have three tries. |
+| `Backup failed` | The backup couldn't be written: the folder may be unavailable or the disk full. | Check the folder under **Folder:**, or pick another with **Change...**. |
+| Automatic backups stopped appearing | **Automatically back up** is off, or the folder is unavailable (the console shows `[backup] Automatic backup failed:`). | Tick the box; check the folder. |
+
+More in [Troubleshooting](troubleshooting.md#backups-and-restore).
+
+## Related pages
+
+- [Data files](data-files.md)
+- [Security and privacy](security-and-privacy.md)
+- [Installing HeatCaller](../getting-started/install.md)

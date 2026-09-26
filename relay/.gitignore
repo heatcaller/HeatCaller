@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/
+relay.config.json
+data-voice-test/
+relay.config.voice-test.json
+voice-test.key

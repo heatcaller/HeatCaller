@@ -1,0 +1,2681 @@
+namespace HeatCaller;
+
+/// <summary>
+/// The Club Website page: where a club points this laptop at its relay, decides
+/// what may be published, and sees whether it is actually getting through.
+///
+/// A page of its own rather than a section on Local Screens, for the same
+/// reason Classes became one: this is the thing somebody goes looking for,
+/// and it should not be four steps inside a page about something else. The
+/// Local Screens page carries a one-line status and a button through to
+/// here, so there are two doors rather than one.
+/// </summary>
+public sealed class RelaySettingsControl : UserControl
+{
+    private const int Inset = 12;
+    private const int PageWidth = 780;
+
+    private readonly RelayPublisher _publisher;
+    private readonly AppSettings _settings;
+    private readonly ProfileStore _profiles;
+
+    /// <summary>The app's undo, for New PINs and Reissue All Badges. Null when the host didn't pass one.</summary>
+    private readonly UndoService? _undo;
+
+    /// <summary>
+    /// True while the controls are being filled in from settings.
+    ///
+    /// Setting a CheckBox's Checked property raises CheckedChanged, and
+    /// this page saves on that event - so loading used to write the boxes
+    /// back to settings BEFORE they had been filled in, storing empty
+    /// strings over a perfectly good address, club and token.
+    ///
+    /// It only bit once publishing had been switched on, because
+    /// CheckedChanged fires on a CHANGE: while the setting was false,
+    /// loading false changed nothing and raised nothing. The first launch
+    /// after enabling it wiped the lot, silently, and the publisher then
+    /// dropped everything for want of a configuration.
+    /// </summary>
+    private bool _loading;
+
+    private readonly CheckBox _chkEnabled = new();
+    private readonly TextBox _txtBaseUrl = new();
+    private readonly TextBox _txtClub = new();
+    private readonly TextBox _txtToken = new();
+    private readonly CheckBox _chkShowToken = new();
+    private readonly CheckBox _chkRoster = new();
+    private readonly CheckBox _chkAbbreviate = new();
+    private readonly Button _btnTest = new();
+    private readonly Button _btnSave = new();
+    private readonly Button _btnRestore = new();
+    private readonly Label _lblLastGood = new();
+    private readonly Button _btnDelete = new();
+    private readonly Label _lblTestResult = new();
+    private readonly Label _lblStatus = new();
+    private readonly Label _lblDetail = new();
+    private readonly TextBox _txtTagline = new();
+
+    /// <summary>One box per RelaySocial platform, keyed by its key.</summary>
+    private readonly Dictionary<string, TextBox> _socialBoxes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Says what is wrong with a link that was just typed, or nothing.</summary>
+    private readonly Label _lblSocialProblem = new();
+    private readonly Button _btnOpenLooks = new();
+    private readonly CheckBox _chkCheckIn = new();
+    private readonly TextBox _txtCheckInPin = new();
+    private readonly Label _lblCheckInState = new();
+    private readonly Button _btnOpenCheckIn = new();
+    private readonly Button _btnReissueBadges = new();
+
+    /// <summary>
+    /// Whether Reissue All Badges is on show. Kept here rather than read
+    /// back from the button's Visible, which answers false whenever this
+    /// page is not the one on screen. See RefreshCheckInState.
+    /// </summary>
+    private bool _reissueOffered = true;
+
+    private readonly CheckBox _chkCheckInPhotos = new();
+    private readonly CheckBox _chkRacerPins = new();
+    private readonly ComboBox _cmbPinRotation = new();
+    private readonly Label _lblPinsState = new();
+    private readonly Button _btnShowPins = new();
+    private readonly Button _btnNewPins = new();
+    private readonly Button _btnEmailPins = new();
+    private readonly CheckBox _chkEmailPinsAuto = new();
+    private readonly ComboBox _cmbMailPreset = new();
+    private readonly TextBox _txtSmtpHost = new();
+    private readonly NumericUpDown _numSmtpPort = new();
+    private readonly TextBox _txtSmtpUser = new();
+    private readonly TextBox _txtSmtpPassword = new();
+    private readonly CheckBox _chkShowSmtpPassword = new();
+    private readonly TextBox _txtSmtpFromName = new();
+    private readonly Button _btnTestMail = new();
+    private readonly Label _lblMailResult = new();
+    private readonly CheckBox _chkManager = new();
+    private readonly Label _lblManagerState = new();
+    private readonly Button _btnManagerPin = new();
+    private readonly Button _btnOpenManage = new();
+
+    /// <summary>Stops an email send in progress when the page goes away.</summary>
+    private readonly CancellationTokenSource _mailCancel = new();
+
+    /// <summary>What the Email PINs button's send is up to, for the status line. Null when it is not sending.</summary>
+    private string? _pinProgress;
+
+    /// <summary>
+    /// Why the staff PIN just typed was not saved, shown in the check-in
+    /// line until it is fixed. Held here rather than written to the label
+    /// once, because that line is redrawn every second and would wipe it.
+    /// </summary>
+    private string? _pinRejected;
+    private readonly LinkLabel _lnkClubPage = new();
+    private readonly Button _btnOpenPage = new();
+    private readonly Button _btnCopyPage = new();
+    private readonly Button _btnPoster = new();
+    private readonly System.Windows.Forms.Timer _tick = new();
+
+    /// <summary>
+    /// Raised when the personal PINs have been changed here - a new set, or
+    /// switched on or off - so the check-in list goes to the relay at once
+    /// rather than on the next pass.
+    /// </summary>
+    public event Action? RacerPinsChanged;
+
+    /// <summary>
+    /// Raised by "Open Looks": the club pages' colours and logo are set on
+    /// Themes → Looks, shared with the app and the other screens, and the
+    /// host (MainForm) takes the user there.
+    /// </summary>
+    public event Action? OpenLooksRequested;
+
+    /// <summary>
+    /// Raised by the manager group's "Set Manager PIN...": the PIN itself
+    /// lives on Local Screens, shared by the Wi-Fi and relay pages alike
+    /// (see AppSettings.ManagerPin), so this page only ever switches the
+    /// relay path on or off and sends the host there rather than keeping a
+    /// second box for the same PIN.
+    /// </summary>
+    public event Action? OpenPhoneWebRequested;
+
+    /// <summary>
+    /// Raised when Reissue All Badges has made and saved a new badge key.
+    /// Every driver's online id has changed with it, so the host (MainForm)
+    /// works them all out again and sends the check-in list - which carries
+    /// them - straight away, rather than on its next pass.
+    /// </summary>
+    public event Action? BadgesReissued;
+
+    /// <summary>Console output from this page: what was done here that the log should show.</summary>
+    public event Action<string>? StatusMessage;
+
+    /// <summary>
+    /// The relay's address, club or token was changed and saved while the
+    /// HeatCaller voice speaks through this same relay (the voice relay
+    /// boxes on Voice Settings are blank). A rest the voice was taking over
+    /// the old relay - a spent allowance, a token it turned down - says
+    /// nothing about the new one, so the announcer is told to ask again.
+    /// </summary>
+    public event Action? VoiceRelayChanged;
+
+    public RelaySettingsControl(RelayPublisher publisher, AppSettings settings, ProfileStore profiles, UndoService? undo = null)
+    {
+        _publisher = publisher;
+        _settings = settings;
+        _profiles = profiles;
+        _undo = undo;
+
+        Dock = DockStyle.Fill;
+        MinimumSize = new Size(820, 640);
+        Font = AppTheme.BodyFont;
+
+        // Four groups tall now; a laptop screen at 125% no longer fits
+        // them, and a page whose last buttons are below the window with
+        // no way down to them is a page with fewer buttons.
+        AutoScroll = true;
+
+        BuildLayout();
+        LoadFromSettings();
+        RefreshStatus();
+        RefreshLastGood();
+
+        _tick.Interval = 1000;
+        _tick.Tick += (_, _) => RefreshStatus();
+        _tick.Start();
+
+        // Everything here is placed from the block above it; the repair
+        // pass would only fight it.
+        LayoutDoctor.LeaveAlone(this);
+    }
+
+    /// <summary>Called when the page is navigated to, so the boxes match what settings actually hold.</summary>
+    public void RefreshAll()
+    {
+        LoadFromSettings();
+        RefreshStatus();
+        RefreshLastGood();
+    }
+
+    private void BuildLayout()
+    {
+        var lblIntro = new Label
+        {
+            Text = "Publishes results, standings and the live race to a relay, so they are reachable from off the "
+                 + "venue's Wi-Fi and outlive this laptop being closed. The laptop stays in charge: it only ever "
+                 + "sends, and nothing on a race day waits for the network.",
+            Location = new Point(Inset, Inset),
+            AutoSize = true,
+            MaximumSize = new Size(PageWidth, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.BodyFont,
+        };
+
+        var grpRelay = new GroupBox
+        {
+            Text = "Relay",
+            Location = new Point(Inset, UiLayout.Below(lblIntro, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildRelayGroup(grpRelay);
+
+        var grpPublish = new GroupBox
+        {
+            Text = "What gets published",
+            Location = new Point(Inset, UiLayout.Below(grpRelay, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildPublishGroup(grpPublish);
+
+        var grpLook = new GroupBox
+        {
+            Text = "Look",
+            Location = new Point(Inset, UiLayout.Below(grpPublish, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildLookGroup(grpLook);
+
+        var grpCheckIn = new GroupBox
+        {
+            Text = "Online check-in",
+            Location = new Point(Inset, UiLayout.Below(grpLook, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildCheckInGroup(grpCheckIn);
+
+        var grpPins = new GroupBox
+        {
+            Text = "Personal PINs",
+            Location = new Point(Inset, UiLayout.Below(grpCheckIn, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildPinsGroup(grpPins);
+
+        var grpMail = new GroupBox
+        {
+            Text = "Email (for racer PINs)",
+            Location = new Point(Inset, UiLayout.Below(grpPins, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildMailGroup(grpMail);
+
+        var grpManager = new GroupBox
+        {
+            Text = "Race-day manager",
+            Location = new Point(Inset, UiLayout.Below(grpMail, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildManagerGroup(grpManager);
+
+        var grpShare = new GroupBox
+        {
+            Text = "Share",
+            Location = new Point(Inset, UiLayout.Below(grpManager, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildShareGroup(grpShare);
+
+        var grpStatus = new GroupBox
+        {
+            Text = "Status",
+            Location = new Point(Inset, UiLayout.Below(grpShare, UiLayout.RowGap)),
+            Width = PageWidth,
+            Font = AppTheme.BodyFont,
+        };
+
+        BuildStatusGroup(grpStatus);
+
+        Controls.Add(lblIntro);
+        Controls.Add(grpRelay);
+        Controls.Add(grpPublish);
+        Controls.Add(grpLook);
+        Controls.Add(grpCheckIn);
+        Controls.Add(grpPins);
+        Controls.Add(grpMail);
+        Controls.Add(grpManager);
+        Controls.Add(grpShare);
+        Controls.Add(grpStatus);
+    }
+
+    private void BuildRelayGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _chkEnabled.Text = "Publish to the relay";
+        _chkEnabled.Location = new Point(Inset, y);
+        _chkEnabled.AutoSize = true;
+        _chkEnabled.Font = AppTheme.BoldFont;
+        _chkEnabled.CheckedChanged += (_, _) =>
+        {
+            // Saved together with the fields: turning this on while the
+            // token sat unsaved in its box would switch on a publisher
+            // with nothing to publish with.
+            SaveFields();
+        };
+
+        y = UiLayout.Below(_chkEnabled, UiLayout.RowGap);
+
+        var lblUrl = new Label { Text = "Address:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblClub = new Label { Text = "Club id:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblToken = new Label { Text = "Publish token:", AutoSize = true, Font = AppTheme.BodyFont };
+
+        // One column from the widest caption, so the three fields line up
+        // instead of each starting wherever its own label ended.
+        var captionWidth = new[] { lblUrl.Text, lblClub.Text, lblToken.Text }
+            .Max(t => TextRenderer.MeasureText(t, AppTheme.BodyFont).Width);
+
+        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
+        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 460);
+
+        _txtBaseUrl.Font = AppTheme.BodyFont;
+        _txtBaseUrl.Width = fieldWidth;
+        _txtBaseUrl.PlaceholderText = "http://localhost:8787";
+
+        _txtClub.Font = AppTheme.BodyFont;
+        _txtClub.Width = Math.Min(260, fieldWidth);
+        _txtClub.PlaceholderText = "your-club";
+
+        _txtToken.Font = AppTheme.BodyFont;
+        _txtToken.Width = fieldWidth;
+        _txtToken.UseSystemPasswordChar = true;
+        _txtToken.PlaceholderText = "hg_...";
+
+        y = FieldRow(lblUrl, _txtBaseUrl, fieldLeft, y);
+        y = FieldRow(lblClub, _txtClub, fieldLeft, y);
+        y = FieldRow(lblToken, _txtToken, fieldLeft, y);
+
+        _chkShowToken.Text = "Show the token";
+        _chkShowToken.Location = new Point(fieldLeft, y);
+        _chkShowToken.AutoSize = true;
+        _chkShowToken.Font = AppTheme.SmallFont;
+        _chkShowToken.CheckedChanged += (_, _) => _txtToken.UseSystemPasswordChar = !_chkShowToken.Checked;
+
+        y = UiLayout.Below(_chkShowToken, UiLayout.RowGap);
+
+        _btnTest.Text = "Test Connection";
+        _btnTest.Font = AppTheme.BodyFont;
+        _btnTest.Click += async (_, _) => await TestAsync();
+
+        _btnSave.Text = "Save";
+        _btnSave.Font = AppTheme.BodyFont;
+        _btnSave.Click += (_, _) =>
+        {
+            if (SaveFields())
+            {
+                ShowTestResult(new RelayProbe(true, "Saved."));
+            }
+        };
+
+        _btnRestore.Text = "Restore Last Working";
+        _btnRestore.Font = AppTheme.BodyFont;
+        _btnRestore.Click += (_, _) => RestoreLastGood();
+
+        _btnTest.Size = new Size(UiLayout.WidthFor(_btnTest), UiLayout.ButtonHeight);
+        _btnSave.Size = new Size(UiLayout.WidthFor(_btnSave), UiLayout.ButtonHeight);
+        _btnRestore.Size = new Size(UiLayout.WidthFor(_btnRestore), UiLayout.ButtonHeight);
+
+        var buttonsBottom = UiLayout.FlowButtons(Inset, y, group.Width - Inset, _btnSave, _btnTest, _btnRestore);
+
+        // Live, so the Restore button knows whether what is in the boxes
+        // has drifted from what last worked.
+        _txtBaseUrl.TextChanged += (_, _) => RefreshLastGood();
+        _txtClub.TextChanged += (_, _) => RefreshLastGood();
+        _txtToken.TextChanged += (_, _) => RefreshLastGood();
+
+        // Both of these say different things at different lengths, and
+        // one sits under the other. Auto-sizing them would mean the group
+        // was measured against whichever message happened to be showing
+        // when the page was built - so they get a fixed two-line box each
+        // and the group's height stops depending on what they say.
+        var hintHeight = AppTheme.SmallFont.Height * 2 + 4;
+
+        _lblTestResult.Location = new Point(Inset, buttonsBottom + UiLayout.HintGap);
+        _lblTestResult.AutoSize = false;
+        _lblTestResult.Size = new Size(inner, hintHeight);
+        _lblTestResult.AutoEllipsis = true;
+        _lblTestResult.Font = AppTheme.SmallFont;
+        _lblTestResult.ForeColor = AppTheme.TextMuted;
+        _lblTestResult.Text = "Test Connection checks the address, club and token without publishing anything.";
+
+        _lblLastGood.Location = new Point(Inset, UiLayout.Below(_lblTestResult, UiLayout.HintGap));
+        _lblLastGood.AutoSize = false;
+        _lblLastGood.Size = new Size(inner, hintHeight);
+        _lblLastGood.AutoEllipsis = true;
+        _lblLastGood.Font = AppTheme.SmallFont;
+        _lblLastGood.ForeColor = AppTheme.TextMuted;
+
+        group.Controls.AddRange(new Control[]
+        {
+            _chkEnabled, lblUrl, _txtBaseUrl, lblClub, _txtClub, lblToken, _txtToken,
+            _chkShowToken, _btnSave, _btnTest, _btnRestore, _lblTestResult, _lblLastGood,
+        });
+
+        group.Height = UiLayout.Below(_lblLastGood, Inset);
+    }
+
+    private static int FieldRow(Label caption, TextBox field, int fieldLeft, int y)
+    {
+        caption.Location = new Point(Inset, UiLayout.CentreOn(caption, y, field.Height));
+        field.Location = new Point(fieldLeft, y);
+        return UiLayout.Below(field, UiLayout.RowGap);
+    }
+
+    private void BuildPublishGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        var lblAlways = new Label
+        {
+            Text = "The live race while one is running, each session's results as it is saved, championship "
+                 + "standings, today's schedule from Race Day's Run Sheet tab, the badges drivers have earned, and "
+                 + "every track layout with its lap record and best laps.",
+            Location = new Point(Inset, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            Font = AppTheme.BodyFont,
+        };
+
+        y = UiLayout.Below(lblAlways, UiLayout.RowGap);
+
+        _chkRoster.Text = "Also publish the roster and heat line-ups (who is entered, and who is in which heat)";
+        _chkRoster.Location = new Point(Inset, y);
+        _chkRoster.AutoSize = true;
+        _chkRoster.Font = AppTheme.BodyFont;
+        _chkRoster.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayPublishRoster = _chkRoster.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        y = UiLayout.Below(_chkRoster, UiLayout.HintGap);
+
+        var lblRosterHint = new Label
+        {
+            Text = "Off by default on purpose. This puts driver names on an address anyone can open, and some of "
+                 + "those drivers are likely to be children. The relay withholds the roster page as well unless the "
+                 + "club is set up to allow it, so both ends have to agree before that list is public. Heat line-ups "
+                 + "are held back here, on the laptop: with this off, the schedule shows the heats but not who is in them.",
+            Location = new Point(Inset + UiLayout.Indent, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        y = UiLayout.Below(lblRosterHint, UiLayout.RowGap);
+
+        _chkAbbreviate.Text = "Shorten published names to a first name and an initial";
+        _chkAbbreviate.Location = new Point(Inset, y);
+        _chkAbbreviate.AutoSize = true;
+        _chkAbbreviate.Font = AppTheme.BodyFont;
+        _chkAbbreviate.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayAbbreviateNames = _chkAbbreviate.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        y = UiLayout.Below(_chkAbbreviate, UiLayout.HintGap);
+
+        var lblNameHint = new Label
+        {
+            Text = "\"Sam K\" rather than the full name, everywhere the relay shows one - the live board, "
+                 + "results, standings and the roster. Only the last name is shortened and a single-word name is "
+                 + "left alone. Affects what is sent from now on, not what is already on the relay.",
+            Location = new Point(Inset + UiLayout.Indent, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[]
+        {
+            lblAlways, _chkRoster, lblRosterHint, _chkAbbreviate, lblNameHint,
+        });
+
+        group.Height = UiLayout.Below(lblNameHint, Inset);
+    }
+
+    /// <summary>
+    /// How the club's pages greet people: the welcome line, live - the site
+    /// document is rebuilt every two seconds and only sent when it differs -
+    /// so there is no Save.
+    ///
+    /// The colours and the logo used to be chosen here too. Since 0.48 they
+    /// are one set shared by the app, the Big Screen, the Wi-Fi pages and
+    /// these pages, chosen on Themes → Looks, and this group points there
+    /// rather than keeping a second copy that could disagree.
+    /// </summary>
+    private void BuildLookGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        var lblTagline = new Label { Text = "Welcome line:", AutoSize = true, Font = AppTheme.BodyFont };
+
+        // One column of boxes for the welcome line and every link below it,
+        // lined up on the widest caption.
+        var widestCaption = RelaySocial.Platforms
+            .Select(p => p.Label + ":")
+            .Append(lblTagline.Text)
+            .Max(text => TextRenderer.MeasureText(text, AppTheme.BodyFont).Width);
+
+        var fieldLeft = Inset + widestCaption + UiLayout.LabelGap;
+        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 460);
+
+        _txtTagline.Font = AppTheme.BodyFont;
+        _txtTagline.Width = fieldWidth;
+        _txtTagline.MaxLength = 160;
+        _txtTagline.PlaceholderText = "Racing every Tuesday from 6pm - all welcome";
+
+        // Held in memory as it is typed, so the next publish carries it;
+        // written to disk when the box is left rather than per keystroke.
+        _txtTagline.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.RelayTagline = _txtTagline.Text.Trim();
+            }
+        };
+        _txtTagline.Leave += (_, _) => _settings.Save();
+
+        y = FieldRow(lblTagline, _txtTagline, fieldLeft, y);
+
+        // ------------------------------------------------ the club's links
+
+        var lblSocial = new Label
+        {
+            Text = "Club links",
+            Location = new Point(Inset, y + UiLayout.HintGap),
+            AutoSize = true,
+            Font = AppTheme.BoldFont,
+        };
+
+        var lblSocialHint = new Label
+        {
+            Text = "Shown on the club's home page and at the foot of every page, so visitors can find you "
+                 + "elsewhere. Paste the full address, or just @yourclub for Instagram, YouTube, TikTok and X. "
+                 + "Leave a box empty to leave that one off.",
+            Location = new Point(Inset, UiLayout.Below(lblSocial, UiLayout.HintGap)),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.Add(lblSocial);
+        group.Controls.Add(lblSocialHint);
+
+        y = UiLayout.Below(lblSocialHint, UiLayout.RowGap);
+
+        foreach (var platform in RelaySocial.Platforms)
+        {
+            var caption = new Label { Text = platform.Label + ":", AutoSize = true, Font = AppTheme.BodyFont };
+            var box = new TextBox
+            {
+                Font = AppTheme.BodyFont,
+                Width = fieldWidth,
+                MaxLength = RelaySocial.MaxUrlLength,
+                PlaceholderText = platform.Placeholder,
+            };
+
+            // Same as the welcome line: held in memory as typed (the site
+            // document is rebuilt every couple of seconds, and ForSite skips
+            // anything half-typed), tidied and saved when the box is left.
+            box.TextChanged += (_, _) =>
+            {
+                if (!_loading)
+                {
+                    _settings.RelaySocialLinks[platform.Key] = box.Text.Trim();
+                }
+            };
+
+            box.Leave += (_, _) => CommitSocialLink(platform, box);
+
+            _socialBoxes[platform.Key] = box;
+            group.Controls.Add(caption);
+            group.Controls.Add(box);
+
+            y = FieldRow(caption, box, fieldLeft, y);
+        }
+
+        _lblSocialProblem.Location = new Point(fieldLeft, y - UiLayout.RowGap + UiLayout.HintGap);
+        _lblSocialProblem.AutoSize = true;
+        _lblSocialProblem.MaximumSize = new Size(inner - (fieldLeft - Inset), 0);
+        _lblSocialProblem.ForeColor = AppTheme.Danger;
+        _lblSocialProblem.Font = AppTheme.SmallFont;
+        _lblSocialProblem.Text = string.Empty;
+        _lblSocialProblem.Visible = false;
+        group.Controls.Add(_lblSocialProblem);
+
+        // Room for a line of complaint under the last box, so showing one
+        // never pushes into the Looks note below.
+        y += TextRenderer.MeasureText("Ag", AppTheme.SmallFont).Height + UiLayout.HintGap;
+
+        var lblLooksNote = new Label
+        {
+            Text = "Colours and club logo are set on Themes \u2192 Looks (shared with the app, Big Screen and Wi-Fi pages).",
+            Location = new Point(Inset, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            Font = AppTheme.BodyFont,
+        };
+
+        _btnOpenLooks.Text = "Open Looks";
+        _btnOpenLooks.Font = AppTheme.BodyFont;
+        _btnOpenLooks.Size = new Size(UiLayout.WidthFor(_btnOpenLooks), UiLayout.ButtonHeight);
+        _btnOpenLooks.Location = new Point(Inset, UiLayout.Below(lblLooksNote, UiLayout.HintGap + 2));
+        _btnOpenLooks.Click += (_, _) => OpenLooksRequested?.Invoke();
+
+        var lblLookHint = new Label
+        {
+            Text = "Changes reach the club's pages within a few seconds.",
+            Location = new Point(Inset, UiLayout.Below(_btnOpenLooks, UiLayout.HintGap)),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[]
+        {
+            lblTagline, _txtTagline, lblLooksNote, _btnOpenLooks, lblLookHint,
+        });
+
+        group.Height = UiLayout.Below(lblLookHint, Inset);
+    }
+
+    /// <summary>
+    /// A link box was left: tidy what was typed into the address the relay
+    /// will be sent ("yourclub.com" to https://yourclub.com/, "@yourclub"
+    /// to the profile), or say why it can't be used. An unusable entry is
+    /// kept in the box - and in the settings, so it isn't lost - but never
+    /// published; RelaySocial.ForSite leaves it off.
+    /// </summary>
+    private void CommitSocialLink(RelaySocial.Platform platform, TextBox box)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        var url = RelaySocial.Normalize(platform, box.Text, out var problem);
+
+        if (url is null)
+        {
+            _settings.RelaySocialLinks[platform.Key] = box.Text.Trim();
+            _lblSocialProblem.Text = problem + " It won't be shown until it's fixed.";
+            _lblSocialProblem.Visible = true;
+        }
+        else
+        {
+            if (url.Length == 0)
+            {
+                _settings.RelaySocialLinks.Remove(platform.Key);
+            }
+            else
+            {
+                _settings.RelaySocialLinks[platform.Key] = url;
+            }
+
+            if (box.Text != url)
+            {
+                _loading = true;
+
+                try
+                {
+                    box.Text = url;
+                }
+                finally
+                {
+                    _loading = false;
+                }
+            }
+
+            RefreshSocialProblem();
+        }
+
+        _settings.Save();
+    }
+
+    /// <summary>Shows the first link that still can't be used, or nothing.</summary>
+    private void RefreshSocialProblem()
+    {
+        foreach (var platform in RelaySocial.Platforms)
+        {
+            if (_socialBoxes.TryGetValue(platform.Key, out var box)
+                && RelaySocial.Normalize(platform, box.Text, out var problem) is null)
+            {
+                _lblSocialProblem.Text = problem + " It won't be shown until it's fixed.";
+                _lblSocialProblem.Visible = true;
+                return;
+            }
+        }
+
+        _lblSocialProblem.Text = string.Empty;
+        _lblSocialProblem.Visible = false;
+    }
+
+    /// <summary>
+    /// Drivers checking themselves in from their own phones, through the
+    /// relay - which means from mobile data, from the car park, from a
+    /// guest Wi-Fi that keeps phones apart, none of which the LAN check-in
+    /// page can reach.
+    /// </summary>
+    private void BuildCheckInGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _chkCheckIn.Text = "Let drivers check in from their own phones";
+        _chkCheckIn.Location = new Point(Inset, y);
+        _chkCheckIn.AutoSize = true;
+        _chkCheckIn.Font = AppTheme.BoldFont;
+        _chkCheckIn.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayCheckInEnabled = _chkCheckIn.Checked;
+
+            if (_chkCheckIn.Checked)
+            {
+                // Made now rather than at the first badge print, so the ids
+                // the relay learns and the ids the badges carry come from
+                // the same key from the very first publish.
+                RelayCheckIn.EnsureSecret(_settings);
+            }
+
+            _settings.Save();
+            RefreshCheckInState();
+        };
+
+        y = UiLayout.Below(_chkCheckIn, UiLayout.RowGap);
+
+        var lblPin = new Label { Text = "Staff PIN (opens the full list):", AutoSize = true, Font = AppTheme.BodyFont };
+        var fieldLeft = Inset + UiLayout.Indent + TextRenderer.MeasureText(lblPin.Text, AppTheme.BodyFont).Width + UiLayout.LabelGap;
+
+        _txtCheckInPin.Font = AppTheme.BodyFont;
+        _txtCheckInPin.Width = 120;
+        _txtCheckInPin.MaxLength = 8;
+        _txtCheckInPin.PlaceholderText = "e.g. 246813";
+
+        // Digits only: the check-in page asks for it with a phone's number
+        // pad, and a PIN with a letter in it could not be typed there.
+        // ASCII digits, not char.IsDigit - that also lets through Arabic,
+        // Devanagari and full-width digits, which no number pad types.
+        _txtCheckInPin.KeyPress += (_, e) =>
+        {
+            if (!char.IsControl(e.KeyChar) && !char.IsAsciiDigit(e.KeyChar))
+            {
+                e.Handled = true;
+            }
+        };
+        _txtCheckInPin.TextChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            // Pasted text gets the same rule as typed text.
+            var digits = new string(_txtCheckInPin.Text.Where(char.IsAsciiDigit).ToArray());
+
+            if (digits != _txtCheckInPin.Text)
+            {
+                _txtCheckInPin.Text = digits;
+                _txtCheckInPin.SelectionStart = digits.Length;
+            }
+        };
+
+        // Taken into settings when the box is left, not per keystroke. The
+        // check-in list is republished every two seconds, so typing "2468"
+        // used to publish the hash of "2", then "24", then "246" - each of
+        // them, for a moment, the PIN that opened every driver's name.
+        //
+        // A new or changed PIN has to be six to eight digits (see
+        // RelayCheckIn.MinNewPinLength). The PIN already saved is left
+        // alone even if it is shorter - it still works, and gets a warning
+        // below rather than being thrown out. Clearing the box is always
+        // allowed: no staff PIN just keeps the full list closed.
+        _txtCheckInPin.Leave += (_, _) =>
+        {
+            var digits = new string(_txtCheckInPin.Text.Where(char.IsAsciiDigit).ToArray());
+
+            if (digits == _settings.RelayCheckInPin)
+            {
+                _pinRejected = null;
+                RefreshCheckInState();
+                return;
+            }
+
+            if (digits.Length > 0 && !RelayCheckIn.IsStrongPin(digits))
+            {
+                _pinRejected = RelayCheckIn.IsUsablePin(_settings.RelayCheckInPin)
+                    ? $"Not saved - a new staff PIN must be {RelayCheckIn.MinNewPinLength} to 8 digits. The old staff PIN still works until it is changed."
+                    : $"Not saved - a new staff PIN must be {RelayCheckIn.MinNewPinLength} to 8 digits.";
+                RefreshCheckInState();
+                return;
+            }
+
+            _pinRejected = null;
+            _settings.RelayCheckInPin = digits;
+            _settings.Save();
+            RefreshCheckInState();
+        };
+
+        _txtCheckInPin.Location = new Point(fieldLeft, y);
+        lblPin.Location = new Point(Inset + UiLayout.Indent, UiLayout.CentreOn(lblPin, y, _txtCheckInPin.Height));
+
+        y = UiLayout.Below(_txtCheckInPin, UiLayout.HintGap);
+
+        var lblHint = new Label
+        {
+            Text = "The staff PIN opens everybody's list at the club's check-in page - for a tablet on the desk. A "
+                 + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on the Entries page while this "
+                 + "is on and any phone camera, iPhones included, opens them straight to a Check In button. A racer's "
+                 + "own PIN (Personal PINs, below) does the same without a QR check-in. Nobody is checked in until somebody "
+                 + "taps it. Taps reach this laptop within a few seconds and land exactly like the Wi-Fi check-in page's.",
+            Location = new Point(Inset + UiLayout.Indent, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        y = UiLayout.Below(lblHint, UiLayout.RowGap);
+
+        _chkCheckInPhotos.Text = "Include photos (drivers can be children - off unless you're sure)";
+        _chkCheckInPhotos.Location = new Point(Inset + UiLayout.Indent, y);
+        _chkCheckInPhotos.AutoSize = true;
+        _chkCheckInPhotos.Font = AppTheme.BodyFont;
+        _chkCheckInPhotos.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            // Saving is all it takes: the check-in list is rebuilt every
+            // two seconds and sent whenever it differs, so the photos go
+            // on - or come off - the relay with the next pass.
+            _settings.RelayCheckInPhotos = _chkCheckInPhotos.Checked;
+            _settings.Save();
+        };
+
+        y = UiLayout.Below(_chkCheckInPhotos, UiLayout.RowGap);
+
+        _lblCheckInState.Location = new Point(Inset + UiLayout.Indent, y);
+        _lblCheckInState.AutoSize = false;
+        _lblCheckInState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
+        _lblCheckInState.Font = AppTheme.SmallFont;
+
+        y = UiLayout.Below(_lblCheckInState, UiLayout.HintGap);
+
+        _btnOpenCheckIn.Text = "Open Check-in Page";
+        _btnOpenCheckIn.Font = AppTheme.BodyFont;
+        _btnOpenCheckIn.Click += (_, _) =>
+        {
+            var page = ClubPageUrl();
+
+            if (page.Length > 0)
+            {
+                OpenUrl(page + "/checkin");
+            }
+        };
+
+        // Beside Open Check-in Page rather than on a row of its own, so the
+        // group is no taller for the club that never needs it. On show only
+        // once there is a badge key to replace - see RefreshCheckInState.
+        _btnReissueBadges.Text = "Reissue All QR Check-ins...";
+        _btnReissueBadges.Font = AppTheme.BodyFont;
+        _btnReissueBadges.Click += (_, _) => ReissueAllBadges();
+
+        var buttonsBottom = UiLayout.FlowButtons(Inset + UiLayout.Indent, y, group.Width - Inset, _btnOpenCheckIn, _btnReissueBadges);
+
+        group.Controls.AddRange(new Control[] { _chkCheckIn, lblPin, _txtCheckInPin, lblHint, _chkCheckInPhotos, _lblCheckInState, _btnOpenCheckIn, _btnReissueBadges });
+
+        group.Height = buttonsBottom + Inset;
+    }
+
+    /// <summary>One line on whether check-in is working, and if not, the thing to do about it.</summary>
+    private void RefreshCheckInState()
+    {
+        string text;
+        var colour = AppTheme.TextMuted;
+
+        if (_pinRejected is not null)
+        {
+            // First, whatever else is going on: it is about what was just
+            // typed, and the box still shows a PIN that is not in use.
+            text = _pinRejected;
+            colour = AppTheme.Danger;
+        }
+        else if (!_settings.RelayCheckInEnabled)
+        {
+            text = "Off. The check-in page says it is closed, and QR check-ins print in the Wi-Fi-only form.";
+        }
+        else if (!_settings.RelayEnabled)
+        {
+            text = "Switched on, but publishing to the relay is off - nothing reaches the check-in page until it is on.";
+            colour = AppTheme.Primary;
+        }
+        else if (_publisher.CheckInProblem is { } problem)
+        {
+            text = problem;
+            colour = AppTheme.Danger;
+        }
+        else if (_publisher.RelayPinLockedUntilUtc is DateTime lockedUntil)
+        {
+            // The relay has stopped taking PINs - racers' own as well as
+            // the staff one - for this club. Publishing a different staff
+            // PIN is what reopens it; badges keep working meanwhile. Ahead
+            // of the PIN checks below because it is the thing stopping
+            // sign-in right now, whatever they would say. The lock grows
+            // each time, so past today the day is given too.
+            var local = lockedUntil.ToLocalTime();
+            var when = local.Date == DateTime.Today ? local.ToString("t") : local.ToString("g");
+            var fix = _settings.RelayCheckInPin.Length == 0 ? "set a staff PIN" : "change the staff PIN";
+            text = $"PIN sign-in is locked after many wrong guesses until {when} - {fix} to reopen it.";
+            colour = AppTheme.Danger;
+        }
+        else if (_settings.RelayCheckInPin.Length == 0)
+        {
+            text = "Open for QR check-ins and racers' own PINs. No staff PIN is set, so the full list stays closed.";
+            colour = AppTheme.Accent;
+        }
+        else if (!RelayCheckIn.IsUsablePin(_settings.RelayCheckInPin))
+        {
+            // Not published at all until it is long enough - see
+            // RelayCheckIn.IsUsablePin - so this is an error, not advice.
+            // Says six, not four: four and five only still work for a PIN
+            // set before the six-digit rule, and a new one needs six.
+            text = "The staff PIN must be 6 to 8 digits. Until it is, the full list stays closed and only QR check-ins and racers' own PINs work.";
+            colour = AppTheme.Danger;
+        }
+        else if (RelayCheckIn.IsWeakPin(_settings.RelayCheckInPin))
+        {
+            text = "Works, but a 4- or 5-digit staff PIN can be guessed - change it to 6 or more digits.";
+            colour = AppTheme.Primary;
+        }
+        else
+        {
+            text = "Open - QR check-ins, racers' own PINs and the staff PIN list all work.";
+            colour = AppTheme.Accent;
+        }
+
+        if (_lblCheckInState.Text != text)
+        {
+            _lblCheckInState.Text = text;
+        }
+
+        _lblCheckInState.ForeColor = colour;
+        _btnOpenCheckIn.Enabled = _settings.RelayCheckInEnabled && ClubPageUrl().Length > 0;
+
+        // Offered once there is a badge key, whether check-in is on or off
+        // today: badges printed while it was on carry ids made from it, and
+        // the desk's scanner still reads them. Before there is a key, no
+        // badge carries an online id and there is nothing to reissue.
+        var offerReissue = RelayCheckIn.CanReissue(_settings);
+
+        if (offerReissue != _reissueOffered)
+        {
+            _reissueOffered = offerReissue;
+            _btnReissueBadges.Visible = offerReissue;
+        }
+    }
+
+    /// <summary>
+    /// Reissue All Badges: a new badge key, so every driver's online id
+    /// changes and every one handed out so far - on a printed badge, or
+    /// kept from the staff list by somebody who once had the staff PIN -
+    /// stops working. See RelayCheckIn.Reissue.
+    ///
+    /// Undo puts the old key back - for a reissue pressed by mistake, before
+    /// any badge has been printed with the new one. Nothing here can see
+    /// whether one has, so it is still asked plainly, with No as the answer
+    /// a stray Enter gives, and the dialog says what Undo would cost.
+    /// </summary>
+    private void ReissueAllBadges()
+    {
+        if (!RelayCheckIn.CanReissue(_settings))
+        {
+            return;
+        }
+
+        var answer = AppDialog.Show(
+            this,
+            "Reissue all QR check-ins?\n\n"
+            + "Every QR check-in printed so far that says \"Scan with your phone camera to check in\" stops working - on "
+            + "phones and at the desk scanner - and has to be printed again. Check-in links anybody has kept stop "
+            + "working too.\n\n"
+            + "Racers' own PINs and the staff PIN keep working. Undo puts the old QR check-ins back, but only until "
+            + "new QR check-ins have been printed - those would then stop working instead.",
+            "Reissue All QR Check-ins",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        // Asked again after the answer: nothing should have changed while
+        // the question was up, but a key made from nothing is not a reissue.
+        if (answer != DialogResult.Yes || !RelayCheckIn.CanReissue(_settings))
+        {
+            return;
+        }
+
+        // The key itself, not the page: the undo works on settings and
+        // tells the host through the same event the reissue does, so the
+        // ids are worked out again and the check-in list sent.
+        // Held sealed (DPAPI), as settings keep it on disk, rather than as
+        // plain text in memory for as long as the step is on the list - a
+        // reissue is often done because the old key got out.
+        string? sealedOldSecret = null;
+        try
+        {
+            sealedOldSecret = _undo is null ? null : SecretBox.Seal(_settings.RelayCheckInSecret);
+        }
+        catch
+        {
+            // Can't seal it: no undo, rather than one holding it in the clear.
+        }
+
+        if (sealedOldSecret is not null)
+        {
+            _undo?.Capture("Reissue all QR check-ins", () =>
+            {
+                _settings.RelayCheckInSecret = SecretBox.Open(sealedOldSecret);
+                _settings.Save();
+                BadgesReissued?.Invoke();
+            });
+        }
+
+        RelayCheckIn.Reissue(_settings);
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [relay] Reissued all QR check-ins: a new QR check-in key was made, so every QR check-in and link handed out before now has stopped working.");
+
+        try
+        {
+            BadgesReissued?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            // The new key is saved whatever happens here, and the host works
+            // the ids out again and sends the check-in list on its own
+            // two-second pass anyway - so this is a delay, not a failure, and
+            // must not turn into a crash after the key has already changed.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [relay] Couldn't send the check-in list with the new QR check-in ids straight away ({ex.Message}). It goes on the next pass.");
+        }
+
+        RefreshCheckInState();
+
+        AppDialog.Show(
+            this,
+            "Done. Print new QR check-ins on Race Day \u2192 Entries with Print QR Check-ins, and hand them out - the old ones no longer work.",
+            "Reissue All QR Check-ins",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    /// <summary>One entry in the "Change them" list.</summary>
+    private sealed record RotationChoice(PinRotation Value, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>One entry in the mail provider list. Other has no server of its own.</summary>
+    private sealed record PresetChoice(string Name, string Host, int Port)
+    {
+        public bool IsOther => Host.Length == 0;
+
+        public override string ToString() => Name;
+    }
+
+    /// <summary>
+    /// A PIN of every racer's own: typed on the check-in page, it checks in
+    /// that racer and nobody else. For the racer who left their badge at
+    /// home, and for the club that would rather not print badges at all.
+    /// </summary>
+    private void BuildPinsGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _chkRacerPins.Text = "Give every racer their own PIN";
+        _chkRacerPins.Location = new Point(Inset, y);
+        _chkRacerPins.AutoSize = true;
+        _chkRacerPins.Font = AppTheme.BoldFont;
+        _chkRacerPins.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayRacerPinsEnabled = _chkRacerPins.Checked;
+            _settings.Save();
+            RefreshPinsState();
+            RacerPinsChanged?.Invoke();
+        };
+
+        y = UiLayout.Below(_chkRacerPins, UiLayout.HintGap);
+
+        var lblPinsHint = new Label
+        {
+            Text = "Six digits each, and no two racers share one. A racer types theirs on the club's check-in page and "
+                 + "it checks in only them - it cannot open the list or check in anybody else. The relay is only ever "
+                 + "sent a scrambled form of each PIN, never the PIN. The staff PIN above still opens everything.",
+            Location = new Point(Inset + UiLayout.Indent, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        y = UiLayout.Below(lblPinsHint, UiLayout.RowGap);
+
+        var lblRotation = new Label { Text = "Change them:", AutoSize = true, Font = AppTheme.BodyFont };
+        var rotationLeft = Inset + UiLayout.Indent + TextRenderer.MeasureText(lblRotation.Text, AppTheme.BodyFont).Width + UiLayout.LabelGap;
+
+        _cmbPinRotation.Font = AppTheme.BodyFont;
+        _cmbPinRotation.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbPinRotation.Width = 200;
+        _cmbPinRotation.Location = new Point(rotationLeft, y);
+        _cmbPinRotation.Items.AddRange(new object[]
+        {
+            new RotationChoice(PinRotation.Never, "Never"),
+            new RotationChoice(PinRotation.Daily, "Every race day"),
+            new RotationChoice(PinRotation.Weekly, "Weekly"),
+            new RotationChoice(PinRotation.Monthly, "Monthly"),
+        });
+        lblRotation.Location = new Point(Inset + UiLayout.Indent, UiLayout.CentreOn(lblRotation, y, _cmbPinRotation.Height));
+
+        _cmbPinRotation.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _cmbPinRotation.SelectedItem is not RotationChoice choice)
+            {
+                return;
+            }
+
+            // Only the schedule. The set itself is replaced when it next
+            // falls due, the first time the app runs on that day - never
+            // from here, halfway through somebody reading their email.
+            _settings.RacerPinRotation = choice.Value;
+            _settings.Save();
+            RefreshPinsState();
+        };
+
+        y = UiLayout.Below(_cmbPinRotation, UiLayout.RowGap);
+
+        // Fixed two-line box, like the check-in state above it: what it says
+        // changes length, and the group's height must not.
+        _lblPinsState.Location = new Point(Inset + UiLayout.Indent, y);
+        _lblPinsState.AutoSize = false;
+        _lblPinsState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
+        _lblPinsState.AutoEllipsis = true;
+        _lblPinsState.Font = AppTheme.SmallFont;
+
+        y = UiLayout.Below(_lblPinsState, UiLayout.HintGap);
+
+        _btnShowPins.Text = "Show PINs...";
+        _btnShowPins.Font = AppTheme.BodyFont;
+        _btnShowPins.Click += (_, _) =>
+        {
+            using var form = new RacerPinsForm(_settings, _profiles);
+            form.ShowDialog(this);
+        };
+
+        _btnNewPins.Text = "New PINs Now";
+        _btnNewPins.Font = AppTheme.BodyFont;
+        _btnNewPins.Click += (_, _) => MakeNewPins();
+
+        _btnEmailPins.Text = "Email PINs...";
+        _btnEmailPins.Font = AppTheme.BodyFont;
+        _btnEmailPins.Click += async (_, _) => await EmailPinsAsync();
+
+        var buttonsBottom = UiLayout.FlowButtons(Inset + UiLayout.Indent, y, group.Width - Inset, _btnShowPins, _btnNewPins, _btnEmailPins);
+
+        y = buttonsBottom + UiLayout.RowGap;
+
+        _chkEmailPinsAuto.Text = "Email automatically when PINs change";
+        _chkEmailPinsAuto.Location = new Point(Inset + UiLayout.Indent, y);
+        _chkEmailPinsAuto.AutoSize = true;
+        _chkEmailPinsAuto.Font = AppTheme.BodyFont;
+        _chkEmailPinsAuto.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RacerPinsEmailAutomatically = _chkEmailPinsAuto.Checked;
+            _settings.Save();
+        };
+
+        y = UiLayout.Below(_chkEmailPinsAuto, UiLayout.HintGap);
+
+        var lblAutoHint = new Label
+        {
+            Text = "Each racer is sent their new PIN when a new set is made, and a newcomer theirs within ten minutes "
+                 + "of being added - as is anybody who has not been sent their current PIN yet. Racers need an "
+                 + "email address on their driver profile, and the Email group below set up.",
+            Location = new Point(Inset + UiLayout.Indent * 2, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent * 2, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[]
+        {
+            _chkRacerPins, lblPinsHint, lblRotation, _cmbPinRotation, _lblPinsState,
+            _btnShowPins, _btnNewPins, _btnEmailPins, _chkEmailPinsAuto, lblAutoHint,
+        });
+
+        group.Height = UiLayout.Below(lblAutoHint, Inset);
+    }
+
+    private void SelectRotation(PinRotation rotation)
+    {
+        var index = _cmbPinRotation.Items.Cast<RotationChoice>().ToList().FindIndex(c => c.Value == rotation);
+        _cmbPinRotation.SelectedIndex = index < 0 ? 0 : index;
+    }
+
+    /// <summary>
+    /// The personal PINs at a glance: how many, when they were made, when
+    /// they change, how many have been emailed - or, while emailing, how
+    /// far it has got.
+    /// </summary>
+    private void RefreshPinsState()
+    {
+        var racers = _profiles.All;
+        var withPin = racers.Count(p => _settings.RacerPins.ContainsKey(p.Transponder));
+        var sending = _pinProgress is not null || PinMailer.IsSending;
+
+        string text;
+        var colour = AppTheme.TextMuted;
+
+        if (_pinProgress is { } progress)
+        {
+            text = progress;
+            colour = AppTheme.Accent;
+        }
+        else if (PinMailer.IsSending)
+        {
+            text = "Sending email in the background...";
+            colour = AppTheme.Accent;
+        }
+        else if (!_settings.RelayRacerPinsEnabled)
+        {
+            text = "Off. Racers check in with their QR check-in, or somebody with the staff PIN checks them in.";
+        }
+        else if (!_settings.RelayCheckInEnabled)
+        {
+            text = "Online check-in is off above. PINs are made, and work, once it is on.";
+            colour = AppTheme.Primary;
+        }
+        else if (withPin == 0)
+        {
+            text = racers.Count == 0
+                ? "No racers yet. Each one gets a PIN within a few seconds of being added."
+                : "Making PINs - they appear within a few seconds.";
+        }
+        else
+        {
+            var emailed = racers.Count(p => _settings.RacerPins.ContainsKey(p.Transponder)
+                                            && RacerPins.IsEmailed(_settings, p.Transponder));
+
+            var parts = new List<string> { withPin == 1 ? "1 racer has a PIN" : $"{withPin} racers have PINs" };
+
+            if (_settings.RacerPinsIssuedUtc is { } issued)
+            {
+                parts.Add($"made {issued.ToLocalTime():d MMM}");
+            }
+
+            if (RacerPins.NextChangeLocal(_settings) is { } next)
+            {
+                parts.Add(next <= DateTime.Today ? "changing today" : $"change next {next:d MMM}");
+            }
+
+            parts.Add($"{emailed} emailed");
+
+            text = string.Join(" \u00B7 ", parts);
+            colour = AppTheme.Accent;
+
+            if (!PinMailer.IsConfigured(_settings))
+            {
+                text += Environment.NewLine + "Set up the Email group below to send racers their PINs.";
+            }
+        }
+
+        if (_lblPinsState.Text != text)
+        {
+            _lblPinsState.Text = text;
+        }
+
+        _lblPinsState.ForeColor = colour;
+
+        var on = _settings.RelayRacerPinsEnabled;
+
+        _cmbPinRotation.Enabled = on;
+        _chkEmailPinsAuto.Enabled = on;
+        _btnShowPins.Enabled = withPin > 0;
+        _btnNewPins.Enabled = on && withPin > 0 && !sending;
+        _btnEmailPins.Enabled = on && withPin > 0 && !sending;
+    }
+
+    private void MakeNewPins()
+    {
+        var answer = AppDialog.Show(
+            this,
+            "Make a new PIN for every racer now?\n\n"
+            + "Every racer's old PIN stops working straight away."
+            + (_settings.RacerPinsEmailAutomatically
+                ? " Each racer with an email address is sent their new one - Undo brings the old PINs back, but an email can't be recalled."
+                : " Nobody is told - use Email PINs afterwards, or hand them out from Show PINs."),
+            "New PINs",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        // The whole old set, with its date and who was emailed it, so Undo
+        // makes those PINs work again. It can't take back an email: anybody
+        // already sent a new PIN has one that stops working again.
+        var oldPins = RacerPins.CaptureSet(_settings);
+        _undo?.Capture("New PINs for every racer (emailed PINs can't be recalled)", () =>
+        {
+            RacerPins.RestoreSet(_settings, _profiles, oldPins);
+            _settings.Save();
+            RacerPinsChanged?.Invoke();
+        });
+
+        try
+        {
+            RacerPins.RegenerateAll(_settings, _profiles);
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(this, $"Couldn't make new PINs: {ex.Message}", "New PINs", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        RefreshPinsState();
+        RacerPinsChanged?.Invoke();
+    }
+
+    private async Task EmailPinsAsync()
+    {
+        if (PinMailer.ConfigurationProblem(_settings) is { } problem)
+        {
+            AppDialog.Show(this, problem + "\n\nSet up the Email group on this page first.", "Can't email PINs",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var withPin = _profiles.All.Where(p => _settings.RacerPins.ContainsKey(p.Transponder)).ToList();
+        var reachable = withPin.Count(p => RacerPins.EmailFor(p) is not null);
+        var unreachable = withPin.Count - reachable;
+
+        if (reachable == 0)
+        {
+            AppDialog.Show(this,
+                "Nobody with a PIN has an email address yet.\n\n"
+                + "Add one in the Email box on each racer's driver profile, or import an Email column from a CSV on the Driver Profiles page.",
+                "Nobody to email", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // About a second and a half apart, so the provider does not take a
+        // burst of a hundred for spam.
+        var minutes = Math.Max(1, (int)Math.Ceiling(reachable * 2 / 60.0));
+
+        var question = $"Email {Plural.Of(reachable, "racer")} their PIN?";
+
+        if (unreachable > 0)
+        {
+            question += $"\n\n{Plural.Of(unreachable, "racer")} {(unreachable == 1 ? "has" : "have")} no email address and won't get one.";
+        }
+
+        question += $"\n\nThey go one at a time - about {Plural.Of(minutes, "minute")}. Everything else keeps working meanwhile. "
+                    + "An email can't be taken back once it has gone - Undo won't recall it.";
+
+        if (AppDialog.Show(this, question, "Email PINs", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _pinProgress = "Starting to email PINs...";
+        RefreshPinsState();
+
+        // Created here, on the UI thread, so each report lands back on it.
+        var progress = new Progress<string>(report =>
+        {
+            if (_pinProgress is not null && !IsDisposed)
+            {
+                _pinProgress = report;
+                RefreshPinsState();
+            }
+        });
+
+        MailResult result;
+
+        try
+        {
+            result = await PinMailer.SendPinsAsync(_settings, _profiles, null, progress, _mailCancel.Token);
+        }
+        catch (Exception ex)
+        {
+            result = new MailResult { Ok = false, Message = ex.Message };
+        }
+        finally
+        {
+            _pinProgress = null;
+        }
+
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        // Back on the UI thread: the only place settings are changed.
+        if (RacerPins.MarkEmailed(_settings, result.Sent) > 0)
+        {
+            _settings.Save();
+        }
+
+        RefreshPinsState();
+
+        AppDialog.Show(this, DescribeMailResult(result), result.Ok ? "PINs emailed" : "PINs not all emailed",
+            MessageBoxButtons.OK,
+            result.Ok && result.Failures.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    /// <summary>The result dialog's text: what went, what didn't and why, and who has no address.</summary>
+    private static string DescribeMailResult(MailResult result)
+    {
+        var text = result.Message;
+
+        if (!result.Ok && result.Sent.Count > 0)
+        {
+            text += $"\n\n{Plural.Of(result.Sent.Count, "racer")} did get theirs.";
+        }
+
+        if (result.Failures.Count > 0)
+        {
+            text += $"\n\nCouldn't send to {result.Failures.Count}:\n" + string.Join("\n", result.Failures.Take(10).Select(f => "   " + f));
+
+            if (result.Failures.Count > 10)
+            {
+                text += $"\n   ...and {result.Failures.Count - 10} more.";
+            }
+        }
+
+        if (result.NoEmail.Count > 0)
+        {
+            text += $"\n\nNo email address for {result.NoEmail.Count}:\n   " + string.Join(", ", result.NoEmail.Take(20));
+
+            if (result.NoEmail.Count > 20)
+            {
+                text += $" and {result.NoEmail.Count - 20} more";
+            }
+
+            text += "\nAdd one in the Email box on their driver profile.";
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// The club's own mailbox, for sending racers their PINs. Straight from
+    /// this laptop to the provider - Gmail, iCloud, Outlook - with nothing
+    /// in between. Saved as it is typed, like the look settings above.
+    /// </summary>
+    private void BuildMailGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        var lblPreset = new Label { Text = "Provider:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblHost = new Label { Text = "Server:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblPort = new Label { Text = "Port:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblUser = new Label { Text = "Club email address:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblPassword = new Label { Text = "App password:", AutoSize = true, Font = AppTheme.BodyFont };
+        var lblFrom = new Label { Text = "From name:", AutoSize = true, Font = AppTheme.BodyFont };
+
+        var captionWidth = new[] { lblPreset.Text, lblHost.Text, lblUser.Text, lblPassword.Text, lblFrom.Text }
+            .Max(t => TextRenderer.MeasureText(t, AppTheme.BodyFont).Width);
+
+        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
+        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 420);
+
+        _cmbMailPreset.Font = AppTheme.BodyFont;
+        _cmbMailPreset.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbMailPreset.Width = 200;
+        _cmbMailPreset.Location = new Point(fieldLeft, y);
+
+        foreach (var preset in PinMailer.Presets)
+        {
+            _cmbMailPreset.Items.Add(new PresetChoice(preset.Name, preset.Host, preset.Port));
+        }
+
+        _cmbMailPreset.Items.Add(new PresetChoice("Other", string.Empty, 587));
+        lblPreset.Location = new Point(Inset, UiLayout.CentreOn(lblPreset, y, _cmbMailPreset.Height));
+
+        _cmbMailPreset.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _cmbMailPreset.SelectedItem is not PresetChoice choice)
+            {
+                return;
+            }
+
+            if (!choice.IsOther)
+            {
+                _settings.SmtpHost = choice.Host;
+                _settings.SmtpPort = choice.Port;
+                _settings.Save();
+                ConfirmRestoredMail();
+
+                // Shown without their own handlers saving it all again.
+                _loading = true;
+
+                try
+                {
+                    _txtSmtpHost.Text = choice.Host;
+                    _numSmtpPort.Value = choice.Port;
+                }
+                finally
+                {
+                    _loading = false;
+                }
+            }
+
+            ShowPresetEditable(choice.IsOther);
+            RefreshMailProblem();
+        };
+
+        y = UiLayout.Below(_cmbMailPreset, UiLayout.RowGap);
+
+        _txtSmtpHost.Font = AppTheme.BodyFont;
+        _txtSmtpHost.Width = Math.Min(280, fieldWidth);
+        _txtSmtpHost.PlaceholderText = "smtp.example.com";
+        _txtSmtpHost.Location = new Point(fieldLeft, y);
+        lblHost.Location = new Point(Inset, UiLayout.CentreOn(lblHost, y, _txtSmtpHost.Height));
+
+        _txtSmtpHost.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.SmtpHost = _txtSmtpHost.Text.Trim();
+
+                // Typed here, so it is the club's choice - see RestoredSettings.
+                ConfirmRestoredMail();
+            }
+        };
+        _txtSmtpHost.Leave += (_, _) => _settings.Save();
+
+        lblPort.Location = new Point(_txtSmtpHost.Left + _txtSmtpHost.Width + 16, UiLayout.CentreOn(lblPort, y, _txtSmtpHost.Height));
+
+        _numSmtpPort.Font = AppTheme.BodyFont;
+        _numSmtpPort.Minimum = 1;
+        _numSmtpPort.Maximum = 65535;
+        _numSmtpPort.Width = 90;
+        _numSmtpPort.Location = new Point(UiLayout.After(lblPort, AppTheme.BodyFont), y);
+        _numSmtpPort.ValueChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.SmtpPort = (int)_numSmtpPort.Value;
+            _settings.Save();
+            RefreshMailProblem();
+        };
+
+        y = UiLayout.Below(_txtSmtpHost, UiLayout.RowGap);
+
+        _txtSmtpUser.Font = AppTheme.BodyFont;
+        _txtSmtpUser.Width = fieldWidth;
+        _txtSmtpUser.PlaceholderText = "club@gmail.com";
+        _txtSmtpUser.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.SmtpUser = _txtSmtpUser.Text.Trim();
+            }
+        };
+        _txtSmtpUser.Leave += (_, _) =>
+        {
+            _settings.Save();
+            RefreshMailProblem();
+        };
+
+        y = FieldRow(lblUser, _txtSmtpUser, fieldLeft, y);
+
+        _txtSmtpPassword.Font = AppTheme.BodyFont;
+        _txtSmtpPassword.Width = Math.Min(280, fieldWidth);
+        _txtSmtpPassword.UseSystemPasswordChar = true;
+        _txtSmtpPassword.PlaceholderText = "abcd efgh ijkl mnop";
+        _txtSmtpPassword.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                // Spaces out: Google shows an app password in groups of
+                // four, and a pasted copy brings the spaces along. No
+                // provider's app password contains one.
+                _settings.SmtpPassword = new string(_txtSmtpPassword.Text.Where(c => !char.IsWhiteSpace(c)).ToArray());
+            }
+        };
+        _txtSmtpPassword.Leave += (_, _) =>
+        {
+            _settings.Save();
+            RefreshMailProblem();
+        };
+
+        y = FieldRow(lblPassword, _txtSmtpPassword, fieldLeft, y);
+
+        _chkShowSmtpPassword.Text = "Show";
+        _chkShowSmtpPassword.Location = new Point(fieldLeft, y);
+        _chkShowSmtpPassword.AutoSize = true;
+        _chkShowSmtpPassword.Font = AppTheme.SmallFont;
+        _chkShowSmtpPassword.CheckedChanged += (_, _) => _txtSmtpPassword.UseSystemPasswordChar = !_chkShowSmtpPassword.Checked;
+
+        y = UiLayout.Below(_chkShowSmtpPassword, UiLayout.RowGap);
+
+        _txtSmtpFromName.Font = AppTheme.BodyFont;
+        _txtSmtpFromName.Width = fieldWidth;
+        _txtSmtpFromName.MaxLength = 80;
+        _txtSmtpFromName.PlaceholderText = "e.g. Acme RC Club - blank uses the club id";
+        _txtSmtpFromName.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                _settings.SmtpFromName = _txtSmtpFromName.Text.Trim();
+            }
+        };
+        _txtSmtpFromName.Leave += (_, _) => _settings.Save();
+
+        y = FieldRow(lblFrom, _txtSmtpFromName, fieldLeft, y);
+
+        _btnTestMail.Text = "Send Test Email";
+        _btnTestMail.Font = AppTheme.BodyFont;
+        _btnTestMail.Size = new Size(UiLayout.WidthFor(_btnTestMail), UiLayout.ButtonHeight);
+        _btnTestMail.Location = new Point(fieldLeft, y);
+        _btnTestMail.Click += async (_, _) => await SendTestMailAsync();
+
+        y = UiLayout.Below(_btnTestMail, UiLayout.HintGap);
+
+        _lblMailResult.Location = new Point(fieldLeft, y);
+        _lblMailResult.AutoSize = false;
+        _lblMailResult.Size = new Size(inner - (fieldLeft - Inset), AppTheme.SmallFont.Height * 2 + 4);
+        _lblMailResult.AutoEllipsis = true;
+        _lblMailResult.Font = AppTheme.SmallFont;
+        _lblMailResult.ForeColor = AppTheme.TextMuted;
+        _lblMailResult.Text = MailTestHint;
+
+        y = UiLayout.Below(_lblMailResult, UiLayout.HintGap);
+
+        var lblMailHint = new Label
+        {
+            Text = "Gmail/iCloud need an app password (Google Account \u2192 Security \u2192 App passwords). "
+                 + "Nothing goes through a cloud service - mail is sent from this laptop.",
+            Location = new Point(Inset, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[]
+        {
+            lblPreset, _cmbMailPreset, lblHost, _txtSmtpHost, lblPort, _numSmtpPort, lblUser, _txtSmtpUser,
+            lblPassword, _txtSmtpPassword, _chkShowSmtpPassword, lblFrom, _txtSmtpFromName,
+            _btnTestMail, _lblMailResult, lblMailHint,
+        });
+
+        group.Height = UiLayout.Below(lblMailHint, Inset);
+    }
+
+    /// <summary>Picks the provider matching the saved server and port, or Other.</summary>
+    private void SelectPreset()
+    {
+        var choices = _cmbMailPreset.Items.Cast<PresetChoice>().ToList();
+        var index = choices.FindIndex(c => !c.IsOther
+                                           && string.Equals(c.Host, _settings.SmtpHost.Trim(), StringComparison.OrdinalIgnoreCase)
+                                           && c.Port == _settings.SmtpPort);
+
+        if (index < 0)
+        {
+            index = choices.FindIndex(c => c.IsOther);
+        }
+
+        _cmbMailPreset.SelectedIndex = index;
+        ShowPresetEditable(index >= 0 && choices[index].IsOther);
+    }
+
+    /// <summary>A named provider fills in its own server and port; only Other lets them be typed.</summary>
+    private void ShowPresetEditable(bool editable)
+    {
+        _txtSmtpHost.ReadOnly = !editable;
+        _numSmtpPort.Enabled = editable;
+    }
+
+    private const string MailTestHint = "Send Test Email sends one message to the club's own address.";
+
+    /// <summary>
+    /// A mail server a restored backup brought in is the club's from now on
+    /// (RestoredSettings): somebody has chosen it, typed it, or had a test
+    /// email go through it, on this page with its name in front of them.
+    /// </summary>
+    private void ConfirmRestoredMail()
+    {
+        if (!RestoredSettings.IsHeld(RestoredSettings.Part.Mail))
+        {
+            return;
+        }
+
+        RestoredSettings.Confirm(RestoredSettings.Part.Mail);
+        ShowMailResult(MailTestHint, ok: true);
+    }
+
+    /// <summary>
+    /// Says so straight away when the port is one this can't use, rather
+    /// than at the first send - or when the server came from a restored
+    /// backup and nothing will be emailed until it is checked.
+    /// </summary>
+    private void RefreshMailProblem()
+    {
+        if (_settings.SmtpPort == 465 || RestoredSettings.IsHeld(RestoredSettings.Part.Mail))
+        {
+            ShowMailResult(PinMailer.ConfigurationProblem(_settings) ?? string.Empty, ok: false);
+        }
+    }
+
+    private void ShowMailResult(string message, bool ok)
+    {
+        _lblMailResult.Text = message;
+        _lblMailResult.ForeColor = ok ? AppTheme.TextDark : AppTheme.Primary;
+    }
+
+    private async Task SendTestMailAsync()
+    {
+        // Whatever is in the boxes, saved first: the test is of what will
+        // actually be used.
+        _settings.Save();
+
+        _btnTestMail.Enabled = false;
+        ShowMailResult("Sending a test email...", ok: true);
+
+        try
+        {
+            var result = await PinMailer.SendTestAsync(_settings, _mailCancel.Token);
+
+            // Through this server, by hand, with its name on the page: it is
+            // the club's (RestoredSettings). Whether or not the page is still up.
+            if (result.Ok)
+            {
+                RestoredSettings.Confirm(RestoredSettings.Part.Mail);
+            }
+
+            if (!IsDisposed)
+            {
+                ShowMailResult(result.Message, result.Ok);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed)
+            {
+                ShowMailResult(ex.Message, ok: false);
+            }
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _btnTestMail.Enabled = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lets the race-day manager - normally reached over the venue's own
+    /// Wi-Fi, from Local Screens - also answer through the relay, for
+    /// someone setting up entries or posting a result from off the
+    /// venue's network. One Manager PIN either way (AppSettings.ManagerPin,
+    /// [JsonIgnore]d, so it is not shown or set here): duplicating it on
+    /// this page would risk the two drifting apart, so this group only
+    /// ever flips the relay path on or off and points at Local Screens
+    /// for the PIN itself, the same way the Look group above points at
+    /// Themes → Looks rather than keeping a second copy of the colours.
+    /// </summary>
+    private void BuildManagerGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _chkManager.Text = "Let the race-day manager be reached through the relay";
+        _chkManager.Location = new Point(Inset, y);
+        _chkManager.AutoSize = true;
+        _chkManager.Font = AppTheme.BoldFont;
+        _chkManager.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.ManagerViaRelay = _chkManager.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+            RefreshManagerState();
+        };
+
+        y = UiLayout.Below(_chkManager, UiLayout.RowGap);
+
+        var lblHint = new Label
+        {
+            Text = "The same page as Local Screens's race-day manager - setting up the day, entries, check-in, the "
+                 + "program and results - reachable from off the venue's Wi-Fi too. It never starts a round or "
+                 + "throws a flag, over the relay or the venue's own Wi-Fi either one. Guarded by the Manager PIN "
+                 + "set on Local Screens; nothing here works without one.",
+            Location = new Point(Inset + UiLayout.Indent, y),
+            AutoSize = true,
+            MaximumSize = new Size(inner - UiLayout.Indent, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        y = UiLayout.Below(lblHint, UiLayout.RowGap);
+
+        // Fixed two-line box, like check-in's and personal PINs' own state
+        // lines above: what it says changes length, and the group's
+        // height must not.
+        _lblManagerState.Location = new Point(Inset + UiLayout.Indent, y);
+        _lblManagerState.AutoSize = false;
+        _lblManagerState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
+        _lblManagerState.AutoEllipsis = true;
+        _lblManagerState.Font = AppTheme.SmallFont;
+
+        y = UiLayout.Below(_lblManagerState, UiLayout.HintGap);
+
+        _btnManagerPin.Text = "Set Manager PIN...";
+        _btnManagerPin.Font = AppTheme.BodyFont;
+        _btnManagerPin.Click += (_, _) => OpenPhoneWebRequested?.Invoke();
+
+        _btnOpenManage.Text = "Open Manager Page";
+        _btnOpenManage.Font = AppTheme.BodyFont;
+        _btnOpenManage.Click += (_, _) =>
+        {
+            var page = ClubPageUrl();
+
+            if (page.Length > 0)
+            {
+                OpenUrl(page + "/manage");
+            }
+        };
+
+        // No "Manager Phones..." any more (26 Sep): a phone signs in with the
+        // Manager PIN alone, and signs every request with a key made from it,
+        // which this laptop checks - see RelayManagerDevices.VerifyPinSigned.
+        // Nothing to enrol at the desk.
+
+        _btnManagerPin.Size = new Size(UiLayout.WidthFor(_btnManagerPin), UiLayout.ButtonHeight);
+        _btnOpenManage.Size = new Size(UiLayout.WidthFor(_btnOpenManage), UiLayout.ButtonHeight);
+
+        var buttonsBottom = UiLayout.FlowButtons(
+            Inset + UiLayout.Indent, y, group.Width - Inset, _btnManagerPin, _btnOpenManage);
+
+        group.Controls.AddRange(new Control[]
+        {
+            _chkManager, lblHint, _lblManagerState, _btnManagerPin, _btnOpenManage,
+        });
+
+        group.Height = buttonsBottom + Inset;
+    }
+
+    /// <summary>One line on whether the manager is reachable through the relay, and if not, why.</summary>
+    private void RefreshManagerState()
+    {
+        string text;
+        var colour = AppTheme.TextMuted;
+
+        if (!_settings.ManagerViaRelay)
+        {
+            text = "Off. The manager still works from Local Screens, over the venue's own Wi-Fi.";
+        }
+        else if (!_settings.RelayEnabled)
+        {
+            text = "Switched on, but publishing to the relay (above) is off - nothing reaches the manager page until it is on.";
+            colour = AppTheme.Primary;
+        }
+        else if (!RaceDayService.IsUsableManagerPin(_settings.ManagerPin))
+        {
+            text = "No usable Manager PIN is set on Local Screens - the manager page refuses every request until one is.";
+            colour = AppTheme.Danger;
+        }
+        else if (_publisher.ManagerProblem is { } problem)
+        {
+            text = problem;
+            colour = AppTheme.Danger;
+        }
+        else if (_publisher.RelayManagerPinLockedUntilUtc is DateTime lockedUntil)
+        {
+            // The relay has stopped taking manager PIN guesses for this
+            // club - publishing a changed one is what reopens it, the same
+            // as check-in's own lock above.
+            var local = lockedUntil.ToLocalTime();
+            var when = local.Date == DateTime.Today ? local.ToString("t") : local.ToString("g");
+            text = $"Locked after many wrong guesses until {when} - change the Manager PIN on Local Screens to reopen it.";
+            colour = AppTheme.Danger;
+        }
+        else
+        {
+            text = "Open with the Manager PIN. Every request is signed with it, and this laptop checks the signature "
+                 + "before running anything.";
+            colour = AppTheme.Accent;
+        }
+
+        if (_lblManagerState.Text != text)
+        {
+            _lblManagerState.Text = text;
+        }
+
+        _lblManagerState.ForeColor = colour;
+        _btnOpenManage.Enabled = _settings.ManagerViaRelay && ClubPageUrl().Length > 0;
+    }
+
+    /// <summary>
+    /// The address to hand out, and the three things people do with it.
+    ///
+    /// The club page rather than any one page on it: it is the one that
+    /// says what is on now and links to everything else, so it is the one
+    /// worth putting on a poster that stays up all season.
+    /// </summary>
+    private void BuildShareGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _lnkClubPage.Location = new Point(Inset, y);
+        _lnkClubPage.AutoSize = false;
+        _lnkClubPage.Size = new Size(inner, AppTheme.BodyFont.Height + 4);
+        _lnkClubPage.AutoEllipsis = true;
+        _lnkClubPage.Font = AppTheme.BodyFont;
+        _lnkClubPage.LinkColor = AppTheme.Accent;
+        _lnkClubPage.ActiveLinkColor = AppTheme.Accent;
+        _lnkClubPage.VisitedLinkColor = AppTheme.Accent;
+        _lnkClubPage.LinkClicked += (_, _) => OpenClubPage();
+
+        y = UiLayout.Below(_lnkClubPage, UiLayout.RowGap);
+
+        _btnOpenPage.Text = "Open";
+        _btnOpenPage.Font = AppTheme.BodyFont;
+        _btnOpenPage.Click += (_, _) => OpenClubPage();
+
+        _btnCopyPage.Text = "Copy Link";
+        _btnCopyPage.Font = AppTheme.BodyFont;
+        _btnCopyPage.Click += (_, _) => CopyClubPage();
+
+        _btnPoster.Text = "Show Poster";
+        _btnPoster.Font = AppTheme.BodyFont;
+        _btnPoster.Click += (_, _) => ShowClubPoster();
+
+        _btnOpenPage.Size = new Size(UiLayout.WidthFor(_btnOpenPage), UiLayout.ButtonHeight);
+        _btnCopyPage.Size = new Size(UiLayout.WidthFor(_btnCopyPage), UiLayout.ButtonHeight);
+        _btnPoster.Size = new Size(UiLayout.WidthFor(_btnPoster), UiLayout.ButtonHeight);
+
+        var buttonsBottom = UiLayout.FlowButtons(Inset, y, group.Width - Inset, _btnOpenPage, _btnCopyPage, _btnPoster);
+
+        var lblShareHint = new Label
+        {
+            Text = "The club's home page: what is on now, the schedule, results, standings, badges and tracks. It "
+                 + "works from anywhere, on any network - no need to be on the venue's Wi-Fi. The poster puts it in "
+                 + "a QR code for the pits wall.",
+            Location = new Point(Inset, buttonsBottom + UiLayout.HintGap),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[] { _lnkClubPage, _btnOpenPage, _btnCopyPage, _btnPoster, lblShareHint });
+
+        group.Height = UiLayout.Below(lblShareHint, Inset);
+        RefreshShare();
+    }
+
+    /// <summary>The club page for what is SAVED, or empty. Never what is merely typed in the boxes - that may not work yet.</summary>
+    private string ClubPageUrl()
+    {
+        var root = RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl);
+        var club = _settings.RelayClub.Trim();
+
+        return root.Length == 0 || club.Length == 0 ? string.Empty : $"{root}/c/{Uri.EscapeDataString(club)}";
+    }
+
+    private void RefreshShare()
+    {
+        var url = ClubPageUrl();
+        var text = url.Length == 0 ? "Save a relay address and club id to get the club's page." : url;
+
+        // Called every second from the status tick; only touched when it
+        // actually changes, so the link is not repainted for nothing.
+        if (_lnkClubPage.Text != text)
+        {
+            _lnkClubPage.Text = text;
+            _lnkClubPage.LinkArea = url.Length == 0 ? new LinkArea(0, 0) : new LinkArea(0, text.Length);
+        }
+
+        _btnOpenPage.Enabled = url.Length > 0;
+        _btnCopyPage.Enabled = url.Length > 0;
+        _btnPoster.Enabled = url.Length > 0;
+    }
+
+    private void OpenClubPage()
+    {
+        var url = ClubPageUrl();
+
+        if (url.Length > 0)
+        {
+            OpenUrl(url);
+        }
+    }
+
+    private void OpenUrl(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowTestResult(new RelayProbe(false, $"Could not open a browser: {ex.Message}"));
+        }
+    }
+
+    private void CopyClubPage()
+    {
+        var url = ClubPageUrl();
+
+        if (url.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(url);
+            ShowTestResult(new RelayProbe(true, "Club page address copied."));
+        }
+        catch (Exception ex)
+        {
+            // Another program holding the clipboard open is enough to make
+            // this throw, and it is no reason to lose the page.
+            ShowTestResult(new RelayProbe(false, $"Could not copy: {ex.Message}"));
+        }
+    }
+
+    private void ShowClubPoster()
+    {
+        var url = ClubPageUrl();
+
+        if (url.Length == 0)
+        {
+            return;
+        }
+
+        // Non-modal, like the Wi-Fi posters: it is meant to sit open on a
+        // second screen while the meeting carries on behind it.
+        var poster = new JoinPosterForm(
+            url,
+            "FOLLOW THE RACING",
+            "Scan with your phone camera. Live timing, schedule and results - from anywhere, on any network.");
+
+        poster.Show(this);
+    }
+
+    private void BuildStatusGroup(GroupBox group)
+    {
+        var inner = group.Width - Inset * 2;
+        var y = UiLayout.InsideGroup(group);
+
+        _lblStatus.Location = new Point(Inset, y);
+        _lblStatus.AutoSize = true;
+        _lblStatus.Font = AppTheme.BoldFont;
+
+        y = UiLayout.Below(_lblStatus, UiLayout.HintGap);
+
+        _lblDetail.Location = new Point(Inset, y);
+        _lblDetail.AutoSize = true;
+        _lblDetail.MaximumSize = new Size(inner, 0);
+        _lblDetail.ForeColor = AppTheme.TextMuted;
+        _lblDetail.Font = AppTheme.SmallFont;
+
+        y = UiLayout.Below(_lblDetail, UiLayout.RowGap);
+
+        _btnDelete.Text = "Delete Everything Published";
+        _btnDelete.Font = AppTheme.BodyFont;
+        _btnDelete.Size = new Size(UiLayout.WidthFor(_btnDelete), UiLayout.ButtonHeight);
+        _btnDelete.Location = new Point(Inset, y);
+        _btnDelete.Click += async (_, _) => await DeleteAsync();
+
+        var lblDeleteHint = new Label
+        {
+            Text = "Removes everything this club has published - results, standings, the live race, the schedule, "
+                 + "badges, tracks, the look and the online check-in list. The laptop keeps its own copy of "
+                 + "everything; this only clears the relay. It also turns \"Publish to the relay\" off, so nothing "
+                 + "goes back up until you tick it again - and ticking it sends everything again, including the "
+                 + "last day and a half of results.",
+            Location = new Point(Inset, UiLayout.Below(_btnDelete, UiLayout.HintGap)),
+            AutoSize = true,
+            MaximumSize = new Size(inner, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        group.Controls.AddRange(new Control[] { _lblStatus, _lblDetail, _btnDelete, lblDeleteHint });
+
+        group.Height = UiLayout.Below(lblDeleteHint, Inset);
+    }
+
+    private void LoadFromSettings()
+    {
+        _loading = true;
+
+        try
+        {
+            // Fields first, then the switches. The flag above makes the
+            // order irrelevant, and the order makes the flag unnecessary -
+            // belt and braces, because this one cost a silent evening of
+            // nothing being published.
+            _txtBaseUrl.Text = _settings.RelayBaseUrl;
+            _txtClub.Text = _settings.RelayClub;
+            _txtToken.Text = _settings.RelayToken;
+
+            _chkEnabled.Checked = _settings.RelayEnabled;
+            _chkRoster.Checked = _settings.RelayPublishRoster;
+            _chkAbbreviate.Checked = _settings.RelayAbbreviateNames;
+
+            _txtTagline.Text = _settings.RelayTagline;
+
+            foreach (var (key, box) in _socialBoxes)
+            {
+                box.Text = _settings.RelaySocialLinks.TryGetValue(key, out var link) ? link : string.Empty;
+            }
+
+            RefreshSocialProblem();
+            _chkCheckIn.Checked = _settings.RelayCheckInEnabled;
+            _txtCheckInPin.Text = _settings.RelayCheckInPin;
+            _pinRejected = null;
+            _chkCheckInPhotos.Checked = _settings.RelayCheckInPhotos;
+
+            _chkRacerPins.Checked = _settings.RelayRacerPinsEnabled;
+            SelectRotation(_settings.RacerPinRotation);
+            _chkEmailPinsAuto.Checked = _settings.RacerPinsEmailAutomatically;
+
+            _txtSmtpHost.Text = _settings.SmtpHost;
+            _numSmtpPort.Value = Math.Clamp(_settings.SmtpPort, (int)_numSmtpPort.Minimum, (int)_numSmtpPort.Maximum);
+            _txtSmtpUser.Text = _settings.SmtpUser;
+            _txtSmtpPassword.Text = _settings.SmtpPassword;
+            _txtSmtpFromName.Text = _settings.SmtpFromName;
+            SelectPreset();
+
+            // A server held back after a restore says so as the page opens,
+            // not only at the first send.
+            RefreshMailProblem();
+
+            _chkManager.Checked = _settings.ManagerViaRelay;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>Writes the boxes to settings. False when the club id is one the relay could never hold - saved anyway, and said so.</summary>
+    private bool SaveFields()
+    {
+        if (_loading)
+        {
+            return false;
+        }
+
+        // Lower case, as the relay keeps it: "Acme-RC" typed here is
+        // plainly acme-rc, and the relay answers anything else with a 404.
+        var club = _txtClub.Text.Trim().ToLowerInvariant();
+
+        var oldBaseUrl = _settings.RelayBaseUrl;
+        var oldClub = _settings.RelayClub;
+        var oldToken = _settings.RelayToken;
+
+        _settings.RelayEnabled = _chkEnabled.Checked;
+        _settings.RelayBaseUrl = RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text);
+        _settings.RelayClub = club;
+        _settings.RelayToken = _txtToken.Text.Trim();
+        _settings.Save();
+
+        // Show the tidied address and club back, so "localhost:8787"
+        // visibly becomes what will actually be called.
+        _txtBaseUrl.Text = _settings.RelayBaseUrl;
+
+        if (_txtClub.Text != club)
+        {
+            _txtClub.Text = club;
+        }
+
+        // Every way here is somebody at this page pressing something, with
+        // the address in front of them - so an address a restored backup
+        // brought in is theirs from now on (RestoredSettings). Before
+        // SettingsChanged, which is what reads it again.
+        RestoredSettings.Confirm(RestoredSettings.Part.PublishRelay);
+
+        _publisher.SettingsChanged();
+        RefreshStatus();
+        RefreshLastGood();
+
+        // Only while the voice has no relay of its own: with the voice relay
+        // boxes filled in, the voice is speaking somewhere else and this
+        // relay's details are not what it was resting over.
+        var relayChanged = !string.Equals(oldBaseUrl, _settings.RelayBaseUrl, StringComparison.Ordinal)
+                           || !string.Equals(oldClub, _settings.RelayClub, StringComparison.Ordinal)
+                           || !string.Equals(oldToken, _settings.RelayToken, StringComparison.Ordinal);
+
+        // ...except where a voice relay of its own still borrows from these
+        // boxes: a blank voice club falls back to this club, and a blank
+        // voice token to this token (see HeatCallerVoiceClient.Target), so
+        // changing either here changes what the voice is asking with.
+        var voiceBorrows = RelayPublisher.NormaliseBaseUrl(_settings.VoiceRelayBaseUrl).Length == 0
+                           || string.IsNullOrWhiteSpace(_settings.VoiceRelayClub)
+                           || string.IsNullOrWhiteSpace(_settings.VoiceRelayToken);
+
+        if (relayChanged && voiceBorrows)
+        {
+            VoiceRelayChanged?.Invoke();
+        }
+
+        // Kept rather than refused, so the box and settings agree - but the
+        // publisher treats it as not configured, and the reason is shown
+        // where the operator is looking.
+        if (club.Length > 0 && !RelayPublisher.IsValidClubId(club))
+        {
+            ShowTestResult(new RelayProbe(false, RelayPublisher.InvalidClubMessage));
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Records the settings a test has just proved.
+    ///
+    /// Kept as a separate set rather than by trusting the live ones,
+    /// because the live ones are what publishing uses and may be halfway
+    /// through being edited. This is the copy that is known to have
+    /// worked, and the only one worth going back to.
+    /// </summary>
+    private void RememberLastGood()
+    {
+        _settings.RelayLastGoodBaseUrl = _settings.RelayBaseUrl;
+        _settings.RelayLastGoodClub = _settings.RelayClub;
+        _settings.RelayLastGoodToken = _settings.RelayToken;
+        _settings.RelayLastGoodUtc = DateTime.UtcNow;
+        _settings.Save();
+
+        RefreshLastGood();
+    }
+
+    private void RestoreLastGood()
+    {
+        if (!HasLastGood())
+        {
+            return;
+        }
+
+        _txtBaseUrl.Text = _settings.RelayLastGoodBaseUrl;
+        _txtClub.Text = _settings.RelayLastGoodClub;
+        _txtToken.Text = _settings.RelayLastGoodToken;
+
+        SaveFields();
+        ShowTestResult(new RelayProbe(true, "Put back the settings that last worked."));
+    }
+
+    private bool HasLastGood() =>
+        _settings.RelayLastGoodBaseUrl.Length > 0
+        && _settings.RelayLastGoodClub.Length > 0
+        && _settings.RelayLastGoodToken.Length > 0;
+
+    /// <summary>Whether what is in the boxes right now IS the set that last worked.</summary>
+    private bool MatchesLastGood() =>
+        HasLastGood()
+        && RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text) == _settings.RelayLastGoodBaseUrl
+        && _txtClub.Text.Trim() == _settings.RelayLastGoodClub
+        && _txtToken.Text.Trim() == _settings.RelayLastGoodToken;
+
+    private void RefreshLastGood()
+    {
+        if (!HasLastGood())
+        {
+            _lblLastGood.Text = "Nothing has tested clean yet. A successful test remembers what it used.";
+            _btnRestore.Enabled = false;
+            return;
+        }
+
+        var when = _settings.RelayLastGoodUtc?.ToLocalTime();
+        var stamp = when is null ? string.Empty : $" ({when.Value:g})";
+
+        if (MatchesLastGood())
+        {
+            _lblLastGood.Text = $"These are the settings that last tested clean{stamp}.";
+            _btnRestore.Enabled = false;
+            return;
+        }
+
+        _lblLastGood.Text = $"Changed since the last clean test{stamp}: "
+                          + $"{_settings.RelayLastGoodClub} at {_settings.RelayLastGoodBaseUrl}.";
+
+        _btnRestore.Enabled = true;
+    }
+
+    private async Task TestAsync()
+    {
+        _btnTest.Enabled = false;
+        ShowTestResult(new RelayProbe(true, "Checking..."));
+
+        // What is being tested, taken before the wait. The test takes a few
+        // seconds, and anything typed in the boxes meanwhile is untested -
+        // saving it as "proved" was how a half-typed token became the one
+        // on record as last working.
+        var testedUrl = _txtBaseUrl.Text;
+        var testedClub = _txtClub.Text;
+        var testedToken = _txtToken.Text;
+
+        try
+        {
+            var probe = await _publisher.TestAsync(testedUrl, testedClub, testedToken);
+
+            var unchanged = _txtBaseUrl.Text == testedUrl
+                            && _txtClub.Text == testedClub
+                            && _txtToken.Text == testedToken;
+
+            if (probe.Ok && !unchanged)
+            {
+                ShowTestResult(new RelayProbe(false, probe.Message + " Not saved - the boxes were changed during the test. Test again."));
+            }
+            else if (probe.Ok)
+            {
+                // The box ends up showing what was PROVED, not what was
+                // pasted. A live-page link is taken back to its relay by
+                // NormaliseBaseUrl before the test; leaving the page's
+                // address sitting in the field afterwards would leave the
+                // operator believing the page address is the setting.
+                var proved = RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text);
+
+                if (proved.Length > 0 && _txtBaseUrl.Text.Trim() != proved)
+                {
+                    _txtBaseUrl.Text = proved;
+                }
+
+                // Saved the moment they are proved, rather than waiting
+                // for Save to be pressed. Losing a token that has just
+                // been shown to work, because the page was navigated away
+                // from, would mean minting another one for no reason.
+                if (SaveFields())
+                {
+                    RememberLastGood();
+                    ShowTestResult(new RelayProbe(true, probe.Message + " Saved."));
+                }
+            }
+            else
+            {
+                ShowTestResult(probe);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowTestResult(new RelayProbe(false, ex.Message));
+        }
+        finally
+        {
+            _btnTest.Enabled = true;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var answer = AppDialog.Show(
+            this,
+            "Delete everything this club has published to the relay?\n\n"
+            + "Results, standings, the live race, the schedule and everything else will disappear from "
+            + "every public page, and online check-in stops. Nothing on this laptop is touched.\n\n"
+            + "Publishing is switched off so none of it comes back on its own. Tick \"Publish to the "
+            + "relay\" again when you want it back - that sends everything again. The Undo button can't "
+            + "reverse this: the relay deletes it straight away.",
+            "Delete published data",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _btnDelete.Enabled = false;
+
+        // Publishing goes off BEFORE the delete, not after. The laptop
+        // keeps publishing on its own - the schedule every few seconds,
+        // the look, badges, tracks and check-in list again every ten
+        // minutes so a copy the relay lost is put back - and with the
+        // switch still on, that refresh filled the relay straight back up
+        // after "Delete everything", against what this page promised.
+        // Off first also means nothing new is queued while the delete is
+        // on its way. Turning it back on is the one way everything is
+        // sent again, which is a choice the club makes, and a new
+        // publishing round starts from scratch: the change caches on the
+        // main window are thrown away when the switch changes (see
+        // RelayPublisher.Generation), so an old copy cannot slip back.
+        var wasPublishing = _settings.RelayEnabled;
+        SetPublishing(false);
+
+        var deleted = false;
+
+        try
+        {
+            // And anything already on its way stopped and waited out: a live
+            // frame that left just before the switch went off, landing just
+            // after the delete, put the live page straight back.
+            await _publisher.QuiesceAsync();
+
+            var probe = await _publisher.DeletePublishedAsync();
+            deleted = probe.Ok;
+
+            ShowTestResult(probe.Ok
+                ? new RelayProbe(true, probe.Message + " Publishing is now off - tick \"Publish to the relay\" to start again.")
+                : probe);
+        }
+        catch (Exception ex)
+        {
+            ShowTestResult(new RelayProbe(false, ex.Message));
+        }
+        finally
+        {
+            // Nothing was deleted, so there is nothing to keep off the
+            // relay: put the switch back the way it was.
+            if (!deleted && wasPublishing)
+            {
+                SetPublishing(true);
+            }
+
+            _btnDelete.Enabled = true;
+            RefreshStatus();
+        }
+    }
+
+    /// <summary>
+    /// Turns publishing on or off without going through the tick box's own
+    /// handler, which saves every field on the page - including anything
+    /// typed into the address, club or token boxes and not yet tested.
+    /// Only the switch changes here.
+    /// </summary>
+    private void SetPublishing(bool on)
+    {
+        _settings.RelayEnabled = on;
+        _settings.Save();
+        _publisher.SettingsChanged();
+
+        _loading = true;
+
+        try
+        {
+            _chkEnabled.Checked = on;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ShowTestResult(RelayProbe probe)
+    {
+        _lblTestResult.Text = probe.Message;
+        _lblTestResult.ForeColor = probe.Ok ? AppTheme.TextDark : AppTheme.Primary;
+    }
+
+    private void RefreshStatus()
+    {
+        RefreshShare();
+        RefreshCheckInState();
+        RefreshPinsState();
+        RefreshManagerState();
+
+        var status = _publisher.Status;
+
+        if (!status.Enabled)
+        {
+            _lblStatus.Text = "Not publishing";
+            _lblStatus.ForeColor = AppTheme.TextMuted;
+            _lblDetail.Text = "Tick \"Publish to the relay\" above once the address, club and token are set.";
+            return;
+        }
+
+        // Before "Not configured", which is what the publisher reports while
+        // it holds back - and which would send somebody looking for a
+        // missing token that is sitting right there.
+        if (RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))
+        {
+            _lblStatus.Text = "Check these settings";
+            _lblStatus.ForeColor = AppTheme.Primary;
+            _lblDetail.Text = RestoredSettings.PublishRelayMessage;
+            return;
+        }
+
+        if (!status.Configured)
+        {
+            _lblStatus.Text = "Not configured";
+            _lblStatus.ForeColor = AppTheme.Primary;
+            _lblDetail.Text = "An address, a club id and a publish token are all needed before anything can be sent.";
+            return;
+        }
+
+        var signupProblem = _publisher.SignupProblem;
+
+        if (status.Online && signupProblem is not null)
+        {
+            // Results are getting through but sign-up is not - a green
+            // "Publishing" here is how invites went out to a sign-up page
+            // that had never heard of their codes. Shown in the colour the
+            // page uses for anything that needs doing.
+            _lblStatus.Text = "Publishing - sign-up needs attention";
+            _lblStatus.ForeColor = AppTheme.Primary;
+        }
+        else if (status.Online)
+        {
+            _lblStatus.Text = "Publishing";
+            _lblStatus.ForeColor = AppTheme.Accent;
+        }
+        else
+        {
+            _lblStatus.Text = status.LastSuccessUtc is null ? "Waiting for the first publish" : "Offline";
+            _lblStatus.ForeColor = AppTheme.Primary;
+        }
+
+        var detail = DescribeStatus(status);
+
+        // A refused signup document is already in the status's own error;
+        // a problem collecting sign-ups is not, so it is added here.
+        if (signupProblem is not null && !detail.Contains(signupProblem, StringComparison.Ordinal))
+        {
+            detail += "  " + signupProblem;
+        }
+
+        _lblDetail.Text = detail;
+    }
+
+    /// <summary>The one sentence a race director actually needs: is it getting through, and how far behind is it.</summary>
+    public static string DescribeStatus(RelayStatus status)
+    {
+        var parts = new List<string>();
+
+        parts.Add(status.LastSuccessUtc is DateTime last
+            ? $"Last published {Ago(DateTime.UtcNow - last)}."
+            : "Nothing has been published yet.");
+
+        if (status.Queued > 0)
+        {
+            parts.Add(status.Queued == 1 ? "1 waiting to go." : $"{status.Queued} waiting to go.");
+        }
+
+        if (status.Dropped > 0)
+        {
+            parts.Add(status.Dropped == 1 ? "1 could not be published." : $"{status.Dropped} could not be published.");
+        }
+
+        if (status.LastError is not null)
+        {
+            parts.Add(status.LastError);
+        }
+
+        return string.Join("  ", parts);
+    }
+
+    private static string Ago(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero)
+        {
+            span = TimeSpan.Zero;
+        }
+
+        if (span.TotalSeconds < 5)
+        {
+            return "just now";
+        }
+
+        // Each tier runs to 90 of its unit, so the tier above starts at 1
+        // of its own - "1 minutes ago" for anything from 90 to 119
+        // seconds, and "1 hours ago" from 90 to 119 minutes. The "just
+        // now" guard hid it at the bottom tier only.
+        if (span.TotalSeconds < 90)
+        {
+            return Plural.Of((int)span.TotalSeconds, "second") + " ago";
+        }
+
+        if (span.TotalMinutes < 90)
+        {
+            return Plural.Of((int)span.TotalMinutes, "minute") + " ago";
+        }
+
+        return Plural.Of((int)span.TotalHours, "hour") + " ago";
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _tick.Stop();
+            _tick.Dispose();
+
+            // An email send still running stops at its current message;
+            // what it had sent is simply not marked, and goes again. Not
+            // disposed as well: the send may still be holding its token,
+            // and a source with no timer owns nothing that needs freeing.
+            _mailCancel.Cancel();
+        }
+
+        base.Dispose(disposing);
+    }
+}

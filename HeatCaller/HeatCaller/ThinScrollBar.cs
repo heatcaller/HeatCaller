@@ -1,0 +1,706 @@
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+
+namespace HeatCaller;
+
+/// <summary>
+/// A slim themed scrollbar that sits on top of a control's native one -
+/// vertical OR horizontal, decided at attach time.
+///
+/// Native scrollbars cannot be recoloured. They are drawn by the system
+/// theme for the whole desktop, and the two usual ways at them both end
+/// badly: SetWindowTheme strips visual styles and gives you the Windows 95
+/// grey bar instead of a white one, and owner-drawing them through WM_NCPAINT
+/// means reimplementing hit-testing, thumb dragging, auto-repeat and the
+/// arrow buttons by hand, in the non-client area, for every control type.
+///
+/// This does neither. The native bar is left exactly where it is, still
+/// working - mouse wheel, keyboard, and the control's own scrolling logic are
+/// untouched - and a plain sibling control is parked on top of it. Covering
+/// it is far more robust than hiding it, because controls re-show their own
+/// scrollbars whenever content changes and there is no way to make that stop.
+///
+/// Driving it goes through the scrollbar API rather than any one control's
+/// members, so the same code scrolls a multiline text box, a list box, a
+/// checked list, a list view and an auto-scrolling panel without knowing or
+/// caring which it is.
+/// </summary>
+internal sealed class ThinScrollBar : Control
+{
+    private const int SB_HORZ = 0;
+    private const int SB_VERT = 1;
+
+    private const int SIF_RANGE = 0x0001;
+    private const int SIF_PAGE = 0x0002;
+    private const int SIF_POS = 0x0004;
+    private const int SIF_ALL = SIF_RANGE | SIF_PAGE | SIF_POS;
+
+    private const int WM_HSCROLL = 0x0114;
+    private const int WM_VSCROLL = 0x0115;
+
+    private const int SB_LINEUP = 0;
+    private const int SB_LINEDOWN = 1;
+    private const int SB_PAGEUP = 2;
+    private const int SB_PAGEDOWN = 3;
+    private const int SB_THUMBPOSITION = 4;
+    private const int SB_THUMBTRACK = 5;
+    private const int SB_ENDSCROLL = 8;
+
+    private const int MinimumThumb = 26;
+
+    private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedV = new();
+    private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedH = new();
+    private static readonly List<WeakReference<ThinScrollBar>> Live = new();
+
+    /// <summary>
+    /// One shared poll for every bar in the app.
+    ///
+    /// There is no notification when a control's scroll range changes -
+    /// typing a line into a text box or adding a row to a list simply makes
+    /// the native bar appear - so the range has to be read back. One timer
+    /// for all of them keeps that to a single tick rather than one per
+    /// control, and 150ms is under the threshold where a scrollbar appearing
+    /// feels late.
+    /// </summary>
+    private static System.Windows.Forms.Timer? _sync;
+
+    private readonly Control _target;
+
+    /// <summary>
+    /// The target when it is a DataGridView, which needs its own path.
+    ///
+    /// A grid does NOT have native scrollbars. WinForms gives it two
+    /// ScrollBar CHILD controls and drives them itself, so there is nothing
+    /// on the grid's own window handle for GetScrollInfo to read - it
+    /// returns a dead range, this bar decides it is not needed, and the
+    /// grid's own child bar is left showing in the system colours. That is
+    /// why every grid in the app still had a white scrollbar while every
+    /// list and text box had a themed one.
+    ///
+    /// Rows are the honest unit here anyway: a grid scrolls a row at a
+    /// time, so the range is the row count and the page is how many rows
+    /// are on screen.
+    /// </summary>
+    private readonly DataGridView? _grid;
+
+    /// <summary>True for the bottom bar, false for the right one. The one field the whole geometry keys off.</summary>
+    private readonly bool _horizontal;
+
+    private readonly int _thickness;
+
+    private bool _dragging;
+    private int _dragOffset;
+    private bool _hot;
+
+    private int _min;
+    private int _max;
+    private int _page;
+    private int _pos;
+
+    private ThinScrollBar(Control target, bool horizontal)
+    {
+        _target = target;
+        _horizontal = horizontal;
+
+        // Vertical only. A grid's columns are almost always Fill-sized in
+        // this app, so the horizontal case does not arise, and rows are
+        // the only unit the row-based path below can speak in.
+        _grid = horizontal ? null : target as DataGridView;
+
+        SetStyle(ControlStyles.OptimizedDoubleBuffer
+                 | ControlStyles.AllPaintingInWmPaint
+                 | ControlStyles.UserPaint
+                 | ControlStyles.ResizeRedraw, true);
+
+        // Never take focus. Clicking the bar must not pull the caret out of
+        // the text box it belongs to.
+        SetStyle(ControlStyles.Selectable, false);
+
+        DoubleBuffered = true;
+        TabStop = false;
+
+        _thickness = Math.Max(10, horizontal
+            ? SystemInformation.HorizontalScrollBarHeight
+            : SystemInformation.VerticalScrollBarWidth);
+
+        Visible = false;
+
+        // Named handlers rather than lambdas, so Dispose can take them off
+        // again. They were lambdas, and the consequence was not only a leak:
+        // the target holds the bar alive through its own event list, so a bar
+        // disposed with its window stayed subscribed to a target that had
+        // outlived that window - and the next ParentChanged put a dead control
+        // into a live form.
+        target.LocationChanged += TargetMoved;
+        target.SizeChanged += TargetMoved;
+        target.VisibleChanged += TargetMoved;
+        target.ParentChanged += TargetReparented;
+        target.Disposed += TargetDisposed;
+
+        Reparent();
+    }
+
+    /// <summary>Themes the control's vertical scrollbar. Kept as the bare name for the many existing callers.</summary>
+    public static void Attach(Control target) => Attach(target, horizontal: false);
+
+    /// <summary>Themes the control's horizontal scrollbar as well, for lists and grids wider than their box.</summary>
+    public static void AttachHorizontal(Control target) => Attach(target, horizontal: true);
+
+    private static void Attach(Control target, bool horizontal)
+    {
+        // A tab page's parent is its tab control, which can hold nothing but
+        // tab pages - there is nowhere to park an overlay. Its contents
+        // scroll inside it with their own bars instead.
+        if (target is TabPage || target.Parent is TabControl)
+        {
+            return;
+        }
+
+        var table = horizontal ? AttachedH : AttachedV;
+
+        if (table.TryGetValue(target, out var already))
+        {
+            // A live one: nothing to do.
+            if (!already.IsDisposed)
+            {
+                return;
+            }
+
+            // A DEAD one, and the entry has to go or the target never gets
+            // another. A bar parks itself as a SIBLING of its target, so it
+            // belongs to whatever window the target was in - and a control
+            // that outlives that window (the scrutineering log borrows one,
+            // and any dialog that hosts a long-lived page does the same) comes
+            // back with its bar disposed underneath it. Left in the table, the
+            // check above would hand back the corpse for the rest of the
+            // session and the target would scroll with the system's own bright
+            // white bar.
+            table.Remove(target);
+        }
+
+        var bar = new ThinScrollBar(target, horizontal);
+        table.Add(target, bar);
+
+        Live.Add(new WeakReference<ThinScrollBar>(bar));
+
+        if (_sync is null)
+        {
+            _sync = new System.Windows.Forms.Timer { Interval = 150 };
+            _sync.Tick += (_, _) => SyncAll();
+            _sync.Start();
+        }
+    }
+
+    private static void SyncAll()
+    {
+        for (var i = Live.Count - 1; i >= 0; i--)
+        {
+            if (!Live[i].TryGetTarget(out var bar) || bar.IsDisposed)
+            {
+                Live.RemoveAt(i);
+                continue;
+            }
+
+            bar.Refresh(fromTimer: true);
+        }
+    }
+
+    private void Reparent()
+    {
+        // Ours first, and this is the one that mattered. A bar is disposed with
+        // the window it was parked in, but it is still subscribed to its
+        // target's ParentChanged - and the target can outlive that window. So
+        // when the target was put into a second window, a DISPOSED control
+        // added itself to that window's Controls, and the first WM_SHOWWINDOW
+        // walked the children calling CreateControl on it:
+        //
+        //   ObjectDisposedException ... at Control.CreateHandle()
+        //   at Control.CreateControl(Boolean) ... at Form.WndProc
+        //
+        // which is thrown from a message pump, so nothing in the code that
+        // opened the window is anywhere near the stack.
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        var parent = _target.Parent;
+
+        if (parent is null || parent.IsDisposed)
+        {
+            return;
+        }
+
+        // See Attach: a tab control takes only tab pages.
+        if (parent is TabControl)
+        {
+            return;
+        }
+
+        if (Parent != parent)
+        {
+            Parent?.Controls.Remove(this);
+            parent.Controls.Add(this);
+        }
+
+        Reposition();
+    }
+
+    /// <summary>
+    /// Our OWN idea of whether the bar is showing.
+    ///
+    /// Control.Visible's getter does not return what the setter was given -
+    /// it returns EFFECTIVE visibility, which is false whenever any ancestor
+    /// is hidden or being destroyed. Writing true and reading back false is
+    /// therefore normal during teardown, and code that loops until the read
+    /// agrees with the write never finishes. That is exactly what killed the
+    /// app: applying a soundscape disposes the sound pages, the target's
+    /// VisibleChanged fired mid-DestroyHandle, and Reposition/Refresh bounced
+    /// off each other until the stack ran out - 0xc00000fd, no dialog, no
+    /// crash.log, because a stack overflow cannot be caught.
+    /// </summary>
+    private bool _shown;
+
+    private void SetShown(bool shown)
+    {
+        _shown = shown;
+
+        if (Visible != shown)
+        {
+            Visible = shown;
+        }
+    }
+
+    /// <summary>
+    /// Moves the bar over its target and nothing else.
+    ///
+    /// Split out so Refresh has something to call that cannot call Refresh
+    /// back. The two used to call each other, which is only safe while every
+    /// exit condition holds - and one of them did not.
+    /// </summary>
+    private void ApplyBounds()
+    {
+        if (IsDisposed || Disposing || _target.IsDisposed || Parent is null)
+        {
+            return;
+        }
+
+        // Straight over the native bar: the bottom strip for a horizontal
+        // bar, the right strip for a vertical one. A horizontal bar stops
+        // short of the corner so it never overlaps the vertical one.
+        var bounds = _horizontal
+            ? new Rectangle(
+                _target.Left,
+                _target.Bottom - _thickness,
+                Math.Max(1, _target.Width),
+                _thickness)
+            : new Rectangle(
+                _target.Right - _thickness,
+                _target.Top,
+                _thickness,
+                Math.Max(1, _target.Height));
+
+        if (Bounds != bounds)
+        {
+            Bounds = bounds;
+        }
+    }
+
+    private void Reposition()
+    {
+        ApplyBounds();
+        Refresh(fromTimer: false);
+    }
+
+    private void Refresh(bool fromTimer)
+    {
+        // Disposing as well as IsDisposed: the window is torn down long
+        // before the flag flips, and this runs from the target's own
+        // VisibleChanged while that is happening.
+        if (IsDisposed || Disposing || _target.IsDisposed || _target.Disposing
+            || !_target.IsHandleCreated || Parent is null || Parent.IsDisposed)
+        {
+            return;
+        }
+
+        if (!_target.Visible)
+        {
+            SetShown(false);
+            return;
+        }
+
+        int min;
+        int max;
+        int page;
+        int pos;
+        bool scrollable;
+
+        if (_grid is not null)
+        {
+            var rows = _grid.RowCount;
+
+            // DisplayedRowCount(false) counts only rows fully on screen,
+            // which is the page size a wheel notch or a page-down moves by.
+            var shown = Math.Max(1, _grid.DisplayedRowCount(false));
+
+            min = 0;
+            max = Math.Max(0, rows - 1);
+            page = shown;
+            pos = Math.Max(0, _grid.FirstDisplayedScrollingRowIndex);
+            scrollable = rows > shown;
+        }
+        else
+        {
+            var info = new SCROLLINFO
+            {
+                cbSize = Marshal.SizeOf<SCROLLINFO>(),
+                fMask = SIF_ALL,
+            };
+
+            if (!GetScrollInfo(_target.Handle, _horizontal ? SB_HORZ : SB_VERT, ref info))
+            {
+                SetShown(false);
+                return;
+            }
+
+            min = info.nMin;
+            max = info.nMax;
+            page = info.nPage;
+            pos = info.nPos;
+
+            var range = info.nMax - info.nMin + 1;
+            scrollable = info.nPage > 0 ? range > info.nPage : range > 1;
+        }
+
+        // Nothing to scroll, but Windows is still drawing its bar - a text
+        // box set to always show one (the Demo Mode log, empty at the start)
+        // keeps a greyed-out white bar with its arrows. Hiding this bar then
+        // uncovered it. Covered instead with an empty track, no thumb.
+        var idle = !scrollable && NativeBarShown();
+
+        if (!scrollable && !idle)
+        {
+            SetShown(false);
+            return;
+        }
+
+        var changed = _idle != idle || _min != min || _max != max || _page != page || _pos != pos;
+
+        _idle = idle;
+
+        _min = min;
+        _max = max;
+        _page = page;
+        _pos = pos;
+
+        // _shown, never Visible - see the field. And ApplyBounds, never
+        // Reposition: Refresh must not be able to re-enter itself.
+        if (!_shown)
+        {
+            SetShown(true);
+
+            // Only on the transition. Doing this every tick would restack the
+            // parent's children 7 times a second.
+            BringToFront();
+            ApplyBounds();
+        }
+        else if (fromTimer && ((_horizontal && Bounds.Bottom != _target.Bottom) || (!_horizontal && Bounds.Right != _target.Right)))
+        {
+            ApplyBounds();
+        }
+
+        if (changed)
+        {
+            Invalidate();
+        }
+    }
+
+    /// <summary>True while covering a native bar that has nothing to scroll - painted as an empty track.</summary>
+    private bool _idle;
+
+    private const int GWL_STYLE = -16;
+    private const int WS_HSCROLL = 0x00100000;
+    private const int WS_VSCROLL = 0x00200000;
+
+    /// <summary>Whether Windows is showing the native bar this one sits over.</summary>
+    private bool NativeBarShown()
+    {
+        if (_grid is not null || !_target.IsHandleCreated)
+        {
+            return false;
+        }
+
+        var style = GetWindowLong(_target.Handle, GWL_STYLE);
+        return (style & (_horizontal ? WS_HSCROLL : WS_VSCROLL)) != 0;
+    }
+
+    private int MaxPos => Math.Max(_min, _max - Math.Max(0, _page - 1));
+
+    /// <summary>The length of the sliding surface - the control's long side, whichever way it runs.</summary>
+    private int TrackLength => Math.Max(1, (_horizontal ? Width : Height) - 4);
+
+    private int ThumbLength
+    {
+        get
+        {
+            var range = Math.Max(1, _max - _min + 1);
+            var proportion = _page <= 0 ? 0.2f : Math.Clamp(_page / (float)range, 0.05f, 1f);
+
+            return Math.Clamp((int)(TrackLength * proportion), MinimumThumb, TrackLength);
+        }
+    }
+
+    private int ThumbStart
+    {
+        get
+        {
+            var travel = Math.Max(0, TrackLength - ThumbLength);
+            var span = Math.Max(1, MaxPos - _min);
+
+            return 2 + (int)(travel * Math.Clamp((_pos - _min) / (float)span, 0f, 1f));
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        // The track takes the control's own background rather than the page
+        // canvas: the bar sits inside the field's edge, not beside it.
+        using (var back = new SolidBrush(_target.BackColor))
+        {
+            g.FillRectangle(back, ClientRectangle);
+        }
+
+        // Nothing to scroll yet: just the track, covering Windows' bar.
+        if (_idle)
+        {
+            return;
+        }
+
+        // 7px thick, centred on the short axis; long axis follows the thumb.
+        var thumb = _horizontal
+            ? new RectangleF(ThumbStart, Height / 2f - 3.5f, Math.Max(MinimumThumb, ThumbLength), 7f)
+            : new RectangleF(Width / 2f - 3.5f, ThumbStart, 7f, Math.Max(MinimumThumb, ThumbLength));
+
+        using var path = AppTheme.RoundedRect(thumb, 3);
+        using var brush = new SolidBrush(_dragging || _hot ? AppTheme.Primary : AppTheme.TextMuted);
+
+        g.FillPath(brush, path);
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _hot = true;
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hot = false;
+        Invalidate();
+    }
+
+    /// <summary>The pointer position along the bar's long axis.</summary>
+    private int Along(MouseEventArgs e) => _horizontal ? e.X : e.Y;
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+
+        if (e.Button != MouseButtons.Left || _idle)
+        {
+            return;
+        }
+
+        var start = ThumbStart;
+        var length = ThumbLength;
+        var at = Along(e);
+
+        if (at >= start && at < start + length)
+        {
+            _dragging = true;
+            _dragOffset = at - start;
+            Capture = true;
+            Invalidate();
+            return;
+        }
+
+        Send(at < start ? SB_PAGEUP : SB_PAGEDOWN, 0);
+        Refresh(fromTimer: false);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+
+        if (!_dragging)
+        {
+            return;
+        }
+
+        var travel = Math.Max(1, TrackLength - ThumbLength);
+        var offset = Math.Clamp(Along(e) - _dragOffset - 2, 0, travel);
+        var span = MaxPos - _min;
+        var target = _min + (int)Math.Round(span * (offset / (float)travel));
+
+        Send(SB_THUMBTRACK, target);
+        _pos = target;
+        Invalidate();
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        if (!_dragging)
+        {
+            return;
+        }
+
+        _dragging = false;
+        Capture = false;
+
+        Send(SB_THUMBPOSITION, _pos);
+        Send(SB_ENDSCROLL, 0);
+
+        Refresh(fromTimer: false);
+        Invalidate();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+
+        // The pointer is over the bar, not the control, so the wheel would
+        // otherwise do nothing at all.
+        var lines = Math.Max(1, SystemInformation.MouseWheelScrollLines);
+        var steps = Math.Abs(e.Delta) / 120 * lines;
+
+        for (var i = 0; i < steps && i < 40; i++)
+        {
+            Send(e.Delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
+        }
+
+        Refresh(fromTimer: false);
+    }
+
+    private void Send(int code, int position)
+    {
+        if (_target.IsDisposed || !_target.IsHandleCreated)
+        {
+            return;
+        }
+
+        if (_grid is not null)
+        {
+            ScrollGrid(code, position);
+            return;
+        }
+
+        // The high word carries the position for the two thumb codes and is
+        // ignored for the rest.
+        var wParam = (IntPtr)((position << 16) | (code & 0xFFFF));
+
+        SendMessage(_target.Handle, _horizontal ? WM_HSCROLL : WM_VSCROLL, wParam, IntPtr.Zero);
+    }
+
+    /// <summary>
+    /// Moves a grid by rows. The scroll codes are the Win32 ones the rest
+    /// of this class speaks in, translated into the one property a
+    /// DataGridView actually exposes for this.
+    /// </summary>
+    private void ScrollGrid(int code, int position)
+    {
+        if (_grid is null || _grid.RowCount == 0)
+        {
+            return;
+        }
+
+        var shown = Math.Max(1, _grid.DisplayedRowCount(false));
+        var last = Math.Max(0, _grid.RowCount - shown);
+        var current = Math.Max(0, _grid.FirstDisplayedScrollingRowIndex);
+
+        var wanted = code switch
+        {
+            SB_LINEUP => current - 1,
+            SB_LINEDOWN => current + 1,
+            SB_PAGEUP => current - shown,
+            SB_PAGEDOWN => current + shown,
+            SB_THUMBTRACK or SB_THUMBPOSITION => position,
+            _ => current,
+        };
+
+        wanted = Math.Clamp(wanted, 0, last);
+
+        if (wanted == current)
+        {
+            return;
+        }
+
+        try
+        {
+            _grid.FirstDisplayedScrollingRowIndex = wanted;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            // The row count can change between the read above and this
+            // assignment - a refresh on another thread's callback, say.
+            // Losing one scroll step is not worth taking the app down for.
+        }
+    }
+
+    private void TargetMoved(object? sender, EventArgs e) => Reposition();
+
+    private void TargetReparented(object? sender, EventArgs e) => Reparent();
+
+    private void TargetDisposed(object? sender, EventArgs e) => Dispose();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            // Off the target completely. A bar belongs to the window it was
+            // parked in, and the control it scrolls can outlive that window -
+            // so a bar that is disposed but still listening is a dead control
+            // waiting to be handed to whatever window the target lands in
+            // next. Detaching is what makes that impossible rather than merely
+            // guarded against.
+            _target.LocationChanged -= TargetMoved;
+            _target.SizeChanged -= TargetMoved;
+            _target.VisibleChanged -= TargetMoved;
+            _target.ParentChanged -= TargetReparented;
+            _target.Disposed -= TargetDisposed;
+
+            Parent?.Controls.Remove(this);
+        }
+
+        base.Dispose(disposing);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SCROLLINFO
+    {
+        public int cbSize;
+        public int fMask;
+        public int nMin;
+        public int nMax;
+        public int nPage;
+        public int nPos;
+        public int nTrackPos;
+    }
+
+    // The 32-bit call on purpose: the style bits fit in it, and it exists
+    // in both 32- and 64-bit Windows, where GetWindowLongPtr does not.
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetScrollInfo(IntPtr hwnd, int bar, ref SCROLLINFO info);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+}

@@ -1,0 +1,41 @@
+# fly.toml app configuration file for the HeatCaller relay. An app it moved
+# from stays up as a forwarder - see README, "Moving to a new app name".
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'heatcaller-relay'
+primary_region = 'ewr'
+
+[build]
+[env]
+  RELAY_DATA = '/data'
+
+[[mounts]]
+  source = 'relay_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/healthz'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+  cpus = 1
+  memory_mb = 256

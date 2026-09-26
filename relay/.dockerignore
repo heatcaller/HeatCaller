@@ -1,0 +1,18 @@
+node_modules
+dist
+data
+
+# The token hashes live in a Fly secret, never in an image layer.
+relay.config.json
+
+# The local voice test: its config, its cached audio, and - above all - the
+# ElevenLabs key it reads. None of it has any business in a deployed image.
+relay.config.voice-test.json
+data-voice-test
+voice-test.key
+voice-test-setup.mjs
+
+*.cmd
+README.md
+.gitignore
+fly.toml

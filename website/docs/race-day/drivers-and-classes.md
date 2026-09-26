@@ -1,0 +1,445 @@
+# Drivers, classes and equipment
+
+This page covers the reference data you set up once and then keep up to date: the drivers who race, the classes they race in, and the club's gear — rental transponders, battery packs, venues, track layouts and car setups. Everything on the Race Day pages is built from this data, so it's worth getting right before your first race night.
+
+The pages covered here are all in the sidebar: **Driver Profiles**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Setup Log**.
+
+## Driver Profiles
+
+A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
+
+<!-- screenshot: Driver Profiles page with the roster on the left and a driver card on the right -->
+
+The page has two halves:
+
+- **The roster** on the left, with a photo (or an initials disc) and the columns **Driver**, **#**, **Class**, **Car / Model** and **Transponder**. If a driver has more than one car, the **Car / Model** column shows the active car and how many others they have, for example `MR-03 (+1)`.
+- **The driver card** on the right, which shows the selected driver's photo, number, class (in the class's color), car, team, sponsors, home track, skill level, transponder, any flags, earned badges and notes. Empty fields are left off the card.
+
+The **Search name, number, car, class, team...** box filters the roster as you type. It matches the driver name, announcer name, transponder, race number, class, team, sponsors, home track and any car in the driver's garage.
+
+You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
+
+### Add a driver
+
+1. On the **Driver Profiles** page, click **Add...**.
+2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
+3. Fill in the other fields you want (see below).
+4. Click **Save**.
+
+If the transponder (or the **Alt transponder:**) is already another driver's, you get a "Transponder already in use" warning naming that driver, and the dialog stays open so you can fix the number. Nothing is replaced.
+
+You can also create profiles from Race Control. When transponders with no profile were on track, HeatCaller asks **Name them now?** after the session and opens this dialog for each one, with the transponder already filled in and locked. See [Transponders](../timing/transponders.md).
+
+### Edit or delete a driver
+
+- To edit, double-click a driver, or select one and click **Edit...** (or **Edit Profile...** on the card).
+- To delete, select one or more drivers and click **Delete**. You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
+
+Undo never overwrites a driver who has one of the deleted driver's transponders now, as their main or alternate transponder, and never puts two drivers on one transponder. A deleted driver whose transponder has been taken since stays deleted:
+
+- When you deleted several, the others come back, and a **Some drivers not restored** message names each one left out and who holds its transponder. To have one back, free the transponder first, then add the driver again.
+- When none of them can come back, nothing changes, and the console says why ("[undo] FAILED to undo ..." and "Nothing was changed.").
+
+If racers have their own check-in PINs (see [Online check-in](../online/check-in.md#personal-pins)), a driver brought back more than a moment after the delete may be given a new PIN.
+
+!!! note
+    Once a profile is saved, its transponder can't be changed from the edit dialog — the field is locked. The transponder is what links the driver to their lap history.
+
+### Profile fields
+
+The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left column holds the organizer's details. The right-hand strip holds the parts that are shown to the crowd.
+
+| Field | What it's for |
+|---|---|
+| **Transponder:** | Required. The transponder number the decoder reports. Locked after the profile is saved. |
+| **Driver name:** | The driver's name, as shown on screens, results and heat sheets. |
+| **Announcer name:** | What the announcer says, if it's different from the driver name — a nickname, or a spelling the voice pronounces correctly. Leave it blank to use the driver name. It takes effect straight away. |
+| **Cars:** | The driver's garage. Type a car and click **Add**; select one and click **Remove** to take it out. The car showing in the box is the *active* car — the one that's announced and recorded. A car you type but forget to add is still saved. |
+| **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
+| **Home track:** | Home club or town. |
+| **Skill level:** | Free text, for example "Novice / Intermediate / Expert". |
+| **Contact:** | For organizer use only. It's never announced. |
+| **Email:** | Where the driver's personal check-in PIN is sent. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
+| **Alt transponder:** | A second transponder the driver runs, for a second car. Its laps count as this driver's — see [Alternate transponder](../timing/transponders.md#alternate-transponder). |
+| **Class:** | The class the driver races in, or **(none)**. Click **Manage...** to open the class list if the class you need doesn't exist yet. |
+| **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, use the [Setup Log](#setup-log). |
+| **Rental / loaner transponder** | Marks this transponder as a club loaner. |
+| **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
+| **Notes:** | Free text. Shown at the bottom of the driver card. |
+| **Team / club:** | The team or club the driver runs under. |
+| **Sponsors:** | Who backs the driver, for example "Kyosho, PN Racing". Shown on the driver card. |
+
+Team and sponsors are also available to announcement templates as `{team}` and `{sponsors}`. See [Voice announcements](../announcer/voice.md).
+
+If the driver has earned any achievements, a **Badges** line appears at the bottom of the dialog.
+
+!!! note
+    Both **Rental / loaner transponder** and **Exclude from track records and points** stop the driver from setting an all-time track record, and keep them off the records published online.
+
+    **Exclude from track records and points** also takes the driver out of championship points: on the **Championship** page, in the standings export and on the club's online pages, the drivers behind them close up and score as if the excluded driver hadn't been there. When an excluded driver finishes a race, the Race Control log says they're "excluded from track records and championship points".
+
+### Photos
+
+Each driver can have a photo. It appears in the roster, on the driver card and, if you turn photos on, on the online check-in page (see [Online check-in](../online/check-in.md)). A driver without a photo gets a colored initials disc that's always the same color for the same name.
+
+To add or change a photo:
+
+- In the profile dialog, click **Choose Photo...**. Click **Remove Photo** to go back to the initials disc.
+- Or, to swap photos quickly without opening the whole profile, select the driver and click **Photo...** on the card. This is handy when you're taking photos of a whole class at the pit table.
+
+You can pick JPG, PNG, BMP or GIF files. HeatCaller makes its own copy of the picture: it rotates phone photos the right way up, scales them down so the longest side is 640 pixels, and stores the copy in its own data folder. Moving or deleting the original file afterwards doesn't affect the profile.
+
+The picture is checked before it's opened. A file over 50 MB, a picture over 20000 pixels across or down or over 64 million pixels in all, and anything that isn't a PNG, JPEG, GIF or BMP picture are turned away. That leaves room for a phone's full-resolution photos, 48 or 50 megapixels included, since the photo is shrunk as it comes in.
+
+If a picture can't be used, a **Photo not added** message says **Couldn't use that picture:** and why, for example "That picture is 12000 x 9000 pixels, too big to use as a driver photo. It can be up to 20000 pixels across or down, and 64 million pixels in all - save a smaller copy and choose that." The profile keeps its existing photo.
+
+### Import drivers from a spreadsheet
+
+If you have a club roster in a spreadsheet, you can import it as a CSV file instead of typing each driver in.
+
+1. Click **Download Template...** and save `driver-roster-template.csv`.
+2. Open it in your spreadsheet program. Fill in one row per driver, and delete the example row.
+3. Save it as CSV.
+4. Click **Import from CSV...** and pick the file.
+
+The template has these columns:
+
+| Column | Also accepted as | Notes |
+|---|---|---|
+| `Transponder` | `TransponderId`, `Transponder Id` | Required. Rows without it are skipped. |
+| `DriverName` | `Driver Name`, `Driver`, `Name` | |
+| `CarModel` | `Car Model`, `Car`, `Model` | |
+| `ClassName` | `Class Name`, `Class` | |
+| `Team` | `Club`, `Team / Club` | |
+| `Sponsors` | `Sponsor` | |
+| `Email` | `E-mail`, `Email Address`, `E-mail Address` | |
+| `Notes` | `Note` | |
+
+Column headers are matched without regard to capitals, and the columns can be in any order. If there's no transponder column, the import stops with **Missing required column**.
+
+How the import treats drivers who already exist:
+
+- A transponder that isn't in HeatCaller yet becomes a new profile.
+- A transponder that already has a profile is **updated, not replaced**. Only the columns that are present *and* filled in on the sheet change anything. The driver's photo, race number, announcer name and every other field not on the sheet are left alone, and a blank cell never wipes out an existing value.
+- A row is skipped, and nothing is changed for it, when its transponder is another driver's alt transponder, when it gives a different driver name for a transponder that's already in use, or when it repeats an earlier row's transponder with a different name.
+
+When it finishes, **Import complete** tells you how many profiles were imported and how many were new or updated. Rows with no transponder are listed (up to ten), and rows skipped because of a transponder clash are listed under "Skipped N rows - nothing was changed for these:".
+
+!!! tip
+    Because blank cells never overwrite anything, you can use a sheet with just `Transponder` and `Email` columns to add email addresses to drivers you've already set up.
+
+## Classes
+
+A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats count, how big a main is, whether bump-ups happen, what a scrutineer checks, and how the races are run. Every setting is per class, because clubs rarely run two classes the same way.
+
+<!-- screenshot: Classes page grid showing several classes with their qualifying, mains and format columns -->
+
+The **Classes** page lists every class in a grid, so you can compare them side by side:
+
+| Column | Shows |
+|---|---|
+| **Class** | The class name, in the class's color. |
+| **Qualifying** | How qualifying is scored, for example "Most laps, then time · best heat" or "Best 3 consecutive · best 2 heats". |
+| **Mains** | Main size and bump-ups, for example "8 per main · top 2 bump up" or "10 per main · no bump-ups". |
+| **Race format** | The class's race format, or "app default". If the class has a separate qualifier format, it's shown after `quals:`. |
+| **Tech** | How many items are on the class's tech checklist, or "-" if there's none. |
+
+Use **Add a Class...**, **Edit...** (or double-click a row), **Sanctioning Preset...** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage...** next to **Class:**.
+
+When you delete a class, drivers keep the class name on their profile, but it no longer appears in the class list. You can undo a delete with the **Undo** button.
+
+### Rename a class
+
+Change the **Name:** in **Edit** and click **Save**. The new name is carried to everything that uses the class: drivers, rounds, championships, tech inspections, race days, handicap modes, run sheet lines and remembered filters. A **Class renamed** box counts what moved (drivers, rounds, championships, tech inspections, race days and run sheet lines), and one **Undo** puts the old name back everywhere.
+
+Undoing a rename only puts back the name. Other changes you've made to the class since the rename are kept. Drivers, rounds, championships, tech inspections, race days and run sheet lines added under the new name go back to the old name with it. Race days and run sheet lines that already used the new name before the rename are left as they were, and a race day that listed both names keeps both. The class keeps its own handicap mode through a rename, and the undo restores it. Undoing several renames in a row puts back every handicap mode they replaced.
+
+Class names must be unique, ignoring capitals: "stock" and "Stock" are the same class. A name that's already used is refused with "There is already a class called ...".
+
+### Class settings
+
+The **Add Class** / **Edit Class** dialog has these settings:
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Name:** | Required. The small colored square beside the name is the class color — click it to change it. | — |
+| **Notes:** | Free text. | Empty |
+| **Qualifying:** | **Most laps, then lowest time**, or **Best consecutive laps (fastest clean run)**. See [How qualifying ranks drivers](program-and-mains.md#how-qualifying-ranks-drivers). | Most laps, then lowest time |
+| **Consecutive laps to count:** | For best-consecutive scoring only: how many laps in a row make a run (2–20). | 3 |
+| **Heats that count:** | How many of each driver's best heats are totaled (1–20). Set 2 for "best 2 of 3". Leave at 1 to count only their single best heat. | 1 |
+| **Drivers per main:** | The largest a main can be when mains are seeded (2–40). Qualifying is split into A, B, C mains of this size. | 8 |
+| **Bump up:** | How many finishers from each main move up into the main above (0–10). Set 0 to turn bump-ups off. | 2 |
+| **Detect jump starts (crossing before the green)** | Watches for cars crossing the line before the green flag. | On |
+| **Automatic penalty:** | Seconds added to a jump-starter's time (0–120). **0** means flag only: the jump start is logged, announced and shown, but what to do about it is up to you. | 0 |
+| **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
+| **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared in the Tech Log today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
+
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist...**, **Race Format...**, **Qualifier Format...**, **Colour...** and **Sanctioning Preset...**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
+
+!!! note
+    Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
+
+### Race format and qualifier format
+
+A race format is how a class's races are run: limits, the start procedure and streak rules. Click **Race Format...** to set the class's format, and **Qualifier Format...** if its qualifying heats should run differently (the common "five-minute quals, eight-minute mains" setup).
+
+HeatCaller picks the format for a race in this order:
+
+1. A format set on that one round (done from Race Control — see [Running a race](../race-control/running-a-race.md)).
+2. For a qualifying heat, the class's qualifier format, if it has one.
+3. The class's race format.
+4. The app default format.
+
+In the format dialog, **Use a custom format (untick to follow the app default)** decides whether the class has its own format. Unticked, the class follows the app default, and keeps following it when the default changes. Ticked, you set:
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Lap limit (0 = none):** | Race ends after the leader completes this many laps. | 0 |
+| **Time limit, min (0 = none):** | Race ends after this many minutes. | 0 |
+| **Min valid lap (ms):** | Passes quicker than this are treated as decoder noise, not laps (100–60000). | 3000 |
+| **Streak window ±%:** and **faster too** | How far a lap can differ from the previous one and still count toward a lap streak, and whether a much faster lap also breaks the streak. | 25, on |
+| **Start:** | The start procedure (see below). | Standard |
+| **Stagger gap (s):** and **Clock:** | For staggered starts: seconds between releases, and whether each car's clock starts at its own release (**Clock: own release**) or at the green (**Clock: shared green**). | 5, own release |
+| **Auto-advance: Stage → Countdown → Green** | Staging runs straight into the countdown and the green by itself. | On |
+| **Stage (s):** | Staging time (1–300). | 15 |
+| **Countdown (s):** | Countdown time (1–60). | 5 |
+| **Leader takes the flag, others finish their lap** | When the limit is reached, the leader takes the checkered flag and everyone else finishes the lap they're on. | On |
+
+The **Start:** choices are:
+
+- **Standard - all away together, one clock** — a simultaneous grid start on one shared clock. The run from the grid to the timing loop counts toward everyone's time.
+- **Staggered - grid order**, **Staggered - reverse grid** and **Staggered - handicap** — cars are released one at a time.
+- **Qualifying - own clock from 1st crossing** — each driver's clock starts at their own first crossing of the line, so the run to the loop doesn't count (the IFMAR convention).
+
+A format that was set to hand-released starts in an older version shows **Hand released (no longer offered)**. It still works, but you can't choose it for anything new.
+
+For what each start type looks like on race day, see [Running a race](../race-control/running-a-race.md).
+
+### Tech checklist
+
+Click **Tech Checklist...** to set what a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row when a car is inspected in the [Tech Log](events-and-entries.md#race-day-tech-log).
+
+Use **Add...**, **Rename...**, **Remove**, **Move Up** and **Move Down** to build the list. **Add Common** adds six starting suggestions you can edit: "Body secure and undamaged", "Motor legal for class", "Tyres legal for class", "Ride height", "Transponder fitted and working" and "No loose parts". An empty checklist means you don't run tech for this class.
+
+If you do run tech for the class, **Warn when a driver in a heat hasn't passed tech today** in the class settings makes Race Control point out drivers who haven't been through tech yet. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control).
+
+### Class color
+
+Every class has a color, used on its name in lists and as a band on its printed heat sheets, so you can tell class sheets apart on the pit table. By default the color is worked out from the class name, so the same class is the same color on every computer at the club.
+
+Click **Colour...** (or the square next to the name) and choose **Choose a Colour...** to pick your own, or **Use the Colour from the Name** to go back to the automatic color.
+
+### Sanctioning presets
+
+A sanctioning preset applies a governing body's published rules to a class. It only changes the settings the rulebook actually states, and leaves everything else as you set it.
+
+To apply one:
+
+1. Select a class on the **Classes** page and click **Sanctioning Preset...** (or click the same button inside the class editor).
+2. Pick a preset from the list. The right side explains **WHERE IT CAME FROM**, **WHAT IT SETS** and **WHAT IT DOES NOT SET** — read the last one before you apply it.
+3. Click **Apply to This Class**, check the list of changes, and click **Yes**.
+
+| Preset | What it sets |
+|---|---|
+| **PN Racing - PNWC 2026 qualifying and mains** | Qualifier format: standard start, 5 minutes, no lap limit. Race format: standard start, 8 minutes, no lap limit. Most laps then time, best 2 heats count, 10 drivers per main, bump-ups off. |
+| **IFMAR - IFMAR-style qualifying clocks** | Qualifier start type set to own clock from first crossing, and most laps then time. Nothing else. |
+| **BRCA - BRCA on-road qualifying (duration NOT set)** | Qualifier start type set to own clock from first crossing, and most laps then time. The qualifier length is deliberately left for you to set. |
+
+!!! warning
+    - None of the presets set a points scale, and the PNWC preset sets the length of one leg only — HeatCaller doesn't model multi-leg mains. Read **WHAT IT DOES NOT SET** for each one.
+    - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format...** afterwards.
+    - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
+
+## Rentals
+
+The **Rentals** page keeps track of the club's loaner transponders — who has each one, what deposit you're holding, and above all what hasn't come back yet.
+
+<!-- screenshot: Rentals page with the "2 UNITS STILL OUT" banner and the units grid -->
+
+A large banner at the top shows **ALL UNITS RETURNED**, or how many are still out (for example **2 UNITS STILL OUT**) with a slow pulse. The sidebar shows the same count as a badge on **Rentals**, so you can see it from any page. Check it before you pack up.
+
+The grid lists units that are out first. Its columns are **Asset Tag**, **Transponder**, **Status** (**OUT**, **Available** or **Retired**), **With**, **Deposit Held**, **Out For**, **Loans** and **Notes**.
+
+### Add a rental unit
+
+1. Click **Add Unit...**.
+2. Enter the **Transponder ID:** exactly as the decoder reports it. It can't be changed after you save, because it ties the unit to its loan history.
+3. Enter an **Asset tag:** — what people call it at the counter, such as "R4" or a sticker number.
+4. Add any **Notes:** and click **Save**.
+
+Tick **Retired (out of service - keeps its history)** on a unit that's damaged or lost. A retired unit can't be loaned out, but its history is kept. Deleting a unit removes its loan history too.
+
+### Lend and take back a unit
+
+1. Select an available unit and click **Check Out...** (or double-click it).
+2. In **Loan to:**, pick a saved driver or just type a name — a walk-in doesn't need a profile.
+3. In **Deposit held:**, note what you're holding (a car key, a license, cash).
+4. Click **Check Out**.
+
+When it comes back, select it and click **Check In...** (or double-click it). The prompt reminds you what deposit to give back and asks for any notes on the unit's condition. Click **OK** to file the loan.
+
+A unit that's already out can't be checked out again — issuing one transponder to two drivers would mix their laps. **Loan History...** lists every completed loan for the selected unit. Check-outs, check-ins and edits to a unit can be undone with **Undo**.
+
+!!! note
+    The Rentals page is separate from the **Rental / loaner transponder** checkbox on a driver profile. The checkbox is what keeps a loaner out of track records; the Rentals page is for tracking the hardware.
+
+The event report also lists any units still out. See [Results and championships](../race-control/results-and-championships.md).
+
+## Batteries
+
+The **Batteries** page answers one question: are you slower on a particular battery pack? You tag each session with the pack that was in the car, and HeatCaller compares the lap times. There's no charge logging.
+
+<!-- screenshot: Batteries page with the PACKS list, PACE BY PACK comparison and the session list -->
+
+### Set up your packs
+
+Under **PACKS**, click **Add Pack...**. Give it a **Label:** (whatever's written on the pack, like "3" or "Blue tape") and a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own). Tick **Retired (out of rotation, keeps its history)** for a pack you've stopped using — it keeps its pace history but isn't offered when you tag sessions.
+
+Deleting a pack removes its tags from any sessions, so its pace history is lost. Retire it instead if you want to keep the history.
+
+### Tag sessions
+
+The **TAG A SESSION** list shows your recent sessions with the columns **When**, **Session**, **Track**, **Drivers** and **Pack used**. Double-click a session (or select it and click **Set Pack...**) and pick the pack. **Clear Pack** removes the tag. The line under the list shows how many sessions are tagged.
+
+### Compare pace
+
+Under **PACE BY PACK**, pick a driver. The comparison is per driver, because pack pace means nothing across different people. For each pack you see **Sessions**, **Best lap**, **Avg best lap** (the average of each session's best lap) and **Gap** to the quickest pack. A gap of 0.1 seconds or more is highlighted in red.
+
+## Venues
+
+A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
+
+<!-- screenshot: Venues page with the venue list and Venue Settings panel -->
+
+Click **New Venue**, then fill in **Venue Settings**. Changes save as you go (the status line shows **Saved.**).
+
+| Setting | What it does |
+|---|---|
+| **Name:** | The venue's name. |
+| **Connect via:** | Which decoder this venue uses. See [Decoders](../timing/decoders.md). |
+| **Preferred track:** | A saved track layout to select, or **(none)**. |
+| **Preferred announcer style:** | A saved announcer style to apply, or **(none)**. |
+| **Lap limit (0 = none):** | Race default for this venue. |
+| **Time limit, min (0 = none):** | Race default for this venue. |
+| **Minimum lap time (ms):** | Race default for this venue. |
+| **Streak slow-lap multiplier:** | How far a lap can differ from the previous one and still extend a streak. It's converted to the streak window when applied: 1.5 becomes ±50%. |
+
+To use a venue, select it and click **Apply This Venue**, then confirm. HeatCaller then:
+
+- sets **Connect via:** on the **Connection** page (a venue saved for Next Level Timing, which was retired in 0.50.0, gets the EasyLap decoder, and the console says so);
+- selects the preferred track layout, if it still exists;
+- applies the preferred announcer style, if it still exists, the same way **Apply Selected Style** does: this PC's playback volume, wireless-speaker setting, output format and **Speak With** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
+- writes the race defaults into the **app default** race format.
+
+Because the race defaults go into the app default, a class or round with its own format still uses its own settings.
+
+## Track Layouts
+
+Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe each layout. The track layout also holds the all-time lap record for that layout and how many corner marshal posts it needs.
+
+<!-- screenshot: Track Layouts page with the layout list and the Selected Track preview -->
+
+The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its picture under **Selected Track**.
+
+### Add or edit a layout
+
+Click **Add...** or **Edit...**. The **Add Track Layout** / **Edit Track Layout** dialog has:
+
+| Field | What it's for |
+|---|---|
+| **Name:** | Required. |
+| **Track length (ft):** | Optional, for information only. |
+| **Average lap time (sec):** | Optional. Used to pace Demo Mode races on this track. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
+| **Corner marshal posts:** | How many marshal posts the layout needs (0–20). **0** means marshals aren't tracked. Posts are named Corner 1, Corner 2 and so on. See [Marshal assignments](program-and-mains.md#corner-marshals). |
+| **Notes:** | Free text. |
+| **Photo or drawing:** | Click **Attach File** to attach a photo or drawing (PNG, JPG, BMP, GIF, PDF, DWG or DXF). **Open** opens it; **Remove** detaches it. Attaching a new file replaces the old one. **Attach File** and **Remove** only take effect when you click **Save**; **Cancel** keeps the old picture. |
+| **Main picture:** | Choose **Uploaded photo** or **Track plan** — which picture stands for this track wherever one is shown. Both are kept. |
+
+HeatCaller keeps its own copy of the attached file, so you can move or delete the original. If a new file can't be attached, the layout keeps its old one. Images get a preview; PDF and CAD files can only be opened.
+
+A photo is checked as soon as you pick it: a file over 50 MB, a picture over 20000 pixels across or down or over 40 million pixels in all, and a file that isn't a PNG, JPEG, GIF or BMP picture are turned away with "Couldn't attach that file:" and the reason. A track photo is kept just as it's picked, so its pixel limit is lower than a driver photo's, and a phone's 48 or 50 megapixel full-resolution photo is too big. Save a smaller copy and attach that. PDF and drawing files attach without that check. A track photo already stored that's over those limits isn't shown, on the **Track Layouts** page or on the club's online tracks page, and the track's plan shows instead if it has one. Nothing is deleted.
+
+### Reset a track record
+
+Each layout keeps its all-time fastest lap and who set it. If you change the physical layout, select it and click **Reset Record** to clear it. You can undo this.
+
+### Draw the layout in the Track Designer
+
+The Track Designer lets you draw an RCP-style tile track: lay the foam floor, stand rails along the seams, add turns and markings, and draw the racing line. Select a layout and click **Track Designer...**, or click it with nothing selected to draw a new track.
+
+<!-- screenshot: Track Designer with a traced photo underneath and rails drawn over it -->
+
+The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, **Erase** and **Photo** (keys <kbd>1</kbd> to <kbd>7</kbd>). The status line at the bottom explains how the current tool works. Other toolbar buttons:
+
+- **Wall the edge** puts a rail round every open edge of the floor.
+- **Trace route** follows the corridor between the rails and lays the racing line down it.
+- **Play** sends a car round the line you drew; **Stop** ends it.
+- **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>), **Redo** (<kbd>Ctrl</kbd>+<kbd>Y</kbd>), **Fit** (<kbd>F</kbd>) and **Clear**.
+
+In any tool, <kbd>Ctrl</kbd>+click or right-click erases. <kbd>R</kbd> turns markings 90 degrees, and <kbd>G</kbd> shows or hides the grid. The tool keys only work while the drawing area has focus, so they don't interfere with typing the track name.
+
+The palette on the left holds floor pieces, barriers (with **Turn radius, in tiles:** buttons for 0.5, 1, 1.5 and 2) and markings.
+
+The side panel on the right has:
+
+- **Track name** — required before you can save.
+- **Tile size** — **30 cm**, **50 cm**, or any size in mm.
+- **Trace a photo** — **Choose photo** puts a photo of the real track underneath. Use the **Photo** tool to drag it into place and the mouse wheel to size it until its tiles line up with the grid, then draw over it. **Hide**, **Remove** and a transparency slider control it. This is the quickest way to get a real layout in exactly. The photo gets the same size and type check as a track photo (above), and it must be on this PC: one on another computer is refused with "That photo is on another computer. Copy it to this PC first, then choose the copy." A photo that's refused, or that passes the check but still won't open, gets a **Photo not loaded** message instead of being traced, and the plan keeps whatever photo it already had. **Undo** and **Redo** put the photo back with the plan, so undoing a photo brings the previous one back on screen.
+- **The lap** — tick **The line closes into a lap** for a circuit. Below it, HeatCaller shows the floor tile count and area, rail counts, and the lap length in meters and feet, with the average speed at the layout's average lap time (12 seconds if the layout has none).
+- **Check against a kit** — pick **30cm Mini-96** or **50cm Wide-L / Oblong** to see whether your layout fits in that box, or what it's short of.
+
+When the designer opens a plan whose traced photo can't be shown, the plan opens without it and the status line says why:
+
+| The status line says | Why |
+|---|---|
+| "The traced photo is on another computer, so it isn't shown. Copy it to this PC, then pick it again with the Choose photo button." | The plan points at a photo on another computer, for example after a backup was restored from elsewhere. HeatCaller doesn't open photos over the network. |
+| "The traced photo isn't where it was any more, so it isn't shown. Pick it again with the Choose photo button." | The photo has been moved, renamed or deleted since it was picked. The plan keeps the photo's location, not a copy of it. |
+| "That image couldn't be opened." | The photo is over the size limits, isn't a PNG, JPEG, GIF or BMP picture, or is damaged. |
+
+At the bottom, **Show this plan as the track's main picture** (on by default) makes the plan the layout's picture. **Save as PNG...** exports the plan as an image. Click **Save Layout** to save the plan onto the layout. You can undo the whole designer session with the sidebar **Undo** button.
+
+## Setup Log
+
+The **Setup Log** records what was in the car and links it to the session it ran in, so the session's best lap shows right next to the setup. Over time it shows which changes actually made the car quicker.
+
+<!-- screenshot: Setup Log page listing several setups with their best laps -->
+
+The grid lists setups newest first, with the columns **Date**, **Driver**, **Track**, **Chassis Sheet**, **Filled** (how many fields are filled in), **Best Lap** and **Setup** (the first few filled values). Use **Driver:** to show one driver's setups.
+
+### Log a setup
+
+1. Click **Log a Setup...**.
+2. Choose the **Driver:**, **Track:** and **Car:**.
+3. Pick a **Chassis sheet:** — the template of fields to fill in.
+4. In **Ran in session:**, pick the session this setup ran in, or leave it at **(not linked to a session)**. Linking it is what fills in **Best Lap**.
+5. Fill in the fields. Click a callout on the chassis diagram to jump to its field; filled callouts are highlighted.
+6. Click **Save**.
+
+Most changes are small tweaks, so **Duplicate** copies the selected setup as a starting point for the next one. The copy keeps the driver, track, car, chassis sheet and values, but not the date or the session link. **Delete** removes the selected setups (you can select several); **Undo** brings them back.
+
+Setups saved before chassis sheets existed show as **(legacy entry)**. When you open one, its old values are copied into the matching fields of the sheet.
+
+### Chassis sheets
+
+A chassis sheet is the template a setup is filled in against: a diagram of the car with callouts, plus a list of fields. HeatCaller comes with a **Kyosho MR-04 / MR-03** sheet.
+
+Click **Chassis Sheets...** to manage them. **New...** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit...** opens it, and **Delete** removes it (setups that used it are kept but show as legacy entries; Undo can restore the sheet).
+
+In the sheet editor (**Chassis Diagram**):
+
+- **Chassis name:** names the sheet.
+- **Set Diagram Image** uses your own picture of the chassis; **Use Built-in Outline** goes back to the drawn outline. The picture gets the same size and type check as a track photo (see [Add or edit a layout](#add-or-edit-a-layout)), and an **Image not set** message says why one is turned away. A diagram already stored that's over the limits isn't opened: the sheet shows the built-in outline instead.
+- Click a dot on the diagram to select a callout, or double-click empty space to add one. **Add Point**, **Delete Point** and **Edit Field...** manage callouts.
+- **Other tuning fields (not on the diagram)** holds things with no place on a picture, such as motor, gearing and battery. Use **Add...**, **Rename...**, **Edit Field...** and **Remove**.
+
+**Edit Field** sets a field's **Label:**, **Unit:** (for example mm), whether to **Show as a callout on the chassis diagram**, and how it's **Filled in as:**:
+
+- **Pick one option (dropdown)**
+- **Tick any options (checklist)**
+- **Number with a unit**
+- **Free text**
+- **Yes / no tickbox**
+
+For the dropdown and checklist kinds, build the **Options:** list with **Add...**, **Rename...**, **Remove**, **Move Up** and **Move Down**.
+
+Because setup values are stored as text, you can edit a sheet's fields later without losing setups already saved against it.

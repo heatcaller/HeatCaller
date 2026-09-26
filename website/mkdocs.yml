@@ -1,0 +1,85 @@
+site_name: HeatCaller Documentation
+site_description: Run RC race nights from one laptop - timing, race control, an AI announcer, results, championships and online check-in.
+# site_url: https://docs.example.com/   # set when the website has an address
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: pink
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: pink
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.keys
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - What HeatCaller does: getting-started/index.md
+      - Installing: getting-started/install.md
+      - A tour of the window: getting-started/tour.md
+      - Your first race night: getting-started/first-race-night.md
+  - Race day:
+      - Drivers, classes and venues: race-day/drivers-and-classes.md
+      - Events, entries and check-in: race-day/events-and-entries.md
+      - Program, qualifying and mains: race-day/program-and-mains.md
+  - Race control:
+      - Running a race: race-control/running-a-race.md
+      - Fixing mistakes and recovering: race-control/corrections-and-recovery.md
+      - Practice, ghosts and handicaps: race-control/practice-and-ghosts.md
+      - Results and championships: race-control/results-and-championships.md
+  - Announcer:
+      - Voice announcements: announcer/voice.md
+      - AI commentary: announcer/commentary.md
+      - Sounds and music: announcer/sounds-and-music.md
+  - Timing:
+      - Decoders: timing/decoders.md
+      - Transponders: timing/transponders.md
+  - Screens:
+      - Big screen: screens/big-screen.md
+      - Phones on the club Wi-Fi: screens/phone-and-web.md
+      - Looks and the club logo: screens/looks-and-logo.md
+  - Online:
+      - Your club's online pages: online/index.md
+      - Setting up the Club Website page: online/setup.md
+      - Online check-in: online/check-in.md
+      - Driver sign-up: online/sign-up.md
+      - Emailing PINs to racers: online/email.md
+  - Administration:
+      - Hosting the relay: admin/relay-hosting.md
+      - Security and privacy: admin/security-and-privacy.md
+      - Backups: admin/backups.md
+      - Where data lives: admin/data-files.md
+      - Troubleshooting: admin/troubleshooting.md
+  - Reference:
+      - Keyboard shortcuts: reference/keyboard-shortcuts.md
+      - Glossary: reference/glossary.md
+      - FAQ: reference/faq.md
+  - Release notes: release-notes.md

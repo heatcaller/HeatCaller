@@ -1,0 +1,4006 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
+namespace HeatCaller;
+
+/// <summary>
+/// A small embedded web server serving pages on the local network:
+///
+///   /        - live results, read-only. Point a browser or an OBS browser
+///              source at this for a spectator display or stream overlay.
+///   /remote  - race control from a phone, so whoever's running the race
+///              can throw flags while standing at the track instead of
+///              being tethered to the laptop.
+///   /checkin - sign-on from a phone. Drivers find their own name and tap
+///              it, which is the half of check-in that does not need
+///              somebody standing at the laptop doing it for them.
+///   /manage  - the race-day manager: set up the day, entries and
+///              check-in, the programme, race control and results, from a
+///              phone on the track's own Wi-Fi. One JSON endpoint
+///              (/api/manage) behind the manager PIN; see RaceDayService
+///              and raceday-protocol.md for what it can do.
+///
+/// Built on HttpListener (part of .NET itself) rather than pulling in a
+/// full web framework - the surface here is a handful of endpoints, and
+/// avoiding another dependency keeps the app's footprint small.
+///
+/// IMPORTANT: binding to a network-visible address on Windows normally
+/// requires either administrator rights or a one-time URL reservation.
+/// Start() surfaces that clearly rather than failing silently - see the
+/// UrlReservationHint below.
+/// </summary>
+public sealed class WebServerService
+{
+    private readonly RaceControlSession _race;
+    private readonly ProfileStore _profiles;
+    private readonly DayScheduleStore? _schedule;
+    private readonly SponsorStore? _sponsors;
+    private readonly AppSettings? _settings;
+    private readonly KpiTracker _kpiTracker = new();
+    private HttpListener? _listener;
+    private CancellationTokenSource? _cts;
+
+    /// <summary>Raised for log-worthy events (started, stopped, errors) so the host can surface them in the console.</summary>
+    public event Action<string>? StatusMessage;
+
+    /// <summary>
+    /// Carries out a race-control action the remote page asked for, and says
+    /// what became of it. The host supplies this rather than this service
+    /// calling RaceControlSession directly, because those actions have to run
+    /// on the UI thread and go through the same paths as the on-screen
+    /// buttons (which also handle things like cancelling a pending
+    /// auto-start).
+    ///
+    /// The second argument is "force": the phone has asked its user whether
+    /// to stage over a running race and been told yes. Without it - which is
+    /// how every press arrives the first time - a stage or countdown over a
+    /// running race is answered with that question (409 with "confirm")
+    /// rather than run, and the page sends it again with force=1 on a yes.
+    /// See HandleCommand.
+    ///
+    /// The third is the race that yes was about - the session generation the
+    /// question carried, sent back by the page as raceGeneration - or null
+    /// from a page that does not send it, which is trusted as before. A yes
+    /// about one race must not abandon another that went green meanwhile.
+    ///
+    /// Called on the request's own thread-pool thread (see DispatchRequest),
+    /// never the UI thread, and it may block for a few seconds: the host
+    /// hands the command to the UI thread and waits for Race Control to
+    /// finish with it, and the phone's answer waits with it.
+    ///
+    /// It replaces CommandReceived and CommandAccepted, which could only say
+    /// whether a command had been handed to the UI thread. The phone was told
+    /// "GREEN sent" for a command Race Control then refused - Stage during
+    /// practice, a checkered with no race running - and whoever was holding
+    /// it had no way to know.
+    /// </summary>
+    public Func<string, bool, int?, RemoteCommandOutcome>? RunCommand { get; set; }
+
+    private volatile bool _hostReady;
+
+    /// <summary>
+    /// Whether the host window is up and able to act on a command or a
+    /// check-in. Set by the host once it has been shown, cleared as it
+    /// closes.
+    ///
+    /// Until then a request would be answered "ok" and then dropped on the
+    /// floor, because there is no UI thread yet to hand it to - a phone
+    /// saying "GREEN sent" for a flag that never flew. Refusing with a 503
+    /// tells the truth instead.
+    /// </summary>
+    public bool HostReady
+    {
+        get => _hostReady;
+        set => _hostReady = value;
+    }
+
+    /// <summary>One driver as the check-in page sees them.</summary>
+    public sealed record CheckInEntry(string Transponder, string Name, string ClassName, bool CheckedIn);
+
+    /// <summary>
+    /// The roster as the check-in page is served it: each driver under an
+    /// opaque id rather than their transponder, and the way back from one
+    /// to the other.
+    ///
+    /// The ids exist because the roster is readable by any phone on the
+    /// Wi-Fi, and a transponder number next to a name is a tracking key -
+    /// it follows somebody from meeting to meeting, and it is also exactly
+    /// what a spoofed decoder pass needs. An HMAC under a key made fresh
+    /// every time the server starts says nothing about the transponder and
+    /// cannot be carried from one meeting to the next.
+    /// </summary>
+    private sealed record RosterView(
+        IReadOnlyList<CheckInEntry> Entries,
+        IReadOnlyList<string> Ids,
+        IReadOnlyDictionary<string, CheckInEntry> ById);
+
+    private static readonly RosterView EmptyRoster = new(
+        Array.Empty<CheckInEntry>(),
+        Array.Empty<string>(),
+        new Dictionary<string, CheckInEntry>(StringComparer.Ordinal));
+
+    /// <summary>
+    /// The roster the check-in page serves, published by the host.
+    ///
+    /// A SNAPSHOT rather than a reference to CheckInStore, and this is the
+    /// important part: requests are handled on thread-pool threads while
+    /// the app edits the same stores on the UI thread. CheckInStore is
+    /// backed by plain dictionaries and sets - reading one while the UI
+    /// thread adds to it is a data race, and the fact that it would
+    /// usually get away with it is exactly what makes that kind of bug
+    /// turn up once, at an event, and never in testing.
+    ///
+    /// Publishing an immutable list instead means the only thing shared
+    /// across threads is a reference, and swapping a reference is atomic.
+    /// </summary>
+    private volatile IReadOnlyList<CheckInEntry> _roster = Array.Empty<CheckInEntry>();
+
+    /// <summary>The roster under its opaque ids. Rebuilt whenever the roster or the key changes; see RosterView.</summary>
+    private volatile RosterView _rosterView = EmptyRoster;
+
+    /// <summary>The key the roster ids are made with. Replaced on every Start, so an id seen at one meeting means nothing at the next.</summary>
+    private volatile byte[] _rosterKey = RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>
+    /// Raised when a phone asks to check somebody in or out. Handled by the
+    /// host on the UI thread, for the same reason RunCommand is - the
+    /// stores belong to that thread.
+    /// </summary>
+    public event Action<string, bool>? CheckInRequested;
+
+    /// <summary>
+    /// Held while _roster and _rosterView are REPLACED - never while they
+    /// are read, which stays a plain read of one reference. Replacing
+    /// happens from two threads: the host publishing from the UI thread,
+    /// and AssumeCheckIn on a request thread, and without this AssumeCheckIn
+    /// could check "nobody has published since" and then write its guess
+    /// over a roster the host published in between.
+    /// </summary>
+    private readonly object _rosterGate = new();
+
+    /// <summary>Hands the check-in page a fresh roster. Called from the UI thread.</summary>
+    public void PublishRoster(IReadOnlyList<CheckInEntry> roster)
+    {
+        lock (_rosterGate)
+        {
+            _roster = roster;
+            _rosterView = BuildRosterView(roster, _rosterKey);
+        }
+    }
+
+    private static RosterView BuildRosterView(IReadOnlyList<CheckInEntry> roster, byte[] key)
+    {
+        var ids = new List<string>(roster.Count);
+        var byId = new Dictionary<string, CheckInEntry>(StringComparer.Ordinal);
+
+        foreach (var entry in roster)
+        {
+            var id = RosterId(key, entry.Transponder);
+            ids.Add(id);
+
+            // A collision in 64 bits is not going to happen on a club
+            // roster, but if it did, the first driver keeps the id rather
+            // than a tap on one checking in the other.
+            byId.TryAdd(id, entry);
+        }
+
+        return new RosterView(roster, ids, byId);
+    }
+
+    /// <summary>Sixteen hex characters of HMAC. Case and spacing in the transponder do not change it.</summary>
+    private static string RosterId(byte[] key, string transponder)
+    {
+        var hash = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(transponder.Trim().ToUpperInvariant()));
+        return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+    }
+
+    public bool IsRunning => _listener?.IsListening == true;
+    public int Port { get; private set; }
+
+    /// <summary>
+    /// The PIN the remote-control page needs. Required: with none set, or
+    /// one shorter than four digits, the remote refuses every command -
+    /// see IsUsableRemotePin.
+    /// </summary>
+    public string Pin
+    {
+        get => _pin;
+        set => _pin = PinChanged(_pin, value, _remotePinLockout);
+    }
+
+    private string _pin = string.Empty;
+
+    /// <summary>
+    /// A new PIN for one of the three pages: stored, and when it really is
+    /// different, the phones trusted under the old one stop being trusted.
+    ///
+    /// Trust (see PinLockout) means "this phone knew the PIN", and lets it
+    /// guess past the whole-PIN lockout. A phone that knew the OLD PIN - a
+    /// marshal who has handed the remote back, the reason the PIN was
+    /// changed - kept that for twelve hours after the change, with nothing
+    /// but its own ten-a-go limit between it and the new one. The settings
+    /// are applied again on every save, so only a real change forgets.
+    /// </summary>
+    private static string PinChanged(string current, string? value, PinLockout lockout)
+    {
+        var next = value ?? string.Empty;
+
+        if (!string.Equals(current, next, StringComparison.Ordinal))
+        {
+            lockout.ForgetTrusted();
+        }
+
+        return next;
+    }
+
+    /// <summary>
+    /// The PIN the check-in page needs, if any. Separate from the remote's
+    /// on purpose: this one is written on the wall for drivers, and a
+    /// driver who knew the remote PIN could throw a red flag from the pits.
+    /// Empty means the check-in page is open to anybody on the Wi-Fi.
+    /// </summary>
+    public string CheckInPin
+    {
+        get => _checkInPin;
+        set => _checkInPin = PinChanged(_checkInPin, value, _checkInPinLockout);
+    }
+
+    private string _checkInPin = string.Empty;
+
+    /// <summary>
+    /// Whether a PIN is good enough to guard the remote: four or more
+    /// digits and nothing else. Digits because the page asks for it with a
+    /// phone's number pad; four because anything shorter falls to the
+    /// wrong-PIN limit in an afternoon.
+    /// </summary>
+    public static bool IsUsableRemotePin(string? pin) =>
+        pin is { Length: >= 4 } && pin.All(char.IsAsciiDigit);
+
+    /// <summary>
+    /// The PIN /manage needs. Separate from both the others: it can touch
+    /// entries, the programme and saved results, not just throw a flag or
+    /// sign somebody in, so it is checked against
+    /// <see cref="RaceDayService.IsUsableManagerPin"/> - six digits or
+    /// more - rather than the remote's four. Empty means the race-day
+    /// manager is not usable at all, the same as the remote with no PIN.
+    /// </summary>
+    public string ManagerPin
+    {
+        get => _managerPin;
+        set => _managerPin = PinChanged(_managerPin, value, _managerPinLockout);
+    }
+
+    private string _managerPin = string.Empty;
+
+    /// <summary>
+    /// The race-day manager itself, handed over by MainForm once the
+    /// stores and controls it needs all exist. Null until then, and
+    /// briefly on shutdown - see HandleManage.
+    /// </summary>
+    public RaceDayService? Manager { get; set; }
+
+    public WebServerService(RaceControlSession race, ProfileStore profiles,
+        DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null)
+    {
+        _race = race;
+        _profiles = profiles;
+        _schedule = schedule;
+        _sponsors = sponsors;
+        _settings = settings;
+    }
+
+    /// <remarks>
+    /// The reservation is written as an SDDL string rather than
+    /// "user=Everyone": that name is translated on non-English Windows
+    /// ("Jeder", "Tout le monde"), and the English one then fails with a
+    /// confusing error on exactly the laptops where nobody can read it.
+    /// WD is the well-known SID for Everyone in every language.
+    ///
+    /// The firewall rule is the second half nobody mentions. Without it the
+    /// reservation succeeds, the server starts, and every phone still times
+    /// out - Windows asks about it once, and a click on the wrong button
+    /// blocks it silently for good. Private profile only: the venue's Wi-Fi
+    /// set as a private network is where this belongs, and a public hotspot
+    /// is not.
+    /// </remarks>
+    public static string UrlReservationHint =>
+        "Windows blocked the app from accepting connections from other devices.\r\n\r\n" +
+        "Fix it once with either of these:\r\n\r\n" +
+        "  \u2022 Run HeatCaller as administrator, or\r\n" +
+        "  \u2022 Open an admin Command Prompt and run:\r\n" +
+        "      netsh http add urlacl url=http://+:{PORT}/ sddl=D:(A;;GX;;;WD)\r\n\r\n" +
+        "The second option is the better one - it's a one-time setup and " +
+        "doesn't require running the whole app elevated afterward.\r\n\r\n" +
+        "If phones still can't connect after that, allow the port through the firewall " +
+        "(same admin Command Prompt, and set the venue's Wi-Fi as a Private network):\r\n" +
+        "      netsh advfirewall firewall add rule name=\"HeatCaller web {PORT}\" dir=in action=allow " +
+        "protocol=TCP localport={PORT} profile=private";
+
+    public bool Start(int port, out string? error)
+    {
+        Stop();
+
+        Port = port;
+
+        // Held in a local until it has started. A listener that failed to
+        // start is closed here rather than left for the collector, which
+        // would otherwise hold the port's registration until it got round
+        // to it - and the next Start, on the same port, then fails too.
+        var listener = new HttpListener();
+        listener.Prefixes.Add($"http://+:{port}/");
+
+        try
+        {
+            listener.Start();
+        }
+        catch (HttpListenerException ex)
+        {
+            CloseQuietly(listener);
+            error = ex.ErrorCode == 5
+                ? UrlReservationHint.Replace("{PORT}", port.ToString())
+                : $"Couldn't start the web server on port {port}: {ex.Message}";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            CloseQuietly(listener);
+            error = $"Couldn't start the web server on port {port}: {ex.Message}";
+            return false;
+        }
+
+        var cts = new CancellationTokenSource();
+
+        _listener = listener;
+        _cts = cts;
+
+        // A fresh start is a fresh slate: somebody locked out by mistyping
+        // is let back in, and the roster ids from the last run stop working.
+        _pinFailures.Clear();
+        _remotePinLockout.Clear();
+        _checkInPinLockout.Clear();
+        _managerPinLockout.Clear();
+        _checkInWrites.Clear();
+        _checkInWritesAll.Clear();
+        _commands.Clear();
+        lock (_rosterGate)
+        {
+            _rosterKey = RandomNumberGenerator.GetBytes(32);
+            _rosterView = BuildRosterView(_roster, _rosterKey);
+        }
+
+        // Before the listener, so the very first request already has a
+        // document to serve rather than an empty one. Start is called from
+        // the UI thread, which is the only thread allowed to build it.
+        PublishState(force: true);
+
+        // The listener and token handed over as they are NOW. The loop used
+        // to read the fields, and a Stop then Start while it was between
+        // two requests left the old loop serving from the new listener.
+        _ = Task.Run(() => ListenLoopAsync(listener, cts.Token));
+
+        StatusMessage?.Invoke(
+            $"[web] Server started on port {port}. Live results: {LocalUrl()}  "
+            + $"Remote: {LocalUrl()}remote  Check-in: {LocalUrl()}checkin");
+
+        if (!IsUsableRemotePin(Pin))
+        {
+            StatusMessage?.Invoke(Pin.Length == 0
+                ? "[web] The phone remote is locked: it needs a PIN of four or more digits (Local Screens page)."
+                : "[web] The phone remote is locked: its PIN must be four or more digits and nothing else (Local Screens page).");
+        }
+
+        // The other half of CheckInLockedReason: said at the start, loudly,
+        // because a server started automatically shows no warning dialog.
+        if (CheckInLockedReason(_settings?.SecretsLocked == true, CheckInPin) is { } locked)
+        {
+            StatusMessage?.Invoke("[web] " + locked);
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Why the check-in pages are closed although no check-in PIN is set -
+    /// or null when a blank PIN means what it says, open to anybody on the
+    /// Wi-Fi.
+    ///
+    /// A blank check-in PIN is a choice a club can make. A check-in PIN that
+    /// is blank because the laptop could not unseal its saved secrets - a
+    /// backup restored onto a new laptop - is not, and the two used to look
+    /// the same here: the remote and the manager, which need a PIN, failed
+    /// closed, while check-in quietly opened to everyone, so nobody noticed
+    /// (25 Sep security audit). Until the secrets are unlocked or a PIN is
+    /// entered again, check-in stays shut and says why.
+    /// </summary>
+    internal static string? CheckInLockedReason(bool secretsLocked, string checkInPin) =>
+        secretsLocked && string.IsNullOrEmpty(checkInPin)
+            ? "Check-in is closed: this laptop's saved PINs are locked (usually a backup restored onto another PC). "
+              + "Unlock them on the laptop, or set the check-in PIN again on the Local Screens page."
+            : null;
+
+    /// <summary>Answers a check-in request refused by CheckInLockedReason, and says whether it may go on.</summary>
+    private bool CheckInOpen(HttpListenerContext context)
+    {
+        if (CheckInLockedReason(_settings?.SecretsLocked == true, CheckInPin) is not { } reason)
+        {
+            return true;
+        }
+
+        context.Response.StatusCode = 503;
+        WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = reason }));
+        return false;
+    }
+
+    private static void CloseQuietly(HttpListener listener)
+    {
+        try
+        {
+            listener.Close();
+        }
+        catch
+        {
+            // It never started; there is nothing more to release.
+        }
+    }
+
+    public void Stop()
+    {
+        var listener = _listener;
+        var cts = _cts;
+
+        _listener = null;
+        _cts = null;
+
+        try
+        {
+            cts?.Cancel();
+            if (listener?.IsListening == true)
+            {
+                listener.Stop();
+            }
+            listener?.Close();
+        }
+        catch
+        {
+            // Shutting down - nothing useful to do if this throws.
+        }
+        finally
+        {
+            cts?.Dispose();
+        }
+    }
+
+    /// <summary>Best-guess URL other devices on the same network should use.</summary>
+    public string LocalUrl()
+    {
+        var ip = GetLocalIPv4() ?? "localhost";
+        return $"http://{ip}:{Port}/";
+    }
+
+    /// <summary>
+    /// The address phones on the same Wi-Fi should use.
+    ///
+    /// The network adapters are asked first. The old way - a UDP socket
+    /// "connected" towards a public address, which makes Windows pick the
+    /// interface it would route through - needs a default gateway to have
+    /// anything to route through, and a race-day network is often a
+    /// travel router with no internet behind it. There it failed, and
+    /// every poster and URL on the Local Screens page said "localhost",
+    /// which no phone can reach. It is still the fallback, because on a
+    /// laptop with several adapters it is the best tie-breaker there is.
+    /// </summary>
+    public static string? GetLocalIPv4()
+    {
+        try
+        {
+            System.Net.IPAddress? withGateway = null;
+            System.Net.IPAddress? withoutGateway = null;
+
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up
+                    || nic.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Loopback
+                        or System.Net.NetworkInformation.NetworkInterfaceType.Tunnel)
+                {
+                    continue;
+                }
+
+                var properties = nic.GetIPProperties();
+                var hasGateway = properties.GatewayAddresses.Any(g =>
+                    g.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                    && !g.Address.Equals(System.Net.IPAddress.Any));
+
+                foreach (var unicast in properties.UnicastAddresses)
+                {
+                    var address = unicast.Address;
+
+                    if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
+                        || !IsPrivateIPv4(address))
+                    {
+                        continue;
+                    }
+
+                    if (hasGateway)
+                    {
+                        withGateway ??= address;
+                    }
+                    else
+                    {
+                        withoutGateway ??= address;
+                    }
+                }
+            }
+
+            // With several private adapters up (Wi-Fi plus a VM switch,
+            // say), the one with a gateway is the one the route agrees
+            // with - ask the route first in that case, then fall back.
+            if (withGateway is not null)
+            {
+                return RoutedIPv4() ?? withGateway.ToString();
+            }
+
+            if (withoutGateway is not null)
+            {
+                return withoutGateway.ToString();
+            }
+        }
+        catch
+        {
+            // Adapter enumeration can fail on a locked-down machine; the
+            // routing trick below still has a chance.
+        }
+
+        return RoutedIPv4();
+    }
+
+    /// <summary>10/8, 172.16/12 and 192.168/16 - the addresses a venue router hands out.</summary>
+    private static bool IsPrivateIPv4(IPAddress address)
+    {
+        var b = address.GetAddressBytes();
+
+        return b.Length == 4
+               && (b[0] == 10
+                   || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                   || (b[0] == 192 && b[1] == 168));
+    }
+
+    private static string? RoutedIPv4()
+    {
+        try
+        {
+            // Opening a UDP socket toward a public address doesn't actually
+            // send anything, but it makes the OS pick the interface it would
+            // route through - which is the address other devices on the LAN
+            // can reach, rather than a loopback or virtual adapter.
+            using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
+            socket.Connect("8.8.8.8", 65530);
+            return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task ListenLoopAsync(HttpListener listener, CancellationToken token)
+    {
+        // Failures in a row, for the backoff below. Any accepted request
+        // puts it back to zero.
+        var failuresInARow = 0;
+
+        while (!token.IsCancellationRequested && listener.IsListening)
+        {
+            HttpListenerContext context;
+            try
+            {
+                context = await listener.GetContextAsync();
+                failuresInARow = 0;
+            }
+            catch (ObjectDisposedException)
+            {
+                return; // listener closed by Stop
+            }
+            catch (Exception ex)
+            {
+                // Only a stopped listener ends the loop. Any failure used to,
+                // and this is the ONLY loop accepting requests: one phone
+                // dropping its connection at the wrong moment (http.sys
+                // reports that as an error here, 1229 and friends) left the
+                // server listening, the Local Screens page saying "Running",
+                // and every phone in the building timing out until somebody
+                // restarted it.
+                if (token.IsCancellationRequested || !listener.IsListening)
+                {
+                    return;
+                }
+
+                failuresInARow++;
+
+                try
+                {
+                    LogRequestFailure($"Couldn't accept a connection: {ex.Message}");
+                }
+                catch
+                {
+                    // The log must never be what stops the server.
+                }
+
+                // One failure is a phone that went away; carry straight on.
+                // Several in a row is something wrong with the listener
+                // itself, and retrying flat out would spin a core and fill
+                // the log - so wait, a little longer each time, up to two
+                // seconds.
+                if (failuresInARow > 1)
+                {
+                    var wait = TimeSpan.FromMilliseconds(Math.Min(2000, 50 << Math.Min(failuresInARow, 6)));
+
+                    try
+                    {
+                        await Task.Delay(wait, token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return;
+                    }
+                }
+
+                continue;
+            }
+
+            try
+            {
+                DispatchRequest(context, token);
+            }
+            catch
+            {
+                // Handing a request to the thread pool does not fail in any
+                // way worth stopping the server for. If it ever did, this
+                // one request is lost and the next is still accepted.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles one request on the thread pool. Everything it can throw is
+    /// caught inside, so no request can take the accept loop down with it.
+    /// </summary>
+    private void DispatchRequest(HttpListenerContext context, CancellationToken token)
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                HandleRequest(context);
+            }
+            catch (Exception ex)
+            {
+                // Answer, and close - FIRST. A request that threw used
+                // to be left open - never answered, never closed - so
+                // the phone that asked hung until its browser gave up.
+                // On a page that polls every second that is a board
+                // that freezes, not one that skips a frame. The log
+                // line used to come before this, and a log handler that
+                // threw meant the phone never heard back at all.
+                try
+                {
+                    context.Response.StatusCode = 500;
+                    context.Response.Close();
+                }
+                catch
+                {
+                    // Headers already sent, or the client already went.
+                    // Either way there is nothing left to tell it.
+                }
+
+                try
+                {
+                    LogRequestFailure(ex.Message);
+                }
+                catch
+                {
+                    // A request thread is no place to let the log take
+                    // the process down.
+                }
+            }
+        }, token);
+    }
+
+    private readonly object _failureLogGate = new();
+    private string? _lastFailure;
+    private DateTime _lastFailureLoggedUtc = DateTime.MinValue;
+    private int _failuresSinceLogged;
+
+    /// <summary>
+    /// One line per distinct failure every ten seconds, with a count of how
+    /// many were swallowed. The pages poll once a second from every phone in
+    /// the building, so one fault in the state document used to be twenty
+    /// identical console lines a second - burying everything else in the
+    /// log, on the one night somebody needed to read it.
+    /// </summary>
+    private void LogRequestFailure(string message)
+    {
+        string line;
+
+        lock (_failureLogGate)
+        {
+            var now = DateTime.UtcNow;
+
+            if (message == _lastFailure && now - _lastFailureLoggedUtc < TimeSpan.FromSeconds(10))
+            {
+                _failuresSinceLogged++;
+                return;
+            }
+
+            // The count belongs to the message it was counting, so it is
+            // only reported when that same message comes round again.
+            line = message == _lastFailure && _failuresSinceLogged > 0
+                ? $"[web] Request failed: {message} (and {_failuresSinceLogged} more times since it was last shown)"
+                : $"[web] Request failed: {message}";
+
+            _lastFailure = message;
+            _lastFailureLoggedUtc = now;
+            _failuresSinceLogged = 0;
+        }
+
+        StatusMessage?.Invoke(line);
+    }
+
+    /// <summary>
+    /// Whether a request was addressed to this laptop by a name that can
+    /// only mean this laptop.
+    ///
+    /// The defence against DNS rebinding. A web page on some other site
+    /// can point a name it controls at this laptop's address, and a phone
+    /// on the club Wi-Fi that opens that page would then let it read the
+    /// roster and send commands as though it were one of these pages. What
+    /// gives it away is the Host header, which carries the name the browser
+    /// used: an IP address, "localhost", this PC's own name, or a name that
+    /// only exists on a local network is fine - a public domain never is.
+    /// </summary>
+    internal static bool IsLocalHost(string? hostHeader)
+    {
+        if (string.IsNullOrWhiteSpace(hostHeader))
+        {
+            return false;
+        }
+
+        var host = hostHeader.Trim();
+
+        if (host.StartsWith('['))
+        {
+            var close = host.IndexOf(']');
+
+            if (close < 0)
+            {
+                return false;
+            }
+
+            host = host[1..close];
+        }
+        else if (host.IndexOf(':') is var colon and >= 0)
+        {
+            host = host[..colon];
+        }
+
+        host = host.TrimEnd('.').ToLowerInvariant();
+
+        if (host.Length == 0)
+        {
+            return false;
+        }
+
+        if (IPAddress.TryParse(host, out _) || host == "localhost"
+            || host == Environment.MachineName.ToLowerInvariant())
+        {
+            return true;
+        }
+
+        // A single-label name ("timing") and the local-only suffixes are
+        // names a router or mDNS hands out on the club's own network, and
+        // that nobody on the internet can register.
+        return !host.Contains('.')
+               || host.EndsWith(".local", StringComparison.Ordinal)
+               || host.EndsWith(".lan", StringComparison.Ordinal)
+               || host.EndsWith(".home", StringComparison.Ordinal)
+               || host.EndsWith(".internal", StringComparison.Ordinal)
+               || host.EndsWith(".localdomain", StringComparison.Ordinal)
+               || host.EndsWith(".home.arpa", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// On every answer: nothing may frame these pages (a remote laid under
+    /// a decoy page is a remote somebody else is pressing), nothing is
+    /// cached, and a response is only ever what its type says it is.
+    /// </summary>
+    private static void AddSecurityHeaders(HttpListenerResponse response)
+    {
+        response.Headers["X-Content-Type-Options"] = "nosniff";
+        response.Headers["X-Frame-Options"] = "DENY";
+        response.Headers["Referrer-Policy"] = "no-referrer";
+        response.Headers["Cache-Control"] = "no-store";
+
+        // The pages are self-contained - inline script and style, images
+        // from this server or data: - so this costs them nothing and takes
+        // away everything else: a name that slipped past the escaping could
+        // not load a script from elsewhere, or send the roster or a PIN
+        // anywhere but back here. 'unsafe-inline' is needed by the pages'
+        // own inline script and handlers; nothing here uses eval.
+        response.Headers["Content-Security-Policy"] =
+            "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+            + "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
+    }
+
+    /// <summary>
+    /// A request that changes something - a flag, a check-in - has to be a
+    /// POST carrying a header of this app's own.
+    ///
+    /// That header is the whole CSRF defence. A GET that throws a red flag
+    /// can be fired by any web page a phone on the club Wi-Fi happens to
+    /// open, with nothing more than an image tag pointing at this laptop.
+    /// A custom header is something no other site's page can add without
+    /// first asking this server's permission - and this server never
+    /// gives it, because it never answers that question.
+    /// </summary>
+    private static bool IsAppWrite(HttpListenerContext context)
+    {
+        var request = context.Request;
+
+        if (string.Equals(request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase)
+            && request.Headers["X-HeatCaller"] == "1")
+        {
+            return true;
+        }
+
+        context.Response.StatusCode = 405;
+        WriteJson(context, "{\"ok\":false,\"error\":\"This page is out of date - reload it and try again.\"}");
+        return false;
+    }
+
+    /// <summary>
+    /// Counts attempts per client inside a sliding window, and says when a
+    /// client has had its share.
+    ///
+    /// Check and record happen under ONE lock, as one step. They used to be
+    /// two - "has this phone had ten wrong PINs?" and, later, "note another
+    /// wrong one" - and a script firing fifty guesses at once got all fifty
+    /// past the first question before any of them reached the second.
+    /// </summary>
+    internal sealed class AttemptLimiter
+    {
+        private readonly int _max;
+        private readonly TimeSpan _window;
+        private readonly int _capacity;
+        private readonly Dictionary<string, List<DateTime>> _attempts = new(StringComparer.Ordinal);
+        private readonly object _gate = new();
+
+        public AttemptLimiter(int max, TimeSpan window, int capacity)
+        {
+            _max = max;
+            _window = window;
+            _capacity = capacity;
+        }
+
+        /// <summary>
+        /// Records an attempt and returns true, or returns false without
+        /// recording when the client is already at its limit.
+        /// <paramref name="ticket"/> identifies the attempt for Release.
+        /// </summary>
+        public bool TryReserve(string who, out DateTime ticket)
+        {
+            var now = DateTime.UtcNow;
+            ticket = now;
+
+            lock (_gate)
+            {
+                if (_attempts.TryGetValue(who, out var times))
+                {
+                    times.RemoveAll(t => now - t > _window);
+
+                    if (times.Count >= _max)
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    MakeRoom(now);
+                    times = new List<DateTime>();
+                    _attempts[who] = times;
+                }
+
+                times.Add(now);
+                return true;
+            }
+        }
+
+        /// <summary>Takes back an attempt that turned out to be fine - a right PIN is not a failure.</summary>
+        public void Release(string who, DateTime ticket)
+        {
+            lock (_gate)
+            {
+                if (_attempts.TryGetValue(who, out var times))
+                {
+                    times.Remove(ticket);
+
+                    if (times.Count == 0)
+                    {
+                        _attempts.Remove(who);
+                    }
+                }
+            }
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+            {
+                _attempts.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Keeps the table bounded without ever forgetting everybody at
+        /// once. It used to be cleared wholesale at a thousand entries -
+        /// which meant a script could wipe its own record, and everybody
+        /// else's, by arriving from a thousand and one addresses. Now the
+        /// expired go first, and only then the longest-quiet.
+        /// </summary>
+        private void MakeRoom(DateTime now)
+        {
+            if (_attempts.Count < _capacity)
+            {
+                return;
+            }
+
+            foreach (var key in _attempts.Keys.ToList())
+            {
+                var times = _attempts[key];
+                times.RemoveAll(t => now - t > _window);
+
+                if (times.Count == 0)
+                {
+                    _attempts.Remove(key);
+                }
+            }
+
+            while (_attempts.Count >= _capacity)
+            {
+                var quietest = _attempts.MinBy(pair => pair.Value.Count == 0 ? DateTime.MinValue : pair.Value.Max()).Key;
+                _attempts.Remove(quietest);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ten wrong PINs from one device in five minutes, and it waits.
+    /// Without this a four-digit PIN is ten thousand requests - about a
+    /// minute's work for a script on the same Wi-Fi.
+    /// </summary>
+    private readonly AttemptLimiter _pinFailures = new(10, TimeSpan.FromMinutes(5), 1000);
+
+    /// <summary>
+    /// Thirty check-in changes a minute from one device. A desk tablet
+    /// signing a queue in is nowhere near it; a script toggling somebody in
+    /// and out to hammer the laptop's disk is stopped well short.
+    /// </summary>
+    private readonly AttemptLimiter _checkInWrites = new(30, TimeSpan.FromMinutes(1), 1000);
+
+    /// <summary>
+    /// Check-in changes from every device together: 120 a minute. Two a
+    /// second is a queue at the desk moving faster than any real one; the
+    /// ceiling is there for addresses that keep changing. See
+    /// ReserveCheckInWrite.
+    /// </summary>
+    private readonly AttemptLimiter _checkInWritesAll = new(120, TimeSpan.FromMinutes(1), 1);
+
+    /// <summary>
+    /// The race-control buttons' brake: one command at a time, and so many
+    /// a minute per device and from all of them together. See
+    /// RemoteCommandGate and HandleCommand.
+    /// </summary>
+    private readonly RemoteCommandGate _commands = new();
+
+    /// <summary>
+    /// Who a request is from, for counting: the device's own address.
+    ///
+    /// IPv6 addresses are counted whole. They used to be counted by /64,
+    /// on the theory that one /64 is one device - true on the internet,
+    /// false on a club's Wi-Fi, where every phone shares the network's /64
+    /// and every phone's link-local fe80:: address is in the same one. One
+    /// phone mistyping ten times then locked out every other IPv6 phone in
+    /// the building. A device that keeps changing its address to dodge the
+    /// count is what the whole-PIN limit (PinLockout) is for. An IPv4
+    /// address that arrives dressed as IPv6 (::ffff:192.168.1.20) is the
+    /// same phone as the plain one and is counted with it.
+    /// </summary>
+    private static string ClientKey(HttpListenerContext context)
+    {
+        var address = context.Request.RemoteEndPoint?.Address;
+
+        if (address is null)
+        {
+            return "unknown";
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            // The scope (%12) is the laptop's own interface number, not
+            // part of who is asking; the bytes alone are the address.
+            return Convert.ToHexString(address.GetAddressBytes());
+        }
+
+        return address.ToString();
+    }
+
+    /// <summary>
+    /// A limit on wrong guesses at one PIN from everybody at once, on top
+    /// of the per-device one.
+    ///
+    /// The per-device limit counts by address, and a device can change its
+    /// address - a laptop script can give itself dozens of IPv4 aliases,
+    /// and an IPv6 phone can make up a new address whenever it likes. At
+    /// ten guesses per address, a four-digit remote PIN falls to a few
+    /// hundred of them. So wrong guesses are also counted for the PIN as a
+    /// whole: fifty in five minutes for the remote (two hundred for the
+    /// check-in page's PIN), from anywhere, and that page stops
+    /// taking PINs for five minutes.
+    ///
+    /// Except from a device that has got this PIN right recently. It
+    /// already knows the PIN, so it cannot be the one guessing it, and the
+    /// race director's phone keeps working while somebody else's script is
+    /// being kept out. The people it does stop are those who have not yet
+    /// typed the PIN in, for five minutes, which is the price of the four
+    /// digits holding.
+    ///
+    /// How many wrong guesses that takes is set per PIN (maxWrong) - see
+    /// the two instances below for why they differ.
+    /// </summary>
+    private sealed class PinLockout
+    {
+        private const int MaxTrusted = 1000;
+        private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan LockFor = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan TrustFor = TimeSpan.FromHours(12);
+
+        private readonly List<DateTime> _attempts = new();
+        private readonly Dictionary<string, DateTime> _trusted = new(StringComparer.Ordinal);
+        private readonly object _gate = new();
+        private DateTime _lockedUntilUtc = DateTime.MinValue;
+        private readonly int _maxWrong;
+
+        public PinLockout(int maxWrong)
+        {
+            _maxWrong = maxWrong;
+        }
+
+        /// <summary>How many wrong guesses in five minutes lock this PIN. For the console warning.</summary>
+        public int MaxWrong => _maxWrong;
+
+        /// <summary>
+        /// Counts an attempt as wrong until Release says otherwise, and
+        /// returns true - or returns false, counting nothing, when this PIN
+        /// is locked and <paramref name="who"/> is not a device that knows
+        /// it. Counted before the comparison, for the same reason the
+        /// per-device limit is: a burst of simultaneous guesses must not
+        /// all get past the check before any of them is counted.
+        /// </summary>
+        public bool TryReserve(string who, out DateTime ticket)
+        {
+            var now = DateTime.UtcNow;
+            ticket = now;
+
+            lock (_gate)
+            {
+                _attempts.RemoveAll(t => now - t > Window);
+
+                var trusted = _trusted.TryGetValue(who, out var knewItUtc) && now - knewItUtc <= TrustFor;
+
+                if (!trusted && (now < _lockedUntilUtc || _attempts.Count >= _maxWrong))
+                {
+                    return false;
+                }
+
+                _attempts.Add(now);
+                return true;
+            }
+        }
+
+        /// <summary>The attempt was the right PIN: not a wrong guess, and the device is trusted from now on.</summary>
+        public void Release(string who, DateTime ticket)
+        {
+            lock (_gate)
+            {
+                _attempts.Remove(ticket);
+
+                if (!_trusted.ContainsKey(who) && _trusted.Count >= MaxTrusted)
+                {
+                    // Bounded like the other tables: the one trusted
+                    // longest ago goes first.
+                    var oldest = _trusted.MinBy(pair => pair.Value).Key;
+                    _trusted.Remove(oldest);
+                }
+
+                _trusted[who] = DateTime.UtcNow;
+            }
+        }
+
+        /// <summary>
+        /// The attempt was wrong, and stays counted. True when it is the one
+        /// that locks the PIN, so the caller can say so once in the console.
+        /// </summary>
+        public bool ConfirmWrong()
+        {
+            var now = DateTime.UtcNow;
+
+            lock (_gate)
+            {
+                _attempts.RemoveAll(t => now - t > Window);
+
+                if (_attempts.Count < _maxWrong || now < _lockedUntilUtc)
+                {
+                    return false;
+                }
+
+                // A fresh count once the lock lifts, rather than the lock
+                // lifting straight into a full count.
+                _lockedUntilUtc = now + LockFor;
+                _attempts.Clear();
+                return true;
+            }
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+            {
+                _attempts.Clear();
+                _trusted.Clear();
+                _lockedUntilUtc = DateTime.MinValue;
+            }
+        }
+
+        /// <summary>The PIN has changed: nobody knows the new one yet. The count and any lock stay as they are.</summary>
+        public void ForgetTrusted()
+        {
+            lock (_gate)
+            {
+                _trusted.Clear();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The whole-PIN limit for the phone remote's PIN. See PinLockout.
+    /// Kept strict: this PIN throws flags, and nobody but the race
+    /// director's own phone should ever be sending it.
+    /// </summary>
+    private readonly PinLockout _remotePinLockout = new(50);
+
+    /// <summary>
+    /// The whole-PIN limit for the check-in page's PIN, counted apart from
+    /// the remote's, and four times as generous. This PIN is written on the
+    /// wall for drivers by design, so it guards far less - and the honest
+    /// mistakes against it come in crowds: a QR poster at the drivers'
+    /// briefing, fifty phones opening the page at once, some of them still
+    /// remembering last meeting's PIN. At fifty, those alone locked
+    /// check-in for everybody who had not yet typed the PIN in.
+    /// </summary>
+    private readonly PinLockout _checkInPinLockout = new(200);
+
+    /// <summary>
+    /// The whole-PIN limit for the race-day manager's PIN, counted apart
+    /// from the other two. Kept as strict as the remote's: this PIN can
+    /// touch entries, the programme and saved results, so it deserves the
+    /// same suspicion as one that can throw a flag.
+    /// </summary>
+    private readonly PinLockout _managerPinLockout = new(50);
+
+    /// <summary>
+    /// Compares a PIN without saying anything about it through timing.
+    /// Both sides are hashed first, so the comparison is always of two
+    /// 32-byte values - comparing the raw strings let the time taken reveal
+    /// the PIN's length, since unequal lengths were rejected at once.
+    /// </summary>
+    private static bool PinMatches(string offered, string expected) =>
+        CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(offered)),
+            SHA256.HashData(Encoding.UTF8.GetBytes(expected)));
+
+    /// <summary>
+    /// Checks the PIN a request carries, in its X-Pin header - never the
+    /// address, where it would sit in every browser's history.
+    ///
+    /// <paramref name="expected"/> is the PIN for THIS page: the remote and
+    /// the check-in page each have their own, and each has its own count
+    /// of wrong guesses (<paramref name="scope"/>), so a driver fumbling
+    /// the check-in PIN does not lock the race director out of the remote.
+    ///
+    /// <paramref name="required"/> is for the remote and the race-day
+    /// manager: with no usable PIN set they refuse outright rather than
+    /// letting anybody on the Wi-Fi throw flags or touch the programme.
+    /// Check-in stays open without one, as it always has.
+    ///
+    /// <paramref name="isUsable"/> is what "usable" means for this scope -
+    /// <see cref="IsUsableRemotePin"/> (four digits or more) unless the
+    /// caller passes something stricter, such as the manager's six.
+    /// </summary>
+    private bool PinAccepted(
+        HttpListenerContext context, string expected, bool required, string scope, Func<string?, bool>? isUsable = null)
+    {
+        isUsable ??= IsUsableRemotePin;
+
+        // What this scope is called back to the person holding the phone,
+        // for the three messages below that name it.
+        var label = scope switch
+        {
+            "remote" => "remote",
+            "manager" => "manager",
+            _ => "check-in",
+        };
+
+        if (required && !isUsable(expected))
+        {
+            context.Response.StatusCode = 403;
+            WriteJson(context, string.IsNullOrEmpty(expected)
+                ? $"{{\"ok\":false,\"error\":\"The {label} needs a PIN. Set one on the laptop's Local Screens page first.\"}}"
+                : $"{{\"ok\":false,\"error\":\"The {label} PIN on the laptop is too short or has something other than digits. Fix it on the Local Screens page.\"}}");
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(expected))
+        {
+            return true;
+        }
+
+        var offered = context.Request.Headers["X-Pin"] ?? string.Empty;
+
+        // No PIN at all is not a guess - it is a phone that has not been
+        // given one yet, usually the check-in page opening for the first
+        // time. It is answered before either limit is touched: counted,
+        // fifty phones opening the page from the poster at the drivers'
+        // briefing locked check-in for everybody. An empty PIN can never
+        // match a set one, so saying so tells nobody anything.
+        if (offered.Length == 0)
+        {
+            context.Response.StatusCode = 403;
+            WriteJson(context, $"{{\"ok\":false,\"pin\":true,\"needPin\":true,\"error\":\"Enter the {label} PIN.\"}}");
+            return false;
+        }
+
+        var device = ClientKey(context);
+        var who = scope + "|" + device;
+        var lockout = scope switch
+        {
+            "remote" => _remotePinLockout,
+            "manager" => _managerPinLockout,
+            _ => _checkInPinLockout,
+        };
+
+        // Counted as a failure BEFORE the comparison, and handed back only
+        // if it was right - so a burst of simultaneous guesses is limited
+        // exactly as a slow trickle of them is.
+        if (!_pinFailures.TryReserve(who, out var ticket))
+        {
+            context.Response.StatusCode = 429;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Too many wrong PINs. Wait a few minutes.\"}");
+            return false;
+        }
+
+        // Then against the PIN as a whole - see PinLockout. Refused here, it
+        // was never a guess, so this device's own count gets it back.
+        if (!lockout.TryReserve(device, out var lockoutTicket))
+        {
+            _pinFailures.Release(who, ticket);
+            context.Response.StatusCode = 429;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Too many wrong PINs on this Wi-Fi. The PIN is not being accepted for five minutes.\"}");
+            return false;
+        }
+
+        if (PinMatches(offered, expected))
+        {
+            _pinFailures.Release(who, ticket);
+            lockout.Release(device, lockoutTicket);
+            return true;
+        }
+
+        if (lockout.ConfirmWrong())
+        {
+            try
+            {
+                StatusMessage?.Invoke(scope switch
+                {
+                    "remote" => $"[web] WARNING: {lockout.MaxWrong} wrong remote PINs in five minutes - somebody may be trying to guess it. "
+                        + "The remote PIN is refused for five minutes, except on phones that already entered it. "
+                        + "Consider a longer PIN on the Local Screens page.",
+                    "manager" => $"[web] WARNING: {lockout.MaxWrong} wrong manager PINs in five minutes - somebody may be trying to guess it. "
+                        + "The manager PIN is refused for five minutes, except on phones that already entered it. "
+                        + "Consider a longer PIN on the Local Screens page.",
+                    _ => $"[web] WARNING: {lockout.MaxWrong} wrong check-in PINs in five minutes. "
+                        + "The check-in PIN is refused for five minutes, except on phones that already entered it.",
+                });
+            }
+            catch
+            {
+                // A request thread; the log must not be what fails it.
+            }
+        }
+
+        context.Response.StatusCode = 403;
+        WriteJson(context, "{\"ok\":false,\"pin\":true,\"error\":\"Wrong PIN\"}");
+        return false;
+    }
+
+    /// <summary>
+    /// Refuses a command or a check-in while the laptop cannot act on it.
+    /// See HostReady.
+    /// </summary>
+    private bool HostAccepting(HttpListenerContext context)
+    {
+        if (HostReady)
+        {
+            return true;
+        }
+
+        context.Response.StatusCode = 503;
+        WriteJson(context, "{\"ok\":false,\"error\":\"Laptop still starting - try again in a moment.\"}");
+        return false;
+    }
+
+    private void HandleRequest(HttpListenerContext context)
+    {
+        AddSecurityHeaders(context.Response);
+
+        if (!IsLocalHost(context.Request.Headers["Host"]))
+        {
+            context.Response.StatusCode = 421;
+            WriteText(context, "This address is not served here.");
+            return;
+        }
+
+        var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? "/";
+
+        switch (path)
+        {
+            case "":
+            case "/":
+                WriteHtml(context, BuildLiveResultsPage());
+                break;
+            case "/remote":
+                WriteHtml(context, BuildRemotePage());
+                break;
+            case "/checkin":
+                WriteHtml(context, BuildCheckInPage());
+                break;
+            case "/manage":
+                WriteHtml(context, BuildManagePage());
+                break;
+            case "/api/manage":
+                // HandleRequest runs on its own thread-pool thread per
+                // request (see DispatchRequest) with no synchronization
+                // context to deadlock against, so waiting here for the
+                // async manager call keeps this method's contract - answer
+                // written before it returns - the same for every case in
+                // this switch.
+                HandleManageAsync(context).GetAwaiter().GetResult();
+                break;
+            case "/api/roster":
+                // Behind the check-in PIN when there is one: the list of who
+                // is here is exactly what that PIN is protecting.
+                if (CheckInOpen(context) && PinAccepted(context, CheckInPin, required: false, scope: "checkin"))
+                {
+                    WriteJson(context, BuildRosterJson());
+                }
+
+                break;
+            case "/api/checkin":
+                HandleCheckIn(context);
+                break;
+            case "/api/state":
+                // The published copy, never a fresh build. See PublishState.
+                WriteJson(context, _publishedState);
+                break;
+            case "/api/look":
+                // Which look the pages would be built with now - see
+                // LookWatchScript. Kept out of /api/state on purpose: that
+                // document is also what the relay publishes.
+                WriteJson(context, "{\"v\":\"" + CurrentPageLook().Fingerprint + "\"}");
+                break;
+            case "/api/command":
+                HandleCommand(context);
+                break;
+            case "/api/sponsor":
+                HandleSponsorImage(context);
+                break;
+            case "/logo.png":
+                HandleLogo(context);
+                break;
+            default:
+                context.Response.StatusCode = 404;
+                WriteText(context, "Not found");
+                break;
+        }
+    }
+
+    private void HandleCommand(HttpListenerContext context)
+    {
+        if (!IsAppWrite(context) || !PinAccepted(context, Pin, required: true, scope: "remote")
+            || !HostAccepting(context))
+        {
+            return;
+        }
+
+        var query = context.Request.QueryString;
+        var action = query["action"];
+
+        var allowed = new[] { "stage", "countdown", "green", "yellow", "red", "checkered", "reset" };
+        if (action is null || !allowed.Contains(action))
+        {
+            context.Response.StatusCode = 400;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Unknown action\"}");
+            return;
+        }
+
+        var force = query["force"] == "1";
+
+        // The race the phone's yes was about, when the page says: the
+        // question below carries the race it was asked about, and the page
+        // sends that back with force=1. Optional - an older page's force=1
+        // is taken as before.
+        int? shownRace = int.TryParse(query["raceGeneration"], System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsedRace)
+            ? parsedRace
+            : null;
+
+        // Read once, from this request thread; the host checks again on the
+        // UI thread before acting.
+        var raceNow = _race.SessionGeneration;
+
+        // A yes about a race that is no longer the one on track is no yes
+        // for this one: asked again, about this one.
+        var confirmedHere = force && (shownRace is not { } shown || shown == raceNow);
+
+        // Staging or counting down over a running race wipes its standings,
+        // and a button on a phone in a pocket is one brush away from it. The
+        // page sends every press without force=1 first; over a running race
+        // it is answered with this question, which the page puts to its user,
+        // and it sends the command again with force=1 on a yes. The page used
+        // to ask first, from the state it last saw - and practice, which runs
+        // in the Racing state too, was asked about a race that wasn't there.
+        // Not for practice: Race Control refuses Stage and Countdown then,
+        // and says why. Read from a request thread, but these are single
+        // reads, and the host checks again on the UI thread before acting.
+        if (!confirmedHere && (action is "stage" or "countdown") && _race.State == RaceState.Racing && !_race.IsPracticeMode)
+        {
+            context.Response.StatusCode = 409;
+            WriteJson(context, JsonSerializer.Serialize(new
+            {
+                ok = false,
+                confirm = true,
+                error = _race.IsDemoMode
+                    ? "A demo is running - this would end it."
+                    : "A race is running - this would wipe its standings.",
+                raceGeneration = raceNow,
+            }));
+            return;
+        }
+
+        // Read once: the host can set or clear it from its own thread while
+        // this request is on its way through.
+        var run = RunCommand;
+
+        if (run is null)
+        {
+            context.Response.StatusCode = 503;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Laptop still starting - try again in a moment.\"}");
+            return;
+        }
+
+        var name = action.ToUpperInvariant();
+        var confirmed = force ? " (confirmed over a running race)" : string.Empty;
+
+        // Here, just before Race Control is asked - the checks above cost
+        // the laptop nothing, and the question over a running race is free
+        // to ask. There used to be no limit at all: see RemoteCommandGate.
+        switch (_commands.TryBegin(ClientKey(context), name, out var running))
+        {
+            case RemoteCommandGate.Answer.Busy:
+                context.Response.StatusCode = 503;
+                context.Response.AddHeader("Retry-After", "1");
+                WriteJson(context, JsonSerializer.Serialize(new
+                {
+                    ok = false,
+                    error = $"NOT sent - the laptop is still carrying out {running}. "
+                        + "Check the flag, then press again if it is still needed.",
+                }));
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Remote command: {action}{confirmed} - turned away, {running} was still being carried out.");
+                return;
+
+            case RemoteCommandGate.Answer.TooMany:
+                context.Response.StatusCode = 429;
+                context.Response.AddHeader("Retry-After", "60");
+                WriteJson(context, "{\"ok\":false,\"error\":\"NOT sent - too many commands in the last minute. Wait a minute, and check the laptop.\"}");
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Remote command: {action}{confirmed} - turned away, too many commands in the last minute.");
+                return;
+        }
+
+        RemoteCommandOutcome outcome;
+
+        try
+        {
+            // On this request's own thread, and it can take a few seconds:
+            // the host waits for Race Control to finish with the command, so
+            // the phone can be told what it did. See RunCommand.
+            outcome = run(action, force, shownRace);
+        }
+        catch (Exception ex)
+        {
+            // Whether it ran before it failed is not something this can
+            // know, so the phone is told neither - only to look.
+            context.Response.StatusCode = 500;
+            WriteJson(context, JsonSerializer.Serialize(new
+            {
+                ok = false,
+                error = "The laptop hit a problem with that command. Check the laptop before trying again.",
+            }));
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Remote command: {action}{confirmed} - failed on the laptop ({ex.Message}). The phone was told to check the laptop.");
+            return;
+        }
+        finally
+        {
+            // Whatever became of it, this phone is about to be answered -
+            // the next command may go.
+            _commands.End();
+        }
+
+        // The phone used to be answered {"ok":true} - shown as "GREEN sent" -
+        // as soon as the command had been handed to the UI thread, whatever
+        // Race Control did with it next, so a command it refused still read
+        // as sent. Each answer now says what became of it, in Race Control's
+        // own words; a host that gave none gets a plain sentence for the
+        // phone rather than a blank line. The page puts the command's name
+        // in front of a refusal or a wait itself ("GREEN not done: ..."), so
+        // those sentences do not repeat it.
+        var said = string.IsNullOrWhiteSpace(outcome.Message) ? null : outcome.Message.Trim();
+
+        int status;
+        string answer;
+        string logged;
+
+        switch (outcome.Status)
+        {
+            case RemoteCommandStatus.Done:
+                said ??= $"{name} done.";
+                status = 200;
+                answer = JsonSerializer.Serialize(new { ok = true, message = said });
+                logged = $"done. The phone was told \"{said}\"";
+                break;
+
+            case RemoteCommandStatus.Refused:
+                // 409 like the "a race is running" answer above, but never
+                // with "confirm": that flag is how the page tells the two
+                // apart. That one asks the phone a question; this one is
+                // final, and the phone shows the command as NOT done.
+                said ??= "Race Control did not do it - check the laptop to see why.";
+                status = 409;
+                answer = JsonSerializer.Serialize(new { ok = false, refused = true, error = said });
+                logged = $"refused. The phone was told \"{said}\"";
+                break;
+
+            case RemoteCommandStatus.Waiting:
+                // It reached Race Control, which had not finished with it
+                // when the phone had to be answered - usually a question on
+                // the laptop. Sent, then, but what happens is up to the laptop.
+                said ??= "Race Control has not finished with it - check the laptop.";
+                status = 202;
+                answer = JsonSerializer.Serialize(new { ok = true, waiting = true, message = said });
+                logged = $"still waiting on the laptop. The phone was told \"{said}\"";
+                break;
+
+            case RemoteCommandStatus.NeedsConfirm:
+                // A race went green while the command was on its way: the
+                // same question the check above asks, so the page asks its
+                // user and sends it again with force=1 on a yes.
+                said ??= "A race is running - this would wipe its standings.";
+                status = 409;
+                answer = JsonSerializer.Serialize(new { ok = false, confirm = true, error = said, raceGeneration = _race.SessionGeneration });
+                logged = $"needs the phone's yes - a race is running. The phone was asked \"{said}\"";
+                break;
+
+            case RemoteCommandStatus.NotDelivered:
+                said ??= "The laptop could not take that command just now - it was NOT sent. Try again.";
+                status = 503;
+                answer = JsonSerializer.Serialize(new { ok = false, error = said });
+                logged = $"the laptop could not take it just then. The phone was told \"{said}\"";
+                break;
+
+            default:
+                // An answer this version does not know. Claimed neither way.
+                said = "The laptop did not say what became of that command. Check the laptop before trying again.";
+                status = 500;
+                answer = JsonSerializer.Serialize(new { ok = false, error = said });
+                logged = $"race control answered {outcome.Status}, which this version does not know. The phone was told to check the laptop.";
+                break;
+        }
+
+        // Answered first and logged after, so the log can never be what
+        // keeps the phone from hearing back.
+        context.Response.StatusCode = status;
+        WriteJson(context, answer);
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Remote command: {action}{confirmed} - {logged}");
+    }
+
+    private string BuildRosterJson()
+    {
+        // Read once into a local: the field can be swapped by the UI thread
+        // between two reads, and a list that changed halfway through being
+        // serialised is the kind of fault nobody ever reproduces.
+        var view = _rosterView;
+        var roster = view.Entries;
+
+        return JsonSerializer.Serialize(new
+        {
+            // An opaque id, never the transponder - see RosterView.
+            drivers = roster.Select((d, i) => new
+            {
+                t = view.Ids[i],
+                n = d.Name,
+                c = d.ClassName,
+                @in = d.CheckedIn,
+            }),
+            checkedIn = roster.Count(d => d.CheckedIn),
+            total = roster.Count,
+        });
+    }
+
+    /// <summary>
+    /// Takes one check-in write slot for this request - this phone's share,
+    /// and everybody's together - or answers 429 and returns false.
+    ///
+    /// The all-devices ceiling is the backstop the per-device count needs:
+    /// the count is by address, an address is cheap to change on a venue's
+    /// Wi-Fi, and with a blank check-in PIN there is no PIN limit behind it.
+    /// Every accepted change is a flushed write on the UI thread, so a
+    /// script toggling somebody in and out from a few dozen addresses
+    /// starved the race tick (25 Sep security audit).
+    /// </summary>
+    private bool ReserveCheckInWrite(HttpListenerContext context)
+    {
+        var device = ClientKey(context);
+
+        if (!_checkInWrites.TryReserve(device, out var ticket))
+        {
+            context.Response.StatusCode = 429;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Too many changes from this phone. Wait a minute.\"}");
+            return false;
+        }
+
+        if (!_checkInWritesAll.TryReserve("all", out _))
+        {
+            // Not this phone's doing - its own count is given back.
+            _checkInWrites.Release(device, ticket);
+            context.Response.StatusCode = 429;
+            WriteJson(context, "{\"ok\":false,\"error\":\"The laptop is taking a lot of check-ins right now. Try again in a minute, or check in at the desk.\"}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void HandleCheckIn(HttpListenerContext context)
+    {
+        if (!IsAppWrite(context) || !CheckInOpen(context)
+            || !PinAccepted(context, CheckInPin, required: false, scope: "checkin")
+            || !HostAccepting(context))
+        {
+            return;
+        }
+
+        var query = context.Request.QueryString;
+
+        var raw = (query["t"] ?? string.Empty).Trim();
+
+        if (raw.Length == 0)
+        {
+            context.Response.StatusCode = 400;
+            WriteJson(context, "{\"ok\":false,\"error\":\"No driver\"}");
+            return;
+        }
+
+        var view = _rosterView;
+
+        // A row on the page sends the opaque id it was given. A phone that
+        // managed to read a printed badge sends the badge payload as it
+        // was scanned - the MZRD: form or an online badge link - and that
+        // is unwrapped here rather than in the page, which keeps one
+        // definition of what a badge is: the same one the USB scanner on
+        // the Entries page uses. A bare transponder number is no longer
+        // accepted; nothing this server serves sends one any more.
+        // Set once this request has used up a write slot, so a badge that
+        // turns out to be a real change is not charged twice.
+        var reserved = false;
+
+        if (!view.ById.TryGetValue(raw.ToLowerInvariant(), out var known))
+        {
+            // A badge payload carries the transponder itself - the durable
+            // number the opaque ids exist to keep off the wire. Answered
+            // "not on this list" or "already so" for free, it was an oracle:
+            // probe a number, meeting after meeting, and learn whether that
+            // car is here tonight (25 Sep security audit). Every answer to
+            // this path now costs a slot, whatever it turns out to be.
+            if (!ReserveCheckInWrite(context))
+            {
+                return;
+            }
+
+            reserved = true;
+
+            var transponder = QrBadgeRenderer.ParsePayload(raw);
+
+            known = string.IsNullOrWhiteSpace(transponder)
+                ? null
+                : view.Entries.FirstOrDefault(d =>
+                    string.Equals(d.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (known is null)
+        {
+            context.Response.StatusCode = 404;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Not a driver on this list\"}");
+            return;
+        }
+
+        var wanted = !string.Equals(query["state"], "out", StringComparison.OrdinalIgnoreCase);
+
+        // Already so: nothing to do, and nothing to write. A double tap, or
+        // a badge scanned twice, used to be a disk write and a rebuild of
+        // the Entries page each time.
+        if (known.CheckedIn == wanted)
+        {
+            WriteJson(context, "{\"ok\":true}");
+            return;
+        }
+
+        if (!reserved && !ReserveCheckInWrite(context))
+        {
+            return;
+        }
+
+        var handler = CheckInRequested;
+
+        if (handler is null)
+        {
+            context.Response.StatusCode = 503;
+            WriteJson(context, "{\"ok\":false,\"error\":\"Laptop still starting - try again in a moment.\"}");
+            return;
+        }
+
+        handler(known.Transponder, wanted);
+        AssumeCheckIn(view, known, wanted);
+        StatusMessage?.Invoke($"[web] {known.Name} checked {(wanted ? "in" : "out")} from a phone.");
+
+        // Optimistic: the change is applied on the UI thread a moment from
+        // now, and the page's next poll is what confirms it. Saying "ok"
+        // here means "accepted", which is the only honest thing a
+        // fire-and-forget endpoint can say.
+        WriteJson(context, "{\"ok\":true}");
+    }
+
+    /// <summary>
+    /// Marks a driver in or out in this server's own copy of the roster, as
+    /// the host is about to in its store.
+    ///
+    /// The "already so" check above reads this copy, and the host's
+    /// republish can be a moment behind. Without this, a quick in-then-out
+    /// from one phone found the copy still saying "out" and answered the
+    /// out as already done - while the store had them in. The host's next
+    /// publish replaces this with the real thing either way.
+    /// </summary>
+    private void AssumeCheckIn(RosterView view, CheckInEntry known, bool wanted)
+    {
+        // Under the gate, so the check and the replace are one step - see
+        // _rosterGate.
+        lock (_rosterGate)
+        {
+            var current = _rosterView;
+
+            // Only on the copy this request read, or on one made from it by
+            // another phone's tap a moment ago - those share its id list,
+            // and building on them keeps both taps rather than letting the
+            // second quietly undo the first. Anything else is a roster the
+            // host has published since, which is better than this guess.
+            if (!ReferenceEquals(current.Ids, view.Ids))
+            {
+                return;
+            }
+
+            var index = -1;
+
+            for (var i = 0; i < view.Entries.Count; i++)
+            {
+                if (ReferenceEquals(view.Entries[i], known))
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index < 0 || index >= current.Entries.Count)
+            {
+                return;
+            }
+
+            var entries = current.Entries.ToList();
+            entries[index] = entries[index] with { CheckedIn = wanted };
+
+            var byId = new Dictionary<string, CheckInEntry>(StringComparer.Ordinal);
+
+            for (var i = 0; i < entries.Count; i++)
+            {
+                byId.TryAdd(current.Ids[i], entries[i]);
+            }
+
+            _roster = entries;
+            _rosterView = new RosterView(entries, current.Ids, byId);
+        }
+    }
+
+    /// <summary>
+    /// The most a /manage request's body is read before it is refused. Well
+    /// above RaceDayService.MaxRequestChars (64K characters, checked once
+    /// the body is parsed) - this is the transport's own, cheaper backstop
+    /// so nobody has to buffer an unbounded body to find out it is too big.
+    /// </summary>
+    private const int MaxManageBodyBytes = 256 * 1024;
+
+    /// <summary>
+    /// The race-day manager's one JSON endpoint. Thin on purpose - the only
+    /// thing this method decides is who may ask (the CSRF header, the
+    /// manager PIN, a body that isn't absurd); what a request means,
+    /// whether it needs a yes first, and whether the laptop is too busy for
+    /// it are all RaceDayService.HandleJsonAsync's job, and it always
+    /// answers with well-formed JSON, never an exception - so whatever it
+    /// comes back with is written straight to the phone.
+    /// </summary>
+    private async Task HandleManageAsync(HttpListenerContext context)
+    {
+        if (!IsAppWrite(context)
+            || !PinAccepted(context, ManagerPin, required: true, scope: "manager", isUsable: RaceDayService.IsUsableManagerPin)
+            || !HostAccepting(context))
+        {
+            return;
+        }
+
+        // Set once, by MainForm, before the window is ever shown - see
+        // WireRaceDayService - so this is really a guard against a future
+        // caller that starts the server without it, not something a phone
+        // should ever see in practice.
+        if (Manager is not { } manager)
+        {
+            context.Response.StatusCode = 503;
+            WriteJson(context, "{\"ok\":false,\"error\":\"The race-day manager isn't ready yet - try again in a moment.\"}");
+            return;
+        }
+
+        string? body;
+
+        try
+        {
+            body = await ReadCappedBodyAsync(context.Request, MaxManageBodyBytes).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or HttpListenerException)
+        {
+            // The phone went away mid-upload - not worth a 500 and a log
+            // line, since there is nobody left to read either.
+            return;
+        }
+
+        if (body is null)
+        {
+            context.Response.StatusCode = 413;
+            WriteJson(context, "{\"ok\":false,\"error\":\"That request was too big.\"}");
+            return;
+        }
+
+        // The server's own stop token: if the laptop stops the web server
+        // mid-request, this unblocks rather than riding out its own
+        // ten-to-seventy-second timeouts for an answer nobody can send any
+        // more.
+        var answer = await manager.HandleJsonAsync(body, RaceDayChannel.WiFi, _cts?.Token ?? CancellationToken.None)
+            .ConfigureAwait(false);
+
+        WriteJson(context, answer);
+    }
+
+    /// <summary>
+    /// Reads a request body up to <paramref name="maxBytes"/> and stops,
+    /// returning null rather than the (start of a) body that turns out to
+    /// be bigger. Nothing before /manage ever read a request body in this
+    /// server, so there was no existing helper to share.
+    /// </summary>
+    private static async Task<string?> ReadCappedBodyAsync(HttpListenerRequest request, int maxBytes)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        var stream = request.InputStream;
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(chunk, 0, chunk.Length).ConfigureAwait(false);
+
+            if (read == 0)
+            {
+                break;
+            }
+
+            buffer.Write(chunk, 0, read);
+
+            if (buffer.Length > maxBytes)
+            {
+                return null;
+            }
+        }
+
+        // Always UTF-8 regardless of what the request claims: every caller
+        // is this page's own fetch(), whose body is JSON.stringify's output,
+        // which is UTF-8 whatever charset (if any) the browser happens to
+        // put on the Content-Type header.
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
+
+    /// <summary>
+    /// A sponsor slide's bytes, read from disk once and kept until the file
+    /// changes.
+    ///
+    /// Every phone and TV showing the sponsors fetches the current slide on
+    /// every rotation, and each fetch read the whole file again - a 12 MB
+    /// photo is a large-object allocation per request, and twenty screens
+    /// at once kept the garbage collector busy enough to make the race tick
+    /// late (25 Sep security audit). Kept by path and checked against the
+    /// file's size and time, so a slide replaced under the same name is read
+    /// afresh. Bounded: past the budget the cache starts again rather than
+    /// growing with however many slides the club adds.
+    /// </summary>
+    private byte[]? SlideBytes(string path)
+    {
+        long length;
+        DateTime written;
+
+        try
+        {
+            var info = new FileInfo(path);
+
+            if (!info.Exists)
+            {
+                return null;
+            }
+
+            length = info.Length;
+            written = info.LastWriteTimeUtc;
+        }
+        catch
+        {
+            return null;
+        }
+
+        lock (_slideGate)
+        {
+            if (_slides.TryGetValue(path, out var kept) && kept.Length == length && kept.Written == written)
+            {
+                return kept.Bytes;
+            }
+        }
+
+        if (SponsorStore.ReadSlide(path) is not { } bytes)
+        {
+            return null;
+        }
+
+        lock (_slideGate)
+        {
+            if (_slides.TryGetValue(path, out var old))
+            {
+                _slideBytes -= old.Bytes.Length;
+            }
+
+            if (_slideBytes + bytes.Length > SlideCacheBudget)
+            {
+                _slides.Clear();
+                _slideBytes = 0;
+            }
+
+            _slides[path] = (length, written, bytes);
+            _slideBytes += bytes.Length;
+        }
+
+        return bytes;
+    }
+
+    /// <summary>The most sponsor-slide bytes SlideBytes keeps at once.</summary>
+    private const long SlideCacheBudget = 64L * 1024 * 1024;
+
+    private readonly object _slideGate = new();
+    private readonly Dictionary<string, (long Length, DateTime Written, byte[] Bytes)> _slides = new(StringComparer.OrdinalIgnoreCase);
+    private long _slideBytes;
+
+    private void HandleSponsorImage(HttpListenerContext context)
+    {
+        var indexText = context.Request.QueryString["i"];
+
+        // Read ONCE into a local. The list belongs to the UI thread, which
+        // can add or remove a slide between a Count and an indexer - and
+        // this runs on a request thread, where that lands as an unhandled
+        // IndexOutOfRange rather than a 404.
+        List<string>? slides;
+
+        try
+        {
+            slides = _sponsors?.SlideFileNames.ToList();
+        }
+        catch
+        {
+            // The list changed while it was being copied, because the
+            // operator is editing the slides. One missed image is the right
+            // outcome; an unhandled exception on a request thread is not.
+            slides = null;
+        }
+
+        if (slides is null || !int.TryParse(indexText, out var index)
+            || index < 0 || index >= slides.Count)
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        var path = _sponsors!.ResolvePath(slides[index]);
+        if (path is null)
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        try
+        {
+            // Only a slide the Sponsors page would take in, sized from its
+            // header (see SponsorStore.ReadSlide). This used to read the whole
+            // file for every request whatever its size - a planted file of
+            // any length, pulled into memory once per phone per page load.
+            if (SlideBytes(path) is not { } bytes)
+            {
+                context.Response.StatusCode = 404;
+                WriteText(context, "Not found");
+                return;
+            }
+
+            // From what the bytes are rather than the file's extension, since
+            // these pages tell the phone not to guess (nosniff): a PNG saved
+            // as .jpg would otherwise not be shown at all.
+            context.Response.ContentType = ImageProbe.IsPng(bytes) ? "image/png"
+                : bytes is [0x47, 0x49, 0x46, 0x38, ..] ? "image/gif"
+                : bytes is [0x42, 0x4D, ..] ? "image/bmp"
+                : "image/jpeg";
+            context.Response.ContentLength64 = bytes.Length;
+            context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+            context.Response.OutputStream.Close();
+        }
+        catch
+        {
+            context.Response.StatusCode = 500;
+            WriteText(context, "Error");
+        }
+    }
+
+    /// <summary>
+    /// The club logo for the pages' header bar. Only ever the logo file the
+    /// app made (ClubLogo.PngBytes checks the stored name and that it really
+    /// is a PNG), so a settings file naming some other file cannot turn this
+    /// into a way to read it. Sent as image/png because nosniff means a
+    /// browser takes the type at its word. Any query string (the pages add
+    /// ?v= so a new logo is never mistaken for the old one) is ignored.
+    /// </summary>
+    private void HandleLogo(HttpListenerContext context)
+    {
+        var bytes = _settings is null ? null : ClubLogo.PngBytes(_settings.RelayLogoFile);
+
+        if (bytes is null)
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        context.Response.ContentType = "image/png";
+        context.Response.ContentLength64 = bytes.Length;
+        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+        context.Response.OutputStream.Close();
+    }
+
+    /// <summary>
+    /// The name to show for a transponder, or - when nobody has named it -
+    /// the raw id on the LAN pages and "Unnamed driver" on the relay copy.
+    /// The LAN pages are only reachable from the venue's Wi-Fi, and the
+    /// person reading them may be the one holding that transponder; the
+    /// relay is the whole internet, where a number next to a car is a
+    /// tracking key.
+    /// </summary>
+    private string DisplayNameFor(string transponder, bool publicCopy = false)
+    {
+        var profile = _profiles.Get(transponder);
+
+        if (!string.IsNullOrWhiteSpace(profile?.DriverName))
+        {
+            return profile!.DriverName;
+        }
+
+        return publicCopy ? RelayDocuments.UnnamedDriver : transponder;
+    }
+
+    /// <summary>Guards a build of the live-state document. See BuildStateJson.</summary>
+    private readonly object _stateGate = new();
+
+    /// <summary>
+    /// The last state document built on the UI thread, for request threads
+    /// to serve.
+    ///
+    /// Volatile, and replaced whole: a reader gets either the previous
+    /// document or the new one, never half of either.
+    /// </summary>
+    private volatile string _publishedState = "{}";
+
+    /// <summary>
+    /// Rebuilds the document /api/state serves. UI thread only.
+    ///
+    /// Requests used to build it themselves, on a thread-pool thread. That
+    /// meant every phone in the building was walking the race session's
+    /// standings several times a second while the lap pipeline was adding
+    /// to them - and the standings are a plain dictionary, so
+    /// "Collection was modified" was one lap away at any moment. What a
+    /// spectator saw was the page going blank mid-race, which is the one
+    /// time anybody is looking at it.
+    ///
+    /// Building on a timer instead costs a document nobody reads when the
+    /// page is closed, and the page polls once a second anyway, so nothing
+    /// on screen is any staler than it was.
+    /// </summary>
+    public void PublishState(bool force = false)
+    {
+        if (!force && !IsRunning)
+        {
+            return;
+        }
+
+        try
+        {
+            _publishedState = BuildStateJson();
+        }
+        catch (Exception ex)
+        {
+            // Kept, rather than thrown into a UI timer where it would take
+            // the app down. The page goes on serving the last good copy.
+            StatusMessage?.Invoke($"[web] Couldn't refresh the live state: {ex.Message}");
+        }
+    }
+
+    private AchievementStore? _achievements;
+    private DateTime _achievementsReadUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Earned badges, re-read from disk at most every few seconds.
+    ///
+    /// Loading them per request was tolerable when a request was the only
+    /// thing asking. The document is built on a timer now, and reading a
+    /// file from the UI thread twice a second is how a race night acquires
+    /// a stutter. A badge awarded between reads appears within a few
+    /// seconds, which is soon enough for a spectator page.
+    /// </summary>
+    private AchievementStore EarnedBadges()
+    {
+        if (_achievements is null || DateTime.UtcNow - _achievementsReadUtc > TimeSpan.FromSeconds(5))
+        {
+            _achievements = AchievementStore.Load();
+            _achievementsReadUtc = DateTime.UtcNow;
+        }
+
+        return _achievements;
+    }
+
+    /// <summary>
+    /// The live race as one JSON document - the same one the results page
+    /// and the OBS overlay are served.
+    ///
+    /// Serialised, because building it MUTATES state: KpiTracker.Observe
+    /// records per-driver history as it goes. Requests already arrive on
+    /// thread-pool threads, so two phones polling at once have always been
+    /// able to interleave inside it; the relay publisher now calls this
+    /// from the UI thread as well, which turns a race that was unlikely
+    /// into one that happens every second. The lock is uncontended a
+    /// handful of times a second and costs nothing measurable.
+    ///
+    /// It does NOT make reading the race session safe - that belongs to
+    /// the UI thread and this has always read it from elsewhere. The fix
+    /// for that is to build here once per tick and serve a published
+    /// snapshot, the way the roster already works, which is a bigger
+    /// change than this one.
+    /// </summary>
+    /// <param name="abbreviateNames">Shorten driver names to a first name and an initial. For the public relay copy only.</param>
+    /// <param name="forRelay">
+    /// The public relay copy. No transponder number leaves in it: an unnamed
+    /// driver is "Unnamed driver" rather than their id, and the Transponder
+    /// column is dropped whatever columns the club picked for the LAN page.
+    /// </param>
+    public string BuildStateJson(bool abbreviateNames = false, bool forRelay = false)
+    {
+        lock (_stateGate)
+        {
+            return BuildStateJsonCore(abbreviateNames, forRelay);
+        }
+    }
+
+    private string BuildStateJsonCore(bool abbreviateNames, bool forRelay)
+    {
+        var ordered = _race.GetOrderedStandings();
+
+        // Decided here because here is where the whole field is. Two
+        // drivers whose names differ only in their last word would
+        // otherwise be shortened, separately, into the same name. The
+        // relay copy always gets a map, shortened or not, because the map
+        // is also what keeps an unnamed driver's id out of the Driver
+        // column.
+        var shortened = abbreviateNames || forRelay ? ShortNames(ordered, abbreviateNames, forRelay) : null;
+
+        // Session-wide fastest lap, so the page can highlight whoever holds it.
+        var bestLapMs = ordered.Where(s => s.FastestLapMs > 0)
+            .Select(s => s.FastestLapMs)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        _kpiTracker.Observe(ordered, _race.SessionGeneration);
+
+        var columns = KpiCatalog.Resolve(_settings?.WebKpis ?? new List<string>(), KpiCatalog.DefaultWeb);
+
+        if (forRelay)
+        {
+            columns = columns.Where(k => k.Key != "transponder").ToList();
+        }
+
+        var context = new KpiContext
+        {
+            Ordered = ordered,
+            Profiles = _profiles,
+            Tracker = _kpiTracker,
+            FastestOverall = bestLapMs,
+            StreakThreshold = _race.StreakThreshold,
+
+            // Re-read per request rather than held: the web server and Race
+            // Control are separate objects, and a badge awarded between
+            // requests has to show up without restarting the server.
+            Achievements = EarnedBadges(),
+            DisplayNames = shortened,
+            PublicCopy = forRelay,
+        };
+
+        // Rows are emitted as parallel arrays of cell values matching the
+        // column list, so the page can render whatever selection is active
+        // without knowing anything about individual KPIs.
+        var standings = ordered.Select((s, i) => new
+        {
+            cells = columns.Select(k =>
+            {
+                var value = k.Compute(s, i, context);
+                return new { text = value.Text, emphasis = value.Emphasis.ToString().ToLowerInvariant() };
+            }).ToList(),
+
+            // The chart pages need the shape of a driver's race, not just
+            // the current numbers. Sent alongside the cells rather than from
+            // a second endpoint so a phone on club wifi makes one request a
+            // second, not two.
+            //
+            // The start lap is dropped here rather than on the page: it runs
+            // from the green to the line and isn't a lap time, and left in
+            // it drags the first point of every line off the bottom of the
+            // chart and flattens everything after it.
+            // The same name the Driver column shows, from the same map.
+            name = shortened is not null && shortened.TryGetValue(s.TransponderId, out var shortName)
+                ? shortName
+                : DisplayNameFor(s.TransponderId, forRelay),
+            laps = RaceGaps.FlyingLaps(s).ToList(),
+            best = s.FastestLapMs,
+        }).ToList();
+
+        string onDeck = string.Empty;
+        var next = _schedule?.NextUp;
+        if (next is not null)
+        {
+            onDeck = string.Join("  \u2022  ", new[] { next.ScheduledTime, next.ClassName, next.Description }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            state = _race.State.ToString(),
+            flag = _race.Flag.ToString(),
+            countdown = _race.GetCountdownText(),
+            onDeck,
+            columns = columns.Select(k => k.Label).ToList(),
+            sponsorCount = _sponsors?.Current.Enabled == true ? _sponsors.SlideFileNames.Count : 0,
+            sponsorLeaderboardSecs = _sponsors?.Current.LeaderboardSeconds ?? 60,
+            sponsorSlideSecs = _sponsors?.Current.SlideSeconds ?? 8,
+            sponsorPauseDuringRace = _sponsors?.Current.PauseDuringRace ?? true,
+            standings,
+        });
+    }
+
+    /// <summary>
+    /// Shortened names for everyone on track, keyed by transponder.
+    ///
+    /// Keyed by transponder rather than by name because two drivers can
+    /// share a name; a transponder is the one thing that cannot collide.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> ShortNames(IReadOnlyList<RacerStanding> ordered, bool abbreviate, bool publicCopy)
+    {
+        var full = ordered.Select(s => DisplayNameFor(s.TransponderId, publicCopy)).ToList();
+        var chosen = RelayPublisher.DisplayNames(full, abbreviate);
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            // The placeholder for a car with no name is not a name, and
+            // shortened to "Unnamed d" it reads like one.
+            map[ordered[i].TransponderId] = full[i] == RelayDocuments.UnnamedDriver ? full[i] : chosen[i];
+        }
+
+        return map;
+    }
+
+    private static void WriteHtml(HttpListenerContext context, string html)
+    {
+        context.Response.ContentType = "text/html; charset=utf-8";
+        WriteBody(context, html);
+    }
+
+    private static void WriteJson(HttpListenerContext context, string json)
+    {
+        context.Response.ContentType = "application/json; charset=utf-8";
+        WriteBody(context, json);
+    }
+
+    private static void WriteText(HttpListenerContext context, string text)
+    {
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        WriteBody(context, text);
+    }
+
+    private static void WriteBody(HttpListenerContext context, string body)
+    {
+        var bytes = Encoding.UTF8.GetBytes(body);
+        context.Response.ContentLength64 = bytes.Length;
+        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+        context.Response.OutputStream.Close();
+    }
+
+    // --- Pages -------------------------------------------------------------
+    // Kept as self-contained strings with inline CSS/JS rather than separate
+    // asset files, so there's nothing extra to copy alongside the .exe and
+    // no chance of the app running without its own web assets present.
+
+    /// <summary>
+    /// What a page takes from the crowd-screen look (Themes → Looks), worked
+    /// out once per request so a change shows on the next page load:
+    /// Scheme is "light" or "dark" (the html class and color-scheme), Root
+    /// the :root block of colour variables every page's CSS is written
+    /// against, ThemeColor the phone's address-bar colour, and Logo the
+    /// header's logo image, or empty. Fingerprint is twelve hex digits
+    /// standing for all of that together: a page carries the one it was
+    /// built with, and /api/look answers with the current one, so a page
+    /// nobody reloads (an OBS source, a TV) can tell it is out of date.
+    /// </summary>
+    private sealed record PageLook(string Scheme, string Root, string ThemeColor, string Logo)
+    {
+        public string Fingerprint { get; } = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(Scheme + "|" + Root + "|" + ThemeColor + "|" + Logo)))
+            [..12].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Keeps a page on the current crowd-screen look without anyone touching
+    /// it. The pages are built with the look baked in, which is right for a
+    /// phone that reloads all the time and wrong for an OBS browser source or
+    /// a TV left on Live Results all day: a new look or logo never reached
+    /// them. Every five seconds this asks /api/look for the fingerprint the
+    /// page would be built with now, and reloads when it differs from the one
+    /// on the body tag (the address, ?overlay=1 included, is kept).
+    ///
+    /// Not while somebody is using the page: a focused box, or whatever the
+    /// page's own lookBusy() says (the check-in page: a name half-searched,
+    /// the camera open) holds the reload until it is idle again. A failed or
+    /// odd answer is ignored rather than acted on, so the laptop being away
+    /// can never set a page reloading over and over.
+    /// </summary>
+    private const string LookWatchScript = """
+        (function(){
+          var built = document.body.getAttribute('data-look') || '';
+          var stale = false;
+          function busy(){
+            var a = document.activeElement;
+            if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { return true; }
+            try { if (typeof lookBusy === 'function' && lookBusy()) { return true; } } catch(e) {}
+            return false;
+          }
+          async function check(){
+            if (!stale) {
+              try {
+                var r = await fetch('/api/look', { cache: 'no-store' });
+                if (!r.ok) { return; }
+                var d = await r.json();
+                if (!d || typeof d.v !== 'string' || !/^[0-9a-f]{12}$/.test(d.v) || d.v === built) { return; }
+                stale = true;
+              } catch(e) { return; }
+            }
+            if (!busy()) { location.reload(); }
+          }
+          if (/^[0-9a-f]{12}$/.test(built)) { setInterval(check, 5000); }
+        })();
+        """;
+
+    /// <summary>
+    /// Builds the PageLook for this request. Runs on a request thread:
+    /// Looks.ForDisplays only reads (the custom-look list is swapped whole,
+    /// never changed in place) and ClubLogo's answers are cached under a
+    /// lock. Every value that goes into the page is either one of the look's
+    /// colours - always #RRGGBB, see ResolvedLook.Hex - an rgba() made here
+    /// from numbers, or a logo name that passed ClubLogo.IsLogoName, so
+    /// nothing a settings file says can break out of the CSS or the markup.
+    /// </summary>
+    private PageLook CurrentPageLook()
+    {
+        var look = _settings is null ? AppTheme.Active : Looks.ForDisplays(_settings);
+        var hex = look.Hex;
+        var light = look.Light;
+
+        var vars = new StringBuilder(":root{");
+
+        void Var(string name, string value) =>
+            vars.Append("--").Append(name).Append(':').Append(value).Append(';');
+
+        // The same eleven, under the same names, as the online pages - so a
+        // stylesheet rule reads the same in either place.
+        Var("bg", hex.Bg);
+        Var("surface", hex.Surface);
+        Var("row-alt", hex.RowAlt);
+        Var("primary", hex.Primary);
+        Var("on-primary", hex.OnPrimary);
+        Var("accent", hex.Accent);
+        Var("text", hex.Text);
+        Var("muted", hex.Muted);
+        Var("border", hex.Border);
+        Var("good", hex.Good);
+        Var("bad", hex.Bad);
+
+        // Worked out here rather than with color-mix() in the page: an
+        // older phone browser that doesn't know color-mix() would drop the
+        // whole rule and leave the colour missing.
+        //   hair   - the line between table rows, a shade quieter than a border
+        //   raised - a chip, an idle dot, the edge of a box you type in
+        //   soft   - chart names and legends: between hint and text
+        Var("hair", Looks.ToHex(Looks.Mix(look.Border, look.Background, 0.3)));
+        Var("raised", Looks.ToHex(Looks.Mix(look.Surface, look.Text, light ? 0.12 : 0.14)));
+        Var("soft", Looks.ToHex(Looks.Mix(look.Muted, look.Text, 0.45)));
+
+        // The leader's row, and a driver who is checked in: a wash of the
+        // primary colour, a little stronger on a light page where a faint
+        // tint vanishes into white.
+        Var("p1-tint", Rgba(look.Primary, light ? "0.09" : "0.06"));
+        Var("on-tint", Rgba(look.Primary, light ? "0.13" : "0.10"));
+        Var("on-edge", Looks.ToHex(Looks.Mix(look.Surface, look.Primary, 0.45)));
+
+        // OBS overlay: the look's own background, see-through, so the text
+        // colours still have what they were chosen against behind them.
+        Var("glass-bg", Rgba(look.Background, "0.86"));
+        Var("glass-cell", Rgba(look.Background, "0.78"));
+        Var("glass-p1", Rgba(Looks.Mix(look.Background, look.Primary, 0.12), "0.82"));
+        Var("glass-surface", Rgba(look.Surface, "0.86"));
+
+        var logo = string.Empty;
+
+        // Read once: the setting can be changed on the UI thread while this
+        // page is being built.
+        var file = _settings?.RelayLogoFile;
+
+        if (_settings is not null && _settings.ShowLogoOnScreens && ClubLogo.PngBytes(file) is not null)
+        {
+            // The header bar is the page background, so that is what the
+            // logo has to stand out from.
+            var plate = ClubLogo.PlateFor(file, look.Background);
+
+            if (plate is Color plateColor)
+            {
+                Var("plate", Looks.ToHex(plateColor));
+            }
+
+            // ?v= the file's name: each import gets a new one, so a phone
+            // can never show last season's logo from its own cache. alt is
+            // empty because the page title follows it.
+            logo = "<img class=\"logo" + (plate is null ? string.Empty : " plate")
+                   + "\" src=\"/logo.png?v=" + WebUtility.UrlEncode(file) + "\" alt=\"\">";
+        }
+
+        var scheme = light ? "light" : "dark";
+        vars.Append("color-scheme:").Append(scheme).Append(";}");
+
+        return new PageLook(scheme, vars.ToString(), hex.Bg, logo);
+    }
+
+    /// <summary>rgba() text from a colour and an alpha written the CSS way, so no culture's decimal comma can creep in.</summary>
+    private static string Rgba(Color color, string alpha) =>
+        "rgba(" + color.R + "," + color.G + "," + color.B + "," + alpha + ")";
+
+    // Every colour here is a variable from the page's :root block (see
+    // CurrentPageLook), so the look decides them all.
+    private const string SharedStyle = """
+        * { box-sizing: border-box; }
+        :root { --cond: 'Bahnschrift','Segoe UI Variable Display','Roboto Condensed','Helvetica Neue',system-ui,sans-serif; }
+        body { margin:0; font-family: 'Segoe UI', system-ui, sans-serif; background:var(--bg); color:var(--text); }
+        h1 { margin:0; font-family:var(--cond); font-stretch:condensed; font-size:22px;
+             font-weight:700; letter-spacing:.14em; display:flex; align-items:center; gap:12px; }
+        /* The club logo, left of the page title. Sized for a phone first,
+           then bigger on a laptop, TV or stream where it is seen from further
+           away. Square because the logo file is square. */
+        .logo { width:40px; height:40px; flex:0 0 auto; object-fit:contain; border-radius:8px; }
+        .logo.plate { background:var(--plate); padding:3px; }
+        @media (min-width:700px) { .logo { width:56px; height:56px; border-radius:10px; } }
+        @media (min-width:1100px) { .logo { width:72px; height:72px; border-radius:12px; } }
+        .bar { background:var(--bg); padding:15px 18px; display:flex; justify-content:space-between;
+               align-items:center; border-bottom:1px solid var(--border); }
+        .state { font-family:var(--cond); font-stretch:condensed; font-weight:700; color:var(--primary);
+                 font-size:17px; letter-spacing:.1em; }
+        .countdown { font-family:var(--cond); font-stretch:condensed; font-size:30px; color:var(--text);
+                     font-weight:700; line-height:1; }
+        table { width:100%; border-collapse:collapse; }
+        th { background:var(--bg); color:var(--muted); text-align:left; padding:9px 12px;
+             font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+             border-bottom:1px solid var(--border); }
+        td { padding:13px 12px; border-bottom:1px solid var(--hair); font-size:21px;
+             font-family:var(--cond); font-stretch:condensed; font-weight:600; }
+        .pos { width:56px; font-weight:700; color:var(--muted); font-size:25px; }
+        tr.p1 td { background:var(--p1-tint); }
+        tr.p1 .pos { color:var(--primary); }
+        .empty { padding:40px; text-align:center; color:var(--muted); }
+
+        /* --- Swipe deck ---
+           One horizontal scroller with snap points rather than a JS carousel:
+           the browser then owns the physics, so the flick feels native and
+           keeps working if the script stalls mid-race. */
+        .deck { display:flex; overflow-x:auto; scroll-snap-type:x mandatory;
+                -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+        .deck::-webkit-scrollbar { display:none; }
+        .page { flex:0 0 100%; scroll-snap-align:start; min-width:100%; }
+        .dots { display:flex; gap:8px; justify-content:center; padding:10px 0 14px;
+                background:var(--bg); position:sticky; bottom:0; }
+        .dot { width:8px; height:8px; border-radius:50%; background:var(--raised); transition:background .2s; }
+        .dot.on { background:var(--primary); }
+        .dots { border-top:1px solid var(--border); }
+        .ptitle { padding:14px 18px 6px; font-size:10px; font-weight:700; letter-spacing:.16em;
+                  color:var(--muted); text-transform:uppercase; }
+        canvas { width:100%; display:block; }
+        .legend { display:flex; flex-wrap:wrap; gap:10px; padding:8px 18px 16px; font-size:13px; }
+        .legend span { display:flex; align-items:center; gap:5px; color:var(--soft); }
+        .swatch { width:12px; height:3px; border-radius:2px; }
+        """;
+
+    private string BuildLiveResultsPage()
+    {
+        var look = CurrentPageLook();
+
+        return $$"""
+        <!DOCTYPE html><html class="{{look.Scheme}}"><head>
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="color-scheme" content="{{look.Scheme}}"><meta name="theme-color" content="{{look.ThemeColor}}">
+        <title>Live Results</title><style>{{look.Root}}{{SharedStyle}}
+        /* Highlight is the accent, as on the Big Screen and the online
+           pages; good is the look's own green. */
+        .good { color:var(--good); font-weight:700; }
+        .highlight { color:var(--accent); font-weight:700; }
+        .bad { color:var(--bad); font-weight:700; }
+        .pen { color:var(--bad); font-size:12px; margin-left:6px; }
+        .ondeck { background:var(--surface); color:var(--accent); padding:11px 18px; font-weight:700;
+                  border-bottom:1px solid var(--border); font-size:15px; }
+        #sponsor { display:none; position:fixed; inset:0; background:var(--bg); z-index:99;
+                   align-items:center; justify-content:center; }
+        #sponsor img { max-width:92%; max-height:92%; object-fit:contain; }
+        /* Overlay mode for OBS: transparent background and no chrome, so it
+           composites cleanly over a video feed instead of covering it. */
+        body.overlay { background:transparent; }
+        body.overlay .bar { background:var(--glass-bg); }
+        body.overlay td { background:var(--glass-cell) !important; }
+        body.overlay tr.p1 td { background:var(--glass-p1) !important; }
+        body.overlay th { background:var(--glass-bg); }
+        body.overlay .ondeck { background:var(--glass-surface); }
+        body.overlay #sponsor { display:none !important; }
+        </style></head><body data-look="{{look.Fingerprint}}">
+        <div class="bar"><h1>{{look.Logo}}LIVE RESULTS</h1>
+          <div><span class="state" id="state">-</span> &nbsp; <span class="countdown" id="countdown"></span></div>
+        </div>
+        <div class="ondeck" id="ondeck" style="display:none"></div>
+
+        <div class="deck" id="deck">
+          <div class="page">
+            <table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table>
+            <div class="empty" id="empty">Waiting for lap data...</div>
+          </div>
+          <div class="page">
+            <div class="ptitle">Lap times</div>
+            <canvas id="lapChart" height="300"></canvas>
+            <div class="legend" id="lapLegend"></div>
+          </div>
+          <div class="page">
+            <div class="ptitle">Best lap &amp; consistency</div>
+            <canvas id="paceChart" height="300"></canvas>
+            <div class="legend"><span>Bar length is the best lap - shorter is quicker. The lighter tail is lap-time spread.</span></div>
+          </div>
+        </div>
+        <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i></div>
+
+        <div id="sponsor"><img id="sponsorImg" src=""></div>
+        <script>
+        // Everything below builds rows with innerHTML, and a driver name is
+        // whatever somebody typed into a profile. Without this, a driver
+        // called "Ash <3 Racing" rendered as "Ash " - the rest swallowed as
+        // a tag - and a name containing a script tag ran on every phone on
+        // the club wifi and on the OBS overlay. The check-in page in this
+        // same file uses textContent and was never exposed; these pages
+        // build markup, so they escape instead.
+        function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        const overlay = new URLSearchParams(location.search).has('overlay');
+        if (overlay) document.body.classList.add('overlay');
+
+        let sponsorCount = 0, sponsorIdx = -1, showingSponsor = false, sinceSwap = 0;
+        // Timings come from the server on every poll rather than being fixed
+        // here, so edits on the Sponsors page take effect on already-open
+        // pages without needing a refresh or a server restart.
+        let leaderboardSecs = 60, slideSecs = 8, pauseDuringRace = true;
+
+        async function tick(){
+          try{
+            const r = await fetch('/api/state'); const d = await r.json();
+            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
+            document.getElementById('countdown').textContent = d.countdown || '';
+
+            const od = document.getElementById('ondeck');
+            if (d.onDeck) { od.textContent = 'ON DECK:  ' + d.onDeck; od.style.display = 'block'; }
+            else { od.style.display = 'none'; }
+
+            document.getElementById('head').innerHTML =
+              (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
+            document.getElementById('rows').innerHTML = d.standings.map((s,ri) =>
+              `<tr class="${ri===0?'p1':''}">` + s.cells.map((c,i) =>
+                `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
+              ).join('') + '</tr>').join('');
+            document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
+
+            window.lastRows = d.standings;
+            drawLaps(d.standings);
+            drawPace(d.standings);
+
+            sponsorCount = d.sponsorCount || 0;
+            leaderboardSecs = d.sponsorLeaderboardSecs || 60;
+            slideSecs = d.sponsorSlideSecs || 8;
+            pauseDuringRace = d.sponsorPauseDuringRace !== false;
+            if (!overlay) rotateSponsors(d.state);
+          }catch(e){}
+        }
+
+        function rotateSponsors(state){
+          if (sponsorCount === 0) { hideSponsor(); return; }
+          sinceSwap++;
+          if (showingSponsor) {
+            if (sinceSwap >= slideSecs) hideSponsor();
+          } else if (sinceSwap >= leaderboardSecs && !(pauseDuringRace && state === 'Racing')) {
+            sponsorIdx = (sponsorIdx + 1) % sponsorCount;
+            document.getElementById('sponsorImg').src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
+            document.getElementById('sponsor').style.display = 'flex';
+            showingSponsor = true; sinceSwap = 0;
+          }
+        }
+
+        // Enough hues to tell a full grid apart, spaced around the wheel so
+        // neighbouring cars never get neighbouring colours. These are the
+        // drivers' colours, not the look's, so they stay the same whatever
+        // look is chosen - except that on a light page each is swapped for a
+        // deeper shade of the same hue: a 2px lime or yellow line on white
+        // is all but invisible.
+        const LIGHT = document.documentElement.classList.contains('light');
+        const COLOURS = LIGHT
+          ? ['#4D7C0F','#0E7490','#C2410C','#15803D','#7E22CE','#A16207','#B91C1C','#047857','#1D4ED8','#BE185D']
+          : ['#C8F031','#22D3EE','#FF9F45','#4ADE80','#B06CFF','#FFE05C','#F0483E','#7CFF5C','#5C9DFF','#FF9ED2'];
+
+        // The chart's own ink - axes, labels, names - from the look, read
+        // from the page's colour variables so the canvas matches the table.
+        const CSSV = getComputedStyle(document.documentElement);
+        function ink(name, fallback){ return (CSSV.getPropertyValue(name) || '').trim() || fallback; }
+        const INK = { text: ink('--text','#F2F4F7'), muted: ink('--muted','#5A6478'),
+                      soft: ink('--soft','#A8B0C0'), line: ink('--border','#161B24') };
+
+        // Canvases are sized in CSS pixels but drawn in device pixels -
+        // without this a chart is a blurry mess on any phone, which is all
+        // of them.
+        function prep(cv){
+          const dpr = window.devicePixelRatio || 1;
+          const w = cv.clientWidth, h = cv.height / dpr || 300;
+          cv.width = w * dpr; cv.height = h * dpr;
+          const g = cv.getContext('2d');
+          g.setTransform(dpr,0,0,dpr,0,0);
+          g.clearRect(0,0,w,h);
+          return {g,w,h};
+        }
+
+        function axes(g,w,h,pad){
+          g.strokeStyle = INK.line; g.lineWidth = 1;
+          g.beginPath(); g.moveTo(pad,8); g.lineTo(pad,h-pad); g.lineTo(w-8,h-pad); g.stroke();
+        }
+
+        function drawLaps(rows){
+          const cv = document.getElementById('lapChart');
+          const runners = (rows||[]).filter(r => r.laps && r.laps.length > 1).slice(0,10);
+          const {g,w,h} = prep(cv);
+          const legend = document.getElementById('lapLegend');
+
+          if (!runners.length){
+            legend.innerHTML = '';
+            g.fillStyle = INK.muted; g.font = '14px system-ui';
+            g.fillText('Two laps needed before there is a shape to draw.', 16, h/2);
+            return;
+          }
+
+          const pad = 44;
+          const all = runners.flatMap(r => r.laps);
+          let lo = Math.min(...all), hi = Math.max(...all);
+
+          // A flat race would otherwise divide by zero and draw nothing.
+          if (hi - lo < 1) { hi = lo + 1; }
+
+          const maxLap = Math.max(...runners.map(r => r.laps.length));
+          const x = i => pad + (maxLap<2?0:(i/(maxLap-1))*(w-pad-12));
+          const y = v => 8 + (1-(v-lo)/(hi-lo))*(h-pad-8);
+
+          axes(g,w,h,pad);
+          g.fillStyle = INK.muted; g.font = '11px system-ui';
+          g.fillText((hi/1000).toFixed(2)+'s', 4, 16);
+          g.fillText((lo/1000).toFixed(2)+'s', 4, h-pad+4);
+
+          runners.forEach((r,ri) => {
+            g.strokeStyle = COLOURS[ri % COLOURS.length];
+            g.lineWidth = 2; g.beginPath();
+            r.laps.forEach((v,i) => i ? g.lineTo(x(i),y(v)) : g.moveTo(x(i),y(v)));
+            g.stroke();
+          });
+
+          legend.innerHTML = runners.map((r,ri) =>
+            `<span><i class="swatch" style="background:${COLOURS[ri % COLOURS.length]}"></i>${esc(r.name)}</span>`).join('');
+        }
+
+        function drawPace(rows){
+          const cv = document.getElementById('paceChart');
+          const runners = (rows||[]).filter(r => r.best > 0).slice(0,10);
+          const {g,w,h} = prep(cv);
+
+          if (!runners.length){
+            g.fillStyle = INK.muted; g.font = '14px system-ui';
+            g.fillText('No lap times yet.', 16, h/2);
+            return;
+          }
+
+          const pad = 8, labelW = 96;
+          const slowest = Math.max(...runners.map(r => r.best));
+          const rowH = Math.min(30, (h - pad*2) / runners.length);
+
+          runners.forEach((r,ri) => {
+            const top = pad + ri*rowH;
+            const len = (r.best/slowest) * (w - labelW - 60);
+
+            g.fillStyle = INK.soft; g.font = '12px system-ui';
+            g.fillText(r.name.slice(0,13), 8, top + rowH*0.65);
+
+            g.fillStyle = COLOURS[ri % COLOURS.length];
+            g.fillRect(labelW, top + 5, len, rowH-12);
+
+            // Spread drawn as a paler tail off the bar: a driver can be
+            // quick and scattered, and the bar alone can't say that.
+            const laps = r.laps || [];
+            if (laps.length > 2){
+              const mean = laps.reduce((a,b)=>a+b,0)/laps.length;
+              const sd = Math.sqrt(laps.reduce((a,b)=>a+(b-mean)*(b-mean),0)/laps.length);
+              const tail = Math.min((sd/slowest) * (w - labelW - 60) * 3, w - labelW - len - 60);
+              g.globalAlpha = 0.32;
+              g.fillRect(labelW + len, top + 5, Math.max(0,tail), rowH-12);
+              g.globalAlpha = 1;
+            }
+
+            g.fillStyle = INK.text; g.font = '12px system-ui';
+            g.fillText((r.best/1000).toFixed(3), labelW + len + 6, top + rowH*0.65);
+          });
+        }
+
+        // Dots follow the scroller rather than driving it, so they stay
+        // honest if the user half-swipes and lets go.
+        const deck = document.getElementById('deck');
+        deck.addEventListener('scroll', () => {
+          const i = Math.round(deck.scrollLeft / deck.clientWidth);
+          document.querySelectorAll('.dot').forEach((d,n) => d.classList.toggle('on', n===i));
+        }, {passive:true});
+
+        window.addEventListener('resize', () => { if (window.lastRows) { drawLaps(window.lastRows); drawPace(window.lastRows); } });
+
+        function hideSponsor(){
+          document.getElementById('sponsor').style.display = 'none';
+          showingSponsor = false; sinceSwap = 0;
+        }
+        tick(); setInterval(tick, 1000);
+        </script><script>{{LookWatchScript}}</script></body></html>
+        """;
+    }
+
+    /// <summary>
+    /// Sign-on from a phone: the driver finds their own name and taps it.
+    ///
+    /// A LIST rather than a camera, and that is a decision rather than a
+    /// shortcut. This server speaks plain HTTP on a LAN address, and every
+    /// current browser refuses getUserMedia outside a secure context - so a
+    /// camera button on this page would be a button that does nothing on
+    /// every phone at the track. The scan path that DOES work is the USB
+    /// scanner on the Entries page, where somebody is standing anyway.
+    ///
+    /// The camera is still wired up behind a feature check, so it appears
+    /// by itself if this is ever served over https, and stays invisible
+    /// rather than broken until then.
+    /// </summary>
+    private string BuildCheckInPage()
+    {
+        var look = CurrentPageLook();
+
+        return $$"""
+        <!DOCTYPE html><html class="{{look.Scheme}}"><head>
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="color-scheme" content="{{look.Scheme}}"><meta name="theme-color" content="{{look.ThemeColor}}">
+        <title>Check In</title><style>{{look.Root}}{{SharedStyle}}
+        .wrap { padding:14px; max-width:560px; margin:0 auto; }
+        .pin, .find { width:100%; padding:13px; font-size:17px; border-radius:8px;
+                      border:1px solid var(--raised); background:var(--surface); color:var(--text); margin-bottom:10px; }
+        .msg { text-align:center; padding:8px; font-weight:700; min-height:20px; font-size:15px; }
+        .row { width:100%; display:flex; align-items:center; justify-content:space-between;
+               gap:10px; padding:15px 14px; margin:7px 0; border:1px solid var(--raised);
+               border-radius:10px; background:var(--surface); color:var(--text); text-align:left;
+               font-family:inherit; cursor:pointer; }
+        .row.on { background:var(--on-tint); border-color:var(--on-edge); }
+        .row:active { opacity:.7; }
+        .lt { display:flex; flex-direction:column; gap:3px; min-width:0; }
+        .nm { font-size:18px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .cl { font-size:12px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+        .chip { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.14em;
+                padding:6px 10px; border-radius:20px; background:var(--raised); color:var(--muted); }
+        .row.on .chip { background:var(--primary); color:var(--on-primary); }
+        /* Centred explicitly. A phone browser with a large accessibility
+           text size, or a button that ends up taller than one line, does
+           not reliably centre a button's label on its own - and a caption
+           sitting against one edge of a big coloured block is the first
+           thing anyone notices. */
+        .cam { display:none; width:100%; padding:14px; margin-bottom:10px; border:none;
+               border-radius:10px; background:var(--primary); color:var(--on-primary); font-size:16px; font-weight:700;
+               font-family:inherit; text-align:center; line-height:1.25;
+               align-items:center; justify-content:center; }
+        .cam.on { display:flex; }
+        #camwrap { display:none; margin-bottom:10px; }
+        #vid { width:100%; border-radius:10px; background:#000; }
+        </style></head><body data-look="{{look.Fingerprint}}">
+        <div class="bar"><h1>{{look.Logo}}CHECK IN</h1><span class="state" id="count">-</span></div>
+        <div class="wrap">
+          <input class="pin" id="pin" placeholder="Check-in PIN (leave blank if none)" inputmode="numeric">
+          <button class="cam" id="cam">SCAN A QR CHECK-IN</button>
+          <div id="camwrap"><video id="vid" playsinline muted></video>
+            <button class="cam on" id="camclose" style="background:#4a4a4a;color:#fff">CLOSE CAMERA</button></div>
+          <input class="find" id="find" placeholder="Find your name" autocomplete="off">
+          <div class="msg" id="msg"></div>
+          <div id="list"></div>
+        </div>
+        <script>
+        // Everything below builds rows with innerHTML, and a driver name is
+        // whatever somebody typed into a profile. Without this, a driver
+        // called "Ash <3 Racing" rendered as "Ash " - the rest swallowed as
+        // a tag - and a name containing a script tag ran on every phone on
+        // the club wifi and on the OBS overlay. The check-in page in this
+        // same file uses textContent and was never exposed; these pages
+        // build markup, so they escape instead.
+        function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        var pinBox = document.getElementById('pin');
+        var find = document.getElementById('find');
+        var list = document.getElementById('list');
+        var msg = document.getElementById('msg');
+        var data = [];
+        // A key of its own. The remote and this page used to share one, so
+        // a phone that had ever opened the remote handed its PIN to this
+        // page - and a driver borrowing that phone could read it back.
+        try { pinBox.value = localStorage.getItem('mzrd_checkin_pin') || ''; } catch(e) {}
+        // The PIN that was last refused. Polling stops while the box still
+        // holds it: every refused poll is a wrong guess to the laptop, and
+        // a page left open with a stale PIN would lock its own phone out.
+        var badPin = null;
+        // Whether this check-in has a PIN, as of when the page was served.
+        // With one set, an empty box is never sent: the page asks for the
+        // PIN instead. The laptop does not count an empty PIN as a wrong
+        // guess any more, but there is no point asking a question whose
+        // answer is already known on every poll.
+        var pinNeeded = {{(string.IsNullOrEmpty(CheckInPin) ? "false" : "true")}};
+        // When an empty box last checked whether a PIN is still needed -
+        // see load(). Starts now: the page was just served with the
+        // answer, so the first look is thirty seconds away, not at once.
+        var lastEmptyProbe = Date.now();
+        pinBox.addEventListener('change', function(){
+          try { localStorage.setItem('mzrd_checkin_pin', pinBox.value); } catch(e) {}
+          badPin = null;
+          load();
+        });
+        find.addEventListener('input', render);
+        function say(text, good){
+          msg.textContent = text;
+          msg.style.color = good ? 'var(--good)' : 'var(--bad)';
+        }
+        function render(){
+          var term = find.value.trim().toLowerCase();
+          list.innerHTML = '';
+          var shown = data.filter(function(d){
+            return !term || (d.n + ' ' + (d.c||'')).toLowerCase().indexOf(term) >= 0;
+          });
+          if (!shown.length) {
+            var e = document.createElement('div');
+            e.className = 'empty';
+            e.textContent = data.length ? 'Nobody matches that.' : 'No drivers on the list yet.';
+            list.appendChild(e);
+            return;
+          }
+          shown.forEach(function(d){
+            var row = document.createElement('button');
+            row.className = 'row' + (d.in ? ' on' : '');
+            var left = document.createElement('span'); left.className = 'lt';
+            var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = d.n;
+            var cl = document.createElement('span'); cl.className = 'cl'; cl.textContent = d.c || 'No class';
+            left.appendChild(nm); left.appendChild(cl);
+            var chip = document.createElement('span'); chip.className = 'chip';
+            chip.textContent = d.in ? 'HERE' : 'TAP';
+            row.appendChild(left); row.appendChild(chip);
+            row.onclick = function(){ toggle(d); };
+            list.appendChild(row);
+          });
+        }
+        function askForPin(){
+          data = [];
+          render();
+          say('Enter the check-in PIN above', false);
+        }
+        async function load(){
+          if (badPin !== null && pinBox.value === badPin) { return; }
+          if (pinNeeded && pinBox.value === '') {
+            askForPin();
+            // Once every thirty seconds it looks again, in case the laptop
+            // has since cleared the PIN - otherwise this page would ask for
+            // a PIN that no longer exists until somebody reloaded it. An
+            // empty PIN is not counted as a guess, so the look costs
+            // nothing but the request.
+            if (Date.now() - lastEmptyProbe < 30000) { return; }
+            lastEmptyProbe = Date.now();
+          }
+          try {
+            var r = await fetch('/api/roster', { headers: { 'X-Pin': pinBox.value } });
+            var d = await r.json();
+            // No PIN typed, and the laptop wants one (set since this page
+            // loaded, perhaps): ask for it, and stop sending the empty box.
+            if (!r.ok && d.needPin) { pinNeeded = true; askForPin(); return; }
+            if (r.ok && pinBox.value === '') { pinNeeded = false; }
+            if (!r.ok) {
+              if (r.status === 403 || r.status === 429) { badPin = pinBox.value; }
+              // Locked out rather than wrong: the lock lifts by itself, so
+              // polling resumes by itself a minute later.
+              if (r.status === 429) { setTimeout(function(){ badPin = null; }, 60000); }
+              data = [];
+              render();
+              say(d.error || 'Enter the check-in PIN', false);
+              return;
+            }
+            data = d.drivers || [];
+            document.getElementById('count').textContent = d.checkedIn + ' / ' + d.total + ' HERE';
+            render();
+          } catch(e) {}
+        }
+        async function toggle(d){
+          // Out asks first. A tap on the wrong row while scrolling used to
+          // sign somebody off without a word, and they found out when
+          // their heat went without them.
+          if (d.in && !confirm('Check ' + d.n + ' out?')) { return; }
+          var want = d.in ? 'out' : 'in';
+          d.in = !d.in;
+          render();
+          try {
+            var r = await fetch('/api/checkin?t=' + encodeURIComponent(d.t) + '&state=' + want,
+                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+            var j = await r.json();
+            if (!j.ok) { d.in = !d.in; render(); say(j.error || 'Failed', false); return; }
+            say(d.n + (d.in ? ' checked in' : ' checked out'), true);
+          } catch(e) { d.in = !d.in; render(); say('Connection lost', false); }
+          setTimeout(load, 500);
+        }
+        async function send(payload){
+          try {
+            var r = await fetch('/api/checkin?t=' + encodeURIComponent(payload) + '&state=in',
+                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+            var j = await r.json();
+            say(j.ok ? 'Checked in' : (j.error || 'Failed'), j.ok);
+          } catch(e) { say('Connection lost', false); }
+          setTimeout(load, 500);
+        }
+        var camBtn = document.getElementById('cam');
+        var camWrap = document.getElementById('camwrap');
+        if (window.isSecureContext && ('BarcodeDetector' in window) && navigator.mediaDevices) {
+          camBtn.classList.add('on');
+          camBtn.onclick = scan;
+        }
+        async function scan(){
+          var v = document.getElementById('vid');
+          try {
+            var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            v.srcObject = stream;
+            camWrap.style.display = 'block';
+            await v.play();
+            var det = new BarcodeDetector({ formats: ['qr_code'] });
+            var stop = function(){
+              stream.getTracks().forEach(function(t){ t.stop(); });
+              camWrap.style.display = 'none';
+            };
+            document.getElementById('camclose').onclick = stop;
+            var loop = async function(){
+              if (camWrap.style.display === 'none') { return; }
+              try {
+                var codes = await det.detect(v);
+                if (codes.length) { stop(); send(codes[0].rawValue); return; }
+              } catch(e) {}
+              requestAnimationFrame(loop);
+            };
+            loop();
+          } catch(e) { say('Camera not available', false); }
+        }
+        // Holds back the page's look-change reload (LookWatchScript) while a
+        // driver is part way through: a name typed into the search, or the
+        // camera open. (A box with the cursor in it - the PIN being typed -
+        // counts as busy too; once entered, the PIN is saved and survives one.)
+        function lookBusy(){
+          return find.value.trim() !== '' || camWrap.style.display === 'block';
+        }
+        load(); setInterval(load, 4000);
+        </script><script>{{LookWatchScript}}</script></body></html>
+        """;
+    }
+
+    private string BuildRemotePage()
+    {
+        var look = CurrentPageLook();
+
+        return $$"""
+        <!DOCTYPE html><html class="{{look.Scheme}}"><head>
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="color-scheme" content="{{look.Scheme}}"><meta name="theme-color" content="{{look.ThemeColor}}">
+        <title>Race Remote</title><style>{{look.Root}}{{SharedStyle}}
+        .wrap { padding:16px; max-width:520px; margin:0 auto; }
+        /* STAGE and COUNTDOWN in a plain button from the look - never its
+           primary colour, which in some looks is green or red and would pass
+           for a flag at a glance. The flag buttons keep their own flag
+           colours whatever the look: those are signals, not decoration. */
+        button { width:100%; padding:20px; margin:8px 0; font-size:19px; font-weight:700;
+                 border:1px solid var(--border); border-radius:10px; color:var(--text); background:var(--raised);
+                 cursor:pointer; font-family:inherit; text-align:center; line-height:1.2; }
+        button:active { opacity:.7; }
+        .green,.yellow,.red,.checkered,.reset { color:#fff; border-color:transparent; }
+        .green{background:#1f9d55}.yellow{background:#c99700}.red{background:#cc2e4d}
+        .checkered{background:#4a4a4a}.reset{background:#7a2233}
+        .pin { width:100%; padding:14px; font-size:17px; border-radius:8px; border:1px solid var(--raised);
+               background:var(--surface); color:var(--text); margin-bottom:10px; }
+        /* What became of the last button pressed. Two lines are kept for it
+           whether or not it has anything to say: the laptop's answer can run
+           to two now, and a line that grew when the answer came in would move
+           every button under the thumb about to press the next one. */
+        .msg { display:flex; align-items:center; justify-content:center; text-align:center;
+               padding:3px 4px; font-weight:700; line-height:1.2; min-height:calc(2.4em + 6px); }
+        .msg .why { font-weight:400; }
+        .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        </style></head><body data-look="{{look.Fingerprint}}">
+        <div class="bar"><h1>{{look.Logo}}RACE REMOTE</h1><span class="state" id="state">-</span></div>
+        <div class="wrap">
+          <input class="pin" id="pin" placeholder="Remote PIN (set on the laptop)" inputmode="numeric">
+          <div class="msg" id="msg" role="status" aria-live="polite"></div>
+          <button onclick="go('stage')">STAGE</button>
+          <button onclick="go('countdown')">COUNTDOWN</button>
+          <button class="green" onclick="go('green')">GREEN - START</button>
+          <div class="grid2">
+            <button class="yellow" onclick="go('yellow')">YELLOW</button>
+            <button class="red" onclick="go('red')">RED</button>
+          </div>
+          <button class="checkered" onclick="go('checkered')">CHECKERED</button>
+          <button class="reset" onclick="if(confirm('Reset the race?'))go('reset')">RESET</button>
+          <table style="margin-top:18px"><thead><tr id="head"></tr></thead>
+          <tbody id="rows"></tbody></table>
+        </div>
+        <script>
+        // Everything below builds rows with innerHTML, and a driver name is
+        // whatever somebody typed into a profile. Without this, a driver
+        // called "Ash <3 Racing" rendered as "Ash " - the rest swallowed as
+        // a tag - and a name containing a script tag ran on every phone on
+        // the club wifi and on the OBS overlay. The check-in page in this
+        // same file uses textContent and was never exposed; these pages
+        // build markup, so they escape instead.
+        function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        const pinBox = document.getElementById('pin');
+        // Wrapped: storage throws outright in some private-browsing modes,
+        // and an exception here stopped the whole script - every button on
+        // the remote dead, with nothing on screen to say why. Its own key,
+        // too: the check-in page must never be able to read this one.
+        try { pinBox.value = localStorage.getItem('mzrd_remote_pin') || ''; } catch(e) {}
+        pinBox.addEventListener('change', () => { try { localStorage.setItem('mzrd_remote_pin', pinBox.value); } catch(e) {} });
+        // What the laptop said about the last button pressed. It used to say
+        // "GREEN sent" as soon as the command reached the laptop, and a
+        // command Race Control then refused - Stage during practice, a
+        // checkered with no race running - still read as sent. The laptop now
+        // waits for Race Control and answers with what it did: done (200),
+        // refused (409 with "refused"), or sent but still waiting on the
+        // laptop (202). Each press takes a number and only the latest may
+        // write the line: an answer can take a few seconds, and a slow one
+        // must not land over a newer press and describe the wrong button.
+        let lastPress = 0;
+        // A bold verdict and, after it, the laptop's reason in plain type:
+        // "CHECKERED not done: No race is running.". Built with textContent,
+        // like everything else the laptop says.
+        function show(press, verdict, reason, tone){
+          if (press !== lastPress) { return; }
+          const msg = document.getElementById('msg');
+          const line = document.createElement('span');
+          line.textContent = verdict;
+          if (reason) {
+            const why = document.createElement('span');
+            why.className = 'why';
+            why.textContent = ' ' + reason;
+            line.appendChild(why);
+          }
+          msg.textContent = '';
+          msg.appendChild(line);
+          msg.style.color = tone === 'good' ? 'var(--good)' : tone === 'bad' ? 'var(--bad)'
+                          : tone === 'wait' ? 'var(--text)' : 'var(--muted)';
+        }
+        // Every press goes to the laptop as it is. Over a running race the
+        // laptop answers with a question (409 with "confirm"), which is put
+        // to whoever pressed, and on a yes the command goes again with
+        // force=1. The page used to ask first, from the state it had last
+        // polled - and during practice, which runs in the Racing state too,
+        // it asked about a race that wasn't there, then the laptop refused.
+        // The yes carries the race the question was about (raceGeneration),
+        // so it can only abandon that race - if another has gone green since,
+        // the laptop asks again.
+        async function go(a, force, race){
+          const name = a.toUpperCase();
+          const press = ++lastPress;
+          show(press, 'Sending ' + name + '…', '', 'busy');
+          let r, d = null;
+          try{
+            r = await fetch('/api/command?action=' + a + (force ? '&force=1' : '')
+                            + (force && typeof race === 'number' ? '&raceGeneration=' + race : ''),
+                            { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+          }catch(e){
+            // It may have got there before the connection went.
+            show(press, 'Connection lost.', 'Check the laptop to see whether ' + name + ' went.', 'bad');
+            return;
+          }
+          try { d = await r.json(); } catch(e) {}
+          if (!d) { show(press, 'No answer this page can read.', 'Check the laptop to see whether ' + name + ' went.', 'bad'); return; }
+          // A race is running: ask, and send it again on a yes.
+          if (!d.ok && d.confirm && !force) {
+            if (confirm((d.error || 'A race is running.') + ' Carry on?')) { go(a, true, d.raceGeneration); }
+            else { show(press, name + ' cancelled.', 'Nothing was changed.', 'busy'); }
+            return;
+          }
+          if (d.ok && d.waiting) { show(press, name + ' sent:', d.message || 'waiting on the laptop.', 'wait'); }
+          else if (d.ok) { show(press, d.message || (name + ' done.'), '', 'good'); }
+          else if (d.refused) { show(press, name + ' not done:', d.error || '', 'bad'); }
+          else { show(press, name + ':', d.error || 'Failed', 'bad'); }
+        }
+        async function tick(){
+          try{
+            const r = await fetch('/api/state'); const d = await r.json();
+            document.getElementById('state').textContent = d.state + ' - ' + d.flag;
+            document.getElementById('head').innerHTML =
+              (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
+            document.getElementById('rows').innerHTML = d.standings.map(s =>
+              '<tr>' + s.cells.map((c,i) => `<td class="${i===0?'pos':''}">${esc(c.text)}</td>`).join('') + '</tr>').join('');
+          }catch(e){}
+        }
+        tick(); setInterval(tick, 1500);
+        </script><script>{{LookWatchScript}}</script></body></html>
+        """;
+    }
+
+    /// <summary>
+    /// The race-day manager's page: five tabs (Today, Entries, Program,
+    /// Race, Results) built entirely from RaceDayService's ops through the
+    /// one /api/manage endpoint - see HandleManageAsync. This transport is
+    /// always Wi-Fi, so race control always shows, but the script still
+    /// asks hello rather than assuming, the same as a relay-served copy of
+    /// this page would have to. See raceday-protocol.md for every op this
+    /// script calls and what each answers.
+    /// </summary>
+    private string BuildManagePage()
+    {
+        var look = CurrentPageLook();
+
+        return $$"""
+        <!DOCTYPE html><html class="{{look.Scheme}}"><head>
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <meta name="color-scheme" content="{{look.Scheme}}"><meta name="theme-color" content="{{look.ThemeColor}}">
+        <title>Race Day Manager</title><style>{{look.Root}}{{SharedStyle}}
+        .wrap { padding:14px 14px 60px; max-width:640px; margin:0 auto; }
+        .pin { width:100%; padding:13px; font-size:17px; border-radius:8px; border:1px solid var(--raised);
+               background:var(--surface); color:var(--text); margin-bottom:10px; }
+        .find { width:100%; padding:13px; font-size:16px; border-radius:8px; border:1px solid var(--raised);
+                background:var(--surface); color:var(--text); margin-bottom:10px; }
+        /* The status line, as a toast pinned to the foot of the screen - over
+           the page, never part of its layout. It used to be a line above the
+           tabs: every message pushed the tab bar down (a long one by three
+           lines), and one that came while a long list was scrolled was off
+           the top of the screen where nobody saw it. It never takes a tap. */
+        .msg { position:fixed; left:12px; right:12px; bottom:14px; z-index:5; max-width:560px; margin:0 auto;
+               padding:11px 14px; border-radius:10px; background:var(--surface); border:1px solid var(--border);
+               box-shadow:0 6px 22px rgba(0,0,0,.3); text-align:center; font-weight:700; font-size:15px;
+               pointer-events:none; }
+        .msg:empty { display:none; }
+
+        .tabs { display:flex; background:var(--surface); border-bottom:1px solid var(--border);
+                overflow-x:auto; position:sticky; top:0; z-index:2; }
+        .navbtn { flex:1 0 auto; padding:13px 8px; background:none; border:none; color:var(--muted);
+                  font-weight:700; font-size:11px; letter-spacing:.07em; text-transform:uppercase;
+                  cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; white-space:nowrap; }
+        .navbtn.on { color:var(--primary); border-bottom-color:var(--primary); }
+
+        .row { width:100%; display:flex; align-items:center; justify-content:space-between;
+               gap:10px; padding:13px 14px; margin:7px 0; border:1px solid var(--raised);
+               border-radius:10px; background:var(--surface); color:var(--text); text-align:left;
+               font-family:inherit; cursor:pointer; }
+        .row.static { cursor:default; }
+        .row:not(.static):active { opacity:.7; }
+        .row.on { background:var(--on-tint); border-color:var(--on-edge); }
+        .lt { display:flex; flex-direction:column; gap:3px; min-width:0; }
+        .nm { font-size:16px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .cl { font-size:12px; color:var(--muted); letter-spacing:.05em; }
+        .rt { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+
+        .chip { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.09em;
+                padding:6px 10px; border-radius:20px; background:var(--raised); color:var(--muted);
+                border:none; font-family:inherit; cursor:pointer; }
+        .row.on .chip { background:var(--primary); color:var(--on-primary); }
+        .chip.go { background:var(--primary); color:var(--on-primary); }
+        .chip.status-onTrack { background:var(--bad); color:#fff; }
+        .chip.status-next { background:var(--primary); color:var(--on-primary); }
+        .chip.status-recorded { background:var(--good); color:#0a2e17; }
+        /* A result row's winner: a small caption over the name, in plain
+           text. It used to be a grey pill like a status chip, which read as
+           a button - and with no winner it was an empty pill. */
+        .win { display:flex; flex-direction:column; align-items:flex-end; gap:2px; min-width:0; text-align:right; }
+        .win .wl { font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+        .win .wn { font-size:14px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        .kv { display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+              padding:9px 0; border-bottom:1px solid var(--hair); font-size:15px; }
+        .kv .lbl { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+        .kv b { font-weight:700; }
+        .sub { font-size:12px; color:var(--muted); padding:0 0 9px; border-bottom:1px solid var(--hair); margin-bottom:4px; }
+        .banner { margin:10px 0; padding:12px 14px; border-radius:10px; background:var(--on-tint); border:1px solid var(--on-edge); }
+        .empty { padding:24px; text-align:center; color:var(--muted); }
+
+        .btn { display:inline-block; padding:13px 16px; margin:4px 6px 4px 0; font-size:15px; font-weight:700;
+               border:1px solid var(--border); border-radius:10px; color:var(--text); background:var(--raised);
+               cursor:pointer; font-family:inherit; text-align:center; }
+        .btn:active { opacity:.7; }
+        .btn.small { padding:9px 14px; font-size:13px; margin:4px 6px 4px 0; }
+        .btn.danger { background:#7a2233; color:#fff; border-color:transparent; }
+        .btn.wide { display:block; width:100%; margin:8px 0; }
+        .btn.green,.btn.yellow,.btn.red,.btn.checkered { color:#fff; border-color:transparent; }
+        .btn.green { background:#1f9d55; } .btn.yellow { background:#c99700; }
+        .btn.red { background:#cc2e4d; } .btn.checkered { background:#4a4a4a; }
+        .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+        .rowActions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center; }
+        /* The Program tab's toolbar: the class picker full width on a line of
+           its own, and its two buttons sharing the line under it half and
+           half, tall enough to hit with a thumb. They used to share one
+           wrapping row, and on a phone Bump Ups fell onto a line by itself.
+           16px in the picker, because iOS zooms the page into any smaller. */
+        .progTools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+        .progTools select { grid-column:1 / -1; width:100%; min-height:44px; font-size:16px; }
+        .progTools .btn { width:100%; min-height:44px; margin:0; }
+        .detail { margin-top:14px; padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+        .detail h3 { margin:0 0 10px; font-size:16px; }
+        .detail h4 { margin:14px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+
+        select { font-family:inherit; font-size:14px; padding:10px; border-radius:8px;
+                 border:1px solid var(--raised); background:var(--surface); color:var(--text); }
+        label.chk { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--muted); margin:10px 0; }
+        </style></head><body data-look="{{look.Fingerprint}}">
+        <div class="bar"><h1>{{look.Logo}}MANAGE</h1></div>
+        <div class="wrap" style="padding-bottom:0">
+          <input class="pin" id="pin" type="password" placeholder="Manager PIN" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+          <div class="msg" id="msg" role="status" aria-live="polite"></div>
+        </div>
+        <div class="tabs">
+          <button class="navbtn on" id="nav-today" data-tab="today">Today</button>
+          <button class="navbtn" id="nav-entries" data-tab="entries">Entries</button>
+          <button class="navbtn" id="nav-program" data-tab="program">Program</button>
+          <button class="navbtn" id="nav-race" data-tab="race">Race</button>
+          <button class="navbtn" id="nav-results" data-tab="results">Results</button>
+        </div>
+        <div class="wrap">
+          <div id="tab-today">
+            <div id="todayBody"></div>
+            <button class="btn wide" id="btnNewDay">New Race Day…</button>
+            <button class="btn wide" id="btnBuildQualifying">Build Qualifying</button>
+            <div class="sub" id="undoList">Nothing to undo.</div>
+          </div>
+
+          <div id="tab-entries" style="display:none">
+            <input class="find" id="entrySearch" placeholder="Find a driver" autocomplete="off">
+            <div id="entryList"></div>
+            <button class="btn wide" id="btnAddDriver">Add Driver…</button>
+          </div>
+
+          <div id="tab-program" style="display:none">
+            <div class="progTools">
+              <select id="selClass"></select>
+              <button class="btn small" id="btnSeedMains">Seed Mains</button>
+              <button class="btn small" id="btnBumpUps">Bump Ups</button>
+            </div>
+            <div id="programList"></div>
+            <div id="heatDetail" class="detail" style="display:none"></div>
+          </div>
+
+          <div id="tab-race" style="display:none">
+            <div class="kv"><span class="lbl">State</span><b id="raceState">-</b></div>
+            <button class="btn wide" id="btnStartNext">Start Next</button>
+            <button class="btn wide" id="btnFlag-stage">STAGE</button>
+            <button class="btn wide" id="btnFlag-countdown">COUNTDOWN</button>
+            <button class="btn wide green" id="btnFlag-green">GREEN - START</button>
+            <div class="grid2">
+              <button class="btn yellow" id="btnFlag-yellow">YELLOW</button>
+              <button class="btn red" id="btnFlag-red">RED</button>
+            </div>
+            <button class="btn wide checkered" id="btnFlag-checkered">CHECKERED</button>
+            <button class="btn wide" id="btnReset">RESET</button>
+          </div>
+
+          <div id="tab-results" style="display:none">
+            <label class="chk"><input type="checkbox" id="resultsTodayOnly" checked> Today's races only</label>
+            <div id="resultsList"></div>
+            <div id="resultDetail" class="detail" style="display:none"></div>
+          </div>
+        </div>
+        <script>
+        function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+        var pinBox = document.getElementById('pin');
+        try { pinBox.value = localStorage.getItem('mzrd_manage_pin') || ''; } catch(e) {}
+        // Whether the laptop last turned the PIN down as wrong, so the line
+        // goes on saying so once the box has been emptied - see sayFailure.
+        var pinWasWrong = false;
+        // Tried as soon as it has been typed (the box loses the cursor, or
+        // Enter), rather than whenever the next poll came round. After Enter
+        // the cursor is let go of too, which puts the keyboard away and lets
+        // the tab fill in - neither happens while the box has it.
+        pinBox.addEventListener('change', function(){
+          if (document.activeElement === pinBox) { pinBox.blur(); }
+          pinWasWrong = false;
+          try { localStorage.setItem('mzrd_manage_pin', pinBox.value); } catch(e) {}
+          loadHello().then(function(){ refreshActive(); });
+        });
+        // Empties the box and the copy this phone keeps. For a PIN the laptop
+        // says is wrong, and for a manager the laptop has switched off: the
+        // PIN is no use either way. A wrong one used to stay in the box, in
+        // clear, and go out again with every poll - each one a wrong guess
+        // to the laptop - until this phone had locked itself out.
+        function forgetPin(){
+          pinBox.value = '';
+          try { localStorage.removeItem('mzrd_manage_pin'); } catch(e) {}
+        }
+        var msgBox = document.getElementById('msg');
+        var msgTimer = null;
+        // What the status line is showing: '' (nothing); 'done', a success,
+        // which goes by itself after four seconds; 'error', something the
+        // laptop turned down, which stays until the next action; or 'gate',
+        // the laptop not reached at all (the PIN, the connection), which
+        // stays while that lasts and goes as soon as an answer gets through.
+        // A tab change clears any of them. The line used to keep whatever
+        // it was last given for ever: a green "Checked in." still there on
+        // Program and Results, and "Enter the manager PIN." still showing
+        // after the PIN had been entered and the page had filled in.
+        var msgKind = '';
+        function say(text, good, kind){
+          clearTimeout(msgTimer);
+          msgTimer = null;
+          msgBox.textContent = text || '';
+          msgBox.style.color = good ? 'var(--good)' : 'var(--bad)';
+          msgKind = text ? (kind || (good ? 'done' : 'error')) : '';
+          if (text && good) { msgTimer = setTimeout(function(){ say(''); }, 4000); }
+        }
+        // A failed answer. Anything but a 200 is the laptop not reached
+        // (a PIN, the connection, the laptop starting up); a 200 that says
+        // no is the laptop turning the request down.
+        function sayFailure(d, fallback){
+          var text = d.error || fallback || 'Failed';
+          if (d.needPin && pinWasWrong) { text = 'Wrong PIN. Enter the manager PIN again.'; }
+          say(text, false, d._status === 200 ? 'error' : 'gate');
+        }
+        function call(op, args, confirmToken){
+          var body = { op: op, args: args || {}, confirm: confirmToken || null };
+          // The PIN as it was sent: an answer about it is only acted on while
+          // the box still holds it, never over a PIN typed in since.
+          var sentPin = pinBox.value;
+          return fetch('/api/manage', { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': sentPin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            .then(function(r){ return r.json().then(function(d){ d._status = r.status; return d; }); })
+            .catch(function(){ return { ok: false, error: 'Connection lost' }; })
+            .then(function(d){ checkGate(d, sentPin); return d; });
+        }
+        function checkGate(d, sentPin){
+          if (d._status === 200) {
+            if (msgKind === 'gate') { say(''); }
+            return;
+          }
+          // A 403 that is not "enter the PIN": the PIN was wrong (d.pin), or
+          // the laptop has no usable manager PIN - the manager is switched
+          // off there. See forgetPin.
+          if (d._status === 403 && !d.needPin && sentPin !== '' && pinBox.value === sentPin) {
+            forgetPin();
+            pinWasWrong = !!d.pin;
+          }
+        }
+        // The shared two-step confirm flow every Change/RaceControl op uses (see
+        // raceday-protocol.md section 3): call once, and if the laptop asks a
+        // question, show it with confirm() and call again with the token it gave.
+        // A transport never needs to know in advance which ops ask - and args is
+        // reused untouched on the second call, since the laptop binds the token to
+        // the exact arguments it was asked about.
+        function doOp(op, args, onDone){
+          // A new action: whatever the line said about the last one is over.
+          say('');
+          call(op, args).then(function(d){ handleOpResult(op, args, d, onDone); });
+        }
+        function handleOpResult(op, args, d, onDone){
+          if (d.needsConfirm) {
+            if (confirm(d.message || 'Are you sure?')) {
+              call(op, args, d.confirmToken).then(function(d2){ finishOp(d2, onDone); });
+            }
+            return;
+          }
+          finishOp(d, onDone);
+        }
+        function finishOp(d, onDone){
+          if (!d.ok) { sayFailure(d); return; }
+          say(d.message || 'Done', true);
+          if (onDone) { onDone(d); }
+        }
+        function fieldBusy(){
+          var a = document.activeElement;
+          return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+        }
+
+        // --- Tabs --------------------------------------------------------------
+        var TABS = ['today', 'entries', 'program', 'race', 'results'];
+        var active = 'today';
+        var caps = { raceControl: true, allowResultEditing: false };
+        function showTab(name){
+          active = name;
+          say('');
+          TABS.forEach(function(t){
+            var page = document.getElementById('tab-' + t);
+            var nav = document.getElementById('nav-' + t);
+            if (page) { page.style.display = (t === name) ? 'block' : 'none'; }
+            if (nav) { nav.className = 'navbtn' + (t === name ? ' on' : ''); }
+          });
+          refreshActive();
+        }
+        function refreshActive(){
+          if (fieldBusy()) { return; }
+          if (active === 'today') { refreshToday(); }
+          else if (active === 'entries') { refreshEntries(); }
+          else if (active === 'program') { refreshProgram(); }
+          else if (active === 'race') { refreshRace(); }
+          else if (active === 'results') { refreshResults(); }
+        }
+        document.querySelectorAll('.navbtn').forEach(function(btn){
+          btn.addEventListener('click', function(){ showTab(btn.getAttribute('data-tab')); });
+        });
+
+        function loadHello(){
+          return call('hello', {}).then(function(d){
+            if (!d.ok) { sayFailure(d, 'Could not reach the laptop'); return d; }
+            caps.raceControl = !!d.data.raceControl;
+            caps.allowResultEditing = !!d.data.allowResultEditing;
+            var navRace = document.getElementById('nav-race');
+            if (navRace) { navRace.style.display = caps.raceControl ? '' : 'none'; }
+            if (!caps.raceControl && active === 'race') { showTab('today'); }
+            // Whether a given RESULT can be corrected is per-session (a demo or
+            // practice never can) and is decided by results.get's own canEdit -
+            // see renderResultDetail. caps.allowResultEditing is only the club-wide
+            // switch, kept here so a future tab can read it without another round
+            // trip.
+            return d;
+          });
+        }
+
+        // --- Today ---------------------------------------------------------------
+        // Shape (RaceDayOpsToday.TodaySummary): { raceDay, classes:[{name,drivers,
+        // checkedIn}], counts:{drivers,checkedIn,rounds,recorded}, race:{state,flag,
+        // ...}, nextStep:{headline,detail,...}, nextRound, runSheetNext, undo,
+        // allowResultEditing, busy }.
+        function refreshToday(){
+          call('today.summary', {}).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            renderToday(d.data);
+          });
+        }
+        function renderToday(d){
+          var box = document.getElementById('todayBody');
+          var day = d.raceDay;
+          var rows = [];
+
+          rows.push('<div class="kv"><span class="lbl">Race day</span><b>' + esc(day ? day.name : 'None open') + '</b></div>');
+          rows.push('<div class="kv"><span class="lbl">Classes racing</span><b>'
+            + esc(((day && day.classNames) || []).join(', ') || 'None') + '</b></div>');
+
+          var checkedIn = 0, entered = 0, perClass = [];
+          // Number() and esc() on counts too, as the relay's copy of this
+          // page does: a string where a number was expected would otherwise
+          // be markup, and += with one in it builds a string, not a sum.
+          (d.classes || []).forEach(function(c){
+            checkedIn += Number(c.checkedIn) || 0;
+            entered += Number(c.drivers) || 0;
+            perClass.push(c.name + ' ' + c.checkedIn + '/' + c.drivers);
+          });
+          rows.push('<div class="kv"><span class="lbl">Checked in</span><b>' + esc(checkedIn) + ' / ' + esc(entered) + '</b></div>');
+          if (perClass.length > 1) {
+            rows.push('<div class="sub">' + esc(perClass.join(', ')) + '</div>');
+          }
+
+          var counts = d.counts || {};
+          rows.push('<div class="kv"><span class="lbl">Rounds recorded</span><b>' + esc(counts.recorded || 0) + ' / ' + esc(counts.rounds || 0) + '</b></div>');
+          rows.push('<div class="kv"><span class="lbl">Laptop</span><b>' + (d.busy ? 'Busy with a question' : 'Ready') + '</b></div>');
+
+          if (d.nextStep && (d.nextStep.headline || d.nextStep.detail)) {
+            rows.push('<div class="banner"><b>' + esc(d.nextStep.headline || '') + '</b>'
+              + (d.nextStep.detail ? '<br>' + esc(d.nextStep.detail) : '') + '</div>');
+          }
+
+          box.innerHTML = rows.join('');
+
+          var undoBox = document.getElementById('undoList');
+          var pending = d.undo || [];
+          undoBox.textContent = pending.length ? ('Undo stack (on the laptop only): ' + pending.join(' • ')) : 'Nothing to undo.';
+        }
+        function newDay(){
+          var name = prompt('Name for the new race day (blank = today\'s date):', '');
+          if (name === null) { return; }
+          doOp('day.create', { name: name }, refreshToday);
+        }
+        document.getElementById('btnNewDay').addEventListener('click', newDay);
+        document.getElementById('btnBuildQualifying').addEventListener('click', function(){
+          doOp('program.buildQualifying', {}, function(){ refreshToday(); if (active === 'program') { refreshProgram(); } });
+        });
+
+        // --- Entries ---------------------------------------------------------------
+        var entriesData = [];
+        function refreshEntries(){
+          var q = document.getElementById('entrySearch').value.trim();
+          call('drivers.search', { query: q, limit: 200 }).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            entriesData = d.data.drivers || [];
+            renderEntries();
+          });
+        }
+        function renderEntries(){
+          var list = document.getElementById('entryList');
+          list.innerHTML = '';
+          if (!entriesData.length) {
+            list.innerHTML = '<div class="empty">No drivers match.</div>';
+            return;
+          }
+          entriesData.forEach(function(row){
+            var el = document.createElement('button');
+            el.className = 'row' + (row.checkedIn ? ' on' : '');
+            el.innerHTML =
+              '<span class="lt"><span class="nm">' + esc(row.name) + '</span>' +
+              '<span class="cl">' + esc(row.className || 'No class') + (row.car ? ' • ' + esc(row.car) : '') + '</span></span>' +
+              '<span class="chip">' + (row.checkedIn ? 'HERE' : 'TAP') + '</span>';
+            el.addEventListener('click', function(){ toggleCheckIn(row); });
+            list.appendChild(el);
+          });
+        }
+        function toggleCheckIn(row){
+          doOp('checkin.set', { driverId: row.id, checkedIn: !row.checkedIn }, refreshEntries);
+        }
+        document.getElementById('entrySearch').addEventListener('input', refreshEntries);
+        document.getElementById('btnAddDriver').addEventListener('click', function(){
+          var transponder = prompt('Transponder number:');
+          if (!transponder) { return; }
+          var name = prompt('Driver name (optional):', '') || '';
+          var className = prompt('Class (optional):', '') || '';
+          doOp('driver.add', { transponder: transponder, name: name, className: className }, refreshEntries);
+        });
+
+        // --- Program -----------------------------------------------------------------
+        // Shape (RaceDayOpsProgram): program.list -> {classes:[string], rounds:[
+        // RoundRow]}; RoundRow has {id,label,className,drivers,status}. program.heat
+        // -> {round: RoundRow, locked, drivers:[in-heat], available:[not yet in]}.
+        var programRounds = [];
+        var programClasses = [];
+        function refreshProgram(){
+          call('program.list', {}).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            programRounds = d.data.rounds || [];
+            programClasses = d.data.classes || [];
+            renderClassPicker();
+            renderProgram();
+          });
+        }
+        function renderClassPicker(){
+          var sel = document.getElementById('selClass');
+          var current = sel.value;
+          sel.innerHTML = '';
+          programClasses.forEach(function(name){
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            sel.appendChild(opt);
+          });
+          if (programClasses.indexOf(current) >= 0) { sel.value = current; }
+        }
+        function statusWord(r){
+          if (r.status === 'onTrack') { return 'ON TRACK'; }
+          if (r.status === 'next') { return 'NEXT'; }
+          if (r.status === 'recorded') { return 'DONE'; }
+          return 'SCHEDULED';
+        }
+        function renderProgram(){
+          var list = document.getElementById('programList');
+          list.innerHTML = '';
+          if (!programRounds.length) {
+            list.innerHTML = '<div class="empty">Nothing on the program yet.</div>';
+            return;
+          }
+          programRounds.forEach(function(r){
+            var el = document.createElement('div');
+            el.className = 'row roundRow';
+
+            var left = document.createElement('span'); left.className = 'lt';
+            var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.label;
+            var cl = document.createElement('span'); cl.className = 'cl';
+            cl.textContent = r.className + ' • ' + r.drivers + ' driver' + (r.drivers === 1 ? '' : 's');
+            left.appendChild(nm); left.appendChild(cl);
+            el.appendChild(left);
+
+            var right = document.createElement('span'); right.className = 'rt';
+
+            if (caps.raceControl && (r.status === 'scheduled' || r.status === 'next')) {
+              var startBtn = document.createElement('button');
+              startBtn.className = 'chip go'; startBtn.textContent = 'START';
+              startBtn.addEventListener('click', function(ev){
+                ev.stopPropagation();
+                doOp('race.startRound', { roundId: r.id }, function(){
+                  refreshProgram();
+                  if (active === 'race') { refreshRace(); }
+                });
+              });
+              right.appendChild(startBtn);
+            }
+
+            var chip = document.createElement('span');
+            chip.className = 'chip status-' + r.status;
+            chip.textContent = statusWord(r);
+            right.appendChild(chip);
+
+            el.appendChild(right);
+            el.addEventListener('click', function(){ openHeat(r.id); });
+            list.appendChild(el);
+          });
+        }
+        function openHeat(roundId){
+          call('program.heat', { roundId: roundId }).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            renderHeat(d.data);
+          });
+        }
+        function driverLine(entry, extra){
+          var row = document.createElement('div'); row.className = 'row static';
+          var left = document.createElement('span'); left.className = 'lt';
+          var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = entry.name;
+          var cl = document.createElement('span'); cl.className = 'cl';
+          cl.textContent = entry.checkedIn ? 'checked in' : 'not checked in';
+          left.appendChild(nm); left.appendChild(cl);
+          row.appendChild(left);
+          if (extra) { row.appendChild(extra); }
+          return row;
+        }
+        function renderHeat(d){
+          var box = document.getElementById('heatDetail');
+          box.innerHTML = '';
+
+          var h3 = document.createElement('h3');
+          h3.textContent = d.round.label + ' — ' + d.round.className;
+          box.appendChild(h3);
+
+          if (d.locked) {
+            var lockedNote = document.createElement('div');
+            lockedNote.className = 'sub';
+            lockedNote.textContent = 'This round has been run, so its drivers are locked.';
+            box.appendChild(lockedNote);
+          }
+
+          (d.drivers || []).forEach(function(entry){
+            var btn = null;
+            if (!d.locked) {
+              btn = document.createElement('button');
+              btn.className = 'chip'; btn.textContent = 'Remove';
+              btn.addEventListener('click', function(){
+                doOp('program.moveDriver', { driverId: entry.id, fromRoundId: d.round.id },
+                  function(){ openHeat(d.round.id); refreshProgram(); });
+              });
+            }
+            box.appendChild(driverLine(entry, btn));
+          });
+
+          if (!(d.drivers || []).length) {
+            var noneRow = document.createElement('div'); noneRow.className = 'empty';
+            noneRow.textContent = 'Nobody is in this heat yet.';
+            box.appendChild(noneRow);
+          }
+
+          if (!d.locked && (d.available || []).length) {
+            var h4 = document.createElement('h4'); h4.textContent = 'Add to this heat';
+            box.appendChild(h4);
+
+            d.available.forEach(function(entry){
+              var btn = document.createElement('button');
+              btn.className = 'chip go'; btn.textContent = 'Add';
+              btn.addEventListener('click', function(){
+                doOp('program.moveDriver', { driverId: entry.id, toRoundId: d.round.id },
+                  function(){ openHeat(d.round.id); refreshProgram(); });
+              });
+              box.appendChild(driverLine(entry, btn));
+            });
+          }
+
+          var actions = document.createElement('div'); actions.className = 'rowActions';
+
+          var btnDelete = document.createElement('button');
+          btnDelete.className = 'btn small danger'; btnDelete.textContent = 'Delete round';
+          btnDelete.addEventListener('click', function(){ deleteRound(d.round.id); });
+          actions.appendChild(btnDelete);
+
+          var btnReorder = document.createElement('button');
+          btnReorder.className = 'btn small'; btnReorder.textContent = 'Reorder…';
+          btnReorder.addEventListener('click', function(){ showReorderPicker(d.round.id); });
+          actions.appendChild(btnReorder);
+
+          box.appendChild(actions);
+          box.style.display = 'block';
+        }
+        function deleteRound(roundId){
+          doOp('program.deleteRound', { roundId: roundId }, function(){
+            document.getElementById('heatDetail').style.display = 'none';
+            refreshProgram();
+          });
+        }
+        function showReorderPicker(roundId){
+          var round = programRounds.find(function(r){ return r.id === roundId; });
+          if (!round) { return; }
+
+          var others = programRounds.filter(function(r){ return r.className === round.className && r.id !== roundId; });
+
+          var wrap = document.createElement('div'); wrap.className = 'rowActions';
+          var sel = document.createElement('select');
+
+          var optEnd = document.createElement('option');
+          optEnd.value = ''; optEnd.textContent = 'End of the program';
+          sel.appendChild(optEnd);
+
+          others.forEach(function(r){
+            var opt = document.createElement('option');
+            opt.value = r.id; opt.textContent = 'Before ' + r.label;
+            sel.appendChild(opt);
+          });
+
+          var go = document.createElement('button');
+          go.className = 'btn small'; go.textContent = 'Move here';
+          go.addEventListener('click', function(){
+            doOp('program.moveRound', { roundId: roundId, beforeRoundId: sel.value || null }, function(){
+              document.getElementById('heatDetail').style.display = 'none';
+              refreshProgram();
+            });
+          });
+
+          wrap.appendChild(sel);
+          wrap.appendChild(go);
+          document.getElementById('heatDetail').appendChild(wrap);
+        }
+        document.getElementById('btnSeedMains').addEventListener('click', function(){
+          var className = document.getElementById('selClass').value;
+          if (!className) { say('No class to seed mains for', false); return; }
+          doOp('program.seedMains', { className: className }, refreshProgram);
+        });
+        document.getElementById('btnBumpUps').addEventListener('click', function(){
+          var className = document.getElementById('selClass').value;
+          if (!className) { say('No class to bump up', false); return; }
+          doOp('program.bumpUps', { className: className }, refreshProgram);
+        });
+
+        // --- Race (Wi-Fi only) ----------------------------------------------------
+        // today.summary's race block: {state, flag, raceGeneration, practice,
+        // demo, roundId, roundLabel, className} - there is no separate "race
+        // state" op.
+        // The race last shown here, sent with every flag: a stage or countdown
+        // that would abandon a running race is only taken as about THAT race,
+        // and the laptop says to look again if another has taken its place.
+        var shownRaceGeneration = null;
+        function refreshRace(){
+          call('today.summary', {}).then(function(d){
+            if (!d.ok) { return; }
+            var race = d.data.race || {};
+            shownRaceGeneration = typeof race.raceGeneration === 'number' ? race.raceGeneration : null;
+            var label = (race.state || 'idle').toUpperCase() + (race.flag && race.flag !== 'none' ? ' – ' + race.flag.toUpperCase() : '');
+            if (race.roundLabel) { label += '  (' + race.roundLabel + (race.className ? ', ' + race.className : '') + ')'; }
+            if (d.data.busy) { label += '  • laptop busy'; }
+            document.getElementById('raceState').textContent = label;
+          });
+        }
+        function flag(name){
+          var args = { flag: name };
+          if (shownRaceGeneration !== null) { args.raceGeneration = shownRaceGeneration; }
+          doOp('race.flag', args, refreshRace);
+        }
+        document.getElementById('btnStartNext').addEventListener('click', function(){
+          doOp('race.startNext', {}, refreshRace);
+        });
+        ['stage', 'countdown', 'green', 'yellow', 'red', 'checkered'].forEach(function(name){
+          var btn = document.getElementById('btnFlag-' + name);
+          if (btn) { btn.addEventListener('click', function(){ flag(name); }); }
+        });
+        document.getElementById('btnReset').addEventListener('click', function(){
+          if (confirm('Reset the race? The board is cleared.')) { flag('reset'); }
+        });
+
+        // --- Results -----------------------------------------------------------------
+        // results.list -> {sessions:[SessionRow]}; SessionRow has {id,label,
+        // roundLabel,className,corrected,winner}. results.get -> {results:[ResultRow],
+        // canEdit}; ResultRow has {position,id,name,laps,outcome,addedLaps}.
+        var resultsData = [];
+        function refreshResults(){
+          var todayOnly = document.getElementById('resultsTodayOnly').checked;
+          call('results.list', { todayOnly: todayOnly, limit: 50 }).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            resultsData = d.data.sessions || [];
+            renderResults();
+          });
+        }
+        function renderResults(){
+          var list = document.getElementById('resultsList');
+          list.innerHTML = '';
+          if (!resultsData.length) {
+            list.innerHTML = '<div class="empty">No results yet.</div>';
+            return;
+          }
+          resultsData.forEach(function(s){
+            var el = document.createElement('button');
+            el.className = 'row';
+            el.innerHTML =
+              '<span class="lt"><span class="nm">' + esc(s.label || s.roundLabel || 'Race') + '</span>' +
+              '<span class="cl">' + esc(s.className || '') + (s.corrected ? ' • corrected' : '') + '</span></span>' +
+              (s.winner ? '<span class="win"><span class="wl">Winner</span><span class="wn">' + esc(s.winner) + '</span></span>' : '');
+            el.addEventListener('click', function(){ openResult(s.id); });
+            list.appendChild(el);
+          });
+        }
+        var currentResult = null;
+        function openResult(sessionId){
+          call('results.get', { sessionId: sessionId }).then(function(d){
+            if (!d.ok) { sayFailure(d); return; }
+            currentResult = { id: sessionId, canEdit: d.data.canEdit, rows: d.data.results };
+            renderResultDetail(d.data);
+          });
+        }
+        function renderResultDetail(d){
+          var box = document.getElementById('resultDetail');
+          box.innerHTML = '';
+
+          var h3 = document.createElement('h3'); h3.textContent = 'Result';
+          box.appendChild(h3);
+
+          (d.results || []).forEach(function(r){
+            var row = document.createElement('div'); row.className = 'kv';
+            var left = document.createElement('span');
+            left.textContent = 'P' + r.position + ' ' + r.name;
+            var right = document.createElement('b');
+            right.textContent = r.laps + ' laps' + (r.outcome ? ' • ' + r.outcome : '');
+            row.appendChild(left); row.appendChild(right);
+            box.appendChild(row);
+          });
+
+          var actions = document.createElement('div'); actions.className = 'rowActions';
+
+          var btnPublish = document.createElement('button');
+          btnPublish.className = 'btn small'; btnPublish.textContent = 'Publish again';
+          btnPublish.addEventListener('click', publishResult);
+          actions.appendChild(btnPublish);
+
+          if (d.canEdit) {
+            var btnEdit = document.createElement('button');
+            btnEdit.className = 'btn small'; btnEdit.textContent = 'Edit result…';
+            btnEdit.addEventListener('click', openEditResult);
+            actions.appendChild(btnEdit);
+          }
+
+          box.appendChild(actions);
+          box.style.display = 'block';
+        }
+        function publishResult(){
+          if (!currentResult) { return; }
+          doOp('results.publish', { sessionId: currentResult.id });
+        }
+        function openEditResult(){
+          if (!currentResult) { return; }
+          var reason = prompt('Reason for the correction (required):', '');
+          if (!reason) { return; }
+          var changes = [];
+          for (var i = 0; i < currentResult.rows.length; i++) {
+            var r = currentResult.rows[i];
+            var addedLaps = prompt('Added laps for ' + r.name + ' (0 = no change):', r.addedLaps || 0);
+            if (addedLaps === null) { return; }
+            var outcome = prompt('Outcome for ' + r.name + ' (blank = finished, or DNF / DQ):', r.outcome || '');
+            if (outcome === null) { return; }
+            changes.push({ driverId: r.id, addedLaps: parseInt(addedLaps, 10) || 0, outcome: outcome || '' });
+          }
+          doOp('result.adjust', { sessionId: currentResult.id, reason: reason, changes: changes },
+            function(){ openResult(currentResult.id); refreshResults(); });
+        }
+        document.getElementById('resultsTodayOnly').addEventListener('change', refreshResults);
+
+        // --- Boot ------------------------------------------------------------------
+        loadHello().then(function(){ refreshActive(); });
+        // Never while the PIN box has the cursor: a half-typed PIN used to go
+        // to the laptop with the next poll, and each was counted there as a
+        // wrong guess. Hello first and the tab after it, as at the start, so
+        // a PIN turned down by the one is not sent again by the other.
+        setInterval(function(){
+          if (document.activeElement === pinBox) { return; }
+          loadHello().then(function(){ refreshActive(); });
+        }, 4000);
+        function lookBusy(){
+          return fieldBusy()
+            || document.getElementById('heatDetail').style.display === 'block'
+            || document.getElementById('resultDetail').style.display === 'block';
+        }
+        </script><script>{{LookWatchScript}}</script></body></html>
+        """;
+    }
+}

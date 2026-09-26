@@ -1,0 +1,37 @@
+{
+  "port": 8787,
+  "dataDir": "./data",
+  "maxBodyBytes": 1048576,
+  "voice": {
+    "monthlyChars": 100000,
+    "maxChars": 600,
+    "voices": [
+      {
+        "id": "clubhouse",
+        "name": "Clubhouse",
+        "what": "Warm and clear, easy over a PA",
+        "voiceId": "the ElevenLabs voice id - never sent to a club",
+        "modelId": "eleven_flash_v2_5",
+        "stability": 0.5,
+        "similarity": 0.75,
+        "style": 0.3,
+        "speakerBoost": true,
+        "speed": 1,
+        "outputFormat": "mp3_44100_128"
+      }
+    ]
+  },
+  "clubs": [
+    {
+      "club": "acme-rc",
+      "name": "Acme RC",
+      "tokenSha256": "run `npm run mint -- acme-rc \"Acme RC\"` and paste the hash it prints here",
+      "publishRoster": false,
+      "voice": {
+        "enabled": true,
+        "monthlyChars": 100000,
+        "voices": []
+      }
+    }
+  ]
+}

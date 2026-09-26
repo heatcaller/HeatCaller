@@ -1,0 +1,317 @@
+using System.Text.Json;
+
+namespace HeatCaller;
+
+/// <summary>
+/// Who turned up - per event.
+///
+/// A "waiver signed" tick used to live here beside the check-in. Nothing
+/// in the app ever read it: no page, no heat build, no publish, no
+/// report. It was a box that recorded a fact and was then never consulted
+/// by anything, which is worse than not asking at all - it looks like a
+/// gate. It has been taken out. The stored key is simply ignored when an
+/// older file is read, so nothing has to be migrated.
+///
+/// This used to be one global list with a "Check Out Everyone" button, on
+/// the understanding that somebody would remember to press it at the start
+/// of each race day. Nobody does, so the first heat of a new day was
+/// routinely seeded from last week's attendance. Worse, the record of who
+/// was actually AT an event was destroyed the moment the button was
+/// finally pressed, which made "who raced the summer series" a question
+/// the app could not answer at all.
+///
+/// Check-ins are now filed against an event. Starting a new event starts
+/// an empty sheet by itself, last week's sheet is still there to look at,
+/// and Check Out Everyone goes back to meaning what it says - clear THIS
+/// event - rather than being the mechanism the whole feature depended on.
+///
+/// The public shape is unchanged. Every existing caller asks about the
+/// current event without knowing an event is involved, which is what keeps
+/// this a data change rather than a rewrite of six pages.
+/// </summary>
+public sealed class CheckInStore
+{
+    /// <summary>One event's sheet.</summary>
+    private sealed class Sheet
+    {
+        public HashSet<string> CheckedIn { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private readonly Dictionary<string, Sheet> _sheets;
+
+    private static string FilePath => Path.Combine(
+        AppPaths.Root,
+        "checkin.json");
+
+    private CheckInStore(Dictionary<string, Sheet> sheets)
+    {
+        _sheets = sheets;
+    }
+
+    /// <summary>
+    /// Which event's sheet the plain methods below read and write.
+    ///
+    /// Set once at startup from the event store and kept in step with it
+    /// afterwards. It is a property rather than a constructor argument
+    /// because the two stores are loaded independently and neither should
+    /// have to know the other's load order.
+    /// </summary>
+    public string CurrentEventId { get; set; } = RaceEventStore.LegacyEventId;
+
+    private Sheet Current => SheetFor(CurrentEventId);
+
+    private Sheet SheetFor(string eventId)
+    {
+        if (!_sheets.TryGetValue(eventId, out var sheet))
+        {
+            sheet = new Sheet();
+            _sheets[eventId] = sheet;
+        }
+
+        return sheet;
+    }
+
+    // --- On-disk shapes ----------------------------------------------------
+
+    /// <summary>The current file: one sheet per event.</summary>
+    private sealed class CheckInFile
+    {
+        public Dictionary<string, SheetData> Events { get; set; } = new();
+    }
+
+    private sealed class SheetData
+    {
+        public List<string> CheckedIn { get; set; } = new();
+    }
+
+    /// <summary>The previous file: one global sheet, no events.</summary>
+    private sealed class LegacyCheckInData
+    {
+        public List<string> CheckedIn { get; set; } = new();
+    }
+
+    public static CheckInStore Load()
+    {
+        if (!File.Exists(FilePath))
+        {
+            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal));
+        }
+
+        string json;
+
+        try
+        {
+            json = SafeFile.ReadAllTextWithRetry(FilePath);
+        }
+        catch (Exception ex)
+        {
+            SafeFile.PreserveUnreadable(FilePath, ex);
+            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal));
+        }
+
+        // Current format first, recognised by the Events object rather than
+        // by whether anything is in it - an event with an empty sheet is a
+        // real state and must not be mistaken for an old file.
+        try
+        {
+            var file = JsonSerializer.Deserialize<CheckInFile>(json);
+
+            if (file?.Events is { Count: > 0 })
+            {
+                var sheets = new Dictionary<string, Sheet>(StringComparer.Ordinal);
+
+                foreach (var (eventId, data) in file.Events)
+                {
+                    sheets[eventId] = new Sheet
+                    {
+                        CheckedIn = new HashSet<string>(data.CheckedIn, StringComparer.OrdinalIgnoreCase),
+                    };
+                }
+
+                return new CheckInStore(sheets);
+            }
+        }
+        catch
+        {
+            // Fall through to the older shapes.
+        }
+
+        // The global sheet, and before that a bare array of transponders.
+        // Both land in the legacy event, which is where everything that
+        // pre-dates events belongs.
+        var legacy = new Sheet();
+
+        try
+        {
+            var data = JsonSerializer.Deserialize<LegacyCheckInData>(json);
+
+            if (data is not null && data.CheckedIn.Count > 0)
+            {
+                legacy = new Sheet
+                {
+                    CheckedIn = new HashSet<string>(data.CheckedIn, StringComparer.OrdinalIgnoreCase),
+                };
+            }
+        }
+        catch
+        {
+            try
+            {
+                var bare = JsonSerializer.Deserialize<List<string>>(json);
+
+                if (bare is not null)
+                {
+                    legacy = new Sheet
+                    {
+                        CheckedIn = new HashSet<string>(bare, StringComparer.OrdinalIgnoreCase),
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                // Unreadable in every shape: start empty rather than
+                // refusing to open.
+                SafeFile.PreserveUnreadable(FilePath, ex);
+            }
+        }
+
+        return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)
+        {
+            [RaceEventStore.LegacyEventId] = legacy,
+        });
+    }
+
+    public void Save()
+    {
+        var file = new CheckInFile();
+
+        foreach (var (eventId, sheet) in _sheets)
+        {
+            // An event whose sheet is empty is not worth a line in the
+            // file; it comes back on demand.
+            if (sheet.CheckedIn.Count == 0)
+            {
+                continue;
+            }
+
+            file.Events[eventId] = new SheetData
+            {
+                CheckedIn = sheet.CheckedIn.ToList(),
+            };
+        }
+
+        SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    // --- This event --------------------------------------------------------
+
+    public bool IsCheckedIn(string transponder) => Current.CheckedIn.Contains(transponder);
+
+    public void SetCheckedIn(string transponder, bool checkedIn)
+    {
+        if (checkedIn)
+        {
+            Current.CheckedIn.Add(transponder);
+        }
+        else
+        {
+            Current.CheckedIn.Remove(transponder);
+        }
+
+        Save();
+    }
+
+
+    public void CheckInAll(IEnumerable<string> transponders)
+    {
+        foreach (var transponder in transponders)
+        {
+            Current.CheckedIn.Add(transponder);
+        }
+
+        Save();
+    }
+
+    public void CheckOutAll()
+    {
+        Current.CheckedIn.Clear();
+        Save();
+    }
+
+    /// <summary>Snapshot of who's currently checked in - used to capture state before a bulk clear so it can be undone.</summary>
+    public List<string> SnapshotCheckedIn() => Current.CheckedIn.ToList();
+
+    /// <summary>
+    /// Checks the snapshot's drivers back in at the event the snapshot was
+    /// taken from. Pairs with SnapshotCheckedIn to undo a "Check Out
+    /// Everyone".
+    ///
+    /// Adds rather than replaces, and names its event rather than using the
+    /// current one. It used to clear whichever sheet was current at the
+    /// moment of the undo and refill it: anyone checked in after the
+    /// check-out was checked out again by the undo, and an undo made after
+    /// switching events copied one event's attendance onto another's.
+    /// </summary>
+    public void RestoreCheckedIn(string eventId, IEnumerable<string> transponders)
+    {
+        var sheet = SheetFor(eventId);
+
+        foreach (var transponder in transponders)
+        {
+            sheet.CheckedIn.Add(transponder);
+        }
+
+        Save();
+    }
+
+    public int Count => Current.CheckedIn.Count;
+
+    // --- Across events -----------------------------------------------------
+
+    /// <summary>Who was checked in at a given event. The question the old global list could not answer.</summary>
+    public IReadOnlyList<string> CheckedInAt(string eventId) => SheetFor(eventId).CheckedIn.ToList();
+
+    /// <summary>How many events this driver has been checked in at - attendance, for standings and awards.</summary>
+    public int EventsAttended(string transponder) =>
+        _sheets.Count(pair => pair.Value.CheckedIn.Contains(transponder));
+
+    /// <summary>
+    /// Moves every sheet that has no event onto the legacy one.
+    ///
+    /// Called by the migration at startup. Separate from Load so that a
+    /// file written by a newer build is never quietly rewritten by an
+    /// older one.
+    ///
+    /// "No event" means a blank key - the older one-sheet files are already
+    /// filed under the legacy event by Load, so that is all that can be
+    /// left. It used to mean any event that could not be found, and as this
+    /// runs on every launch, deleting an event (or undoing its creation)
+    /// poured its check-ins into the legacy sheet the next time
+    /// the app opened. A sheet whose event has gone is left where it is:
+    /// nothing shows it, and it comes back with the event if the delete is
+    /// undone.
+    /// </summary>
+    public void AdoptOrphans()
+    {
+        var orphans = _sheets.Keys.Where(string.IsNullOrEmpty).ToList();
+
+        if (orphans.Count == 0)
+        {
+            return;
+        }
+
+        var legacy = SheetFor(RaceEventStore.LegacyEventId);
+
+        foreach (var orphan in orphans.Where(id => id != RaceEventStore.LegacyEventId))
+        {
+            foreach (var transponder in _sheets[orphan].CheckedIn)
+            {
+                legacy.CheckedIn.Add(transponder);
+            }
+
+            _sheets.Remove(orphan);
+        }
+
+        Save();
+    }
+}

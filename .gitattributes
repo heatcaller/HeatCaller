@@ -1,0 +1,6 @@
+# Store every file exactly as it is on disk - no line-ending conversion.
+# The app's files are CRLF with a byte-order mark, the relay's are LF, and
+# the .cmd files must stay CRLF for Windows to run them. Letting git
+# "normalise" them would rewrite hundreds of files the first time anything
+# was checked out.
+* -text
