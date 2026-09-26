@@ -1,0 +1,37 @@
+# Builds and tests the app and the relay on every push, on a Windows machine
+# of GitHub's - the same check.cmd you run at home. A red cross on GitHub
+# means the last push is broken; the log says where.
+#
+# The relay's packages are installed first (npm ci, from package-lock.json),
+# because node_modules is never committed.
+
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the relay's packages
+        working-directory: relay
+        run: npm ci
+
+      - name: Build and test everything
+        shell: cmd
+        run: call check.cmd
