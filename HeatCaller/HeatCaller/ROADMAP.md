@@ -39,14 +39,28 @@ What follows from that:
 |---|---|
 | Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
 | App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 20 test classes, including a whole race night (`RaceNightTests`) |
+| Tests | `HeatCaller.Tests`: 25 test classes, including a whole race night (`RaceNightTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
 
 ---
 
-## The rule for now: feature freeze
+## The feature freeze - lifted 27 Sep 2026
+
+**Lifted on 27 Sep 2026, after rehearsal 3 ran smoothly** - Asher's call.
+That was one clean rehearsal after the fixes, not the two asked for below,
+and rehearsal 2's freeze is still unexplained (see the table below), so
+two things carry on:
+
+- **The freeze catcher stays in** (`SessionLog`, `HangWatchdog`). If the
+  app freezes again, the `Logs` folder holds the console up to the freeze
+  and a dump of the app at that moment - bring both back before anything
+  else.
+- **A solo rehearsal after any change to the timing path**, added to the
+  table below.
+
+What the freeze asked for, kept for the record:
 
 **No new features until both of these are true.** Only fixes, and the
 jobs listed under "Next". (Changed 26 Sep 2026: the first version asked for
@@ -76,8 +90,9 @@ and that night does not count.
 
 | Rehearsal | Date | Clean? | What went wrong |
 |---|---|---|---|
-| 1 | | | |
-| 2 | | | |
+| 1 | 27 Sep 2026 | No | The countdown played twice: the start went on to the countdown while the AI round intro was still being written. A recap called a win by 0.004s a tie. Both fixed. |
+| 2 | 27 Sep 2026 | No | Froze mid-race in heat 2, with no message; force-closed. Cause unknown - the console only lived in the window. Added the session log file and the freeze catcher (`SessionLog`, `HangWatchdog`) to catch it next time. |
+| 3 | 27 Sep 2026 | Called clean - freeze lifted | Nothing lost, froze or needed fixing by hand. Its log showed four things, fixed after: the A-Main started from the Next Up bar ran as freeform (no intro, "No round selected"; saved to the right round only by the fallback); the round intro was shouted, 80 words, and called Q3 Heat 1 "Heat 3"; cars parked on the loop were called as jump starts ("Frank jumped the start!"); and the "too soon" log line printed the wrong figure. The intro and the jump-start call are wrong calls by the announcer, which strictly fails the list above. |
 
 ### The rehearsal copy
 
@@ -104,13 +119,17 @@ dotnet run --project HeatCaller\HeatCaller\HeatCaller.csproj -- --rehearsal
 ### After the freeze
 
 Real club nights: one or two clubs willing to run HeatCaller for a night,
-with the notes and the console log brought back after each.
+with the notes and the console log brought back after each. The console
+log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
+"brought back" means copying that folder.
 
 ---
 
 ## Next, in order
 
-1. **Two clean solo rehearsals** (above) - the race-night test is already in.
+1. **Two clean solo rehearsals** (above) - the freeze was lifted on
+   27 Sep 2026 after rehearsal 3. Keep rehearsing after changes to the
+   timing path, and add each one to the table.
 2. **Off-site copy on GitHub** - done 26 Sep 2026 (`asherizm/HeatCaller`).
    Push after every commit; `.github\workflows\check.yml` runs `check.cmd`
    on GitHub's Windows machine each time, and a red cross means that push
@@ -325,8 +344,8 @@ never silent, and a warning at nine tenths. What remains is not code:
 
 Written 26 Sep 2026, from reading the code and the project notes - not
 from watching a club use it, so to be re-ranked after the first beta nights.
-Nothing here is built during the freeze, except where an item says to check
-it in a rehearsal. Ranked by what decides whether a club switches, and stays.
+The freeze was lifted on 27 Sep 2026, so this is now the list to build
+from. Ranked by what decides whether a club switches, and stays.
 
 ### What stops a club switching
 
@@ -494,6 +513,14 @@ championships, the announcer's queueing, and anything on screen.
 - Heats with no valid window are dropped first under drop-scores.
 - Only the first jump-start pass per driver counts - a car on the line can
   trigger the decoder repeatedly.
+- A car sitting on the loop since before the countdown (three passes in a
+  row, each within 3s of the last - an EasyLap repeats every 2s) is not a
+  jump start; its crossing is still kept, so the green credits the start
+  lap. A car moved onto the loop in the countdown is (`ParkedOnLoopTests`).
+- Starting a round from the Next Up bar or the program rebuilds the Round
+  box ON that round. A round built since the last rebuild (the mains, just
+  seeded) was not in the box, and the rebuild put the active round back to
+  freeform (rehearsal 3).
 - Qualifying counts one race day's rounds, and nothing at all when no race
   day is open. Event membership is an explicit set of round ids, not a date
   range: dates break on events past midnight, practice days and shared

@@ -1464,6 +1464,8 @@ public sealed class RaceControlSession
         _jumpStarters.Clear();
         _pendingJumpStartPenalties.Clear();
         _jumpStartCrossingMs.Clear();
+        _sightingsBeforeGreen.Clear();
+        _parkedOnLoopLogged.Clear();
     }
 
     public void StartCountdown()
@@ -2363,7 +2365,14 @@ public sealed class RaceControlSession
     /// the decoder repeatedly, and stacking a penalty for each read would
     /// turn one mistake into a disqualification.
     /// </summary>
-    private void RegisterJumpStart(string transponderId, long? crossingDeviceTimeMs = null)
+    /// <param name="parkedOnTheLoop">
+    /// The car has been sitting on the loop since before this pass - see
+    /// NoteSightingBeforeGreen. Its crossing is still recorded (it IS on the
+    /// line, and the green credits its start lap the same way), but it is
+    /// not flagged, penalised or called out: it did not go early, it was
+    /// put down in the wrong place.
+    /// </param>
+    private void RegisterJumpStart(string transponderId, long? crossingDeviceTimeMs = null, bool parkedOnTheLoop = false)
     {
         if (string.IsNullOrWhiteSpace(transponderId))
         {
@@ -2379,7 +2388,7 @@ public sealed class RaceControlSession
             _jumpStartCrossingMs[transponderId] = crossedAt;
         }
 
-        if (!DetectJumpStarts)
+        if (!DetectJumpStarts || parkedOnTheLoop)
         {
             return;
         }
@@ -2412,6 +2421,73 @@ public sealed class RaceControlSession
 
     /// <summary>Penalties owed by jump starters, applied once the race is under way and they have a standing.</summary>
     private readonly Dictionary<string, long> _pendingJumpStartPenalties = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A pass this soon after the same car's previous one, before the green,
+    /// is the car still being there rather than the car arriving. An EasyLap
+    /// reports a transponder sitting on its loop every two seconds.
+    /// </summary>
+    private const long ParkedRepeatGapMs = 3000;
+
+    /// <summary>How many such passes in a row mean the car is sitting on the loop.</summary>
+    private const int ParkedSightingsInARow = 3;
+
+    /// <summary>Each car's last pass before the green, and how many passes in a row have come within ParkedRepeatGapMs of the one before.</summary>
+    private readonly Dictionary<string, (long LastMs, int InARow)> _sightingsBeforeGreen = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cars already logged as sitting on the loop this start, so it is said once.</summary>
+    private readonly HashSet<string> _parkedOnLoopLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Notes a pass during staging or the countdown, and says whether the car
+    /// is sitting on the loop: <see cref="ParkedSightingsInARow"/> passes in a
+    /// row, each within <see cref="ParkedRepeatGapMs"/> of the one before.
+    /// </summary>
+    /// <remarks>
+    /// Rehearsal 3 (27 Sep 2026) had both cars parked on the loop through
+    /// staging and the countdown, reported every two seconds, and both were
+    /// called as jump starts - "Frank jumped the start!" - at their first
+    /// pass of the countdown. A car that was already there before the lights
+    /// began has not anticipated them; it is on the grid in the wrong place,
+    /// which is worth saying, but not as a jump.
+    ///
+    /// A real jump still reads as one: a car placed on its grid slot across
+    /// the loop is seen once or twice, and its crossing in the countdown
+    /// comes long after that - so its run starts again at one. Only a car
+    /// seen at least twice just before, a couple of seconds apart, is taken
+    /// to be sitting there. A car moved ONTO the loop during the countdown
+    /// is flagged at its first pass, as before.
+    /// </remarks>
+    private bool NoteSightingBeforeGreen(string transponderId, long deviceTimeMs)
+    {
+        if (string.IsNullOrWhiteSpace(transponderId))
+        {
+            return false;
+        }
+
+        // A clock that went backwards (a reconnect) starts the run again.
+        var inARow = _sightingsBeforeGreen.TryGetValue(transponderId, out var seen)
+                     && deviceTimeMs > seen.LastMs
+                     && deviceTimeMs - seen.LastMs <= ParkedRepeatGapMs
+            ? seen.InARow + 1
+            : 1;
+
+        _sightingsBeforeGreen[transponderId] = (deviceTimeMs, inARow);
+
+        if (inARow < ParkedSightingsInARow)
+        {
+            return false;
+        }
+
+        if (_parkedOnLoopLogged.Add(transponderId))
+        {
+            Log($"{transponderId} is sitting on the loop - seen {inARow} times in a row, no more than "
+                + $"{ParkedRepeatGapMs / 1000}s apart. Not called as a jump start while it stays there, "
+                + "but it belongs behind the line.");
+        }
+
+        return true;
+    }
 
     // ---------------------------------------------------------------
     // Starts
@@ -2779,9 +2855,11 @@ public sealed class RaceControlSession
         // they were before jump starts were detected at all.
         if ((State is RaceState.Staging or RaceState.Countdown) && !lap.IsSynthetic)
         {
+            var parkedOnTheLoop = NoteSightingBeforeGreen(lap.TransponderId, lap.DeviceTimeMs);
+
             if (State == RaceState.Countdown)
             {
-                RegisterJumpStart(lap.TransponderId, lap.DeviceTimeMs);
+                RegisterJumpStart(lap.TransponderId, lap.DeviceTimeMs, parkedOnTheLoop);
             }
 
             return;
@@ -2977,6 +3055,11 @@ public sealed class RaceControlSession
         // journal after a crash - see below.
         var firstLapAfterRecovery = false;
 
+        // What a too-soon pass was judged on, for the log line that rejects
+        // it - see RejectionReason. Null on a driver's first pass, which is
+        // not judged against an earlier one.
+        long? gapFromLastSeenMs = null;
+
         if (standing.LastSeenDeviceTimeMs == 0)
         {
             // Very first pass of the race for this racer - always counts.
@@ -3035,6 +3118,7 @@ public sealed class RaceControlSession
             // MinLapTimeMs for why this matters.
             var gapFromLastSeen = lap.DeviceTimeMs - standing.LastSeenDeviceTimeMs;
             isValid = gapFromLastSeen >= MinLapTimeMs;
+            gapFromLastSeenMs = gapFromLastSeen;
 
             // The lap TIME we report/announce is still measured from the
             // last actually-counted lap, since that's the meaningful
@@ -3284,7 +3368,12 @@ public sealed class RaceControlSession
             standing.StreakLapTimeSumMs = 0;
             standing.StreakLapCount = 0;
             standing.RejectedLaps++;
-            Log($"Lap rejected (too soon, {lapTimeMs}ms < {MinLapTimeMs}ms minimum): {lap.TransponderId}");
+
+            // The backwards clock has already said why, above.
+            if (!clockWentBackwards)
+            {
+                Log($"Lap rejected ({RejectionReason(gapFromLastSeenMs, lapTimeMs, standing.LastLapDeviceTimeMs > 0)}): {lap.TransponderId}");
+            }
         }
 
         // Safely, like everything else on the way to a finish: the flag is
@@ -3399,6 +3488,39 @@ public sealed class RaceControlSession
                 Log($"A {eventName} handler failed and was skipped ({ex.GetType().Name}: {ex.Message}). The race carries on.");
             }
         }
+    }
+
+    /// <summary>
+    /// Why a pass was thrown out, in the words the race log uses.
+    /// </summary>
+    /// <remarks>
+    /// The minimum lap time is checked against the PREVIOUS PASS of any kind
+    /// - see the class-level comment on MinLapTimeMs - but the log used to
+    /// print the time since the last COUNTED lap beside it. Rehearsal 3 (27
+    /// Sep 2026) had cars parked on the loop, seen every two seconds: each
+    /// pass rightly thrown out as two seconds after the one before, and
+    /// logged as "too soon, 4000ms &lt; 3000ms minimum" - then 5999, then 8104
+    /// - which reads as the check being broken. Both figures now, each
+    /// saying what it is measured from.
+    /// </remarks>
+    /// <param name="gapFromLastSeenMs">Time since this car's previous pass, counted or not; null on its first pass of the race.</param>
+    /// <param name="lapTimeMs">The lap time the pass would have had.</param>
+    /// <param name="measuredFromCountedLap">True when <paramref name="lapTimeMs"/> runs from a counted lap, false when from the start.</param>
+    internal string RejectionReason(long? gapFromLastSeenMs, long lapTimeMs, bool measuredFromCountedLap)
+    {
+        if (gapFromLastSeenMs is not { } gap)
+        {
+            // A first pass is only ever rejected for coming no later than the
+            // start itself. No figure: for a driver restored from the race
+            // journal the lap time is not measured from the start.
+            return "first pass came at or before the start";
+        }
+
+        var lapPart = measuredFromCountedLap
+            ? $"{lapTimeMs}ms since the last counted lap"
+            : $"{lapTimeMs}ms since the start";
+
+        return $"too soon: {gap}ms after the previous pass, {MinLapTimeMs}ms minimum; {lapPart}";
     }
 
     /// <summary>

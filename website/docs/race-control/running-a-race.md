@@ -152,6 +152,8 @@ A **Countdown** or **Green (Start)** pressed without **Stage** first still start
 
 A car that crosses the line during the countdown is flagged as a jump starter. In a staggered start, a car that crosses before its own release time is flagged too. Each car is flagged at most once per race.
 
+A car left sitting on the loop isn't a jump start. The decoder keeps reporting a car parked on the loop every couple of seconds. If it has been seen there three times in a row, no more than 3 seconds apart, by the time of its pass in the countdown, the console says it's sitting on the loop and it isn't flagged. Move it back behind the line. At the green it's treated like any car already past the line. A car moved onto the loop during the countdown is still flagged at its first pass.
+
 When a car jumps the start:
 
 - The announcer calls it.

@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+**Fixes from the rehearsals (27 Sep)**
+
+- **The countdown plays once.** With race intros on, the start now waits for the AI round intro to be written and spoken before the countdown begins. It used to start the countdown while the intro was still being written, and the countdown was heard twice. With the countdown ticks on, the ticks are the countdown sound.
+- **A close finish is never called a tie.** A win by less than a tenth of a second is given to the recap in thousandths, and the recap is told it isn't a dead heat.
+- **The console is saved to a log file as it goes,** one file per run, in `%LocalAppData%\HeatCaller\Logs` (in a rehearsal, the `Logs` folder in `%LocalAppData%\HeatCaller Rehearsal`). The last 20 are kept. If the window stops responding for 10 seconds, the log says so, and a freeze dump is saved beside it once per run for working out why.
+- **Starting a round from the Next Up bar always races that round.** A round built after the last race, such as a main seeded straight after qualifying, used to run as freeform: no round intro, and "No round selected" at the green. If a round can't be selected, the console says so.
+- **Round intros keep to their length and the round's name.** An intro written in capitals is put back into normal case, a wrong heat number is replaced with the round's name, and an intro well past **Max length** (**Voice Announcements → Commentary**) is cut to whole sentences, or skipped if its first sentence alone is too long. The console says what was changed.
+- **A car sitting on the loop isn't called as a jump start.** A car the decoder has seen on the loop since before the countdown is logged as sitting on the loop instead, and still starts the race with its start lap, like a car past the line. A car that goes on the lights, or is moved onto the loop during the countdown, is still a jump start.
+- **The console says why a pass was too soon.** "Lap rejected" now gives the time since that car's previous pass, which is what the minimum lap time is checked against, with the lap time beside it.
+
 **Rehearsal copy (26 Sep)**
 
 - **Practise a race night without touching the club's data.** Start HeatCaller with `--rehearsal` and it runs on a copy of the club's data, in `%LocalAppData%\HeatCaller Rehearsal`. The first rehearsal makes the copy; later ones carry on from it. Delete that folder to start again from the club's data as it is now.

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace HeatCaller;
 
 /// <summary>
@@ -474,7 +476,8 @@ public sealed class CommentaryService
     /// A short "coming up" line for a round that's about to run. Called
     /// between heats, so a few seconds of model latency is free.
     /// </summary>
-    public async Task<string?> BuildRoundIntroAsync(RoundDefinition round, CancellationToken ct = default)
+    /// <param name="log">Told what TidyIntro had to put right, if anything. Called on whatever thread the answer arrives on.</param>
+    public async Task<string?> BuildRoundIntroAsync(RoundDefinition round, CancellationToken ct = default, Action<string>? log = null)
     {
         if (Client is null)
         {
@@ -513,6 +516,14 @@ public sealed class CommentaryService
             // Length comes from the system prompt - saying "one sentence"
             // here too would override whatever the user set.
             "\nIntroduce this race."
+            // Rehearsal 3 (27 Sep 2026): Q3 Heat 1 came back as "HEAT 3",
+            // shouted from end to end, with the two drivers "going at it all
+            // heat" before it had started. TidyIntro puts the first two right
+            // afterwards; these ask for them not to happen. The round is
+            // referred to, not repeated, so the label stays inside the facts.
+            + " Call the race exactly what the Round in the facts says - never renumber, shorten or reword it."
+            + " It has not started yet: nothing has happened in it, so describe no laps, battles or results."
+            + " Write in normal sentence case - capitals for a word or two of emphasis at most, never a whole sentence."
             + (rivalries.Count > 0 ? " If a listed rivalry is worth mentioning, lead with it." : string.Empty)
             + (details.Count > 0
                 ? " A driver's team or sponsors from the details can be worked in where it fits - one or two, not a "
@@ -520,9 +531,273 @@ public sealed class CommentaryService
                   + "give a team or sponsor to a driver who has none listed."
                 : string.Empty);
 
-        return await RecordAndReturn("Intro", Client.GenerateAsync(
+        var answer = await Client.GenerateAsync(
             BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
-            timeout: BetweenRacesTimeout));
+            timeout: BetweenRacesTimeout);
+
+        if (!string.IsNullOrWhiteSpace(answer))
+        {
+            // The same names the model was given, spelled the way the
+            // facts spell them, for TidyIntro to put back.
+            var properNames = names
+                .Append(Field(round.ClassName))
+                .Append(Field(round.RoundLabel))
+                .Append(Field(round.TrackLayoutName))
+                .ToList();
+
+            var notes = new List<string>();
+            answer = TidyIntro(StripAudioTags(answer), Field(round.RoundLabel), properNames, Math.Max(8, _settings.CommentaryMaxWords), notes);
+
+            if (notes.Count > 0)
+            {
+                log?.Invoke("Round intro " + string.Join("; ", notes) + ".");
+            }
+        }
+
+        return await RecordAndReturn("Intro", Task.FromResult(answer));
+    }
+
+    /// <summary>
+    /// How many shouted words in a row make a shouted passage rather than
+    /// emphasis. "RIGHT there" and "NEW HEIGHTS" are emphasis, and stay.
+    /// </summary>
+    private const int ShoutedRunWords = 4;
+
+    /// <summary>
+    /// How far past the word limit an intro may run before it is cut back.
+    /// The limit is asked for in the prompt and small models overrun it by
+    /// a few words as a matter of course; trimming at the exact figure would
+    /// cut a 47-word intro down to its first sentence.
+    /// </summary>
+    private const double IntroWordSlack = 1.2;
+
+    private static readonly Regex TokenPattern = new(@"\S+", RegexOptions.Compiled);
+
+    /// <summary>A spoken word: starts with a letter or digit - so "1.0" and "we've" are one word each and a lone dash is none.</summary>
+    private static readonly Regex SpokenWord = new(@"[\p{L}\p{N}][\p{L}\p{N}'\u2019.\-]*", RegexOptions.Compiled);
+
+    private static readonly Regex HeatInLabel = new(
+        @"(?<![\p{L}\p{N}])heat\s*(\d+)(?![\p{L}\p{N}])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>"Heat 3", "heat #3", "Q3 Heat 3" - with any qualifier in front, so a correction replaces the lot.</summary>
+    private static readonly Regex HeatInLine = new(
+        @"(?<![\p{L}\p{N}])(?:q\d+\s+)?heat\s*#?\s*(\d+)(?![\p{L}\p{N}])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SentenceStartLower = new(@"(^|[.!?][""'\u201D\u2019)\]]*\s+)(\p{Ll})", RegexOptions.Compiled);
+
+    private static readonly Regex LowerCaseI = new(@"(?<![\p{L}\p{N}])i(?=['\u2019\s,.!?;:]|$)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Holds a model-written round intro to the rules the prompt gives it,
+    /// instead of trusting it to follow them. Rehearsal 3 (27 Sep 2026) had
+    /// an intro that opened with a 27-word sentence in capitals, ran to 80
+    /// words against a limit of 45, and called Q3 Heat 1 "Heat 3". Each
+    /// thing put right is added to <paramref name="notes"/> for the log.
+    ///
+    /// In this order, because each step reads the one before:
+    ///
+    ///  1. Shouting - a run of <see cref="ShoutedRunWords"/> or more words in
+    ///     capitals - goes to lower case, then the names from the facts get
+    ///     their own spelling back and each sentence its capital. A word or
+    ///     two in capitals is emphasis and is left alone.
+    ///  2. A heat number that is not the round's is replaced by the round's
+    ///     own label. Only when the label has a heat number to compare with.
+    ///  3. Past the word limit (with <see cref="IntroWordSlack"/>), whole
+    ///     sentences are kept up to it. If even the first sentence is past it
+    ///     the intro is dropped - null - and the start goes on without one,
+    ///     which is better than a speech holding the grid up.
+    /// </summary>
+    internal static string? TidyIntro(string line, string roundLabel, IEnumerable<string> properNames, int maxWords, List<string> notes)
+    {
+        var text = line.Trim();
+
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        // 1. Shouting.
+        var calmed = CalmShouting(text);
+
+        if (!string.Equals(calmed, text, StringComparison.Ordinal))
+        {
+            // Longest first, so "Test Class" is restored before a "Test"
+            // inside it could be.
+            foreach (var name in properNames
+                         .Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().Length >= 2)
+                         .Select(n => n.Trim())
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderByDescending(n => n.Length))
+            {
+                calmed = Regex.Replace(
+                    calmed,
+                    $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
+                    name.Replace("$", "$$"),
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+
+            calmed = LowerCaseI.Replace(calmed, "I");
+            text = calmed;
+            notes.Add("was in capitals - put back into normal case");
+        }
+
+        // 2. The heat number.
+        var labelHeat = HeatInLabel.Match(roundLabel);
+
+        if (labelHeat.Success && int.TryParse(labelHeat.Groups[1].Value, out var wantedHeat))
+        {
+            var wrong = new List<string>();
+
+            text = HeatInLine.Replace(text, m =>
+            {
+                if (int.TryParse(m.Groups[1].Value, out var said) && said == wantedHeat)
+                {
+                    return m.Value;
+                }
+
+                wrong.Add(m.Value);
+                return roundLabel;
+            });
+
+            if (wrong.Count > 0)
+            {
+                notes.Add($"called the race \"{string.Join("\", \"", wrong.Distinct(StringComparer.OrdinalIgnoreCase))}\" - corrected to \"{roundLabel}\"");
+            }
+        }
+
+        // Every sentence starts with a capital - after step 1 lowered it,
+        // or step 2 put a label where a sentence began.
+        text = SentenceStartLower.Replace(text, m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant());
+
+        // 3. Length.
+        var limit = (int)Math.Ceiling(maxWords * IntroWordSlack);
+        var total = SpokenWord.Matches(text).Count;
+
+        if (total <= limit)
+        {
+            return text;
+        }
+
+        var kept = new List<string>();
+        var keptWords = 0;
+
+        foreach (var sentence in SentenceBreak.Split(text).Select(s => s.Trim()).Where(s => s.Length > 0))
+        {
+            var words = SpokenWord.Matches(sentence).Count;
+
+            if (keptWords + words > limit)
+            {
+                break;
+            }
+
+            kept.Add(sentence);
+            keptWords += words;
+        }
+
+        if (kept.Count == 0)
+        {
+            notes.Add($"dropped - {total} words, and even its first sentence was past the {maxWords}-word limit");
+            return null;
+        }
+
+        notes.Add($"cut from {total} words to {keptWords} (the limit is {maxWords})");
+        return string.Join(" ", kept);
+    }
+
+    /// <summary>
+    /// Lower-cases every run of <see cref="ShoutedRunWords"/> or more words
+    /// written in capitals, from its first such word to its last. A word
+    /// counts when it has two or more letters and all of them are capitals;
+    /// numbers, single letters ("A", "I") and dashes neither count nor break
+    /// a run, but are lowered with it when they sit inside one. Everything
+    /// between the words - spaces, punctuation - is kept exactly.
+    /// </summary>
+    internal static string CalmShouting(string text)
+    {
+        var tokens = TokenPattern.Matches(text);
+        var lower = new bool[tokens.Count];
+
+        var runStart = -1;
+        var runEnd = -1;
+        var runWords = 0;
+
+        void CloseRun()
+        {
+            if (runWords >= ShoutedRunWords)
+            {
+                for (var k = runStart; k <= runEnd; k++)
+                {
+                    lower[k] = true;
+                }
+            }
+
+            runStart = -1;
+            runEnd = -1;
+            runWords = 0;
+        }
+
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var letters = 0;
+            var capitals = 0;
+
+            foreach (var ch in tokens[i].Value)
+            {
+                if (char.IsLetter(ch))
+                {
+                    letters++;
+
+                    if (char.IsUpper(ch))
+                    {
+                        capitals++;
+                    }
+                }
+            }
+
+            if (letters < 2)
+            {
+                continue;
+            }
+
+            if (capitals == letters)
+            {
+                if (runStart < 0)
+                {
+                    runStart = i;
+                }
+
+                runEnd = i;
+                runWords++;
+            }
+            else
+            {
+                CloseRun();
+            }
+        }
+
+        CloseRun();
+
+        if (!lower.Any(l => l))
+        {
+            return text;
+        }
+
+        var result = new System.Text.StringBuilder(text.Length);
+        var at = 0;
+
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var token = tokens[i];
+
+            result.Append(text, at, token.Index - at);
+            result.Append(lower[i] ? token.Value.ToLowerInvariant() : token.Value);
+            at = token.Index + token.Length;
+        }
+
+        result.Append(text, at, text.Length - at);
+        return result.ToString();
     }
 
     /// <summary>

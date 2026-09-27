@@ -476,12 +476,27 @@ public sealed partial class RaceControlControl
             try
             {
                 using var budget = new CancellationTokenSource(RoundIntroModelBudget);
-                var answer = await _commentary.BuildRoundIntroAsync(round, budget.Token);
+
+                // Set when the intro was put right or thrown out after it
+                // came back (CommentaryService.TidyIntro), which has already
+                // said so - so an intro it dropped is not then reported as
+                // one that never arrived.
+                var tidied = false;
+
+                var answer = await _commentary.BuildRoundIntroAsync(
+                    round,
+                    budget.Token,
+                    log: note =>
+                    {
+                        tidied = true;
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}");
+                    });
 
                 if (string.IsNullOrWhiteSpace(answer))
                 {
-                    StatusMessage?.Invoke(budget.IsCancellationRequested
-                        ? $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - the model took longer than {RoundIntroModelBudget.TotalSeconds:0}s, so the start went on without it."
+                    StatusMessage?.Invoke(
+                        tidied ? $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - see the line above."
+                        : budget.IsCancellationRequested ? $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - the model took longer than {RoundIntroModelBudget.TotalSeconds:0}s, so the start went on without it."
                         : $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - no line came back.");
                     writing.Dispose();
                     return;

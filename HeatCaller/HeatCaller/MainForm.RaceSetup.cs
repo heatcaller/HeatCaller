@@ -108,9 +108,14 @@ public partial class MainForm
     }
 
     /// <summary>Repopulates the "Race Round" dropdown with not-yet-recorded rounds from the race program, preserving the current selection or falling back to the last one used.</summary>
-    private void RefreshActiveRoundCombo()
+    /// <param name="selectRoundId">
+    /// The round to leave selected, when the caller knows which one that is
+    /// - see StartRoundNow. Null keeps whatever the box was showing.
+    /// </param>
+    private void RefreshActiveRoundCombo(string? selectRoundId = null)
     {
-        var previousId = (cmbActiveRound.SelectedItem as RoundComboItem)?.Round.Id
+        var previousId = selectRoundId
+            ?? (cmbActiveRound.SelectedItem as RoundComboItem)?.Round.Id
             ?? _activeRound?.Id
             ?? _settings.LastActiveRoundId;
 
@@ -178,7 +183,10 @@ public partial class MainForm
         // If the previously-selected round is no longer selectable (it was
         // recorded, or deleted), say so rather than silently reverting to
         // freeform - that silence is exactly what made this hard to spot.
-        if (previousId is not null && idx < 0)
+        // Not for a round the caller asked for: StartRoundNow says why that
+        // one is missing itself, and "already recorded or deleted" may not
+        // be the reason.
+        if (previousId is not null && idx < 0 && selectRoundId is null)
         {
             OnClientRawMessage(
                 $"{AppTime.LogStampNow()}  [program] The selected race round is no longer available "
@@ -262,7 +270,44 @@ public partial class MainForm
         // auto-start - so there's one code path for starting a race.
         ApplyRoundToSessionSetup(round);
         _activeRound = round;
-        RefreshActiveRoundCombo();
+
+        // Rebuilt ON this round, not on whatever the box was showing.
+        //
+        // Rehearsal 3 (27 Sep 2026) started the A-Main from the Next Up bar
+        // and raced it as freeform: no round intro, "No round selected" at
+        // the green, and the result only reached the A-Main because the
+        // save falls back to the next round in the programme. The A-Main
+        // had been built a few seconds earlier, after the box was last
+        // filled, so ApplyRoundToSessionSetup found nothing to select and
+        // the box stayed on "(freeform)" from the heat before. The rebuild
+        // below then kept the box's choice - freeform - and set the active
+        // round back to none, undoing the line above. Any round added since
+        // the last rebuild went the same way; a heat that was already in
+        // the list did not, which is why the qualifiers were fine.
+        RefreshActiveRoundCombo(selectRoundId: round.Id);
+
+        if (_activeRound?.Id == round.Id)
+        {
+            // Saved here because the box's own handler, which normally
+            // does it, is quiet during a rebuild - so a round that was only
+            // selected by the rebuild would not be the one restored at the
+            // next launch.
+            if (_settings.LastActiveRoundId != round.Id)
+            {
+                _settings.LastActiveRoundId = round.Id;
+                _settings.Save();
+            }
+        }
+        else
+        {
+            // Not tonight's, or already recorded - the Round box only lists
+            // tonight's unrun rounds. Said, rather than racing it quietly as
+            // freeform the way rehearsal 3 did.
+            OnClientRawMessage(
+                $"{AppTime.LogStampNow()}  [program] WARNING: \"{round.RoundLabel}\" ({round.ClassName}) is not in the Round box "
+                + "(not on tonight's race day, or already recorded), so this race is running as freeform. "
+                + "Pick the round in the Round box before the green if it should be filed against it.");
+        }
 
         if (showRaceControl)
         {

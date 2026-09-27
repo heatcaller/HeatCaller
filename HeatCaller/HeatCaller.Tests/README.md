@@ -44,6 +44,9 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 | `RestoredSettingsTests` | A restored backup's new relay, voice relay or mail server address is held until checked; the club's own backup asks nothing; a backup can't bring its own record; the publisher, voice and mailer all wait |
 | `CommentaryMarginTests` | The recap's winning margin: a win by thousandths is written in thousandths and never as a tie (rehearsal 1, 27 Sep) |
 | `FreezeDiagnosticsTests` | The session log and freeze-dump clean-up keeps the newest files of its own kind only; only `--write-freeze-dump` makes the exe the dump helper, and a bad command line dumps nothing (rehearsal 2, 27 Sep) |
+| `LapRejectionTests` | A pass thrown out as too soon is logged with the gap it was judged on - since the previous pass - and the lap time beside it, each saying what it runs from (rehearsal 3, 27 Sep) |
+| `ParkedOnLoopTests` | A car sitting on the loop since staging is not called as a jump start; a car placed across the loop and then going early, or driven onto it in the countdown, still is (rehearsal 3, 27 Sep) |
+| `RoundIntroTidyTests` | The round intro after the model: shouting put back into normal case (a word of emphasis kept), a wrong heat number replaced with the round's label, and an intro past the word limit cut to whole sentences or dropped (rehearsal 3, 27 Sep) |
 
 ## What comes next
 
