@@ -108,11 +108,23 @@ public partial class MainForm
     }
 
     /// <summary>Repopulates the "Race Round" dropdown with not-yet-recorded rounds from the race program, preserving the current selection or falling back to the last one used.</summary>
+    /// <remarks>
+    /// Its own overload rather than an optional parameter on the one below:
+    /// it is also used as a plain Action (the Race Control page's refresh
+    /// hook in PopulateTabs), and a method with an optional parameter does
+    /// not convert to one.
+    /// </remarks>
+    private void RefreshActiveRoundCombo() => RefreshActiveRoundCombo(selectRoundId: null);
+
+    /// <summary>
+    /// Repopulates the "Race Round" dropdown, as above, leaving
+    /// <paramref name="selectRoundId"/> selected when it is given.
+    /// </summary>
     /// <param name="selectRoundId">
     /// The round to leave selected, when the caller knows which one that is
     /// - see StartRoundNow. Null keeps whatever the box was showing.
     /// </param>
-    private void RefreshActiveRoundCombo(string? selectRoundId = null)
+    private void RefreshActiveRoundCombo(string? selectRoundId)
     {
         var previousId = selectRoundId
             ?? (cmbActiveRound.SelectedItem as RoundComboItem)?.Round.Id
