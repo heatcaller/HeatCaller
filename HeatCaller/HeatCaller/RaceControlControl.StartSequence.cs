@@ -52,8 +52,15 @@ public sealed partial class RaceControlControl
     /// - and the race is still at the step this chain was waiting on.
     /// </summary>
     /// <param name="waitingIn">The state this step leaves the race in, which it must still be in for the chain to go on.</param>
-    private void ChainAfterAudio(RaceState waitingIn, Action next)
+    /// <param name="maxWait">
+    /// The longest to wait for the audio before moving on anyway. 20 seconds
+    /// when not given - enough for any call. Longer only for staging with a
+    /// round intro being written (see StagingWaitWithIntro).
+    /// </param>
+    private void ChainAfterAudio(RaceState waitingIn, Action next, TimeSpan? maxWait = null)
     {
+        var wait = maxWait ?? TimeSpan.FromSeconds(20);
+
         // A token of its own, held where CancelAutoStart can reach it. The
         // wait below used to take CancellationToken.None, so pressing a
         // flag button during it cancelled nothing.
@@ -94,7 +101,7 @@ public sealed partial class RaceControlControl
                 // own settle window, so the chained path paid both and the
                 // countdown-to-green gap dragged - noticeably worse than
                 // the demo, which pays neither.
-                await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(20), token);
+                await _announcer.WaitForAudioAsync(wait, token);
             }
             catch
             {

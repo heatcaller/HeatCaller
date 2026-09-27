@@ -48,6 +48,12 @@ public sealed partial class AnnouncementService
         // green flag especially - sees silence and goes early.
         Interlocked.Increment(ref _deferredSoundsPending);
 
+        // A countdown starting while this waits cuts the line it was waiting
+        // to follow - and this cue with it (see CutForCountdown). Without
+        // the check, the cut line ending looked like the cue's moment, and
+        // a staging sound would have played over the countdown.
+        var countdownGeneration = Volatile.Read(ref _countdownCutGeneration);
+
         _ = Task.Run(async () =>
         {
             try
@@ -72,6 +78,12 @@ public sealed partial class AnnouncementService
                 // A short beat after the words, so the cue reads as a
                 // follow-up rather than being clipped onto the end.
                 await Task.Delay(180);
+
+                if (Volatile.Read(ref _countdownCutGeneration) != countdownGeneration)
+                {
+                    StatusMessage?.Invoke($"[sound] Skipped {label} - the countdown started before it played.");
+                    return;
+                }
 
                 PlaySound(kind, playGenerated, label);
             }

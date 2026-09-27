@@ -332,6 +332,12 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        if (IsCutByCountdown())
+        {
+            StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started before it spoke.");
+            return;
+        }
+
         if (honourMute && Muted)
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the announcer is muted.");
@@ -362,6 +368,15 @@ public sealed partial class AnnouncementService
             if (IsSupersededByInterrupt())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - a flag call interrupted while it was being synthesised.");
+                return;
+            }
+
+            // The same for a countdown: the line was on the network or
+            // waiting for the speaker when it started, and the countdown
+            // sounds are what must be heard now.
+            if (IsCutByCountdown())
+            {
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started while it was being synthesised.");
                 return;
             }
 
@@ -727,6 +742,11 @@ public sealed partial class AnnouncementService
             // line alone and replaces anything copied from the caller.
             _dequeuedUnderGeneration.Value = generation;
 
+            // Never cut by a countdown (see _countdownCutGeneration) - a
+            // flag or a start call is the newest instruction, not something
+            // left over. Cleared so nothing copied from the caller applies.
+            _dequeuedUnderCountdown.Value = null;
+
             // Tells SynthesizeAndPlayAsync which call this is, so it waits
             // for the call's own sound AFTER synthesising rather than before
             // - the words are rendered while the sound plays.
@@ -780,6 +800,7 @@ public sealed partial class AnnouncementService
 
             Func<Task>? work;
             int? generation;
+            int? countdownGeneration;
             lock (_voiceQueueLock)
             {
                 if (_voiceQueue.Count > 0)
@@ -796,17 +817,24 @@ public sealed partial class AnnouncementService
                     generation = IsPriorityAnnouncement(item.Type)
                         ? null
                         : Volatile.Read(ref _interruptGeneration);
+
+                    // Every line, priority or not: the countdown cuts off
+                    // everything still talking. Read under the same lock
+                    // CutForCountdown bumps it under.
+                    countdownGeneration = Volatile.Read(ref _countdownCutGeneration);
                 }
                 else
                 {
                     work = null;
                     generation = null;
+                    countdownGeneration = null;
                 }
             }
 
             // Flows into work() and everything it awaits; reset every
             // iteration so nothing leaks from one line to the next.
             _dequeuedUnderGeneration.Value = generation;
+            _dequeuedUnderCountdown.Value = countdownGeneration;
 
             // Mute can land between an item being queued and it being
             // played, so check again here rather than trusting the

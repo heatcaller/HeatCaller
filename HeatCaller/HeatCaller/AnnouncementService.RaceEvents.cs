@@ -156,14 +156,123 @@ public sealed partial class AnnouncementService
         // A countdown restarted over one already running starts its ticks again.
         CancelCountdownTicks();
 
+        // Whatever is still talking stops here, before the countdown's own
+        // sounds are queued - they share the speaker, and in rehearsal 1 the
+        // AI round intro was still speaking when the countdown started, so
+        // the countdown sounds waited behind it and came out late, over
+        // the green.
+        CutForCountdown();
+
         // Sound only, no voice. A spoken countdown line took ~7 seconds to
         // synthesise and speak before the beep could follow it, and the
         // green flag waits for all of that - so the start sequence dragged.
         // The beep alone is what a countdown actually needs; the announcer
         // has already said the interesting part at staging.
-        PlaySound(SoundEffectKind.CountdownStarted, ToneGenerator.PlayCountdownStartedAsync, "countdown started sound");
+        //
+        // And only when the ticks are off. With both, every race heard two
+        // countdowns back to back - three quick beeps, then five slow ones -
+        // and the ticks are the one that ends on the green.
+        if (CountdownTicksAreOn())
+        {
+            StatusMessage?.Invoke("[sound] Skipped countdown started sound - the countdown ticks are on, so they are the countdown.");
+        }
+        else
+        {
+            PlaySound(SoundEffectKind.CountdownStarted, ToneGenerator.PlayCountdownStartedAsync, "countdown started sound");
+        }
 
         StartCountdownTicks(greenIn);
+    }
+
+    /// <summary>
+    /// Whether StartCountdownTicks will play the ticks: not muted, and the
+    /// effect switched on for races or practice, whichever this is.
+    /// </summary>
+    private bool CountdownTicksAreOn()
+    {
+        if (Muted)
+        {
+            return false;
+        }
+
+        var config = _soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.CountdownTicks));
+        return config is not null && config.IsEnabledFor(IsPracticeMode);
+    }
+
+    /// <summary>
+    /// Cuts off everything still talking when a countdown starts: the line
+    /// playing, the lines queued, a line already taken off the queue and
+    /// still synthesising (see _countdownCutGeneration), the sound playing,
+    /// the sounds queued, a sound waiting to follow its line (see
+    /// PlaySoundAfterSpeech), per-lap lines waiting to be weighed, and any
+    /// line a caller is still waiting on a model to write (see
+    /// BeginLineBeingWritten).
+    ///
+    /// Unlike a flag (ClearTheDecksFor), nothing is spared: race-control
+    /// lines queued before the countdown - the staging call, the grid call,
+    /// the round intro - were all about getting to this moment, and the
+    /// countdown is the instruction that replaces them.
+    /// </summary>
+    private void CutForCountdown()
+    {
+        int clearedVoice;
+        int abandonedWriting;
+
+        lock (_voiceQueueLock)
+        {
+            lock (_linesBeingWrittenLock)
+            {
+                // Under the queue lock, which the voice loop dequeues under:
+                // a line was either taken before this (and now holds an old
+                // generation, so it stays silent) or is still queued and
+                // cleared just below. Under the writing lock too, so a line
+                // being written is either released here or started after.
+                Interlocked.Increment(ref _countdownCutGeneration);
+
+                abandonedWriting = _linesBeingWritten;
+                _linesBeingWritten = 0;
+            }
+
+            clearedVoice = _voiceQueue.Count;
+            _voiceQueue.Clear();
+        }
+
+        int clearedSounds;
+
+        lock (_soundQueueLock)
+        {
+            // The countdown's own sounds are not queued yet - they are
+            // queued straight after this.
+            clearedSounds = RemoveQueuedSounds(_ => true);
+        }
+
+        lock (_batchLock)
+        {
+            foreach (var cts in _pendingBatchCancellation.Values)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+
+            _pendingBatchCancellation.Clear();
+            _pendingPerLapBatches.Clear();
+        }
+
+        var wasSpeaking = StopCurrentPlayback();
+        var cutSound = StopPlayingSound();
+
+        // Silent when there was nothing to cut, which is the usual case -
+        // the staging chain waits for the audio before it starts a countdown.
+        if (!wasSpeaking && !cutSound && clearedVoice == 0 && clearedSounds == 0 && abandonedWriting == 0)
+        {
+            return;
+        }
+
+        StatusMessage?.Invoke(
+            $"[voice] Countdown started - {(wasSpeaking ? "cut off the line in progress" : "nothing was speaking")}"
+            + $"{(cutSound ? " and the sound playing" : string.Empty)}, "
+            + $"cleared {Plural.Of(clearedVoice, "queued line")} and {Plural.Of(clearedSounds, "sound")}"
+            + $"{(abandonedWriting > 0 ? $", and stopped waiting for {Plural.Of(abandonedWriting, "line")} still being written" : string.Empty)}.");
     }
 
     /// <summary>

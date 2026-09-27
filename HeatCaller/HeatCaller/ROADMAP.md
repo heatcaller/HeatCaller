@@ -169,24 +169,100 @@ written to disk (crash.log).
 
 ### 3. Install, update, and undo
 
-- [ ] **Self-contained build**: `dotnet publish` with the .NET runtime
-      included, so a club installs nothing else. Fonts, sound packs and
-      music travel with it.
-- [ ] **Installer**: Inno Setup or MSIX - a Start menu entry, an uninstaller
-      that never deletes `%AppData%\HeatCaller`, and the rehearsal copy as
-      its own shortcut.
-- [ ] **Code signing certificate**, so Windows SmartScreen doesn't greet the
-      club with "unknown publisher".
-- [ ] **Auto-update**: check a version feed (heatcaller.com or GitHub
-      Releases), download, check the signature, and install only when no
-      race day is open and nothing is on track - never mid-meeting. The
-      club can always say "not now".
-- [ ] **Undo an update**: an automatic backup before a new version first
-      runs, and the previous installer kept so a bad release can be rolled
-      back.
-- [ ] **Release discipline**: `AppVersion` bumped with every release, the
-      release notes' "Unreleased" turned into a numbered version, and a beta
-      channel - so the version a club is on is always known.
+Planned 27 Sep 2026. Roughly 1.5 to 2 weeks of evenings, most of it the
+update rules and the testing. **Start the signing identity check early**:
+it is days of waiting, not work.
+
+**The tool: Velopack** (MIT licence, free). One command (`vpk pack`) makes
+the installer (`Setup.exe`) and the update packages; updates download only
+what changed and apply with no admin prompt, because it installs for the
+current Windows user. Not MSIX: a packaged app's `%AppData%` writes are
+redirected into a private folder that uninstalling deletes - the club's
+data would go with the app. Not Inno Setup: no updater, so that would be a
+second project. Not WiX/MSI: too heavy.
+
+**Packaging**
+- [ ] **Self-contained build**: `dotnet publish -c Release -r win-x64
+      --self-contained true`, so a club installs nothing else. No trimming
+      (WinForms doesn't support it); ReadyToRun optional, for startup.
+      Fonts, sound packs and music already copy beside the exe and are
+      found through `AppContext.BaseDirectory` - no change needed.
+- [ ] **One version number.** `AppVersion.Number` is a hard-coded
+      `"0.58.0"`. Take it from the csproj `<Version>` (the assembly's
+      version) so the package, the updater and the title bar can never
+      disagree.
+- [ ] **Package id `HeatCallerApp`, never `HeatCaller`.** Velopack
+      installs into `%LocalAppData%\<package id>`, and
+      `%LocalAppData%\HeatCaller` is already `AppPaths.LocalRoot` - the
+      voice-line cache and its undo folder. The same name would mix the
+      app's files into it, and uninstalling would delete the voice cache
+      (lines the club paid ElevenLabs for).
+- [ ] **`VelopackApp.Build().Run()` first in `Main`**, before the
+      rehearsal switch and the single-instance mutex - it is where the
+      install, update and uninstall hooks run.
+- [ ] **Shortcuts**: Start menu and desktop from Velopack; the
+      **HeatCaller Rehearsal** shortcut (`--rehearsal`) made in our own
+      install hook.
+- [ ] **Uninstall** removes the app's folder only. `%AppData%\HeatCaller`,
+      the voice cache and the rehearsal folder stay - tested, not assumed.
+
+**Signing**
+- [ ] **Azure Artifact Signing** (formerly Trusted Signing), about $9.99 a
+      month; open to individuals in the USA and Canada, identity checked
+      against a government ID. Sign the app's exe and `Setup.exe`. OV
+      certificates ($150-300/yr) are the fallback; EV ($400+) is not worth
+      it - since 2024 it no longer skips SmartScreen.
+- [ ] **Expect SmartScreen anyway at first.** Reputation builds as signed
+      releases are downloaded under the same identity. The first-night
+      guide shows the "More info - Run anyway" screen.
+
+**Updates - never mid-meeting**
+- [ ] **Feed**: a small **public** releases repo on GitHub, or a folder
+      on heatcaller.com. Not the source repo while it is private - reading
+      it would need a token shipped inside the app.
+- [ ] **When**: check quietly at startup and when idle (no internet = say
+      nothing); download in the background; **apply only with no race day
+      open, Race Control idle and the race journal empty**. Ask: "Update
+      now / After tonight / Not now". Never restart on its own.
+- [ ] **Backup first**: an automatic backup before a new version's first
+      run, named with the version that made it.
+- [ ] **Rolling back** = publishing the previous build again under a higher
+      version number, plus restoring that backup if data changed. The risk
+      to design against from the first release: an older version reading
+      files a newer one wrote and dropping the new fields when it saves.
+- [ ] **Channels**: `beta` now, `stable` later. The version is in the
+      support bundle (section 2).
+
+**Outside the installer's reach**
+- [ ] **Phone pages on the local network** need a URL reservation and a
+      firewall rule - admin-only, so a per-user installer can't make them.
+      Keep today's handling (the app shows the two commands, or runs them
+      when elevated); consider a "Set up phone pages" button that asks for
+      admin once.
+- [ ] **Decoder drivers**: EasyLap needs none. An I-Lap on a USB-to-serial
+      adapter may need the adapter's own driver - said in the guide, not
+      bundled.
+- [ ] **Licences**: an About box listing NAudio, HidSharp, QRCoder and the
+      OFL fonts (their licence files already travel with them).
+
+**Release pipeline and discipline**
+- [ ] **A tag makes a release**: GitHub Actions runs `check.cmd`, then
+      publish, `vpk pack`, sign, upload. A release only ever comes from a
+      green build. The signing credentials live as GitHub secrets, set up
+      by Asher.
+- [ ] **Release discipline**: the version bumped with every release, the
+      release notes' "Unreleased" turned into a numbered version - so the
+      version a club is on is always known.
+
+**Tests before any club gets it** (Windows Sandbox is enough)
+- [ ] Fresh install on a clean machine, as a standard (non-admin) user.
+- [ ] Upgrade from the previous version: data kept, music and fonts there,
+      voice cache untouched.
+- [ ] An update offered while a race day is open waits.
+- [ ] Uninstall keeps `%AppData%\HeatCaller`; reinstalling brings
+      everything back.
+- [ ] Offline machine: no errors. SmartScreen as expected. The rehearsal
+      shortcut works. The EasyLap connects.
 
 ### 4. A smaller app for beta clubs
 
@@ -242,6 +318,120 @@ never silent, and a warning at nine tenths. What remains is not code:
       how a driver is removed.
 - [ ] The **terms ElevenLabs requires** clubs to be bound by.
 - [ ] An hour with a lawyer on the above. Claude is not one.
+
+---
+
+## After the freeze - what could be better or is missing
+
+Written 26 Sep 2026, from reading the code and the project notes - not
+from watching a club use it, so to be re-ranked after the first beta nights.
+Nothing here is built during the freeze, except where an item says to check
+it in a rehearsal. Ranked by what decides whether a club switches, and stays.
+
+### What stops a club switching
+
+1. **MyLaps / AMB decoders.** Most clubs time with MyLaps (RC4 and older),
+   and HeatCaller reads only EasyLap and I-Lap. Every other item here
+   matters less for a club that can't plug in. (Also Beta readiness 1.)
+2. **Importing from the club's current software.** There is a CSV driver
+   import (Driver Profiles), which recognises its own column names. A club
+   switching mid-season also has classes, transponder lists and season
+   points in LiveTime, Next Level Timing, ZRound or RCM, and retyping them
+   is the reason not to switch. None of those publishes an export format,
+   so nothing can be built against a spec. The plan:
+   - **Samples first.** The beta application asks each club whether its
+     software exports the driver list, and for a sample file (Q28). A
+     dedicated "import from X" is built only for a system a beta club
+     actually sends, and tested against that club's file.
+   - **Column mapping.** Before that, make the CSV import handle any file:
+     a preview of the first rows with a dropdown above each column
+     (Transponder, Driver name, Car, Class, Team, Email, Notes, or Ignore),
+     guessed from the header and changeable. The same preview takes a table
+     pasted from a web page or a spreadsheet, which covers systems that
+     only show their lists on screen.
+   - **Season points as a starting number.** Past race results are not
+     imported. Each driver gets a "points so far" figure per class that the
+     season standings add to, typed in or imported as one more column.
+3. **A pit TV display.** The Big Screen is a window on the race laptop.
+   Clubs want a TV in the pits showing the live board: a full-screen page
+   from the laptop's own Wi-Fi server, opened in any TV browser or a cheap
+   stick, would do it.
+4. **Printed heat sheets and results.** Heat and run sheets can be
+   rendered, but the only real print dialog is the join poster. Clubs still
+   pin heat lists on a board: print, with a preview, from the Program tab
+   and Race History.
+
+### Timing that holds up on a bad night
+
+5. **Warning when timing quietly goes wrong.** The decoder reconnects by
+   itself. Not yet confirmed: whether Race Control warns when no crossings
+   arrive for longer than any lap should take mid-race, or when one car stops
+   being seen while the rest carry on - a dead transponder or a knocked
+   cable that nobody notices until the results are wrong. **Check this in a
+   rehearsal** by unplugging the decoder and switching a transponder off
+   mid-race; build the warning if it isn't there.
+6. **A "counted by hand" mark.** When a transponder fails, laps are added
+   by hand. The result should show which cars were hand-counted, so results
+   built partly by hand can be trusted and questioned.
+
+### Could be better
+
+7. **Less on screen for a new club.** 25 pages is a lot for a volunteer on
+   a race night. The Next Steps banner is the right idea: make the race-night
+   path all a new club sees, and the rest one click away. (The beta tier,
+   Beta readiness 4, is the first step.)
+8. **The fixed-pixel layout.** Most recent small UI bugs - clipped buttons,
+   stray scrollbars - come from fixed coordinates and `DpiUnaware`. Check it
+   on a small screen and a high-DPI one in a rehearsal; start the change
+   below only once beta clubs say which screens hurt on their laptops.
+
+   **Today:** about 1,500 hand-placed positions (`Location = new Point(...)`),
+   two TableLayoutPanels and two FlowLayoutPanels in the whole app. The app
+   runs `DpiUnaware`, so on a scaled screen Windows stretches it like a
+   picture (right size, slightly soft). When the text size changes (Ctrl +/-,
+   `AppTheme.FontScale`), `LayoutDoctor` repairs each page afterwards -
+   widening what no longer fits, pushing overlaps apart.
+
+   **The change - page by page, never a rewrite:**
+
+   1. **Reusable layout pieces first:** a label-and-field row, a button bar
+      (what `AppTheme.LayoutButtonRow` does by hand), a section, a panel
+      that fills what is left - built on TableLayoutPanel / FlowLayoutPanel
+      with AutoSize, Dock and Anchor, so each row measures its own text.
+   2. **Pages converted in race-night order, one per commit,** each checked
+      by eye at 100% and 150%: Race Control; Heats & Mains, Who's Racing and
+      check-in; Connection; the dialogs used on a race night; then the rest.
+   3. **Custom-drawn controls scale their drawing** (flag buttons, the race
+      clock, charts, badges, `ControlSkins`): sizes multiplied by the
+      control's `DeviceDpi` / 96.
+   4. **`LayoutDoctor`'s checks become a test:** every page built at 100%,
+      150% and 200%, and at 1366x768, failing on anything that overlaps or is
+      cut off. The runtime repair pass is deleted once every page passes on
+      its own.
+   5. **Last, and only when every page is converted:** `DpiUnaware` becomes
+      `PerMonitorV2` in `HeatCaller.csproj`, so text is sharp on high-DPI
+      laptops and a window moved to a TV or projector re-scales. Flipped
+      earlier, it makes the unconverted pages worse.
+
+   Cost: probably the biggest job after the installer - weeks of sessions,
+   dozens of pages. Risk: visual only (a misaligned screen, never lost
+   data), and `check.cmd` guards the logic underneath. Pays back as fewer
+   UI bugs for good, sharp text, bigger text for older eyes, and room for
+   translation later.
+
+   **Separately, and small:** a high-contrast theme for a bright room -
+   one new theme in the existing theme system.
+9. **Choosing and trusting the HeatCaller voice.** The feature clubs will
+   judge first: they can't hear a voice before choosing it, can't re-roll a
+   bad line, and can't see which lines spend their allowance (all in
+   `website\KNOWN-ISSUES.md`).
+10. **Taking the data with you.** One "export everything" - drivers,
+    results, standings as CSV - makes HeatCaller an easier yes for a club
+    afraid of being locked in.
+
+Deliberately not on this list: more race formats, more statistics, more
+sound or visual features. There is plenty of breadth already; what decides
+whether a club stays is 1, 2 and 5.
 
 ---
 
@@ -330,7 +520,7 @@ championships, the announcer's queueing, and anything on screen.
 
 From `website\KNOWN-ISSUES.md`, where the full wording lives:
 
-- No installer yet (see "Next").
+- No installer yet (see "Beta readiness", section 3).
 - The Windows voice gets the classic SAPI voices only.
 - Low: a move-driver or bump-up undo on the Program tab restores the whole
   heat roster, even onto a heat that has since been run.

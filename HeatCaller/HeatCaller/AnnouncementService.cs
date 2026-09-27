@@ -273,6 +273,101 @@ public sealed partial class AnnouncementService
     private int _deferredSoundsPending;
 
     /// <summary>
+    /// Lines a caller has asked a model to write and will speak when the
+    /// answer comes back - the AI round intro at staging. Counted as pending
+    /// audio from the moment the request goes out, so the staging chain
+    /// waits for the intro instead of seeing silence while the model thinks
+    /// and starting the countdown on top of it (rehearsal 1: the intro
+    /// arrived mid-countdown and pushed the countdown sounds back behind
+    /// itself, so every race heard the countdown twice).
+    ///
+    /// Changed only under _linesBeingWrittenLock; read without it.
+    /// </summary>
+    private int _linesBeingWritten;
+
+    private readonly object _linesBeingWrittenLock = new();
+
+    /// <summary>
+    /// Bumped every time a countdown starts (CutForCountdown). The countdown
+    /// cuts off everything still talking, and this is how a line that was
+    /// already taken off the queue - still synthesising, or waiting for the
+    /// speaker - finds out it has been overtaken. It is the same idea as
+    /// _interruptGeneration, kept separate because a flag spares
+    /// race-control lines and the countdown spares nothing.
+    ///
+    /// Changed under _voiceQueueLock AND _linesBeingWrittenLock, so a line
+    /// dequeued, or a line-being-written started, reads a value that is
+    /// either before the cut or after it.
+    /// </summary>
+    private int _countdownCutGeneration;
+
+    /// <summary>The countdown generation a voice-queue line was dequeued under. See _countdownCutGeneration.</summary>
+    private readonly AsyncLocal<int?> _dequeuedUnderCountdown = new();
+
+    /// <summary>True when the line being produced was dequeued before a countdown started.</summary>
+    private bool IsCutByCountdown() =>
+        _dequeuedUnderCountdown.Value is int generation && generation != Volatile.Read(ref _countdownCutGeneration);
+
+    /// <summary>
+    /// Marks a line as being written - see _linesBeingWritten. Dispose the
+    /// result once the line has been handed to the announcer (or given up
+    /// on); disposing twice is harmless.
+    ///
+    /// Never holds audio pending for longer than <paramref name="maxHold"/>,
+    /// whatever happens to the caller: a request whose answer never arrives
+    /// must not leave every later start waiting out its full cap. A countdown
+    /// starting releases it at once as well (CutForCountdown) - the line it
+    /// stands for would only be dropped when it arrived.
+    /// </summary>
+    public IDisposable BeginLineBeingWritten(TimeSpan maxHold)
+    {
+        LineBeingWritten token;
+
+        lock (_linesBeingWrittenLock)
+        {
+            _linesBeingWritten++;
+            token = new LineBeingWritten(this, _countdownCutGeneration);
+        }
+
+        _ = Task.Delay(maxHold).ContinueWith(_ => token.Dispose(), TaskScheduler.Default);
+        return token;
+    }
+
+    private void EndLineBeingWritten(int countdownGeneration)
+    {
+        lock (_linesBeingWrittenLock)
+        {
+            // A countdown since it began has already released it - see
+            // CutForCountdown, which zeroes the count.
+            if (countdownGeneration == _countdownCutGeneration && _linesBeingWritten > 0)
+            {
+                _linesBeingWritten--;
+            }
+        }
+    }
+
+    private sealed class LineBeingWritten : IDisposable
+    {
+        private readonly AnnouncementService _owner;
+        private readonly int _countdownGeneration;
+        private int _ended;
+
+        public LineBeingWritten(AnnouncementService owner, int countdownGeneration)
+        {
+            _owner = owner;
+            _countdownGeneration = countdownGeneration;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _ended, 1) == 0)
+            {
+                _owner.EndLineBeingWritten(_countdownGeneration);
+            }
+        }
+    }
+
+    /// <summary>
     /// True while anything is queued or actually playing. Lets callers wait
     /// for a cue to finish instead of guessing its length - the race start
     /// used a fixed delay with no relationship to how long the countdown
@@ -284,7 +379,8 @@ public sealed partial class AnnouncementService
         {
             if (Volatile.Read(ref _soundInFlight) > 0
                 || Volatile.Read(ref _voiceInFlight) > 0
-                || Volatile.Read(ref _deferredSoundsPending) > 0)
+                || Volatile.Read(ref _deferredSoundsPending) > 0
+                || Volatile.Read(ref _linesBeingWritten) > 0)
             {
                 return true;
             }
@@ -322,6 +418,7 @@ public sealed partial class AnnouncementService
         StatusMessage?.Invoke(
             $"[audio-wait] enter: pending={IsAudioPending} voice={Volatile.Read(ref _voiceInFlight)} "
             + $"sound={Volatile.Read(ref _soundInFlight)} deferred={Volatile.Read(ref _deferredSoundsPending)} "
+            + $"writing={Volatile.Read(ref _linesBeingWritten)} "
             + $"speaking={_isVoiceSpeaking} muted={Muted}");
 
         // Settle first, before deciding there's nothing to wait for.

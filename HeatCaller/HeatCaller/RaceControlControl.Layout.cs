@@ -405,17 +405,21 @@ public sealed partial class RaceControlControl
             // practice - see ApplyEffectiveFormat.
             ApplyEffectiveFormat(startingNewRace: true);
             ApplyJumpStartRules();
-            SpeakRoundIntro();
             _race.Stage();
             generationAfterStage = _race.SessionGeneration;
 
-            // Chain onward once the staging call has finished speaking.
-            // Driven by the audio rather than a timer, so the sequence
-            // always follows the announcements instead of talking over
-            // them or leaving dead air.
+            // After Stage, so it knows which race it is for - it is spoken
+            // only if this race is still staging when the model answers.
+            var introComing = _race.State == RaceState.Staging && SpeakRoundIntro(generationAfterStage);
+
+            // Chain onward once the staging call - and the round intro, when
+            // one is being written - has finished speaking. Driven by the
+            // audio rather than a timer, so the sequence always follows the
+            // announcements instead of talking over them or leaving dead air.
             if (_fmt.AutoAdvance)
             {
-                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false));
+                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false),
+                    introComing ? StagingWaitWithIntro : null);
             }
         };
         _btnStage.Click += (_, _) => _actStage(false, null);

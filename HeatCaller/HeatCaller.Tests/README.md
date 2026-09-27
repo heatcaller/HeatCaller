@@ -42,6 +42,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 | `NetworkRulesTests` | The relay token never goes over plain http to a .local/.lan name; check-in stays shut while the saved PINs are locked |
 | `PinKdfTests` | Salted, slow PIN hashes and the manager phone's PIN key: vectors shared with the relay's `pinsalt.test.ts`; a request signed with any other PIN, altered, stale or unsigned is refused |
 | `RestoredSettingsTests` | A restored backup's new relay, voice relay or mail server address is held until checked; the club's own backup asks nothing; a backup can't bring its own record; the publisher, voice and mailer all wait |
+| `CommentaryMarginTests` | The recap's winning margin: a win by thousandths is written in thousandths and never as a tie (rehearsal 1, 27 Sep) |
 
 ## What comes next
 

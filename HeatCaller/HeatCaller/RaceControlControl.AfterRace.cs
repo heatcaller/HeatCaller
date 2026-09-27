@@ -421,38 +421,124 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
-    /// Speaks an LLM-written "coming up" line for a round about to start.
-    /// Called from the staging path, where there's time for it before the
-    /// countdown begins.
+    /// The longest the model gets to write a round intro. Past it the intro
+    /// is skipped and the start carries on - the staging chain waits for
+    /// the intro (see SpeakRoundIntro), so this is how long a slow or cold
+    /// model can hold a start up. Deliberately shorter than the between-races
+    /// budget the recap gets: nobody is waiting on a recap.
     /// </summary>
-    private void SpeakRoundIntro()
+    private static readonly TimeSpan RoundIntroModelBudget = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// How long the staging chain waits for audio when an intro is coming:
+    /// the model's budget, then the staging call and the intro spoken. The
+    /// usual 20 seconds covered the staging call alone, and a start that
+    /// waited that long went on to the countdown while the intro was still
+    /// being written - which is what made rehearsal 1 play its countdown
+    /// twice.
+    /// </summary>
+    private static readonly TimeSpan StagingWaitWithIntro = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Speaks an LLM-written "coming up" line for a round about to start.
+    /// Called from the Stage button, straight after the race is staged.
+    ///
+    /// Counted as pending audio from the moment the request goes out (see
+    /// AnnouncementService.BeginLineBeingWritten), so the staging chain
+    /// waits for it rather than starting the countdown while the model is
+    /// still thinking. Spoken only if the race is still staging, and still
+    /// the race it was written for, when the answer arrives - an intro that
+    /// lands in the countdown, or after a reset, is dropped.
+    /// </summary>
+    /// <param name="stagedGeneration">The session the intro is for - _race.SessionGeneration straight after Stage.</param>
+    /// <returns>True if an intro was asked for, so the caller knows to wait for it.</returns>
+    private bool SpeakRoundIntro(int stagedGeneration)
     {
         if (_commentary is null || !_commentary.IsAvailable || !_settings.CommentaryRaceIntros)
         {
-            return;
+            return false;
         }
 
         var round = _activeRound?.Invoke();
         if (round is null)
         {
-            return;
+            return false;
         }
+
+        // Released however this ends - spoken, dropped, failed - and in any
+        // case after the budget plus a margin, or when a countdown starts.
+        var writing = _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10));
 
         _ = Task.Run(async () =>
         {
+            string line;
+
             try
             {
-                var line = await _commentary.BuildRoundIntroAsync(round);
-                if (!string.IsNullOrWhiteSpace(line))
+                using var budget = new CancellationTokenSource(RoundIntroModelBudget);
+                var answer = await _commentary.BuildRoundIntroAsync(round, budget.Token);
+
+                if (string.IsNullOrWhiteSpace(answer))
                 {
-                    _announcer.SpeakReminder(line);
+                    StatusMessage?.Invoke(budget.IsCancellationRequested
+                        ? $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - the model took longer than {RoundIntroModelBudget.TotalSeconds:0}s, so the start went on without it."
+                        : $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - no line came back.");
+                    writing.Dispose();
+                    return;
                 }
+
+                line = answer;
             }
-            catch
+            catch (Exception ex)
             {
-                // As above - decoration only.
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Round intro skipped - {ex.Message}");
+                writing.Dispose();
+                return;
+            }
+
+            // On the UI thread, where the race's state belongs. Released
+            // AFTER SpeakReminder has queued the line, so the audio never
+            // looks finished in between.
+            try
+            {
+                if (IsDisposed || Disposing || !IsHandleCreated)
+                {
+                    writing.Dispose();
+                    return;
+                }
+
+                BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (IsDisposed || Disposing)
+                        {
+                            return;
+                        }
+
+                        if (_race.State != RaceState.Staging || _race.SessionGeneration != stagedGeneration)
+                        {
+                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Round intro dropped - the race had moved on from staging before it was written.");
+                            return;
+                        }
+
+                        _announcer.SpeakReminder(line);
+                    }
+                    finally
+                    {
+                        writing.Dispose();
+                    }
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                // The window handle went away between the check and the
+                // post - the page is closing.
+                writing.Dispose();
             }
         });
+
+        return true;
     }
 
     private void SaveCompletedSessionToHistory()

@@ -740,7 +740,7 @@ public sealed class CommentaryService
     /// Deliberately blunt about a processional race. Telling the model it
     /// was comfortable is what stops it reaching for cup-final language.
     /// </summary>
-    private static string DescribeMargin(List<SessionResultEntry> ordered)
+    internal static string DescribeMargin(List<SessionResultEntry> ordered)
     {
         if (ordered.Count < 2)
         {
@@ -786,10 +786,19 @@ public sealed class CommentaryService
 
         if (gapMs <= 0)
         {
-            return "same lap, margin unknown - don't claim it was either close or comfortable";
+            return "same lap, margin unknown - don't claim it was either close or comfortable, and don't call it a tie - the results have a winner";
         }
 
         var gapSeconds = gapMs / 1000.0;
+
+        // Thousandths below a tenth. Two decimals turned a 4ms win into
+        // "0.00s", and the model read that as a dead heat - rehearsal 1's
+        // Q2 recap called a race with a clear winner a tie.
+        if (gapSeconds < 0.1)
+        {
+            return $"a photo finish - {Invariant(gapSeconds, "0.000")}s between first and second. "
+                + "Incredibly close, but NOT a tie - there is a clear winner, so never call it a dead heat";
+        }
 
         return gapSeconds switch
         {
