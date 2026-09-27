@@ -24,8 +24,8 @@ namespace HeatCaller.Tests;
 /// checked against the wall clock on the first lap, and a test cannot spend
 /// a minute per heat. So the decoder's own path - its clock, alternate
 /// transponders, jump starts - is not exercised here; that is what a solo
-/// rehearsal with the EasyLap is for (see Rehearsal), and what captured
-/// decoder logs will test later (ROADMAP.md, "Next").
+/// rehearsal with the EasyLap is for (see Rehearsal), and what the captured
+/// decoder log in EasyLapCaptureTests plays back.
 /// </summary>
 public sealed class RaceNightTests : IDisposable
 {

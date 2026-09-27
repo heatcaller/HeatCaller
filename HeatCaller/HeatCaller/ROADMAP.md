@@ -39,7 +39,7 @@ What follows from that:
 |---|---|
 | Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
 | App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 25 test classes, including a whole race night (`RaceNightTests`) |
+| Tests | `HeatCaller.Tests`: 26 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
@@ -138,8 +138,15 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
    on the bench. With one connected: read the raw capture
    (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn the capture
    into tests.
-4. **Tests for the decoder path.** Neither decoder's parsing is tested yet;
-   the raw captures are the test data.
+4. **Tests for the decoder path.** EasyLap done 27 Sep 2026
+   (`EasyLapCaptureTests`): rehearsal 3's console - every HID report, from
+   `HeatCaller.Tests\Captures\easylap-rehearsal3.log` - is played through
+   `EasyLapFramer` (the read loop's framing, split out of
+   `DirectDecoderClient` to be testable) and must decode line for line as
+   it did on the night; the A-Main's passes then go through
+   `RaceControlSession` and must count the same laps. Add a capture from
+   each rehearsal that shows something new - the session log keeps the
+   decoder lines. I-Lap waits for a real unit (3).
 5. **Beta readiness** - everything in the next section, in its order.
 6. **Split the two remaining giant methods.** `PopulateTabs`
    (`MainForm.Pages.cs`, ~1,750 lines) and `BuildLayout`
@@ -174,11 +181,11 @@ read at all.
 
 ### 2. A night you can support from somewhere else
 
-Today the console exists only while the app is open; only crashes are
-written to disk (crash.log).
-
-- [ ] **A saved race-night log**: every console line written to a dated
-      file in the data folder, kept for a few weeks, capped in size.
+- [x] **A saved race-night log** - done 27 Sep 2026 (`SessionLog`): every
+      console line, one file per run, in `%LocalAppData%\HeatCaller\Logs`
+      (the rehearsal's own `Logs` folder in a rehearsal), the last 20 runs
+      kept. Deliberately NOT in the data folder, which backups zip whole.
+      Freeze dumps (`HangWatchdog`) go beside the logs.
 - [ ] **A "send support info" button**: zips the night's log, crash.log, the
       version and the settings that matter - no driver names, emails, PINs
       or tokens - for the club to email.
@@ -389,6 +396,15 @@ from. Ranked by what decides whether a club switches, and stays.
    cable that nobody notices until the results are wrong. **Check this in a
    rehearsal** by unplugging the decoder and switching a transponder off
    mid-race; build the warning if it isn't there.
+
+   Found in rehearsal 3's capture (27 Sep 2026), and not used yet: the
+   EasyLap's heartbeat (the 11-byte `0x0B` message) carries the decoder's
+   clock in bytes 3-6, little-endian ms, once a second - 738 of them over
+   737 seconds, each 992-1008ms after the last. So "the decoder is alive"
+   and "no car has crossed" can be told apart: a missing heartbeat means the
+   decoder or its cable, a running clock with no passes means the cars. The
+   same clock would give the green a real decoder time instead of an
+   estimate from the last pass. Bytes 7-10 were the same in every one.
 6. **A "counted by hand" mark.** When a transponder fails, laps are added
    by hand. The result should show which cars were hand-counted, so results
    built partly by hand can be trusted and questioned.
@@ -499,8 +515,11 @@ result corrections, saving a race and stores that fail, the round picker,
 restored-backup addresses, PIN hashing (shared vectors with the relay),
 sound-effect settings, achievement grid positions, driver photos.
 
-Not yet: the decoders (the race-night test feeds laps as race times, not
-decoder readings), handicaps, tech inspection, rentals, multi-day events,
+The EasyLap decoder path, from HID report to counted lap, on one real
+night (`EasyLapCaptureTests`).
+
+Not yet: the I-Lap decoder, the EasyLap's connect and reconnect (they need
+the device), handicaps, tech inspection, rentals, multi-day events,
 championships, the announcer's queueing, and anything on screen.
 
 ### Edge cases worth not re-breaking

@@ -47,6 +47,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 | `LapRejectionTests` | A pass thrown out as too soon is logged with the gap it was judged on - since the previous pass - and the lap time beside it, each saying what it runs from (rehearsal 3, 27 Sep) |
 | `ParkedOnLoopTests` | A car sitting on the loop since staging is not called as a jump start; a car placed across the loop and then going early, or driven onto it in the countdown, still is (rehearsal 3, 27 Sep) |
 | `RoundIntroTidyTests` | The round intro after the model: shouting put back into normal case (a word of emphasis kept), a wrong heat number replaced with the round's label, and an intro past the word limit cut to whole sentences or dropped (rehearsal 3, 27 Sep) |
+| `EasyLapCaptureTests` | Rehearsal 3's EasyLap night played back from `Captures\easylap-rehearsal3.log`: every HID report decodes line for line as it did on the night, a pass split across reports after a stray byte is still read, and the A-Main's passes count the same laps through the race (27 Sep) |
 
 ## What comes next
 

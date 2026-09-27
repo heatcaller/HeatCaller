@@ -60,18 +60,9 @@ public sealed class DirectDecoderClient : IDisposable
     private HidStream? _stream;
     private CancellationTokenSource? _cts;
 
-    // The only two message lengths the decoder is known to send (see
-    // HandleMessage): 0x0D = 13-byte lap pass, 0x0B = 11-byte heartbeat. The
-    // framer only trusts a leading byte that is one of these - anything else
-    // means we are out of step with the stream, so one byte is dropped and the
-    // next position is tried until we resync.
-    private const byte LapMessageLength = 0x0D;
-    private const byte HeartbeatMessageLength = 0x0B;
-
-    // A healthy stream never holds more than a partial message; if the buffer
-    // gets this big something is badly wrong and it is thrown away rather than
-    // growing for the rest of the session.
-    private const int MaxBufferBytes = 4096;
+    // What is done with the bytes once they are read - framing, decoding,
+    // the console lines - is EasyLapFramer, so a captured night can be
+    // played back through it with no decoder attached.
 
     public event Action<DecoderConnectionState, string>? StatusChanged;
     public event Action<string>? RawMessage;
@@ -140,11 +131,11 @@ public sealed class DirectDecoderClient : IDisposable
 
     private void ReadLoop(HidStream stream, int maxInputReportLength, CancellationToken ct)
     {
-        // The framing buffer is local to this loop on purpose: a reconnect
-        // starts a fresh loop with its own buffer, so an old loop that is still
-        // winding down can never interleave bytes with the new one, and
+        // The framer (and its buffer) is local to this loop on purpose: a
+        // reconnect starts a fresh loop with its own, so an old loop that is
+        // still winding down can never interleave bytes with the new one, and
         // Disconnect() (UI thread) never has to touch it while it is in use.
-        var buffer = new List<byte>();
+        var framer = new EasyLapFramer(Log, lap => LapEventReceived?.Invoke(lap));
 
         try
         {
@@ -190,23 +181,11 @@ public sealed class DirectDecoderClient : IDisposable
                 // suspect data) and carry on with the next report.
                 try
                 {
-                    var report = readBuffer.AsSpan(0, bytesRead).ToArray();
-                    Log($"[raw HID] {ToHex(report)}");
-
-                    var length = report[0];
-                    if (length > 0 && length < report.Length)
-                    {
-                        for (var i = 1; i <= length; i++)
-                        {
-                            buffer.Add(report[i]);
-                        }
-                    }
-
-                    ProcessBuffer(buffer, ct);
+                    framer.AddReport(readBuffer.AsSpan(0, bytesRead), ct);
                 }
                 catch (Exception ex)
                 {
-                    buffer.Clear();
+                    framer.Clear();
                     Log($"[error] Failed to process a decoder report, buffered bytes discarded: {ex.Message}");
                 }
             }
@@ -229,78 +208,6 @@ public sealed class DirectDecoderClient : IDisposable
                 }
             }
         }
-    }
-
-    private void ProcessBuffer(List<byte> buffer, CancellationToken ct)
-    {
-        if (buffer.Count > MaxBufferBytes)
-        {
-            Log($"[framing] Buffer reached {buffer.Count} bytes without a valid message - discarding it.");
-            buffer.Clear();
-            return;
-        }
-
-        var skipped = 0;
-        while (buffer.Count > 0 && !ct.IsCancellationRequested)
-        {
-            var msgLen = buffer[0];
-            if (msgLen != LapMessageLength && msgLen != HeartbeatMessageLength)
-            {
-                // Not the start of any message we know - we are out of step
-                // (a dropped/garbled byte upstream). Slide forward one byte
-                // and try again rather than trusting it as a length.
-                buffer.RemoveAt(0);
-                skipped++;
-                continue;
-            }
-
-            if (buffer.Count < msgLen)
-            {
-                break;
-            }
-
-            var message = buffer.GetRange(0, msgLen).ToArray();
-            buffer.RemoveRange(0, msgLen);
-
-            HandleMessage(message);
-        }
-
-        if (skipped > 0)
-        {
-            Log($"[framing] Skipped {skipped} byte(s) to resynchronise with the decoder stream.");
-        }
-    }
-
-    private void HandleMessage(byte[] message)
-    {
-        Log($"[decoded msg] {ToHex(message)}");
-
-        if (message.Length == 13 && message[0] == 0x0d)
-        {
-            var transponder = $"{message[2]:X2}{message[3]:X2}{message[4]:X2}";
-            var deviceTimeMs = (uint)(message[7] | (message[8] << 8) | (message[9] << 16) | (message[10] << 24));
-            var signalHits = message[11];
-            var signalStrength = message[12];
-
-            Log($"[LAP EVENT] transponder={transponder}  device_time={deviceTimeMs}ms  " +
-                $"signal_hits={signalHits}  signal_strength={signalStrength}");
-
-            LapEventReceived?.Invoke(new DirectLapEvent
-            {
-                TransponderId = transponder,
-                DeviceTimeMs = deviceTimeMs,
-                SignalHits = signalHits,
-                SignalStrength = signalStrength,
-            });
-            return;
-        }
-
-        if (message.Length == 11 && message[0] == 0x0b)
-        {
-            return; // periodic heartbeat, not otherwise acted on
-        }
-
-        Log($"[unknown message type] length={message.Length}");
     }
 
     public void Disconnect()

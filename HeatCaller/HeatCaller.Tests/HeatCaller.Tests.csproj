@@ -29,4 +29,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Decoder captures from real nights, played back by the tests
+         (EasyLapCaptureTests). Copied beside the test dll, where the tests
+         look for them. -->
+    <None Update="Captures\**\*.log" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
