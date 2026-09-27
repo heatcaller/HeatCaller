@@ -33,6 +33,13 @@ public sealed class BackupRestoreControl : UserControl
     public event Action? ReleaseFilesForRestore;
 
     /// <summary>
+    /// Raised by Save Support Info. The host (MainForm) does the work - see
+    /// SupportInfo - because it needs Driver Profiles, which this page
+    /// doesn't have, to know whose names to take out.
+    /// </summary>
+    public event Action? SupportInfoRequested;
+
+    /// <summary>
     /// Asked before a restore starts: true while a race (or practice) is
     /// under way. Set by the host (MainForm), which knows the race state;
     /// null means "never", which is what this page assumed before.
@@ -130,7 +137,13 @@ public sealed class BackupRestoreControl : UserControl
         var grpPassword = BuildPasswordGroup(width);
         grpPassword.Location = new Point(UiLayout.PageLeft, UiLayout.Below(grpAuto, UiLayout.RowGap));
 
-        var listTop = UiLayout.Below(grpPassword, UiLayout.RowGap);
+        var grpSupport = BuildSupportGroup(width);
+        grpSupport.Location = new Point(UiLayout.PageLeft, UiLayout.Below(grpPassword, UiLayout.RowGap));
+
+        // The list stays the last box on the page: it grows and shrinks with
+        // the backups it holds (LayoutListGroup), and nothing sits below it
+        // to be pushed about.
+        var listTop = UiLayout.Below(grpSupport, UiLayout.RowGap);
 
         var grpList = BuildListGroup(width);
 
@@ -139,7 +152,46 @@ public sealed class BackupRestoreControl : UserControl
         Controls.Add(grpManual);
         Controls.Add(grpAuto);
         Controls.Add(grpPassword);
+        Controls.Add(grpSupport);
         Controls.Add(grpList);
+    }
+
+    /// <summary>
+    /// Save Support Info: one zip of the logs and crash log, with driver
+    /// names and emails taken out, for a club to email when something went
+    /// wrong. On this page because it is where the app's files are looked
+    /// after; the crash dialog and the console's menu point here too.
+    /// </summary>
+    private GroupBox BuildSupportGroup(int width)
+    {
+        var group = new GroupBox
+        {
+            Text = "Getting Help",
+            Font = AppTheme.BodyFont,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+
+        var btnSupport = new Button { Text = "Save Support Info..." };
+        btnSupport.Click += (_, _) => SupportInfoRequested?.Invoke();
+
+        UiLayout.ButtonRow(Inset, UiLayout.InsideGroup(group), btnSupport);
+
+        var lblHint = new Label
+        {
+            Text = "Saves one file to attach to an email when something went wrong: the console from the last few runs, the crash log, "
+                   + "the version and the settings that matter. Driver names, email addresses and your Windows user name are replaced "
+                   + "first, and no keys, tokens, PINs or passwords go in.",
+            AutoSize = true,
+            MaximumSize = new Size(width - Inset * 2, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+            Location = new Point(Inset, UiLayout.Below(btnSupport, UiLayout.RowGap)),
+        };
+
+        group.Controls.AddRange(new Control[] { btnSupport, lblHint });
+        group.Size = new Size(width, UiLayout.Below(lblHint, Inset));
+
+        return group;
     }
 
     private GroupBox BuildManualGroup(int width)

@@ -1552,6 +1552,10 @@ public partial class MainForm
         // A restore restarts the app, which would end a race or practice
         // mid-session - the page asks first when this says one is on.
         backupRestore.IsRaceUnderWay = () => _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+        // Save Support Info - done here rather than on the page, which has
+        // no Driver Profiles to take the names out with. See SupportInfo.
+        backupRestore.SupportInfoRequested += () => SupportInfo.Save(backupRestore, _settings, _profiles, OnClientRawMessage);
         backupRestore.RestoreCompleted += () =>
         {
             // Every store only reads from disk once, at startup - the only

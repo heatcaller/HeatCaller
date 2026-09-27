@@ -39,7 +39,7 @@ What follows from that:
 |---|---|
 | Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
 | App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 26 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
+| Tests | `HeatCaller.Tests`: 27 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
@@ -186,9 +186,18 @@ read at all.
       (the rehearsal's own `Logs` folder in a rehearsal), the last 20 runs
       kept. Deliberately NOT in the data folder, which backups zip whole.
       Freeze dumps (`HangWatchdog`) go beside the logs.
-- [ ] **A "send support info" button**: zips the night's log, crash.log, the
-      version and the settings that matter - no driver names, emails, PINs
-      or tokens - for the club to email.
+- [x] **Save Support Info** - done 27 Sep 2026 (`SupportBundle`,
+      `Redactor`, `SupportInfo`): Backup & Restore, Getting Help box, and
+      the console's right-click menu. One zip: the last 5 runs' logs from
+      the last 3 days, crash.log and crash.old.log, 3 days of I-Lap raw
+      capture, and a summary (version, PC, an allow-list of settings that
+      only says whether each secret is set). Driver names (whole and word
+      by word, as written and in capitals), emails, Driver Profiles
+      contacts and the Windows user name in paths are replaced first;
+      freeze dumps are listed, never included. Names not in Driver
+      Profiles (a turned-down sign-up) can't be recognised - the README
+      inside says so. The crash dialog points at it. Not yet tried on the
+      laptop: save one after a rehearsal and read it through.
 - [ ] **A support channel** the club knows before the night (an email
       address at heatcaller.com), and a plain answer to "what if it breaks
       on Saturday": they switch to the fallback plan (section 5).
@@ -516,7 +525,9 @@ restored-backup addresses, PIN hashing (shared vectors with the relay),
 sound-effect settings, achievement grid positions, driver photos.
 
 The EasyLap decoder path, from HID report to counted lap, on one real
-night (`EasyLapCaptureTests`).
+night (`EasyLapCaptureTests`). Save Support Info: what goes in the zip, and
+that no name, email, user folder, secret or freeze dump does
+(`SupportBundleTests`).
 
 Not yet: the I-Lap decoder, the EasyLap's connect and reconnect (they need
 the device), handicaps, tech inspection, rentals, multi-day events,

@@ -206,10 +206,9 @@ See [Big Screen](../screens/big-screen.md).
 
 ## Still stuck?
 
-Collect the following before asking for help:
+Before asking for help:
 
-- The version, shown on the startup screen (for example `BETA 0.52.0`).
-- The exact message, copied from the console or a screenshot.
-- `crash.log` from the data folder, if there is one ([Data files](data-files.md)).
+- Save the support file: **Save Support Info** on the **Backup & Restore** page. It holds the version, the console from the last few runs and `crash.log`, with driver names and email addresses taken out. See [Save Support Info](backups.md#save-support-info).
+- Note what you were doing when it happened, and copy the exact message from the console or take a screenshot.
 
 <!-- TODO: add the support contact / issue tracker link -->

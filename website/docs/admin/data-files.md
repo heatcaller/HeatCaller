@@ -29,6 +29,14 @@ And one outside both, for saved voice lines:
 
 This is where HeatCaller keeps every announcer line the HeatCaller voice or your own ElevenLabs account has spoken, so it can play it again without paying for it again. Nothing the free Windows voice says is ever kept here, not even when it's standing in. Lines from the two paid voices are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has everything it has already paid for. See [Saved voice lines](../announcer/voice.md#saved-voice-lines). It's a cache: everything in it can be made again, so it isn't part of backups, and it isn't copied to a new laptop. On a typical laptop it's `C:\Users\<your name>\AppData\Local\HeatCaller\VoiceLibrary`. Each line is an `.mp3` or `.wav` file named by a long code, with a `.json` file beside it holding the words. It's kept to about 500 MB: past that, the lines played least recently are cleared.
 
+Beside it, the console logs:
+
+```text
+%LocalAppData%\HeatCaller\Logs
+```
+
+HeatCaller writes the **Developer Console** to a file here as it goes, one file per run (`console-YYYY-MM-DD_HH-MM-SS.log`), and keeps the last 20. If HeatCaller stops responding for 10 seconds, the log says so, and a freeze dump (`freeze-YYYY-MM-DD_HH-MM-SS.dmp`, a copy of the app's memory at that moment) is saved here too: at most one per run, the last 2 kept. Neither is part of backups. In a rehearsal they go to the `Logs` folder in `%LocalAppData%\HeatCaller Rehearsal` instead. To send them for help, use [Save Support Info](backups.md#save-support-info).
+
 ## What each file holds
 
 All data files are plain JSON text, except where noted.
@@ -167,6 +175,7 @@ Close HeatCaller first. Then you can delete:
 | `*.unreadable-*` | Only once you've recovered anything you need from it. |
 | `race-in-progress-discarded.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
 | `*.tmp` | Left over from an interrupted save. |
+| `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
 | `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** under **Voice Announcements → Voice Settings → Saved Voice Lines** does the same without closing HeatCaller. |
 
 Don't delete or edit anything else by hand. In particular:

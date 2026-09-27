@@ -249,9 +249,15 @@ public partial class MainForm
             console.Clear();
         };
 
+        // The whole log, from the file rather than the box - which holds the
+        // last few thousand lines, and has been cleared if somebody pressed
+        // the item above - with names taken out. See SupportInfo.
+        var saveSupport = new ToolStripMenuItem("Save support info...");
+        saveSupport.Click += (_, _) => SupportInfo.Save(this, _settings, _profiles, OnClientRawMessage);
+
         menu.Items.AddRange(new ToolStripItem[]
         {
-            copySelection, copyVisible, new ToolStripSeparator(), selectAll, new ToolStripSeparator(), clear,
+            copySelection, copyVisible, new ToolStripSeparator(), selectAll, new ToolStripSeparator(), saveSupport, new ToolStripSeparator(), clear,
         });
 
         // Copy is pointless with nothing selected, so it says so rather

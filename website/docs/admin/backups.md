@@ -194,6 +194,32 @@ You'll also see a `settings.json.unreadable-...` copy after restoring onto a new
 
 To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of the data folder, then rename the copy back to the original file name, replacing the default one. <!-- TODO: confirm this recovery procedure is the recommended one --> If it still won't load, keep the copy and contact support with it.
 
+## Save Support Info
+
+When something has gone wrong and you want help with it, **Save Support Info** in the **Getting Help** box saves one `.zip` file to attach to an email. You can also right-click the **Developer Console** on the **Connection** page and choose **Save support info...**.
+
+1. Click **Save Support Info**.
+2. Choose where to save it. It suggests your desktop and a name like `HeatCaller support 2026-09-27 21-30.zip`.
+3. HeatCaller says what went in, then opens the folder with the file selected. If the file is over 20 MB, it says so: most email won't take a file that big, so put it in Google Drive, OneDrive or Dropbox and send the link.
+
+| In the file | What it is |
+|---|---|
+| `summary.txt` | The HeatCaller version, the PC (Windows version, memory, screens, free disk space) and the settings that help work out a problem. Keys, tokens, PINs and passwords never go in: it only says whether each one is set. |
+| `logs` | The console from the last few times HeatCaller ran: up to 5 runs from the last 3 days, newest first. The newest always goes in. |
+| `crash` | `crash.log` and `crash.old.log`, if there are any. |
+| `decoder` | With an I-Lap decoder, its raw capture from the last 3 days (up to 3 files). |
+| `README.txt` | What's in the file and what was changed. |
+
+Before anything goes in, HeatCaller replaces:
+
+- each driver's **Driver name:** and **Announcer name:** from **Driver Profiles**, whole and word by word, with `[driver 1]`, `[driver 2]` and so on. The same driver keeps the same number all the way through, so one driver can still be followed through the night;
+- email addresses with `[email]`, and each driver's **Contact:** with `[contact]`;
+- your Windows user name in folder paths with `[user]`.
+
+Names are matched as written and in capitals (`Sam`, `SAM`), not in lower case, so a driver called Max doesn't take every "max" in the log with them. A name that isn't in **Driver Profiles**, such as an online sign-up you turned down, isn't recognized. Open the file and look if you need to be sure.
+
+Freeze dumps are never included. If HeatCaller stops responding, it saves a copy of its memory for working out why (see [Data files](data-files.md#the-data-folder)). That copy holds everything the app had open, so only send one if you're asked for it; the README in the support file says where it is.
+
 ## Troubleshooting
 
 | Message | What it means | What to do |

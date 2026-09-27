@@ -12,6 +12,9 @@ internal static class Program
         Path.GetDirectoryName(CrashLogPath)!,
         "crash.old.log");
 
+    /// <summary>Both crash logs, newest first, for Save Support Info (SupportBundle). Either may not exist.</summary>
+    internal static IReadOnlyList<string> CrashLogPaths => new[] { CrashLogPath, CrashLogOldPath };
+
     // crash.log is appended to forever; past this it's moved aside to
     // crash.old.log and started again, so a fault that repeats all night
     // can't fill the disk.
@@ -305,6 +308,7 @@ internal static class Program
             MessageBox.Show(
                 $"{ex.GetType().Name}: {ex.Message}\r\n\r\n" +
                 $"Full details were written to:\r\n{CrashLogPath}\r\n\r\n" +
+                "To send them for help: Backup & Restore page, Save Support Info.\r\n\r\n" +
                 $"{ex.StackTrace}",
                 title, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }

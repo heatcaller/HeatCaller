@@ -4,6 +4,11 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+**Getting help (27 Sep)**
+
+- **Save Support Info.** One `.zip` to attach to an email when something has gone wrong: the console from the last few runs, the crash log, the version, the PC and the settings that matter, and an I-Lap's raw capture. Driver names, email addresses, contact details and your Windows user name are replaced first, and no keys, tokens, PINs or passwords go in. It's in the new **Getting Help** box on **Backup & Restore**, and on the **Developer Console**'s right-click menu. See [Save Support Info](admin/backups.md#save-support-info).
+- The crash message now says where to find it.
+
 **Fixes from the rehearsals (27 Sep)**
 
 - **The countdown plays once.** With race intros on, the start now waits for the AI round intro to be written and spoken before the countdown begins. It used to start the countdown while the intro was still being written, and the countdown was heard twice. With the countdown ticks on, the ticks are the countdown sound.
