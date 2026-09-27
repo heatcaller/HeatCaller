@@ -43,6 +43,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 | `PinKdfTests` | Salted, slow PIN hashes and the manager phone's PIN key: vectors shared with the relay's `pinsalt.test.ts`; a request signed with any other PIN, altered, stale or unsigned is refused |
 | `RestoredSettingsTests` | A restored backup's new relay, voice relay or mail server address is held until checked; the club's own backup asks nothing; a backup can't bring its own record; the publisher, voice and mailer all wait |
 | `CommentaryMarginTests` | The recap's winning margin: a win by thousandths is written in thousandths and never as a tie (rehearsal 1, 27 Sep) |
+| `FreezeDiagnosticsTests` | The session log and freeze-dump clean-up keeps the newest files of its own kind only; only `--write-freeze-dump` makes the exe the dump helper, and a bad command line dumps nothing (rehearsal 2, 27 Sep) |
 
 ## What comes next
 

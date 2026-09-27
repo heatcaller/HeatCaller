@@ -1448,6 +1448,11 @@ public partial class MainForm : Form
             _closingDown = true;
             _webServer.HostReady = false;
 
+            // Closing can take a while (saving, stopping the decoder), and
+            // the window stops answering pings as it goes - which is not a
+            // freeze.
+            HangWatchdog.Stop();
+
             // The announcer's window is deliberately NOT owned by this one,
             // so that it can be left on a second screen while this one is
             // used - which also means closing this one does not close it.
@@ -1720,9 +1725,11 @@ public partial class MainForm : Form
             _pendingConsoleLines.Clear();
         }
 
+        // Already in the session log - OnClientRawMessage wrote them there
+        // when they arrived.
         foreach (var line in lines)
         {
-            OnClientRawMessage(line);
+            ShowConsoleLine(line);
         }
     }
 
@@ -1785,6 +1792,16 @@ public partial class MainForm : Form
         // Everything it is going to show is already drawn, so it arrives in
         // one piece rather than as a sequence of controls appearing.
         Opacity = 1d;
+
+        if (SessionLog.FilePath is { } logFile)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [log] This run's console is also being saved to {logFile}");
+        }
+
+        // From here on, a window that stops answering for ten seconds is
+        // noted in that file, with a dump of the frozen app beside it. See
+        // HangWatchdog.
+        HangWatchdog.Start(this, OnClientRawMessage);
 
         Ready?.Invoke(this, EventArgs.Empty);
     }

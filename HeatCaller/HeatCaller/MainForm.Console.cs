@@ -86,7 +86,22 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Logs a line: to the session log file straight away, from whatever
+    /// thread this is (see SessionLog), then to the console box.
+    ///
+    /// The file comes first and does not wait for the UI thread - when the
+    /// window is frozen, the lines other threads go on logging still reach
+    /// the file, and they are what shows what was happening around it.
+    /// </summary>
     private void OnClientRawMessage(string line)
+    {
+        SessionLog.Write(line);
+        ShowConsoleLine(line);
+    }
+
+    /// <summary>The console box half of OnClientRawMessage. Anything re-posting a line calls this, so the file gets it once.</summary>
+    private void ShowConsoleLine(string line)
     {
         // Closing the window disposes the pages, and disposing Demo Mode
         // resets the race session - which logs, which lands here after the
@@ -121,7 +136,7 @@ public partial class MainForm
 
         if (InvokeRequired)
         {
-            TryPost(() => OnClientRawMessage(line));
+            TryPost(() => ShowConsoleLine(line));
             return;
         }
 

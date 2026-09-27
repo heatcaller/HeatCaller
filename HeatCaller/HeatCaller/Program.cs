@@ -31,6 +31,18 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // HeatCaller.exe --write-freeze-dump <process> <file>: not the app at
+        // all, but the helper the freeze watchdog starts to dump a frozen
+        // copy of it from outside (see HangWatchdog). First, before the
+        // single-instance check - which would wait on, and then refuse, the
+        // very copy it has been asked to dump.
+        var commandLine = Environment.GetCommandLineArgs();
+        if (HangWatchdog.IsDumpHelper(commandLine))
+        {
+            Environment.ExitCode = HangWatchdog.RunDumpHelper(commandLine);
+            return;
+        }
+
         // Without these, any exception thrown while the app is starting up
         // kills the process with no window, no message, and nothing printed
         // to the console - it just returns to the prompt as if nothing
@@ -97,6 +109,12 @@ internal static class Program
             {
                 return;
             }
+
+            // The console, also written to a file as it goes - so a freeze
+            // that ends in a force-close still leaves the lines that led up
+            // to it. After the rehearsal switch (it decides the folder) and
+            // the migration (it moves the folders this writes into).
+            SessionLog.Start();
 
             // The startup screen goes up FIRST, before anything else is
             // built.
