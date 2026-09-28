@@ -617,7 +617,8 @@ public sealed partial class AnnouncementService
     /// be speaking is worse than useless - it reads as the feature being
     /// broken, which is how several things in this app got reported.
     /// </summary>
-    public void SpeakTest(string text, double speed)
+    /// <param name="voice">Another speaker's voice to test - the recap's mechanic, from the Commentary page. Null for the announcer.</param>
+    public void SpeakTest(string text, double speed, SecondVoice? voice = null)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -639,7 +640,8 @@ public sealed partial class AnnouncementService
                     "[voice] Test",
                     "[voice] Test skipped - ElevenLabs API key or voice not configured.",
                     speedOverride: speed,
-                    honourMute: false);
+                    honourMute: false,
+                    voice: voice);
             }
             catch (Exception ex)
             {
@@ -648,7 +650,19 @@ public sealed partial class AnnouncementService
         });
     }
 
-    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null)
+    /// <summary>
+    /// Which engine speaks - ElevenLabs, the HeatCaller voice or the Windows
+    /// voice - as saved on Voice Settings. For a second speaker, whose voice
+    /// is picked per engine (see SecondVoice).
+    /// </summary>
+    public VoiceEngine VoiceEngineInUse => _voiceStore.Current.EffectiveEngine;
+
+    /// <param name="voice">
+    /// Another speaker's voice for this line alone - the mechanic in the
+    /// recap's interview. Null for the announcer. Only the part picked for
+    /// the engine in use changes anything.
+    /// </param>
+    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -657,7 +671,7 @@ public sealed partial class AnnouncementService
 
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride));
+            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice));
     }
 
     /// <summary>A line already rendered to audio, ready to play the instant it's wanted.</summary>
@@ -676,8 +690,9 @@ public sealed partial class AnnouncementService
     /// the render failed. Every one of those is a cue for the caller to fall
     /// back to <see cref="SpeakReminder"/>, which synthesises at speak time.
     /// </summary>
+    /// <param name="voice">Another speaker's voice for this line alone, as for SpeakReminder. Null for the announcer.</param>
     public async Task<PreparedSpeech?> PrepareReminderAsync(
-        string text, (double Stability, double Style)? deliveryOverride = null)
+        string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -691,6 +706,11 @@ public sealed partial class AnnouncementService
         if (deliveryOverride is { } delivery)
         {
             profile = profile.CloneForDelivery(delivery.Stability, delivery.Style);
+        }
+
+        if (voice is not null)
+        {
+            profile = profile.CloneWithVoice(voice);
         }
 
         // Whichever voice would say it live - the Windows voice, ElevenLabs,

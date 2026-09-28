@@ -4,6 +4,18 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+**The recap as a broadcast (27 Sep)**
+
+- **A TV-style opening and sign-off for the recap.** Tick them under the new **Broadcast** heading on **Voice Announcements → Commentary**, and give your show a name for them to use. The sign-off tees up the next race on the program. See [Broadcast](announcer/commentary.md#broadcast).
+- **After a main, a word with the winner's mechanic.** The announcer asks two questions and the mechanic answers in a voice of their own, about the race and about the setup changes logged for the winning car in the **Garage** that day. Pick the mechanic's name and voice on the Commentary page. Heats don't get one.
+- **Intros and recaps say whether it's a heat or a main.**
+- **Intros just for the races that matter.** **Only for a main, or a race with a known rivalry on the grid** skips the round intro for every other race.
+- **The phone remote says which race it's controlling.** **CONTROLLING** at the top of the race remote shows the round selected on **Race Control**, for example "Q2 Heat 1 (Stock Buggy)". See [Race remote](screens/phone-and-web.md#race-remote).
+- **Import drivers from any CSV.** **Import from CSV** on **Driver Profiles** now shows the file first, with a list above each column to say what it is - guessed from the headings - so an export from the club's old timing software works as well as the template. Semicolon- and tab-separated files work, and so do separate first- and last-name columns. See [Import drivers from a spreadsheet](race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
+- **Bring a season's points with you.** A **Points so far** column carries each driver's championship points in as their starting total, into the championship you pick or the one for each driver's class. They show in a new **Carried In** column on **Championship → Standings**, and can be typed in or changed there with **Points Carried In**. See [Points carried in](race-control/results-and-championships.md#points-carried-in).
+- **Recent activity on the driver card.** **Driver Profiles** shows each driver's latest races, personal bests and setup changes, newest first.
+- **What changed between setups, at a glance.** A car's setups in the **Garage** have a new **Changed Since Last** column: "Pinion 22T → 23T, Front springs Soft → Medium". See [Setup Log](race-day/drivers-and-classes.md#setup-log).
+
 **Timing warnings (27 Sep)**
 
 - **Race Control says when timing goes quietly wrong.** During a race the Next Up bar shows a red **TIMING** warning, and the console a `[timing] WARNING:` line, when the decoder isn't connected, when an EasyLap stops sending (checked once a second), when no car has crossed for three typical laps, or when one car hasn't been seen for three of its laps while the others keep crossing. Not during practice, a demo or a red flag. See [Timing warnings](race-control/running-a-race.md#timing-warnings).

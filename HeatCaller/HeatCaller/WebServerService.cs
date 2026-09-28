@@ -78,6 +78,14 @@ public sealed class WebServerService
     /// </summary>
     public Func<string, bool, int?, RemoteCommandOutcome>? RunCommand { get; set; }
 
+    /// <summary>
+    /// The race Race Control has in hand - "Q2 Heat 1 (Stock Buggy)" - for
+    /// the phone remote to say what its buttons are about to act on (27 Sep
+    /// 2026). Asked on the UI thread as the LAN copy of the live state is
+    /// built. Never in the relay's copy.
+    /// </summary>
+    public Func<string>? RaceInHand { get; set; }
+
     private volatile bool _hostReady;
 
     /// <summary>
@@ -2328,7 +2336,7 @@ public sealed class WebServerService
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
         }
 
-        return JsonSerializer.Serialize(new
+        var document = new
         {
             state = _race.State.ToString(),
             flag = _race.Flag.ToString(),
@@ -2340,7 +2348,32 @@ public sealed class WebServerService
             sponsorSlideSecs = _sponsors?.Current.SlideSeconds ?? 8,
             sponsorPauseDuringRace = _sponsors?.Current.PauseDuringRace ?? true,
             standings,
-        });
+        };
+
+        // The relay's copy stays exactly as it was: it is a public document
+        // with a format the relay knows.
+        if (forRelay)
+        {
+            return JsonSerializer.Serialize(document);
+        }
+
+        // The LAN copy also says which race Race Control has in hand, for
+        // the phone remote. Guarded: the live state must not go stale for
+        // the sake of a heading.
+        string race;
+
+        try
+        {
+            race = RaceInHand?.Invoke() ?? string.Empty;
+        }
+        catch
+        {
+            race = string.Empty;
+        }
+
+        var node = JsonSerializer.SerializeToNode(document)!.AsObject();
+        node["race"] = race;
+        return node.ToJsonString();
     }
 
     /// <summary>
@@ -3124,9 +3157,17 @@ public sealed class WebServerService
                padding:3px 4px; font-weight:700; line-height:1.2; min-height:calc(2.4em + 6px); }
         .msg .why { font-weight:400; }
         .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        /* Which race the buttons act on (27 Sep 2026). One line, always
+           there - a line that appeared, or grew, would move every button
+           under the thumb. A long name ends in an ellipsis instead. */
+        .race { display:flex; align-items:baseline; gap:8px; padding:2px 2px 12px; min-height:1.4em; }
+        .race .lbl { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.09em; color:var(--muted); }
+        .race .name { flex:1 1 auto; min-width:0; font-size:18px; font-weight:700;
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         </style></head><body data-look="{{look.Fingerprint}}">
         <div class="bar"><h1>{{look.Logo}}RACE REMOTE</h1><span class="state" id="state">-</span></div>
         <div class="wrap">
+          <div class="race"><span class="lbl">CONTROLLING</span><span class="name" id="race">-</span></div>
           <input class="pin" id="pin" placeholder="Remote PIN (set on the laptop)" inputmode="numeric">
           <div class="msg" id="msg" role="status" aria-live="polite"></div>
           <button onclick="go('stage')">STAGE</button>
@@ -3227,6 +3268,10 @@ public sealed class WebServerService
           try{
             const r = await fetch('/api/state'); const d = await r.json();
             document.getElementById('state').textContent = d.state + ' - ' + d.flag;
+            // As text, never markup: a race name is whatever was typed.
+            const race = document.getElementById('race');
+            race.textContent = d.race || '-';
+            race.title = d.race || '';
             document.getElementById('head').innerHTML =
               (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
             document.getElementById('rows').innerHTML = d.standings.map(s =>

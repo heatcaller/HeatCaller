@@ -378,15 +378,17 @@ from. Ranked by what decides whether a club switches, and stays.
      software exports the driver list, and for a sample file (Q28). A
      dedicated "import from X" is built only for a system a beta club
      actually sends, and tested against that club's file.
-   - **Column mapping.** Before that, make the CSV import handle any file:
-     a preview of the first rows with a dropdown above each column
-     (Transponder, Driver name, Car, Class, Team, Email, Notes, or Ignore),
-     guessed from the header and changeable. The same preview takes a table
-     pasted from a web page or a spreadsheet, which covers systems that
-     only show their lists on screen.
-   - **Season points as a starting number.** Past race results are not
-     imported. Each driver gets a "points so far" figure per class that the
-     season standings add to, typed in or imported as one more column.
+   - **Column mapping** - built 27 Sep 2026 (`DriverImport`,
+     `CsvMappingForm`). Import from CSV takes any file - comma, semicolon or
+     tab - and shows its first rows with a list above each column, guessed
+     from the heading and changeable, first and last names included. Still
+     to do: taking a table pasted from a web page, for systems that only
+     show their lists on screen.
+   - **Season points as a starting number** - built 27 Sep 2026. Past race
+     results are not imported. A "Points so far" column carries each
+     driver's points into a championship (`Season.CarriedPoints`), added
+     after the best-rounds rule; typed in or changed on the Championship
+     page with Points Carried In.
 3. **A pit TV display.** The Big Screen is a window on the race laptop.
    Clubs want a TV in the pits showing the live board: a full-screen page
    from the laptop's own Wi-Fi server, opened in any TV browser or a cheap
@@ -512,7 +514,11 @@ rivalries, analytics, ghost cars, demo mode.
 HeatCaller voice (ElevenLabs through the relay), and the Windows voice as a
 stand-in; lines prepared before the night; commentary written by a local
 model (Ollama); five sound packs, ambience, music, soundscapes, a mixer and
-lap beeps.
+lap beeps. The recap can run as a small broadcast (27 Sep 2026): a TV-style
+opening and sign-off, and after a main a pit-lane interview with the
+winner's mechanic in a second voice, who talks from the setup changes the
+Garage has for the winning car (`MechanicBrief`, `SetupDiff`). Intros and
+recaps say heat or main, and intros can be kept to mains and rivalries.
 
 **Online:** the relay publishes live timing, the schedule, results with
 share cards, standings, badges and tracks; check-in with staff and personal
@@ -537,11 +543,17 @@ sound-effect settings, achievement grid positions, driver photos.
 The EasyLap decoder path, from HID report to counted lap, on one real
 night (`EasyLapCaptureTests`). Save Support Info: what goes in the zip, and
 that no name, email, user folder, secret or freeze dump does
-(`SupportBundleTests`).
+(`SupportBundleTests`). Timing warnings (`TimingWatchTests`). What changed
+between setups, and what the mechanic is told about the winning car
+(`SetupDiffTests`, `MechanicBriefTests`); the interview split into two
+voices, heat or main, and the mechanic's voice (`RecapBroadcastTests`).
+A driver's recent activity (`DriverActivityTests`). Importing from any CSV
+and points carried into a championship (`DriverImportTests`).
 
 Not yet: the I-Lap decoder, the EasyLap's connect and reconnect (they need
 the device), handicaps, tech inspection, rentals, multi-day events,
-championships, the announcer's queueing, and anything on screen.
+championships, the announcer's queueing, the prompts the model is sent
+(there's no model in the tests), and anything on screen.
 
 ### Edge cases worth not re-breaking
 

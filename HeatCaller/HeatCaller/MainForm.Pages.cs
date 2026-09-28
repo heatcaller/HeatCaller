@@ -27,6 +27,10 @@ public partial class MainForm
         // UpdateTimingWatch whichever page is showing.
         raceControl.TimingProblem = () => _timingProblemText;
 
+        // What the phone remote says it is controlling - on the UI thread,
+        // where the LAN copy of the live state is built.
+        _webServer.RaceInHand = raceControl.RaceInHandTitle;
+
         // A finished race changes race-program state, so refresh the visible
         // page rather than leaving a heat showing "Scheduled" until the user
         // happens to navigate away and back.
@@ -141,6 +145,7 @@ public partial class MainForm
             TechInspections = _techInspections,
             CheckIns = _checkInStore,
             SetupLog = _setupLog,
+            ChassisTemplates = _chassisTemplates,
         };
 
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings) { Dock = DockStyle.Fill };
@@ -1244,6 +1249,11 @@ public partial class MainForm
 
         var commentary = new CommentaryControl(_settings, _commentary) { Dock = DockStyle.Fill };
         subPageCommentary.Controls.Add(commentary);
+
+        // The recap's broadcast: the Garage's record of the winning car for
+        // the mechanic's interview, and the mechanic's voice list - see
+        // MainForm.Commentary.cs.
+        WireRecapBroadcast(raceControl, commentary);
 
         // The model client's "[llm] ..." lines, which Race Control's "any
         // [llm] line above says why" points at. Stamped here, as the client

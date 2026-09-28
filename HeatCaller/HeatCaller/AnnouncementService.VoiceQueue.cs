@@ -268,13 +268,15 @@ public sealed partial class AnnouncementService
     /// synthesis and after waiting for the speaker, because a mute can land
     /// while a line is in either.
     /// </param>
+    /// <param name="voice">Another speaker's voice for this line alone - the recap's mechanic. Null for the announcer.</param>
     private async Task SynthesizeAndPlayAsync(
         string text,
         string announcingLogPrefix,
         string skippedLogMessage = "[voice] Skipped announcement - ElevenLabs API key or voice not configured.",
         (double Stability, double Style)? deliveryOverride = null,
         double? speedOverride = null,
-        bool honourMute = true)
+        bool honourMute = true,
+        SecondVoice? voice = null)
     {
         var currentProfile = _voiceStore.Current;
 
@@ -291,6 +293,12 @@ public sealed partial class AnnouncementService
             // needs room to breathe but no change in expression.
             currentProfile = currentProfile.CloneForDelivery(
                 currentProfile.Stability, currentProfile.Style, speedOnly);
+        }
+
+        if (voice is not null)
+        {
+            // After the delivery, which it keeps: only who is speaking changes.
+            currentProfile = currentProfile.CloneWithVoice(voice);
         }
 
         // Strips [excited]-style tags on models that can't use them, so a

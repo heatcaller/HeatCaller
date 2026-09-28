@@ -1093,7 +1093,11 @@ internal sealed class CarDetailForm : Form
             new DataGridViewTextBoxColumn { Name = "sheet", HeaderText = "Chassis Sheet", FillWeight = 55 },
             new DataGridViewTextBoxColumn { Name = "filled", HeaderText = "Filled", FillWeight = 26 },
             new DataGridViewTextBoxColumn { Name = "bestlap", HeaderText = "Best Lap", FillWeight = 42 },
-            new DataGridViewTextBoxColumn { Name = "summary", HeaderText = "Setup", FillWeight = 160 }
+
+            // What this setup changed from the one before it, so a run of
+            // setups reads as a run of changes (27 Sep 2026). See SetupDiff.
+            new DataGridViewTextBoxColumn { Name = "changed", HeaderText = "Changed Since Last", FillWeight = 130 },
+            new DataGridViewTextBoxColumn { Name = "summary", HeaderText = "Setup", FillWeight = 110 }
         );
         _setupGrid.SelectionChanged += (_, _) => UpdateButtons();
         _setupGrid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditSetup(); };
@@ -1416,9 +1420,26 @@ internal sealed class CarDetailForm : Form
     {
         _setupGrid.Rows.Clear();
 
-        foreach (var entry in SetupsForThisCar())
+        // Newest first, so the setup before each one is the next row down.
+        var setups = SetupsForThisCar();
+
+        for (var i = 0; i < setups.Count; i++)
         {
+            var entry = setups[i];
             var template = entry.ChassisTemplateId is null ? null : _chassisTemplates.Get(entry.ChassisTemplateId);
+
+            // Every one of these is this car's, so the one before is simply
+            // the next older - no need to match the car again. Not across
+            // the change to setup sheets: an older entry and a sheet entry
+            // share no fields, and every one would read as a change.
+            var previous = i + 1 < setups.Count ? setups[i + 1] : null;
+            var changes = previous is null || previous.IsLegacy != entry.IsLegacy
+                ? null
+                : SetupDiff.Between(previous, entry, _chassisTemplates.Get);
+
+            var changed = previous is not null && changes is null
+                ? "(first on a setup sheet)"
+                : SetupDiff.Describe(changes);
 
             var index = _setupGrid.Rows.Add(
                 AppTime.DateAndTime(entry.RecordedAtUtc.ToLocalTime()),
@@ -1427,9 +1448,16 @@ internal sealed class CarDetailForm : Form
                 template?.Name ?? (entry.IsLegacy ? "(older entry)" : string.Empty),
                 entry.IsLegacy ? string.Empty : entry.FilledCount.ToString(),
                 BestLapFor(entry),
+                changed,
                 entry.Summarise(template));
 
             _setupGrid.Rows[index].Tag = entry.Id;
+
+            // The whole list where the cell can only show the first few.
+            if (changes is { Count: > 3 })
+            {
+                _setupGrid.Rows[index].Cells["changed"].ToolTipText = SetupDiff.Describe(changes, int.MaxValue);
+            }
         }
 
         UpdateButtons();

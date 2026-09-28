@@ -103,6 +103,14 @@ public sealed class Season
 
     public List<PointsSchemeEntry> PointsScheme { get; set; } = DefaultPointsScheme();
 
+    /// <summary>
+    /// Points drivers bring in from before this championship was run in
+    /// HeatCaller - the standings from the club's old software, imported
+    /// with the drivers or typed in on the Championship page (27 Sep 2026).
+    /// Empty on anything made before, which then scores exactly as it did.
+    /// </summary>
+    public List<CarriedPointsEntry> CarriedPoints { get; set; } = new();
+
     /// <summary>A simple linear scheme (10-9-8-...-1) - the most common club-racing default. Users can edit it into an F1-style table or anything else in the Season tab.</summary>
     public static List<PointsSchemeEntry> DefaultPointsScheme()
     {
@@ -116,6 +124,19 @@ public sealed class Season
 
     public int PointsForPosition(int position) =>
         PointsScheme.FirstOrDefault(e => e.Position == position)?.Points ?? 0;
+}
+
+/// <summary>
+/// One driver's points carried into a championship - see Season.CarriedPoints.
+/// Added to what they score in HeatCaller, and never dropped by the
+/// best-rounds rule: that drops rounds, and this is not one.
+/// </summary>
+public sealed class CarriedPointsEntry
+{
+    /// <summary>The driver by the name the standings go by - the name saved with their results.</summary>
+    public string DriverName { get; set; } = string.Empty;
+
+    public int Points { get; set; }
 }
 
 /// <summary>One driver's aggregated standing within a season.</summary>
@@ -136,4 +157,7 @@ public sealed class SeasonStandingEntry
 
     /// <summary>Rounds they were entered in but completed no laps - scored nothing and not counted.</summary>
     public int Dnfs { get; set; }
+
+    /// <summary>Points carried in from before - included in TotalPoints and RawPoints. Zero for most.</summary>
+    public int CarriedIn { get; set; }
 }

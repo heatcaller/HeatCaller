@@ -76,6 +76,7 @@ public sealed class SeasonsControl : UserControl
     private Button _btnResetScheme = new();
     private Button _btnRules = new();
     private Button _btnExportStandings = new();
+    private Button _btnCarried = new();
 
     private void BuildLayout()
     {
@@ -164,6 +165,10 @@ public sealed class SeasonsControl : UserControl
             new DataGridViewTextBoxColumn { Name = "rank", HeaderText = "Rank", FillWeight = 30 },
             new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 100 },
             new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 50 },
+
+            // Of those points, how many were carried in from before - blank
+            // for everybody who carried none (27 Sep 2026).
+            new DataGridViewTextBoxColumn { Name = "carried", HeaderText = "Carried In", FillWeight = 50 },
             new DataGridViewTextBoxColumn { Name = "wins", HeaderText = "Wins", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "podiums", HeaderText = "Podiums", FillWeight = 50 },
             new DataGridViewTextBoxColumn { Name = "sessions", HeaderText = "Races", FillWeight = 40 },
@@ -192,6 +197,10 @@ public sealed class SeasonsControl : UserControl
         btnExportStandings.Text = "Export Standings to CSV...";
         btnExportStandings.Click += (_, _) => ExportStandings();
         Controls.Add(btnExportStandings);
+
+        _btnCarried.Text = "Points Carried In...";
+        _btnCarried.Click += (_, _) => EditCarriedPoints();
+        Controls.Add(_btnCarried);
 
         Controls.Add(btnResetScheme);
         Controls.Add(_btnRules);
@@ -251,7 +260,7 @@ public sealed class SeasonsControl : UserControl
         var middleLeft = seasonsLeft + seasonsWidth + gap;
         var standingsLeft = middleLeft + middleWidth + gap;
 
-        foreach (var button in new[] { _btnNew, _btnRename, _btnDeleteSeason, _btnResetScheme, _btnRules, _btnExportStandings })
+        foreach (var button in new[] { _btnNew, _btnRename, _btnDeleteSeason, _btnResetScheme, _btnRules, _btnExportStandings, _btnCarried })
         {
             var text = TextRenderer.MeasureText(
                 button.Text,
@@ -314,6 +323,10 @@ public sealed class SeasonsControl : UserControl
 
         _btnExportStandings.Location = new Point(standingsLeft, bottom - UiLayout.ButtonHeight);
 
+        // Level with the heading, at the column's right edge - beside Export
+        // Standings the two did not fit the column at the page's narrowest.
+        _btnCarried.Location = new Point(standingsLeft + standingsWidth - _btnCarried.Width, top);
+
         var statusHeight = AppTheme.BodyFont.Height + 2;
 
         _lblStatus.Location = new Point(
@@ -322,7 +335,7 @@ public sealed class SeasonsControl : UserControl
 
         _lblStatus.Size = new Size(standingsWidth, statusHeight);
 
-        var standingsTop = UiLayout.Below(_lblStandings, UiLayout.RowGap);
+        var standingsTop = Math.Max(UiLayout.Below(_lblStandings, UiLayout.RowGap), UiLayout.Below(_btnCarried, UiLayout.RowGap));
 
         _dgvStandings.Location = new Point(standingsLeft, standingsTop);
         _dgvStandings.Size = new Size(
@@ -390,6 +403,55 @@ public sealed class SeasonsControl : UserControl
     }
 
     private Season? SelectedSeason() => (_lstSeasons.SelectedItem as SeasonListItem)?.Season;
+
+    /// <summary>
+    /// The points drivers carry into the selected championship from before
+    /// it ran here (27 Sep 2026). One undo step for the whole list.
+    /// </summary>
+    private void EditCarriedPoints()
+    {
+        if (SelectedSeason() is not { } season)
+        {
+            AppDialog.Show(this, "Pick a championship first.", "No championship selected",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // The names the table already goes by, offered as a name is typed.
+        var known = SeasonStore.ComputeStandings(season, EventSpine.SessionsFor(season, _events, _rounds, _history), _profiles)
+            .Select(e => e.DriverName)
+            .ToList();
+
+        using var form = new CarriedPointsForm(season.Name, season.CarriedPoints, known);
+
+        if (form.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var before = season.CarriedPoints.Select(e => new CarriedPointsEntry { DriverName = e.DriverName, Points = e.Points }).ToList();
+        var seasons = _seasons;
+        var seasonId = season.Id;
+
+        _undo.Capture($"Points carried into '{season.Name}'", () =>
+        {
+            // Onto the championship as it is on file now, by id - one
+            // deleted since stays deleted rather than being written back.
+            if (seasons.Get(seasonId) is not { } current)
+            {
+                throw new InvalidOperationException("that championship has been deleted since. Nothing was changed.");
+            }
+
+            current.CarriedPoints = before.Select(e => new CarriedPointsEntry { DriverName = e.DriverName, Points = e.Points }).ToList();
+            seasons.Upsert(current);
+            RefreshAfterUndo();
+        });
+
+        season.CarriedPoints = form.Entries;
+        _seasons.Upsert(season);
+
+        RecomputeStandings();
+    }
 
     /// <summary>Called when this page becomes visible - new sessions become available to include while it's inactive.</summary>
     public void RefreshAll() => RefreshSeasonList();
@@ -562,6 +624,7 @@ public sealed class SeasonsControl : UserControl
                 rank++,
                 entry.DriverName,
                 entry.TotalPoints,
+                entry.CarriedIn == 0 ? string.Empty : entry.CarriedIn.ToString(),
                 entry.Wins,
                 entry.Podiums,
 
@@ -591,6 +654,13 @@ public sealed class SeasonsControl : UserControl
         var overrides = season.ExcludedSessionIds.Count > 0
             ? $" \u00b7 {season.ExcludedSessionIds.Count} forced out"
             : string.Empty;
+
+        var carriedIn = standings.Count(e => e.CarriedIn != 0);
+
+        if (carriedIn > 0)
+        {
+            overrides += $" \u00b7 {Plural.Of(carriedIn, "driver")} carrying points in";
+        }
 
         _lblStatus.Text = standings.Count == 0
             ? $"Nothing counted yet ({rule}). Tick a race, or change the scoring rules."
@@ -804,7 +874,7 @@ public sealed class SeasonsControl : UserControl
         {
             var lines = new List<string>
             {
-                CsvHelper.BuildRow("Rank", "Driver", "Points", "Wins", "Podiums", "Sessions Counted", "DNF", "Best Finish"),
+                CsvHelper.BuildRow("Rank", "Driver", "Points", "Wins", "Podiums", "Sessions Counted", "DNF", "Best Finish", "Carried In"),
             };
 
             var rank = 1;
@@ -818,7 +888,8 @@ public sealed class SeasonsControl : UserControl
                     entry.Podiums,
                     entry.SessionsCounted,
                     entry.Dnfs,
-                    entry.BestFinish == int.MaxValue ? "-" : $"P{entry.BestFinish}"));
+                    entry.BestFinish == int.MaxValue ? "-" : $"P{entry.BestFinish}",
+                    entry.CarriedIn));
             }
 
             File.WriteAllLines(dialog.FileName, lines, CsvHelper.FileEncoding);

@@ -155,20 +155,32 @@ Only sessions recorded as "Race" appear here. Practice sessions and demo races n
 - **Excluded drivers.** A driver whose profile has **Exclude from track records and points** ticked is left out, and the drivers behind them close up, like ghosts. This applies on the **Championship** page, in the standings export and on the club's online pages.
 - **DNF.** A driver who is in a race but completed zero laps scores no points, and that race doesn't count as one of their rounds. It's shown in the **DNF** column instead.
 - **Best N rounds.** With **Count each driver's best:** set, only each driver's N highest scores count. The **Races** column then shows how many counted, for example "5 of 7". A driver who has raced N rounds or fewer drops nothing.
+- **Points carried in** from before the championship ran in HeatCaller are added on top, after the best-N rule. See [Points carried in](#points-carried-in).
 - **Ties** are broken by more wins, then by the better best finish.
 
 !!! note
     Championship points use the raw finishing order. Handicaps don't change them.
 
-The **Standings** table shows **Rank**, **Driver**, **Points**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count".
+The **Standings** table shows **Rank**, **Driver**, **Points**, **Carried In**, **Wins**, **Podiums**, **Races**, **DNF** and **Best Finish**. The line under it summarizes the rules in force, for example "12 drivers, 6 races · Stock, mains only · best 5 rounds count", and ends "· 8 drivers carrying points in" when some are.
 
 Drivers are matched by the name saved with each result, so keep driver names consistent through a season.
 
 If a race counts toward a championship and the recap is on, the end-of-race recap includes how the championship table moved. See [Commentary](../announcer/commentary.md).
 
+### Points carried in
+
+A club that switches to HeatCaller part way through a season can bring its standings with it. Each driver's points from the old software become their starting total: they're added to what the driver scores in HeatCaller and shown in the **Carried In** column. They aren't a round, so **Count each driver's best** never drops them, and a driver who has carried points in but not raced yet is in the table on those points alone.
+
+There are two ways to carry points in:
+
+- **Import them with the drivers.** Import the old software's standings with **Import from CSV** on **Driver Profiles**, with the points column set to **Points so far**. See [Import drivers from a spreadsheet](../race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
+- **Type them in.** Select the championship and click **Points Carried In**, above the standings. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
+
+Either way, the sidebar **Undo** button puts the points back as they were.
+
 ### Export standings
 
-**Export Standings to CSV...** saves the table with **Rank**, **Driver**, **Points**, **Wins**, **Podiums**, **Sessions Counted**, **DNF** and **Best Finish**. The file is UTF-8 with a byte order mark and formula-safe, like the other exports.
+**Export Standings to CSV...** saves the table with **Rank**, **Driver**, **Points**, **Wins**, **Podiums**, **Sessions Counted**, **DNF**, **Best Finish** and **Carried In**. The file is UTF-8 with a byte order mark and formula-safe, like the other exports.
 
 ## Race Analytics
 

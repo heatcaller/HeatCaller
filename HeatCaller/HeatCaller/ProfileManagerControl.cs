@@ -1007,6 +1007,9 @@ public sealed class ProfileManagerControl : UserControl
         {
             c.Y += 10f;
             Paragraph(c, "No races yet - their numbers start the first time they cross the line.", AppTheme.BodyFont, AppTheme.TextMuted);
+
+            // A setup can be logged before they have raced.
+            RenderActivity(c, stats);
             return;
         }
 
@@ -1047,6 +1050,8 @@ public sealed class ProfileManagerControl : UserControl
         {
             Paragraph(c, $"No races yet - {Plural.Of(stats.PracticeSessions, "practice session")} so far.", AppTheme.BodyFont, AppTheme.TextMuted);
         }
+
+        RenderActivity(c, stats);
 
         // --- Career ---
         //
@@ -1184,6 +1189,71 @@ public sealed class ProfileManagerControl : UserControl
                 + (latest.Count == 0 ? string.Empty : $"  ·  latest: {string.Join(", ", latest)}"),
                 AppTheme.BodyFont, AppTheme.TextDark);
         }
+    }
+
+    /// <summary>
+    /// What they have been up to lately, newest first (27 Sep 2026): races
+    /// with their place and best lap, personal bests, and setups logged for
+    /// them with what each one changed. Straight after their form, so the
+    /// card answers "what's new with them" before the career totals.
+    /// </summary>
+    private static void RenderActivity(CardCursor c, DriverStats stats)
+    {
+        if (stats.RecentActivity.Count == 0)
+        {
+            return;
+        }
+
+        Heading(c, "Recent activity");
+
+        // As wide as the widest date actually shown, in this PC's own
+        // month names - "30 sept. 2026" is longer than "30 Sep 2026".
+        var dates = stats.RecentActivity.Select(line => ActivityDate(line.WhenUtc)).ToList();
+        var dateWidth = dates.Max(date => c.G.MeasureString(date, AppTheme.SmallFont).Width) + 10f;
+
+        for (var i = 0; i < dates.Count; i++)
+        {
+            var line = stats.RecentActivity[i];
+            ActivityRow(c, dates[i], dateWidth, line.Text, line.Kind == ActivityKind.PersonalBest);
+        }
+    }
+
+    /// <summary>"27 Sep", with the year when it isn't this one.</summary>
+    private static string ActivityDate(DateTime utc)
+    {
+        var local = utc.ToLocalTime();
+
+        return local.Year == DateTime.Now.Year ? local.ToString("d MMM") : local.ToString("d MMM yyyy");
+    }
+
+    /// <summary>
+    /// One line of recent activity: the date in a narrow muted column, and
+    /// what happened beside it, wrapping under itself rather than under the
+    /// date. A personal best in the theme's primary colour, as the headings
+    /// are - readable on every look, which a fill colour is not.
+    /// </summary>
+    private static void ActivityRow(CardCursor c, string date, float dateWidth, string text, bool highlight)
+    {
+        var dateFont = AppTheme.SmallFont;
+        var textFont = AppTheme.BodyFont;
+        var textWidth = Math.Max(40f, c.Width - dateWidth);
+
+        var textHeight = c.G.MeasureString(text, textFont, (int)textWidth).Height;
+        var dateHeight = dateFont.GetHeight(c.G);
+
+        if (c.Draw)
+        {
+            using var dateBrush = new SolidBrush(AppTheme.TextMuted);
+            using var textBrush = new SolidBrush(highlight ? AppTheme.Primary : AppTheme.TextDark);
+
+            // The date sits on the text's first line rather than above it.
+            var dateTop = c.Y + Math.Max(0f, (textFont.GetHeight(c.G) - dateHeight) / 2f);
+
+            c.G.DrawString(date, dateFont, dateBrush, c.Left, dateTop);
+            c.G.DrawString(text, textFont, textBrush, new RectangleF(c.Left + dateWidth, c.Y, textWidth, textHeight + 1f));
+        }
+
+        c.Y += Math.Max(textHeight, dateHeight) + 5f;
     }
 
     /// <summary>
@@ -1981,9 +2051,16 @@ public sealed class ProfileManagerControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Imports drivers - and, when the file has them, their championship
+    /// points so far - from any CSV: this app's template, a spreadsheet, or
+    /// the club's old timing software's export (27 Sep 2026). The file's
+    /// columns are shown first (CsvMappingForm) with a guess at what each
+    /// one is, to be put right before anything changes.
+    /// </summary>
     private void ImportFromCsv()
     {
-        using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*" };
+        using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*" };
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -2000,35 +2077,52 @@ public sealed class ProfileManagerControl : UserControl
             return;
         }
 
-        if (lines.Count == 0)
-        {
-            AppDialog.Show(this, "That file is empty.", "Nothing to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        // Header row is matched case-insensitively and can be in any order,
-        // so a roster exported from a spreadsheet with slightly different
-        // column ordering still works without the user needing to
-        // rearrange anything.
-        var headers = CsvHelper.ParseLine(lines[0]).Select(h => h.Trim().ToLowerInvariant()).ToList();
-        var transponderCol = FindColumn(headers, "transponder", "transponderid", "transponder id");
-        var nameCol = FindColumn(headers, "drivername", "driver name", "driver", "name");
-        var carCol = FindColumn(headers, "carmodel", "car model", "car", "model");
-        var classCol = FindColumn(headers, "classname", "class name", "class");
-        var teamCol = FindColumn(headers, "team", "club", "team / club");
-        var sponsorsCol = FindColumn(headers, "sponsors", "sponsor");
-        var notesCol = FindColumn(headers, "notes", "note");
-
-        // For emailing racers their check-in PINs. Organiser use only.
-        var emailCol = FindColumn(headers, "email", "e-mail", "email address", "e-mail address");
-
-        if (transponderCol < 0)
+        if (lines.Count < 2)
         {
             AppDialog.Show(this,
-                "Couldn't find a \"Transponder\" column in the header row. Use \"Download Template...\" for the expected format.",
-                "Missing required column", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                lines.Count == 0 ? "That file is empty." : "That file has a heading row and nothing under it.",
+                "Nothing to import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+
+        // Comma, semicolon or tab, whichever the file uses - and the first
+        // row taken as the headings, which is what every export writes.
+        var delimiter = DriverImport.DetectDelimiter(lines[0]);
+        var headers = DriverImport.ParseLine(lines[0], delimiter);
+        var rows = lines.Skip(1).Select(line => DriverImport.ParseLine(line, delimiter)).ToList();
+
+        var seasonStore = _sources?.Seasons;
+        var seasons = seasonStore?.All ?? Array.Empty<Season>();
+
+        using var mapping = new CsvMappingForm(Path.GetFileName(dialog.FileName), headers, rows, DriverImport.GuessAll(headers), seasons);
+
+        if (mapping.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var columns = mapping.Columns;
+        int Col(ImportColumn column) => columns.ToList().IndexOf(column);
+
+        var transponderCol = Col(ImportColumn.Transponder);
+        var nameCol = Col(ImportColumn.DriverName);
+        var firstNameCol = Col(ImportColumn.FirstName);
+        var lastNameCol = Col(ImportColumn.LastName);
+        var announcerCol = Col(ImportColumn.AnnouncerName);
+        var numberCol = Col(ImportColumn.RaceNumber);
+        var carCol = Col(ImportColumn.Car);
+        var classCol = Col(ImportColumn.ClassName);
+        var teamCol = Col(ImportColumn.Team);
+        var sponsorsCol = Col(ImportColumn.Sponsors);
+        var notesCol = Col(ImportColumn.Notes);
+        var pointsCol = Col(ImportColumn.PointsSoFar);
+
+        // For emailing racers their check-in PINs. Organiser use only.
+        var emailCol = Col(ImportColumn.Email);
+
+        // The name on a row: its own column, or first and last put together.
+        string SheetName(List<string> fields) =>
+            nameCol >= 0 ? GetField(fields, nameCol) : DriverImport.JoinName(GetField(fields, firstNameCol), GetField(fields, lastNameCol));
 
         var added = 0;
         var updated = 0;
@@ -2045,110 +2139,255 @@ public sealed class ProfileManagerControl : UserControl
         var beforeImport = new List<DriverProfile>();
         var addedByImport = new List<string>();
 
-        for (var i = 1; i < lines.Count; i++)
+        // Points so far, by championship and then by driver name - the name
+        // the standings go by. A later row for the same driver wins.
+        var carried = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
+        var pointsSkipped = new List<string>();
+        var unknownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var r = 0; r < rows.Count; r++)
         {
-            var fields = CsvHelper.ParseLine(lines[i]);
-            var transponder = transponderCol < fields.Count ? fields[transponderCol].Trim() : string.Empty;
+            var fields = rows[r];
+            var line = r + 2;
+            var sheetName = SheetName(fields);
+            DriverProfile? profile = null;
 
-            if (string.IsNullOrWhiteSpace(transponder))
+            if (transponderCol >= 0)
             {
-                skipped++;
-                skippedDetails.Add($"Row {i + 1}: missing transponder");
-                continue;
-            }
+                var transponder = GetField(fields, transponderCol);
 
-            // Another driver's alternate transponder. Get resolves those to
-            // the owner, so without this the row would be merged into that
-            // driver's profile - renaming them after whoever is on the sheet.
-            if (!batch.ContainsKey(transponder) && _store.PrimaryForAlternate(transponder) is { } altOwner)
-            {
-                skipped++;
-                skippedDetails.Add($"Row {i + 1}: {transponder} is already {OwnerName(_store.Get(altOwner), altOwner)}'s alt transponder");
-                continue;
-            }
-
-            // Merged into the existing profile rather than replacing it. A
-            // roster sheet carries a handful of columns; replacing the whole
-            // profile wiped everything it didn't mention - photo, race
-            // number, announcer name, alternate transponder - for every
-            // driver already set up. Only a column that is present AND
-            // filled in changes anything.
-            var existing = batch.TryGetValue(transponder, out var pending) ? pending : _store.Get(transponder);
-
-            // ...but only when it is the SAME driver. A row naming somebody
-            // else on a transponder already in use is a mistake on the
-            // sheet (or a transponder that changed hands), and merging it
-            // renamed the existing driver - the silent replacement Add used
-            // to do. Skipped and reported, so the organiser decides.
-            var sheetName = GetField(fields, nameCol);
-
-            if (existing is not null
-                && sheetName.Length > 0
-                && !string.IsNullOrWhiteSpace(existing.DriverName)
-                && !string.Equals(sheetName, existing.DriverName.Trim(), StringComparison.OrdinalIgnoreCase))
-            {
-                skipped++;
-                skippedDetails.Add($"Row {i + 1}: {transponder} already belongs to {existing.DriverName.Trim()} (the sheet says {sheetName})");
-                continue;
-            }
-
-            var profile = existing ?? new DriverProfile { Transponder = transponder };
-
-            if (existing is null)
-            {
-                added++;
-                addedByImport.Add(transponder);
-            }
-            else if (!batch.ContainsKey(transponder))
-            {
-                updated++;
-
-                // Once per driver: a row for their alt transponder and
-                // another for their main one find the same live profile, and
-                // by the second row it holds the first row's changes - a
-                // second copy would have Undo put those back instead.
-                if (!beforeImport.Any(b => string.Equals(b.Transponder, existing.Transponder, StringComparison.OrdinalIgnoreCase)))
+                if (string.IsNullOrWhiteSpace(transponder))
                 {
-                    beforeImport.Add(ProfileStore.Snapshot(existing));
+                    skipped++;
+                    skippedDetails.Add($"Row {line}: missing transponder");
+                    continue;
+                }
+
+                // Another driver's alternate transponder. Get resolves those to
+                // the owner, so without this the row would be merged into that
+                // driver's profile - renaming them after whoever is on the sheet.
+                if (!batch.ContainsKey(transponder) && _store.PrimaryForAlternate(transponder) is { } altOwner)
+                {
+                    skipped++;
+                    skippedDetails.Add($"Row {line}: {transponder} is already {OwnerName(_store.Get(altOwner), altOwner)}'s alt transponder");
+                    continue;
+                }
+
+                // Merged into the existing profile rather than replacing it. A
+                // roster sheet carries a handful of columns; replacing the whole
+                // profile wiped everything it didn't mention - photo, race
+                // number, announcer name, alternate transponder - for every
+                // driver already set up. Only a column that is present AND
+                // filled in changes anything.
+                var existing = batch.TryGetValue(transponder, out var pending) ? pending : _store.Get(transponder);
+
+                // ...but only when it is the SAME driver. A row naming somebody
+                // else on a transponder already in use is a mistake on the
+                // sheet (or a transponder that changed hands), and merging it
+                // renamed the existing driver - the silent replacement Add used
+                // to do. Skipped and reported, so the organiser decides.
+                if (existing is not null
+                    && sheetName.Length > 0
+                    && !string.IsNullOrWhiteSpace(existing.DriverName)
+                    && !string.Equals(sheetName, existing.DriverName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped++;
+                    skippedDetails.Add($"Row {line}: {transponder} already belongs to {existing.DriverName.Trim()} (the sheet says {sheetName})");
+                    continue;
+                }
+
+                profile = existing ?? new DriverProfile { Transponder = transponder };
+
+                if (existing is null)
+                {
+                    added++;
+                    addedByImport.Add(transponder);
+                }
+                else if (!batch.ContainsKey(transponder))
+                {
+                    updated++;
+
+                    // Once per driver: a row for their alt transponder and
+                    // another for their main one find the same live profile, and
+                    // by the second row it holds the first row's changes - a
+                    // second copy would have Undo put those back instead.
+                    if (!beforeImport.Any(b => string.Equals(b.Transponder, existing.Transponder, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        beforeImport.Add(ProfileStore.Snapshot(existing));
+                    }
+                }
+
+                if (sheetName.Length > 0)
+                {
+                    profile.DriverName = sheetName;
+                }
+
+                profile.AnnouncerName = MergeField(profile.AnnouncerName, fields, announcerCol);
+                profile.RaceNumber = MergeField(profile.RaceNumber, fields, numberCol);
+                profile.CarModel = MergeField(profile.CarModel, fields, carCol);
+                profile.ClassName = MergeField(profile.ClassName, fields, classCol);
+                profile.Team = MergeField(profile.Team, fields, teamCol);
+                profile.Sponsors = MergeField(profile.Sponsors, fields, sponsorsCol);
+                profile.Notes = MergeField(profile.Notes, fields, notesCol);
+                profile.Email = MergeField(profile.Email, fields, emailCol);
+
+                batch[transponder] = profile;
+            }
+
+            // --- Points so far ---
+            if (pointsCol < 0 || !DriverImport.TryParsePoints(GetField(fields, pointsCol), out var points))
+            {
+                continue;
+            }
+
+            // The name the standings will know them by: the profile's, which
+            // is what their results are saved under.
+            var driver = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName.Trim() : sheetName;
+
+            if (driver.Length == 0)
+            {
+                pointsSkipped.Add($"Row {line}: no driver name for the points");
+                continue;
+            }
+
+            Season? target;
+
+            if (mapping.SeasonPerClass)
+            {
+                var className = classCol >= 0 && GetField(fields, classCol) is { Length: > 0 } sheetClass
+                    ? sheetClass
+                    : (profile?.ClassName ?? string.Empty).Trim();
+
+                var forClass = seasons
+                    .Where(s => !string.IsNullOrWhiteSpace(s.ClassName)
+                                && string.Equals(s.ClassName.Trim(), className, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                // Two championships for one class - this season's and last
+                // season's, usually. Guessing would put a whole class's
+                // points in the wrong one without a word.
+                if (forClass.Count != 1)
+                {
+                    pointsSkipped.Add(className.Length == 0
+                        ? $"Row {line}: {driver} has no class, so no championship for the points"
+                        : forClass.Count == 0
+                            ? $"Row {line}: no championship for {className}"
+                            : $"Row {line}: {forClass.Count} championships for {className} - import again and pick the one");
+                    continue;
+                }
+
+                target = forClass[0];
+            }
+            else
+            {
+                target = seasons.FirstOrDefault(s => string.Equals(s.Id, mapping.SeasonId, StringComparison.Ordinal));
+
+                if (target is null)
+                {
+                    continue;
                 }
             }
 
-            profile.DriverName = MergeField(profile.DriverName, fields, nameCol);
-            profile.CarModel = MergeField(profile.CarModel, fields, carCol);
-            profile.ClassName = MergeField(profile.ClassName, fields, classCol);
-            profile.Team = MergeField(profile.Team, fields, teamCol);
-            profile.Sponsors = MergeField(profile.Sponsors, fields, sponsorsCol);
-            profile.Notes = MergeField(profile.Notes, fields, notesCol);
-            profile.Email = MergeField(profile.Email, fields, emailCol);
+            // A name no driver goes by scores as somebody new - said at the
+            // end, in case it is a spelling of somebody who isn't.
+            if (profile is null && !_store.All.Any(d => string.Equals((d.DriverName ?? string.Empty).Trim(), driver, StringComparison.OrdinalIgnoreCase)))
+            {
+                unknownNames.Add(driver);
+            }
 
-            batch[transponder] = profile;
+            if (!carried.TryGetValue(target.Id, out var forSeason))
+            {
+                forSeason = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                carried[target.Id] = forSeason;
+            }
+
+            forSeason[driver] = points;
         }
 
-        if (batch.Count > 0)
+        // What each championship carried before, for the undo.
+        var carriedBefore = new List<(string SeasonId, List<CarriedPointsEntry> Entries)>();
+
+        if (batch.Count > 0 || carried.Count > 0)
         {
             var store = _store;
 
+            foreach (var seasonId in carried.Keys)
+            {
+                if (seasonStore?.Get(seasonId) is { } season)
+                {
+                    carriedBefore.Add((seasonId, season.CarriedPoints.Select(CopyOf).ToList()));
+                }
+            }
+
             // Targeted rather than a whole-roster snapshot: only the drivers
             // this sheet touched go back, so an edit made to anyone else
-            // since the import survives the undo.
-            _undo.Capture($"Import {Plural.Of(batch.Count, "driver profile")} from CSV", () =>
+            // since the import survives the undo. The championships go back
+            // to the points they carried before.
+            _undo.Capture($"Import {Plural.Of(Math.Max(batch.Count, carried.Values.Sum(s => s.Count)), "driver")} from CSV", () =>
             {
-                if (store.PutBack(beforeImport, addedByImport) == 0)
+                var putBack = batch.Count > 0 ? store.PutBack(beforeImport, addedByImport) : 0;
+                var seasonsPutBack = 0;
+
+                foreach (var (seasonId, entries) in carriedBefore)
                 {
-                    throw new InvalidOperationException("every driver that import touched has been deleted since, so there is nothing to put back.");
+                    if (seasonStore?.Get(seasonId) is { } season)
+                    {
+                        season.CarriedPoints = entries.Select(CopyOf).ToList();
+                        seasonsPutBack++;
+                    }
+                }
+
+                if (seasonsPutBack > 0)
+                {
+                    seasonStore!.Save();
+                }
+
+                if (putBack == 0 && seasonsPutBack == 0)
+                {
+                    throw new InvalidOperationException("every driver and championship that import touched has been deleted since, so there is nothing to put back.");
                 }
             });
         }
 
         _store.UpsertMany(batch.Values);
 
+        // Points so far: each driver on the sheet replaces what they carried
+        // into that championship before; anyone not on it keeps theirs.
+        var pointsImported = 0;
+
+        foreach (var (seasonId, byDriver) in carried)
+        {
+            if (seasonStore?.Get(seasonId) is not { } season)
+            {
+                continue;
+            }
+
+            var entries = season.CarriedPoints
+                .Where(entry => !byDriver.ContainsKey((entry.DriverName ?? string.Empty).Trim()))
+                .ToList();
+
+            entries.AddRange(byDriver.Select(kv => new CarriedPointsEntry { DriverName = kv.Key, Points = kv.Value }));
+
+            season.CarriedPoints = entries;
+            pointsImported += byDriver.Count;
+        }
+
+        if (carried.Count > 0)
+        {
+            seasonStore!.Save();
+        }
+
         RefreshAll();
 
         var imported = added + updated;
-        var summary = $"Imported {Plural.Of(imported, "driver profile")}.";
+        var summary = transponderCol >= 0 ? $"Imported {Plural.Of(imported, "driver profile")}." : string.Empty;
         if (updated > 0)
         {
             summary += $"\n\n{Plural.Of(added, "new driver")}, {Plural.Of(updated, "existing profile")} updated - only the columns filled in on the sheet were changed.";
+        }
+        if (pointsCol >= 0)
+        {
+            summary += $"\n\nPoints so far carried into {Plural.Of(carried.Count, "championship")} for {Plural.Of(pointsImported, "driver")}.";
         }
         if (skipped > 0)
         {
@@ -2158,17 +2397,32 @@ public sealed class ProfileManagerControl : UserControl
                 summary += $"\n...and {skippedDetails.Count - 10} more.";
             }
         }
+        if (unknownNames.Count > 0)
+        {
+            summary += $"\n\n{Plural.Of(unknownNames.Count, "name")} with points matched no driver here, so each is in the "
+                       + "standings on their own - check they're spelled as the driver's results are:\n"
+                       + string.Join(", ", unknownNames.Take(10))
+                       + (unknownNames.Count > 10 ? $" and {unknownNames.Count - 10} more" : string.Empty);
+        }
+        if (pointsSkipped.Count > 0)
+        {
+            summary += $"\n\nPoints not carried in for {Plural.Of(pointsSkipped.Count, "row")}:\n" + string.Join("\n", pointsSkipped.Take(10));
+            if (pointsSkipped.Count > 10)
+            {
+                summary += $"\n...and {pointsSkipped.Count - 10} more.";
+            }
+        }
 
-        AppDialog.Show(this, summary, "Import complete", MessageBoxButtons.OK,
-            skipped > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+        AppDialog.Show(this, summary.Trim(), "Import complete", MessageBoxButtons.OK,
+            skipped > 0 || pointsSkipped.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
+
+    private static CarriedPointsEntry CopyOf(CarriedPointsEntry entry) =>
+        new() { DriverName = entry.DriverName, Points = entry.Points };
 
     /// <summary>A driver's name for an import report, or their transponder when they have no name.</summary>
     private static string OwnerName(DriverProfile? profile, string transponder) =>
         profile is null || string.IsNullOrWhiteSpace(profile.DriverName) ? transponder : profile.DriverName.Trim();
-
-    private static int FindColumn(List<string> headers, params string[] candidates) =>
-        headers.FindIndex(h => candidates.Contains(h));
 
     private static string GetField(List<string> fields, int index) =>
         index >= 0 && index < fields.Count ? fields[index].Trim() : string.Empty;

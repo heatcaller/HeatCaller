@@ -30,6 +30,17 @@ public sealed class SeasonStore
                 var loaded = JsonSerializer.Deserialize<List<Season>>(json);
                 if (loaded is not null)
                 {
+                    // A hand-edited or restored file can say null where a
+                    // list belongs; every reader takes the list as it is.
+                    loaded.RemoveAll(season => season is null);
+
+                    foreach (var season in loaded)
+                    {
+                        season.CarriedPoints = (season.CarriedPoints ?? new List<CarriedPointsEntry>())
+                            .Where(entry => entry is not null)
+                            .ToList();
+                    }
+
                     return new SeasonStore(loaded);
                 }
             }
@@ -308,6 +319,37 @@ public sealed class SeasonStore
 
             entry.TotalPoints = scored.OrderByDescending(p => p).Take(best).Sum();
             entry.DroppedRounds = scored.Count - best;
+        }
+
+        // Points carried in from before the championship ran here (27 Sep
+        // 2026). Added after the best-rounds rule, which drops rounds - and
+        // carried points are not a round. A driver with carried points and
+        // no race yet is in the table on those alone - unless their profile
+        // is kept out of records and points, as their races are above.
+        var excluded = new HashSet<string>(
+            (profiles?.All ?? Array.Empty<DriverProfile>())
+                .Where(p => p.ExcludeFromRecords && !string.IsNullOrWhiteSpace(p.DriverName))
+                .Select(p => p.DriverName.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var carried in season.CarriedPoints ?? new List<CarriedPointsEntry>())
+        {
+            var name = (carried?.DriverName ?? string.Empty).Trim();
+
+            if (carried is null || name.Length == 0 || carried.Points == 0 || excluded.Contains(name))
+            {
+                continue;
+            }
+
+            if (!byDriver.TryGetValue(name, out var entry))
+            {
+                entry = new SeasonStandingEntry { DriverName = name };
+                byDriver[name] = entry;
+            }
+
+            entry.CarriedIn += carried.Points;
+            entry.RawPoints += carried.Points;
+            entry.TotalPoints += carried.Points;
         }
 
         return byDriver.Values

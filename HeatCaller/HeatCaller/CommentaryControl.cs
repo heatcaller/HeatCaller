@@ -18,6 +18,7 @@ public sealed class CommentaryControl : UserControl
     private readonly TextBox _txtModel = new();
     private readonly NumericUpDown _numTimeout = new();
     private readonly CheckBox _chkIntros = new();
+    private readonly CheckBox _chkIntrosSelective = new();
     private readonly CheckBox _chkSummaries = new();
     private readonly CheckBox _chkTalkingPoints = new();
     private readonly NumericUpDown _numFinishers = new();
@@ -37,6 +38,44 @@ public sealed class CommentaryControl : UserControl
     private readonly CheckBox _chkDeepDuck = new();
     private readonly NumericUpDown _numDuckPercent = new();
     private readonly Label _lblTestResult = new();
+
+    // --- Broadcast (27 Sep 2026) ---
+    private readonly CheckBox _chkOpening = new();
+    private readonly CheckBox _chkClosing = new();
+    private readonly TextBox _txtShowName = new();
+    private readonly CheckBox _chkInterview = new();
+    private readonly TextBox _txtMechanicName = new();
+    private readonly ComboBox _cmbMechanicVoice = new();
+    private readonly Button _btnLoadVoices = new();
+    private readonly Button _btnTestMechanic = new();
+    private Label? _lblVoiceSource;
+
+    /// <summary>The engine the mechanic's list was last filled for - what a pick is saved against.</summary>
+    private VoiceEngine _voiceListEngine = VoiceEngine.ElevenLabs;
+
+    /// <summary>Set while the list is being filled, so filling it isn't taken for a pick.</summary>
+    private bool _fillingVoices;
+
+    private bool _loadingVoices;
+
+    /// <summary>A voice the mechanic can be given - what is saved for it, and what the list shows.</summary>
+    /// <param name="Id">The ElevenLabs voice id, the HeatCaller voice's id, or the Windows voice's name. Empty for the announcer's own voice.</param>
+    /// <param name="Rev">The HeatCaller catalogue's fingerprint for the voice; empty for the other engines.</param>
+    public sealed record VoiceChoice(string Id, string Name, string Rev, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    private static readonly VoiceChoice AnnouncersVoice = new(string.Empty, string.Empty, string.Empty, "(the announcer's own voice)");
+
+    /// <summary>Which engine speaks, as chosen on Voice Settings. Set by the host; without it the list offers ElevenLabs.</summary>
+    internal Func<VoiceEngine>? EngineInUse { get; set; }
+
+    /// <summary>Fetches the voices one engine offers. Set by the host, which has the clients. Throws with a sentence for the page when it can't.</summary>
+    internal Func<VoiceEngine, Task<IReadOnlyList<VoiceChoice>>>? LoadVoices { get; set; }
+
+    /// <summary>Says a test line in the mechanic's voice, even while the announcer is muted. Set by the host.</summary>
+    internal Action<SecondVoice>? SpeakAsMechanic { get; set; }
 
     // Guards against a second click while a test is running. Used INSTEAD
     // of disabling the button: disabling the focused control pushes focus
@@ -363,9 +402,24 @@ public sealed class CommentaryControl : UserControl
 
         Check(_chkIntros, "Race intros - a \"coming up\" line before a round starts", L0);
         _chkIntros.Checked = _settings.CommentaryRaceIntros;
-        _chkIntros.CheckedChanged += (_, _) => { _settings.CommentaryRaceIntros = _chkIntros.Checked; _settings.Save(); };
+        _chkIntros.CheckedChanged += (_, _) => { _settings.CommentaryRaceIntros = _chkIntros.Checked; _settings.Save(); UpdateEnabledState(); };
 
         y = Block(y, _chkIntros);
+
+        Check(_chkIntrosSelective, "Only for a main, or a race with a known rivalry on the grid", L1);
+        _chkIntrosSelective.Checked = _settings.CommentaryIntrosMainsOrRivalriesOnly;
+        _chkIntrosSelective.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryIntrosMainsOrRivalriesOnly = _chkIntrosSelective.Checked;
+            _settings.Save();
+        };
+
+        y = Block(y, _chkIntrosSelective);
+
+        y = HintUnder(y, Hint(
+            "Every other race starts without one - fewer words between heats, and the intro saved for the races that "
+            + "matter. Rivalries are set on the Rivalries tab.",
+            L2));
 
         Check(_chkSummaries, "Race recaps - a wrap-up after the checkered flag", L0);
         _chkSummaries.Checked = _settings.CommentaryRaceSummaries;
@@ -697,10 +751,307 @@ public sealed class CommentaryControl : UserControl
             "The recap runs for half a minute, so the usual announcement duck leaves the music and crowd competing with it.",
             L1));
 
+        y += UiLayout.SectionGap - Gap;
+
+        // ------------------------------------------------------------------
+        // Broadcast - the recap dressed up as TV (27 Sep 2026)
+        // ------------------------------------------------------------------
+
+        y = Heading(y, "Broadcast");
+
+        y = HintUnder(y, Hint(
+            "recap  ->  interview (after a main)  ->  sign-off.   Dresses the recap up as a TV broadcast. The model writes "
+            + "every part from the race's facts, like the recap itself, and the recap and intros say whether a race was a "
+            + "heat or a main.",
+            L0));
+
+        Check(_chkOpening, "Open the recap like a TV broadcast coming back on air", L0);
+        _chkOpening.Checked = _settings.RecapBroadcastOpening;
+        _chkOpening.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapBroadcastOpening = _chkOpening.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
+        y = Block(y, _chkOpening);
+
+        Check(_chkClosing, "End with a TV-style sign-off that tees up what's next on the program", L0);
+        _chkClosing.Checked = _settings.RecapBroadcastClosing;
+        _chkClosing.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapBroadcastClosing = _chkClosing.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
+        y = Block(y, _chkClosing);
+
+        var lblShow = Caption("Show name:", L1);
+        _txtShowName.Width = 280;
+        _txtShowName.Left = UiLayout.After(lblShow, AppTheme.BodyFont);
+        _txtShowName.MaxLength = 60;
+        _txtShowName.Text = _settings.RecapShowName ?? string.Empty;
+        _txtShowName.TextChanged += (_, _) =>
+        {
+            _settings.RecapShowName = _txtShowName.Text.Trim();
+            _settings.Save();
+        };
+        Add(_txtShowName);
+
+        var lblShowSuffix = Suffix("named in the opening and the sign-off - leave it blank for none", _txtShowName);
+
+        y = Row(y, lblShow, _txtShowName, lblShowSuffix);
+
+        Check(_chkInterview, "After a main, a quick interview with the winner's mechanic", L0);
+        _chkInterview.Checked = _settings.RecapMechanicInterview;
+        _chkInterview.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapMechanicInterview = _chkInterview.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
+        y = Block(y, _chkInterview);
+
+        y = HintUnder(y, Hint(
+            "The announcer asks, the mechanic answers, twice. The mechanic talks about the race and about the setup changes "
+            + "logged for the winning car in the Garage on the day - and says nothing about the car's settings when none "
+            + "are logged. Heats don't get one.",
+            L1));
+
+        var lblMechanic = Caption("Mechanic's name:", L1);
+        var lblVoice = Caption("Mechanic's voice:", L1);
+
+        var mechanicLeft = Math.Max(
+            UiLayout.After(lblMechanic, AppTheme.BodyFont),
+            UiLayout.After(lblVoice, AppTheme.BodyFont));
+
+        _txtMechanicName.Width = 200;
+        _txtMechanicName.Left = mechanicLeft;
+        _txtMechanicName.MaxLength = 40;
+        _txtMechanicName.Text = _settings.RecapMechanicName ?? string.Empty;
+        _txtMechanicName.TextChanged += (_, _) =>
+        {
+            _settings.RecapMechanicName = _txtMechanicName.Text.Trim();
+            _settings.Save();
+        };
+        Add(_txtMechanicName);
+
+        var lblMechanicSuffix = Suffix("blank for \"the team's mechanic\" - the model never makes a name up", _txtMechanicName);
+
+        y = Row(y, lblMechanic, _txtMechanicName, lblMechanicSuffix);
+
+        _cmbMechanicVoice.Width = 260;
+        _cmbMechanicVoice.Left = mechanicLeft;
+        _cmbMechanicVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbMechanicVoice.SelectedIndexChanged += (_, _) => SaveMechanicVoice();
+        Add(_cmbMechanicVoice);
+
+        // Added before they are measured, so each is sized in the font it
+        // is drawn in - see the note at the top of this method.
+        _btnLoadVoices.Text = "Load Voices";
+        Add(_btnLoadVoices);
+        _btnLoadVoices.Size = new Size(UiLayout.WidthFor(_btnLoadVoices), UiLayout.ButtonHeight);
+        _btnLoadVoices.Left = _cmbMechanicVoice.Right + UiLayout.RowGap;
+        _btnLoadVoices.Click += async (_, _) => await LoadMechanicVoicesAsync();
+
+        _btnTestMechanic.Text = "Test Voice";
+        Add(_btnTestMechanic);
+        _btnTestMechanic.Size = new Size(UiLayout.WidthFor(_btnTestMechanic), UiLayout.ButtonHeight);
+        _btnTestMechanic.Left = _btnLoadVoices.Right + UiLayout.ButtonGap;
+        _btnTestMechanic.Click += (_, _) => SpeakAsMechanic?.Invoke(_settings.MechanicVoice);
+
+        // Which engine's voices the list holds - the one chosen on Voice
+        // Settings. Last on the row, so its text can change without moving
+        // anything.
+        _lblVoiceSource = Suffix(string.Empty, _btnTestMechanic);
+
+        y = Row(y, lblVoice, _cmbMechanicVoice, _btnLoadVoices, _btnTestMechanic, _lblVoiceSource);
+
+        y = HintUnder(y, Hint(
+            "The list is the voice engine chosen on Voice Settings. A voice is kept for each engine, so switching engine "
+            + "there needs one picked here for the new engine too - with none picked, the announcer's own voice answers.",
+            mechanicLeft));
+
+        FillMechanicVoices(null);
+
+        // Voice Settings can change the engine while this page is hidden,
+        // so the list is set out again for it whenever the page is shown.
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible && EngineInUse?.Invoke() is { } engine && engine != _voiceListEngine)
+            {
+                FillMechanicVoices(engine);
+            }
+        };
+
         // Whatever the wrapping above actually came to.
         Height = Math.Max(MinimumSize.Height, y + UiLayout.PageTop);
 
         UpdateEnabledState();
+    }
+
+    // ==================== The mechanic's voice ====================
+
+    private static string EngineLabel(VoiceEngine engine) => engine switch
+    {
+        VoiceEngine.Windows => "Windows",
+        VoiceEngine.HeatCaller => "HeatCaller",
+        _ => "ElevenLabs",
+    };
+
+    /// <summary>The voice saved for the mechanic on this engine, as a list entry - the announcer's own when none is.</summary>
+    private VoiceChoice SavedMechanicVoice(VoiceEngine engine)
+    {
+        var voice = _settings.MechanicVoice;
+
+        static string Shown(string name, string id) => string.IsNullOrWhiteSpace(name) ? id : name;
+
+        return engine switch
+        {
+            VoiceEngine.Windows => string.IsNullOrWhiteSpace(voice.WindowsVoiceName)
+                ? AnnouncersVoice
+                : new VoiceChoice(voice.WindowsVoiceName, voice.WindowsVoiceName, string.Empty, voice.WindowsVoiceName),
+
+            VoiceEngine.HeatCaller => string.IsNullOrWhiteSpace(voice.HeatCallerVoice)
+                ? AnnouncersVoice
+                : new VoiceChoice(voice.HeatCallerVoice, voice.HeatCallerVoiceName, voice.HeatCallerRev, Shown(voice.HeatCallerVoiceName, voice.HeatCallerVoice)),
+
+            _ => string.IsNullOrWhiteSpace(voice.ElevenLabsVoiceId)
+                ? AnnouncersVoice
+                : new VoiceChoice(voice.ElevenLabsVoiceId, voice.ElevenLabsVoiceName, string.Empty, Shown(voice.ElevenLabsVoiceName, voice.ElevenLabsVoiceId)),
+        };
+    }
+
+    /// <summary>
+    /// Sets the mechanic's list out for an engine: the announcer's own
+    /// voice, the voice saved for that engine, and - once loaded - every
+    /// voice it offers. The saved one stays on the list even when the engine
+    /// no longer offers it: it is what is set, and the page shouldn't show
+    /// otherwise.
+    /// </summary>
+    /// <param name="engine">The engine to show; null for the one in use.</param>
+    /// <param name="loaded">The engine's voices, or null before they have been loaded.</param>
+    private void FillMechanicVoices(VoiceEngine? engine, IReadOnlyList<VoiceChoice>? loaded = null)
+    {
+        var shown = engine ?? EngineInUse?.Invoke() ?? VoiceEngine.ElevenLabs;
+        _voiceListEngine = shown;
+
+        var saved = SavedMechanicVoice(shown);
+        var choices = (loaded ?? Array.Empty<VoiceChoice>()).ToList();
+
+        if (saved.Id.Length > 0 && !choices.Any(c => string.Equals(c.Id, saved.Id, StringComparison.Ordinal)))
+        {
+            choices.Insert(0, saved);
+        }
+
+        _fillingVoices = true;
+
+        try
+        {
+            _cmbMechanicVoice.Items.Clear();
+            _cmbMechanicVoice.Items.Add(AnnouncersVoice);
+
+            foreach (var choice in choices)
+            {
+                _cmbMechanicVoice.Items.Add(choice);
+            }
+
+            var index = saved.Id.Length == 0 ? 0 : choices.FindIndex(c => string.Equals(c.Id, saved.Id, StringComparison.Ordinal)) + 1;
+            _cmbMechanicVoice.SelectedIndex = Math.Max(0, index);
+        }
+        finally
+        {
+            _fillingVoices = false;
+        }
+
+        if (_lblVoiceSource is not null)
+        {
+            _lblVoiceSource.Text = loaded is null
+                ? $"{EngineLabel(shown)} voices"
+                : Plural.Of(loaded.Count, $"{EngineLabel(shown)} voice");
+        }
+    }
+
+    /// <summary>Saves the picked voice against the engine the list is showing.</summary>
+    private void SaveMechanicVoice()
+    {
+        if (_fillingVoices || _cmbMechanicVoice.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        switch (_voiceListEngine)
+        {
+            case VoiceEngine.Windows:
+                _settings.MechanicWindowsVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.HeatCaller:
+                _settings.MechanicHeatCallerVoice = choice.Id;
+                _settings.MechanicHeatCallerVoiceName = choice.Name;
+                _settings.MechanicHeatCallerRev = choice.Rev;
+                break;
+
+            default:
+                _settings.MechanicElevenLabsVoiceId = choice.Id;
+                _settings.MechanicElevenLabsVoiceName = choice.Name;
+                break;
+        }
+
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Asks the engine in use for its voices. The button's caption says it
+    /// is working rather than the button being disabled - see _testRunning
+    /// for why.
+    /// </summary>
+    private async Task LoadMechanicVoicesAsync()
+    {
+        if (_loadingVoices)
+        {
+            return;
+        }
+
+        var engine = EngineInUse?.Invoke() ?? VoiceEngine.ElevenLabs;
+
+        if (LoadVoices is null)
+        {
+            AppDialog.Show(this, "The voice list isn't available in this window.", "Mechanic's voice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _loadingVoices = true;
+        _btnLoadVoices.Text = "Loading...";
+
+        try
+        {
+            var voices = await LoadVoices(engine);
+
+            if (!IsDisposed)
+            {
+                FillMechanicVoices(engine, voices);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed)
+            {
+                AppDialog.Show(this, $"Couldn't load the {EngineLabel(engine)} voices - {ex.Message.TrimEnd('.')}.", "Mechanic's voice",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        finally
+        {
+            _loadingVoices = false;
+
+            if (!IsDisposed)
+            {
+                _btnLoadVoices.Text = "Load Voices";
+            }
+        }
     }
 
     /// <summary>Keeps the test result level with the button, however many lines it wraps to.</summary>
@@ -743,6 +1094,7 @@ public sealed class CommentaryControl : UserControl
         _txtModel.Enabled = on;
         _numTimeout.Enabled = on;
         _chkIntros.Enabled = on;
+        _chkIntrosSelective.Enabled = on && _chkIntros.Checked;
         _chkSummaries.Enabled = on;
         _chkTalkingPoints.Enabled = on;
 
@@ -752,6 +1104,18 @@ public sealed class CommentaryControl : UserControl
         var summariesOn = on && _chkSummaries.Checked;
         _numFinishers.Enabled = summariesOn;
         _chkMentionFastestLap.Enabled = summariesOn;
+
+        // The broadcast is the recap's, so it goes dark with recaps.
+        _chkOpening.Enabled = summariesOn;
+        _chkClosing.Enabled = summariesOn;
+        _txtShowName.Enabled = summariesOn && (_chkOpening.Checked || _chkClosing.Checked);
+        _chkInterview.Enabled = summariesOn;
+
+        var interviewOn = summariesOn && _chkInterview.Checked;
+        _txtMechanicName.Enabled = interviewOn;
+        _cmbMechanicVoice.Enabled = interviewOn;
+        _btnLoadVoices.Enabled = interviewOn;
+        _btnTestMechanic.Enabled = interviewOn;
 
         var talkingOn = on && _chkTalkingPoints.Checked;
         _numInterval.Enabled = talkingOn;

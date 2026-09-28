@@ -166,6 +166,15 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     public Func<string?>? TimingProblem { get; set; }
 
+    /// <summary>
+    /// What the Garage has on the winning car, for the mechanic in the
+    /// recap's interview - see MechanicBrief. Given the saved race and the
+    /// round it was run for (null for a freeform race). Worked out by the
+    /// host, which owns the Garage; asked on the UI thread. Null leaves the
+    /// mechanic with nothing to say about the car's setup.
+    /// </summary>
+    public Func<SessionRecord, RoundDefinition?, IReadOnlyList<string>>? MechanicSetupFacts { get; set; }
+
     /// <summary>Raised when the bar's button is offering a programme step rather than a start. The host runs it through the programme tab.</summary>
     internal event Action<ProgramStep>? RunProgramStepRequested;
 

@@ -296,6 +296,33 @@ public sealed partial class RaceControlControl
             ? round.RoundLabel
             : $"{round.RoundLabel} ({round.ClassName})";
 
+    /// <summary>
+    /// The race these controls act on, for the phone remote (27 Sep 2026):
+    /// "Q2 Heat 1 (Stock Buggy)", a race name typed in, "Practice", or
+    /// "Freeform race" with neither. The round is the one the race is being
+    /// run for - the Round box's, or a restored race's. UI thread.
+    /// </summary>
+    public string RaceInHandTitle()
+    {
+        if (_race.IsPracticeMode)
+        {
+            return "Practice";
+        }
+
+        var round = RoundForThisRace();
+        var typed = _txtSessionLabel.Text.Trim();
+
+        var title = typed.Length > 0
+            ? round is not null
+              && !string.IsNullOrWhiteSpace(round.ClassName)
+              && !typed.Contains(round.ClassName.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? $"{typed} ({round.ClassName.Trim()})"
+                : typed
+            : round is not null ? RoundTitle(round) : "Freeform race";
+
+        return _race.IsDemoMode ? $"Demo: {title}" : title;
+    }
+
     private void UpdateNextUpBar()
     {
         var program = OrderedProgram();

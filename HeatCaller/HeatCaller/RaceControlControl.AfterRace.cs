@@ -119,8 +119,15 @@ public sealed partial class RaceControlControl
     /// broken model can't delay or endanger them. The announcer's own
     /// "race completed" call has already gone out too, meaning this is
     /// strictly additive - if it never arrives, nothing is missing.
+    ///
+    /// Since 27 Sep 2026 the recap can be a small broadcast of its own - a
+    /// TV-style opening and sign-off, and after a main a word with the
+    /// winner's mechanic in a second voice - all set on the Commentary page.
+    /// See PlanRecap for what is asked for, and the steps below for when
+    /// each part is written and spoken.
     /// </summary>
-    private void SpeakRaceSummary(SessionRecord record)
+    /// <param name="round">The round the race was run for - kept for a demo too, which isn't linked to it - or null for a freeform race.</param>
+    private void SpeakRaceSummary(SessionRecord record, RoundDefinition? round)
     {
         // The teaser is fixed text and needs nothing from the LLM, so it is
         // NOT behind the commentary guard. It used to be, which meant an
@@ -176,24 +183,109 @@ public sealed partial class RaceControlControl
                 + string.Join(", ", championship.Moves.Select(m => $"P{m.Position} {m.DriverName}")));
         }
 
-        _ = Task.Run(async () =>
+        // Heat or main, the opening and sign-off, the mechanic - from the
+        // settings, the program and the Garage, so worked out here on the
+        // UI thread for the same reason as the standings, and guarded the
+        // same way: this is the save path.
+        RecapPlan? plan = null;
+
+        if (commentaryAvailable)
         {
             try
             {
+                plan = PlanRecap(record, round);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Recap goes out plain, without its opening, sign-off or interview - they could not be set up: {ex.Message}");
+            }
+        }
+
+        // Cancelled the moment the next race is called to the grid - staged,
+        // counting down or started. What follows the recap stops there,
+        // whether it is being written, rendered or waiting to be spoken: it
+        // queues as reminders, which staging doesn't clear, and a mechanic
+        // talking over the next start is worse than no mechanic. Told by the
+        // race's own event rather than read from its state in the
+        // background, which is the UI thread's to read.
+        //
+        // Not disposed: it has no timer, and the handler below may still be
+        // running on the UI thread as the sequence ends.
+        var nextRace = new CancellationTokenSource();
+
+        Action<RaceState> onNextRace = state =>
+        {
+            if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+            {
+                // Async: Cancel() would run whatever is waiting on the token
+                // right here, on the thread that is changing the race.
+                _ = nextRace.CancelAsync();
+            }
+        };
+
+        _race.StateChanged += onNextRace;
+
+        // Already called? Then nothing follows the recap at all.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            nextRace.Cancel();
+        }
+
+        _ = Task.Run(async () =>
+        {
+            // The writing and rendering of the interview and the sign-off:
+            // stopped with the next race, and also once the sequence has
+            // given up on them, so nothing goes on costing characters or
+            // holding the local model after it is over.
+            using var followOnWork = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
+
+            try
+            {
                 var sequenceStarted = DateTime.UtcNow;
+
+                // Punchier delivery for the recap's own lines. The words were
+                // already broadcast-shaped; the flatness came from the
+                // voice settings, where style exaggeration sits at 0 by
+                // default and stability at a middling 0.5.
+                //
+                // Applied as-is, not merged with the profile. Merging took
+                // the more EXPRESSIVE of the two, which pulled a cranked
+                // announcer profile straight back in - and an
+                // over-expressive recap is the cheesiness this setting now
+                // exists to avoid.
+                //
+                // Worked out up here, before anything is written: the
+                // interview's questions and the sign-off are rendered in it
+                // too, while the recap is still being written or spoken.
+                (double, double)? delivery = _settings.SummaryUseBroadcastVoice
+                    ? (_settings.SummaryVoiceStability, _settings.SummaryVoiceStyle)
+                    : null;
 
                 // The model starts work at the flag, not after the teaser.
                 // Everything below - the finish call, the pause, the teaser -
                 // is time the recap can be generating in, and it used to sit
                 // idle through all of it.
                 var generation = commentaryAvailable
-                    ? _commentary!.BuildRaceSummaryAsync(record, championship)
+                    ? _commentary!.BuildRaceSummaryAsync(record, championship, plan?.Context)
                     : null;
 
                 if (generation is not null)
                 {
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Asking the model for a recap...");
                 }
+
+                // What follows the recap is written after it, each part as
+                // soon as the one before is done: the local model answers one
+                // request at a time, and the recap is wanted first. So the
+                // interview and the sign-off are written - and rendered -
+                // while the teaser and the recap play.
+                var interviewTask = generation is not null && plan is { Interview: true }
+                    ? WriteInterviewAsync(generation, record, plan, delivery, followOnWork.Token)
+                    : null;
+
+                var closingTask = generation is not null && plan is { SeparateClosing: true }
+                    ? WriteClosingAsync(interviewTask is not null ? (Task)interviewTask : generation, generation, record, plan, delivery, followOnWork.Token)
+                    : null;
 
                 var generationStarted = DateTime.UtcNow;
 
@@ -221,20 +313,6 @@ public sealed partial class RaceControlControl
                 {
                     await Task.Delay(TimeSpan.FromSeconds(flagPause));
                 }
-
-                // Punchier delivery for this one line. The words were
-                // already broadcast-shaped; the flatness came from the
-                // voice settings, where style exaggeration sits at 0 by
-                // default and stability at a middling 0.5.
-                //
-                // Applied as-is, not merged with the profile. Merging took
-                // the more EXPRESSIVE of the two, which pulled a cranked
-                // announcer profile straight back in - and an
-                // over-expressive recap is the cheesiness this setting now
-                // exists to avoid.
-                (double, double)? delivery = _settings.SummaryUseBroadcastVoice
-                    ? (_settings.SummaryVoiceStability, _settings.SummaryVoiceStyle)
-                    : null;
 
                 // Written AND rendered as one job, so "the recap is ready"
                 // means there is audio in hand, not just text.
@@ -348,10 +426,44 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
                     + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : "already rendered")}).");
 
+                // 5. After a main, the word with the mechanic; then the
+                // sign-off, when it has been kept back to come last. Each
+                // only once the line before it has been heard, and neither
+                // once the next race has been called to the grid.
+                var interview = interviewTask is null
+                    ? FollowOn.Spoken
+                    : await SpeakInterviewAsync(interviewTask, nextRace.Token);
+
+                if (closingTask is not null)
+                {
+                    if (interview == FollowOn.Late)
+                    {
+                        // Written after the interview, so later still -
+                        // rather than hold the silence open a second time.
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Sign-off skipped - it's written after the interview, which was too late.");
+                    }
+                    else if (interview != FollowOn.Stopped)
+                    {
+                        await SpeakClosingAsync(closingTask, nextRace.Token);
+                    }
+                }
+
+                // Nothing still being written or rendered is wanted now.
+                followOnWork.Cancel();
+
                 // Music handled AFTER the recap, not at the flag. Waiting
                 // for the voice queue means the fade starts when the
-                // broadcast actually ends rather than cutting across it.
-                await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(60), CancellationToken.None);
+                // broadcast actually ends rather than cutting across it -
+                // unless the next race has been called, which the deep duck
+                // must not sit on top of.
+                try
+                {
+                    await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(60), nextRace.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The next race was called while the broadcast finished.
+                }
 
                 DeepDuckRequested?.Invoke(false);
             }
@@ -372,9 +484,411 @@ public sealed partial class RaceControlControl
                 // that skipped this left it playing for the rest of the
                 // night; and raising it in more than one place risked a
                 // second fade or stop landing on the next race's music.
+                // First, so nothing below can keep it from being raised.
                 RaiseSessionAudioFinished();
+
+                _race.StateChanged -= onNextRace;
+
+                // However the sequence ended, nothing it started carries on
+                // writing or rendering. Before the using disposes it.
+                try
+                {
+                    followOnWork.Cancel();
+                }
+                catch
+                {
+                    // Whatever was waiting on it has its own handling; the
+                    // broadcast is over either way.
+                }
             }
         });
+    }
+
+    // ==================== The recap as a broadcast ====================
+
+    /// <summary>
+    /// What the recap is wrapped in this time. Worked out on the UI thread
+    /// by PlanRecap, with everything else the recap reads, before the
+    /// sequence goes to the background.
+    /// </summary>
+    /// <param name="Context">What the recap itself is told: heat or main, the opening, an inline sign-off, the show, what's next.</param>
+    /// <param name="Interview">A word with the winner's mechanic follows the recap.</param>
+    /// <param name="SeparateClosing">The sign-off is a line of its own, spoken last - after the interview.</param>
+    /// <param name="MechanicName">What the announcer calls the mechanic; blank for "the team's mechanic".</param>
+    /// <param name="SetupFacts">What the Garage has on the winning car - see MechanicBrief.</param>
+    /// <param name="MechanicVoice">The mechanic's voice, or null for the announcer's own.</param>
+    private sealed record RecapPlan(
+        CommentaryService.RecapContext Context,
+        bool Interview,
+        bool SeparateClosing,
+        string MechanicName,
+        IReadOnlyList<string> SetupFacts,
+        SecondVoice? MechanicVoice);
+
+    /// <summary>A line the recap sequence will speak: its words, who says them, and its audio when it rendered in advance.</summary>
+    /// <param name="Voice">The mechanic's voice, or null for the announcer.</param>
+    /// <param name="Delivery">The recap's delivery for the announcer's lines; null for the mechanic, who talks the way the voice does.</param>
+    /// <param name="Audio">Rendered while the recap played; null when it couldn't be, and the line is rendered as it is spoken.</param>
+    private sealed record SpokenLine(
+        string Text,
+        SecondVoice? Voice,
+        (double Stability, double Style)? Delivery,
+        AnnouncementService.PreparedSpeech? Audio);
+
+    /// <summary>
+    /// How long, once the recap has been heard, the interview may still be
+    /// waited for - and the sign-off once the interview has. Past it the
+    /// part is dropped: a silence any longer reads as the broadcast having
+    /// ended, and a line that then starts up reads as a mistake.
+    /// </summary>
+    private static readonly TimeSpan FollowOnWait = TimeSpan.FromSeconds(15);
+
+    /// <summary>The longest a line of the recap sequence is waited on to be heard before the next is queued behind it anyway.</summary>
+    private static readonly TimeSpan RecapLineLimit = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// Heat or main, the opening and sign-off, and the mechanic - what the
+    /// Commentary page asks for, for this race.
+    /// </summary>
+    private RecapPlan PlanRecap(SessionRecord record, RoundDefinition? round)
+    {
+        var clubNight = round is not null && _events?.EventForRound(round.Id)?.IsClubNight == true;
+        var kind = CommentaryService.DescribeKind(round, clubNight);
+
+        // Mains only, as asked for on 27 Sep 2026: a word with the mechanic
+        // is an occasion, and after every heat it would be a routine.
+        var interview = _settings.RecapMechanicInterview && round?.Kind == RoundKind.Main;
+        var closing = _settings.RecapBroadcastClosing;
+
+        var context = new CommentaryService.RecapContext(
+            kind,
+            _settings.RecapBroadcastOpening,
+
+            // After an interview the sign-off is a line of its own, spoken
+            // last, rather than the end of the recap before it.
+            closing && !interview,
+            (_settings.RecapShowName ?? string.Empty).Trim(),
+
+            // A demo leaves its round unrun, so that round is still next.
+            closing ? UpNextAfter(record.IsDemo ? null : round) : null,
+            InterviewFollows: interview);
+
+        if (!interview)
+        {
+            return new RecapPlan(context, false, false, string.Empty, Array.Empty<string>(), null);
+        }
+
+        var mechanicName = (_settings.RecapMechanicName ?? string.Empty).Trim();
+        IReadOnlyList<string> setupFacts = Array.Empty<string>();
+
+        try
+        {
+            setupFacts = MechanicSetupFacts?.Invoke(record, round) ?? Array.Empty<string>();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The mechanic goes without the Garage's setup log - it could not be read: {ex.Message}");
+        }
+
+        // The mechanic's voice for the engine in use. With none picked for
+        // it the announcer's own voice answers - and that is said, because
+        // both parts in one voice sounds like a mistake.
+        var engine = _announcer.VoiceEngineInUse;
+        var voices = _settings.MechanicVoice;
+        var voice = voices.IsSetFor(engine) ? voices : null;
+
+        var who = mechanicName.Length > 0 ? mechanicName : "the mechanic";
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [commentary] After the recap: an interview with {who}"
+            + (voice is not null
+                ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
+                : $" in the announcer's own voice - no mechanic's voice is picked for {EngineName(engine)} on the Commentary page")
+            + (setupFacts.Count > 0
+                ? ", with the setup the Garage has for the winning car."
+                : ". No setup is logged for the winning car, so the mechanic won't talk settings."));
+
+        return new RecapPlan(context, true, closing, mechanicName, setupFacts, voice);
+    }
+
+    private static string EngineName(VoiceEngine engine) => engine switch
+    {
+        VoiceEngine.Windows => "the Windows voice",
+        VoiceEngine.HeatCaller => "the HeatCaller voice",
+        _ => "ElevenLabs",
+    };
+
+    /// <summary>
+    /// What is next on the program after the race just run - "A-Main
+    /// (Stock Buggy)" - for the sign-off to tee up. The first round not yet
+    /// run, in program order, as the Next Up bar has it. Null when the
+    /// program has nothing left, or there isn't one.
+    /// </summary>
+    private string? UpNextAfter(RoundDefinition? justRun)
+    {
+        var next = OrderedProgram().FirstOrDefault(r =>
+            !r.IsRecorded && !string.Equals(r.Id, justRun?.Id, StringComparison.Ordinal));
+
+        return next is null ? null : RoundTitle(next);
+    }
+
+    /// <summary>How a part of the recap sequence ended.</summary>
+    private enum FollowOn
+    {
+        /// <summary>Spoken - or there was nothing usable to speak, which has been said.</summary>
+        Spoken,
+
+        /// <summary>Not ready in time, and skipped.</summary>
+        Late,
+
+        /// <summary>The next race was called to the grid.</summary>
+        Stopped,
+    }
+
+    /// <summary>
+    /// Writes the interview once the recap has been written, then renders
+    /// each line - the questions in the announcer's voice, the answers in
+    /// the mechanic's - one at a time, while the recap plays. Null when
+    /// there's no recap for it to follow, nothing usable came back, or it
+    /// was called off.
+    /// </summary>
+    private async Task<List<SpokenLine>?> WriteInterviewAsync(
+        Task<string?> recapWritten, SessionRecord record, RecapPlan plan, (double Stability, double Style)? delivery, CancellationToken cancel)
+    {
+        try
+        {
+            // No recap, no interview: it would follow nothing.
+            if (string.IsNullOrWhiteSpace(await recapWritten) || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            var exchanges = await _commentary!.BuildMechanicInterviewAsync(
+                record,
+                plan.MechanicName,
+                plan.SetupFacts,
+                plan.Context.Kind,
+                log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
+                ct: cancel);
+
+            if (exchanges is null)
+            {
+                return null;
+            }
+
+            var lines = new List<SpokenLine>();
+
+            foreach (var exchange in exchanges)
+            {
+                // Checked before each render: each one costs characters.
+                if (cancel.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                lines.Add(new SpokenLine(exchange.Question, null, delivery,
+                    await _announcer.PrepareReminderAsync(exchange.Question, delivery)));
+
+                if (cancel.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                lines.Add(new SpokenLine(exchange.Answer, plan.MechanicVoice, null,
+                    await _announcer.PrepareReminderAsync(exchange.Answer, null, plan.MechanicVoice)));
+            }
+
+            return lines;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No interview - {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes and renders the sign-off once what comes before it has been
+    /// written - the interview, or the recap. Null when there's no recap
+    /// for it to close, nothing came back, or it was called off.
+    /// </summary>
+    /// <param name="before">The part written just before - the local model takes one request at a time.</param>
+    private async Task<SpokenLine?> WriteClosingAsync(
+        Task before, Task<string?> recapWritten, SessionRecord record, RecapPlan plan, (double Stability, double Style)? delivery, CancellationToken cancel)
+    {
+        try
+        {
+            try
+            {
+                await before;
+            }
+            catch
+            {
+                // Its own failure is its own to report; the sign-off still follows.
+            }
+
+            if (string.IsNullOrWhiteSpace(await recapWritten) || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            var line = await _commentary!.BuildBroadcastClosingAsync(record, plan.Context, cancel);
+
+            if (string.IsNullOrWhiteSpace(line) || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            // Tagged for delivery like the recap, and rendered in its voice.
+            var spoken = _commentary!.PrepareSummaryForSpeech(line);
+
+            return new SpokenLine(spoken, null, delivery, await _announcer.PrepareReminderAsync(spoken, delivery));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No sign-off - {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Speaks the interview once the recap has been heard: a line at a time,
+    /// each queued once the one before it has played, so that calling the
+    /// next race to the grid stops it between lines rather than leaving the
+    /// mechanic talking over the staging call.
+    /// </summary>
+    /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
+    private async Task<FollowOn> SpeakInterviewAsync(Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace)
+    {
+        const string stopped = "Interview stopped - the next race was called to the grid.";
+
+        if (!await HeardOutAsync(nextRace))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+            return FollowOn.Stopped;
+        }
+
+        var (timedOut, lines) = await WithinAsync(interviewTask, FollowOnWait, nextRace);
+
+        if (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+            return FollowOn.Stopped;
+        }
+
+        if (lines is null)
+        {
+            StatusMessage?.Invoke(timedOut
+                ? $"{AppTime.LogStampNow()}  [commentary] Interview skipped - it wasn't ready within {FollowOnWait.TotalSeconds:0}s of the recap ending."
+                : $"{AppTime.LogStampNow()}  [commentary] No interview - nothing usable came back from the model. Any line above says why.");
+
+            return timedOut ? FollowOn.Late : FollowOn.Spoken;
+        }
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i > 0 && !await HeardOutAsync(nextRace))
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                return FollowOn.Stopped;
+            }
+
+            Say(lines[i]);
+        }
+
+        return FollowOn.Spoken;
+    }
+
+    /// <summary>Speaks the sign-off kept back for the end, once everything before it has been heard.</summary>
+    /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
+    private async Task SpeakClosingAsync(Task<SpokenLine?> closingTask, CancellationToken nextRace)
+    {
+        const string dropped = "Sign-off dropped - the next race was called to the grid.";
+
+        if (!await HeardOutAsync(nextRace))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped}");
+            return;
+        }
+
+        var (timedOut, closing) = await WithinAsync(closingTask, FollowOnWait, nextRace);
+
+        if (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped}");
+            return;
+        }
+
+        if (closing is null)
+        {
+            StatusMessage?.Invoke(timedOut
+                ? $"{AppTime.LogStampNow()}  [commentary] Sign-off skipped - it wasn't ready within {FollowOnWait.TotalSeconds:0}s."
+                : $"{AppTime.LogStampNow()}  [commentary] No sign-off - nothing came back from the model. Any line above says why.");
+            return;
+        }
+
+        Say(closing, AnnouncementService.SpeechTail.Long);
+    }
+
+    /// <summary>
+    /// Waits for whatever is being said to finish. False when the next race
+    /// was called to the grid first - or already had been.
+    /// </summary>
+    private async Task<bool> HeardOutAsync(CancellationToken nextRace)
+    {
+        if (nextRace.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        try
+        {
+            await _announcer.WaitForAudioAsync(RecapLineLimit, nextRace);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+
+        return !nextRace.IsCancellationRequested;
+    }
+
+    /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
+    private void Say(SpokenLine line, AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal)
+    {
+        if (line.Audio is not null)
+        {
+            _announcer.SpeakPrepared(line.Audio, tail);
+        }
+        else
+        {
+            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice);
+        }
+    }
+
+    /// <summary>
+    /// The task's result if it finishes within <paramref name="limit"/>.
+    /// Otherwise - or when <paramref name="cancel"/> goes first - TimedOut,
+    /// and the task carries on unwatched (its own work stops with its own
+    /// token).
+    /// </summary>
+    private static async Task<(bool TimedOut, T? Result)> WithinAsync<T>(Task<T?> task, TimeSpan limit, CancellationToken cancel)
+        where T : class
+    {
+        if (!task.IsCompleted && await Task.WhenAny(task, Task.Delay(limit, cancel)) != task)
+        {
+            return (true, null);
+        }
+
+        try
+        {
+            return (false, await task);
+        }
+        catch
+        {
+            // Both tasks this waits on report their own failures.
+            return (false, null);
+        }
     }
 
     /// <summary>
@@ -465,6 +979,23 @@ public sealed partial class RaceControlControl
             return false;
         }
 
+        // Intros kept for the races that earn one, when the Commentary page
+        // says so (27 Sep 2026): a main, or a race with a known rivalry on
+        // its grid. Said, so an intro that doesn't come isn't taken for the
+        // model having failed.
+        if (_settings.CommentaryIntrosMainsOrRivalriesOnly
+            && round.Kind != RoundKind.Main
+            && !_commentary.HasRivalryAmong(round.AssignedTransponders))
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No round intro for {round.RoundLabel} - intros are set to mains and rivalries only, "
+                + "and this race is neither.");
+            return false;
+        }
+
+        // On a club night a race is just a race - it isn't called a heat.
+        var clubNight = _events?.EventForRound(round.Id)?.IsClubNight == true;
+
         // Released however this ends - spoken, dropped, failed - and in any
         // case after the budget plus a margin, or when a countdown starts.
         var writing = _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10));
@@ -490,7 +1021,8 @@ public sealed partial class RaceControlControl
                     {
                         tidied = true;
                         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}");
-                    });
+                    },
+                    clubNight: clubNight);
 
                 if (string.IsNullOrWhiteSpace(answer))
                 {
@@ -713,7 +1245,7 @@ public sealed partial class RaceControlControl
                     AwardAchievements(record);
                 }
 
-                SpeakRaceSummary(record);
+                SpeakRaceSummary(record, round);
             },
             beforeJournalCleared: () =>
             {

@@ -96,6 +96,8 @@ The overlay address (`/?overlay=1`) is the same live results page with a transpa
 
 The page at `/remote` lets you run the race from a phone at the trackside. It has buttons for **STAGE**, **COUNTDOWN**, **GREEN - START**, **YELLOW**, **RED**, **CHECKERED** and **RESET**, plus the current race state and a live standings table.
 
+At the top, **CONTROLLING** shows which race the buttons act on: the round selected on **Race Control** with its class, for example "Q2 Heat 1 (Stock Buggy)", or the race name typed in, **Practice** during practice, or **Freeform race** with neither. A demo race starts with "Demo:". It changes within a couple of seconds when a different round is picked on the laptop, so check it before you press **STAGE**.
+
 1. Open the **Phone remote:** address on your phone (or scan its QR poster).
 2. Type the remote PIN into the box at the top ("Remote PIN (set on the laptop)"). The phone remembers it.
 3. Tap a button. The page shows, for example, "Sending GREEN…", and then what the laptop actually did with it.

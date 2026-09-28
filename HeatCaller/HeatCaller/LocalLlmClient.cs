@@ -159,6 +159,14 @@ public sealed class LocalLlmClient
             StatusMessage?.Invoke($"[llm] Timed out after {effectiveTimeout.TotalSeconds:0.#}s - falling back to templates.");
             return null;
         }
+        catch (OperationCanceledException)
+        {
+            // Called off by the caller - a round intro past its budget, or
+            // the recap's interview once the next race is called. Not a
+            // failure: the caller says why in its own words.
+            StatusMessage?.Invoke("[llm] Request called off before the model answered.");
+            return null;
+        }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"[llm] {ex.GetType().Name}: {ex.Message} - falling back to templates.");

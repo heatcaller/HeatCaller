@@ -20,6 +20,9 @@ public sealed class DriverStatsSources
     public TechInspectionStore? TechInspections { get; init; }
     public CheckInStore? CheckIns { get; init; }
     public SetupLogStore? SetupLog { get; init; }
+
+    /// <summary>The setup sheets, for the names of the fields a setup changed - see DriverStats.RecentActivity.</summary>
+    public ChassisTemplateStore? ChassisTemplates { get; init; }
 }
 
 /// <summary>
@@ -53,6 +56,12 @@ public sealed class DriverStatsSnapshot
 
     /// <summary>A private copy of the badges file, or null when it could not be read.</summary>
     public AchievementStore? Achievements { get; init; }
+
+    /// <summary>Every logged setup, newest first - a fresh list, as SetupLogStore.All gives it.</summary>
+    public IReadOnlyList<SetupEntry> Setups { get; init; } = Array.Empty<SetupEntry>();
+
+    /// <summary>The setup sheets by id, copied out of the store for the field names.</summary>
+    public IReadOnlyDictionary<string, ChassisTemplate> SetupSheets { get; init; } = new Dictionary<string, ChassisTemplate>();
 
     /// <summary>Takes the copy. UI thread only - see the class summary.</summary>
     public static DriverStatsSnapshot Take(DriverStatsSources sources, ProfileStore profiles)
@@ -119,6 +128,18 @@ public sealed class DriverStatsSnapshot
             achievements = null;
         }
 
+        // The sheets copied into a dictionary of their own: the store hands
+        // out its live list, and the sums may run on another thread.
+        var sheets = new Dictionary<string, ChassisTemplate>(StringComparer.Ordinal);
+
+        foreach (var sheet in sources.ChassisTemplates?.All ?? Array.Empty<ChassisTemplate>())
+        {
+            if (!string.IsNullOrEmpty(sheet.Id))
+            {
+                sheets[sheet.Id] = sheet;
+            }
+        }
+
         return new DriverStatsSnapshot
         {
             Sessions = sessions,
@@ -126,6 +147,11 @@ public sealed class DriverStatsSnapshot
             Rivalries = rivalries,
             Championships = championships,
             Achievements = achievements,
+            // Copies, not the store's own entries: the Garage's setup form
+            // edits an entry's values in place while it is open, and the
+            // sums may be reading these on another thread.
+            Setups = (sources.SetupLog?.All ?? Array.Empty<SetupEntry>()).Select(SetupLogStore.CopyOf).ToList(),
+            SetupSheets = sheets,
         };
     }
 }
@@ -155,6 +181,17 @@ public sealed record ChampionshipLine(string Season, int Position, int FieldSize
 /// the Rivalries page, false when this is simply who they have raced most.
 /// </summary>
 public sealed record RivalLine(string Name, int Ahead, int Behind, bool Named);
+
+/// <summary>What kind of thing a line of a driver's recent activity is.</summary>
+public enum ActivityKind
+{
+    Race,
+    PersonalBest,
+    Setup,
+}
+
+/// <summary>One line of a driver's recent activity: when, what kind, and what happened, in words.</summary>
+public sealed record ActivityLine(DateTime WhenUtc, ActivityKind Kind, string Text);
 
 /// <summary>What the card says about today: check-in, tech, handicap. Read live from the stores.</summary>
 public sealed record RaceDayLine(
@@ -269,6 +306,23 @@ public sealed class DriverStats
 
     /// <summary>Filled on the UI thread once the sums are back - it reads live stores.</summary>
     public RaceDayLine? RaceDay { get; set; }
+
+    /// <summary>How many lines of recent activity the card shows.</summary>
+    public const int ActivityLength = 8;
+
+    /// <summary>How many of their latest races and setups are looked at for it - plenty to fill it.</summary>
+    private const int ActivityLookBack = ActivityLength;
+
+    /// <summary>
+    /// What they have been up to lately, newest first (27 Sep 2026): their
+    /// races, their personal bests, and the setups logged for them, with
+    /// what each setup changed. Personal bests join once
+    /// <see cref="ApplyPersonalBests"/> has settled them.
+    /// </summary>
+    public IReadOnlyList<ActivityLine> RecentActivity { get; private set; } = Array.Empty<ActivityLine>();
+
+    /// <summary>The races and setups of RecentActivity, before the personal bests join them.</summary>
+    private List<ActivityLine> _activity = new();
 
     /// <summary>
     /// Every timed lap of theirs that could be a personal best, before any
@@ -430,6 +484,26 @@ public sealed class DriverStats
             .Select(r => r.Row.Laps >= 1 && r.Place is { } p ? p : 0)
             .ToList();
 
+        // --- Recent activity: races and setups (personal bests join later) ---
+        foreach (var (session, row, place) in races.Take(ActivityLookBack))
+        {
+            if (session.StartedAtUtc == default)
+            {
+                continue;
+            }
+
+            var field = session.Results.Count(e => !GhostService.IsGhost(e.Transponder));
+
+            var outcome = row.Laps < 1 || place is not { } finished
+                ? "did not finish"
+                : $"P{finished} of {field}" + (row.FastLapMs > 0 ? $"  ·  best {LapText(row.FastLapMs)}s" : string.Empty);
+
+            stats._activity.Add(new ActivityLine(session.StartedAtUtc, ActivityKind.Race, $"{RaceName(session, snapshot)}  ·  {outcome}"));
+        }
+
+        stats._activity.AddRange(SetupActivity(query.DriverName, snapshot));
+        stats.RecentActivity = stats.MergeActivity(Array.Empty<ActivityLine>());
+
         // A saved race records its round, and the round its class - the
         // same lookup EventSpine.RuleAccepts uses to put a race in a
         // class's championship.
@@ -527,6 +601,86 @@ public sealed class DriverStats
             .ToList();
 
         BestLap = PersonalBests.OrderBy(b => b.LapMs).FirstOrDefault();
+
+        RecentActivity = MergeActivity(PersonalBests
+            .Where(b => b.SetUtc != default)
+            .Select(b => new ActivityLine(b.SetUtc, ActivityKind.PersonalBest, $"Personal best  ·  {b.Layout}  ·  {LapText(b.LapMs)}s"))
+            .ToList());
+    }
+
+    /// <summary>
+    /// The races and setups with the personal bests, newest first, cut to
+    /// <see cref="ActivityLength"/>. A personal best goes above the race it
+    /// was set in: they share a time, and the sort keeps them in the order
+    /// given.
+    /// </summary>
+    private IReadOnlyList<ActivityLine> MergeActivity(IReadOnlyList<ActivityLine> personalBests) =>
+        personalBests
+            .Concat(_activity)
+            .OrderByDescending(line => line.WhenUtc)
+            .Take(ActivityLength)
+            .ToList();
+
+    /// <summary>A lap time as the card shows one: seconds to the thousandth.</summary>
+    private static string LapText(long ms) => (ms / 1000.0).ToString("0.000");
+
+    /// <summary>
+    /// A saved race's name for the card: its label without "[DEMO]" and the
+    /// like, with the class after it when the label doesn't already say it -
+    /// "Q2 Heat 1 (Stock Buggy)".
+    /// </summary>
+    private static string RaceName(SessionRecord session, DriverStatsSnapshot snapshot)
+    {
+        var label = System.Text.RegularExpressions.Regex.Replace(session.Label ?? string.Empty, @"\[[^\]]*\]", string.Empty).Trim();
+
+        if (label.Length == 0)
+        {
+            label = "Race";
+        }
+
+        return !string.IsNullOrEmpty(session.RoundId)
+               && snapshot.RoundClasses.TryGetValue(session.RoundId, out var cls)
+               && !label.Contains(cls, StringComparison.OrdinalIgnoreCase)
+            ? $"{label} ({cls})"
+            : label;
+    }
+
+    /// <summary>
+    /// The setups logged under this driver's name, newest first, each with
+    /// what it changed from the one before it on the same car - the Garage's
+    /// "Changed Since Last", in a line.
+    /// </summary>
+    private static IEnumerable<ActivityLine> SetupActivity(string driverName, DriverStatsSnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(driverName))
+        {
+            yield break;
+        }
+
+        ChassisTemplate? SheetFor(string? id) =>
+            id is not null && snapshot.SetupSheets.TryGetValue(id, out var sheet) ? sheet : null;
+
+        var theirs = snapshot.Setups
+            .Where(e => e.RecordedAtUtc != default
+                        && string.Equals((e.DriverName ?? string.Empty).Trim(), driverName, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.RecordedAtUtc)
+            .Take(ActivityLookBack);
+
+        foreach (var entry in theirs)
+        {
+            var previous = SetupDiff.Previous(entry, snapshot.Setups);
+
+            var what = previous is null ? "the first one logged"
+                : previous.IsLegacy != entry.IsLegacy ? "the first on a setup sheet"
+                : SetupDiff.Describe(SetupDiff.Between(previous, entry, SheetFor).Where(c => c.OnSheet).ToList(), max: 2);
+
+            var car = (entry.CarModel ?? string.Empty).Trim();
+
+            yield return new ActivityLine(
+                entry.RecordedAtUtc,
+                ActivityKind.Setup,
+                (car.Length > 0 ? $"Setup on {car}" : "Setup") + $"  ·  {what}");
+        }
     }
 
     /// <summary>What today looks like for this driver, from the live race-day stores. UI thread only.</summary>

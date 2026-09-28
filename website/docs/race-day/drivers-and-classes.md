@@ -15,6 +15,8 @@ The page has two halves:
 - **The roster** on the left, with a photo (or an initials disc) and the columns **Driver**, **#**, **Class**, **Car / Model** and **Transponder**. If a driver has more than one car, the **Car / Model** column shows the active car and how many others they have, for example `MR-03 (+1)`.
 - **The driver card** on the right, which shows the selected driver's photo, number, class (in the class's color), car, team, sponsors, home track, skill level, transponder, any flags, earned badges and notes. Empty fields are left off the card.
 
+Under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
+
 The **Search name, number, car, class, team...** box filters the roster as you type. It matches the driver name, announcer name, transponder, race number, class, team, sponsors, home track and any car in the driver's garage.
 
 You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
@@ -95,38 +97,52 @@ If a picture can't be used, a **Photo not added** message says **Couldn't use th
 
 ### Import drivers from a spreadsheet
 
-If you have a club roster in a spreadsheet, you can import it as a CSV file instead of typing each driver in.
+If you have your drivers in a spreadsheet, or in the timing software your club used before, you can import them from a CSV file instead of typing each one in. Any CSV will do: HeatCaller shows you the file's columns first and you say what each one is. If your old software exports its championship standings, the points can come in too, as each driver's starting total.
 
-1. Click **Download Template...** and save `driver-roster-template.csv`.
-2. Open it in your spreadsheet program. Fill in one row per driver, and delete the example row.
-3. Save it as CSV.
-4. Click **Import from CSV...** and pick the file.
+1. Click **Import from CSV** and pick the file. Comma-, semicolon- and tab-separated files all work; the first row must be the column headings.
+2. HeatCaller shows the file's first rows, with a list at the top of each column. Each list has a guess at what that column is, taken from its heading. Change any that are wrong, and set the columns you don't want to **(ignore)**.
+3. If a column is **Points so far**, pick the championship they go into under **Points so far go into:**. With a **Class** column picked, you can choose **The championship for each driver's class**.
+4. Click **Import**.
 
-The template has these columns:
+<!-- screenshot: the import preview with a list above each column and Points so far go into -->
 
-| Column | Also accepted as | Notes |
-|---|---|---|
-| `Transponder` | `TransponderId`, `Transponder Id` | Required. Rows without it are skipped. |
-| `DriverName` | `Driver Name`, `Driver`, `Name` | |
-| `CarModel` | `Car Model`, `Car`, `Model` | |
-| `ClassName` | `Class Name`, `Class` | |
-| `Team` | `Club`, `Team / Club` | |
-| `Sponsors` | `Sponsor` | |
-| `Email` | `E-mail`, `Email Address`, `E-mail Address` | |
-| `Notes` | `Note` | |
+What each column can be:
 
-Column headers are matched without regard to capitals, and the columns can be in any order. If there's no transponder column, the import stops with **Missing required column**.
+| Choice | What it fills in |
+|---|---|
+| **Transponder** | The transponder number. This is how drivers are matched: rows without one are skipped. |
+| **Driver name** | The driver's name. |
+| **First name**, **Last name** | Put together into the driver's name, for files that keep them apart. Ignored when a **Driver name** column is picked. |
+| **Announcer name** | The name the announcer says. |
+| **Race number** | The driver's race number. |
+| **Class** | The driver's class. |
+| **Car** | The car. |
+| **Team**, **Sponsors**, **Email**, **Notes** | Those fields on the profile. |
+| **Points so far** | The driver's championship points before switching to HeatCaller. See below. |
+| **(ignore)** | Nothing. The column isn't imported. |
+
+Each choice can be picked for one column only. The guesses come from common headings, such as "TX" or "MyLaps Transponder" for **Transponder**, "Surname" for **Last name**, "Category" for **Class** and "Pts" or "Total" for **Points so far**. A file saved from **Download Template** is guessed right every time.
 
 How the import treats drivers who already exist:
 
 - A transponder that isn't in HeatCaller yet becomes a new profile.
-- A transponder that already has a profile is **updated, not replaced**. Only the columns that are present *and* filled in on the sheet change anything. The driver's photo, race number, announcer name and every other field not on the sheet are left alone, and a blank cell never wipes out an existing value.
+- A transponder that already has a profile is **updated, not replaced**. Only the columns that are picked *and* filled in on the sheet change anything. The driver's photo and every other field not on the sheet are left alone, and a blank cell never wipes out an existing value.
 - A row is skipped, and nothing is changed for it, when its transponder is another driver's alt transponder, when it gives a different driver name for a transponder that's already in use, or when it repeats an earlier row's transponder with a different name.
 
-When it finishes, **Import complete** tells you how many profiles were imported and how many were new or updated. Rows with no transponder are listed (up to ten), and rows skipped because of a transponder clash are listed under "Skipped N rows - nothing was changed for these:".
+When it finishes, **Import complete** tells you how many profiles were imported and how many were new or updated, and how many drivers' points were carried in. Rows with no transponder, rows skipped because of a transponder clash, and rows whose points couldn't be carried in are listed (up to ten of each). The whole import is one step for the sidebar **Undo** button, points included.
+
+#### Points so far
+
+A **Points so far** column brings each driver's championship points in with them, so a club switching part way through a season keeps its table. The points become the driver's starting total in the championship you pick: they're added to what the driver scores in HeatCaller, shown in the standings' **Carried In** column, and never dropped by **Count each driver's best**. See [Points carried in](../race-control/results-and-championships.md#points-carried-in).
+
+- A cell like `45`, `45.0`, `45 pts` or `1,234` is read as a number; a blank or anything else carries nothing in for that row. A fraction is rounded to a whole point.
+- The points go under the driver's name as HeatCaller has it, which is how the standings match them to the driver's results.
+- With **The championship for each driver's class**, each driver's points go into the championship set up for their class (the **Class** on the row, or else the class on their profile). A driver whose class has no championship, or more than one (last season's and this season's, say), gets no points and is listed in **Import complete**: import again and pick the championship for them.
+- Importing again replaces the points of every driver on the sheet. Drivers not on it keep theirs.
+- There's no transponder column? Then only the points are imported, matched by driver name, and no profiles change. Names that match no driver in HeatCaller are listed in **Import complete**, in case one is spelled differently from the driver's results: a name the standings don't know gets a line of its own.
 
 !!! tip
-    Because blank cells never overwrite anything, you can use a sheet with just `Transponder` and `Email` columns to add email addresses to drivers you've already set up.
+    Because blank cells never overwrite anything, you can use a sheet with just a transponder and an email column to add email addresses to drivers you've already set up.
 
 ## Classes
 
@@ -400,11 +416,15 @@ At the bottom, **Show this plan as the track's main picture** (on by default) ma
 
 ## Setup Log
 
-The **Setup Log** records what was in the car and links it to the session it ran in, so the session's best lap shows right next to the setup. Over time it shows which changes actually made the car quicker.
+Setups are logged against a car in the **Garage**: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
 
-<!-- screenshot: Setup Log page listing several setups with their best laps -->
+<!-- screenshot: a car in the Garage, its setups listed with Changed Since Last and Best Lap -->
 
-The grid lists setups newest first, with the columns **Date**, **Driver**, **Track**, **Chassis Sheet**, **Filled** (how many fields are filled in), **Best Lap** and **Setup** (the first few filled values). Use **Driver:** to show one driver's setups.
+The list shows the car's setups newest first, with the columns **Date**, **Driver**, **Track**, **Chassis Sheet**, **Filled** (how many fields are filled in), **Best Lap**, **Changed Since Last** and **Setup** (the first few filled values).
+
+**Changed Since Last** shows what's different from the setup logged before it, so a run of tuning sessions reads as a run of changes at a glance: for example "Pinion 22T → 23T, Front springs Soft → Medium". A value that was set for the first time shows as "Front springs → Hard", and one that was cleared as "Pinion 22T → (none)". Up to three changes are shown, then "and 2 more"; point at the cell to see them all. A setup identical to the one before it says **no changes**, and the oldest says **(first setup)**. Notes aren't counted, and neither are differences in capitals or spaces, or the same options ticked in a different order. A setup filled in on a chassis sheet isn't compared with one from before chassis sheets, since they share no fields: the first sheet setup after an older one says **(first on a setup sheet)**.
+
+The same changes are what the winner's mechanic talks about in the recap's interview after a main. See [Commentary](../announcer/commentary.md#broadcast).
 
 ### Log a setup
 

@@ -284,6 +284,39 @@ public enum VoiceEngine
 }
 
 /// <summary>
+/// A second speaker - the mechanic in the recap's interview (27 Sep 2026) -
+/// as a voice for each engine, since the club can switch engine at any time.
+/// Only the one for the engine in use is used; a blank one leaves that part
+/// of the announcer's own voice as it is.
+/// </summary>
+public sealed record SecondVoice(
+    string ElevenLabsVoiceId,
+    string ElevenLabsVoiceName,
+    string HeatCallerVoice,
+    string HeatCallerVoiceName,
+    string HeatCallerRev,
+    string WindowsVoiceName)
+{
+    /// <summary>Whether a voice has been picked for this engine - otherwise the announcer's own is used.</summary>
+    public bool IsSetFor(VoiceEngine engine) => engine switch
+    {
+        VoiceEngine.ElevenLabs => !string.IsNullOrWhiteSpace(ElevenLabsVoiceId),
+        VoiceEngine.HeatCaller => !string.IsNullOrWhiteSpace(HeatCallerVoice),
+        VoiceEngine.Windows => !string.IsNullOrWhiteSpace(WindowsVoiceName),
+        _ => false,
+    };
+
+    /// <summary>The picked voice's name for this engine, for the page and the console; empty when none is.</summary>
+    public string NameFor(VoiceEngine engine) => engine switch
+    {
+        VoiceEngine.ElevenLabs => ElevenLabsVoiceName,
+        VoiceEngine.HeatCaller => HeatCallerVoiceName,
+        VoiceEngine.Windows => WindowsVoiceName,
+        _ => string.Empty,
+    };
+}
+
+/// <summary>
 /// Everything needed to turn race events into spoken announcements: the
 /// ElevenLabs credentials/voice choice, voice tuning parameters, playback
 /// volume, and per-event on/off + text template.
@@ -585,6 +618,39 @@ public sealed class VoiceProfile
         HeatCallerRev = HeatCallerRev,
         HeatCallerVoiceName = HeatCallerVoiceName,
     };
+
+    /// <summary>
+    /// A copy that speaks in another voice - every picked part of
+    /// <paramref name="voice"/> replacing the announcer's, the rest (key,
+    /// model, delivery, speed) kept. The Windows voice goes over too when one
+    /// is picked, so a stand-in for an ElevenLabs line is still a different
+    /// voice from the announcer's.
+    /// </summary>
+    public VoiceProfile CloneWithVoice(SecondVoice voice)
+    {
+        var copy = CloneForDelivery(Stability, Style);
+
+        if (!string.IsNullOrWhiteSpace(voice.ElevenLabsVoiceId))
+        {
+            copy.VoiceId = voice.ElevenLabsVoiceId;
+            copy.VoiceName = voice.ElevenLabsVoiceName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(voice.HeatCallerVoice))
+        {
+            copy.HeatCallerVoice = voice.HeatCallerVoice;
+            copy.HeatCallerRev = voice.HeatCallerRev;
+            copy.HeatCallerVoiceName = voice.HeatCallerVoiceName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(voice.WindowsVoiceName))
+        {
+            copy.WindowsVoiceName = voice.WindowsVoiceName;
+        }
+
+        return copy;
+    }
+
     public double SimilarityBoost { get; set; } = 0.75;
     public double Style { get; set; } = 0.0;
     public bool SpeakerBoost { get; set; } = true;

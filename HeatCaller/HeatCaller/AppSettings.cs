@@ -192,6 +192,14 @@ public sealed class AppSettings
     public bool CommentaryRaceSummaries { get; set; } = true;
     public bool CommentaryTalkingPoints { get; set; } = true;
 
+    /// <summary>
+    /// Round intros only where they earn their place: a main, or a race
+    /// with a known rivalry on its grid. Every other race starts without one
+    /// (27 Sep 2026). Off by default, so an intro before every race stays
+    /// what a club already has.
+    /// </summary>
+    public bool CommentaryIntrosMainsOrRivalriesOnly { get; set; }
+
     // Shared voice - applies to intros, summaries and talking points alike,
     // since a club wants one announcer personality, not a different one per
     // feature. Stored as an int (enum), so new CommentaryTone members must
@@ -368,6 +376,50 @@ public sealed class AppSettings
     // it to read.
     public int CommentaryTalkingPointIntervalSeconds { get; set; } = 20;
     public int CommentaryTalkingPointObservationCount { get; set; } = 6;
+
+    // --- The recap as a TV broadcast (27 Sep 2026) -----------------------
+    // Each off by default: a club that never opens the Commentary page
+    // hears the recap it always has.
+
+    /// <summary>The recap opens like a TV broadcast coming back on air - naming <see cref="RecapShowName"/> when there is one.</summary>
+    public bool RecapBroadcastOpening { get; set; }
+
+    /// <summary>The recap ends on a TV-style sign-off, sending it to what is next on the program. After an interview it is a line of its own.</summary>
+    public bool RecapBroadcastClosing { get; set; }
+
+    /// <summary>The show the opening and closing name - "Friday Night Thunder". Blank for none; the model is told not to make one up.</summary>
+    public string RecapShowName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// After a main only: a short pit-lane interview with the winner's
+    /// mechanic, in a second voice, about the race and the setup changes
+    /// logged for the winning car in the Garage.
+    /// </summary>
+    public bool RecapMechanicInterview { get; set; }
+
+    /// <summary>What the announcer calls the mechanic. Blank: "the team's mechanic", never a made-up name.</summary>
+    public string RecapMechanicName { get; set; } = string.Empty;
+
+    // The mechanic's voice, one per engine - the club can switch engine on
+    // Voice Settings at any time, and a voice id means nothing to the
+    // others. Blank for an engine means the announcer's own voice says the
+    // answers. Names are for the Commentary page only.
+    public string MechanicElevenLabsVoiceId { get; set; } = string.Empty;
+    public string MechanicElevenLabsVoiceName { get; set; } = string.Empty;
+    public string MechanicHeatCallerVoice { get; set; } = string.Empty;
+    public string MechanicHeatCallerVoiceName { get; set; } = string.Empty;
+    public string MechanicHeatCallerRev { get; set; } = string.Empty;
+    public string MechanicWindowsVoiceName { get; set; } = string.Empty;
+
+    /// <summary>The mechanic's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
+    [JsonIgnore]
+    public SecondVoice MechanicVoice => new(
+        MechanicElevenLabsVoiceId ?? string.Empty,
+        MechanicElevenLabsVoiceName ?? string.Empty,
+        MechanicHeatCallerVoice ?? string.Empty,
+        MechanicHeatCallerVoiceName ?? string.Empty,
+        MechanicHeatCallerRev ?? string.Empty,
+        MechanicWindowsVoiceName ?? string.Empty);
     /// <summary>Whether reaching a lap or time limit puts the checkered out rather than stopping the race on the spot.</summary>
     public bool RaceFinishOnNextCrossing { get; set; } = true;
 
