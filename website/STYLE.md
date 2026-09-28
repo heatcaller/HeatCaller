@@ -5,7 +5,7 @@ Public documentation for HeatCaller, a Windows desktop app
 (WinForms, .NET 8) that runs RC car race nights: timing via decoders, race control, an AI race announcer,
 results, championships, a laptop Wi-Fi server for phones, and an optional online "relay" (a small
 Node/TypeScript server hosted on Fly.io) that publishes the club's pages and online check-in.
-Current version: 0.52.0 (BETA). The docs will be published on the product website with MkDocs
+Current version: 0.59.0 (BETA). The docs will be published on the product website with MkDocs
 (Material theme). Two audiences:
 - **Race directors** — the person running the laptop at the track. Most pages.
 - **Club admins / IT** — relay hosting on Fly.io, tokens, security, backups, troubleshooting.

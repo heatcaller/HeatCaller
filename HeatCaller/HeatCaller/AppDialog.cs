@@ -26,6 +26,27 @@ namespace HeatCaller;
 /// </summary>
 public static class AppDialog
 {
+    /// <summary>
+    /// Set by the tests that build windows nobody can see - the layout test
+    /// puts every page up off-screen. A message opened there would wait for
+    /// ever for a click that cannot come, and hang the whole test run. With
+    /// this set it throws instead, saying what it would have said, and the
+    /// test reports that against the page and carries on.
+    /// </summary>
+    /// <remarks>
+    /// Per thread: it is the test's own window thread that must not wait,
+    /// and a test thread that has timed out and been left behind must not
+    /// switch it off for the next one.
+    /// </remarks>
+    internal static bool ThrowInsteadOfShowing
+    {
+        get => _throwInsteadOfShowing;
+        set => _throwInsteadOfShowing = value;
+    }
+
+    [ThreadStatic]
+    private static bool _throwInsteadOfShowing;
+
     public static DialogResult Show(IWin32Window? owner, string text) =>
         Show(owner, text, string.Empty, MessageBoxButtons.OK, MessageBoxIcon.None);
 
@@ -60,6 +81,13 @@ public static class AppDialog
         MessageBoxIcon icon,
         MessageBoxDefaultButton defaultButton)
     {
+        // Before the try: the fallback below would open the system box instead.
+        if (ThrowInsteadOfShowing)
+        {
+            throw new InvalidOperationException(
+                $"A message would have opened here, which nobody can answer in a test: \"{caption}\" - {text}");
+        }
+
         try
         {
             using var dialog = new DialogForm(text, caption, buttons, icon, defaultButton);

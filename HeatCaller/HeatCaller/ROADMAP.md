@@ -6,9 +6,11 @@ any folder name.)*
 
 Rewritten on 26 Sep 2026. The previous version said 118 source files, an
 I-Lap "on order" and store saves with no error handling - all long untrue.
-Its own warning still stands: a stale roadmap is worse than none, because
-it gets trusted. **Update this file in the same commit as anything that
-makes it wrong.**
+Brought up to date on 28 Sep 2026, after a reassessment
+(`claude/project-review-2026-09-28.md` in the project notes), when its
+figures had drifted again in two days. Its own warning still stands: a
+stale roadmap is worse than none, because it gets trusted. **Update this
+file in the same commit as anything that makes it wrong.**
 
 ---
 
@@ -37,12 +39,13 @@ What follows from that:
 
 | | |
 |---|---|
-| Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
-| App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 28 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
+| Version | 0.59.0 BETA (`AppVersion.cs`), cut on 28 Sep 2026 from everything since 0.52.0 - 0.53 to 0.58 were working builds with no notes of their own. Its notes are in `website\docs\release-notes.md` |
+| App | C# / .NET 8 WinForms, about 305 source files, ~177k lines, 25 pages |
+| Tests | `HeatCaller.Tests`: 35 test classes, about 250 tests, including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`) and every page's layout measured at five sizes (`LayoutTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
-| Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
+| Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
+| Real use | Three solo rehearsal nights at home (27 Sep), one called clean. No club has run a night on it yet |
 
 ---
 
@@ -93,6 +96,7 @@ and that night does not count.
 | 1 | 27 Sep 2026 | No | The countdown played twice: the start went on to the countdown while the AI round intro was still being written. A recap called a win by 0.004s a tie. Both fixed. |
 | 2 | 27 Sep 2026 | No | Froze mid-race in heat 2, with no message; force-closed. Cause unknown - the console only lived in the window. Added the session log file and the freeze catcher (`SessionLog`, `HangWatchdog`) to catch it next time. |
 | 3 | 27 Sep 2026 | Called clean - freeze lifted | Nothing lost, froze or needed fixing by hand. Its log showed four things, fixed after: the A-Main started from the Next Up bar ran as freeform (no intro, "No round selected"; saved to the right round only by the fallback); the round intro was shouted, 80 words, and called Q3 Heat 1 "Heat 3"; cars parked on the loop were called as jump starts ("Frank jumped the start!"); and the "too soon" log line printed the wrong figure. The intro and the jump-start call are wrong calls by the announcer, which strictly fails the list above. |
+| 4 | Due | - | Owed under the rule above: the timing path has changed since rehearsal 3 (`EasyLapFramer` took over the decoder's framing, heartbeats are decoded, `TimingWatch` runs on every race tick), and the broadcast recap and the CSV import are new. What it has to cover is "Next, in order", 2. |
 
 ### The rehearsal copy
 
@@ -127,32 +131,59 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 
 ## Next, in order
 
-1. **Two clean solo rehearsals** (above) - the freeze was lifted on
-   27 Sep 2026 after rehearsal 3. Keep rehearsing after changes to the
-   timing path, and add each one to the table.
-2. **Off-site copy on GitHub** - done 26 Sep 2026 (`asherizm/HeatCaller`).
-   Push after every commit; `.github\workflows\check.yml` runs `check.cmd`
-   on GitHub's Windows machine each time, and a red cross means that push
-   broke something.
-3. **I-Lap on real hardware.** `ILapClient` was written before a unit was
-   on the bench. With one connected: read the raw capture
-   (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn the capture
-   into tests.
-4. **Tests for the decoder path.** EasyLap done 27 Sep 2026
-   (`EasyLapCaptureTests`): rehearsal 3's console - every HID report, from
-   `HeatCaller.Tests\Captures\easylap-rehearsal3.log` - is played through
-   `EasyLapFramer` (the read loop's framing, split out of
+Reordered on 28 Sep 2026. In the hours after the freeze came off, the work
+went to new features and none of the beta preparation below had started;
+this order puts the beta path back in front.
+
+1. **Build what is waiting.** The layout test and layout pieces (28 Sep)
+   and the 0.59.0 cut: run `check.cmd`, and commit when it is ALL GREEN.
+   Nothing new starts until the working copy is a green commit.
+2. **Rehearsal 4** - owed under the rule above, since the timing path
+   changed after rehearsal 3. On a commit that went green on GitHub:
+   - the timing-warning drills: unplug the decoder, pull the loop cable,
+     switch a transponder off - each warning appears, and clears;
+   - the mains with the broadcast recap on (opening, interview, sign-off);
+   - afterwards, **Save Support Info**, and read the zip through;
+   - a row in the rehearsal table, and a capture test if the log shows
+     anything new.
+3. **Start the beta path's waiting now**, alongside 1 and 2: post the beta
+   application (Beta readiness 1) and start the signing identity check
+   (Beta readiness 3). Both are days of waiting, not work.
+4. **The installer** (Beta readiness 3), then **the beta tier and the
+   first-night guide** (Beta readiness 4).
+5. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
+   was written before a unit was on the bench. With one connected: read
+   the raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and
+   turn the capture into tests.
+6. **A capture from every rehearsal that shows something new.** The
+   EasyLap path is tested from rehearsal 3's (`EasyLapCaptureTests`): every
+   HID report in `HeatCaller.Tests\Captures\easylap-rehearsal3.log` is
+   played through `EasyLapFramer` (the read loop's framing, split out of
    `DirectDecoderClient` to be testable) and must decode line for line as
-   it did on the night; the A-Main's passes then go through
-   `RaceControlSession` and must count the same laps. Add a capture from
-   each rehearsal that shows something new - the session log keeps the
-   decoder lines. I-Lap waits for a real unit (3).
-5. **Beta readiness** - everything in the next section, in its order.
-6. **Split the two remaining giant methods.** `PopulateTabs`
-   (`MainForm.Pages.cs`, ~1,750 lines) and `BuildLayout`
+   it did on the night, and the A-Main's passes then go through
+   `RaceControlSession` and must count the same laps. The session log keeps
+   the decoder lines.
+7. **The layout overhaul, Race Control only for now** ("After the freeze",
+   8) - the page a club lives on. The other pages after Beta readiness 3
+   and 4; it is visual risk only.
+8. **Split the two remaining giant methods.** `PopulateTabs`
+   (`MainForm.Pages.cs`, ~1,775 lines) and `BuildLayout`
    (`RaceControlControl.Layout.cs`, ~1,000 lines) each build many pages or
    panels in one method. Split them page by page, one per commit, each
    checked by running the app.
+
+Done and kept going: the off-site copy on GitHub (26 Sep 2026,
+`asherizm/HeatCaller`). Push after every commit;
+`.github\workflows\check.yml` runs `check.cmd` on GitHub's Windows machine
+each time, and a red cross means that push broke something.
+
+**Two rules while this list runs:**
+
+- **Nothing new on air until a rehearsal has heard it.** Anything the
+  announcer says that it didn't before starts switched off, and isn't
+  offered to a club until a rehearsal has run it. The broadcast recap's
+  opening, interview and sign-off are off by default.
+- **The version moves with the release notes** - see "Gotchas".
 
 ---
 
@@ -222,10 +253,12 @@ second project. Not WiX/MSI: too heavy.
       (WinForms doesn't support it); ReadyToRun optional, for startup.
       Fonts, sound packs and music already copy beside the exe and are
       found through `AppContext.BaseDirectory` - no change needed.
-- [ ] **One version number.** `AppVersion.Number` is a hard-coded
-      `"0.58.0"`. Take it from the csproj `<Version>` (the assembly's
+- [ ] **One version number.** `AppVersion.Number` is typed in by hand
+      (`"0.59.0"`). Take it from the csproj `<Version>` (the assembly's
       version) so the package, the updater and the title bar can never
-      disagree.
+      disagree. `AppVersion.cs` argues for keeping it by hand - an assembly
+      version can move without anything shipping - so decide which of the
+      two gives way when the packaging is built, and write the answer there.
 - [ ] **Package id `HeatCallerApp`, never `HeatCaller`.** Velopack
       installs into `%LocalAppData%\<package id>`, and
       `%LocalAppData%\HeatCaller` is already `AppPaths.LocalRoot` - the
@@ -287,7 +320,10 @@ second project. Not WiX/MSI: too heavy.
       by Asher.
 - [ ] **Release discipline**: the version bumped with every release, the
       release notes' "Unreleased" turned into a numbered version - so the
-      version a club is on is always known.
+      version a club is on is always known. Started 28 Sep 2026: 0.59.0 was
+      cut from everything since 0.52.0, because 0.53 to 0.58 had gone out
+      with no notes and "Unreleased" had grown to 107 entries. Done when a
+      tag makes the release (above) and the notes are cut with it.
 
 **Tests before any club gets it** (Windows Sandbox is enough)
 - [ ] Fresh install on a clean machine, as a standard (non-admin) user.
@@ -475,6 +511,20 @@ from. Ranked by what decides whether a club switches, and stays.
    UI bugs for good, sharp text, bigger text for older eyes, and room for
    translation later.
 
+   **Started 28 Sep - steps 1 and 4 are in.** The pieces are
+   `LayoutPieces.cs` - `PageStack` (a page that scrolls), `FillPage` (one
+   part takes the height left), `Section` (a card), `FieldGrid` (caption and
+   field rows, with hints) and `ButtonBar` (buttons sized to their captions,
+   wrapping) - with their own test (`LayoutPiecesTests`). The check is
+   `LayoutTests`: every page and tab built at 1920x1080 with text at 100%,
+   150% and 200%, at 1366x768, and at 1280x720 (what this app sees on a
+   1080p laptop at Windows' 150%), each measured with `LayoutAudit` - the
+   doctor's detection without its repairs - with the doctor kept off, so it
+   is the page's own layout. It writes `layout\report.txt` beside the test
+   dll; `layout.cmd` adds pictures of every page. For now it fails only for
+   a page on `LayoutAudit.ConvertedPages` (which the doctor also leaves
+   alone); the report is the to-do list for the rest. Next: Race Control.
+
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
 9. **Choosing and trusting the HeatCaller voice.** The feature clubs will
@@ -550,10 +600,18 @@ voices, heat or main, and the mechanic's voice (`RecapBroadcastTests`).
 A driver's recent activity (`DriverActivityTests`). Importing from any CSV
 and points carried into a championship (`DriverImportTests`).
 
+Whether every page fits: each page and each tab inside it built at five
+window and text sizes and measured for overlaps, cut-off text, things past
+an edge and parts squashed to nothing (`LayoutTests`, with `LayoutAudit`).
+It fails only for a page rebuilt on the layout pieces; the rest are listed
+in `layout\report.txt` beside the test dll. The pieces themselves
+(`LayoutPiecesTests`).
+
 Not yet: the I-Lap decoder, the EasyLap's connect and reconnect (they need
 the device), handicaps, tech inspection, rentals, multi-day events,
 championships, the announcer's queueing, the prompts the model is sent
-(there's no model in the tests), and anything on screen.
+(there's no model in the tests), and anything on screen beyond whether it
+fits.
 
 ### Edge cases worth not re-breaking
 
@@ -632,7 +690,7 @@ what didn't fit an area:
 
 | Class | Parts |
 |---|---|
-| `MainForm` | `MainForm.cs`, `.Audio`, `.Chrome`, `.Connection`, `.Console`, `.Ghosts`, `.Keyboard`, `.Navigation`, `.Pages`, `.RaceSetup`, `.Relay`, plus `MainForm.Designer.cs` |
+| `MainForm` | `MainForm.cs`, `.Audio`, `.Chrome`, `.Commentary`, `.Connection`, `.Console`, `.Ghosts`, `.Keyboard`, `.LayoutCheck`, `.Navigation`, `.Pages`, `.RaceSetup`, `.Relay`, `.TimingWatch`, plus `MainForm.Designer.cs` |
 | `AnnouncementService` | `AnnouncementService.cs`, `.DriverRelease`, `.HeatCallerVoice`, `.LapCalls`, `.Playback`, `.PreparedLines`, `.RaceEvents`, `.Sounds`, `.Synthesis`, `.VoiceQueue` |
 | `RaceControlControl` | `RaceControlControl.cs`, `.AfterRace`, `.Layout`, `.Leaderboard`, `.NextUp`, `.RaceEvents`, `.StartSequence`, plus `RaceControlShortcuts.cs` and `RaceControlWarnings.cs` |
 
@@ -645,7 +703,8 @@ what didn't fit an area:
 | Chart or card colours for export | `ChartPalette` - screen, print, monochrome |
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
-| A row of buttons | `AppTheme.LayoutButtonRow` - measures each label, returns the right edge |
+| A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
+| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `ButtonBar`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |
@@ -681,7 +740,17 @@ successful one.
 **Check brace DEPTH, not totals.** Totals balance while structure is
 broken - an extra `}` in one place masks a missing one elsewhere.
 
-**Never hardcode button widths.** Use `AppTheme.LayoutButtonRow`.
+**Never hardcode button widths.** Use `ButtonBar`, or
+`AppTheme.LayoutButtonRow` on a hand-placed page.
+
+**The version and the release notes move together.** Every change a club
+would notice goes under an "Unreleased" heading at the top of
+`website\docs\release-notes.md` (add the heading when the first one comes
+in). Cutting a version renames that heading to the number and bumps
+`AppVersion.Number` in the same commit, and the "current version" lines in
+`website\docs\index.md`, `website\docs\getting-started\index.md` and
+`website\STYLE.md` go with it. 0.53 to 0.58 went out with no notes, and
+0.59.0 had to gather six versions' worth up at once.
 
 **Never rebuild an object on save.** Assign onto the existing object, so a
 new property is preserved by default rather than lost by default.

@@ -24,6 +24,34 @@ internal static class TestSetup
 
     [ModuleInitializer]
     internal static void RedirectAppData() => AppPaths.RedirectForTests(SessionRoot);
+
+    /// <summary>
+    /// Windows set up the way the app sets them up (ApplicationConfiguration
+    /// .Initialize, from HeatCaller.csproj) - before any test makes one,
+    /// since none of these can be changed once a window exists.
+    ///
+    /// It matters to anything that measures: the layout test (LayoutTests)
+    /// builds every page and measures what comes out, and text is measured
+    /// differently without these - by GDI+ rather than GDI, at the screen's
+    /// real DPI rather than the 96 the app always sees, with the old
+    /// unthemed check boxes. A report measured that way would describe a
+    /// different app.
+    /// </summary>
+    [ModuleInitializer]
+    internal static void SetUpWindowsLikeTheApp()
+    {
+        try
+        {
+            Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // A window already exists, so it is too late - measured as it
+            // stands. Not a reason to stop every other test running.
+        }
+    }
 }
 
 /// <summary>

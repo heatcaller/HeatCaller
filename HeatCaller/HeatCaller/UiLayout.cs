@@ -359,6 +359,23 @@ public static class UiLayout
     }
 
     /// <summary>
+    /// The whole size a button needs: <see cref="WidthFor"/> across, and down
+    /// the theme's own rule - its caption's height plus twelve, never under a
+    /// standard button - so a button sized here is one AppTheme.StyleButton
+    /// has nothing to grow. Measured in the bold face, like WidthFor.
+    /// </summary>
+    public static Size ButtonSizeFor(Button button)
+    {
+        var width = WidthFor(button);
+
+        var caption = TextRenderer.MeasureText(
+            string.IsNullOrEmpty(button.Text) ? "Xg" : button.Text,
+            ButtonFont).Height;
+
+        return new Size(width, Math.Max(ButtonHeight, caption + 12));
+    }
+
+    /// <summary>
     /// A dense row: every button sized to its own caption, with no standard
     /// minimum width and a tighter gap.
     ///

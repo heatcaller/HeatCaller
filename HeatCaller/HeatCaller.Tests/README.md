@@ -54,7 +54,17 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 | `MechanicBriefTests` | What the mechanic in the recap's interview is told about the winning car: the day's changes (counted past four), nothing from an earlier day or from after the race, only the car in the race's class, a car lent for the day, an entry matched by the driver's name, the first setup on a sheet, and a field no longer on the sheet left out (27 Sep) |
 | `DriverActivityTests` | A driver's recent activity on the Driver Profiles card: races with place, field and best lap (ghosts not counted, a no-lap race as did not finish), setup changes, personal bests above the race they were set in, newest first and cut to eight, demo races and other drivers' setups left out (27 Sep) |
 | `DriverImportTests` | Importing from any CSV: headings guessed (each kind once), the separator found, quoted fields kept whole, points read as whole numbers (thousands, decimals, "pts"), first and last names joined; and points carried into a championship after the best-rounds rule (27 Sep) |
+| `LayoutTests` | Every sidebar page and every tab inside it, built at 1920x1080 with text at 100%, 150% and 200%, and at 1366x768 and 1280x720, and measured with `LayoutAudit`: controls overlapping, text cut off, things past the edge of what holds them, parts squashed to nothing. Fails only for a page on `LayoutAudit.ConvertedPages`; everything else goes in the layout report (below) (28 Sep) |
+| `LayoutPiecesTests` | The layout pieces on a page of their own at two text sizes and two widths: nothing overlapping or cut off, the hint wrapping and the buttons running onto a second row when narrow, and `FillPage` giving its list the room left over, scrolling rather than squashing it (28 Sep) |
 | `RecapBroadcastTests` | The mechanic's interview split into the announcer's and the mechanic's lines (labels in any form, a stripped first label, the mechanic's name mid-question, a preamble, a broken or overlong one), a race named heat or main, and the mechanic's voice replacing only what was picked (27 Sep) |
+
+## The layout report
+
+`LayoutTests` writes `bin\Debug\net8.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, measured with `LayoutDoctor` kept off - the to-do list for moving pages onto the layout pieces (`LayoutPieces.cs`, ROADMAP item 8).
+
+For pictures as well, run `layout.cmd` beside `check.cmd`: every page and tab at every size, in `layout\pictures`. `layout.cmd "Race Control"` does one page (several: `"Race Control;Voice"`), which is quicker.
+
+The windows are built on a thread of their own (`StaThread`), off-screen, invisible and never activated, so nothing appears while the tests run. `TestSetup` sets Windows up as the app does first - no DPI awareness, visual styles, GDI text - because text measured any other way would describe a different app.
 
 ## What comes next
 

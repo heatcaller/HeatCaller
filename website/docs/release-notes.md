@@ -2,7 +2,9 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
-## Unreleased
+## 0.59.0
+
+Released 28 Sep 2026. Everything since 0.52.0: the new name, safer race nights, a rehearsal copy to practice on, warnings when timing goes quiet, Save Support Info, and the recap as a broadcast. Versions 0.53.0 to 0.58.0 were working builds and never had notes of their own; their changes are all here.
 
 **The recap as a broadcast (27 Sep)**
 
@@ -37,7 +39,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 **Rehearsal copy (26 Sep)**
 
-- **Practise a race night without touching the club's data.** Start HeatCaller with `--rehearsal` and it runs on a copy of the club's data, in `%LocalAppData%\HeatCaller Rehearsal`. The first rehearsal makes the copy; later ones carry on from it. Delete that folder to start again from the club's data as it is now.
+- **Practice a race night without touching the club's data.** Start HeatCaller with `--rehearsal` and it runs on a copy of the club's data, in `%LocalAppData%\HeatCaller Rehearsal`. The first rehearsal makes the copy; later ones carry on from it. Delete that folder to start again from the club's data as it is now.
 - The title bar says **REHEARSAL**. Backups and results cards stay in the rehearsal's folder, and nothing is emailed.
 - Publishing to the club website starts switched off in the copy. Switch it on from the **Club Website** page to rehearse online check-in or the phone manager: it then publishes the rehearsal's results to the club's real website.
 

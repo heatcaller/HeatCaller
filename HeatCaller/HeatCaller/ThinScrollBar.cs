@@ -50,7 +50,13 @@ internal sealed class ThinScrollBar : Control
 
     private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedV = new();
     private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedH = new();
-    private static readonly List<WeakReference<ThinScrollBar>> Live = new();
+    /// <summary>
+    /// The bars made on this thread - see _sync for why per thread.
+    /// </summary>
+    [ThreadStatic]
+    private static List<WeakReference<ThinScrollBar>>? _live;
+
+    private static List<WeakReference<ThinScrollBar>> Live => _live ??= new();
 
     /// <summary>
     /// One shared poll for every bar in the app.
@@ -61,7 +67,15 @@ internal sealed class ThinScrollBar : Control
     /// for all of them keeps that to a single tick rather than one per
     /// control, and 150ms is under the threshold where a scrollbar appearing
     /// feels late.
+    ///
+    /// One per thread, with its list. A window timer ticks only on the
+    /// thread that made it, and dies with it. The app has one UI thread, so
+    /// this changes nothing there; the tests build windows on a thread per
+    /// test, and with one timer for the process every test after the first
+    /// had bars nothing re-synced - or, had an earlier test's thread still
+    /// been running, a timer on it walking this thread's bars.
     /// </summary>
+    [ThreadStatic]
     private static System.Windows.Forms.Timer? _sync;
 
     private readonly Control _target;
@@ -201,8 +215,64 @@ internal sealed class ThinScrollBar : Control
                 continue;
             }
 
+            // Parked in the wrong place: nowhere yet, because its target was
+            // attached while the tables around it were not in a window, or
+            // somewhere those tables have since been moved away from. See
+            // HostFor.
+            if (!ReferenceEquals(bar.Parent, HostFor(bar._target)))
+            {
+                bar.Reparent();
+            }
+
             bar.Refresh(fromTimer: true);
         }
+    }
+
+    /// <summary>
+    /// Where the bar is parked: beside its target, in the target's parent -
+    /// unless that parent is a table or a flow panel (the layout pieces,
+    /// LayoutPieces.cs). Those place every child they hold, so a bar added to
+    /// one becomes one more cell in the table, laid out in a row of its own
+    /// rather than over the target. It goes in the nearest container above
+    /// them that leaves its children where they are put.
+    /// </summary>
+    private static Control? HostFor(Control target)
+    {
+        var host = target.Parent;
+
+        while (host is TableLayoutPanel or FlowLayoutPanel)
+        {
+            host = host.Parent;
+        }
+
+        return host;
+    }
+
+    /// <summary>
+    /// The target's bounds in the host's coordinates. The same as its own
+    /// bounds when the host is its parent; otherwise moved by the position of
+    /// each table or flow panel in between - those have no border, so where
+    /// one sits is where its children's coordinates start.
+    /// </summary>
+    private Rectangle TargetBounds()
+    {
+        var bounds = _target.Bounds;
+
+        for (var between = _target.Parent; between is not null; between = between.Parent)
+        {
+            if (ReferenceEquals(between, Parent))
+            {
+                return bounds;
+            }
+
+            bounds.Offset(between.Location);
+        }
+
+        // The bar is not above the target at all - its tables were moved
+        // somewhere else since it was parked, and the next sync re-parks it.
+        // The target's own bounds until then, rather than every ancestor's
+        // position summed into nonsense.
+        return _target.Bounds;
     }
 
     private void Reparent()
@@ -224,7 +294,7 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
-        var parent = _target.Parent;
+        var parent = HostFor(_target);
 
         if (parent is null || parent.IsDisposed)
         {
@@ -285,25 +355,33 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
-        // Straight over the native bar: the bottom strip for a horizontal
-        // bar, the right strip for a vertical one. A horizontal bar stops
-        // short of the corner so it never overlaps the vertical one.
-        var bounds = _horizontal
-            ? new Rectangle(
-                _target.Left,
-                _target.Bottom - _thickness,
-                Math.Max(1, _target.Width),
-                _thickness)
-            : new Rectangle(
-                _target.Right - _thickness,
-                _target.Top,
-                _thickness,
-                Math.Max(1, _target.Height));
+        var bounds = PlacedBounds();
 
         if (Bounds != bounds)
         {
             Bounds = bounds;
         }
+    }
+
+    /// <summary>
+    /// Where the bar belongs: straight over the native bar - the bottom strip
+    /// for a horizontal bar, the right strip for a vertical one.
+    /// </summary>
+    private Rectangle PlacedBounds()
+    {
+        var target = TargetBounds();
+
+        return _horizontal
+            ? new Rectangle(
+                target.Left,
+                target.Bottom - _thickness,
+                Math.Max(1, target.Width),
+                _thickness)
+            : new Rectangle(
+                target.Right - _thickness,
+                target.Top,
+                _thickness,
+                Math.Max(1, target.Height));
     }
 
     private void Reposition()
@@ -404,8 +482,10 @@ internal sealed class ThinScrollBar : Control
             BringToFront();
             ApplyBounds();
         }
-        else if (fromTimer && ((_horizontal && Bounds.Bottom != _target.Bottom) || (!_horizontal && Bounds.Right != _target.Right)))
+        else if (fromTimer && Bounds != PlacedBounds())
         {
+            // Also catches a table above the target moving it without the
+            // target itself moving - which raises nothing the bar hears.
             ApplyBounds();
         }
 

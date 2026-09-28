@@ -652,6 +652,12 @@ internal static class StickyHeadings
         track.Width = Math.Max(track.Width, widest + UiLayout.PageRight);
         track.Location = Point.Empty;
 
+        // Both reach past their box on purpose - the track is as wide as
+        // the rows and slides sideways with them, and the rows scroll
+        // sideways - so the layout check is told not to report them.
+        LayoutAudit.AllowOverflow(track);
+        LayoutAudit.AllowOverflow(rows);
+
         // A rule under the headings, so they read as a header rather than
         // as a first row. Kept in the border colour through the theme pass.
         var rule = new Panel

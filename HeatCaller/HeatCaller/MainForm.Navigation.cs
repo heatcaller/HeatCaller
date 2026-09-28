@@ -674,6 +674,15 @@ public partial class MainForm
     /// </summary>
     private int TidyPage(string name, Control page)
     {
+        // The layout test measures each page's own layout, not the doctor's
+        // repairs of it. And a page rebuilt to lay itself out is left to do
+        // so: two authorities moving the same controls is how Race Control
+        // came to be excluded below.
+        if (LayoutCheckMode || LayoutAudit.IsConverted(name))
+        {
+            return 0;
+        }
+
         if (!_tidiedPages.Add(name))
         {
             return 0;

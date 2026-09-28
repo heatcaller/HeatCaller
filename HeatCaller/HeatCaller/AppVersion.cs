@@ -23,13 +23,18 @@ namespace HeatCaller;
 public static class AppVersion
 {
     /// <summary>The version itself. Bump this when work ships.</summary>
-    public const string Number = "0.58.0";
+    public const string Number = "0.59.0";
 
     /// <summary>Beta until the club has run a full event on it without surprises.</summary>
     public const string Stage = "BETA";
 
-    /// <summary>What the last bump was for - shown under the version on the startup screen.</summary>
-    public const string Note = "Keyboard shortcuts - driver keys, F7/F8, M mute, Ctrl+Z, Ctrl+1-9, ? cheat sheet";
+    /// <summary>
+    /// What the last bump was for. Not shown anywhere at the moment - the
+    /// startup screen shows only the version - so it is a note for whoever
+    /// bumps the version next. The release notes (website\docs\release-notes.md)
+    /// have the full list, under the same number.
+    /// </summary>
+    public const string Note = "Everything since 0.52.0: the new name, safer race nights, rehearsal copy, timing warnings, Save Support Info, broadcast recap, CSV import";
 
     /// <summary>"BETA 0.18.0", for a title bar or an about line.</summary>
     public static string Short => $"{Stage} {Number}";

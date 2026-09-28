@@ -1575,6 +1575,15 @@ public partial class MainForm : Form
     /// </summary>
     protected override void OnShown(EventArgs e)
     {
+        // The layout test shows this window only to measure it. Nothing that
+        // showing it starts - the Shown handlers (web server, relay, the page
+        // sweep), the reveal, the startup questions that follow Ready - is
+        // wanted there, and most of it would reach outside the test.
+        if (LayoutCheckMode)
+        {
+            return;
+        }
+
         // There is a window to hover over now, so tips may speak. Until this
         // point they are silent: the pages are built while the splash is up,
         // and one created under the pointer would otherwise pop its tip over
