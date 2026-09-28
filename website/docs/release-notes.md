@@ -4,6 +4,10 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+**Timing warnings (27 Sep)**
+
+- **Race Control says when timing goes quietly wrong.** During a race the Next Up bar shows a red **TIMING** warning, and the console a `[timing] WARNING:` line, when the decoder isn't connected, when an EasyLap stops sending (checked once a second), when no car has crossed for three typical laps, or when one car hasn't been seen for three of its laps while the others keep crossing. Not during practice, a demo or a red flag. See [Timing warnings](race-control/running-a-race.md#timing-warnings).
+
 **Getting help (27 Sep)**
 
 - **Save Support Info.** One `.zip` to attach to an email when something has gone wrong: the console from the last few runs, the crash log, the version, the PC and the settings that matter, and an I-Lap's raw capture. Driver names, email addresses, contact details and your Windows user name are replaced first, and no keys, tokens, PINs or passwords go in. It's in the new **Getting Help** box on **Backup & Restore**, and on the **Developer Console**'s right-click menu. See [Save Support Info](admin/backups.md#save-support-info).

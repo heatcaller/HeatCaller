@@ -27,6 +27,12 @@ namespace HeatCaller;
 ///  - A pass: transponder in bytes 2-4 (shown as hex, "84C1C4"), the
 ///    decoder's clock in milliseconds in bytes 7-10 (little-endian), then
 ///    the hit count and the signal strength.
+///  - A heartbeat: the decoder's clock in milliseconds in bytes 3-6
+///    (little-endian), once a second. Found in rehearsal 3's capture (27 Sep
+///    2026): 738 of them over 737 seconds, each 992-1008ms after the last,
+///    on the same clock as the passes. Bytes 7-10 were the same in every
+///    one. Used to tell a decoder that has stopped from one with nothing
+///    crossing it (TimingWatch).
 /// </remarks>
 internal sealed class EasyLapFramer
 {
@@ -46,13 +52,16 @@ internal sealed class EasyLapFramer
     private readonly List<byte> _buffer = new();
     private readonly Action<string> _log;
     private readonly Action<DirectLapEvent> _lap;
+    private readonly Action<uint>? _heartbeat;
 
     /// <param name="log">Given each console line, without a time stamp - "[raw HID] ...", "[decoded msg] ...", "[LAP EVENT] ...".</param>
     /// <param name="lap">Given each pass as it is decoded. Anything it throws comes out of AddReport.</param>
-    public EasyLapFramer(Action<string> log, Action<DirectLapEvent> lap)
+    /// <param name="heartbeat">Given the decoder's clock from each heartbeat. Anything it throws comes out of AddReport.</param>
+    public EasyLapFramer(Action<string> log, Action<DirectLapEvent> lap, Action<uint>? heartbeat = null)
     {
         _log = log;
         _lap = lap;
+        _heartbeat = heartbeat;
     }
 
     /// <summary>
@@ -149,7 +158,10 @@ internal sealed class EasyLapFramer
 
         if (message.Length == 11 && message[0] == 0x0b)
         {
-            return; // periodic heartbeat, not otherwise acted on
+            // Not logged beyond the [decoded msg] line above - one a second
+            // would bury everything else.
+            _heartbeat?.Invoke((uint)(message[3] | (message[4] << 8) | (message[5] << 16) | (message[6] << 24)));
+            return;
         }
 
         _log($"[unknown message type] length={message.Length}");

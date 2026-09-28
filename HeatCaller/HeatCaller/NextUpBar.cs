@@ -17,7 +17,8 @@ namespace HeatCaller;
 public sealed class NextUpBar : Control
 {
     /// <summary>One refresh's worth of text. Records compare by value, which is what makes the repaint-only-on-change below cheap.</summary>
-    public sealed record Info(string Now, string Next, string Day, bool Warning);
+    /// <param name="Timing">What is wrong with timing (TimingWatch), shown first and in red; empty when nothing is.</param>
+    public sealed record Info(string Now, string Next, string Day, bool Warning, string Timing = "");
 
     private Info _info = new(string.Empty, string.Empty, string.Empty, false);
 
@@ -64,6 +65,11 @@ public sealed class NextUpBar : Control
         var right = Width - Math.Max(0, ReservedRight) - 12;
         var x = 12;
 
+        // First, and in red: laps not being counted outranks what is next.
+        // It crowds the rest along the bar while it lasts, which is the
+        // point - it goes when timing is right again.
+        x = Block(g, x, right, "TIMING", _info.Timing, AppTheme.Danger, AppTheme.Danger);
+
         x = Block(g, x, right, "NOW", _info.Now, AppTheme.TextDark);
         x = Block(g, x, right, "NEXT", _info.Next, _info.Warning ? AppTheme.Warning : AppTheme.TextDark);
         Block(g, x, right, "DAY", _info.Day, AppTheme.TextMuted);
@@ -75,7 +81,7 @@ public sealed class NextUpBar : Control
     /// boundary - a bar that wraps is a bar that pushed the flags off the
     /// page.
     /// </summary>
-    private int Block(Graphics g, int x, int right, string caption, string text, Color textColour)
+    private int Block(Graphics g, int x, int right, string caption, string text, Color textColour, Color? captionColour = null)
     {
         if (string.IsNullOrEmpty(text) || x >= right)
         {
@@ -83,7 +89,7 @@ public sealed class NextUpBar : Control
         }
 
         TextRenderer.DrawText(
-            g, AppTheme.Spaced(caption), AppTheme.MicroFont, new Point(x, 7), AppTheme.Primary,
+            g, AppTheme.Spaced(caption), AppTheme.MicroFont, new Point(x, 7), captionColour ?? AppTheme.Primary,
             TextFormatFlags.NoPadding);
 
         var bounds = new Rectangle(x, 24, right - x, Height - 26);

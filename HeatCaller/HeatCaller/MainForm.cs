@@ -1208,6 +1208,10 @@ public partial class MainForm : Form
         _ilapClient.RawMessage += OnClientRawMessage;
         _ilapClient.LapEventReceived += OnDecoderLapEvent;
 
+        // Watches for timing going quietly wrong mid-race - a decoder gone
+        // quiet, nothing crossing, a car not seen. See TimingWatch.
+        WireTimingWatch();
+
         _decoderAutoConnectRetryTimer.Tick += (_, _) =>
         {
             // Only while EasyLap is the decoder chosen. The box stays ticked
@@ -1234,6 +1238,8 @@ public partial class MainForm : Form
         _raceTickTimer.Tick += (_, _) =>
         {
             _race.Tick();
+
+            UpdateTimingWatch();
 
             // The live page's state document is built HERE, on the UI
             // thread, and served from a published copy - see

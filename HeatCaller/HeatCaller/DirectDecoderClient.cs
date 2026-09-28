@@ -68,6 +68,13 @@ public sealed class DirectDecoderClient : IDisposable
     public event Action<string>? RawMessage;
     public event Action<DirectLapEvent>? LapEventReceived;
 
+    /// <summary>
+    /// Raised for each heartbeat, about once a second, with the decoder's
+    /// clock in milliseconds - see EasyLapFramer. On the decoder's own
+    /// thread.
+    /// </summary>
+    public event Action<uint>? HeartbeatReceived;
+
     public DecoderConnectionState State { get; private set; } = DecoderConnectionState.Disconnected;
 
     public void Connect()
@@ -135,7 +142,7 @@ public sealed class DirectDecoderClient : IDisposable
         // reconnect starts a fresh loop with its own, so an old loop that is
         // still winding down can never interleave bytes with the new one, and
         // Disconnect() (UI thread) never has to touch it while it is in use.
-        var framer = new EasyLapFramer(Log, lap => LapEventReceived?.Invoke(lap));
+        var framer = new EasyLapFramer(Log, lap => LapEventReceived?.Invoke(lap), clock => HeartbeatReceived?.Invoke(clock));
 
         try
         {

@@ -39,7 +39,7 @@ What follows from that:
 |---|---|
 | Version | 0.58.0 BETA (`AppVersion.cs`); newer work is under "Unreleased" in the release notes |
 | App | C# / .NET 8 WinForms, about 260 source files, ~168k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 27 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
+| Tests | `HeatCaller.Tests`: 28 test classes, including a whole race night (`RaceNightTests`) and a real EasyLap night played back (`EasyLapCaptureTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep |
@@ -398,22 +398,32 @@ from. Ranked by what decides whether a club switches, and stays.
 
 ### Timing that holds up on a bad night
 
-5. **Warning when timing quietly goes wrong.** The decoder reconnects by
-   itself. Not yet confirmed: whether Race Control warns when no crossings
-   arrive for longer than any lap should take mid-race, or when one car stops
-   being seen while the rest carry on - a dead transponder or a knocked
-   cable that nobody notices until the results are wrong. **Check this in a
-   rehearsal** by unplugging the decoder and switching a transponder off
-   mid-race; build the warning if it isn't there.
+5. **Warning when timing quietly goes wrong** - built 27 Sep 2026
+   (`TimingWatch`, `MainForm.TimingWatch.cs`): the code had none - a
+   decoder dropping off USB turned one dot red on the Connection page, and
+   a pulled loop cable or a flat transponder showed nowhere. Now, during a
+   real race, a red TIMING block on the Next Up bar and a `[timing]
+   WARNING:` console line for: decoder not connected; EasyLap heartbeat
+   stopped for 5s; no crossing for 3 field laps (30s at least); one car
+   not seen for 3 of its laps (20s at least) while others cross. Only
+   cars that have crossed this race are expected - the grid can hold the
+   last race's field or a no-show - so a transponder flat from the start
+   is Pre-race check's job. Not in practice, demos, ghost-only races,
+   under red, or before anyone is released; a late-released car only from
+   its release; every count restarts when the decoder is back. Times on
+   Environment.TickCount64, not the wall clock. `TimingWatchTests`. **Still to do: try it in
+   a rehearsal** - unplug the decoder, pull the loop cable, switch a
+   transponder off - and check each warning appears, and clears.
 
-   Found in rehearsal 3's capture (27 Sep 2026), and not used yet: the
-   EasyLap's heartbeat (the 11-byte `0x0B` message) carries the decoder's
+   Found in rehearsal 3's capture (27 Sep 2026), and used by the warning
+   above since: the EasyLap's heartbeat (the 11-byte `0x0B` message) carries the decoder's
    clock in bytes 3-6, little-endian ms, once a second - 738 of them over
    737 seconds, each 992-1008ms after the last. So "the decoder is alive"
    and "no car has crossed" can be told apart: a missing heartbeat means the
    decoder or its cable, a running clock with no passes means the cars. The
-   same clock would give the green a real decoder time instead of an
-   estimate from the last pass. Bytes 7-10 were the same in every one.
+   same clock could give the green a real decoder time instead of an
+   estimate from the last pass - not done. Bytes 7-10 were the same in
+   every one.
 6. **A "counted by hand" mark.** When a transponder fails, laps are added
    by hand. The result should show which cars were hand-counted, so results
    built partly by hand can be trusted and questioned.

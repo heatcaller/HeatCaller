@@ -23,6 +23,10 @@ public partial class MainForm
         _raceControlControl = raceControl;
         raceControl.StatusMessage += OnClientRawMessage;
 
+        // The TIMING line on the Next Up bar, worked out every race tick in
+        // UpdateTimingWatch whichever page is showing.
+        raceControl.TimingProblem = () => _timingProblemText;
+
         // A finished race changes race-program state, so refresh the visible
         // page rather than leaving a heat showing "Scheduled" until the user
         // happens to navigate away and back.

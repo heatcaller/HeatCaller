@@ -389,7 +389,8 @@ public sealed class RaceControlSession
     /// applied at the one moment it costs the most. False when there is no
     /// time limit at all, because then nobody ever runs out.
     /// </summary>
-    private bool IsOutOfTime(string transponderId) =>
+    /// <remarks>Internal so TimingWatch's host can leave a car whose window is over out of the cars it expects to cross.</remarks>
+    internal bool IsOutOfTime(string transponderId) =>
         TimeLimit is { } limit
         && RaceStartUtc.HasValue
         && ElapsedRaceTime >= limit + TimeSpan.FromMilliseconds(OwnClockOffsetMs(transponderId));
@@ -2527,6 +2528,9 @@ public sealed class RaceControlSession
     /// <summary>This driver's grid slot, 1-based, or zero when the grid wasn't known.</summary>
     public int StartPositionOf(string transponderId) =>
         _startPositions.TryGetValue(transponderId, out var position) ? position : 0;
+
+    /// <summary>The grid as set for this race - empty when it wasn't known. Read by TimingWatch's host, to expect every car on it.</summary>
+    public IReadOnlyList<string> Grid => _grid;
 
     public void SetGrid(IEnumerable<string> transponders)
     {

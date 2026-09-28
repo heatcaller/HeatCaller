@@ -185,7 +185,7 @@ When something doesn't happen the way you expected, such as a race that wasn't s
 HeatCaller doesn't use pop-up notifications. Status is shown in these places:
 
 - **Connection status**: a colored dot and a **Status:** line on the **Connection** page. Gray means disconnected, amber connecting, green connected, and red an error.
-- **The Next Up bar** on **Race Control**: what's running **NOW**, what's **NEXT**, and how the **DAY** is going.
+- **The Next Up bar** on **Race Control**: what's running **NOW**, what's **NEXT**, and how the **DAY** is going. During a race it also shows **TIMING** warnings, in red, when laps may not be being counted. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
 - **Banners** at the top of some pages, such as **Race Day → Program**. They tell you the next step and give you a button for it.
 - **The Rentals count** in the sidebar, while any rental transponder is still out.
 - **The Developer Console**, for everything else.

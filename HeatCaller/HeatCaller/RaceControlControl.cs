@@ -159,6 +159,13 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     internal Func<ProgramStep?>? NextStepProvider { get; set; }
 
+    /// <summary>
+    /// What is wrong with timing right now, or null - see TimingWatch. Shown
+    /// first on the Next Up bar, under TIMING. Asked by the bar, worked out
+    /// by the host, which owns the decoders.
+    /// </summary>
+    public Func<string?>? TimingProblem { get; set; }
+
     /// <summary>Raised when the bar's button is offering a programme step rather than a start. The host runs it through the programme tab.</summary>
     internal event Action<ProgramStep>? RunProgramStepRequested;
 

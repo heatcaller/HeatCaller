@@ -304,8 +304,9 @@ A lap that beats the record by an implausible margin doesn't set the record. The
 
 ## The Next Up bar
 
-The bar across the top of the page has three parts:
+The bar across the top of the page has three parts, and a fourth when timing goes wrong:
 
+- **TIMING** (in red, first): only during a race, when HeatCaller thinks laps aren't being counted. See [Timing warnings](#timing-warnings).
 - **NOW**: the round or session that's running and its state, for example "Q1 Heat 2 (Stock) · racing".
 - **NEXT**: the next round that hasn't run yet, how many drivers are in it, how many of them aren't checked in (shown in amber), and who marshals it (the heat before). When there are no rounds left it says "program complete". With no program it says "no program - Quick Race is one press away".
 - **DAY**: how many rounds have been recorded, for example "6/14 recorded". If the run sheet gives the next round a time, it also shows how far ahead or behind you are, once that's 3 minutes or more.
@@ -315,6 +316,23 @@ When you stage a heat whose class runs tech and someone in it hasn't passed tech
 **Start Next** loads the next round and stages it (the announcer makes the grid call first). While a session is running, the button reads **Race Running** and is greyed out, so a stray click can't launch the next heat.
 
 **Re-seed Remaining...** rebuilds the rosters of every qualifying heat that hasn't run yet from the drivers checked in right now. Use it for a no-show or a late entry. Recorded heats and mains aren't changed, and **Undo** puts the old rosters back. See [Events and entries](../race-day/events-and-entries.md).
+
+## Timing warnings
+
+During a race, HeatCaller watches for timing going wrong without anyone noticing, the kind of fault that otherwise only shows when the results are wrong. When it spots one, the Next Up bar shows it first, in red, under **TIMING**, and the console gets a line starting `[timing] WARNING:`. When things are right again, the warning goes and the console says so.
+
+It checks these, most serious first, and shows only the first that fails:
+
+| Warning | What it means | What to do |
+|---|---|---|
+| `The decoder isn't connected - no laps are being counted. Connect it on the Connection page.` | The decoder in use says it isn't connected. | Check its cable, then connect it on the **Connection** page (or let **Auto-connect** find it). |
+| `Nothing from the decoder for 8s - check its USB cable.` | An EasyLap sends a signal once a second, and it has stopped, even though Windows hasn't said the decoder has gone. | Check the USB cable and the decoder's power. |
+| `No car has crossed the line for 45s - check the loop and its cable.` | The decoder is working, but no car has crossed for three typical laps (and at least 30 seconds). | Check the loop cable at the decoder. |
+| `Not seen: Frank (25s) - stopped, or a flat transponder?` | A car that has crossed in this race hasn't crossed again for three of its typical laps (and at least 20 seconds) while the others keep crossing. | Look for the car on track. If it's running, its transponder may be flat or loose. |
+
+It only watches real races while they're running: not practice, not a demo, not under a red flag, and not before anyone has been released in a hand-released or staggered start. A car released later is only expected from its own release. After a red flag, or once the decoder is back after a warning, every count starts again. Once the checkered is out, cars that have finished aren't expected to cross, so only a car still out there and silent is named. A black-flagged driver isn't expected either.
+
+A car whose transponder was flat before the race never crosses at all, so it can't be missed: use **Pre-race check...** before the heat for that. See [Transponders](../timing/transponders.md).
 
 ## The clock column buttons
 

@@ -429,7 +429,7 @@ public sealed partial class RaceControlControl
             nextText = owed.Headline + "  ·  " + owed.ActionCaption.TrimEnd('.');
         }
 
-        _nextUpBar.ShowInfo(new NextUpBar.Info(now, nextText, day, warning));
+        _nextUpBar.ShowInfo(new NextUpBar.Info(now, nextText, day, warning, TimingProblem?.Invoke() ?? string.Empty));
 
         // While a session is under way the button starts nothing - that is
         // deliberate, the next heat must not be launchable by a stray

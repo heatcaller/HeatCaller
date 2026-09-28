@@ -99,6 +99,53 @@ public sealed class EasyLapCaptureTests : IDisposable
     }
 
     [Fact]
+    public void Every_heartbeat_carries_the_decoders_clock_once_a_second()
+    {
+        var capture = ReadCapture();
+
+        // In stream order, so each pass can be set against the heartbeat
+        // that follows it.
+        var stream = new List<(bool Heartbeat, uint Clock)>();
+        var framer = new EasyLapFramer(_ => { }, pass => stream.Add((false, pass.DeviceTimeMs)), clock => stream.Add((true, clock)));
+
+        foreach (var report in capture.Where(l => l.Kind == "raw HID"))
+        {
+            framer.AddReport(ReportBytes(report));
+        }
+
+        var heartbeats = stream.Where(s => s.Heartbeat).Select(s => s.Clock).ToList();
+
+        // 738 heartbeats over 737 seconds, the first read off by hand:
+        // "0b 2f 83 37 85 21 01 ..." - clock bytes 37 85 21 01, 0x01218537.
+        Assert.Equal(738, heartbeats.Count);
+        Assert.Equal(18_974_007u, heartbeats[0]);
+
+        for (var i = 1; i < heartbeats.Count; i++)
+        {
+            var gap = heartbeats[i] - heartbeats[i - 1];
+            Assert.InRange(gap, 990u, 1010u);
+        }
+
+        // The same clock as the passes: the heartbeat after a pass reads
+        // just after the pass's own time (a pass is reported a moment
+        // after the car crossed).
+        for (var i = 0; i < stream.Count; i++)
+        {
+            if (stream[i].Heartbeat)
+            {
+                continue;
+            }
+
+            var next = stream.Skip(i + 1).FirstOrDefault(s => s.Heartbeat);
+
+            if (next.Heartbeat)
+            {
+                Assert.InRange(next.Clock - stream[i].Clock, 0u, 1500u);
+            }
+        }
+    }
+
+    [Fact]
     public void A_pass_split_across_reports_after_a_stray_byte_is_still_read()
     {
         var produced = new List<string>();
