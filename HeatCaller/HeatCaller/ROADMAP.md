@@ -133,11 +133,14 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 
 Reordered on 28 Sep 2026. In the hours after the freeze came off, the work
 went to new features and none of the beta preparation below had started;
-this order puts the beta path back in front.
+this order puts the beta path back in front - with one change the same
+day: the layout overhaul is finished before the beta rather than after it
+(item 4).
 
-1. **Build what is waiting.** The layout test and layout pieces (28 Sep)
-   and the 0.59.0 cut: run `check.cmd`, and commit when it is ALL GREEN.
-   Nothing new starts until the working copy is a green commit.
+1. **Build what is waiting.** Race Control on the layout pieces (28 Sep):
+   run `check.cmd`, then `layout.cmd "Race Control"` and look at the
+   pictures at 100% and 150%; commit when it is ALL GREEN and they look
+   right. Nothing new starts until the working copy is a green commit.
 2. **Rehearsal 4** - owed under the rule above, since the timing path
    changed after rehearsal 3. On a commit that went green on GitHub:
    - the timing-warning drills: unplug the decoder, pull the loop cable,
@@ -149,13 +152,18 @@ this order puts the beta path back in front.
 3. **Start the beta path's waiting now**, alongside 1 and 2: post the beta
    application (Beta readiness 1) and start the signing identity check
    (Beta readiness 3). Both are days of waiting, not work.
-4. **The installer** (Beta readiness 3), then **the beta tier and the
+4. **The layout overhaul, all of it, before the beta** ("After the
+   freeze", 8). Decided 28 Sep: a club's first impression is the screens,
+   and the overhaul is visual risk only. Page by page in race-night order,
+   one per commit, each held to a clean layout report and checked by eye;
+   then the drawn controls, then `PerMonitorV2`. Race Control is done.
+5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
-5. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
+6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
    was written before a unit was on the bench. With one connected: read
    the raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and
    turn the capture into tests.
-6. **A capture from every rehearsal that shows something new.** The
+7. **A capture from every rehearsal that shows something new.** The
    EasyLap path is tested from rehearsal 3's (`EasyLapCaptureTests`): every
    HID report in `HeatCaller.Tests\Captures\easylap-rehearsal3.log` is
    played through `EasyLapFramer` (the read loop's framing, split out of
@@ -163,13 +171,11 @@ this order puts the beta path back in front.
    it did on the night, and the A-Main's passes then go through
    `RaceControlSession` and must count the same laps. The session log keeps
    the decoder lines.
-7. **The layout overhaul, Race Control only for now** ("After the freeze",
-   8) - the page a club lives on. The other pages after Beta readiness 3
-   and 4; it is visual risk only.
 8. **Split the two remaining giant methods.** `PopulateTabs`
-   (`MainForm.Pages.cs`, ~1,775 lines) and `BuildLayout`
-   (`RaceControlControl.Layout.cs`, ~1,000 lines) each build many pages or
-   panels in one method. Split them page by page, one per commit, each
+   (`MainForm.Pages.cs`, ~1,715 lines) and `BuildLayout`
+   (`RaceControlControl.Layout.cs`, ~800 lines - mostly the flag actions
+   now; the page itself is put together from the pieces at the end) each
+   build many pages or panels in one method. Split them page by page, one per commit, each
    checked by running the app.
 
 Done and kept going: the off-site copy on GitHub (26 Sep 2026,
@@ -521,9 +527,33 @@ from. Ranked by what decides whether a club switches, and stays.
    1080p laptop at Windows' 150%), each measured with `LayoutAudit` - the
    doctor's detection without its repairs - with the doctor kept off, so it
    is the page's own layout. It writes `layout\report.txt` beside the test
-   dll; `layout.cmd` adds pictures of every page. For now it fails only for
+   dll; `layout.cmd` adds pictures of every page and copies both to
+   `layout-check\` at the top of the folder. For now it fails only for
    a page on `LayoutAudit.ConvertedPages` (which the doctor also leaves
-   alone); the report is the to-do list for the rest. Next: Race Control.
+   alone); the report is the to-do list for the rest.
+
+   **Step 2 under way - Race Control converted (28 Sep).** Three more
+   pieces came with it: `FieldRow` (caption-and-field pairs along a line,
+   the last field taking the width left - the Session row), `Beside` (a
+   column down the right beside a filling part - the clock column beside
+   the flags and the leaderboard) and a `Section` whose list takes the
+   height the card has left; plus a tight `ButtonBar` for the flag row and a
+   one-width one for the correction buttons. The Session row, which MainForm
+   owns, is on the page now (`ShowSessionRow`) rather than docked above it,
+   and the Next Up bar lays out its own buttons and grows with the text.
+   The page is built to follow a text-size change (Ctrl +/-) without a
+   restart. In the 28 Sep report Race Control had 1 to 23 findings a size;
+   it is on `ConvertedPages` now, so any at all fail the build. The
+   pictures found three things the audit could not: cards that kept the
+   height they had grown to while the page was narrow (see "Gotchas"), a
+   tight "Reset" cut to "Rese" at 200% (the audit's button rule now counts
+   TextRenderer's own room round a caption, so the report will list more
+   buttons on the unconverted pages at 150% and 200%), and the stat tiles'
+   captions cut in half (they grow with the text now). Left for step 3: the
+   clock and the flag buttons are drawn at fixed sizes. At 1280x720 (a
+   1080p laptop at 150%) the page scrolls: the clock column and the least
+   the board can do with are taller than the room there. Next: Heats &
+   Mains, Who's Racing and check-in.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
@@ -704,7 +734,7 @@ what didn't fit an area:
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
-| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `ButtonBar`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone |
+| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |
@@ -742,6 +772,18 @@ broken - an extra `}` in one place masks a missing one elsewhere.
 
 **Never hardcode button widths.** Use `ButtonBar`, or
 `AppTheme.LayoutButtonRow` on a hand-placed page.
+
+**A TableLayoutPanel that sizes itself does not shrink back** (dotnet/winforms
+issue 10379). When what is in it wraps onto more lines it grows, and when it
+unwraps the height stays. And a table lays a row out before it widens the
+part in it, whose request to be laid out again is then dropped. So `Section`
+works out its own height, part by part, and every table in the layout pieces
+checks after laying out that each part is the height it wants at its width
+(`Pieces.OutOfStep`), and lays out once more if not. `FieldGrid` still asks
+the table for its own height - give it a narrow-then-wide test when a page
+with one is converted. `LayoutAudit` cannot see empty space, so
+`LayoutPiecesTests` checks that a card has nothing under its last part but
+its inset.
 
 **The version and the release notes move together.** Every change a club
 would notice goes under an "Unreleased" heading at the top of

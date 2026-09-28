@@ -24,6 +24,10 @@ TestResults/
 Claude outputs/
 HeatCaller Sound Options/
 
+# The layout report and pictures that layout.cmd copies up from the test's
+# bin folder - made again on every run.
+layout-check/
+
 # Python leftovers from audio-tools
 __pycache__/
 *.pyc

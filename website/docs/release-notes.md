@@ -2,6 +2,14 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
+## Unreleased
+
+- **Race Control fits at every text size.** At a larger text size the flag buttons, **State:** and **Flag:**, the format chip and **Race Format...** no longer run into each other, the buttons under the clock get wider to fit their captions, and the correction buttons under the leaderboard get taller to fit their text. **Flag:** no longer overlaps **None** at the normal size either.
+- **A short window scrolls Race Control instead of squashing it.** The leaderboard always shows its headings and at least three drivers, and the clock column is never cut off at the bottom.
+- **The Session row is part of the Race Control page.** **Name:**, **Track:** and **Round:** are in a card at the top of the page. **Track:** is as wide as your longest track layout name, and **Name:** shows all of its hint. In a narrow window **Round:** moves onto a line of its own instead of cutting a round's name short.
+- **The Next Up bar gets taller with the text** instead of cutting off its lines, and is a card like the rest of the page. So do the **Laps** and **Fastest** tiles under the clock, whose captions were cut in half at a larger text size.
+- **The leaderboard's instructions are a line of help under its heading:** double-click a driver for their lap breakdown, right-click for names, penalties and corrections.
+
 ## 0.59.0
 
 Released 28 Sep 2026. Everything since 0.52.0: the new name, safer race nights, a rehearsal copy to practice on, warnings when timing goes quiet, Save Support Info, and the recap as a broadcast. Versions 0.53.0 to 0.58.0 were working builds and never had notes of their own; their changes are all here.

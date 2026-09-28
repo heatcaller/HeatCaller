@@ -72,11 +72,6 @@ public partial class MainForm
             PageHeader.Reserve(item.Page);
         }
 
-        // Re-measured here as well as on resize: a text-size change moves
-        // every caption in that row without changing the group's size, so
-        // Resize never fires and the row would keep its old spacing.
-        LayoutSessionRow();
-
         // Every page's spacing was judged against the font that was in
         // effect when it was last checked, so a size change invalidates all
         // of them. The one on screen is re-checked now; the rest are done as

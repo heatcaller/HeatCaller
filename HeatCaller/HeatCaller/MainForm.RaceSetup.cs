@@ -13,98 +13,62 @@ namespace HeatCaller;
 public partial class MainForm
 {
     /// <summary>
-    /// The Session row on Race Control, measured against the group's real
-    /// width on every resize.
-    ///
-    /// It was laid out once, left to right, at fixed field widths: a name
-    /// box, a track picker, a session type, a 280px round picker and then
-    /// "Reset Round" at whatever x the arithmetic reached. Nothing checked
-    /// that the total fitted - and at the designed width it already did
-    /// not, so the button sat off the right-hand edge of the group and, on
-    /// a window narrower than the sum of the parts, off the page.
-    ///
-    /// Now the button is pinned to the right edge and the round picker
-    /// takes whatever is left between its caption and the button. When
-    /// that is too little to read a round name in, the row splits in two
-    /// rather than squeezing. A picker showing half a round name with an
-    /// ellipsis is not a picker - it is a tooltip you have to hover to read.
+    /// The narrowest the Session row's round picker is allowed to get before
+    /// the row gives up and puts it on a line of its own (see FieldRow): as
+    /// wide as the longest thing it has to show, and never narrower than the
+    /// freeform choice. A picker showing half a round name with an ellipsis
+    /// is not a picker - it is a tooltip you have to hover to read.
     /// </summary>
-    private void LayoutSessionRow()
+    private int SessionRoundLeastWidth() =>
+        PickerWidth(cmbActiveRound, ref _roundPickerWidth, "(freeform - no race program round)");
+
+    /// <summary>The Session row's track picker: wide enough for the longest layout name, and never under the 180px it always had.</summary>
+    private int SessionTrackWidth() =>
+        Math.Max(180, PickerWidth(cmbTrackLayout, ref _trackPickerWidth, "(none)"));
+
+    /// <summary>The Session row's Name box: wide enough to show its hint, and never under the 170px it always had.</summary>
+    private int SessionNameWidth() =>
+        Math.Max(170, TextRenderer.MeasureText(txtSessionLabel.PlaceholderText, txtSessionLabel.Font).Width + 16);
+
+    /// <summary>
+    /// The widths the Session row's pickers were last measured at, with the
+    /// font and the length of list they were measured for. Forgotten when a
+    /// list is rebuilt, which can change what is in it without changing how
+    /// long it is - see RefreshActiveRoundCombo and RefreshTrackLayoutCombo.
+    /// </summary>
+    private (Font Font, int Count, int Width)? _roundPickerWidth;
+    private (Font Font, int Count, int Width)? _trackPickerWidth;
+
+    /// <summary>
+    /// What a Session row picker needs across for the longest thing it
+    /// shows, measured the way LayoutAudit checks a drop-down - padding and
+    /// all - with room for the arrow and either side of the text.
+    ///
+    /// Kept until the picker's font or the length of its list changes: the
+    /// row is measured many times in one layout, and the round list can run
+    /// to hundreds. Capped at the first few hundred, like the audit's own
+    /// check - they say as much as all of them.
+    /// </summary>
+    private static int PickerWidth(ComboBox picker, ref (Font Font, int Count, int Width)? kept, string shortest)
     {
-        if (grpSession.IsDisposed || grpSession.Width < 80)
+        if (kept is { } known && ReferenceEquals(known.Font, picker.Font) && known.Count == picker.Items.Count)
         {
-            return;
+            return known.Width;
         }
 
-        const int inset = 12;
+        var widest = TextRenderer.MeasureText(shortest, picker.Font).Width;
 
-        // The narrowest the round picker is allowed to get before the row
-        // gives up and wraps. Measured against the longest thing it ever
-        // has to show rather than guessed.
-        var wanted = TextRenderer.MeasureText(
-            "(freeform - no race program round)",
-            AppTheme.BodyFont,
-            new Size(int.MaxValue, int.MaxValue),
-            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width + 40;
-
-        var right = grpSession.Width - inset;
-        var top = UiLayout.InsideGroup(grpSession);
-        var rowHeight = Math.Max(cmbActiveRound.Height, UiLayout.ButtonHeight);
-
-        // --- Name, only while there is no round to derive one from ---
-        //
-        // With a round chosen the box is filled from that round and made
-        // read-only, so it spends a caption and 170 pixels restating what
-        // the Round picker already says. Hidden then, and the row closes up
-        // behind it.
-        var x = inset;
-
-        // _sessionNameShown, not txtSessionLabel.Visible - see that field.
-        if (_sessionNameShown)
+        foreach (var item in picker.Items.Cast<object>().Take(400))
         {
-            lblSessionLabel.Location = new Point(x, UiLayout.CentreOn(lblSessionLabel, top, rowHeight));
-            txtSessionLabel.Location = new Point(UiLayout.After(lblSessionLabel), UiLayout.CentreOn(txtSessionLabel, top, rowHeight));
-            x = UiLayout.After(txtSessionLabel) + UiLayout.SectionGap;
+            var text = picker.GetItemText(item) ?? string.Empty;
+
+            widest = Math.Max(widest, TextRenderer.MeasureText(text, picker.Font).Width);
         }
 
-        lblTrack.Location = new Point(x, UiLayout.CentreOn(lblTrack, top, rowHeight));
-        cmbTrackLayout.Location = new Point(UiLayout.After(lblTrack), UiLayout.CentreOn(cmbTrackLayout, top, rowHeight));
+        var width = widest + SystemInformation.VerticalScrollBarWidth + 24;
 
-        // --- The round picker, on the same row when it fits ---
-        //
-        // It takes everything left over to the right-hand edge. There used
-        // to be a "Reset Round" button pinned out there taking a bite out of
-        // it; that is Race Control's own Reset now, which was doing the same
-        // job two feet away.
-        var oneRowLeft = UiLayout.After(cmbTrackLayout) + UiLayout.SectionGap;
-
-        // Measured, not PreferredWidth: an autosize width leaves out the
-        // glyph padding the caption is actually drawn with, which is the ten
-        // pixels the layout pass spent every startup pushing this back out.
-        var captionWidth = TextRenderer.MeasureText(lblActiveRound.Text, AppTheme.BodyFont).Width;
-        var oneRowCaption = oneRowLeft + captionWidth + UiLayout.LabelGap;
-        var oneRowSpace = right - oneRowCaption;
-
-        var roundY = oneRowSpace >= wanted
-            ? top
-            : top + rowHeight + UiLayout.RowGap;
-
-        var roundCaptionLeft = oneRowSpace >= wanted ? oneRowLeft : inset;
-
-        lblActiveRound.Location = new Point(roundCaptionLeft, UiLayout.CentreOn(lblActiveRound, roundY, rowHeight));
-
-        var comboLeft = UiLayout.After(lblActiveRound);
-
-        cmbActiveRound.Width = Math.Max(140, right - comboLeft);
-        cmbActiveRound.Location = new Point(comboLeft, UiLayout.CentreOn(cmbActiveRound, roundY, rowHeight));
-
-        // The group grows for a second row rather than clipping it.
-        var height = UiLayout.Below(cmbActiveRound, inset);
-
-        if (grpSession.Height != height)
-        {
-            grpSession.Height = height;
-        }
+        kept = (picker.Font, picker.Items.Count, width);
+        return width;
     }
 
     /// <summary>Repopulates the "Race Round" dropdown with not-yet-recorded rounds from the race program, preserving the current selection or falling back to the last one used.</summary>
@@ -167,6 +131,13 @@ public partial class MainForm
         {
             _rebuildingRoundCombo = false;
         }
+
+        // A longer round name may need the picker on a line of its own now,
+        // or a shorter one let it back beside the track - see
+        // SessionRoundLeastWidth, which the row asks as it lays out. Null
+        // until InitializeComponent has made the row.
+        _roundPickerWidth = null;
+        sessionRow?.PerformLayout();
 
         // The handler was suppressed during the rebuild, so bring the rest
         // of the UI back in step with whatever ended up selected - without
@@ -495,10 +466,10 @@ public partial class MainForm
 
         _sessionNameShown = visible;
 
+        // The row closes up behind the pair, or opens for it - FieldRow
+        // lays itself out again when one of its fields is shown or hidden.
         lblSessionLabel.Visible = visible;
         txtSessionLabel.Visible = visible;
-
-        LayoutSessionRow();
     }
 
     /// <summary>
@@ -698,6 +669,12 @@ public partial class MainForm
 
         var idx = previous is not null ? cmbTrackLayout.Items.IndexOf(previous) : -1;
         cmbTrackLayout.SelectedIndex = idx >= 0 ? idx : 0;
+
+        // The picker is as wide as its longest layout name - see
+        // SessionTrackWidth, which the Session row asks as it lays out.
+        // Null until InitializeComponent has made the row.
+        _trackPickerWidth = null;
+        sessionRow?.PerformLayout();
 
         // Race Control keeps its own list of layouts to record races
         // against; a layout added, renamed or removed has to reach it too,

@@ -62,7 +62,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 
 `LayoutTests` writes `bin\Debug\net8.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, measured with `LayoutDoctor` kept off - the to-do list for moving pages onto the layout pieces (`LayoutPieces.cs`, ROADMAP item 8).
 
-For pictures as well, run `layout.cmd` beside `check.cmd`: every page and tab at every size, in `layout\pictures`. `layout.cmd "Race Control"` does one page (several: `"Race Control;Voice"`), which is quicker.
+For pictures as well, run `layout.cmd` beside `check.cmd`: every page and tab at every size, in `layout\pictures`. `layout.cmd "Race Control"` does one page (several: `"Race Control;Voice"`), which is quicker. It copies the report and the pictures to `layout-check\` at the top of the folder too, where a clean build doesn't delete them and Claude's file bridge can reach them (it stops seven folders down); git ignores that folder.
 
 The windows are built on a thread of their own (`StaThread`), off-screen, invisible and never activated, so nothing appears while the tests run. `TestSetup` sets Windows up as the app does first - no DPI awareness, visual styles, GDI text - because text measured any other way would describe a different app.
 

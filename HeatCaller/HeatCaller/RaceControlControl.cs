@@ -86,11 +86,33 @@ public sealed partial class RaceControlControl : UserControl
     private readonly RaceClockPanel _clock;
     private readonly RaceStatStrip _statStrip;
 
-    /// <summary>Width of the clock column down the right-hand side - the clock, the three buttons under it, and the stat tiles all share it.</summary>
+    /// <summary>
+    /// The narrowest the clock column down the right-hand side gets - the
+    /// clock, the buttons under it and the stat tiles all share its width.
+    /// Wider when a button's caption needs it (a larger text size).
+    /// </summary>
     private const int ClockWidth = 260;
 
-    /// <summary>Set once the five controls in the clock column exist, so a size change during construction is ignored rather than crashing.</summary>
-    private bool _rightColumnBuilt;
+    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given. (The stat tiles under the column size themselves - see RaceStatStrip.)</summary>
+    private const int ClockHeight = 200;
+
+    /// <summary>
+    /// The page: the host's Session row (see ShowSessionRow), the Next Up
+    /// bar, and the flags and the leaderboard beside the clock column,
+    /// the leaderboard taking the height that is left. See BuildLayout.
+    /// </summary>
+    private readonly FillPage _page = new();
+
+    /// <summary>
+    /// The labels here that wear a face of their own - the bold captions and
+    /// the small hints - and the face each wears.
+    ///
+    /// Everything else here takes the window's font, and follows it when
+    /// the text size changes. These were given theirs outright, which is
+    /// the old one once the size has changed, so they are handed the new
+    /// one - see OnFontChanged.
+    /// </summary>
+    private readonly List<(Label Label, Func<Font> Face)> _ownFaces = new();
 
     /// <summary>
     /// The format in force for whatever is about to run: the active
@@ -105,18 +127,6 @@ public sealed partial class RaceControlControl : UserControl
 
     /// <summary>The chip that says which format is in force and where it came from.</summary>
     private readonly Label _lblFormat = new();
-
-    /// <summary>The flags-and-format group and the board, held so the layout pass can reach them. Null until BuildLayout makes them.</summary>
-    private GroupBox? _grpRaceControl;
-    private GroupBox? _grpLeaderboard;
-
-    /// <summary>
-    /// Re-lays the correction strip and the board grid against the
-    /// group's CURRENT width - LayoutRightColumn calls it after every
-    /// board resize, so the strip can never stay laid out against a
-    /// width the board no longer has.
-    /// </summary>
-    private Action? _reflowToolbar;
 
     private readonly Button _btnFormat = new();
     private readonly Button _btnQuickRace = new();
@@ -345,10 +355,12 @@ public sealed partial class RaceControlControl : UserControl
         _projector = new QualifyingProjector(
             race, profiles, raceClasses, sessionHistory, rounds, events, activeRound);
 
+        // No scrolling, minimum size or font of its own. The page inside
+        // (_page, a FillPage) scrolls when the window is too short for it,
+        // and needs no minimum to fall back on. And the font is the
+        // window's, so a new text size reaches everything here the way it
+        // reaches every other page - see OnFontChanged.
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        MinimumSize = new Size(900, 560);
-        Font = AppTheme.BodyFont;
 
         BuildLayout();
         WireRaceControl();

@@ -30,6 +30,31 @@ public sealed class RaceStatStrip : Control
 
         DoubleBuffered = true;
         TabStop = false;
+        Height = WantedHeight;
+    }
+
+    /// <summary>
+    /// The small caption over each value. It follows the text size, and the
+    /// strip grows with it rather than drawing the caption into a strip too
+    /// short for it - at 150% the captions were cut through the middle.
+    /// Fourteen at the normal text size, as it always was.
+    /// </summary>
+    private static int CaptionHeight => Math.Max(14, AppTheme.MicroFont.Height - 2);
+
+    /// <summary>The caption, the 24px the value has always had, and room round them - about fifty at the normal text size.</summary>
+    private static int WantedHeight => CaptionHeight + 36;
+
+    /// <summary>A new text size. The window's font change reaches the strip, which has none of its own, and is the cue.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+
+        if (Height != WantedHeight)
+        {
+            Height = WantedHeight;
+        }
+
+        Invalidate();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -94,7 +119,7 @@ public sealed class RaceStatStrip : Control
             FormatFlags = StringFormatFlags.NoWrap,
         };
 
-        var labelRect = new RectangleF(bounds.Left + 4, bounds.Top + 7, bounds.Width - 8, 14);
+        var labelRect = new RectangleF(bounds.Left + 4, bounds.Top + 7, bounds.Width - 8, CaptionHeight);
         g.DrawString(AppTheme.Spaced(label.ToUpperInvariant()), AppTheme.MicroFont, labelBrush, labelRect, centred);
 
         var valueRect = new RectangleF(bounds.Left + 4, labelRect.Bottom - 2, bounds.Width - 8, bounds.Height - labelRect.Height - 12);

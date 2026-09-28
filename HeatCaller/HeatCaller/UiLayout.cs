@@ -100,6 +100,15 @@ public static class UiLayout
     public const int ButtonGap = 10;
 
     /// <summary>
+    /// The gap in a dense row - see <see cref="TightButtonSizeFor"/> - where
+    /// the standard one would push a long row onto a second line.
+    /// </summary>
+    public const int TightButtonGap = 6;
+
+    /// <summary>Space either side of a caption in a dense row, on top of the room TextRenderer keeps round it.</summary>
+    private const int TightButtonPaddingX = 12;
+
+    /// <summary>
     /// Space either side of a button's caption.
     ///
     /// A button whose width was chosen by eye against the old font is the
@@ -349,8 +358,19 @@ public static class UiLayout
         // drawn. See AppTheme.Caption.
         button.Text = AppTheme.Caption(button.Text);
 
+        return WidthFor(button.Text);
+    }
+
+    /// <summary>
+    /// How wide a button has to be for <paramref name="caption"/>, measured
+    /// exactly as given - for sizing a button for a caption it will wear
+    /// later rather than the one it has now. The overload above takes the
+    /// button's own caption, without its trailing ellipsis.
+    /// </summary>
+    public static int WidthFor(string caption)
+    {
         var text = TextRenderer.MeasureText(
-            button.Text,
+            caption,
             ButtonFont,
             new Size(int.MaxValue, int.MaxValue),
             TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
@@ -359,30 +379,71 @@ public static class UiLayout
     }
 
     /// <summary>
-    /// The whole size a button needs: <see cref="WidthFor"/> across, and down
-    /// the theme's own rule - its caption's height plus twelve, never under a
-    /// standard button - so a button sized here is one AppTheme.StyleButton
-    /// has nothing to grow. Measured in the bold face, like WidthFor.
+    /// The whole size a button needs: <see cref="WidthFor(Button)"/> across,
+    /// and down the theme's own rule - its caption's height plus twelve,
+    /// never under a standard button - so a button sized here is one
+    /// AppTheme.StyleButton has nothing to grow. Measured in the bold face,
+    /// like WidthFor.
     /// </summary>
     public static Size ButtonSizeFor(Button button)
     {
         var width = WidthFor(button);
 
-        var caption = TextRenderer.MeasureText(
-            string.IsNullOrEmpty(button.Text) ? "Xg" : button.Text,
+        return new Size(width, HeightFor(button.Text));
+    }
+
+    /// <summary>The same for <paramref name="caption"/>, measured exactly as given - see <see cref="WidthFor(string)"/>.</summary>
+    public static Size ButtonSizeFor(string caption) => new(WidthFor(caption), HeightFor(caption));
+
+    /// <summary>
+    /// A button in a dense row: only as wide as its caption and a little room
+    /// either side, with no standard minimum - for a long row that should
+    /// stay on one line where it can, Race Control's seven flags. Down, the
+    /// same as <see cref="ButtonSizeFor(Button)"/>. The caption loses its
+    /// trailing ellipsis first, as it does there.
+    ///
+    /// Measured WITH the room TextRenderer keeps either side of a line, which
+    /// grows with the font, and a flat button draws its caption with it. The
+    /// bare caption plus a fixed 24 was enough at the normal text size and
+    /// not at 200%, where Race Control's Reset came out as "Rese" (the
+    /// layout pictures, 28 Sep).
+    /// </summary>
+    public static Size TightButtonSizeFor(Button button)
+    {
+        button.Text = AppTheme.Caption(button.Text);
+
+        var text = TextRenderer.MeasureText(
+            button.Text,
+            ButtonFont,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.SingleLine);
+
+        return new Size(text.Width + TightButtonPaddingX * 2, HeightFor(button.Text));
+    }
+
+    /// <summary>
+    /// The theme's rule for a button's height: its caption's plus twelve,
+    /// never under a standard button. An empty caption still needs room for
+    /// a line, so it is measured as if it had ascenders and descenders.
+    /// </summary>
+    private static int HeightFor(string caption)
+    {
+        var height = TextRenderer.MeasureText(
+            string.IsNullOrEmpty(caption) ? "Xg" : caption,
             ButtonFont).Height;
 
-        return new Size(width, Math.Max(ButtonHeight, caption + 12));
+        return Math.Max(ButtonHeight, height + 12);
     }
 
     /// <summary>
     /// A dense row: every button sized to its own caption, with no standard
     /// minimum width and a tighter gap.
     ///
-    /// For rows of five or more - Race Control's seven flags, say - where
-    /// the standard width would put the row wider than the group holding
-    /// it. Returns the x just past the last button, so the caller can check
-    /// the row actually fits.
+    /// For rows of five or more on a hand-placed page, where the standard
+    /// width would put the row wider than the group holding it. A page built
+    /// from the layout pieces uses ButtonBar(tight: true) instead, as Race
+    /// Control's seven flags do. Returns the x just past the last button, so
+    /// the caller can check the row actually fits.
     /// </summary>
     public static int TightButtonRow(int x, int y, params Button[] buttons)
     {

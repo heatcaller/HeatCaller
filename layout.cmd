@@ -7,6 +7,12 @@ rem   layout.cmd "Race Control"         one page, named as in the sidebar
 rem   layout.cmd "Race Control;Voice"   several
 rem
 rem check.cmd runs the same check, every time, without the pictures.
+rem
+rem The report and the pictures are written under the test's bin folder,
+rem and copied to layout-check\ here at the top as well: the bin folder is
+rem thrown away by a clean build, and it is too deep for Claude's file
+rem bridge to reach (seven folders down at most). git leaves layout-check\
+rem alone - see .gitignore.
 setlocal
 cd /d "%~dp0"
 
@@ -16,7 +22,14 @@ if not "%~1"=="" set "HEATCALLER_LAYOUT_ONLY=%~1"
 dotnet test "HeatCaller\HeatCaller.sln" --filter "FullyQualifiedName~HeatCaller.Tests.LayoutTests"
 set RESULT=%errorlevel%
 
+rem A mirror: a picture of a page that was not checked this time does not
+rem linger from an earlier run. Its own exit code is not this script's -
+rem robocopy counts anything under 8 as success.
+if exist "HeatCaller\HeatCaller.Tests\bin\Debug\net8.0-windows\layout" (
+  robocopy "HeatCaller\HeatCaller.Tests\bin\Debug\net8.0-windows\layout" "layout-check" /MIR /NJH /NJS /NFL /NDL /NP >nul
+)
+
 echo.
 echo The report and the pictures are in
-echo   %~dp0HeatCaller\HeatCaller.Tests\bin\Debug\net8.0-windows\layout
+echo   %~dp0layout-check
 exit /b %RESULT%

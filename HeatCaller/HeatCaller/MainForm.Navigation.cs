@@ -676,25 +676,16 @@ public partial class MainForm
     {
         // The layout test measures each page's own layout, not the doctor's
         // repairs of it. And a page rebuilt to lay itself out is left to do
-        // so: two authorities moving the same controls is how Race Control
-        // came to be excluded below.
+        // so: two authorities moving the same controls is worse than
+        // neither. Race Control, the first page rebuilt, was kept out by
+        // name for that reason even before it was - its hand-placed column
+        // fought the doctor's nudges at every resize.
         if (LayoutCheckMode || LayoutAudit.IsConverted(name))
         {
             return 0;
         }
 
         if (!_tidiedPages.Add(name))
-        {
-            return 0;
-        }
-
-        // Race Control lays itself out: LayoutRightColumn places every
-        // group, the board's grid and the correction strip against the
-        // real width on every resize. The repair pass moving things here
-        // was one authority too many - its nudges were made against
-        // whatever width the page had at startup and then fought the
-        // page's own pass at the next resize.
-        if (string.Equals(name, "Race Control", StringComparison.OrdinalIgnoreCase))
         {
             return 0;
         }

@@ -29,14 +29,20 @@ partial class MainForm
     private Label lblStatus = new();
     private Panel pnlStatusDot = new();
     private GroupBox grpConnection = new();
-    private GroupBox grpSession = new();
+
+    // The Session row on Race Control. Made in InitializeComponent rather
+    // than here: a card takes the theme's surface colour as it is made, and
+    // these initialisers run before the constructor has chosen the look.
+    private Section grpSession = null!;
+    private FieldRow sessionRow = null!;
+
     private ComboBox cmbTrackLayout = new();
     private TextBox txtSessionLabel = new();
     private ComboBox cmbActiveRound = new();
 
-    // Fields rather than locals: the Session row is re-measured on every
-    // resize (see MainForm.LayoutSessionRow), and that needs the captions
-    // it is measuring against.
+    // Fields rather than locals: the Session row's FieldRow is handed them
+    // in InitializeComponent, and SetSessionNameVisible hides the Name
+    // caption with its box.
     private Label lblSessionLabel = new() { Text = "Name:", AutoSize = true };
     private Label lblTrack = new() { Text = "Track:", AutoSize = true };
     private Label lblActiveRound = new() { Text = "Round:", AutoSize = true };
@@ -264,24 +270,20 @@ partial class MainForm
         // app - and since the program, the format chip and the Next Up bar
         // took over deciding what runs next, most of a race day never
         // touches it. What remains is the row of overrides: name a freeform
-        // session, pick its track and type, jump to ANY round out of order,
-        // and Reset Round for when it all needs to start again.
-        grpSession.Text = "Session";
-        grpSession.Font = AppTheme.BodyFont;
+        // session, pick its track, and jump to ANY round out of order.
+        //
+        // A card from the layout pieces, put at the top of the Race Control
+        // page in PopulateTabs, its row laid out by a FieldRow: each field
+        // beside its measured caption, the round picker taking the width the
+        // others leave, and the row going onto a second line rather than
+        // squeezing the picker. No positions, sizes or fonts here: the
+        // fields' widths are measured too (SessionNameWidth,
+        // SessionTrackWidth, SessionRoundLeastWidth), and the card and the
+        // row measure themselves in the window's font, and follow it when
+        // the text size changes.
+        grpSession = new Section("Session");
+        sessionRow = new FieldRow();
 
-        // No Location, Size or Anchor here on purpose. This box is docked to
-        // the top of the Race Control page and its height is measured from
-        // the controls inside it - see BuildRaceControlPage and
-        // LayoutSessionRow. Literals here were overwritten a moment after
-        // they were set, which made them look like the layout while being
-        // nothing of the sort: reading them told you the box was 960x76 at
-        // (12, 190), and none of those three numbers was ever true on
-        // screen.
-
-        // Fields configured first - a control measures at its own font's
-        // height, and every position below leans on those heights.
-        txtSessionLabel.Font = AppTheme.BodyFont;
-        txtSessionLabel.Width = 170;
         txtSessionLabel.PlaceholderText = "optional, e.g. \"Friday Main\"";
         txtSessionLabel.TextChanged += (_, _) =>
         {
@@ -289,31 +291,16 @@ partial class MainForm
             txtSessionLabel.ForeColor = AppTheme.TextDark;
         };
 
-        cmbTrackLayout.Font = AppTheme.BodyFont;
-        cmbTrackLayout.Width = 180;
         cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        cmbActiveRound.Font = AppTheme.BodyFont;
-        cmbActiveRound.Width = 280;
         cmbActiveRound.DropDownStyle = ComboBoxStyle.DropDownList;
         cmbActiveRound.SelectedIndexChanged += CmbActiveRound_SelectedIndexChanged;
 
-        lblSessionLabel.Font = AppTheme.BodyFont;
-        lblTrack.Font = AppTheme.BodyFont;
-        lblActiveRound.Font = AppTheme.BodyFont;
+        sessionRow.Add(lblSessionLabel, txtSessionLabel, SessionNameWidth);
+        sessionRow.Add(lblTrack, cmbTrackLayout, SessionTrackWidth);
+        sessionRow.AddLast(lblActiveRound, cmbActiveRound, SessionRoundLeastWidth);
 
-        // Placed by LayoutSessionRow, which runs on every resize. The row
-        // used to be laid out here, left to right, at fixed field widths
-        // and with nothing checking that it fitted - so "Reset Round" sat
-        // wherever the arithmetic put it, which on a narrower window or a
-        // larger text size was past the right-hand edge of the group.
-        grpSession.Resize += (_, _) => LayoutSessionRow();
-
-        grpSession.Controls.AddRange(new Control[]
-        {
-            lblSessionLabel, txtSessionLabel, lblTrack, cmbTrackLayout,
-            lblActiveRound, cmbActiveRound,
-        });
+        grpSession.Add(sessionRow);
 
         // The Leaderboard box that used to sit here is gone, and so is the
         // grid inside it.

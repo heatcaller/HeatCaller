@@ -37,7 +37,10 @@ internal static class LayoutAudit
     /// itself out does not need a second authority moving its controls.
     /// A page goes on this list in the same change that converts it.
     /// </summary>
-    internal static readonly IReadOnlyList<string> ConvertedPages = Array.Empty<string>();
+    internal static readonly IReadOnlyList<string> ConvertedPages = new[]
+    {
+        "Race Control",
+    };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>
     internal static bool IsConverted(string where) =>
@@ -276,11 +279,21 @@ internal static class LayoutAudit
         }
     }
 
+    /// <summary>A flat button's border and insets round its caption, beyond TextRenderer's own room - see CheckButton.</summary>
+    private const int FlatButtonInset = 16;
+
     /// <summary>
     /// Buttons, check boxes and radio buttons. The widths are the doctor's:
     /// a caption plus 22px for a button and 26px for a box and its gap, and
     /// a button's height is its caption's plus 12 - the rule the theme sizes
     /// every button by (AppTheme.StyleButton).
+    ///
+    /// And one the doctor never had, for a button: its caption measured with
+    /// the room TextRenderer keeps either side of a line, which grows with
+    /// the font, plus the flat button's own border and insets. The doctor's
+    /// 22 is enough at the normal text size and not at 200% - Race Control's
+    /// Reset, 105px wide at 200%, passed it and showed "Rese" in the layout
+    /// pictures of 28 Sep. The 16 is what that picture showed was needed.
     ///
     /// One that sizes itself fits, unless whatever holds it has the last
     /// word - a table column narrower than the caption - and then it is
@@ -336,10 +349,14 @@ internal static class LayoutAudit
             return;
         }
 
-        if (oneLine.Width > room)
+        var across = isButton
+            ? Math.Max(oneLine.Width + chrome, TextRenderer.MeasureText(button.Text, font).Width + FlatButtonInset)
+            : oneLine.Width + chrome;
+
+        if (across > button.Width)
         {
             findings.Add(new Finding(where, CutOff,
-                $"{Describe(button)} needs {oneLine.Width + chrome}px across for its caption and is {button.Width}px{In(button.Parent)}"));
+                $"{Describe(button)} needs {across}px across for its caption and is {button.Width}px{In(button.Parent)}"));
         }
 
         var lineHeight = TextRenderer.MeasureText(button.Text, font).Height;

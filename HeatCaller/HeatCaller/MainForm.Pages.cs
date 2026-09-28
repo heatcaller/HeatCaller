@@ -43,66 +43,13 @@ public partial class MainForm
         // set immediately before starting a race, so it belongs beside the
         // race controls rather than next to the decoder settings.
         //
-        // IN A HOST PANEL, so it sits on the same two edges as everything
-        // below it.
-        //
-        // It used to be docked straight to the page, which put it flush
-        // against both sides. Everything under it - the Next Up bar, the
-        // Race Control box, the board, the clock column - is placed by Race
-        // Control itself, PageLeft in from the left and PageRight in from a
-        // right edge measured INSIDE its own scrollbar. So the Session box
-        // stuck out sixteen pixels past the lot on the left, and on the
-        // right ran on over the column the scrollbar occupies underneath
-        // it: two boxes stacked one over the other, sharing neither edge.
-        //
-        // Docking ignores a control's Margin, and only the parent's Padding
-        // can inset a docked child - hence the host, whose Padding carries
-        // the page's margins plus however wide Race Control's scrollbar is
-        // at the moment. See KeepSessionOnPageRails.
-        grpSession.Dock = DockStyle.Top;
-
-        var sessionHost = new Panel { Dock = DockStyle.Top };
-        sessionHost.Controls.Add(grpSession);
-
-        void KeepSessionOnPageRails()
-        {
-            // Width minus ClientSize is the vertical scrollbar when it is
-            // showing and nothing when it is not - the same allowance Race
-            // Control makes for it when it places its own right edge.
-            var scrollbar = Math.Max(0, raceControl.Width - raceControl.ClientSize.Width);
-
-            var wanted = new Padding(
-                UiLayout.PageLeft,
-                8,
-                UiLayout.PageRight + scrollbar,
-                0);
-
-            if (sessionHost.Padding != wanted)
-            {
-                sessionHost.Padding = wanted;
-            }
-
-            // Follows the group, which grows a second row when the round
-            // picker cannot fit beside the track and shrinks again when the
-            // Name box is hidden. See LayoutSessionRow.
-            var height = wanted.Top + grpSession.Height + wanted.Bottom;
-
-            if (sessionHost.Height != height)
-            {
-                sessionHost.Height = height;
-            }
-        }
-
-        grpSession.SizeChanged += (_, _) => KeepSessionOnPageRails();
-
-        // ClientSizeChanged, not just Resize: the scrollbar coming and going
-        // changes the client area without changing the control's size.
-        raceControl.ClientSizeChanged += (_, _) => KeepSessionOnPageRails();
-        raceControl.Resize += (_, _) => KeepSessionOnPageRails();
-
-        // As tall as its one row, not the 168px card it used to be - the
-        // difference goes straight to the leaderboard below.
-        grpSession.Height = UiLayout.InsideGroup(grpSession) + UiLayout.ButtonHeight + 12;
+        // ON the Race Control page, as its first part, above the Next Up
+        // bar - see RaceControlControl.ShowSessionRow. It used to be docked
+        // above the page in a strip of its own, which then had to be told
+        // how wide Race Control's scrollbar was at every moment to keep to
+        // the same two edges as everything under it. On the page it simply
+        // has them.
+        raceControl.ShowSessionRow(grpSession);
 
         // Track Layout and Session Label are no longer SHOWN here - Race
         // Control has the visible pair - but session saving still reads
@@ -122,13 +69,7 @@ public partial class MainForm
 
         txtSessionLabel.TextChanged += (_, _) => raceControl.SetSessionLabel(txtSessionLabel.Text);
 
-        // Fill first, top second: docking resolves from the last child added
-        // backwards, so the host claims its strip before Race Control fills
-        // what is left.
         pageRaceControl.Controls.Add(raceControl);
-        pageRaceControl.Controls.Add(sessionHost);
-
-        KeepSessionOnPageRails();
 
         // The stores the driver card reads its numbers from - results,
         // championships, rivalries, personal-best resets and the

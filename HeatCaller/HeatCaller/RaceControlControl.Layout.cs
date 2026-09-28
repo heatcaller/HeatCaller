@@ -1,126 +1,82 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Race Control's layout: building the page (BuildLayout), the right-hand
-/// column, resizing, the clock display and the track picker.
+/// Race Control's layout: building the page (BuildLayout), the clock
+/// display and the track picker.
 ///
 /// Moved here unchanged from RaceControlControl.cs on 26 Sep 2026, when the
 /// file was split into parts. Fields with initializers stayed there.
+///
+/// Rebuilt on the layout pieces (LayoutPieces.cs) on 28 Sep 2026: nothing
+/// on the page is placed by hand any more. It used to be - a right-hand
+/// column worked out on every resize, a correction strip flowed by hand
+/// under the board, the flag row and the state line at fixed pixels - and
+/// at a larger text size the flags ran into the state line, the state line
+/// into the format chip, and the chip into its button. The page is on
+/// LayoutAudit.ConvertedPages now, and the layout test holds it to nothing
+/// overlapping or cut off at every size it tries.
 /// </summary>
 public sealed partial class RaceControlControl
 {
     /// <summary>
-    /// Puts the clock column where it belongs, against the width the page
-    /// actually has right now.
+    /// Puts the host's Session row - the Name, Track and Round pickers,
+    /// which MainForm owns - at the top of the page, above the Next Up bar.
     ///
-    /// This used to be done once in the constructor, from
-    /// Math.Max(700, Width - PageRight), with every control in the column
-    /// anchored to the right afterwards. Both halves of that are wrong.
-    /// Width in the constructor is the UserControl's default, not the width
-    /// this page ends up with - it has no parent yet - so the floor of 700
-    /// is what actually decided the layout, and then anchoring preserved a
-    /// distance from a right edge that never existed. The column came out
-    /// hard against the window edge with no margin at all, and the stat
-    /// tiles ended up on a different left edge from the clock and buttons
-    /// above them, which is the part that shows.
-    ///
-    /// Anchors are gone with it. Anchoring and explicit placement are two
-    /// authorities on the same coordinate, and the one that ran last won -
-    /// which is exactly the kind of disagreement that makes a column look
-    /// hand-assembled.
+    /// On the page rather than docked above it, as it used to be: in a
+    /// strip of its own it had to be told how wide this page's scrollbar
+    /// was to keep to the same edges, and it now simply has them.
     /// </summary>
-    private void LayoutRightColumn()
+    internal void ShowSessionRow(Control row) => _page.AddFirst(row, gapBelow: UiLayout.RowGap);
+
+    /// <summary>Gives a label a face of its own, and keeps it in step with the text size.</summary>
+    private T Wear<T>(T label, Func<Font> face) where T : Label
     {
-        // The clock and the stat strip are built partway down the
-        // constructor. A size change before that point would arrive here
-        // with them still unset, which is a crash on startup rather than a
-        // layout glitch.
-        if (!_rightColumnBuilt)
+        label.Font = face();
+        _ownFaces.Add((label, face));
+        return label;
+    }
+
+    /// <summary>
+    /// A new text size. The window's font change reaches this page, which
+    /// has none of its own, and is the cue - AppTheme's faces have already
+    /// been rebuilt at the new size by then.
+    /// </summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+
+        foreach (var (label, face) in _ownFaces)
         {
-            return;
-        }
+            var font = face();
 
-        // ClientSize, not Width: with a scrollbar showing, Width counts the
-        // strip nothing can be placed in, and the column would sit under
-        // it.
-        //
-        // The floor is only for the window that has not been given its real
-        // width yet - a page laid out at its default 150px would stack this
-        // column on top of the Race Control group beside it, and the repair
-        // pass would then spend its budget shoving them apart. As soon as
-        // there is a real width, the real width wins.
-        var right = Math.Max(700, ClientSize.Width - UiLayout.PageRight);
-        var left = right - ClockWidth;
-
-        // The bar first, spanning the full width, with its two buttons
-        // parked in its right end and the text told where to stop.
-        _nextUpBar.Location = new Point(UiLayout.PageLeft, 8);
-        _nextUpBar.Width = right - UiLayout.PageLeft;
-
-        var buttonY = (_nextUpBar.Height - _btnStartNext.Height) / 2;
-
-        _btnReseed.Location = new Point(_nextUpBar.Width - _btnReseed.Width - 8, buttonY);
-        _btnStartNext.Location = new Point(_btnReseed.Left - UiLayout.ButtonGap - _btnStartNext.Width, buttonY);
-        _nextUpBar.ReservedRight = _nextUpBar.Width - _btnStartNext.Left + 8;
-
-        var contentTop = _nextUpBar.Bottom + 10;
-
-        _clock.Location = new Point(left, contentTop);
-        _btnQuickRace.Location = new Point(left, _clock.Bottom + 8);
-        _btnBigScreen.Location = new Point(left, _btnQuickRace.Bottom + 8);
-        _btnAnnouncer.Location = new Point(left, _btnBigScreen.Bottom + 8);
-        _btnProjection.Location = new Point(left, _btnAnnouncer.Bottom + 8);
-
-        // Last of the buttons: it is run once, before the first race, and
-        // then not again all night - the ones above it are pressed during
-        // the racing. The stat strip under it is a readout, not a button.
-        _btnReadiness.Location = new Point(left, _btnProjection.Bottom + 8);
-        _statStrip.Location = new Point(left, _btnReadiness.Bottom + 8);
-
-        // The two groups share the space to the LEFT of the clock column:
-        // flags on top, and the board taking everything else down to the
-        // bottom edge. This is what makes the leaderboard the biggest thing
-        // on the page at any window size, which is what a leaderboard is
-        // for.
-        if (_grpRaceControl is { } flags && _grpLeaderboard is { } board)
-        {
-            var innerRight = left - UiLayout.RowGap;
-
-            flags.Location = new Point(UiLayout.PageLeft, contentTop);
-            flags.Width = Math.Max(600, innerRight - flags.Left);
-
-            board.Location = new Point(flags.Left, flags.Bottom + 10);
-            board.Size = new Size(
-                Math.Max(600, innerRight - board.Left),
-                Math.Max(180, ClientSize.Height - board.Top - 12));
-
-            // And the board's INSIDES against those bounds, in the same
-            // breath. The docked strip has already taken the new width by
-            // the time Size returns; this rewraps its buttons to it and
-            // hands the grid everything above the strip.
-            _reflowToolbar?.Invoke();
+            if (!Equals(label.Font, font))
+            {
+                label.Font = font;
+            }
         }
     }
 
-    /// <summary>The clock column is placed by hand, so it has to be re-placed whenever the page changes width.</summary>
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        LayoutRightColumn();
-    }
+    /// <summary>A line of help in the small muted type the app's hints use, wrapping to the room it is given.</summary>
+    private Label Hint(string text) =>
+        Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
+
+    /// <summary>
+    /// The least height the leaderboard's grid can do with: its headings and
+    /// three drivers. Below that the page scrolls instead - see FillPage.
+    /// Asked whenever it is needed, because the row height follows the text
+    /// size (AppTheme.StyleGrid).
+    /// </summary>
+    private int LeastBoardHeight() =>
+        _dgvLeaderboard.ColumnHeadersHeight + 3 * _dgvLeaderboard.RowTemplate.Height;
 
     private void BuildLayout()
     {
-        // --- Session row --------------------------------------------------
-        // Track and label on one aligned row, with the clock pinned right.
-        // These used to sit at four different left edges with the group
-        // below starting at a fifth.
-        // Track Layout and Session Name live in Session Setup above this
-        // page now. These controls stay - track-record checks read
+        // --- The hidden track and session-name fields ---
+        //
+        // Track and Session Name are set on the Session row, MainForm's, at
+        // the top of this page. These stay - track-record checks read
         // _cmbTrackLayout - but they're hidden and driven from there, so
         // there's one place to set each value rather than two.
-        var lblTrack = new Label { Text = "Track Layout:", Visible = false };
-
         _cmbTrackLayout.Visible = false;
         _cmbTrackLayout.Width = 200;
         _cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -137,53 +93,30 @@ public sealed partial class RaceControlControl
             _settings.Save();
         };
 
-        var lblLabel = new Label { Text = "Session Name:", Visible = false };
-
         _txtSessionLabel.Visible = false;
         _txtSessionLabel.Width = 220;
         _txtSessionLabel.PlaceholderText = "optional, e.g. \"Friday Main\"";
         _txtSessionLabel.TextChanged += (_, _) => SessionLabelChanged?.Invoke(_txtSessionLabel.Text);
 
-        // The clock column: sizes and behaviour here, positions in
-        // LayoutRightColumn, which runs again every time the page changes
-        // width. Nothing in this block sets a Location or an Anchor - that
-        // split is the whole point, and putting one back here is how the
-        // column came to disagree with itself.
-        const int clockWidth = ClockWidth;
-
-        // Still wanted for the group box below, which is anchored on both
-        // sides and so only needs a starting width. Note the floor of 700:
-        // during a constructor this control has no parent and Width is the
-        // UserControl default, which is why it is not to be trusted as a
-        // right edge for anything placed by hand.
-        var contentRight = Math.Max(700, Width - UiLayout.PageRight);
-
         // --- The Next Up bar ---
         //
-        // Lives INSIDE the bar as children, so painting order is never a
-        // question - a child always draws over its parent.
-        // Sized for the WIDEST caption it ever wears, because swapping
-        // text must not change the bar's geometry. It says "Race Running"
-        // while a session is under way, and when the programme owes
+        // Its two buttons live INSIDE the bar, so painting order is never a
+        // question - a child always draws over its parent - and the bar
+        // lays them out at its right-hand end and stops its text short of
+        // them. See NextUpBar.
+        //
+        // Start Next is sized for the WIDEST caption it ever wears, because
+        // swapping text must not change the bar's geometry. It says "Race
+        // Running" while a session is under way, and when the programme owes
         // something before the next race it wears that step's own caption
         // instead - see UpdateNextUpBar.
-        _btnStartNext.Font = AppTheme.BodyFont;
-
-        var startNextWide = 0;
-
+        //
         // Taken from ProgramCaptions rather than written out again here. The
         // same four strings used to be literals in both files, and renaming
         // one of them left this list behind - which does not break anything
         // loudly, it just clips the new caption on the one screen the
         // director watches all night.
-        foreach (var caption in ProgramCaptions.NextUpBarWidest)
-        {
-            _btnStartNext.Text = caption;
-            startNextWide = Math.Max(startNextWide, UiLayout.WidthFor(_btnStartNext));
-        }
-
         _btnStartNext.Text = ProgramCaptions.StartNext;
-        _btnStartNext.Size = new Size(startNextWide, UiLayout.ButtonHeight);
         _btnStartNext.Click += (_, _) =>
         {
             if (_race.State is not (RaceState.Idle or RaceState.Finished))
@@ -215,21 +148,26 @@ public sealed partial class RaceControlControl
         // that have not run yet from who is checked in now, which is what
         // the caption says and what "re-seed" did not.
         _btnReseed.Text = "Redo Remaining Heats...";
-        _btnReseed.Font = AppTheme.BodyFont;
-        _btnReseed.Size = new Size(UiLayout.WidthFor(_btnReseed), UiLayout.ButtonHeight);
         _btnReseed.Click += (_, _) => ReseedRemaining();
 
-        _nextUpBar.Controls.Add(_btnStartNext);
-        _nextUpBar.Controls.Add(_btnReseed);
+        _nextUpBar.AddButton(_btnStartNext, ProgramCaptions.NextUpBarWidest);
+        _nextUpBar.AddButton(_btnReseed);
 
-        _clock.Size = new Size(clockWidth, 200);
+        // --- The clock column ---
+        //
+        // Down the right-hand side, beside the flags and the board: the
+        // clock, the buttons pressed during the night, and the stat tiles.
+        // One width for all of them - ClockWidth, or wider when a caption
+        // needs it at a larger text size - and the buttons sized to their
+        // captions; the column itself is put together with the rest of the
+        // page at the end of this method.
+        _clock.Height = ClockHeight;
 
         // The escape hatch. Whoever is on the track right now, the app
         // default format, no event, no program, no check-in - staged,
         // counted down and green in one press. A structured race day is
         // only acceptable when "just go" is always one button away.
         _btnQuickRace.Text = "Quick Race";
-        _btnQuickRace.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
 
         // A delegate, like the flag actions: F8 used to reach this through
         // PerformClick, which does nothing while the button is not visible -
@@ -277,18 +215,13 @@ public sealed partial class RaceControlControl
         _btnQuickRace.Click += (_, _) => _actQuickRace?.Invoke();
 
         _btnBigScreen.Text = "Open Big Screen";
-        _btnBigScreen.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
 
-        // At the foot of the button column - see LayoutRightColumn. It is
-        // run once before racing starts and then left alone, so it gives up
-        // the higher slots to the buttons pressed during the night.
+        // At the foot of the button column. It is run once before racing
+        // starts and then left alone, so it gives up the higher slots to the
+        // buttons pressed during the night.
         _btnReadiness.Text = "Pre-race check...";
-        _btnReadiness.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
         _btnReadiness.Click += (_, _) => ShowReadinessCheck();
 
-        // Fills the dead space that sat between the Big Screen button and
-        // the leaderboard, and puts the leader's lap count and the session
-        // best where they can be read without hunting for a row.
         // Opens the announcer's own window; there is a button on it that
         // brings this page back to the front.
         //
@@ -300,21 +233,16 @@ public sealed partial class RaceControlControl
         // own a second monitor. A tab could do neither, and every glance at
         // the announcer's notes took Race Control off the screen.
         _btnAnnouncer.Text = "Open Announcer Screen";
-        _btnAnnouncer.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
         _btnAnnouncer.Click += (_, _) => AnnouncerRequested?.Invoke();
 
         _btnProjection.Text = "Qualifying Projection";
-        _btnProjection.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
         _btnProjection.Click += (_, _) => ToggleProjectionWindow();
 
-        _statStrip.Size = new Size(clockWidth, 50);
-
-        // Placed, rather than anchored. See LayoutRightColumn.
-        _rightColumnBuilt = true;
-        LayoutRightColumn();
-
-        // (continues below - see LayoutRightColumn for where the five
-        // controls above are actually put.)
+        // The stat strip, at the foot of the column, fills the dead space
+        // that sat between the Big Screen button and the leaderboard, and
+        // puts the leader's lap count and the session best where they can be
+        // read without hunting for a row. It sizes itself to the text size -
+        // see RaceStatStrip.
 
         // Restored: my layout rewrite dropped this handler entirely, so the
         // button did nothing and TriggerOpenBigScreen - used by the remote
@@ -323,30 +251,13 @@ public sealed partial class RaceControlControl
         _actBigScreen = () => new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector).Show();
         _btnBigScreen.Click += (_, _) => _actBigScreen();
 
-        var grpRaceControl = new GroupBox
-        {
-            Text = "Race Control",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
-
-            // A starting width only - no anchor. The layout pass sets the
-            // real width against the page's real size on every resize, and
-            // anchoring as well would make two authorities on the same
-            // edge; whichever ran last would win. That lesson is written on
-            // the clock column, and it applies here identically.
-            Size = new Size(Math.Max(600, contentRight - clockWidth - 36), 292),
-        };
-
-        // The flag row is measured, not placed.
+        // --- The flags ---
         //
-        // These were seven buttons pinned to 86x30 at x = 12, 104, 196 and
-        // so on. "Green (Start)" does not fit 86px at this text size, so
-        // every launch the repair pass widened three of them and shoved the
-        // four after them right - twenty-odd adjustments on the page the
-        // app spends its life on, redone from scratch each time the window
-        // opened. Measuring the row here means there is nothing left to
-        // repair.
-        //
-        // Laid out after the captions are set, at the bottom of this block.
+        // One row, in F1-F7 order, each button as wide as its own caption:
+        // a tight row (ButtonBar tight), because seven buttons at the usual
+        // minimum width would not fit on one line beside the clock. It
+        // wraps rather than clipping the last flag off the end when even
+        // that is too wide - a longer language, a bigger text size.
         _btnStage.Text = "Stage";
         _actStage = (confirmedOverRunningRace, restoreHostOnUndo) =>
         {
@@ -699,15 +610,16 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnReadiness, "Shortcut: R");
         shortcutTips.SetToolTip(_btnAnnouncer, "Shortcut: A  -  press ? for every shortcut");
 
-        var lblStateCaption = new Label { Text = "State:", Location = new Point(12, 72), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+        // The state and the flag, each caption beside what it names. They
+        // sat at fixed x positions, and "Flag:" at 200 ran into "None" at
+        // 246 at every text size - by five pixels at the normal one.
+        var lblStateCaption = Wear(new Label { Text = "State:", AutoSize = true }, () => AppTheme.BoldFont);
         _lblRaceState.Text = "Idle";
-        _lblRaceState.Location = new Point(96, 72);
         _lblRaceState.AutoSize = true;
 
-        var lblFlagCaption = new Label { Text = "Flag:", Location = new Point(200, 72), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+        var lblFlagCaption = Wear(new Label { Text = "Flag:", AutoSize = true }, () => AppTheme.BoldFont);
         _lblFlag.Text = "None";
         _lblFlag.ForeColor = AppTheme.TextMuted;
-        _lblFlag.Location = new Point(246, 72);
         _lblFlag.AutoSize = true;
 
         // --- The race format chip ----------------------------------------
@@ -729,18 +641,6 @@ public sealed partial class RaceControlControl
         // to abandon it.
         _actAutoStart = (confirmedOverRunningRace, restoreHostOnUndo) => _actStage?.Invoke(confirmedOverRunningRace, restoreHostOnUndo);
 
-        // One row, left to right, each button as wide as its own caption.
-        // A tight row rather than the standard one: seven buttons at the
-        // usual minimum width would come out wider than the group holding
-        // them.
-        var flagRowRight = UiLayout.TightButtonRow(
-            12, 26, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset);
-
-        // And if the captions still need more room than the group has - a
-        // longer language, a bigger text size - the group grows rather than
-        // clipping the last flag off the end.
-        grpRaceControl.Width = Math.Max(grpRaceControl.Width, flagRowRight + 12);
-
         // Attached after every Click above, so the action runs and then
         // focus moves off. A flag button that keeps focus keeps answering
         // to Space and Enter, which on this row means a stray keypress can
@@ -749,11 +649,10 @@ public sealed partial class RaceControlControl
         AppTheme.ReleaseFocusAfterClick(
             _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset);
 
+        // The chip wraps to the card's width - the value can run long - and
+        // wears the window's font.
         _lblFormat.AutoSize = true;
-        _lblFormat.Font = AppTheme.BodyFont;
         _lblFormat.ForeColor = AppTheme.TextMuted;
-        _lblFormat.MaximumSize = new Size(560, 0);
-        _lblFormat.Location = new Point(12, 108);
 
         var formatTip = new ToolTip();
         AppTheme.StyleToolTip(formatTip, keep: true);
@@ -762,64 +661,19 @@ public sealed partial class RaceControlControl
             + "else its class's format, else the app default. Class formats are set on the Classes page.");
 
         _btnFormat.Text = "Race Format...";
-        _btnFormat.Font = AppTheme.BodyFont;
-        _btnFormat.Size = new Size(UiLayout.WidthFor(_btnFormat), UiLayout.ButtonHeight);
-        _btnFormat.Location = new Point(12, 148);
         _btnFormat.Click += (_, _) => EditFormat();
-
-        grpRaceControl.Height = _btnFormat.Bottom + 16;
-
-        grpRaceControl.Controls.AddRange(new Control[]
-        {
-            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset,
-            lblStateCaption, _lblRaceState, lblFlagCaption, _lblFlag,
-            _lblFormat, _btnFormat,
-        });
 
         ApplyEffectiveFormat();
 
-        // BESIDE the clock column, not below it. The board used to run the
-        // full width of the page, which meant it could only start below the
-        // clock, Quick Race, the buttons and the stat tiles - half a screen
-        // of dead space above it, and a board that never dominated the page
-        // it is the whole point of. Now it starts directly under the flags
-        // and stops just left of the clock column, and the layout pass
-        // gives it every remaining pixel down to the bottom edge - see
-        // LayoutRightColumn, which owns all of this geometry against the
-        // page's real width. The placeholder numbers here are overwritten
-        // by that pass before the page is ever seen.
-        var leaderboardTop = grpRaceControl.Bottom + 10;
-
-        var grpLeaderboard = new GroupBox
-        {
-            Text = "Leaderboard (double-click a driver for their lap breakdown - right-click for names, penalties and corrections)",
-            Location = new Point(12, leaderboardTop),
-            Size = new Size(876, 320),
-        };
-        // The correction toolbar gets a strip of its own, pinned to the
-        // bottom of the group, and the board gets everything above it.
+        // --- The leaderboard ---
         //
-        // It used to be the other way about: the buttons were placed at a
-        // remembered y inside the group, and the board was given a fixed
-        // height and anchored to the TOP only - because anchoring it to the
-        // bottom as well made it grow straight down over them. That kept
-        // the buttons visible at the price of a board that never got any
-        // taller, so on a big screen there was a band of empty group box
-        // under a board still scrolling at eight drivers.
-        //
-        // A strip of its own fixes both. The board can be anchored on all
-        // four sides, because the space it grows into now stops where the
-        // strip begins.
-        // PLACED, not docked - see FlowToolbar, which puts both this strip
-        // and the board inside the group's display rectangle in one pass.
-        var toolbar = new Panel { Height = 1, BackColor = AppTheme.Surface, Tag = AppTheme.KeepBackColor };
-
-        // Neither placed nor anchored here: FlowToolbar sets this board's
-        // whole rectangle, and the strip's, from the group's display
-        // rectangle on every pass. Anything written here would be
-        // overwritten a few lines later, which is worse than nothing
-        // because it reads as though it meant something.
-        _dgvLeaderboard.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        // BESIDE the clock column, not below it, and given every pixel the
+        // flags leave down to the bottom of the page, so it is the biggest
+        // thing on the page at any window size - which is what a
+        // leaderboard is for. It used to run the full width of the page,
+        // which meant it could only start below the clock, the buttons and
+        // the stat tiles: half a screen of dead space above a board that
+        // never dominated the page it is the whole point of.
         _dgvLeaderboard.ReadOnly = true;
 
         // No pop-ups on the board at all - not even the notes it used to put
@@ -867,10 +721,16 @@ public sealed partial class RaceControlControl
         _dgvLeaderboard.CellPainting += LeaderboardDetailPaint;
         _dgvLeaderboard.ContextMenuStrip = BuildLeaderboardMenu();
         RebuildLeaderboardColumns();
-        grpLeaderboard.Controls.Add(_dgvLeaderboard);
 
         // --- Manual corrections toolbar ---
-        var lblFix = new Label { Text = "Selected racer:", AutoSize = true, Font = AppTheme.BoldFont };
+        //
+        // Under the board, in its card: what the buttons are for, then who
+        // they act on, then the buttons, which wrap onto a second row when
+        // the board is narrow - and the board gives up exactly that row's
+        // height, no more. "Selected racer:" sits ABOVE the buttons rather
+        // than in front of the first one, so both rows of buttons start at
+        // the same left edge.
+        var lblFix = Wear(new Label { Text = "Selected racer:", AutoSize = true }, () => AppTheme.BoldFont);
 
         var btnLapPlus = new Button { Text = "+1 Lap" };
         btnLapPlus.Click += (_, _) => AdjustSelected(laps: 1, penaltyMs: 0);
@@ -936,183 +796,107 @@ public sealed partial class RaceControlControl
             }
         };
 
-        var lblFixHint = new Label
+        // --- The page ---
+        //
+        // Top to bottom: the host's Session row (see ShowSessionRow), the
+        // Next Up bar, then the flags and the board beside the clock column,
+        // the board taking the height that is left. Too short a window
+        // scrolls the page rather than squashing the board below its least.
+        var flags = new Section("Race Control");
+
+        flags.Add(new ButtonBar(tight: true).With(
+            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
+
+        var status = new FlowLayoutPanel
         {
-            Text = "For missed or double-counted passes, on-track penalties and warnings. Press ? for keyboard shortcuts.",
             AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            Tag = AppTheme.KeepBackColor,
         };
 
-        // The hint goes on its own line above the buttons rather than after
-        // them. It used to sit at x=734 with six buttons in front of it,
-        // and since every one of those buttons widens with the font, the
-        // hint was being pushed off the right-hand edge of an 876-wide
-        // group before anyone had even resized the window.
-        lblFixHint.Location = new Point(12, 6);
+        status.Controls.Add(StatusPair(lblStateCaption, _lblRaceState));
+        status.Controls.Add(StatusPair(lblFlagCaption, _lblFlag));
 
-        // PreferredHeight/PreferredWidth rather than Height/Width: an
-        // AutoSize label has not measured its text until it is shown, so
-        // reading Height here gives the default 23 and everything placed
-        // under it lands too high. Asking for the preferred size forces the
-        // measurement now.
-        var buttonsTop = lblFixHint.Top + lblFixHint.PreferredHeight + 6;
+        flags.Add(status);
+        flags.Add(_lblFormat);
+        flags.Add(new ButtonBar().With(_btnFormat));
 
-        // "Selected racer:" sits ABOVE the buttons now instead of in front
-        // of the first one.
-        //
-        // In the row it cost the first line about 110px, which is what made
-        // the strip wrap onto two lines - and the second line then started
-        // at the margin while the first started past the label, so the two
-        // rows of buttons did not line up with each other. Above, every
-        // button starts at the same left edge, and the row usually fits on
-        // one line again: the label's line costs the height the wrap was
-        // costing anyway.
-        lblFix.Location = new Point(12, buttonsTop);
+        // The board's instructions used to be its group box's caption, all
+        // hundred-odd characters of it; a card's caption is a heading, and
+        // they are a line of help under it.
+        var board = new Section("Leaderboard");
 
-        var buttonRowTop = buttonsTop + lblFix.PreferredHeight + 4;
+        board.Add(
+            Hint("Double-click a driver for their lap breakdown. Right-click for names, penalties and corrections."),
+            gapBelow: UiLayout.HintGap);
 
-        // Sized here (ButtonRow measures each caption); POSITIONED by the
-        // flow below, which re-runs on every toolbar resize.
-        UiLayout.ButtonRow(
-            12,
-            buttonRowTop,
-            btnLapPlus, btnLapMinus, btnPenalty5, btnPenalty10, btnClearPenalty, btnWarning, btnColumns);
+        board.AddFill(_dgvLeaderboard, LeastBoardHeight);
 
-        toolbar.Controls.AddRange(new Control[]
-        {
-            lblFixHint, lblFix, btnLapPlus, btnLapMinus, btnPenalty5, btnPenalty10, btnClearPenalty, btnWarning, btnColumns,
-        });
+        board.Add(
+            Hint("For missed or double-counted passes, on-track penalties and warnings. Press ? for keyboard shortcuts."),
+            gapBelow: UiLayout.HintGap);
 
-        // The row WRAPS. It was laid out once against the old full-width
-        // board; now that the board stops at the clock column, a narrower
-        // window ran the last buttons straight off the group's right edge.
-        // Flowing on resize means the row uses one line when it fits and
-        // takes a second when it doesn't - and the board above gives up
-        // exactly that row's height, no more.
-        var flowItems = new Control[]
-        {
-            btnLapPlus, btnLapMinus, btnPenalty5, btnPenalty10, btnClearPenalty, btnWarning, btnColumns,
-        };
+        board.Add(lblFix, stretch: false, gapBelow: UiLayout.HintGap);
 
-        // Lays the strip out, then puts BOTH it and the board inside the
-        // group in one pass.
-        //
-        // This is the third attempt at this rectangle and the first one
-        // that cannot drift. The strip used to be docked to the bottom of
-        // the group while the board's height was worked out from the
-        // group's height, the board's own Top and the strip's height - the
-        // same answer arrived at two different ways, in two places, with a
-        // GroupBox's caption reserve (which follows the FONT, not the
-        // painted caption) as an unstated third term. Whenever those three
-        // disagreed the result was a band of empty group under the strip,
-        // or the board painted over the strip's first row.
-        //
-        // Now there is one rectangle - the group's DisplayRectangle - and
-        // the two children are placed from its bottom and its top. They
-        // meet in the middle by construction, and the group's own insets
-        // are whatever they are rather than something to be guessed at.
-        void FlowToolbar()
-        {
-            var inner = grpLeaderboard.DisplayRectangle;
+        // One width for all of them - the widest caption sets it - so the
+        // two rows read as columns instead of ragging out to the length of
+        // each caption.
+        board.Add(
+            new ButtonBar(sameWidth: true).With(btnLapPlus, btnLapMinus, btnPenalty5, btnPenalty10, btnClearPenalty, btnWarning, btnColumns),
+            gapBelow: 0);
 
-            // One width for all of them - the widest caption sets it - so
-            // the two rows read as columns instead of ragging out to the
-            // length of each caption.
-            //
-            // Re-measured from the captions here rather than taken from the
-            // widths already on the buttons: reading those back and keeping
-            // the largest would ratchet, so the row could grow with the font
-            // but never shrink again.
-            var uniform = 0;
+        var body = new Beside(sideLeastWidth: ClockWidth);
 
-            foreach (var item in flowItems)
-            {
-                if (item is Button measured)
-                {
-                    uniform = Math.Max(uniform, UiLayout.WidthFor(measured));
-                }
-            }
+        body.Add(flags);
+        body.AddFill(board, board.LeastHeight);
 
-            foreach (var item in flowItems)
-            {
-                if (item is Button sized)
-                {
-                    sized.Size = new Size(uniform, UiLayout.ButtonHeight);
-                }
-            }
+        body.AddSide(_clock);
+        body.AddSide(_btnQuickRace);
+        body.AddSide(_btnBigScreen);
+        body.AddSide(_btnAnnouncer);
+        body.AddSide(_btnProjection);
+        body.AddSide(_btnReadiness);
+        body.AddSide(_statStrip);
 
-            var x = 12;
-            var y = buttonRowTop;
-            var limit = Math.Max(240, inner.Width - 12);
+        _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
+        _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
-            foreach (var item in flowItems)
-            {
-                var width = item is Label label ? label.PreferredWidth : item.Width;
+        Controls.Add(_page);
 
-                if (x > 12 && x + width > limit)
-                {
-                    x = 12;
-                    y += UiLayout.ButtonHeight + 6;
-                }
-
-                item.Location = item is Label fixLabel
-                    ? new Point(x, y + Math.Max(0, (UiLayout.ButtonHeight - fixLabel.PreferredHeight) / 2))
-                    : new Point(x, y);
-
-                x += width + UiLayout.ButtonGap;
-            }
-
-            var needed = y + UiLayout.ButtonHeight + 6;
-
-            // Flush to the bottom of the group, full width of it.
-            toolbar.Bounds = new Rectangle(inner.Left, inner.Bottom - needed, inner.Width, needed);
-
-            // And the board takes everything above, meeting the strip with
-            // one gap that is stated once.
-            _dgvLeaderboard.Bounds = new Rectangle(
-                inner.Left,
-                inner.Top,
-                Math.Max(200, inner.Width),
-                Math.Max(120, toolbar.Top - inner.Top - UiLayout.HintGap));
-        }
-
-        // No Resize hook. The strip's width is now set by FlowToolbar
-        // itself, so a hook on its own Resize would be this method
-        // re-entering itself - and the group's resize already runs
-        // LayoutRightColumn, which calls this.
-        _reflowToolbar = FlowToolbar;
-
-        grpLeaderboard.Controls.Add(toolbar);
-
-        FlowToolbar();
-
-        // Two children placed by hand from one rectangle. The repair pass
-        // is told to keep out, because a third opinion on this rectangle is
-        // exactly what produced the band of dead space under the buttons.
-        LayoutDoctor.LeaveAlone(grpLeaderboard);
-
-        Controls.Add(lblTrack);
+        // Hidden, and driven from the Session row - see the top of this
+        // method. Off the page: nothing is laid out round them.
         Controls.Add(_cmbTrackLayout);
-        Controls.Add(lblLabel);
         Controls.Add(_txtSessionLabel);
-        Controls.Add(_clock);
-        Controls.Add(_statStrip);
-        Controls.Add(_nextUpBar);
-        Controls.Add(_btnQuickRace);
-        Controls.Add(_btnBigScreen);
-        Controls.Add(_btnAnnouncer);
-        Controls.Add(_btnProjection);
-        Controls.Add(_btnReadiness);
-        Controls.Add(grpRaceControl);
-        Controls.Add(grpLeaderboard);
+    }
 
-        _grpRaceControl = grpRaceControl;
-        _grpLeaderboard = grpLeaderboard;
+    /// <summary>
+    /// A caption and what it names, kept together on one line - "State:
+    /// Racing" - so a row of them that wraps never leaves a caption at the
+    /// end of one line and its value at the start of the next. A section
+    /// gap after it, before the next pair.
+    /// </summary>
+    private static FlowLayoutPanel StatusPair(Label caption, Label value)
+    {
+        caption.Margin = Padding.Empty;
+        value.Margin = Padding.Empty;
 
-        // Now that both groups exist, the layout pass places them against
-        // the real width - and keeps doing so on every resize.
-        LayoutRightColumn();
+        var pair = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            Margin = new Padding(0, 0, UiLayout.SectionGap, 0),
+            Padding = Padding.Empty,
+            Tag = AppTheme.KeepBackColor,
+        };
+
+        pair.Controls.Add(caption);
+        pair.Controls.Add(value);
+
+        return pair;
     }
 
     /// <summary>
