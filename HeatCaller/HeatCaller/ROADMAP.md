@@ -156,8 +156,8 @@ day: the layout overhaul is finished before the beta rather than after it
    freeze", 8). Decided 28 Sep: a club's first impression is the screens,
    and the overhaul is visual risk only. Page by page in race-night order,
    one per commit, each held to a clean layout report and checked by eye;
-   then the drawn controls, then `PerMonitorV2`. Race Control and Race Day
-   are done.
+   then the drawn controls, then `PerMonitorV2`. Race Control, Race Day,
+   Connection, Driver Profiles and Classes are done.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -580,7 +580,45 @@ from. Ranked by what decides whether a club switches, and stays.
    narrow page's height after the page was widened. `LayoutAudit` no longer
    reports a label that ends in "..." by design: the theme pass swaps
    AutoEllipsis for `QuietEllipsis`, which the audit did not know. Race Day's user docs still describe the tabs from before the fold
-   (Event, Entries, Program) - a separate fix. Next: Connection.
+   (Event, Entries, Program) - a separate fix.
+
+   **Two fixes the Race Day pictures asked for (29 Sep).** Next Steps'
+   program keeps its least - the filter, three rounds and its buttons,
+   `RaceProgramControl.LeastPaneHeight`, from `FillPage.LeastHeight` - and
+   the top half gives way and scrolls; the splitter is moved to keep it
+   after a resize, a change in the program's least
+   (`LeastPaneHeightChanged`) or a drag too far down, and only a position
+   dragged by hand is saved. `LayoutTests` checks the program's buttons are
+   in view at every size, which the audit cannot see (a button scrolled
+   out of sight is not cut off). And `FieldGrid` puts a caption beside a
+   field more than a line tall level with its first line (a list, a box of
+   notes, a row of controls that has wrapped, a `StatusLine`).
+
+   **Connection, Driver Profiles and Classes converted (29 Sep).**
+   Connection is two cards on a `FillPage` (`MainForm.ConnectionPage`): the
+   decoder's fields in a `FieldGrid`, I-Lap's rows hidden whole, and the
+   console filling the rest over its filter row and buttons; the status is
+   a new piece, `StatusLine` (a light and a line of text that wraps), and
+   the light now keeps its colour through the theme pass. Driver Profiles
+   is two cards on a `Beside`, the driver's card taking the column's full
+   height - a new `Beside.AddSideFill`. Classes is one card on a
+   `FillPage`. Driver Profiles and Classes lost the `MinimumSize` that
+   WinForms honoured over the page's own size, and wear the body face
+   through `TextSize` so they follow a text-size change; Connection wears
+   the window's font, and keeps its hint's face, its pickers' widths and
+   the console's type in step through `TextSize`. `FillPage.LeastHeight`
+   and `PageStack.ContentHeight` now count the theme's 32px room under the
+   last control (`AutoScrollMargin`), which WinForms adds to the scrolling
+   range: a page sized to them without it still scrolled. The pictures
+   then asked for three things: the roster's columns fit the roster
+   (`FitColumns` - the driver's takes what is left, the rest give way
+   towards their headings before it scrolls sideways - a heading is
+   measured, not scaled), the status light sits on the middle of the
+   capitals rather than the line box (`StatusLine.CapitalsMiddle` draws an
+   "H" once per font and finds its ink - the typeface's own metrics moved it
+   one pixel of the three it was out), and
+   Next Steps' top half is exactly as tall as its content until the line is
+   dragged. Next: Championship, then the rest of the sidebar in its order.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
@@ -761,7 +799,7 @@ what didn't fit an area:
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
-| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
+| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `TextSize`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |
@@ -812,6 +850,22 @@ Day), with a narrow-then-wide test. A `FieldGrid` that has been laid out
 answers with what its rows came to: a drop-down, a number box or a check
 box can be drawn a few pixels taller than it says it wants to be. `LayoutAudit` cannot see empty space, so `LayoutPiecesTests` checks
 that a card has nothing under its last part but its inset.
+
+**Check a column's height after laying it out, not only before.** A
+`FieldGrid` learns what its rows really come to only by laying them out,
+and the card it is in grows to that inside the column's own layout
+(`Pieces.OutOfStep`) - after the column asked its page for its height. So
+`PageStack`'s column and `FillPage`'s rows ask again afterwards, and the
+page places them again until they stay put, three times at most - asked
+while the page is laying out, the request is dropped (29 Sep: a card hung
+9px past the bottom of its column when a page that scrolled was widened). The theme also gives every page that scrolls 32px
+of room under its last control (`AutoScrollMargin`), which WinForms adds
+to the scrolling range - count it when sizing a page to fit
+(`FillPage.LeastHeight`, `PageStack.ContentHeight`).
+
+**Hide a bar, not every button in it.** A `ButtonBar` whose buttons are all
+hidden is still on the page, zero pixels tall, and the layout test reports
+it as squashed (Driver Profiles' card, 29 Sep).
 
 **A page in a tab inherits the tab row's bold face.** `StyleTabControl` gives
 every TabControl `BoldFont` for its captions, and a TabPage and everything on

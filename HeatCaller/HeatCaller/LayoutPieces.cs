@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace HeatCaller;
 
 // THE LAYOUT PIECES
@@ -33,6 +35,8 @@ namespace HeatCaller;
 //   SplitBar    two rows of buttons on one line, one against each edge.
 //   SteadyLabel a label as tall as the longest thing it can say, so
 //               rewording it never moves what is under it.
+//   StatusLine  a coloured light and a line of text beside it that wraps -
+//               the decoder's status on the Connection page.
 //   TextSize    what a page keeps in step with the text size: the controls
 //               that wear a face of their own, and anything sized from the
 //               fonts.
@@ -89,6 +93,13 @@ internal sealed class PageStack : Panel
     /// How tall the page would have to be to show all of it without
     /// scrolling, at the width it has - for a host that sizes the page to
     /// fit, as MainForm sizes Next Steps' half of its split.
+    ///
+    /// The top margin, the column, and under it the bottom margin or the
+    /// theme's room under the last control (AutoScrollMargin), whichever is
+    /// more. WinForms counts that room, not the bottom margin, when it
+    /// decides whether to scroll - the column is placed by hand, and the
+    /// margin is only added for the old DockPadding - so a page sized to the
+    /// two margins alone still scrolled by the difference.
     /// </summary>
     public int ContentHeight { get; private set; }
 
@@ -126,17 +137,25 @@ internal sealed class PageStack : Panel
 
         // The scrolling range follows the column - and may bring the bar in
         // or take it away, which changes the width the column should have.
-        // Once more if it did; the second placing cannot change the answer
-        // back (narrower only ever makes the column taller, so it still
-        // needs the bar that narrowed it).
+        //
+        // And placing the column at a new width lays it out, which is when
+        // a field grid in it learns what its rows really come to - after
+        // the column was measured for the placing (see StackColumn's
+        // OnLayout, whose own request to be placed again is dropped while
+        // this runs). So it is placed until it stays put: the bar going
+        // away, then the grids' real heights, when a page that scrolled is
+        // widened past needing to (LayoutPiecesTests, narrow and then wide
+        // again, 29 Sep - the card at the bottom hung 9px past the column).
+        // Three times at most, so a column that could not settle cannot
+        // hang the window.
         base.OnLayout(levent);
 
-        if (PlaceColumn())
+        for (var again = 0; again < 3 && PlaceColumn(); again++)
         {
             base.OnLayout(levent);
         }
 
-        var content = _column.Height + Padding.Vertical;
+        var content = Padding.Top + _column.Height + Math.Max(Padding.Bottom, AutoScrollMargin.Height);
 
         if (ContentHeight != content)
         {
@@ -239,6 +258,30 @@ internal sealed class PageStack : Panel
             {
                 base.OnLayout(levent);
             }
+
+            // And again after: laying the parts out is itself what can show
+            // that one of them is taller than it said - a field grid learns
+            // the height its rows really come to only by laying them out
+            // (FieldGrid.GetPreferredSize), and the card it is in grows to
+            // it here (Pieces.OutOfStep, above) - and asked before, the
+            // stack placed this at the height it was told. A card was left
+            // hanging 9px past the bottom of the column, and the page
+            // scrolling 9px short of it (LayoutPiecesTests, 29 Sep). When the stack is
+            // itself laying out, the request is dropped and it places this
+            // again once its layout is done. If a scrollbar arriving takes
+            // the width as well, the layout that asks for is dropped, this
+            // one running - so it is done here.
+            if (Parent is PageStack after && Height != GetPreferredSize(new Size(Width, 0)).Height)
+            {
+                var before = Size;
+
+                after.PerformLayout();
+
+                if (Size != before)
+                {
+                    base.OnLayout(levent);
+                }
+            }
         }
     }
 }
@@ -258,6 +301,17 @@ internal sealed class FillPage : Panel
 
     /// <summary>The filling parts, with the least height each can do with at the width it is given.</summary>
     private readonly Dictionary<Control, Func<int, int>> _leastHeights = new();
+
+    /// <summary>
+    /// Raised when the least height the page can do with has changed - a
+    /// part wrapping onto another line, a new text size - for a host that
+    /// sizes the page, as Next Steps' split sizes the program under it.
+    ///
+    /// Raised from inside the page's own layout, so a host that answers by
+    /// resizing the page must do it afterwards (BeginInvoke): WinForms drops
+    /// a layout asked for while one is running.
+    /// </summary>
+    public event Action? LeastHeightChanged;
 
     public FillPage()
     {
@@ -366,12 +420,12 @@ internal sealed class FillPage : Panel
         // The range was worked out at the width the panel had before this
         // layout - and the layout may bring the scrollbar in or take it
         // away, which changes the width, which changes how tall anything
-        // that wraps is. Once more if it did; the second answer cannot undo
-        // the first (narrower only ever makes the parts taller, so the bar
-        // that narrowed them is still needed).
+        // that wraps is; and laying the parts out at a new width is when a
+        // field grid in them learns what its rows really come to. Again
+        // until it stays put, as PageStack does - three times at most.
         base.OnLayout(levent);
 
-        if (UpdateScrollRange())
+        for (var again = 0; again < 3 && UpdateScrollRange(); again++)
         {
             base.OnLayout(levent);
         }
@@ -394,7 +448,7 @@ internal sealed class FillPage : Panel
             return false;
         }
 
-        var least = Padding.Vertical + RowsHeight();
+        var least = Padding.Vertical + RowsHeight(Math.Max(1, ClientSize.Width - Padding.Horizontal));
 
         if (AutoScrollMinSize.Height == least && AutoScrollMinSize.Width == 0)
         {
@@ -403,8 +457,24 @@ internal sealed class FillPage : Panel
 
         // Its own request for a layout is dropped - this is already one.
         AutoScrollMinSize = new Size(0, least);
+        LeastHeightChanged?.Invoke();
         return true;
     }
+
+    /// <summary>
+    /// The height the page needs at <paramref name="width"/> to show all of
+    /// its parts at their least without scrolling - for a host that wants
+    /// the whole page in view, as Next Steps' split does the program. See
+    /// LeastHeightChanged.
+    ///
+    /// That is the scrolling range (see OnLayout) and the theme's room under
+    /// the last control on top of it (AutoScrollMargin, which the theme pass
+    /// gives every page that scrolls - LayoutDoctor.ThemeScrolling): WinForms
+    /// adds that room to AutoScrollMinSize, and a page shorter than the two
+    /// together scrolls, by as much as the room.
+    /// </summary>
+    public int LeastHeight(int width) =>
+        Padding.Vertical + RowsHeight(Math.Max(1, width - Padding.Horizontal)) + AutoScrollMargin.Height;
 
     /// <summary>
     /// Coming into view - its page shown - is when the range can first be
@@ -433,23 +503,29 @@ internal sealed class FillPage : Panel
     /// </summary>
     internal void LeastHeightMayHaveChanged()
     {
-        if (Visible && _rows is not null && AutoScrollMinSize.Height != Padding.Vertical + RowsHeight())
+        if (Visible && _rows is not null && AutoScrollMinSize.Height != Padding.Vertical + RowsHeight(Math.Max(1, ClientSize.Width - Padding.Horizontal)))
         {
             PerformLayout();
         }
     }
 
-    /// <summary>The height the rows can least do with: the others as tall as they need, the filling ones at their least.</summary>
-    private int RowsHeight()
+    /// <summary>
+    /// The height the rows can least do with, <paramref name="width"/> wide
+    /// inside the margins: the others as tall as they need, the filling ones
+    /// at their least.
+    /// </summary>
+    private int RowsHeight(int width)
     {
-        var width = Math.Max(1, ClientSize.Width - Padding.Horizontal);
         var total = 0;
 
         foreach (Control part in _rows.Controls)
         {
             // A themed scrollbar is parked outside the tables (ThinScrollBar
-            // .HostFor), but one is never a part either way.
-            if (!part.Visible || part is ThinScrollBar)
+            // .HostFor), but one is never a part either way. Hidden in its
+            // own right leaves a part out - askable only while the page is
+            // on screen, as in Pieces.TrailingGap: while it is hidden, every
+            // part reports itself hidden.
+            if ((Visible && !part.Visible) || part is ThinScrollBar)
             {
                 continue;
             }
@@ -491,6 +567,20 @@ internal sealed class FillPage : Panel
             base.OnLayout(levent);
 
             if (Pieces.OutOfStep(this))
+            {
+                base.OnLayout(levent);
+            }
+
+            // And after, for the reason PageStack's column asks again: laying
+            // a part out can be what shows it is taller than it said. The
+            // page answering can resize this - a scrollbar arriving takes
+            // its width - and the layout that resize asks for is dropped,
+            // this one running; so it is done here.
+            var before = Size;
+
+            (Parent as FillPage)?.LeastHeightMayHaveChanged();
+
+            if (Size != before)
             {
                 base.OnLayout(levent);
             }
@@ -731,8 +821,11 @@ internal sealed class Section : TableLayoutPanel
 /// separate cards can share one caption column (LineUp), so a page split
 /// into cards still lines up down its length.
 ///
-/// A caption is centred on its field. A hint goes under the field it is
-/// about, in the field's column, and wraps to the room there.
+/// A caption is centred on its field - or, beside a field more than a line
+/// tall, level with its first line: a list, a box of notes, a row of
+/// controls that has wrapped onto a second line (see FirstLine). A
+/// hint goes under the field it is about, in the field's column, and wraps
+/// to the room there.
 /// </summary>
 internal sealed class FieldGrid : TableLayoutPanel
 {
@@ -744,6 +837,9 @@ internal sealed class FieldGrid : TableLayoutPanel
 
     /// <summary>The captions, which LineUp gives a least width.</summary>
     private readonly List<Label> _captions = new();
+
+    /// <summary>Each caption and the field it names - see LevelWithFirstLines.</summary>
+    private readonly List<(Label Caption, Control Field)> _pairs = new();
 
     /// <summary>
     /// How tall the rows came to when the table last laid them out, and
@@ -795,6 +891,7 @@ internal sealed class FieldGrid : TableLayoutPanel
         _lastRow.Add(label);
         _lastRow.Add(field);
         _captions.Add(label);
+        _pairs.Add((label, field));
 
         return label;
     }
@@ -1033,10 +1130,148 @@ internal sealed class FieldGrid : TableLayoutPanel
             base.OnLayout(levent);
         }
 
+        // Once more with the captions moved, which may make a row a pixel
+        // or two taller; it moves nothing across, so nothing wraps anew.
+        if (LevelWithFirstLines())
+        {
+            base.OnLayout(levent);
+        }
+
         var rows = GetRowHeights().Sum() - Pieces.TrailingGap(this);
         var lowest = Parts().Select(part => part.Bottom).DefaultIfEmpty(0).Max();
 
         _laidOut = (Width, Math.Max(0, Math.Max(rows, lowest)));
+    }
+
+    /// <summary>
+    /// Puts each caption beside a field more than a line tall level with
+    /// the field's first line, rather than centred on the whole field - so
+    /// "Notes:" is beside the first line of the notes, not halfway down the
+    /// box, and "Working on:" stays beside the race day picker when the
+    /// buttons after it wrap onto a second line. Every other caption stays
+    /// centred on its field. True when it moved one, and the rows want
+    /// laying out again.
+    ///
+    /// Run after the table has laid the rows out, because a row of controls
+    /// only knows where its first line ends once it has been given its
+    /// width. Only while on screen: a hidden control reports itself hidden,
+    /// and the row would look empty. It is laid out as it comes into view
+    /// (OnVisibleChanged).
+    /// </summary>
+    private bool LevelWithFirstLines()
+    {
+        if (!Visible)
+        {
+            return false;
+        }
+
+        var moved = false;
+
+        foreach (var (caption, field) in _pairs)
+        {
+            var first = FirstLine(field);
+
+            // Centred on the line the way the table centres a caption on a
+            // whole field, rounding the same way - so a row of controls on
+            // one line leaves its caption exactly where it was.
+            var anchor = first is null ? AnchorStyles.Left : AnchorStyles.Top | AnchorStyles.Left;
+            var top = first is { } line
+                ? Math.Max(0, field.Margin.Top + (line.Top + line.Bottom - caption.PreferredHeight) / 2)
+                : 0;
+
+            if (caption.Anchor != anchor)
+            {
+                caption.Anchor = anchor;
+                moved = true;
+            }
+
+            if (caption.Margin.Top != top)
+            {
+                caption.Margin = new Padding(caption.Margin.Left, top, caption.Margin.Right, caption.Margin.Bottom);
+                moved = true;
+            }
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// Where a field's first line is, from its top - for a field whose
+    /// first line is not all of it - or null for one that is one line tall,
+    /// whose caption is centred on it.
+    ///
+    ///   A row of controls (Inline): the first line of them as the row has
+    ///   laid them out - the controls level with the first one - so a row
+    ///   on one line comes out as it always did.
+    ///   A list: its first item. A grid: its headings.
+    ///   A box of several lines: its first line of text.
+    ///   A status line: the first line of what it says.
+    /// </summary>
+    private static (int Top, int Bottom)? FirstLine(Control field)
+    {
+        switch (field)
+        {
+            case FlowLayoutPanel flow:
+            {
+                var shown = flow.Controls.Cast<Control>().Where(control => control.Visible).ToList();
+
+                if (shown.Count == 0)
+                {
+                    return null;
+                }
+
+                // Everything that starts above the first control's bottom is
+                // on its line; the next line starts below the tallest of them.
+                var first = shown[0];
+                var line = shown.Where(control => control.Top < first.Bottom).ToList();
+
+                return (line.Min(control => control.Top), line.Max(control => control.Bottom));
+            }
+
+            case ListBox list:
+            {
+                var border = BorderOf(list.BorderStyle);
+                return (border, border + list.ItemHeight);
+            }
+
+            case DataGridView grid:
+            {
+                var border = BorderOf(grid.BorderStyle);
+                return (border, border + (grid.ColumnHeadersVisible ? grid.ColumnHeadersHeight : grid.RowTemplate.Height));
+            }
+
+            case TextBoxBase { Multiline: true } box:
+            {
+                // The edit control starts its text a pixel inside its border.
+                var top = BorderOf(box.BorderStyle) + 1;
+                return (top, top + box.Font.Height);
+            }
+
+            case StatusLine status:
+                return status.FirstLine;
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>How thick a control's border is, top and bottom.</summary>
+    private static int BorderOf(BorderStyle style) => style switch
+    {
+        BorderStyle.Fixed3D => SystemInformation.Border3DSize.Height,
+        BorderStyle.FixedSingle => SystemInformation.BorderSize.Height,
+        _ => 0,
+    };
+
+    /// <summary>Coming into view is when the captions can be levelled - see LevelWithFirstLines.</summary>
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+
+        if (Visible)
+        {
+            PerformLayout();
+        }
     }
 
     /// <summary>
@@ -1532,7 +1767,9 @@ internal sealed class FieldRow : Panel
 /// tall as it needs to be, and one that takes the height left over (Add,
 /// AddFill). On the right, the column (AddSide, AddSideCard): as wide as
 /// the widest button in it needs, and never narrower than it was told, with
-/// every part in it that wide, one under another from the top.
+/// every part in it that wide, one under another from the top - and one of
+/// them can take the height the column has left, as Driver Profiles' card
+/// does (AddSideFill).
 ///
 /// Goes in a FillPage as its filling part, with LeastHeight as the least it
 /// can do with - the column, or the left-hand parts with the filling one at
@@ -1560,6 +1797,9 @@ internal sealed class Beside : Panel
     /// <summary>The panel holding the part on the left that takes the height left over, and the least that part can do with.</summary>
     private Control? _fillHolder;
     private Func<int, int>? _fillLeast;
+
+    /// <summary>The part of the column that takes the height the column has left, and the least it can do with at the column's width - see AddSideFill.</summary>
+    private (Control Part, Func<int, int> Least)? _sideFill;
 
     /// <summary>Set while a button is being sized, so the size change it causes is not taken for a caption change.</summary>
     private bool _fitting;
@@ -1678,6 +1918,32 @@ internal sealed class Beside : Panel
         return card;
     }
 
+    /// <summary>
+    /// Adds the part of the column that takes the height the column has
+    /// left once the others have theirs - Driver Profiles' card, the
+    /// driver's picture and record, which scrolls inside itself. One only.
+    /// It is given the column's width, and never less height than
+    /// <paramref name="leastHeight"/> says at that width, which is what the
+    /// column counts it as when working out the least this can do with.
+    ///
+    /// Placed again whenever it lays itself out, as a card added with
+    /// AddSideCard is: something in it shown or hidden can change its least.
+    /// </summary>
+    public T AddSideFill<T>(T part, Func<int, int> leastHeight, int gapBelow = UiLayout.RowGap) where T : Control
+    {
+        if (_sideFill is not null)
+        {
+            throw new InvalidOperationException("A Beside's column has one part that takes the height left over.");
+        }
+
+        Side(part, gapBelow, measured: false);
+        _sideFill = (part, leastHeight);
+
+        part.Layout += (_, _) => PerformLayout();
+
+        return part;
+    }
+
     private void Side(Control part, int gapBelow, bool measured)
     {
         // Sized here, never by the layout: one that sized itself would be
@@ -1793,6 +2059,10 @@ internal sealed class Beside : Panel
         var left = client.Width - side.Width;
         var y = 0;
 
+        // What the column's filling part has on top of its least: whatever
+        // the others leave of the height this has.
+        var spare = Math.Max(0, client.Height - side.Height);
+
         foreach (var (part, gapBelow, measured) in _side)
         {
             if (!Counts(part))
@@ -1800,7 +2070,9 @@ internal sealed class Beside : Panel
                 continue;
             }
 
-            var height = SideHeight(part, measured, side.Width);
+            var height = SideHeight(part, measured, side.Width)
+                + (IsSideFill(part) ? spare : 0);
+
             var bounds = new Rectangle(left, y, side.Width, height);
 
             if (part.Bounds != bounds)
@@ -1856,9 +2128,19 @@ internal sealed class Beside : Panel
         return new Size(width, height);
     }
 
-    /// <summary>A part's height in the column: a card as tall as it needs to be at the column's width, anything else its own.</summary>
-    private static int SideHeight(Control part, bool measured, int width) =>
-        measured ? part.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height : part.Height;
+    /// <summary>
+    /// A part's least height in the column: the filling part at its least, a
+    /// card as tall as it needs to be at the column's width, anything else
+    /// its own.
+    /// </summary>
+    private int SideHeight(Control part, bool measured, int width) =>
+        IsSideFill(part) && _sideFill is { } fill
+            ? Math.Max(0, fill.Least(Math.Max(1, width)))
+            : measured
+                ? part.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height
+                : part.Height;
+
+    private bool IsSideFill(Control part) => _sideFill is { } fill && ReferenceEquals(fill.Part, part);
 
     /// <summary>What the column leaves on the left, with a gap between the two.</summary>
     private static int MainWidth(int width, Size side) =>
@@ -2132,6 +2414,241 @@ internal sealed class SteadyLabel : Label
         }
 
         return size;
+    }
+}
+
+/// <summary>
+/// A light and what it means, side by side - the decoder's status on the
+/// Connection page: grey, amber, green or red, and a line saying what is
+/// happening. The line wraps to the room there is, and the light stays
+/// level with its first line.
+///
+/// The light is whatever control it is handed, coloured by its owner
+/// through its BackColor - which the theme pass is told to leave alone - and
+/// sized here: the 14px square it was at the normal text size, at the size
+/// in use. The text is a label its owner keeps and rewrites, and the line
+/// follows what it says (see TextRewritten). An error from a decoder can
+/// run to two sentences; a label that sized itself would have kept them to
+/// one line, off the edge of the card.
+///
+/// Sizes itself: put it in a Section or a FieldGrid, which give it the
+/// width it wraps to. In a FieldGrid its caption is level with its first
+/// line (FieldGrid.FirstLine).
+/// </summary>
+internal sealed class StatusLine : Panel
+{
+    /// <summary>The light's side at the normal text size.</summary>
+    private const int LightSide = 14;
+
+    private readonly Control _light;
+    private readonly Label _text;
+
+    public StatusLine(Control light, Label text)
+    {
+        _light = light;
+        _text = text;
+
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Margin = Padding.Empty;
+        Padding = Padding.Empty;
+        Tag = AppTheme.KeepBackColor;
+
+        // The colour is what the light says. Left to the theme pass it was
+        // repainted in the page's colour every time the look or the text
+        // size changed, and stayed invisible until the status next did.
+        light.Tag = AppTheme.KeepBackColor;
+        light.Margin = Padding.Empty;
+
+        // Sized and placed here: a label that sizes itself keeps to one line
+        // whatever width it has.
+        text.AutoSize = false;
+        text.Margin = Padding.Empty;
+        text.TextChanged += TextRewritten;
+
+        Controls.Add(light);
+        Controls.Add(text);
+    }
+
+    /// <summary>The light's side at the text size in use.</summary>
+    private static int Side => UiLayout.AtTextSize(LightSide);
+
+    /// <summary>One line of the text, as the label draws it.</summary>
+    private int TextLine => _text.Font.Height + _text.Padding.Vertical;
+
+    /// <summary>Where the text's first line is, from the top - what FieldGrid levels a caption with.</summary>
+    internal (int Top, int Bottom) FirstLine
+    {
+        get
+        {
+            var (_, textTop) = Tops();
+            return (textTop, textTop + TextLine);
+        }
+    }
+
+    /// <summary>
+    /// How far down a line of the text the middle of its capitals is - where
+    /// the light's middle goes. Not the middle of the line: a line is as
+    /// tall as the font's ascent and descent together, and the capitals sit
+    /// on the baseline, below the middle. Centred on the line, the light
+    /// sat 3px above "Disconnected" at the normal text size and more at 200%
+    /// (layout pictures, 29 Sep); worked out from the typeface's own
+    /// measurements, it moved one pixel, because what GDI draws is not what
+    /// those measurements say. So a capital is drawn, the way the label
+    /// draws its text, and looked at - once for each font (CapitalsIn).
+    /// </summary>
+    private int CapitalsMiddle() =>
+        _text.Padding.Top + CapitalsIn.GetValue(_text.Font, font => new StrongBox<int>(MeasureCapitals(font))).Value;
+
+    /// <summary>The middle of the capitals, from the top of a line, for each font asked about - fonts are replaced, not changed, so a font is its own key.</summary>
+    private static readonly ConditionalWeakTable<Font, StrongBox<int>> CapitalsIn = new();
+
+    /// <summary>Draws an "H" in <paramref name="font"/> as a label draws text, from the top of the line, and finds its first and last rows of ink.</summary>
+    private static int MeasureCapitals(Font font)
+    {
+        var middleOfLine = font.Height / 2;
+
+        try
+        {
+            var size = TextRenderer.MeasureText("H", font, Size.Empty, TextFormatFlags.NoPadding);
+
+            using var bitmap = new Bitmap(Math.Max(1, size.Width + 4), Math.Max(1, font.Height + 4));
+
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.Clear(Color.White);
+                TextRenderer.DrawText(g, "H", font, new Point(0, 0), Color.Black, Color.White, TextFormatFlags.NoPadding);
+            }
+
+            var top = -1;
+            var bottom = -1;
+
+            for (var y = 0; y < bitmap.Height; y++)
+            {
+                for (var x = 0; x < bitmap.Width; x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+
+                    if (pixel.R + pixel.G + pixel.B < 3 * 128)
+                    {
+                        if (top < 0)
+                        {
+                            top = y;
+                        }
+
+                        bottom = y;
+                        break;
+                    }
+                }
+            }
+
+            return top < 0 ? middleOfLine : (top + bottom + 1) / 2;
+        }
+        catch (Exception ex) when (ex is ArgumentException or System.Runtime.InteropServices.ExternalException)
+        {
+            // Nothing could be drawn to look at. The middle of the line is
+            // near enough.
+            return middleOfLine;
+        }
+    }
+
+    /// <summary>
+    /// Where the light and the text start: the light's middle on the middle
+    /// of the capitals, and the text moved down only when the light would
+    /// otherwise start above the top.
+    /// </summary>
+    private (int Light, int Text) Tops()
+    {
+        var light = CapitalsMiddle() - Side / 2;
+
+        return light >= 0 ? (light, 0) : (0, -light);
+    }
+
+    /// <summary>How tall the two come to at the width proposed. With none, the text on one line.</summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        // A label treats a width of 1 as none at all; so does this.
+        var width = proposedSize.Width is > 1 and < int.MaxValue / 4
+            ? proposedSize.Width
+            : Side + UiLayout.LabelGap + _text.GetPreferredSize(Size.Empty).Width;
+
+        var (light, text) = Arrange(width);
+
+        return new Size(width, Math.Max(light.Bottom, text.Bottom));
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+
+        Place();
+    }
+
+    /// <summary>Coming into view: while it was hidden, what it said was not laid out - see TextRewritten.</summary>
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+
+        if (Visible)
+        {
+            PerformLayout();
+        }
+    }
+
+    /// <summary>
+    /// The status has been rewritten. Nothing tells the line: the label does
+    /// not size itself, so it does not ask. So this asks - the whole line,
+    /// and whatever it is in, only when it changes height; otherwise the
+    /// text is just given the room it now needs, as FieldRow does for its
+    /// summary.
+    /// </summary>
+    private void TextRewritten(object? sender, EventArgs e)
+    {
+        if (!Visible)
+        {
+            return;
+        }
+
+        if (GetPreferredSize(new Size(Math.Max(2, ClientSize.Width), 0)).Height != Height)
+        {
+            PerformLayout();
+        }
+        else
+        {
+            Place();
+        }
+    }
+
+    private void Place()
+    {
+        var (light, text) = Arrange(Math.Max(2, ClientSize.Width));
+
+        if (_light.Bounds != light)
+        {
+            _light.Bounds = light;
+        }
+
+        if (_text.Bounds != text)
+        {
+            _text.Bounds = text;
+        }
+    }
+
+    /// <summary>
+    /// The light on the left, level with the capitals of the first line
+    /// (Tops); the text beside it, wrapped to the rest of the width.
+    /// </summary>
+    private (Rectangle Light, Rectangle Text) Arrange(int width)
+    {
+        var side = Side;
+        var (lightTop, textTop) = Tops();
+        var left = side + UiLayout.LabelGap;
+        var room = Math.Max(2, width - left);
+        var height = Math.Max(TextLine, _text.GetPreferredSize(new Size(room, 0)).Height);
+
+        return (
+            new Rectangle(0, lightTop, side, side),
+            new Rectangle(left, textTop, room, height));
     }
 }
 

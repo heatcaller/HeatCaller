@@ -63,6 +63,10 @@ public partial class MainForm
         cmbSerialPort.Items.Clear();
         cmbSerialPort.Items.AddRange(ports);
 
+        // The longest port name may have come or gone.
+        _serialPickerWidth = null;
+        SizeConnectionFields();
+
         if (ports.Length == 0)
         {
             return;
@@ -101,6 +105,9 @@ public partial class MainForm
         }
 
         cmbBaud.SelectedItem = rates.Contains(_settings.ILapBaud) ? _settings.ILapBaud : ILapClient.CommonBaudRates[0];
+
+        _baudPickerWidth = null;
+        SizeConnectionFields();
 
         // Wired after the first selection, so filling the list is not
         // mistaken for the user choosing a rate.
@@ -221,9 +228,10 @@ public partial class MainForm
         // few seconds.
         chkAutoConnect.Visible = isEasyLap;
 
+        // The port picker's whole row, with its Rescan button, rather than
+        // the two in it: an emptied row would keep its place in the card.
         lblSerialPort.Visible = isILap;
-        cmbSerialPort.Visible = isILap;
-        btnRefreshPorts.Visible = isILap;
+        serialPortRow.Visible = isILap;
         lblBaud.Visible = isILap;
         cmbBaud.Visible = isILap;
 

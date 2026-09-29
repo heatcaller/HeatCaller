@@ -14,7 +14,8 @@ namespace HeatCaller.Tests;
 /// same promise made through a Beside, the way Race Control is built: a
 /// Session row handed over afterwards, a column down the side, and a card
 /// with a list that fills it. And the pieces Race Day's tabs are built
-/// from: grids in separate cards lined up down the page, a hint that holds
+/// from: grids in separate cards lined up down the page, captions level
+/// with the first line of a field more than a line tall, a hint that holds
 /// still when it is reworded, a filter row whose summary moves onto a line
 /// of its own, two cards side by side in a page that sizes its parts, two
 /// bars of buttons against opposite edges - and the fonts they keep in step
@@ -608,6 +609,18 @@ public sealed class LayoutPiecesTests
 
             var only = aboutGrid.AddField(new CheckBox { Text = "Checked-in drivers only", AutoSize = true });
 
+            // A row of controls that wraps when the page is narrow, and a box
+            // of several lines: their captions beside their first lines.
+            var dayPicker = new ComboBox { Width = 260, DropDownStyle = ComboBoxStyle.DropDownList };
+            dayPicker.Items.Add("Club night, 29 September");
+            dayPicker.SelectedIndex = 0;
+
+            var wizard = new Button { Text = "Set Up With the Wizard..." };
+            var workingCaption = aboutGrid.AddRow("Working on:", FieldGrid.Inline(dayPicker, new Button { Text = "New Day..." }, wizard));
+
+            var notes = new TextBox { Multiline = true, Width = 300, Height = 70 };
+            var notesCaption = aboutGrid.AddRow("Notes:", notes);
+
             var program = stack.Add(new Section("Building the program"));
             var programGrid = program.Add(new FieldGrid(), gapBelow: 0);
 
@@ -684,6 +697,7 @@ public sealed class LayoutPiecesTests
             CheckLinedUp();
             CheckSnug();
             CheckBand();
+            CheckFirstLines(wrapped: false);
             Audit();
 
             if (commands.Concat(tools).Select(TopIn).Distinct().Count() != 1)
@@ -749,6 +763,7 @@ public sealed class LayoutPiecesTests
             CheckLinedUp();
             CheckSnug();
             CheckBand();
+            CheckFirstLines(wrapped: true);
             Audit();
 
             summary.Text = "3 of 12 checked in";
@@ -770,11 +785,17 @@ public sealed class LayoutPiecesTests
             CheckLinedUp();
             CheckSnug();
             CheckBand();
+            CheckFirstLines(wrapped: false);
             Audit();
 
-            if (stack.ContentHeight != bars.Bottom + stack.Padding.Vertical)
+            // The top margin, the column, and the bottom margin or the
+            // theme's room under the last control, whichever is more - what
+            // the page needs not to scroll.
+            var contentHeight = stack.Padding.Top + bars.Bottom + Math.Max(stack.Padding.Bottom, stack.AutoScrollMargin.Height);
+
+            if (stack.ContentHeight != contentHeight)
             {
-                problems.Add($"{_now}: the page says its content is {stack.ContentHeight}px tall - it is {bars.Bottom + stack.Padding.Vertical}px");
+                problems.Add($"{_now}: the page says its content is {stack.ContentHeight}px tall - it is {contentHeight}px");
             }
 
             // The two grids share a caption column, however wide their own
@@ -822,6 +843,45 @@ public sealed class LayoutPiecesTests
                     {
                         problems.Add($"{_now}: a field grid is {grid.Height}px tall and its last row ends at {bottom}");
                     }
+                }
+            }
+
+            // A caption beside a field more than a line tall is level with
+            // its first line - "Working on:" with the picker when the buttons
+            // after it have wrapped under it, "Notes:" with the first line of
+            // the notes - and one beside a row on one line is centred on it,
+            // as every other caption is.
+            void CheckFirstLines(bool wrapped)
+            {
+                static int Middle(Control control) => control.Top + control.Height / 2;
+
+                var row = dayPicker.Parent!;
+
+                if (wrapped != (wizard.Top >= dayPicker.Bottom))
+                {
+                    problems.Add(wrapped
+                        ? $"{_now}: the wizard's button is still beside the picker, in a row {row.Width}px wide - it should have wrapped"
+                        : $"{_now}: the wizard's button is under the picker, in a row {row.Width}px wide - there is room beside it");
+                }
+
+                var pickerTop = row.Top + dayPicker.Top;
+                var pickerBottom = row.Top + dayPicker.Bottom;
+
+                if (Middle(workingCaption) < pickerTop || Middle(workingCaption) > pickerBottom)
+                {
+                    problems.Add($"{_now}: \"Working on:\" is {workingCaption.Top}-{workingCaption.Bottom}, not beside the picker at {pickerTop}-{pickerBottom}");
+                }
+
+                if (!wrapped && Math.Abs(Middle(workingCaption) - Middle(row)) > 1)
+                {
+                    problems.Add($"{_now}: \"Working on:\" is not centred on its row of one line ({workingCaption.Top}-{workingCaption.Bottom} beside {row.Top}-{row.Bottom})");
+                }
+
+                var firstLineBottom = notes.Top + 4 + notes.Font.Height;
+
+                if (Middle(notesCaption) < notes.Top || Middle(notesCaption) > firstLineBottom)
+                {
+                    problems.Add($"{_now}: \"Notes:\" is {notesCaption.Top}-{notesCaption.Bottom}, not beside the first line of the notes at {notes.Top}-{firstLineBottom}");
                 }
             }
 

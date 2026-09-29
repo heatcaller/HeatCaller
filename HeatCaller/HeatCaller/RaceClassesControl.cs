@@ -28,6 +28,9 @@ public sealed class RaceClassesControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly Label _lblSummary = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
     private readonly Button _btnAdd = new() { Text = "Add a Class..." };
     private readonly Button _btnEdit = new() { Text = "Edit..." };
     private readonly Button _btnPreset = new() { Text = "Sanctioning Preset..." };
@@ -39,13 +42,44 @@ public sealed class RaceClassesControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(700, 420);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize. It was 700x420, which WinForms honours over the
+        // size the page is given - so a window shorter than that had the
+        // buttons under the grid off the bottom of the page. A short window
+        // scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then one card: how many classes there are, the grid of
+    /// them taking the height that is left, and the buttons under it. On the
+    /// layout pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be: the grid stretched and the buttons flowed on every
+    /// resize, over a 700x420 floor the page kept however small its window,
+    /// with the intro capped at a width that fitted that floor and wrapped
+    /// short of the page on any wider one.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
@@ -53,19 +87,13 @@ public sealed class RaceClassesControl : UserControl
             Text = "A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats "
                  + "count, how big a main is, whether bump-ups happen, and what a scrutineer checks. Everything here "
                  + "is per class, because a club rarely runs two classes the same way.",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
             AutoSize = true,
-            MaximumSize = new Size(668, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
         };
 
         _lblSummary.AutoSize = true;
-        _lblSummary.Font = AppTheme.BodyFont;
         _lblSummary.ForeColor = AppTheme.TextMuted;
-        _lblSummary.Location = new Point(UiLayout.PageLeft, UiLayout.Below(lblIntro, UiLayout.RowGap));
 
-        _grid.Location = new Point(UiLayout.PageLeft, UiLayout.Below(_lblSummary, UiLayout.RowGap));
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -74,7 +102,6 @@ public sealed class RaceClassesControl : UserControl
         _grid.MultiSelect = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
         _grid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 90 },
@@ -98,52 +125,32 @@ public sealed class RaceClassesControl : UserControl
         _btnPreset.Click += (_, _) => ApplyPresetToSelected();
         _btnDelete.Click += (_, _) => DeleteSelected();
 
-        Controls.Add(lblIntro);
-        Controls.Add(_lblSummary);
-        Controls.Add(_grid);
+        // No caption: the page's heading already says "Classes", and the
+        // count under it says how many.
+        var list = new Section();
 
-        foreach (var button in Buttons())
-        {
-            Controls.Add(button);
-        }
+        list.Add(_lblSummary);
+        list.AddFill(_grid, LeastGridHeight);
+        list.Add(new ButtonBar().With(_btnAdd, _btnEdit, _btnPreset, _btnDelete), gapBelow: 0);
 
-        LayoutStretch();
+        var page = new FillPage();
 
-        // This page places every one of its children on every resize, so
-        // the repair pass is told to keep out.
+        page.Add(lblIntro);
+        page.AddFill(list, list.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // The repair pass is kept out. The Classes page is left alone by
+        // name (LayoutAudit.ConvertedPages), but this page is also the
+        // Race Classes dialog (RaceClassManagerForm), and every dialog is
+        // checked and nudged when it is first shown (LayoutDoctor.Watch) -
+        // a second authority moving controls the pieces place.
         LayoutDoctor.LeaveAlone(this);
     }
 
-    private Button[] Buttons() => new[] { _btnAdd, _btnEdit, _btnPreset, _btnDelete };
-
-    /// <summary>The grid takes everything between the summary and the button row.</summary>
-    private void LayoutStretch()
-    {
-        var width = Math.Max(MinimumSize.Width, ClientSize.Width);
-        var height = Math.Max(MinimumSize.Height, ClientSize.Height);
-
-        var right = width - UiLayout.PageRight;
-
-        // Flowed once from zero just to MEASURE it, then flowed again where
-        // it belongs. Four buttons at their captions' widths is close to a
-        // narrow window's worth, and a row placed at "bottom minus one
-        // button" that then wraps puts its second line off the bottom of
-        // the page - where it cannot be reached or even seen.
-        var rowHeight = UiLayout.FlowButtons(UiLayout.PageLeft, 0, right, Buttons());
-
-        var buttonsTop = height - UiLayout.PageTop - rowHeight;
-
-        UiLayout.FlowButtons(UiLayout.PageLeft, buttonsTop, right, Buttons());
-
-        _grid.Width = Math.Max(400, width - UiLayout.PageLeft - UiLayout.PageRight);
-        _grid.Height = Math.Max(160, buttonsTop - UiLayout.RowGap - _grid.Top);
-    }
-
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        LayoutStretch();
-    }
+    /// <summary>The least the grid can do with: its headings and three classes. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastGridHeight() =>
+        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height;
 
     /// <summary>Called when the page becomes visible - a class can be edited from the driver pages too.</summary>
     public void RefreshAll()

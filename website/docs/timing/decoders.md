@@ -9,7 +9,7 @@ HeatCaller reads your decoder directly and runs the race itself, on the **Race C
 | Direct EasyLap Decoder (USB) | HeatCaller reads an EasyLap USB decoder directly. |
 | I-Lap Decoder (Serial) | HeatCaller reads an I-Lap decoder through its serial (COM) port. |
 
-The page's footer says the same: "Choose your decoder above. Its laps feed the Race Control page, which runs the race."
+The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race."
 
 <!-- screenshot: Connection page with "Connect via:" set to Direct EasyLap Decoder (USB), status dot green, Developer Console below -->
 
@@ -78,7 +78,7 @@ When the decoder connects, the console also lists every transponder number HeatC
 
 1. Open the **Connection** page.
 2. In **Connect via:**, choose **I-Lap Decoder (Serial)**.
-3. In **COM Port:**, choose the decoder's port. If it isn't listed, plug the decoder in and click **Rescan**.
+3. In **COM port:**, choose the decoder's port. If it isn't listed, plug the decoder in and click **Rescan**.
 4. In **Baud:**, choose the speed your decoder is set to: 9600, 19200, 38400, 57600 or 115200. 9600 is the usual I-Lap setting. The **Baud:** box only appears when I-Lap is chosen.
 5. Click **Connect**.
 
@@ -140,7 +140,7 @@ The race on the **Race Control** page keeps running. Its clock and time limit ca
 
 ## The Developer Console
 
-The box below the connection settings, titled "Developer Console — messages from the timing connection and the app's own log", shows everything HeatCaller logs: decoder traffic from whichever connection you use, race events, voice, sound, storage messages and more.
+The **Developer console** card, under the **Timing decoder** card, shows everything HeatCaller logs: decoder traffic from whichever connection you use, race events, voice, sound, storage messages and more.
 
 | Control | What it does |
 |---|---|
@@ -148,8 +148,8 @@ The box below the connection settings, titled "Developer Console — messages fr
 | Preset list | Quick filters: "All", "Audio timing", "Voice", "Sound", "Race", "Decoder", "Storage" and "Hide raw HID". Anything typed in **Filter:** takes priority over the preset. |
 | **Exclude matches** | Turns the filter around: hides matching lines and shows everything else. Choosing "Hide raw HID" ticks this for you. |
 | **Auto-scroll** | Keeps the newest line in view. Untick it to read back without being pulled to the bottom. On by default. |
-| **Copy** | Copies the lines currently shown (after filtering) to the clipboard. |
-| **Clear** | Empties the console. |
+| **Copy** (under the console) | Copies the lines currently shown (after filtering) to the clipboard. |
+| **Clear** (under the console) | Empties the console. |
 
 Filtering never throws lines away. You can narrow the view, read what you need, and clear the filter to see everything again. The console keeps roughly the most recent 5,000 lines.
 
@@ -166,7 +166,7 @@ Right-click inside the console for **Copy** (the selected text), **Copy everythi
 **"Found the decoder but could not open it..." (EasyLap)**
 : Next Level Timing or another copy of a timing program has the decoder. Close it, then connect again. HeatCaller itself only runs one copy at a time.
 
-**I-Lap port isn't in the COM Port list**
+**I-Lap port isn't in the COM port list**
 : Plug the decoder in, wait a few seconds, and click **Rescan**.
 
 **I-Lap connects but no laps appear**

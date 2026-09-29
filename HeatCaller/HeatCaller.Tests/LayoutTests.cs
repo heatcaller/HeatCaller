@@ -81,6 +81,108 @@ public sealed class LayoutTests
             + (mustBeClean.Count > 40 ? $"\n  ...and {mustBeClean.Count - 40} more" : string.Empty)
             + $"\nThe whole report is in {Path.Combine(folder, "report.txt")}");
     }
+
+    /// <summary>
+    /// Next Steps is a split: the day's summary over tonight's program. The
+    /// program's buttons are what a race night is run from, so at every size
+    /// its half is kept tall enough for them, and the summary above scrolls
+    /// instead (MainForm.Pages, KeepProgramInView).
+    ///
+    /// The test above cannot see this go wrong: a button scrolled below the
+    /// fold of a half that scrolls is not cut off, it is only out of sight -
+    /// which is how 1366x768, 1280x720 and the largest text size once had
+    /// them. So it is checked here: every button under the program wholly
+    /// inside what its half shows, with nothing to scroll to.
+    /// </summary>
+    [Fact]
+    public void NextStepsKeepsTheProgramsButtonsInViewAtEverySize()
+    {
+        var wrong = new List<string>();
+        var looked = new List<string>();
+
+        var sweep = LayoutSweep.Run(
+            LayoutView.Standard,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Race Day" },
+            pictures: null,
+            alsoCheck: (view, _, page) =>
+            {
+                wrong.AddRange(ProgramButtonsOutOfView(page).Select(what => $"  {view.Name}: {what}"));
+
+                // After the check, so a check that threw - noted as a
+                // problem by the sweep - counts as a size not looked at.
+                looked.Add(view.Name);
+            });
+
+        Assert.True(looked.Count == LayoutView.Standard.Count,
+            $"The Race Day page was only checked at {looked.Count} of {LayoutView.Standard.Count} sizes. "
+            + "Problems: " + string.Join("; ", sweep.Problems.Select(problem => $"{problem.FirstAt}: {problem.What}")));
+
+        Assert.True(wrong.Count == 0,
+            "Next Steps has the program's buttons out of sight:\n" + string.Join("\n", wrong));
+    }
+
+    /// <summary>What is wrong with the program's buttons on the Race Day page on screen - nothing, when they all show.</summary>
+    private static List<string> ProgramButtonsOutOfView(Control page)
+    {
+        var wrong = new List<string>();
+        var program = Descendants(page).OfType<RaceProgramControl>().FirstOrDefault();
+
+        if (program is null)
+        {
+            wrong.Add("the Race Day page has no program on it");
+            return wrong;
+        }
+
+        // Its tab, which the measuring may have left showing another.
+        for (Control? up = program; up is not null; up = up.Parent)
+        {
+            if (up is TabPage tab && tab.Parent is TabControl tabs && !ReferenceEquals(tabs.SelectedTab, tab))
+            {
+                tabs.SelectedTab = tab;
+            }
+        }
+
+        // The splitter is moved from work the halves post to themselves
+        // after their layouts - see TodayControl.ContentHeightChanged.
+        for (var i = 0; i < 4; i++)
+        {
+            StaThread.Settle();
+        }
+
+        var half = program.RectangleToScreen(program.ClientRectangle);
+        var shown = Rectangle.Intersect(half, page.RectangleToScreen(page.ClientRectangle));
+        var buttons = Descendants(program).OfType<Button>().Where(button => button.Visible).ToList();
+
+        if (buttons.Count == 0)
+        {
+            wrong.Add("the program shows no buttons at all");
+        }
+
+        foreach (var button in buttons)
+        {
+            var at = button.RectangleToScreen(button.ClientRectangle);
+
+            if (!shown.Contains(at))
+            {
+                wrong.Add($"\"{button.Text}\" is at {at.Top - half.Top}-{at.Bottom - half.Top}px down a half that shows {shown.Top - half.Top}-{shown.Bottom - half.Top}px");
+            }
+        }
+
+        return wrong;
+    }
+
+    private static IEnumerable<Control> Descendants(Control control)
+    {
+        foreach (Control child in control.Controls)
+        {
+            yield return child;
+
+            foreach (var below in Descendants(child))
+            {
+                yield return below;
+            }
+        }
+    }
 }
 
 /// <summary>A window and text size to check every page at.</summary>
@@ -178,10 +280,19 @@ internal static class LayoutSweep
     /// on a laptop; the limit is for GitHub's slower machines, which run
     /// check.cmd on every push (.github\workflows\check.yml).
     /// </summary>
-    public static SweepResult Run(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? onlyPages, string? pictures) =>
-        StaThread.Run(() => Sweep(views, onlyPages, pictures), TimeSpan.FromMinutes(10), () => _now);
+    /// <param name="alsoCheck">
+    /// Run on each page after it has been measured, for a test that holds a
+    /// page to something the general rules cannot see. What it throws is
+    /// noted as a problem, as anything the measuring throws is.
+    /// </param>
+    public static SweepResult Run(
+        IReadOnlyList<LayoutView> views,
+        IReadOnlySet<string>? onlyPages,
+        string? pictures,
+        Action<LayoutView, string, Control>? alsoCheck = null) =>
+        StaThread.Run(() => Sweep(views, onlyPages, pictures, alsoCheck), TimeSpan.FromMinutes(10), () => _now);
 
-    private static SweepResult Sweep(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? onlyPages, string? pictures)
+    private static SweepResult Sweep(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? onlyPages, string? pictures, Action<LayoutView, string, Control>? alsoCheck)
     {
         var result = new SweepResult();
 
@@ -197,7 +308,7 @@ internal static class LayoutSweep
         {
             foreach (var view in views)
             {
-                SweepView(view, onlyPages, pictures, result);
+                SweepView(view, onlyPages, pictures, alsoCheck, result);
             }
         }
         finally
@@ -213,7 +324,7 @@ internal static class LayoutSweep
         return result;
     }
 
-    private static void SweepView(LayoutView view, IReadOnlySet<string>? onlyPages, string? pictures, SweepResult result)
+    private static void SweepView(LayoutView view, IReadOnlySet<string>? onlyPages, string? pictures, Action<LayoutView, string, Control>? alsoCheck, SweepResult result)
     {
         var clock = Stopwatch.StartNew();
 
@@ -298,6 +409,8 @@ internal static class LayoutSweep
                     });
 
                     result.Findings.AddRange(found.Select(finding => new SweepFinding(view, name, finding)));
+
+                    alsoCheck?.Invoke(view, name, page);
                 }
                 catch (Exception ex)
                 {

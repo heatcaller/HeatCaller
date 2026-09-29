@@ -20,7 +20,7 @@ If you ran the first-run wizard, you may already have a track, a class and one d
 1. Open the **Connection** page.
 2. In **Connect via:**, choose your decoder:
     - **Direct EasyLap Decoder (USB)**. Tick **Auto-connect (retries every few seconds until the decoder is found)** so it reconnects by itself if the cable is knocked.
-    - **I-Lap Decoder (Serial)**. Pick the **COM Port:** and the **Baud:** rate your decoder uses (usually 9600). Use **Rescan** if you plugged it in after opening the page.
+    - **I-Lap Decoder (Serial)**. Pick the **COM port:** and the **Baud:** rate your decoder uses (usually 9600). Use **Rescan** if you plugged it in after opening the page.
 3. Click **Connect**.
 4. Check that the **Status:** line and dot turn green.
 5. Drive a car over the loop. You should see its crossing in the Developer Console at the bottom of the page.

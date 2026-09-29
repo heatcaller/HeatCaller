@@ -44,6 +44,15 @@ internal static class LayoutAudit
         // All three tabs: Next Steps (TodayControl over RaceProgramControl),
         // Setup (RaceDayEventControl) and Who's Racing (CheckInControl).
         "Race Day",
+
+        // The timing decoder and the developer console (MainForm.ConnectionPage).
+        "Connection",
+
+        // The roster beside the driver's card (ProfileManagerControl).
+        "Driver Profiles",
+
+        // The grid of classes (RaceClassesControl).
+        "Classes",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>

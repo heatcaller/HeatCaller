@@ -19,15 +19,33 @@ namespace HeatCaller;
 /// </summary>
 public sealed class ProfileManagerControl : UserControl
 {
-    private const int Gap = 12;
     private const int ThumbSize = 40;
 
-    /// <summary>The card's width range. It takes about two fifths of the page between these.</summary>
+    /// <summary>The card's width range at the normal text size. It takes about two fifths of the page between these.</summary>
     private const int MinCardWidth = 340;
     private const int MaxCardWidth = 600;
 
-    /// <summary>Space inside the card around its content.</summary>
-    private const float CardPad = 16f;
+    /// <summary>
+    /// Room between what is painted on the card and the canvas's edge. The
+    /// card's own inset (Section.Inset) is the rest - this is only a hair,
+    /// so a photo's rounded corners never touch the canvas's scrollbar.
+    /// </summary>
+    private const float CardPad = 4f;
+
+    /// <summary>The least the card's canvas can do with at the normal text size - a photo and a name. Below that the page scrolls instead.</summary>
+    private const int LeastCanvasHeight = 200;
+
+    /// <summary>The roster's columns at the normal text size: driver, number, class, car, transponder. The driver's takes whatever the others leave instead - see FitColumns.</summary>
+    private static readonly int[] ColumnWidths = { 200, 42, 100, 150, 95 };
+
+    /// <summary>The least the driver column gets beside its photo at the normal text size - a short name. Past that, the list scrolls sideways.</summary>
+    private const int DriverNameLeast = 120;
+
+    /// <summary>Set while the roster's columns are being sized - which can bring a scrollbar in or take it away, and so change the room they are being sized to. See FitColumns.</summary>
+    private bool _fittingColumns;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
 
     private readonly ProfileStore _store;
     private readonly UndoService _undo;
@@ -45,15 +63,19 @@ public sealed class ProfileManagerControl : UserControl
     // let go of them, and on Dispose.
     private readonly List<Bitmap> _thumbBitmaps = new();
 
-    /// <summary>The card's rounded frame. Holds the scrolling canvas and the two buttons at its foot.</summary>
-    private readonly Panel _card = new();
-
     /// <summary>Where the driver is painted. Scrolls, because a driver with a long record is taller than any window.</summary>
     private readonly CardCanvas _cardScroll = new();
 
     private readonly Button _btnCardEdit = new();
     private readonly Button _btnCardPhoto = new();
-    private readonly Button[] _bottomButtons;
+
+    /// <summary>
+    /// The card's two buttons, hidden together while there is nobody to
+    /// show. The bar is hidden rather than the buttons in it: a bar with
+    /// every button hidden is still on the page, zero pixels tall, and
+    /// squashed to nothing is what the layout test reports it as.
+    /// </summary>
+    private ButtonBar? _cardButtons;
 
     // ---- Stats ----
     //
@@ -125,13 +147,16 @@ public sealed class ProfileManagerControl : UserControl
         _rememberTimer.Tick += (_, _) => RememberShownNow();
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
-        MinimumSize = new Size(900, 480);
 
-        // Laid out entirely by DoLayout, card contents included, so the
-        // page-tidying pass has nothing to straighten here - and moving the
-        // card's canvas or buttons would only be undone at the next resize.
-        LayoutDoctor.LeaveAlone(this);
+        // The body face, worn rather than set once: set once, it stayed at
+        // the size the page was built at when the text size changed. See
+        // TextSize.
+        //
+        // No MinimumSize. It was 900x480, which WinForms honours over the
+        // size the page is given - so on a small screen the page was wider
+        // and taller than its window, and the buttons under the roster were
+        // off the bottom. A short window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         _txtSearch.PlaceholderText = "Search name, number, car, class, team...";
         _txtSearch.TextChanged += (_, _) => RefreshList();
@@ -142,21 +167,18 @@ public sealed class ProfileManagerControl : UserControl
         _list.MultiSelect = true;
         _list.HeaderStyle = ColumnHeaderStyle.Nonclickable;
         _list.SmallImageList = _thumbs;
-        _list.Columns.Add("Driver", 200);
-        _list.Columns.Add("#", 42);
-        _list.Columns.Add("Class", 100);
-        _list.Columns.Add("Car / Model", 150);
-        _list.Columns.Add("Transponder", 95);
+        _list.Columns.Add("Driver");
+        _list.Columns.Add("#");
+        _list.Columns.Add("Class");
+        _list.Columns.Add("Car / Model");
+        _list.Columns.Add("Transponder");
         _list.DoubleClick += (_, _) => EditSelected();
         _list.SelectedIndexChanged += (_, _) => OnSelectionChanged();
 
-        // The frame paints its rounded outline; the canvas inside it paints
-        // the driver and scrolls. Surface-coloured, and told to keep it, so
-        // the theme pass does not turn the inside of the card into page
-        // background.
-        _card.Paint += (_, e) => PaintCardFrame(e.Graphics);
-        _card.Resize += (_, _) => _card.Invalidate();
-
+        // The card is the theme's (a Section, built in BuildLayout); the
+        // canvas inside it paints the driver and scrolls. Surface-coloured,
+        // and told to keep it, so the theme pass does not turn the inside of
+        // the card into page background.
         _cardScroll.AutoScroll = true;
         _cardScroll.BackColor = AppTheme.Surface;
         _cardScroll.Tag = AppTheme.KeepBackColor;
@@ -174,30 +196,8 @@ public sealed class ProfileManagerControl : UserControl
         _btnCardEdit.Click += (_, _) => EditSelected();
         _btnCardPhoto.Text = "Photo...";
         _btnCardPhoto.Click += (_, _) => QuickChangePhoto();
-        _card.Controls.Add(_cardScroll);
-        _card.Controls.Add(_btnCardEdit);
-        _card.Controls.Add(_btnCardPhoto);
 
-        var btnAdd = new Button { Text = "Add...", Width = 90 };
-        btnAdd.Click += (_, _) => AddNew();
-        var btnEdit = new Button { Text = "Edit...", Width = 90 };
-        btnEdit.Click += (_, _) => EditSelected();
-        var btnDelete = new Button { Text = "Delete", Width = 90 };
-        btnDelete.Click += (_, _) => DeleteSelected();
-        var btnImport = new Button { Text = "Import from CSV...", Width = 140 };
-        btnImport.Click += (_, _) => ImportFromCsv();
-        var btnTemplate = new Button { Text = "Download Template...", Width = 160 };
-        btnTemplate.Click += (_, _) => DownloadTemplate();
-        _bottomButtons = new[] { btnAdd, btnEdit, btnDelete, btnImport, btnTemplate };
-
-        Controls.Add(_txtSearch);
-        Controls.Add(_list);
-        Controls.Add(_card);
-
-        foreach (var button in _bottomButtons)
-        {
-            Controls.Add(button);
-        }
+        BuildLayout();
 
         // A race finishing while this page is open changes the numbers on
         // the card. Raised on the UI thread today, but posted rather than
@@ -208,15 +208,175 @@ public sealed class ProfileManagerControl : UserControl
             _sources.History.SessionAdded += OnSessionAdded;
         }
 
-        // Laid out by hand in DoLayout rather than with anchors. Anchors
-        // remember the margins a control had when its parent was FIRST
-        // measured, and this control is built before its page has a size -
-        // the exact trap LayoutDoctor spends its life reporting.
-        Resize += (_, _) => DoLayout();
-        DoLayout();
-
         RefreshList();
     }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through the window's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Two cards side by side, on the layout pieces (LayoutPieces.cs): the
+    /// roster - the search box, the list taking the height that is left, and
+    /// the buttons under it - and beside it the driver's card, as tall as the
+    /// page, its canvas taking the height that is left over its two buttons.
+    /// Nothing is placed by hand.
+    ///
+    /// It used to be, on every resize, against a floor of 900x480 that the
+    /// page kept however small its window: a card two fifths of the width,
+    /// the roster's buttons in a row that the card stopped short of when
+    /// they reached under it, and the card's canvas and buttons placed
+    /// inside a painted frame.
+    /// </summary>
+    private void BuildLayout()
+    {
+        // --- The roster ---
+        var btnAdd = new Button { Text = "Add..." };
+        btnAdd.Click += (_, _) => AddNew();
+        var btnEdit = new Button { Text = "Edit..." };
+        btnEdit.Click += (_, _) => EditSelected();
+        var btnDelete = new Button { Text = "Delete" };
+        btnDelete.Click += (_, _) => DeleteSelected();
+        var btnImport = new Button { Text = "Import from CSV..." };
+        btnImport.Click += (_, _) => ImportFromCsv();
+        var btnTemplate = new Button { Text = "Download Template..." };
+        btnTemplate.Click += (_, _) => DownloadTemplate();
+
+        var roster = new Section("Roster");
+
+        roster.Add(_txtSearch);
+        roster.AddFill(_list, LeastListHeight);
+        roster.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete, btnImport, btnTemplate), gapBelow: 0);
+
+        // The columns fitted to the roster at the text size in use, and
+        // again whenever the roster's width changes.
+        _textSize.Keep(FitColumns);
+        _list.ClientSizeChanged += (_, _) => FitColumns();
+
+        // --- The driver's card ---
+        //
+        // No caption: the driver's name is its heading. The two buttons
+        // are hidden while there is nobody to show, and the canvas takes
+        // their room.
+        var card = new Section();
+
+        card.AddFill(_cardScroll, () => UiLayout.AtTextSize(LeastCanvasHeight));
+        _cardButtons = card.Add(new ButtonBar().With(_btnCardEdit, _btnCardPhoto), gapBelow: 0);
+
+        // --- The page ---
+        Beside? band = null;
+
+        band = new Beside(() => CardWidth(band?.Width ?? 0));
+
+        band.AddFill(roster, roster.LeastHeight);
+        band.AddSideFill(card, card.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
+    }
+
+    /// <summary>
+    /// The card's width: about two fifths of the page - a driver-first card
+    /// needs room for big type, but the roster is what gets scanned on a
+    /// race day - and between 340px and 600px at the normal text size, at
+    /// the size in use.
+    /// </summary>
+    private static int CardWidth(int pageWidth) =>
+        Math.Clamp((int)(pageWidth * 0.4f), UiLayout.AtTextSize(MinCardWidth), UiLayout.AtTextSize(MaxCardWidth));
+
+    /// <summary>
+    /// Fits the roster's columns to its width.
+    ///
+    /// Each column is the width it was at the normal text size, at the size
+    /// in use - or its heading's, if that is wider - and the driver's takes
+    /// whatever the others leave, never less than the photo and a short name.
+    /// When that does not fit, the other four give way first, down to the
+    /// width of their headings, before the list scrolls sideways. At fixed
+    /// widths the columns overran the roster at 1280x720 and at 200% text -
+    /// "Transponder" cut off, and a sideways scrollbar - and on a wide screen
+    /// stopped short of it with a blank band down the right (layout
+    /// pictures, 29 Sep). A heading is measured, not scaled: at 200% the
+    /// 95px the transponder column had at 100% did not hold its heading.
+    /// </summary>
+    private void FitColumns()
+    {
+        if (_fittingColumns || _list.Columns.Count < ColumnWidths.Length)
+        {
+            return;
+        }
+
+        _fittingColumns = true;
+
+        try
+        {
+            var room = _list.ClientSize.Width;
+            var driverLeast = ThumbSize + UiLayout.AtTextSize(DriverNameLeast);
+            var others = ColumnWidths.Length - 1;
+
+            var wanted = new int[others];
+            var least = new int[others];
+
+            for (var i = 0; i < others; i++)
+            {
+                var column = _list.Columns[i + 1];
+
+                // The heading and the room a header keeps either side of it.
+                least[i] = TextRenderer.MeasureText(column.Text, _list.Font).Width + UiLayout.AtTextSize(16);
+                wanted[i] = Math.Max(least[i], UiLayout.AtTextSize(ColumnWidths[i + 1]));
+            }
+
+            var wantedTotal = wanted.Sum();
+            var leastTotal = least.Sum();
+            var forOthers = room - driverLeast;
+
+            var widths = new int[others];
+
+            for (var i = 0; i < others; i++)
+            {
+                widths[i] = forOthers >= wantedTotal || wantedTotal == leastTotal
+                    ? wanted[i]
+                    : forOthers <= leastTotal
+                        ? least[i]
+                        : least[i] + (wanted[i] - least[i]) * (forOthers - leastTotal) / (wantedTotal - leastTotal);
+            }
+
+            for (var i = 0; i < others; i++)
+            {
+                if (_list.Columns[i + 1].Width != widths[i])
+                {
+                    _list.Columns[i + 1].Width = widths[i];
+                }
+            }
+
+            var driver = Math.Max(driverLeast, room - widths.Sum());
+
+            if (_list.Columns[0].Width != driver)
+            {
+                _list.Columns[0].Width = driver;
+            }
+        }
+        finally
+        {
+            _fittingColumns = false;
+        }
+    }
+
+    /// <summary>The least the roster can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastListHeight() =>
+        _list.Font.Height * 2 + 3 * (Math.Max(ThumbSize, _list.Font.Height) + 4);
 
     /// <summary>
     /// Called when this page becomes visible - profiles can be created
@@ -241,51 +401,6 @@ public sealed class ProfileManagerControl : UserControl
         {
             onCard.EnsureVisible();
         }
-    }
-
-    private void DoLayout()
-    {
-        var w = Math.Max(MinimumSize.Width, ClientSize.Width);
-        var h = Math.Max(MinimumSize.Height, ClientSize.Height);
-
-        // About two fifths of the page: a driver-first card needs room for
-        // big type, but the roster is what gets scanned on a race day.
-        var cardWidth = Math.Clamp((int)(w * 0.4f), MinCardWidth, MaxCardWidth);
-        var listWidth = w - Gap * 3 - cardWidth;
-        var buttonRowY = h - Gap - UiLayout.ButtonHeight;
-
-        _txtSearch.SetBounds(Gap, Gap, listWidth, _txtSearch.Height);
-
-        var listTop = _txtSearch.Bottom + 8;
-        _list.SetBounds(Gap, listTop, listWidth, buttonRowY - 10 - listTop);
-
-        var x = Gap;
-
-        foreach (var button in _bottomButtons)
-        {
-            button.SetBounds(x, buttonRowY, button.Width, UiLayout.ButtonHeight);
-            x += button.Width + 8;
-        }
-
-        // The roster's button row can be wider than the roster on a narrow
-        // window. When it would run under the card, the card stops above
-        // that row instead of covering the buttons.
-        var cardLeft = w - Gap - cardWidth;
-        var buttonsReachCard = x - 8 > cardLeft - Gap;
-        var cardBottom = buttonsReachCard ? buttonRowY - 10 : h - Gap;
-
-        _card.SetBounds(cardLeft, Gap, cardWidth, Math.Max(UiLayout.ButtonHeight * 3, cardBottom - Gap));
-
-        const int buttonInset = 14;
-        var cardButtonY = _card.Height - Gap - UiLayout.ButtonHeight;
-        var half = (cardWidth - buttonInset * 2 - 8) / 2;
-
-        _btnCardEdit.SetBounds(buttonInset, cardButtonY, half, UiLayout.ButtonHeight);
-        _btnCardPhoto.SetBounds(buttonInset + half + 8, cardButtonY, cardWidth - buttonInset - (buttonInset + half + 8), UiLayout.ButtonHeight);
-
-        // Inset from the frame's edge so the canvas never paints over the
-        // rounded outline, and stopping short of the buttons.
-        _cardScroll.SetBounds(2, 8, cardWidth - 4, Math.Max(20, cardButtonY - 8 - 8));
     }
 
     // ==================== The roster ====================
@@ -459,8 +574,10 @@ public sealed class ProfileManagerControl : UserControl
     {
         var profile = CardProfile();
 
-        _btnCardEdit.Visible = profile is not null;
-        _btnCardPhoto.Visible = profile is not null;
+        if (_cardButtons is not null)
+        {
+            _cardButtons.Visible = profile is not null;
+        }
 
         // A different driver starts at the top of their card. Only when it
         // really is a different one: the roster clears and refills its
@@ -752,21 +869,6 @@ public sealed class ProfileManagerControl : UserControl
     }
 
     // ==================== The card ====================
-
-    /// <summary>The card's rounded frame. Everything inside is the canvas's job.</summary>
-    private void PaintCardFrame(Graphics g)
-    {
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
-        var bounds = _card.ClientRectangle;
-
-        using var back = new SolidBrush(AppTheme.Surface);
-        using var border = new Pen(AppTheme.TextMuted, 1f);
-        using var outline = AppTheme.RoundedRect(new RectangleF(0.5f, 0.5f, bounds.Width - 1f, bounds.Height - 1f), 10);
-
-        g.FillPath(back, outline);
-        g.DrawPath(border, outline);
-    }
 
     /// <summary>
     /// Sets how tall the canvas's scrollable area is, by laying the card

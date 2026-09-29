@@ -811,11 +811,19 @@ public partial class MainForm
         // The programme page is built for this half now - no next-step banner
         // of its own, no height floor - so there is nothing to switch off.
 
-        // How much of the page each half wants to open at. Measured rather
-        // than written down, because what "enough to be useful" costs in
-        // pixels depends entirely on the text-size setting: the summary needs
-        // its heading, the card and one row of tiles; the programme needs its
-        // two-row footer, the grid's header and a few rounds under it.
+        // How much of the page each half wants. Measured rather than written
+        // down, because what "enough to be useful" costs in pixels depends
+        // entirely on the text-size setting and the width.
+        //
+        // The two are not equals. The program's least is a floor: its class
+        // filter, the headings and three rounds, and the buttons under them
+        // (RaceProgramControl.LeastPaneHeight) - any shorter and the buttons
+        // go below the fold, and the program is the half a race night is
+        // run from. The top half gives way instead, and scrolls: on a small
+        // screen or at a large text size, what it cannot show is under its
+        // own scrollbar rather than under the splitter. The top's least is
+        // only where it OPENS when there is room for both - the day's name,
+        // the card's headline and its button.
         //
         // These are NOT Panel1MinSize and Panel2MinSize, and that is the whole
         // point of this comment. Assigning those properties validates
@@ -824,22 +832,17 @@ public partial class MainForm
         // setting a 228px Panel2MinSize in the initializer threw
         // "SplitterDistance must be between Panel1MinSize and Width -
         // Panel2MinSize" out of the constructor, before the window ever
-        // appeared. They are the opening position's bounds instead, applied
-        // once there is room for them, and the panels keep WinForms' own 25px
+        // appeared. They are applied by moving the splitter instead, once
+        // there is room for them, and the panels keep WinForms' own 25px
         // minimums - which are small enough to survive any window size, and
         // still stop either half being dragged away to nothing.
         //
         // Asked each time rather than worked out once, so they follow the
-        // text size as the two halves do.
+        // text size and the width as the two halves do.
         static int TodayTopMin() =>
             AppTheme.TitleFont.Height + AppTheme.BodyFont.Height
             + AppTheme.HeadingFont.Height + UiLayout.ButtonHeight
             + UiLayout.SectionGap * 2;
-
-        static int TodayBottomMin() =>
-            UiLayout.ButtonHeight * 2 + AppTheme.SmallFont.Height * 2
-            + AppTheme.MicroFont.Height + AppTheme.BodyFont.Height * 3
-            + UiLayout.RowGap * 5;
 
         var todaySplit = new SplitContainer
         {
@@ -873,10 +876,45 @@ public partial class MainForm
         todaySplit.Panel1.Controls.Add(today);
         todaySplit.Panel2.Controls.Add(raceProgram);
 
+        // The program's least, at the width the split gives it - the lower
+        // half is as wide as the split - and never under the panel's own
+        // 25px, which the arithmetic below relies on to stay in range.
+        int TodayBottomMin() => Math.Max(todaySplit.Panel2MinSize, raceProgram.LeastPaneHeight(todaySplit.Width));
+
+        // The most the top half can have and still leave the program its
+        // least. Under the top half's own 25px when the window is too short
+        // for both, which the callers check for.
+        int TodayTopMost() => todaySplit.Height - todaySplit.SplitterWidth - TodayBottomMin();
+
         // Placed on the first resize that has room for it, not here: a
         // SplitterDistance assigned before the control has a height is either
         // ignored or throws, depending on how far out it is.
         var todaySplitPlaced = false;
+
+        // Set while the splitter is moved from here rather than by hand, so
+        // only a position the director chose is remembered. Moved to fit -
+        // the window made smaller for a minute, the text size tried out - it
+        // would otherwise overwrite the one they dragged it to.
+        var todaySplitFitting = false;
+
+        void MoveTodaySplitter(int distance)
+        {
+            if (todaySplit.SplitterDistance == distance)
+            {
+                return;
+            }
+
+            todaySplitFitting = true;
+
+            try
+            {
+                todaySplit.SplitterDistance = distance;
+            }
+            finally
+            {
+                todaySplitFitting = false;
+            }
+        }
 
         void PlaceTodaySplitter()
         {
@@ -885,38 +923,66 @@ public partial class MainForm
                 return;
             }
 
-            var room = todaySplit.Height - todaySplit.SplitterWidth;
+            var most = TodayTopMost();
 
-            // Not enough room to open at a useful size: leave WinForms to it
-            // and try again on the next resize. Nothing is assigned until the
-            // arithmetic below is known to be in range.
-            if (room < TodayTopMin() + TodayBottomMin())
+            // Not enough room for the program's least and a strip of the top
+            // half over it: leave WinForms to it and try again on the next
+            // resize. Nothing is assigned until the arithmetic below is known
+            // to be in range.
+            if (most < todaySplit.Panel1MinSize)
             {
                 return;
             }
 
-            // 55% the first time, measured rather than written down: the
+            // Until the director has dragged the line, as tall as the top
+            // half's content (see FitTodayToContent) - or 55% when that is
+            // not known yet, measured rather than written down: the
             // summary's real height depends on the text-size setting, and any
             // pixel count decided here would be right at one setting only.
+            // Never so far down that the program loses its least; never
+            // higher than the top's least while there is room for that.
+            var room = todaySplit.Height - todaySplit.SplitterWidth;
             var saved = _settings.TodayProgrammeSplit;
-            var wanted = saved > 0 ? saved : room * 55 / 100;
+            var wanted = saved > 0 ? saved : today.ContentHeight > 0 ? today.ContentHeight : room * 55 / 100;
 
-            todaySplit.SplitterDistance = Math.Clamp(wanted, TodayTopMin(), room - TodayBottomMin());
+            MoveTodaySplitter(Math.Clamp(wanted, Math.Min(TodayTopMin(), most), most));
 
-            // Set last, so the assignment above - which raises SplitterMoved -
-            // does not save the default back over a position the director
-            // chose in an earlier session.
             todaySplitPlaced = true;
 
             FitTodayToContent();
         }
 
-        // The top half is always tall enough to show all of Next Steps -
-        // the card, Ready to Race and the tiles - without scrolling. It
-        // only ever GROWS the half, so a director who drags the line down to
-        // give the programme less room keeps that; dragging it up past the
-        // content is what is undone, the next time the content changes or
-        // the window is resized. Still leaves the programme its minimum.
+        // The program is always tall enough for its buttons: when it is not
+        // - the window made smaller, the buttons wrapping onto a second line,
+        // the line dragged too far down - the top half gives way, and
+        // scrolls. Down to its own 25px and no further, which only a window
+        // too short for anything reaches.
+        void KeepProgramInView()
+        {
+            if (!todaySplitPlaced || todaySplit.IsDisposed)
+            {
+                return;
+            }
+
+            var most = Math.Max(todaySplit.Panel1MinSize, TodayTopMost());
+
+            if (todaySplit.SplitterDistance > most && todaySplit.Height - todaySplit.SplitterWidth - todaySplit.Panel2MinSize >= most)
+            {
+                MoveTodaySplitter(most);
+            }
+        }
+
+        // The top half is tall enough to show all of Next Steps - the card,
+        // Ready to Race and the tiles - without scrolling, whenever that
+        // leaves the program its least.
+        //
+        // Until the director drags the line, it is exactly that tall: the
+        // program gets everything else, rather than a blank band opening
+        // under the tiles at 55% of a tall window (layout pictures, 29 Sep).
+        // Once they have, it only ever GROWS the half, so a director who
+        // drags the line down to give the program less room keeps that;
+        // dragging it up past the content is what is undone, the next time
+        // the content changes or the window is resized.
         void FitTodayToContent()
         {
             if (!todaySplitPlaced || todaySplit.IsDisposed)
@@ -924,23 +990,24 @@ public partial class MainForm
                 return;
             }
 
-            var room = todaySplit.Height - todaySplit.SplitterWidth;
-            var most = room - TodayBottomMin();
+            var most = TodayTopMost();
 
-            if (most < TodayTopMin())
+            if (most >= todaySplit.Panel1MinSize && today.ContentHeight > 0)
             {
-                return;
+                var wanted = Math.Clamp(today.ContentHeight, todaySplit.Panel1MinSize, most);
+                var dragged = _settings.TodayProgrammeSplit > 0;
+
+                if (dragged ? todaySplit.SplitterDistance < wanted : todaySplit.SplitterDistance != wanted)
+                {
+                    MoveTodaySplitter(wanted);
+                }
             }
 
-            var wanted = Math.Clamp(today.ContentHeight, TodayTopMin(), most);
-
-            if (todaySplit.SplitterDistance < wanted)
-            {
-                todaySplit.SplitterDistance = wanted;
-            }
+            KeepProgramInView();
         }
 
         today.ContentHeightChanged += FitTodayToContent;
+        raceProgram.LeastPaneHeightChanged += FitTodayToContent;
 
         todaySplit.Resize += (_, _) =>
         {
@@ -956,13 +1023,23 @@ public partial class MainForm
 
         todaySplit.SplitterMoved += (_, _) =>
         {
-            if (!todaySplitPlaced)
+            if (!todaySplitPlaced || todaySplitFitting)
             {
                 return;
             }
 
             _settings.TodayProgrammeSplit = todaySplit.SplitterDistance;
             _settings.Save();
+
+            // Dragged so far down that the program's buttons would go below
+            // the fold: back up to where they show, once the drag is over -
+            // not from inside the splitter's own event. WinForms moves the
+            // splitter itself too, when the window is made too short for the
+            // top half, and that can be before the window has a handle.
+            if (IsHandleCreated && !IsDisposed)
+            {
+                BeginInvoke(new Action(KeepProgramInView));
+            }
         };
 
         subPageToday.Controls.Add(todaySplit);

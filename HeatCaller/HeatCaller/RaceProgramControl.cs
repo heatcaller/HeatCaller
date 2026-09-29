@@ -64,6 +64,12 @@ public sealed class RaceProgramControl : UserControl
     /// <summary>The class filter and its caption - held so a rebuilt class list can re-measure it.</summary>
     private FieldRow? _filterRow;
 
+    /// <summary>The page the card fills - held so Next Steps can ask how short it can go. See LeastPaneHeight.</summary>
+    private FillPage? _page;
+
+    /// <summary>Set while a LeastPaneHeightChanged is waiting to be raised - see PostLeastPaneHeightChanged.</summary>
+    private bool _leastPosted;
+
     /// <summary>The class filter's width, measured from its choices - see Pieces.PickerWidth. Forgotten when the list is rebuilt.</summary>
     private (Font Font, int Count, int Width)? _filterWidth;
 
@@ -114,6 +120,14 @@ public sealed class RaceProgramControl : UserControl
 
     /// <summary>Raised when the timetable is asked for. The host owns the window it opens in - see MainForm.</summary>
     public event Action? TimetableRequested;
+
+    /// <summary>
+    /// Raised when the least height this page can do with has changed - the
+    /// buttons wrapping onto another line, a new text size - after the
+    /// layout that changed it. Next Steps' split keeps the page at least
+    /// that tall. See LeastPaneHeight.
+    /// </summary>
+    public event Action? LeastPaneHeightChanged;
 
     /// <summary>The timetable, read-only - only for the grid's Due column. Null when the host did not pass one.</summary>
     private readonly DayScheduleStore? _schedule;
@@ -340,8 +354,47 @@ public sealed class RaceProgramControl : UserControl
         var page = new FillPage();
 
         page.AddFill(list, list.LeastHeight, gapBelow: 0);
+        page.LeastHeightChanged += PostLeastPaneHeightChanged;
 
+        _page = page;
         Controls.Add(page);
+    }
+
+    /// <summary>
+    /// The least height this page can do with at <paramref name="width"/>:
+    /// the class filter, the headings and three rounds, the buttons and the
+    /// status line, in the card and its margins. Any shorter and it scrolls,
+    /// and the buttons are the first thing to go below the fold - so Next
+    /// Steps keeps its lower half at least this tall, and scrolls its top
+    /// half instead.
+    /// </summary>
+    public int LeastPaneHeight(int width) => _page?.LeastHeight(width) ?? 0;
+
+    /// <summary>
+    /// Tells the host the least height has changed - after the layout that
+    /// changed it, not during, for the reason TodayControl gives for its
+    /// own ContentHeightChanged: the host answers by moving the splitter,
+    /// which resizes this page. Once however many layouts in a row changed
+    /// it.
+    /// </summary>
+    private void PostLeastPaneHeightChanged()
+    {
+        if (_leastPosted || IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        _leastPosted = true;
+
+        BeginInvoke(new Action(() =>
+        {
+            _leastPosted = false;
+
+            if (!IsDisposed)
+            {
+                LeastPaneHeightChanged?.Invoke();
+            }
+        }));
     }
 
     /// <summary>
