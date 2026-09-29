@@ -39,43 +39,84 @@ public sealed class LapChartControl : UserControl
         _settings = settings;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(900, 640);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take. No MinimumSize: the 900x640 floor was honoured over the size
+        // the page was given. A short window scrolls the page instead
+        // (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The session picker's width at the normal text size.</summary>
+    private const int SessionPickerWidth = 420;
+
+    /// <summary>The drivers' card's width at the normal text size.</summary>
+    private const int DriversWidth = 220;
+
+    /// <summary>The least the chart gets at the normal text size - below that the page scrolls.</summary>
+    private const int ChartLeastHeight = 220;
+
+    /// <summary>Drivers shown in the consistency table without scrolling it.</summary>
+    private const int StatsRowsShown = 4;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro and the session picker, then the drivers down the left and
+    /// beside them the chart - taking the height that is left - over the
+    /// consistency table. On the layout pieces (LayoutPieces.cs), so nothing
+    /// is placed by hand.
+    ///
+    /// It used to be placed by hand over a 900x640 floor: the list and the
+    /// chart at a fixed 340px, and the export button and the consistency box
+    /// at fixed places under them, in faces handed out once.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Lap-by-lap pace for a saved race. Tick drivers on the left to compare them. Sessions recorded before " +
                    "lap-by-lap tracking was added won't have chart data - only races run from now on will.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(860, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Measured off the caption - see UiLayout.After.
-        var lblSession = new Label { Text = "Session:", Location = new Point(12, 62), AutoSize = true };
-        _cmbSession.Width = 420;
-        _cmbSession.Location = new Point(UiLayout.After(lblSession), 59);
         _cmbSession.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSession.SelectedIndexChanged += (_, _) => LoadSelectedSession();
 
-        // After the box rather than at a flat 520, which assumed the box
-        // began at 100 - it begins wherever "Session:" actually ends.
-        _lblInfo.Location = new Point(_cmbSession.Right + UiLayout.SectionGap, 62);
-        _lblInfo.AutoSize = true;
+        // What the session holds, beside the picker - on a line of its own
+        // when it no longer fits there (FieldRow).
+        _lblInfo.AutoSize = false;
+        _lblInfo.AutoEllipsis = true;
         _lblInfo.ForeColor = AppTheme.TextMuted;
 
-        var lblDrivers = new Label { Text = "Drivers:", Location = new Point(12, 96), AutoSize = true, Font = AppTheme.BoldFont };
-        _clbDrivers.Location = new Point(12, 118);
-        _clbDrivers.Size = new Size(220, 340);
-        _clbDrivers.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        var sessionRow = new FieldRow();
+
+        sessionRow.Add(new Label { Text = "Session:" }, _cmbSession, () => UiLayout.AtTextSize(SessionPickerWidth));
+        sessionRow.AddLast(null, _lblInfo, () => _lblInfo.GetPreferredSize(Size.Empty).Width);
+
+        // --- The drivers ---
         _clbDrivers.CheckOnClick = true;
+        _clbDrivers.IntegralHeight = false;
         _clbDrivers.ItemCheck += (_, _) =>
         {
             if (!IsHandleCreated || IsDisposed)
@@ -86,11 +127,11 @@ public sealed class LapChartControl : UserControl
             BeginInvoke(() => { _chartPanel.Invalidate(); RefreshStats(); });
         };
 
-        _chartPanel.Location = new Point(248, 118);
-        _chartPanel.Size = new Size(640, 340);
-        // Top/Left/Right only - with Bottom anchoring the chart grew
-        // downward on a taller window and painted over the export button.
-        _chartPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        var drivers = new Section("Drivers");
+
+        drivers.AddFill(_clbDrivers, () => 4 * _clbDrivers.ItemHeight + 6, gapBelow: 0);
+
+        // --- The chart ---
         _chartPanel.BackColor = AppTheme.Surface;
 
         // The hover readout repaints the chart, so this has to be buffered
@@ -107,27 +148,19 @@ public sealed class LapChartControl : UserControl
             }
         };
 
-        var btnExport = new Button { Text = "Save Chart as Image...", Location = new Point(12, 470), Width = 220, Anchor = AnchorStyles.Top | AnchorStyles.Left };
+        // It draws its own axes and labels to its size, so a resize is a
+        // repaint.
+        _chartPanel.Resize += (_, _) => _chartPanel.Invalidate();
+
+        var btnExport = new Button { Text = "Save Chart as Image..." };
         btnExport.Click += (_, _) => ExportChart();
 
-        // The font is set here so the caption's height - which is what the
-        // first row inside has to clear - is measured against the face this
-        // box is actually drawn in. The table sat at a flat 22, which was
-        // under a smaller caption than this one, and the box was a pixel
-        // short of holding it.
-        var grpStats = new GroupBox
-        {
-            Text = "Consistency",
-            Location = new Point(448, 466),
-            Size = new Size(440, 150),
-            Font = AppTheme.BodyFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
+        var chart = new Section("Lap times");
 
-        _statsTable.Location = new Point(12, UiLayout.InsideGroup(grpStats));
-        _statsTable.Size = new Size(416, 118);
-        grpStats.Height = Math.Max(grpStats.Height, UiLayout.GroupHeightFor(_statsTable.Bottom));
-        _statsTable.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        chart.AddFill(_chartPanel, () => UiLayout.AtTextSize(ChartLeastHeight));
+        chart.Add(new ButtonBar().With(btnExport), gapBelow: 0);
+
+        // --- Consistency ---
         _statsTable.ReadOnly = true;
         _statsTable.AllowUserToAddRows = false;
         _statsTable.AllowUserToDeleteRows = false;
@@ -142,17 +175,42 @@ public sealed class LapChartControl : UserControl
             new DataGridViewTextBoxColumn { Name = "spread", HeaderText = "Avg-Best", FillWeight = 55 },
             new DataGridViewTextBoxColumn { Name = "consistency", HeaderText = "Std Dev", FillWeight = 50 }
         );
-        grpStats.Controls.Add(_statsTable);
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblSession);
-        Controls.Add(_cmbSession);
-        Controls.Add(_lblInfo);
-        Controls.Add(lblDrivers);
-        Controls.Add(_clbDrivers);
-        Controls.Add(_chartPanel);
-        Controls.Add(btnExport);
-        Controls.Add(grpStats);
+        // Every heading whole, and a few drivers tall, at the text size in
+        // use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() =>
+        {
+            Pieces.KeepHeadingsWhole(_statsTable);
+
+            var height = _statsTable.ColumnHeadersHeight + StatsRowsShown * _statsTable.RowTemplate.Height + 2;
+
+            if (_statsTable.Height != height)
+            {
+                _statsTable.Height = height;
+            }
+        });
+
+        var consistency = new Section("Consistency");
+
+        consistency.Add(_statsTable, gapBelow: 0);
+
+        // --- The page ---
+        //
+        // The drivers down the left, ticked from; the chart and the table
+        // beside them, taking the rest of the width.
+        var band = new Beside(() => UiLayout.AtTextSize(DriversWidth)) { SideOnLeft = true };
+
+        band.AddFill(chart, chart.LeastHeight, gapBelow: UiLayout.RowGap);
+        band.Add(consistency, gapBelow: 0);
+        band.AddSideFill(drivers, drivers.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.Add(sessionRow);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     /// <summary>

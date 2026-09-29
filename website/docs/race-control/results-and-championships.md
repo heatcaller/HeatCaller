@@ -212,7 +212,7 @@ A reset never deletes race history. Results, track records and championship poin
 
 ### Lap Times
 
-Lap-by-lap pace for one saved session. Choose the **Session:**, then tick **Drivers:** to plot them against each other. The **Consistency** box shows each driver's **Best**, **Average**, **Avg-Best** and **Std Dev**. **Save Chart as Image...** exports the chart.
+Lap-by-lap pace for one saved session. Choose the **Session:**, then tick drivers in the **Drivers** list, down the left, to plot them against each other. The **Consistency** table under the chart shows each driver's **Best**, **Average**, **Avg-Best** and **Std Dev**. **Save Chart as Image** exports the chart.
 
 Sessions saved before lap-by-lap times were recorded have no chart data.
 
@@ -220,7 +220,7 @@ Sessions saved before lap-by-lap times were recorded have no chart data.
 
 Pick **Driver A:** and **Driver B:** to compare two drivers across every session they both raced in. A race one of them missed doesn't count.
 
-**Career comparison (shared sessions only)** covers:
+**Career comparison (shared sessions only)**, on the right, covers:
 
 - sessions won and win rate
 - current and longest win streaks
@@ -229,7 +229,7 @@ Pick **Driver A:** and **Driver B:** to compare two drivers across every session
 - average finish position, podiums and winning margins
 - pace gap, improvement over time and strongest track.
 
-**Session by session** lists each shared race with both positions, both best laps and who was **Ahead**.
+**Session by session**, beside it, lists each shared race with both positions, both best laps and who was **Ahead**.
 
 ### Trends
 

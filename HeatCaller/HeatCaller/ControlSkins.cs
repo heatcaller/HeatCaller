@@ -1335,6 +1335,10 @@ internal sealed class ListViewHeaderSkin : NativeWindow
 {
     private const int WM_PAINT = 0x000F;
     private const int WM_ERASEBKGND = 0x0014;
+
+    /// <summary>"Draw yourself into this DC": what a window is sent when it is printed rather than painted - Control.DrawToBitmap, and so every layout picture.</summary>
+    private const int WM_PRINTCLIENT = 0x0318;
+
     private const int LVM_FIRST = 0x1000;
     private const int LVM_GETHEADER = LVM_FIRST + 31;
     private const int HDM_FIRST = 0x1200;
@@ -1342,7 +1346,32 @@ internal sealed class ListViewHeaderSkin : NativeWindow
     /// <summary>Asks the header where a given column sits, in the header's own coordinates - so a horizontally scrolled list still lines up.</summary>
     private const int HDM_GETITEMRECT = HDM_FIRST + 7;
 
+    /// <summary>How far in from the left of its column a caption is drawn.</summary>
+    private const int CaptionLeft = 8;
+
+    /// <summary>The room a caption keeps from the right of its column.</summary>
+    private const int CaptionRight = 4;
+
+    /// <summary>How a caption is laid out - measured with the same flags it is drawn with, so a fit is a fit.</summary>
+    private const TextFormatFlags CaptionFlags = TextFormatFlags.Left | TextFormatFlags.SingleLine;
+
     private static readonly ConditionalWeakTable<ListView, ListViewHeaderSkin> Attached = new();
+
+    /// <summary>
+    /// The narrowest a column can be and still show its whole caption: the
+    /// caption in plain capitals - as Draw falls back to when the spaced
+    /// ones do not fit - with the inset it is drawn at and a little room.
+    /// In the header face in use, so it follows the text size. What
+    /// Pieces.FitListColumns and the Driver Profiles roster hold a list's
+    /// columns to.
+    ///
+    /// It used to be measured by each of them in the bold or the body face,
+    /// in mixed case - the look of a header this class replaced, and not
+    /// the width of the one it draws.
+    /// </summary>
+    internal static int LeastWidth(string heading) =>
+        TextRenderer.MeasureText((heading ?? string.Empty).ToUpperInvariant(), AppTheme.MicroFont, new Size(int.MaxValue, int.MaxValue), CaptionFlags).Width
+        + CaptionLeft + CaptionRight + 2;
 
     private readonly ListView _listView;
 
@@ -1405,6 +1434,26 @@ internal sealed class ListViewHeaderSkin : NativeWindow
             case WM_PAINT when !_listView.IsDisposed:
                 Paint();
                 return;
+
+            // Drawn into a DC it is handed rather than onto the screen -
+            // DrawToBitmap, and so every layout picture. Only WM_PAINT used
+            // to be claimed, so a printed header was the system's own white
+            // bar with mixed-case captions: the pictures showed a header the
+            // screen never does (29 Sep, Track Layouts and Race History).
+            case WM_PRINTCLIENT when !_listView.IsDisposed && m.WParam != IntPtr.Zero:
+                try
+                {
+                    using var g = Graphics.FromHdc(m.WParam);
+                    Draw(g);
+                }
+                catch
+                {
+                    // As in Paint: a window going away mid-print is not
+                    // worth taking the app down for.
+                }
+
+                m.Result = IntPtr.Zero;
+                return;
         }
 
         base.WndProc(ref m);
@@ -1423,66 +1472,7 @@ internal sealed class ListViewHeaderSkin : NativeWindow
         try
         {
             using var g = Graphics.FromHdc(hdc);
-
-            // The quiet header, exactly as the grids draw theirs (see
-            // AppTheme.QuietHeaderPaint): surface, spaced caps in the
-            // accent ink, one hairline underneath. This used to be a solid
-            // Primary banner with white bold text - the loudest band on
-            // the page, sitting next to grids that had already gone quiet,
-            // so every ListView looked like it came from a different app.
-            var bounds = GetClientBounds();
-
-            using var back = new SolidBrush(AppTheme.Surface);
-
-            g.FillRectangle(back, bounds);
-
-            using (var rule = new Pen(AppTheme.Border))
-            {
-                g.DrawLine(rule, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1);
-            }
-
-            // A header exists in Details view only; in any other view the
-            // window is there but has nothing to say.
-            if (_listView.View != View.Details)
-            {
-                return;
-            }
-
-            for (var i = 0; i < _listView.Columns.Count; i++)
-            {
-                var rect = new RECT();
-
-                if (SendMessage(Handle, HDM_GETITEMRECT, (IntPtr)i, ref rect) == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var cell = new Rectangle(
-                    rect.Left,
-                    rect.Top,
-                    Math.Max(0, rect.Right - rect.Left),
-                    Math.Max(0, rect.Bottom - rect.Top));
-
-                if (cell.Width <= 1 || cell.Height <= 1)
-                {
-                    continue;
-                }
-
-                var textRect = new Rectangle(cell.X + 8, cell.Y, cell.Width - 12, cell.Height);
-
-                // Spacing only on short captions, same rule as the grids -
-                // thin spaces push a long one past its column.
-                var label = _listView.Columns[i].Text.ToUpperInvariant();
-
-                if (label.Length <= 10)
-                {
-                    label = AppTheme.Spaced(label);
-                }
-
-                TextRenderer.DrawText(
-                    g, label, AppTheme.MicroFont, textRect, AppTheme.Primary,
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
-            }
+            Draw(g);
         }
         catch
         {
@@ -1492,6 +1482,82 @@ internal sealed class ListViewHeaderSkin : NativeWindow
         finally
         {
             EndPaint(Handle, ref paint);
+        }
+    }
+
+    /// <summary>
+    /// The whole header - background, every column's caption, and the
+    /// leftover strip - into whatever it is handed: the screen through
+    /// WM_PAINT, or a picture through WM_PRINTCLIENT.
+    /// </summary>
+    private void Draw(Graphics g)
+    {
+        // The quiet header, exactly as the grids draw theirs (see
+        // AppTheme.QuietHeaderPaint): surface, spaced caps in the
+        // accent ink, one hairline underneath. This used to be a solid
+        // Primary banner with white bold text - the loudest band on
+        // the page, sitting next to grids that had already gone quiet,
+        // so every ListView looked like it came from a different app.
+        var bounds = GetClientBounds();
+
+        using var back = new SolidBrush(AppTheme.Surface);
+
+        g.FillRectangle(back, bounds);
+
+        using (var rule = new Pen(AppTheme.Border))
+        {
+            g.DrawLine(rule, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1);
+        }
+
+        // A header exists in Details view only; in any other view the
+        // window is there but has nothing to say.
+        if (_listView.View != View.Details)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _listView.Columns.Count; i++)
+        {
+            var rect = new RECT();
+
+            if (SendMessage(Handle, HDM_GETITEMRECT, (IntPtr)i, ref rect) == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            var cell = new Rectangle(
+                rect.Left,
+                rect.Top,
+                Math.Max(0, rect.Right - rect.Left),
+                Math.Max(0, rect.Bottom - rect.Top));
+
+            if (cell.Width <= 1 || cell.Height <= 1)
+            {
+                continue;
+            }
+
+            var textRect = new Rectangle(cell.X + CaptionLeft, cell.Y, cell.Width - CaptionLeft - CaptionRight, cell.Height);
+
+            // Spacing only on short captions, same rule as the grids -
+            // thin spaces push a long one past its column. And only while
+            // the spaced one fits, as the grids have it too: at a larger
+            // text size, or in a narrow column, the thin spaces were what
+            // cut a heading short when the plain capitals had room.
+            var label = _listView.Columns[i].Text.ToUpperInvariant();
+
+            if (label.Length <= 10)
+            {
+                var spaced = AppTheme.Spaced(label);
+
+                if (TextRenderer.MeasureText(g, spaced, AppTheme.MicroFont, new Size(int.MaxValue, int.MaxValue), CaptionFlags).Width <= textRect.Width)
+                {
+                    label = spaced;
+                }
+            }
+
+            TextRenderer.DrawText(
+                g, label, AppTheme.MicroFont, textRect, AppTheme.Primary,
+                CaptionFlags | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
     }
 

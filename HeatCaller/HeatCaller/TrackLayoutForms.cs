@@ -488,7 +488,17 @@ public sealed class TrackLayoutEditForm : Form
     }
 }
 
-/// <summary>Lists saved track layouts with add/edit/delete.</summary>
+/// <summary>
+/// Lists saved track layouts with add/edit/delete, and shows the one
+/// selected beside the list.
+///
+/// On the layout pieces (LayoutPieces.cs): two cards side by side, the
+/// list with its buttons under it, and the selected track - its name and
+/// its picture, as big as the card. It used to be a 400px list and a 240px
+/// preview box placed by hand over a 680x360 floor, the buttons at a fixed
+/// y, all in faces handed out once - so a short window cut the buttons off
+/// and a larger text size ran the name into the picture.
+/// </summary>
 public sealed class TrackLayoutManagerControl : UserControl
 {
     private readonly TrackLayoutStore _store;
@@ -499,6 +509,16 @@ public sealed class TrackLayoutManagerControl : UserControl
     private readonly AppSettings _settings;
     private readonly UndoService _undo;
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The selected track's card at the normal text size - about two fifths of the page, between these.</summary>
+    private const int PreviewLeastWidth = 260;
+    private const int PreviewMostWidth = 480;
+
+    /// <summary>The least the picture gets at the normal text size - below that the page scrolls.</summary>
+    private const int PictureLeastHeight = 160;
+
     public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo)
     {
         _store = store;
@@ -506,20 +526,42 @@ public sealed class TrackLayoutManagerControl : UserControl
         _settings = settings;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(680, 360);
-        Font = AppTheme.BodyFont;
 
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No MinimumSize: the 680x360 floor was honoured
+        // over the size the page was given. A short window scrolls the page
+        // instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        BuildLayout();
+        RefreshList();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    private void BuildLayout()
+    {
+        // --- The layouts ---
         _list.View = View.Details;
         _list.FullRowSelect = true;
         _list.MultiSelect = false;
         _list.GridLines = true;
-        _list.Location = new Point(12, 12);
-        _list.Size = new Size(400, 290);
-        _list.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-        _list.Columns.Add("Name", 140);
-        _list.Columns.Add("Record", 130);
-        _list.Columns.Add("Attachment", 110);
-        _list.Columns.Add("Plan", 110);
+        _list.Columns.Add("Name");
+        _list.Columns.Add("Record");
+        _list.Columns.Add("Attachment");
+        _list.Columns.Add("Plan");
         _list.DoubleClick += (_, _) => EditSelected();
         _list.SelectedIndexChanged += (_, _) =>
         {
@@ -531,80 +573,69 @@ public sealed class TrackLayoutManagerControl : UserControl
             }
         };
 
-        var grpPreview = new GroupBox { Text = "Selected Track", Location = new Point(424, 12), Size = new Size(240, 290), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right };
+        // The name takes what the others leave - see Pieces.FitListColumns.
+        Pieces.FitListColumns(_list, 0, 140, 130, 110, 110);
 
-        _lblPreviewName.Location = new Point(12, 26);
+        var btnAdd = new Button { Text = "Add..." };
+        btnAdd.Click += (_, _) => AddNew();
+
+        var btnEdit = new Button { Text = "Edit..." };
+        btnEdit.Click += (_, _) => EditSelected();
+
+        var btnDelete = new Button { Text = "Delete" };
+        btnDelete.Click += (_, _) => DeleteSelected();
+
+        var btnResetRecord = new Button { Text = "Reset Record" };
+        btnResetRecord.Click += (_, _) => ResetSelectedRecord();
+
+        var btnDesign = new Button { Text = "Track Designer..." };
+        btnDesign.Click += (_, _) => DesignSelected();
+
+        var layouts = new Section("Track layouts");
+
+        layouts.AddFill(_list, () => _list.Font.Height * 2 + 4 * (_list.Font.Height + 6));
+        layouts.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete, btnResetRecord, btnDesign), gapBelow: 0);
+
+        // --- The selected track ---
         _lblPreviewName.AutoSize = true;
-        _lblPreviewName.MaximumSize = new Size(216, 0);
-        _lblPreviewName.Font = new Font(AppTheme.BoldFont.FontFamily, 12F, FontStyle.Bold);
+        _textSize.Wear(_lblPreviewName, () => AppTheme.HeadingFont);
 
-        _picPreview.Location = new Point(12, 56);
-        _picPreview.Size = new Size(216, 216);
-        _picPreview.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _picPreview.BorderStyle = BorderStyle.FixedSingle;
         _picPreview.SizeMode = PictureBoxSizeMode.Zoom;
         _picPreview.BackColor = AppTheme.Surface;
         _picPreview.Visible = false;
 
+        // Shown when there is no picture, over the room the picture keeps -
+        // which stays, so the card does not change shape as the selection
+        // does.
         _lblPreviewEmpty.Text = "Select a track layout to see it here.";
-        _lblPreviewEmpty.Location = new Point(12, 56);
         _lblPreviewEmpty.AutoSize = true;
-        _lblPreviewEmpty.MaximumSize = new Size(216, 0);
         _lblPreviewEmpty.ForeColor = AppTheme.TextMuted;
 
-        grpPreview.Controls.Add(_lblPreviewName);
-        grpPreview.Controls.Add(_picPreview);
-        grpPreview.Controls.Add(_lblPreviewEmpty);
+        var preview = new Section("Selected track");
 
-        // Sized to their captions and run left to right, rather than the
-        // fixed 90 / 90 / 90 / 110 / 150 at 12 / 108 / 204 / 300 / 416.
-        // "Reset Record" outgrew its 110 at this font, so the doctor
-        // widened it every startup and then pushed "Track Designer..."
-        // eleven pixels clear of it.
-        var btnAdd = new Button { Text = "Add...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnAdd.Click += (_, _) => AddNew();
+        preview.Add(_lblPreviewName);
+        preview.Add(_lblPreviewEmpty);
+        preview.AddFill(_picPreview, () => UiLayout.AtTextSize(PictureLeastHeight), gapBelow: 0);
 
-        var btnEdit = new Button { Text = "Edit...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnEdit.Click += (_, _) => EditSelected();
+        // --- The page ---
+        Beside? band = null;
 
-        var btnDelete = new Button { Text = "Delete", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnDelete.Click += (_, _) => DeleteSelected();
+        band = new Beside(() => PreviewWidth(band?.Width ?? 0));
 
-        var btnResetRecord = new Button { Text = "Reset Record", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnResetRecord.Click += (_, _) => ResetSelectedRecord();
+        band.AddFill(layouts, layouts.LeastHeight);
+        band.AddSideFill(preview, preview.LeastHeight, gapBelow: 0);
 
-        var btnDesign = new Button { Text = "Track Designer...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnDesign.Click += (_, _) => DesignSelected();
+        var page = new FillPage();
 
-        var buttonLeft = 12;
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
-        foreach (var button in new[] { btnAdd, btnEdit, btnDelete, btnResetRecord, btnDesign })
-        {
-            // Narrower than UiLayout's standard button on purpose - five of
-            // them share one row under the list - but measured the way
-            // LayoutDoctor measures, so it has nothing left to widen.
-            button.Text = AppTheme.Caption(button.Text);
-
-            button.Width = TextRenderer.MeasureText(
-                button.Text,
-                AppTheme.BoldFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width + UiLayout.ButtonPaddingX + 8;
-
-            button.Location = new Point(buttonLeft, 312);
-            buttonLeft = button.Right + UiLayout.ButtonGap;
-        }
-
-        Controls.Add(_list);
-        Controls.Add(grpPreview);
-        Controls.Add(btnAdd);
-        Controls.Add(btnEdit);
-        Controls.Add(btnDelete);
-        Controls.Add(btnResetRecord);
-        Controls.Add(btnDesign);
-
-        RefreshList();
+        Controls.Add(page);
     }
+
+    /// <summary>The selected track's card: about two fifths of the page, between 260px and 480px at the normal text size, at the size in use.</summary>
+    private static int PreviewWidth(int page) =>
+        Math.Clamp((int)(page * 0.4f), UiLayout.AtTextSize(PreviewLeastWidth), UiLayout.AtTextSize(PreviewMostWidth));
 
     /// <summary>Called when this page becomes visible - layouts can gain records from Race Control while it's inactive.</summary>
     public void RefreshAll() => RefreshList();

@@ -157,8 +157,11 @@ day: the layout overhaul is finished before the beta rather than after it
    and the overhaul is visual risk only. Page by page in race-night order,
    one per commit, each held to a clean layout report and checked by eye;
    then the drawn controls, then `PerMonitorV2`. Race Control, Race Day,
-   Connection, Driver Profiles, Classes, Championship, Rentals, Handicaps
-   and Batteries are done.
+   Connection, Driver Profiles, Classes, Championship, Rentals, Handicaps,
+   Batteries, Track Layouts, Race History, Race Analytics (all six tabs),
+   Achievements and Garage are done. Left: Practice, Ghost Cars, Demo
+   Mode, Venues, Themes, Sponsors, Local Screens, Club Website, Voice (four
+   tabs), Sounds (six tabs) and Backup & Restore.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -651,8 +654,29 @@ from. Ranked by what decides whether a club switches, and stays.
    column was pushed to its new minimum took that as the column's weight,
    and the transponder column took half the list - and the championships'
    column is never narrower than its caption (`Section.CaptionWidth`),
-   which wrapped between its spaced letters. Next: Track Layouts, then the
-   rest of the sidebar in its order.
+   which wrapped between its spaced letters.
+
+   **Track Layouts, Race History, Race Analytics, Achievements and Garage
+   converted (29 Sep).** New pieces: a `Beside` can put its column down
+   the left (`SideOnLeft` - a list picked from, beside what it shows: Race
+   History's sessions, Lap Times' drivers); `Pieces.FitListColumns` fits a
+   details-view list's columns the way Driver Profiles' roster does (one
+   stretches, the rest give way to their headings before it scrolls); and
+   Next Steps' tiles moved into the pieces (`StatTile`, `TileStrip`) for
+   the Analytics overview to share. Head to Head's comparison and its
+   session list are side by side rather than stacked, so each has the
+   page's height - the twenty rows of the comparison were in a 292px box
+   under a 790px floor. Pace keeps `LayoutDoctor.LeaveAlone`, being also
+   the whole of `PaceAnalysisForm`. The drawn parts (the badge wall, the
+   car cards, the charts) are unchanged apart from Head to Head's win bar
+   and the Garage's class headings, which now follow the text size; the
+   car cards are still 208x172 at every text size. After the eye check: a
+   list's header now draws itself when printed too (`WM_PRINTCLIENT` in
+   `ListViewHeaderSkin`) - the layout pictures had shown the system's white
+   header, which the screen never does - and falls back to plain capitals
+   when the spaced ones don't fit, as the grids' headers do; its
+   `LeastWidth` is now the one measure `FitListColumns` and the roster hold
+   columns to. Next: Practice, then the rest of the sidebar in its order.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
@@ -833,7 +857,7 @@ what didn't fit an area:
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
-| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `TextSize`. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
+| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `StatTile`/`TileStrip`, `TextSize`; `Pieces.KeepHeadingsWhole` for a grid, `Pieces.FitListColumns` for a details-view list. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |

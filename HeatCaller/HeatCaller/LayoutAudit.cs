@@ -65,6 +65,24 @@ internal static class LayoutAudit
 
         // The packs, the pace by pack and the sessions to tag (BatteryPackControl).
         "Batteries",
+
+        // The layouts beside the one selected (TrackLayoutManagerControl, in TrackLayoutForms).
+        "Track Layouts",
+
+        // The sessions beside the one selected (RaceHistoryControl).
+        "Race History",
+
+        // All six tabs: Overview, Personal Bests, Lap Times, Head to Head,
+        // Trends and Pace (AnalyticsOverviewControl, PersonalBestsControl,
+        // LapChartControl, HeadToHeadControl, TrendChartControl,
+        // PaceAnalysisControl).
+        "Race Analytics",
+
+        // The picker, the progress strip and the wall of badges (AchievementsControl).
+        "Achievements",
+
+        // The filter, the wall of cars and its buttons (GarageControl).
+        "Garage",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>

@@ -28,85 +28,121 @@ public sealed class HeadToHeadControl : UserControl
         _history = history;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(900, 790);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take. No MinimumSize: the 900x790 floor was taller than a 1080p
+        // screen has room for, so the bottom of the page was never in view.
+        // A short window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The driver pickers' width at the normal text size - never narrower, and as wide as the longest name.</summary>
+    private const int DriverPickerWidth = 220;
+
+    /// <summary>The comparison card's width at the normal text size - about two fifths of the page, between these.</summary>
+    private const int ComparisonLeastWidth = 340;
+    private const int ComparisonMostWidth = 520;
+
+    /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when the lists are refilled.</summary>
+    private (Font Font, int Count, int Width)? _widthA;
+    private (Font Font, int Count, int Width)? _widthB;
+
+    /// <summary>The two pickers - held so refilled lists can re-measure the line.</summary>
+    private FieldRow? _pickRow;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro; a card for the matchup - the two pickers, who leads, and
+    /// the wins as a bar; and under it the races one by one beside the
+    /// career comparison, both taking the height that is left. On the
+    /// layout pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be one tall column placed by hand over a 900x790 floor,
+    /// the comparison's twenty rows in a fixed 292px box over the races -
+    /// most of both below the fold on a 1080p screen. Side by side, each
+    /// gets the page's height.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Pick two drivers to see how they stack up. Only sessions where both raced are counted - a race one of " +
                    "them sat out doesn't say anything about the matchup.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(860, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Measured off the caption rather than a literal x - see
-        // UiLayout.After. "Driver A:" outgrew the 80 it was written for.
-        var lblA = new Label { Text = "Driver A:", Location = new Point(12, 62), AutoSize = true };
-        _cmbDriverA.Width = 220;
-        _cmbDriverA.Location = new Point(UiLayout.After(lblA), 59);
+        // --- The matchup ---
         _cmbDriverA.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverA.SelectedIndexChanged += (_, _) => Compare();
 
-        // "vs" and the second caption sat at 312 and 344, which assumed the
-        // first box ran 90 to 310. It starts wherever "Driver A:" actually
-        // ends, and at this font that is further right than 90.
-        var lblVs = new Label
-        {
-            Text = "vs",
-            Location = new Point(_cmbDriverA.Right + UiLayout.RowGap, 62),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-        };
-
-        var lblB = new Label
-        {
-            Text = "Driver B:",
-            Location = new Point(UiLayout.After(lblVs) + UiLayout.RowGap, 62),
-            AutoSize = true,
-        };
-
-        _cmbDriverB.Width = 220;
-        _cmbDriverB.Location = new Point(UiLayout.After(lblB), 59);
         _cmbDriverB.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverB.SelectedIndexChanged += (_, _) => Compare();
 
-        _lblSummary.Location = new Point(12, 100);
+        var lblVs = new Label { Text = "vs", AutoSize = true };
+        _textSize.Wear(lblVs, () => AppTheme.BoldFont);
+
+        var pickRow = new FieldRow();
+
+        pickRow.Add(new Label { Text = "Driver A:" }, _cmbDriverA, () => PickerWidth(_cmbDriverA, ref _widthA));
+        pickRow.Add(null, lblVs);
+        pickRow.Add(new Label { Text = "Driver B:" }, _cmbDriverB, () => PickerWidth(_cmbDriverB, ref _widthB));
+        _pickRow = pickRow;
+
+        // Who leads, in the heading face - wrapping rather than cut short.
         _lblSummary.AutoSize = true;
-        _lblSummary.Font = new Font(AppTheme.BoldFont.FontFamily, 13F, FontStyle.Bold);
         _lblSummary.ForeColor = AppTheme.Accent;
+        _textSize.Wear(_lblSummary, () => AppTheme.HeadingFont);
 
-        _pnlWinBar.Location = new Point(12, 124);
-        _pnlWinBar.Size = new Size(860, 34);
-        _pnlWinBar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        // The wins as a bar, as tall as its names in the bold face.
         _pnlWinBar.Paint += WinBar_Paint;
+        _pnlWinBar.Resize += (_, _) => _pnlWinBar.Invalidate();
+        AppTheme.EnableDoubleBuffering(_pnlWinBar);
 
-        var grpStats = new GroupBox { Text = "Career comparison (shared sessions only)", Location = new Point(12, 168), Size = new Size(860, 330), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-        _statsGrid.Location = new Point(12, 24);
-        _statsGrid.Size = new Size(836, 292);
-        _statsGrid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _textSize.Keep(() =>
+        {
+            var height = WinBarHeight + WinBarPad * 2;
+
+            if (_pnlWinBar.Height != height)
+            {
+                _pnlWinBar.Height = height;
+            }
+        });
+
+        var matchup = new Section("Matchup");
+
+        matchup.Add(pickRow);
+        matchup.Add(_lblSummary, gapBelow: UiLayout.HintGap);
+        matchup.Add(_pnlWinBar, gapBelow: 0);
+
+        // --- The comparison, and the races one by one ---
         ConfigureGrid(_statsGrid);
         _statsGrid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "metric", HeaderText = "Metric", FillWeight = 60 },
             new DataGridViewTextBoxColumn { Name = "a", HeaderText = "Driver A", FillWeight = 50 },
             new DataGridViewTextBoxColumn { Name = "b", HeaderText = "Driver B", FillWeight = 50 }
         );
-        grpStats.Controls.Add(_statsGrid);
 
-        var grpRaces = new GroupBox { Text = "Session by session", Location = new Point(12, 510), Size = new Size(860, 260), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right };
-        _grid.Location = new Point(12, 24);
-        _grid.Size = new Size(836, 222);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         ConfigureGrid(_grid);
         _grid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "date", HeaderText = "Date", FillWeight = 55 },
@@ -117,19 +153,49 @@ public sealed class HeadToHeadControl : UserControl
             new DataGridViewTextBoxColumn { Name = "bestB", HeaderText = "B Best", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "winner", HeaderText = "Ahead", FillWeight = 50 }
         );
-        grpRaces.Controls.Add(_grid);
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblA);
-        Controls.Add(_cmbDriverA);
-        Controls.Add(lblVs);
-        Controls.Add(lblB);
-        Controls.Add(_cmbDriverB);
-        Controls.Add(_lblSummary);
-        Controls.Add(_pnlWinBar);
-        Controls.Add(grpStats);
-        Controls.Add(grpRaces);
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_statsGrid));
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var races = new Section("Session by session");
+
+        races.AddFill(_grid, () => _grid.ColumnHeadersHeight + 4 * _grid.RowTemplate.Height, gapBelow: 0);
+
+        var comparison = new Section("Career comparison (shared sessions only)");
+
+        comparison.AddFill(_statsGrid, () => _statsGrid.ColumnHeadersHeight + 4 * _statsGrid.RowTemplate.Height, gapBelow: 0);
+
+        Beside? band = null;
+
+        band = new Beside(() => ComparisonWidth(band?.Width ?? 0));
+
+        band.AddFill(races, races.LeastHeight);
+        band.AddSideFill(comparison, comparison.LeastHeight, gapBelow: 0);
+
+        // --- The page ---
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.Add(matchup);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>A driver picker: as wide as the longest name, and never under its width at the normal text size.</summary>
+    private static int PickerWidth(ComboBox picker, ref (Font Font, int Count, int Width)? kept) =>
+        Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(picker, ref kept));
+
+    /// <summary>The comparison's card: about two fifths of the page, between 340px and 520px at the normal text size, at the size in use.</summary>
+    private static int ComparisonWidth(int page) =>
+        Math.Clamp((int)(page * 0.4f), UiLayout.AtTextSize(ComparisonLeastWidth), UiLayout.AtTextSize(ComparisonMostWidth));
+
+    /// <summary>The bar itself: its names in the bold face, with room above and below them.</summary>
+    private static int WinBarHeight => AppTheme.BoldFont.Height + 8;
+
+    /// <summary>Room above and below the bar, inside its panel.</summary>
+    private const int WinBarPad = 6;
 
     private static void ConfigureGrid(DataGridView grid)
     {
@@ -175,6 +241,12 @@ public sealed class HeadToHeadControl : UserControl
                 combo.Items.Add(d);
             }
         }
+
+        // The longest name may have come or gone: measured again, and the
+        // line with it.
+        _widthA = null;
+        _widthB = null;
+        _pickRow?.PerformLayout();
 
         RestoreSelection(_cmbDriverA, previousA);
         RestoreSelection(_cmbDriverB, previousB);
@@ -453,7 +525,8 @@ public sealed class HeadToHeadControl : UserControl
         var g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-        using (var bg = new SolidBrush(AppTheme.Background))
+        // The card's colour round it, not the page's: it sits in a card.
+        using (var bg = new SolidBrush(_pnlWinBar.Parent?.BackColor ?? AppTheme.Surface))
         {
             g.FillRectangle(bg, _pnlWinBar.ClientRectangle);
         }
@@ -464,7 +537,10 @@ public sealed class HeadToHeadControl : UserControl
             return;
         }
 
-        var bounds = new Rectangle(0, 6, _pnlWinBar.Width, 22);
+        // As tall as its names in the bold face at the text size in use - it
+        // was 22px whatever the text size, and a larger one ran the names
+        // off the bottom of it.
+        var bounds = new Rectangle(0, WinBarPad, _pnlWinBar.Width, Math.Max(1, _pnlWinBar.Height - WinBarPad * 2));
         var widthA = (int)(bounds.Width * (_winsA / (double)total));
 
         using (var brushA = new SolidBrush(AppTheme.Primary))
@@ -478,17 +554,23 @@ public sealed class HeadToHeadControl : UserControl
         // segment is too narrow to hold them legibly. Each takes the text
         // colour for its own fill - the two segments are different colours,
         // and one of them can want dark text while the other wants white.
-        using var textBrushA = new SolidBrush(AppTheme.OnPrimary);
-        using var textBrushB = new SolidBrush(AppTheme.OnSuccess);
-        if (widthA > 70)
+        //
+        // Centred down the bar, and cut with "..." rather than run into the
+        // other segment.
+        var legible = UiLayout.AtTextSize(70);
+        const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
+
+        if (widthA > legible)
         {
-            g.DrawString($"{_nameA}  {_winsA}", AppTheme.BoldFont, textBrushA, bounds.Left + 8, bounds.Top + 3);
+            TextRenderer.DrawText(g, $"{_nameA}  {_winsA}", AppTheme.BoldFont,
+                new Rectangle(bounds.Left + 8, bounds.Top, widthA - 16, bounds.Height),
+                AppTheme.OnPrimary, flags | TextFormatFlags.Left);
         }
-        if (bounds.Width - widthA > 70)
+        if (bounds.Width - widthA > legible)
         {
-            var label = $"{_winsB}  {_nameB}";
-            var size = g.MeasureString(label, AppTheme.BoldFont);
-            g.DrawString(label, AppTheme.BoldFont, textBrushB, bounds.Right - size.Width - 8, bounds.Top + 3);
+            TextRenderer.DrawText(g, $"{_winsB}  {_nameB}", AppTheme.BoldFont,
+                new Rectangle(bounds.Left + widthA + 8, bounds.Top, bounds.Width - widthA - 16, bounds.Height),
+                AppTheme.OnSuccess, flags | TextFormatFlags.Right);
         }
     }
 

@@ -23,35 +23,79 @@ public sealed class PersonalBestsControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(860, 520);
-        Font = AppTheme.BodyFont;
 
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take. No MinimumSize: the 860x520 floor was honoured over the size
+        // the page was given, and a short window lost the reset buttons off
+        // the bottom. A short window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        BuildLayout();
+        RefreshAll();
+    }
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The driver picker's width at the normal text size - it is never narrower, and is as wide as the longest name.</summary>
+    private const int DriverPickerWidth = 220;
+
+    /// <summary>The driver picker's width as last measured - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _driverWidth;
+
+    /// <summary>The picker and the summary beside it - held so a refilled list can re-measure the line.</summary>
+    private FieldRow? _filterRow;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then one card: the driver picker with the count beside it,
+    /// the bests taking the height that is left, and the reset buttons with
+    /// what resetting does under them. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed by hand over an 860x520 floor: the grid at a
+    /// fixed 340px, the buttons at y=446 and their hint squeezed beside them
+    /// into 394px.
+    /// </summary>
+    private void BuildLayout()
+    {
         var lblIntro = new Label
         {
             Text = "Each driver's best-ever lap time per track, across every saved session - separate from the single all-time track " +
                    "record on the Track Layouts page, since this tracks your own progress rather than the fastest lap anyone's set.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(820, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Measured off the caption - see UiLayout.After.
-        var lblFilter = new Label { Text = "Driver:", Location = new Point(12, 66), AutoSize = true };
-        _cmbDriverFilter.Width = 220;
-        _cmbDriverFilter.Location = new Point(UiLayout.After(lblFilter), 63);
         _cmbDriverFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverFilter.SelectedIndexChanged += (_, _) => RefreshGrid();
 
-        // After the box rather than at a flat 300. The caption before it is
-        // measured, so the box no longer starts where 300 assumed it did.
-        _lblSummary.Location = new Point(_cmbDriverFilter.Right + UiLayout.SectionGap, 66);
-        _lblSummary.AutoSize = true;
+        // How many bests, beside the picker - on a line of its own when it
+        // no longer fits there (FieldRow).
+        _lblSummary.AutoSize = false;
+        _lblSummary.AutoEllipsis = true;
         _lblSummary.ForeColor = AppTheme.TextMuted;
 
-        _grid.Location = new Point(12, 94);
-        _grid.Size = new Size(820, 340);
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        var filterRow = new FieldRow();
+
+        filterRow.Add(new Label { Text = "Driver:" }, _cmbDriverFilter, DriverWidth);
+        filterRow.AddLast(null, _lblSummary, () => _lblSummary.GetPreferredSize(Size.Empty).Width);
+        _filterRow = filterRow;
+
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -69,39 +113,46 @@ public sealed class PersonalBestsControl : UserControl
             new DataGridViewTextBoxColumn { Name = "since", HeaderText = "Counting Since", FillWeight = 80 }
         );
 
-        var btnResetTrack = new Button { Text = "Reset This Track", Location = new Point(12, 446), Width = 140 };
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var btnResetTrack = new Button { Text = "Reset This Track" };
         btnResetTrack.Click += (_, _) => ResetSelected(allTracks: false);
 
-        var btnResetDriver = new Button { Text = "Reset All Tracks", Location = new Point(160, 446), Width = 140 };
+        var btnResetDriver = new Button { Text = "Reset All Tracks" };
         btnResetDriver.Click += (_, _) => ResetSelected(allTracks: true);
 
-        var btnClearReset = new Button { Text = "Clear Reset", Location = new Point(308, 446), Width = 120 };
+        var btnClearReset = new Button { Text = "Clear Reset" };
         btnClearReset.Click += (_, _) => ClearSelectedReset();
 
         var lblResetHint = new Label
         {
             Text = "Resetting ignores laps set before now when working out a best - it never deletes race history, "
                  + "and results, records and season points are untouched. Clear Reset brings the full history back.",
-            Location = new Point(438, 444),
             AutoSize = true,
-            MaximumSize = new Size(394, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        Controls.Add(btnResetTrack);
-        Controls.Add(btnResetDriver);
-        Controls.Add(btnClearReset);
-        Controls.Add(lblResetHint);
-        Controls.Add(lblIntro);
-        Controls.Add(lblFilter);
-        Controls.Add(_cmbDriverFilter);
-        Controls.Add(_lblSummary);
-        Controls.Add(_grid);
+        _textSize.Wear(lblResetHint, () => AppTheme.SmallFont);
 
-        RefreshAll();
+        var bests = new Section("Personal bests");
+
+        bests.Add(filterRow);
+        bests.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
+        bests.Add(new ButtonBar().With(btnResetTrack, btnResetDriver, btnClearReset), gapBelow: UiLayout.HintGap);
+        bests.Add(lblResetHint, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(bests, bests.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
+    /// <summary>The driver picker: as wide as the longest name, and never under its width at the normal text size.</summary>
+    private int DriverWidth() =>
+        Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(_cmbDriverFilter, ref _driverWidth));
 
     private (string Driver, string Track)? SelectedRow()
     {
@@ -247,6 +298,11 @@ public sealed class PersonalBestsControl : UserControl
         {
             _cmbDriverFilter.Items.Add(d);
         }
+
+        // The longest name may have come or gone: measured again, and the
+        // line with it.
+        _driverWidth = null;
+        _filterRow?.PerformLayout();
 
         var idx = previous is not null ? _cmbDriverFilter.Items.IndexOf(previous) : -1;
         _cmbDriverFilter.SelectedIndex = idx >= 0 ? idx : 0;

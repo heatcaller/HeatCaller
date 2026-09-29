@@ -333,8 +333,9 @@ public sealed class ProfileManagerControl : UserControl
             {
                 var column = _list.Columns[i + 1];
 
-                // The heading and the room a header keeps either side of it.
-                least[i] = TextRenderer.MeasureText(column.Text, _list.Font).Width + UiLayout.AtTextSize(16);
+                // The heading whole, as the header draws it, and the room it
+                // keeps either side - see ListViewHeaderSkin.LeastWidth.
+                least[i] = ListViewHeaderSkin.LeastWidth(column.Text);
                 wanted[i] = Math.Max(least[i], UiLayout.AtTextSize(ColumnWidths[i + 1]));
             }
 

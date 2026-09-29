@@ -32,22 +32,58 @@ public sealed class AchievementsControl : UserControl
         _profiles = profiles;
 
         Dock = DockStyle.Fill;
-        Padding = new Padding(12, 12, 12, 12);
-        MinimumSize = new Size(860, 520);
-        Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var header = new Panel { Dock = DockStyle.Top, BackColor = Color.Transparent };
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No MinimumSize: the 860x520 floor was honoured
+        // over the size the page was given. A short window scrolls the page
+        // instead (FillPage), and the wall keeps its own scrollbar.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
-        var lblDriver = new Label
-        {
-            Text = "Driver:",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-        };
+        BuildLayout();
+        RefreshAll();
+    }
 
-        _cmbDriver.Font = AppTheme.BodyFont;
-        _cmbDriver.Width = 280;
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The driver picker's width at the normal text size - never narrower, and as wide as the longest entry.</summary>
+    private const int DriverPickerWidth = 280;
+
+    /// <summary>The least the wall gets at the normal text size - about a row of badges. Below that the page scrolls.</summary>
+    private const int WallLeastHeight = 150;
+
+    /// <summary>The driver picker's width as last measured - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _driverWidth;
+
+    /// <summary>The picker's line - held so a refilled list can re-measure it.</summary>
+    private FieldRow? _pickRow;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The driver picker along a line with its switch and a hint, the
+    /// progress strip under it, and the wall taking the height that is
+    /// left, scrolling inside itself. On the layout pieces (LayoutPieces.cs).
+    ///
+    /// It used to be a header placed by hand - the picker's line measured
+    /// once, at build, in faces set once - over the wall docked to fill,
+    /// with an 860x520 floor under all of it.
+    /// </summary>
+    private void BuildLayout()
+    {
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriver.SelectedIndexChanged += (_, _) => RenderBadges();
 
@@ -55,68 +91,45 @@ public sealed class AchievementsControl : UserControl
         _chkHideLocked.AutoSize = true;
         _chkHideLocked.CheckedChanged += (_, _) => RenderBadges();
 
+        // At the end of the line, in the small type - or on a line of its
+        // own when it no longer fits there (FieldRow).
         var lblOpenHint = new Label
         {
             Text = "Double-click a badge to see who else has it.",
-            AutoSize = true,
+            AutoSize = false,
+            AutoEllipsis = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        // Measured across, not placed at remembered gutters. "Driver:" got
-        // 64px, "Earned only" started at 364 and the hint at 508 - numbers
-        // that are correct at one text size and overlapping at the next,
-        // which is what left this row for the repair pass to sort out.
-        var rowY = 4;
-        var rowHeight = _cmbDriver.Height;
+        _textSize.Wear(lblOpenHint, () => AppTheme.SmallFont);
 
-        lblDriver.Location = new Point(0, UiLayout.CentreOn(lblDriver, rowY, rowHeight));
-        _cmbDriver.Location = new Point(UiLayout.After(lblDriver), rowY);
+        var lblDriver = new Label { Text = "Driver:" };
+        _textSize.Wear(lblDriver, () => AppTheme.BoldFont);
 
-        _chkHideLocked.Location = new Point(
-            UiLayout.After(_cmbDriver) + UiLayout.SectionGap,
-            UiLayout.CentreOn(_chkHideLocked, rowY, rowHeight));
+        var pickRow = new FieldRow();
 
-        lblOpenHint.Location = new Point(
-            UiLayout.After(_chkHideLocked) + UiLayout.SectionGap,
-            UiLayout.CentreOn(lblOpenHint, rowY, rowHeight));
+        pickRow.Add(lblDriver, _cmbDriver, DriverWidth);
+        pickRow.Add(null, _chkHideLocked);
+        pickRow.AddLast(null, lblOpenHint, () => lblOpenHint.GetPreferredSize(Size.Empty).Width);
+        _pickRow = pickRow;
 
-        // The strip is as tall as the three lines it draws - see
-        // ProgressStrip.HeightFor - and as wide as the header, measured
-        // rather than anchored.
-        //
-        // It used to be built 860 wide with a Left|Right anchor. Anchoring
-        // does not mean "stay as wide as your parent"; it means "keep the
-        // margins you had when your parent was first laid out". This is
-        // built before the page has ever been shown, when the header is
-        // nothing like 860 wide, so its RIGHT margin was captured as a
-        // NEGATIVE number - and then preserved, exactly, forever. That is
-        // the 660px this page reported running past its right edge on
-        // every launch, and the reason the meter it draws at its own right
-        // edge sat off the side of the window where nobody could see it.
-        //
-        // Width now has one authority: the header's own size, reapplied
-        // whenever that changes.
-        _progress.Location = new Point(0, UiLayout.Below(_cmbDriver, UiLayout.RowGap));
-        _progress.Height = ProgressStrip.HeightFor();
-        _progress.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        // As tall as the three lines it draws, at the text size in use - see
+        // ProgressStrip.HeightFor.
+        _textSize.Keep(() =>
+        {
+            var height = ProgressStrip.HeightFor();
 
-        void FitProgress() => _progress.Width = Math.Max(1, header.ClientSize.Width);
-
-        header.Resize += (_, _) => FitProgress();
-        FitProgress();
-
-        header.Height = UiLayout.Below(_progress, UiLayout.RowGap);
-
-        header.Controls.AddRange(new Control[] { lblDriver, _cmbDriver, _chkHideLocked, lblOpenHint, _progress });
+            if (_progress.Height != height)
+            {
+                _progress.Height = height;
+            }
+        });
 
         // The wall is taller than the page and scrolls inside this panel -
         // it sizes itself to its content and lets the panel do the
         // scrolling, rather than trying to paint a viewport by hand.
-        _scroll.Dock = DockStyle.Fill;
         _scroll.AutoScroll = true;
         _scroll.BackColor = AppTheme.Background;
-        _scroll.Padding = new Padding(0, 8, 0, 0);
         _scroll.Controls.Add(_wall);
         _scroll.Resize += (_, _) => LayoutWall();
 
@@ -125,17 +138,33 @@ public sealed class AchievementsControl : UserControl
         // A wheel notch should move a row, not a pixel.
         _scroll.AutoScrollMargin = new Size(0, 8);
 
-        Controls.Add(_scroll);
-        Controls.Add(header);
+        // The badges are measured in the text size - see BadgeWall - so a
+        // new one lays the wall out again, whether or not the panel changed
+        // size with it.
+        _textSize.Keep(LayoutWall);
 
-        RefreshAll();
+        var page = new FillPage();
+
+        page.Add(pickRow, gapBelow: UiLayout.RowGap);
+        page.Add(_progress, gapBelow: UiLayout.RowGap);
+        page.AddFill(_scroll, _ => UiLayout.AtTextSize(WallLeastHeight), gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>The driver picker: as wide as its longest entry, and never under its width at the normal text size.</summary>
+    private int DriverWidth() =>
+        Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(_cmbDriver, ref _driverWidth));
 
     private void LayoutWall()
     {
         var width = Math.Max(320, _scroll.ClientSize.Width - 4);
 
-        _wall.Location = new Point(0, 0);
+        // Where the top of the wall is now - above the panel by however far
+        // it is scrolled. Put back at 0,0, a wall laid out again while
+        // scrolled (a new text size, a resize) jumped to the top of the view
+        // with the scrollbar still part-way down.
+        _wall.Location = _scroll.AutoScrollPosition;
         _wall.Width = width;
         _wall.Height = _wall.MeasureContent(width);
     }
@@ -183,6 +212,11 @@ public sealed class AchievementsControl : UserControl
         {
             _cmbDriver.Items.Add(entry);
         }
+
+        // The longest entry may have come or gone: measured again, and the
+        // line with it.
+        _driverWidth = null;
+        _pickRow?.PerformLayout();
 
         if (_cmbDriver.Items.Count == 0)
         {

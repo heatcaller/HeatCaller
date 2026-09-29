@@ -17,106 +17,89 @@ public sealed class AnalyticsOverviewControl : UserControl
 {
     private readonly SessionHistoryStore _history;
 
-    private readonly Label _lblRaces = new();
-    private readonly Label _lblLaps = new();
-    private readonly Label _lblDrivers = new();
-    private readonly Label _lblBest = new();
+    // The four figures, each a number over its caption on a tile of its
+    // own - the same tiles as Next Steps' day so far (StatTile).
+    private readonly StatTile _races = new();
+    private readonly StatTile _laps = new();
+    private readonly StatTile _drivers = new();
+    private readonly StatTile _best = new();
+
     private readonly Label _lblBestWho = new();
     private readonly DataGridView _grid = new();
     private readonly Label _lblEmpty = new();
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
 
     public AnalyticsOverviewControl(SessionHistoryStore history)
     {
         _history = history;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise take,
+        // and set once it stayed at the size it was built at. See TextSize.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The four figures across the page as tiles, who set the best lap under
+    /// them, and the track records in a card taking the height that is left.
+    /// On the layout pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be a header placed by hand - the figures 190px apart
+    /// whatever their size, in the 29pt face set once - over a list docked
+    /// to fill the rest.
+    /// </summary>
     private void BuildLayout()
     {
-        // --- The headline strip ---
-        var header = new Panel { Dock = DockStyle.Top };
-
-        var y = UiLayout.PageTop;
-
-        var lblTitle = new Label
+        // --- At a glance ---
+        var lblGlance = new Label
         {
-            Text = "AT A GLANCE",
-            Location = new Point(UiLayout.PageLeft, y),
+            Text = AppTheme.Spaced("AT A GLANCE"),
             AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
+            ForeColor = AppTheme.TextMuted,
         };
 
-        y = UiLayout.Below(lblTitle, UiLayout.HeadingGap);
+        _textSize.Wear(lblGlance, () => AppTheme.MicroFont);
 
-        // Four figures across, each a caption over a number, measured off
-        // each other rather than placed at remembered columns.
-        var tiles = new[]
+        var tiles = new[] { _races, _laps, _drivers, _best };
+        var captions = new[] { "Races run", "Laps counted", "Drivers seen", "Best lap ever" };
+
+        for (var i = 0; i < tiles.Length; i++)
         {
-            ("Races run", _lblRaces),
-            ("Laps counted", _lblLaps),
-            ("Drivers seen", _lblDrivers),
-            ("Best lap ever", _lblBest),
-        };
+            var tile = tiles[i];
 
-        var x = UiLayout.PageLeft;
-
-        foreach (var (caption, value) in tiles)
-        {
-            var lblCaption = new Label
-            {
-                Text = caption,
-                Location = new Point(x, y),
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-                Font = AppTheme.SmallFont,
-            };
-
-            value.Text = "-";
-            value.AutoSize = true;
-            value.Font = AppTheme.StatFont;
-            value.ForeColor = AppTheme.TextDark;
-            value.Location = new Point(x, UiLayout.Below(lblCaption, 2));
-
-            header.Controls.Add(lblCaption);
-            header.Controls.Add(value);
-
-            // A fixed column per tile, wide enough for the widest number any
-            // of them will hold, so they do not shuffle sideways as the
-            // figures grow during a race day.
-            x += 190;
+            _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
+            _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
+            tile.Set("-", captions[i]);
         }
 
+        // Who set the best lap, where and when - under the tiles, which have
+        // room for a number and not for a sentence.
         _lblBestWho.AutoSize = true;
         _lblBestWho.ForeColor = AppTheme.TextMuted;
-        _lblBestWho.Font = AppTheme.SmallFont;
-        _lblBestWho.MaximumSize = new Size(360, 0);
-        _lblBestWho.Location = new Point(UiLayout.PageLeft + 190 * 3, UiLayout.Below(_lblBest, 2));
-
-        header.Controls.Add(lblTitle);
-        header.Controls.Add(_lblBestWho);
-
-        header.Height = UiLayout.Below(_lblBestWho, UiLayout.SectionGap);
+        _textSize.Wear(_lblBestWho, () => AppTheme.SmallFont);
 
         // --- Track records ---
-        var lblRecords = new Label
-        {
-            Text = "TRACK RECORDS",
-            Dock = DockStyle.Top,
-            AutoSize = false,
-            Height = AppTheme.BoldFont.Height + UiLayout.RowGap,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-            Padding = new Padding(UiLayout.PageLeft, 0, 0, 0),
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-
-        _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -132,27 +115,37 @@ public sealed class AnalyticsOverviewControl : UserControl
             new DataGridViewTextBoxColumn { Name = "set", HeaderText = "Set", FillWeight = 80 },
             new DataGridViewTextBoxColumn { Name = "races", HeaderText = "Races here", FillWeight = 70 });
 
-        // Sits over the grid and is shown only when there is nothing in it.
-        // An empty grid with column headings and no rows reads as broken;
-        // a sentence reads as "nothing yet".
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var records = new Section("Track records");
+
+        records.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height, gapBelow: 0);
+
+        // Shown in place of the list when there is nothing in it - in the
+        // list's own room, behind it, and centred there. An empty grid with
+        // column headings and no rows reads as broken; a sentence reads as
+        // "nothing yet".
+        _lblEmpty.AutoSize = false;
         _lblEmpty.Dock = DockStyle.Fill;
         _lblEmpty.TextAlign = ContentAlignment.MiddleCenter;
         _lblEmpty.ForeColor = AppTheme.TextMuted;
         _lblEmpty.Text = "No races recorded yet - run one and the records start here.";
         _lblEmpty.Visible = false;
 
-        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(UiLayout.PageLeft, 0, UiLayout.PageRight, UiLayout.RowGap) };
+        _grid.Parent!.Controls.Add(_lblEmpty);
 
-        // Empty label first so it sits BEHIND the grid in z-order; the grid
-        // is hidden when it has nothing to show.
-        body.Controls.Add(_lblEmpty);
-        body.Controls.Add(_grid);
+        // --- The page ---
+        //
+        // The tiles on the page itself, not in a card: they are cards.
+        var page = new FillPage();
 
-        // Fill first, then the two Top bands - docking resolves from the
-        // last child backwards.
-        Controls.Add(body);
-        Controls.Add(lblRecords);
-        Controls.Add(header);
+        page.Add(lblGlance, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(tiles), gapBelow: UiLayout.HintGap);
+        page.Add(_lblBestWho);
+        page.AddFill(records, records.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     /// <summary>Called when the tab is opened, since races finish elsewhere.</summary>
@@ -169,21 +162,21 @@ public sealed class AnalyticsOverviewControl : UserControl
             .Where(s => s.SessionType == RaceSessionType.Race)
             .ToList();
 
-        _lblRaces.Text = races.Count.ToString();
+        _races.Set(races.Count.ToString(), "Races run");
 
-        _lblLaps.Text = everything
+        _laps.Set(everything
             .SelectMany(s => s.Results)
             .Where(r => !GhostService.IsGhost(r.Transponder))
             .Sum(r => (long)r.Laps)
-            .ToString("N0");
+            .ToString("N0"), "Laps counted");
 
-        _lblDrivers.Text = everything
+        _drivers.Set(everything
             .SelectMany(s => s.Results)
             .Select(r => r.Transponder)
             .Where(t => !string.IsNullOrWhiteSpace(t) && !GhostService.IsGhost(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count()
-            .ToString();
+            .ToString(), "Drivers seen");
 
         // --- The outright best, and who set it ---
         var best = everything
@@ -194,12 +187,12 @@ public sealed class AnalyticsOverviewControl : UserControl
 
         if (best.Result is null)
         {
-            _lblBest.Text = "-";
+            _best.Set("-", "Best lap ever");
             _lblBestWho.Text = string.Empty;
         }
         else
         {
-            _lblBest.Text = Lap(best.Result.FastLapMs);
+            _best.Set(Lap(best.Result.FastLapMs), "Best lap ever");
 
             var who = string.IsNullOrWhiteSpace(best.Result.DriverName)
                 ? best.Result.Transponder
@@ -209,7 +202,7 @@ public sealed class AnalyticsOverviewControl : UserControl
                 ? "an unnamed layout"
                 : best.Session.TrackLayoutName;
 
-            _lblBestWho.Text = $"{who} on {layout}, {best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}";
+            _lblBestWho.Text = $"Best lap ever: {who} on {layout}, {best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}";
         }
 
         FillRecords(everything);

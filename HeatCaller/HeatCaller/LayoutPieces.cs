@@ -1810,6 +1810,9 @@ internal sealed class FieldRow : Panel
 /// The column is placed by hand rather than by a table: its width comes
 /// from the buttons' captions, not from what the parts in it would report,
 /// and every part in it is given that width.
+///
+/// The column can go down the left instead (SideOnLeft) - a list picked
+/// from, beside what it shows: Race History's sessions, Lap Times' drivers.
 /// </summary>
 internal sealed class Beside : Panel
 {
@@ -1832,6 +1835,9 @@ internal sealed class Beside : Panel
 
     /// <summary>Set while a button is being sized, so the size change it causes is not taken for a caption change.</summary>
     private bool _fitting;
+
+    /// <summary>The column down the left-hand edge rather than the right, the other parts to the right of it. Set as the Beside is made.</summary>
+    public bool SideOnLeft { get; init; }
 
     /// <param name="sideLeastWidth">The narrowest the column gets - the width its drawn parts (a clock) were designed at.</param>
     public Beside(int sideLeastWidth = 0)
@@ -2072,20 +2078,21 @@ internal sealed class Beside : Panel
         }
     }
 
-    /// <summary>The left-hand parts across the width the column leaves, the column against the right-hand edge.</summary>
+    /// <summary>The other parts across the width the column leaves, the column against the right-hand edge - or the left, with SideOnLeft.</summary>
     private void Place()
     {
         var client = ClientSize;
         var side = MeasureSide();
 
-        var main = new Rectangle(0, 0, MainWidth(client.Width, side), Math.Max(0, client.Height));
+        var mainLeft = SideOnLeft && side.Width > 0 ? side.Width + UiLayout.RowGap : 0;
+        var main = new Rectangle(mainLeft, 0, MainWidth(client.Width, side), Math.Max(0, client.Height));
 
         if (_main.Bounds != main)
         {
             _main.Bounds = main;
         }
 
-        var left = client.Width - side.Width;
+        var left = SideOnLeft ? 0 : client.Width - side.Width;
         var y = 0;
 
         // What the column's filling part has on top of its least: whatever
@@ -2682,6 +2689,125 @@ internal sealed class StatusLine : Panel
 }
 
 /// <summary>
+/// One number with a caption under it, on a card of its own - the theme's
+/// rounded card, as a Section is. Next Steps' day so far; Race Analytics'
+/// overview. A row of them is a TileStrip; the page gives the value and
+/// the caption their faces (TextSize.Wear: the title face and the micro
+/// one), which the strip sizes the tiles to.
+///
+/// One line each, cut with an ellipsis rather than wrapped. A round
+/// label in the last tile used to wrap to a second line, the tile's
+/// contents then overran the tile, and the old layout pass turned
+/// scrolling on INSIDE the tile - the stray bars that showed across
+/// "classes racing".
+/// </summary>
+internal sealed class StatTile
+{
+    public readonly TileCard Panel = new();
+
+    public readonly Label Value = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextDark };
+    public readonly Label Caption = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextMuted };
+
+    public StatTile()
+    {
+        Panel.Controls.Add(Value);
+        Panel.Controls.Add(Caption);
+    }
+
+    public void Set(string value, string caption)
+    {
+        Value.Text = value;
+        Caption.Text = AppTheme.Spaced(caption.ToUpperInvariant());
+    }
+}
+
+/// <summary>A tile's card: the theme's rounded surface, the page's colour in the corners - as Section paints itself.</summary>
+internal sealed class TileCard : Panel
+{
+    public TileCard()
+    {
+        BackColor = AppTheme.Surface;
+        Tag = AppTheme.KeepBackColor;
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
+        {
+            e.Graphics.FillRectangle(behind, ClientRectangle);
+        }
+
+        AppTheme.DrawCard(e.Graphics, new RectangleF(0, 0, Width, Height));
+    }
+}
+
+/// <summary>
+/// The tiles, across the page in one row, sharing its width equally and
+/// as tall as a value and a caption in the fonts in use. They get
+/// narrower with the page rather than scrolling it sideways, and a value
+/// too long for its tile ends in "...".
+/// </summary>
+internal sealed class TileStrip : Panel
+{
+    private readonly IReadOnlyList<StatTile> _tiles;
+
+    public TileStrip(IReadOnlyList<StatTile> tiles)
+    {
+        _tiles = tiles;
+
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Margin = Padding.Empty;
+        Padding = Padding.Empty;
+        Tag = AppTheme.KeepBackColor;
+
+        foreach (var tile in tiles)
+        {
+            Controls.Add(tile.Panel);
+        }
+    }
+
+    /// <summary>Room inside a tile, and between two.</summary>
+    private const int Pad = UiLayout.RowGap;
+
+    private static int ValueHeight => AppTheme.TitleFont.Height + 2;
+
+    private static int CaptionHeight => AppTheme.MicroFont.Height + 2;
+
+    private static int TileHeight => Pad + ValueHeight + UiLayout.HintGap + CaptionHeight + Pad;
+
+    public override Size GetPreferredSize(Size proposedSize) =>
+        new(proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width, TileHeight);
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+
+        if (_tiles.Count == 0)
+        {
+            return;
+        }
+
+        var height = TileHeight;
+        var room = Math.Max(0, ClientSize.Width - Pad * (_tiles.Count - 1));
+
+        for (var i = 0; i < _tiles.Count; i++)
+        {
+            // Shared out to the pixel: the last tile ends on the edge.
+            var left = i * (room / _tiles.Count) + i * Pad;
+            var width = i == _tiles.Count - 1 ? ClientSize.Width - left : room / _tiles.Count;
+            var tile = _tiles[i];
+
+            tile.Panel.Bounds = new Rectangle(left, 0, Math.Max(1, width), height);
+            tile.Value.Bounds = new Rectangle(Pad, Pad, Math.Max(1, width - Pad * 2), ValueHeight);
+            tile.Caption.Bounds = new Rectangle(Pad, Pad + ValueHeight + UiLayout.HintGap, Math.Max(1, width - Pad * 2), CaptionHeight);
+        }
+    }
+}
+
+/// <summary>
 /// What a page keeps in step with the text size.
 ///
 /// AppTheme replaces its fonts when the text size changes - it does not
@@ -2843,6 +2969,95 @@ internal static class Pieces
             }
         }
     }
+
+    /// <summary>
+    /// Fits a details-view list's columns to its width - now, and again
+    /// whenever its room or its font changes (a scrollbar arriving, a new
+    /// text size). Each column is the width it had at the normal text size,
+    /// at the size in use, or its heading's if that is wider; the one that
+    /// stretches takes whatever the others leave, never less than its own.
+    /// When that does not fit, the others give way first, down to their
+    /// headings, before the list scrolls sideways.
+    ///
+    /// As Driver Profiles' roster does it (ProfileManagerControl.FitColumns,
+    /// whose own least is a photo and a name). At fixed widths a list's
+    /// columns overran it at 1280x720 and at 200% text, and stopped short of
+    /// it on a wide screen with a blank band down the right.
+    /// </summary>
+    /// <param name="stretch">The column that takes what the others leave.</param>
+    /// <param name="widths">Every column's width at the normal text size, in order - the stretching one's is its least.</param>
+    internal static void FitListColumns(ListView list, int stretch, params int[] widths)
+    {
+        void Fit() => FitListColumnsNow(list, stretch, widths);
+
+        list.ClientSizeChanged += (_, _) => Fit();
+        list.FontChanged += (_, _) => Fit();
+        Fit();
+    }
+
+    /// <summary>Set while a list's columns are being sized - which can bring a scrollbar in or take it away, and so change the room they are being sized to. One per thread: the tests build windows on threads of their own.</summary>
+    [ThreadStatic]
+    private static bool _fittingList;
+
+    private static void FitListColumnsNow(ListView list, int stretch, int[] widths)
+    {
+        if (_fittingList || list.Columns.Count != widths.Length || stretch < 0 || stretch >= widths.Length)
+        {
+            return;
+        }
+
+        _fittingList = true;
+
+        try
+        {
+            var count = widths.Length;
+            var least = new int[count];
+            var wanted = new int[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                least[i] = ListHeadingWidth(list.Columns[i].Text);
+                wanted[i] = Math.Max(least[i], UiLayout.AtTextSize(widths[i]));
+            }
+
+            var stretchLeast = wanted[stretch];
+            var others = Enumerable.Range(0, count).Where(i => i != stretch).ToList();
+            var wantedTotal = others.Sum(i => wanted[i]);
+            var leastTotal = others.Sum(i => least[i]);
+            var forOthers = list.ClientSize.Width - stretchLeast;
+            var used = 0;
+
+            foreach (var i in others)
+            {
+                var width = forOthers >= wantedTotal || wantedTotal == leastTotal
+                    ? wanted[i]
+                    : forOthers <= leastTotal
+                        ? least[i]
+                        : least[i] + (wanted[i] - least[i]) * (forOthers - leastTotal) / (wantedTotal - leastTotal);
+
+                if (list.Columns[i].Width != width)
+                {
+                    list.Columns[i].Width = width;
+                }
+
+                used += width;
+            }
+
+            var stretched = Math.Max(stretchLeast, list.ClientSize.Width - used);
+
+            if (list.Columns[stretch].Width != stretched)
+            {
+                list.Columns[stretch].Width = stretched;
+            }
+        }
+        finally
+        {
+            _fittingList = false;
+        }
+    }
+
+    /// <summary>A list's column heading as its header draws it, whole, with the inset round it - see ListViewHeaderSkin.LeastWidth.</summary>
+    private static int ListHeadingWidth(string heading) => ListViewHeaderSkin.LeastWidth(heading);
 
     /// <summary>
     /// Puts a part on the next row of a one-column table: stretched across

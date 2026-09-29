@@ -40,7 +40,21 @@ public sealed class GarageControl : UserControl
 
     private const int WallPad = 12;
     private const int CardGap = 12;
-    private const int BandHeight = 28;
+
+    /// <summary>A class's heading: a line of the bold face and a little room - it was 28px whatever the text size, and a larger one cut the heading off.</summary>
+    private static int BandHeight => AppTheme.BoldFont.Height + UiLayout.AtTextSize(6);
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The owner picker's width at the normal text size - never narrower, and as wide as the longest name.</summary>
+    private const int OwnerPickerWidth = 240;
+
+    /// <summary>The owner picker's width as last measured - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _ownerWidth;
+
+    /// <summary>The filter's line - held so a refilled list can re-measure it.</summary>
+    private FieldRow? _filterRow;
 
     private const string EveryoneKey = "\u0000everyone";
     private const string ClubKey = "\u0000club";
@@ -77,61 +91,93 @@ public sealed class GarageControl : UserControl
         _events = events;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(920, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No MinimumSize: the 920x560 floor was honoured
+        // over the size the page was given. A short window scrolls the page
+        // instead (FillPage), and the wall keeps its own scrollbar.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
     /// <summary>The race day a loan would be for, or null when none is open.</summary>
     private string? CurrentEventId => _events?.Active is { IsLegacy: false } day ? day.Id : null;
 
+    /// <summary>
+    /// The intro, the filter along a line with the count at the end of it,
+    /// the wall taking the height that is left - scrolling inside itself -
+    /// and the buttons under it. On the layout pieces (LayoutPieces.cs).
+    /// The wall is on the page itself rather than in a card: the cars are
+    /// cards.
+    ///
+    /// It used to be placed by hand over a 920x560 floor, the intro capped
+    /// at 880px and the filter's line at remembered x positions, in faces
+    /// set once.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "The club's cars. Add a photograph and a car starts looking like itself - until then it gets a plate "
                  + "with its number on. Click a car to open it: its photographs, what it is, and every setup logged for it.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(880, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var lblFilter = new Label { Text = "Show:", Location = new Point(12, 62), AutoSize = true };
-
-        _cmbOwnerFilter.Location = new Point(70, 59);
-        _cmbOwnerFilter.Width = 240;
         _cmbOwnerFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbOwnerFilter.SelectedIndexChanged += (_, _) => BuildWall();
 
         _chkRetired.Text = "Include retired";
-        _chkRetired.Location = new Point(324, 61);
         _chkRetired.AutoSize = true;
         _chkRetired.CheckedChanged += (_, _) => BuildWall();
 
-        _lblSummary.Location = new Point(470, 62);
-        _lblSummary.AutoSize = true;
+        // How many cars, at the end of the line - or on a line of its own
+        // when it no longer fits there (FieldRow).
+        _lblSummary.AutoSize = false;
+        _lblSummary.AutoEllipsis = true;
         _lblSummary.ForeColor = AppTheme.TextMuted;
+
+        var filterRow = new FieldRow();
+
+        filterRow.Add(new Label { Text = "Show:" }, _cmbOwnerFilter, OwnerWidth);
+        filterRow.Add(null, _chkRetired);
+        filterRow.AddLast(null, _lblSummary, () => _lblSummary.GetPreferredSize(Size.Empty).Width);
+        _filterRow = filterRow;
 
         // The wall. AutoScroll rather than a fixed grid of pages: a club
         // with sixty cars scrolls, and a club with four does not get four
         // cars stranded at the top of an empty page of tabs.
-        _wall.Location = new Point(12, 94);
-        _wall.Size = new Size(880, 340);
-        _wall.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _wall.AutoScroll = true;
         _wall.BackColor = AppTheme.Background;
         _wall.Resize += (_, _) => LayoutWall();
 
-        _lblEmpty.Text = "No cars yet. Add one, and it appears here under its class.";
+        // Worded as the wall is built - see EmptyWallText.
         _lblEmpty.AutoSize = true;
         _lblEmpty.ForeColor = AppTheme.TextMuted;
         _lblEmpty.Location = new Point(WallPad, WallPad);
         _lblEmpty.Visible = false;
 
         _wall.Controls.Add(_lblEmpty);
+
+        // The class headings are in the bold face at the text size in use,
+        // so a new one lays the wall out again.
+        _textSize.Keep(LayoutWall);
 
         var btnAdd = new Button { Text = "Add a Car..." };
         btnAdd.Click += (_, _) => AddCar();
@@ -142,21 +188,35 @@ public sealed class GarageControl : UserControl
         var btnSheets = new Button { Text = "Chassis Sheets..." };
         btnSheets.Click += (_, _) => ManageChassisSheets();
 
-        foreach (var button in new[] { btnAdd, btnChassis, btnSheets })
-        {
-            button.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-        }
+        var page = new FillPage();
 
-        var buttonsY = _wall.Bottom + UiLayout.RowGap;
+        page.Add(lblIntro);
+        page.Add(filterRow, gapBelow: UiLayout.RowGap);
 
-        UiLayout.ButtonRow(12, buttonsY, btnAdd, btnChassis, btnSheets);
+        // At least a row of cars under a heading - below that the page
+        // scrolls.
+        page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets), gapBelow: 0);
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, lblFilter, _cmbOwnerFilter, _chkRetired, _lblSummary, _wall,
-            btnAdd, btnChassis, btnSheets,
-        });
+        Controls.Add(page);
     }
+
+    /// <summary>
+    /// What the wall says when it has no cars to show. "No cars yet" only
+    /// when there are none: it used to say that whatever emptied the wall,
+    /// so a driver with no cars of their own, or a garage of retired ones,
+    /// read as an empty garage next to a count of the cars in it.
+    /// </summary>
+    private string EmptyWallText() =>
+        _cars.All.Count == 0
+            ? "No cars yet. Add one, and it appears here under its class."
+            : _chkRetired.Checked
+                ? "No cars to show - pick another in Show."
+                : "No cars to show - pick another in Show, or tick Include retired.";
+
+    /// <summary>The owner picker: as wide as the longest name, and never under its width at the normal text size.</summary>
+    private int OwnerWidth() =>
+        Math.Max(UiLayout.AtTextSize(OwnerPickerWidth), Pieces.PickerWidth(_cmbOwnerFilter, ref _ownerWidth));
 
     /// <summary>Call when this page becomes visible - drivers, classes and the open race day all change elsewhere.</summary>
     public void RefreshAll()
@@ -182,6 +242,11 @@ public sealed class GarageControl : UserControl
         }
 
         _cmbOwnerFilter.EndUpdate();
+
+        // The longest name may have come or gone: measured again, and the
+        // line with it.
+        _ownerWidth = null;
+        _filterRow?.PerformLayout();
 
         var match = _cmbOwnerFilter.Items
             .Cast<OwnerChoice>()
@@ -284,6 +349,9 @@ public sealed class GarageControl : UserControl
                 AutoSize = false,
                 Height = BandHeight,
                 TextAlign = ContentAlignment.MiddleLeft,
+
+                // Given the face again as the wall is laid out, at the text
+                // size in use - see LayoutWall.
                 Font = AppTheme.BoldFont,
 
                 // The class's own colour, the same one the programme's
@@ -318,11 +386,26 @@ public sealed class GarageControl : UserControl
         var total = _cars.InUse.Count;
         var club = _cars.ClubCars.Count(c => !c.Retired);
 
-        _lblSummary.Text = total == 0
-            ? "No cars yet."
-            : $"{Plural.Of(total, "car")} in the garage" + (club > 0 ? $", {club} the club's own." : ".");
+        // Nothing at the end of the line while the garage is empty: the
+        // wall says so, and what to do about it. It used to say "No cars
+        // yet." here as well, a line above the wall saying it again (layout
+        // pictures, 29 Sep).
+        _lblSummary.Text = _cars.All.Count == 0
+            ? string.Empty
+            : total == 0
+                ? "Every car in the garage is retired."
+                : $"{Plural.Of(total, "car")} in the garage" + (club > 0 ? $", {club} the club's own." : ".");
 
+        _lblEmpty.Text = EmptyWallText();
         _lblEmpty.Visible = _groups.Count == 0;
+
+        // Back to the top when there is nothing to show: the label sits at
+        // the top of the view, and a wall scrolled down before a filter
+        // emptied it kept its scrolling range of blank space above it.
+        if (_groups.Count == 0)
+        {
+            _wall.AutoScrollPosition = Point.Empty;
+        }
         _lblEmpty.BringToFront();
 
         _wall.ResumeLayout();
@@ -386,12 +469,22 @@ public sealed class GarageControl : UserControl
 
         var y = WallPad;
 
+        // Scrolled: the top of the wall's contents is above the panel by
+        // however far - positions are the panel's, not the contents'.
+        var top = _wall.AutoScrollPosition.Y;
+        var left = _wall.AutoScrollPosition.X;
+        var bandHeight = BandHeight;
+
         foreach (var (band, cards) in _groups)
         {
-            band.Location = new Point(WallPad, y);
-            band.Width = usable;
+            if (!Equals(band.Font, AppTheme.BoldFont))
+            {
+                band.Font = AppTheme.BoldFont;
+            }
 
-            y += BandHeight + 6;
+            band.Bounds = new Rectangle(left + WallPad, top + y, usable, bandHeight);
+
+            y += bandHeight + 6;
 
             for (var i = 0; i < cards.Count; i++)
             {
@@ -399,8 +492,8 @@ public sealed class GarageControl : UserControl
                 var row = i / perRow;
 
                 cards[i].Location = new Point(
-                    WallPad + column * (CarCard.CardWidth + CardGap),
-                    y + row * (CarCard.CardHeight + CardGap));
+                    left + WallPad + column * (CarCard.CardWidth + CardGap),
+                    top + y + row * (CarCard.CardHeight + CardGap));
             }
 
             var rows = (cards.Count + perRow - 1) / perRow;

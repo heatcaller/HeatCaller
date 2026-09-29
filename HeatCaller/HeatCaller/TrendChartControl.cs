@@ -29,77 +29,118 @@ public sealed class TrendChartControl : UserControl
         _settings = settings;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(900, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take. No MinimumSize: the 900x560 floor was honoured over the size
+        // the page was given. A short window scrolls the page instead
+        // (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The pickers' width at the normal text size - never narrower, and as wide as their longest choice.</summary>
+    private const int PickerLeastWidth = 200;
+
+    /// <summary>The least the chart gets at the normal text size - below that the page scrolls.</summary>
+    private const int ChartLeastHeight = 240;
+
+    /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when the lists are refilled.</summary>
+    private (Font Font, int Count, int Width)? _driverWidth;
+    private (Font Font, int Count, int Width)? _trackWidth;
+
+    /// <summary>The pickers' line - held so refilled lists can re-measure it.</summary>
+    private FieldRow? _pickRow;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then one card: the driver and track pickers, the summary,
+    /// the chart taking the height that is left, and the export button. On
+    /// the layout pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed by hand over a 900x560 floor, the chart at a
+    /// fixed 360px with the button placed under it.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Best lap per session over time, for one driver on one track. Comparing across different layouts would " +
                    "just show which track is faster, not whether anyone's improving - so pick a track to see a real trend.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(860, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Run left to right, not stepped 72 / 292 / 344 / 564. Those were
-        // spaced for a smaller font, so "Track:" sat on the driver box and
-        // its own box sat on "Track:".
-        var lblDriver = new Label { Text = "Driver:", Location = new Point(12, 62), AutoSize = true };
-        _cmbDriver.Width = 200;
-        _cmbDriver.Location = new Point(UiLayout.After(lblDriver), 59);
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriver.SelectedIndexChanged += (_, _) => Redraw();
 
-        var lblTrack = new Label
-        {
-            Text = "Track:",
-            Location = new Point(_cmbDriver.Right + UiLayout.SectionGap, 62),
-            AutoSize = true,
-        };
-
-        _cmbTrack.Width = 200;
-        _cmbTrack.Location = new Point(UiLayout.After(lblTrack), 59);
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTrack.SelectedIndexChanged += (_, _) => Redraw();
 
         _chkIncludePractice.Text = "Include practice sessions";
-        _chkIncludePractice.Location = new Point(_cmbTrack.Right + UiLayout.SectionGap, 61);
         _chkIncludePractice.AutoSize = true;
         _chkIncludePractice.Checked = true;
         _chkIncludePractice.CheckedChanged += (_, _) => Redraw();
 
-        _lblSummary.Location = new Point(12, 96);
-        _lblSummary.AutoSize = true;
-        _lblSummary.Font = AppTheme.BoldFont;
+        var pickRow = new FieldRow();
 
-        _chartPanel.Location = new Point(12, 126);
-        _chartPanel.Size = new Size(860, 360);
-        // Top/Left/Right only - Bottom anchoring made the chart grow
-        // over the export button below it.
-        _chartPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        pickRow.Add(new Label { Text = "Driver:" }, _cmbDriver, () => PickerWidth(_cmbDriver, ref _driverWidth));
+        pickRow.Add(new Label { Text = "Track:" }, _cmbTrack, () => PickerWidth(_cmbTrack, ref _trackWidth));
+        pickRow.Add(null, _chkIncludePractice);
+        _pickRow = pickRow;
+
+        // What the points add up to, in the bold face - wrapping rather
+        // than cut short.
+        _lblSummary.AutoSize = true;
+        _textSize.Wear(_lblSummary, () => AppTheme.BoldFont);
+
         _chartPanel.BackColor = AppTheme.Surface;
         _chartPanel.Paint += (_, e) => DrawChart(e.Graphics, _chartPanel.ClientRectangle, ChartPalette.Screen());
 
-        var btnExport = new Button { Text = "Save Chart as Image...", Location = new Point(12, 498), Width = 180 };
+        // It draws its axes and labels to its size, so a resize is a
+        // repaint - and buffered, so that repaint does not flicker.
+        AppTheme.EnableDoubleBuffering(_chartPanel);
+        _chartPanel.Resize += (_, _) => _chartPanel.Invalidate();
+
+        var btnExport = new Button { Text = "Save Chart as Image..." };
         btnExport.Click += (_, _) => ExportChart();
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblDriver);
-        Controls.Add(_cmbDriver);
-        Controls.Add(lblTrack);
-        Controls.Add(_cmbTrack);
-        Controls.Add(_chkIncludePractice);
-        Controls.Add(_lblSummary);
-        Controls.Add(_chartPanel);
-        Controls.Add(btnExport);
+        var trend = new Section("Trend");
+
+        trend.Add(pickRow);
+        trend.Add(_lblSummary);
+        trend.AddFill(_chartPanel, () => UiLayout.AtTextSize(ChartLeastHeight));
+        trend.Add(new ButtonBar().With(btnExport), gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(trend, trend.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>A picker: as wide as its longest choice, and never under its width at the normal text size.</summary>
+    private static int PickerWidth(ComboBox picker, ref (Font Font, int Count, int Width)? kept) =>
+        Math.Max(UiLayout.AtTextSize(PickerLeastWidth), Pieces.PickerWidth(picker, ref kept));
 
     private sealed record TrendPoint(DateTime When, long BestLapMs, string Label);
 
@@ -150,6 +191,12 @@ public sealed class TrendChartControl : UserControl
         {
             _cmbTrack.Items.Add(t);
         }
+
+        // The longest choice may have come or gone: measured again, and the
+        // line with it.
+        _driverWidth = null;
+        _trackWidth = null;
+        _pickRow?.PerformLayout();
 
         Restore(_cmbDriver, previousDriver);
         Restore(_cmbTrack, previousTrack);

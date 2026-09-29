@@ -2,12 +2,18 @@ using System.Globalization;
 
 namespace HeatCaller;
 
-/// <summary>Lists all saved sessions and shows full results for the selected one.</summary>
+/// <summary>
+/// Lists all saved sessions and shows full results for the selected one.
+///
+/// On the layout pieces (LayoutPieces.cs): the sessions down the left, and
+/// beside them a card for the one selected - what it was, its results
+/// taking the height that is left, its notes, and what can be done with
+/// it. It used to be placed by hand over an 820x520 floor, the results
+/// grid at a fixed 268px and the eight buttons flowed under the notes on
+/// every resize, in faces handed out once.
+/// </summary>
 public sealed class RaceHistoryControl : UserControl
 {
-    /// <summary>The bottom action row, in the order it is laid out. See LayoutActionRow.</summary>
-    private Button[] _actions = Array.Empty<Button>();
-
     private readonly SessionHistoryStore _history;
     private readonly UndoService _undo;
     private readonly AppSettings _settings;
@@ -44,32 +50,71 @@ public sealed class RaceHistoryControl : UserControl
         _events = events;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(820, 520);
-        Font = AppTheme.BodyFont;
 
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No MinimumSize: the 820x520 floor was
+        // honoured over the size the page was given. A short window scrolls
+        // the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        BuildLayout();
+        RefreshList();
+    }
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The sessions' card at the normal text size - about a third of the page, between these. The least is the old list's width, which the date and time need.</summary>
+    private const int SessionsLeastWidth = 380;
+    private const int SessionsMostWidth = 520;
+
+    /// <summary>Lines of the notes box kept in view.</summary>
+    private const int NotesLines = 3;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    private void BuildLayout()
+    {
+        // --- The sessions ---
         _sessionList.View = View.Details;
         _sessionList.FullRowSelect = true;
         // Ctrl-click for individual rows, Shift-click for a range.
         _sessionList.MultiSelect = true;
         _sessionList.GridLines = true;
-        _sessionList.Location = new Point(12, 12);
-        _sessionList.Size = new Size(380, 440);
-        _sessionList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-        _sessionList.Columns.Add("Date", 110);
-        _sessionList.Columns.Add("Type", 60);
-        _sessionList.Columns.Add("Track", 100);
-        _sessionList.Columns.Add("Label", 100);
+        _sessionList.Columns.Add("Date");
+        _sessionList.Columns.Add("Type");
+        _sessionList.Columns.Add("Track");
+        _sessionList.Columns.Add("Label");
         _sessionList.SelectedIndexChanged += (_, _) => ShowDetail();
 
-        _lblDetailTitle.Location = new Point(404, 12);
-        _lblDetailTitle.AutoSize = true;
-        _lblDetailTitle.MaximumSize = new Size(404, 0);
-        _lblDetailTitle.Font = new Font(Font, FontStyle.Bold);
-        _lblDetailTitle.Text = "Select a session to see full results.";
+        // The label takes what the others leave - see Pieces.FitListColumns -
+        // and asks for little of its own: it is often "-", while the date
+        // and time are what a session is picked by.
+        Pieces.FitListColumns(_sessionList, 3, 130, 70, 100, 60);
 
-        _detailGrid.Location = new Point(404, 44);
-        _detailGrid.Size = new Size(404, 268);
-        _detailGrid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        var sessions = new Section("Sessions");
+
+        sessions.AddFill(_sessionList, () => _sessionList.Font.Height * 2 + 4 * (_sessionList.Font.Height + 6), gapBelow: 0);
+
+        // --- The one selected ---
+        //
+        // What it was and when, over its results, in the bold face.
+        _lblDetailTitle.AutoSize = true;
+        _lblDetailTitle.Text = "Select a session to see full results.";
+        _textSize.Wear(_lblDetailTitle, () => AppTheme.BoldFont);
+
         _detailGrid.ReadOnly = true;
         _detailGrid.AllowUserToAddRows = false;
         _detailGrid.AllowUserToDeleteRows = false;
@@ -86,32 +131,30 @@ public sealed class RaceHistoryControl : UserControl
             new DataGridViewTextBoxColumn { Name = "warn", HeaderText = "Warnings", FillWeight = 55 }
         );
 
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_detailGrid));
+
         _lblNotes.Text = "Notes (weather, track surface, incidents, whatever's worth remembering):";
-        _lblNotes.Location = new Point(404, 320);
         _lblNotes.AutoSize = true;
-        _lblNotes.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        _lblNotes.Font = AppTheme.SmallFont;
+        _textSize.Wear(_lblNotes, () => AppTheme.SmallFont);
 
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
-        _txtNotes.Location = new Point(404, 340);
-        _txtNotes.Size = new Size(404, 68);
-        _txtNotes.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _txtNotes.Enabled = false;
         _txtNotes.Leave += (_, _) => SaveNotes();
 
-        // --- The action row ---
-        //
-        // Eight buttons, laid out in ONE measured pass - see
-        // LayoutActionRow. They used to be three separate authorities:
-        // Delete/Replay/Pace re-measured at y=460, Share/Event Report
-        // remembered at y=454, and Export Session/Export Results
-        // remembered at y=416. Six pixels between the first two rows is
-        // near enough to look like a mistake rather than a decision, and
-        // at a larger text size the 38px step between 416 and 454 was
-        // smaller than the buttons themselves, so they overlapped and the
-        // repair pass shoved them sideways.
+        // A few lines of its type, at the text size in use.
+        _textSize.Keep(() =>
+        {
+            var height = _txtNotes.Font.Height * NotesLines + UiLayout.HintGap * 2;
+
+            if (_txtNotes.Height != height)
+            {
+                _txtNotes.Height = height;
+            }
+        });
+
         var btnDelete = new Button { Text = "Delete Session" };
         btnDelete.Click += (_, _) => DeleteSelected();
 
@@ -139,93 +182,41 @@ public sealed class RaceHistoryControl : UserControl
         // Ordered by how often a race director reaches for them, not by
         // the order they were written. Delete goes last because it is the
         // one that cannot be taken back from here - Edit Result sits just
-        // ahead of it instead, since a correction is undoable.
-        _actions = new[]
-        {
+        // ahead of it instead, since a correction is undoable. The bar
+        // wraps onto more lines when the card is too narrow for them.
+        var actions = new ButtonBar().With(
             btnReplay, btnPace, btnShareCard, btnEventReport,
-            btnExportSession, btnExportAll, btnEditResult, btnDelete,
-        };
+            btnExportSession, btnExportAll, btnEditResult, btnDelete);
 
-        Controls.Add(_sessionList);
-        Controls.Add(_lblDetailTitle);
-        Controls.Add(_detailGrid);
-        Controls.Add(_lblNotes);
-        Controls.Add(_txtNotes);
+        var results = new Section("Results");
 
-        foreach (var button in _actions)
-        {
-            Controls.Add(button);
-        }
+        results.Add(_lblDetailTitle);
+        results.AddFill(_detailGrid, () => _detailGrid.ColumnHeadersHeight + 4 * _detailGrid.RowTemplate.Height);
+        results.Add(_lblNotes, gapBelow: UiLayout.HintGap);
+        results.Add(_txtNotes);
+        results.Add(actions, gapBelow: 0);
 
-        LayoutActionRow();
+        // --- The page ---
+        //
+        // The sessions down the left, picked from; the one picked beside
+        // them, taking the rest of the width.
+        Beside? band = null;
 
-        // This page places every one of its children on every resize, so
-        // the repair pass is told to keep out - two things moving the same
-        // control is worse than neither doing it. See
-        // LayoutDoctor.LeaveAlone.
-        LayoutDoctor.LeaveAlone(this);
+        band = new Beside(() => SessionsWidth(band?.Width ?? 0)) { SideOnLeft = true };
 
-        RefreshList();
+        band.AddFill(results, results.LeastHeight);
+        band.AddSideFill(sessions, sessions.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
-    /// <summary>
-    /// Flows the action row, wrapping when it runs out of width.
-    ///
-    /// Measured on every resize rather than placed once, because the
-    /// captions are drawn in a font that follows the text-size setting and
-    /// the page is as wide as the window. A row of seven that fits at the
-    /// normal size stops fitting a couple of notches up, and the only
-    /// honest answer to that is to wrap rather than to run off the edge.
-    /// </summary>
-    private void LayoutActionRow()
-    {
-        if (_actions.Length == 0)
-        {
-            return;
-        }
-
-        // Below the notes box, measured from it rather than from a number
-        // that happened to be under it when the font was smaller.
-        var top = UiLayout.Below(_txtNotes, UiLayout.RowGap);
-
-        // And to the RIGHT of the session list, which is the bug this
-        // replaces. The list runs the full height of the left column and
-        // was added to Controls FIRST - which in WinForms puts it at the
-        // front of the z-order - so a row starting at the page margin was
-        // not merely beside the list, it was behind it, and the first
-        // button in the row was sheared off mid-caption.
-        var left = _detailGrid.Left;
-
-        var right = Math.Max(left + 200, Width - UiLayout.PageRight);
-        var x = left;
-        var y = top;
-
-        foreach (var button in _actions)
-        {
-            var text = TextRenderer.MeasureText(
-                button.Text,
-                AppTheme.BoldFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-
-            button.Size = new Size(text.Width + 26, UiLayout.ButtonHeight);
-
-            if (x > left && x + button.Width > right)
-            {
-                x = left;
-                y += UiLayout.ButtonHeight + UiLayout.RowGap;
-            }
-
-            button.Location = new Point(x, y);
-            x += button.Width + UiLayout.ButtonGap;
-        }
-    }
-
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        LayoutActionRow();
-    }
+    /// <summary>The sessions' card: about a third of the page, between 380px and 520px at the normal text size, at the size in use.</summary>
+    private static int SessionsWidth(int page) =>
+        Math.Clamp((int)(page * 0.35f), UiLayout.AtTextSize(SessionsLeastWidth), UiLayout.AtTextSize(SessionsMostWidth));
 
     /// <summary>Called when this page becomes visible - sessions are saved by Race Control and Practice while it's inactive.</summary>
     public void RefreshAll() => RefreshList();

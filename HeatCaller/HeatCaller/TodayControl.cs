@@ -86,7 +86,7 @@ public sealed class TodayControl : UserControl
     private readonly Button _btnPrimary = new();
 
     private readonly Label _lblGlance = new();
-    private readonly List<Tile> _tiles = new();
+    private readonly List<StatTile> _tiles = new();
 
     // --- Ready to race: a bar, a count, what is left, and one button ---
     private readonly Panel _barReady = new();
@@ -287,7 +287,7 @@ public sealed class TodayControl : UserControl
 
         for (var i = 0; i < TileCount; i++)
         {
-            var tile = new Tile();
+            var tile = new StatTile();
 
             _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
             _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
@@ -361,122 +361,6 @@ public sealed class TodayControl : UserControl
                 ContentHeightChanged?.Invoke();
             }
         }));
-    }
-
-    /// <summary>
-    /// One number with a caption under it, on a card of its own - the same
-    /// rounded card as the ones above it.
-    ///
-    /// One line each, cut with an ellipsis rather than wrapped. A round
-    /// label in the last tile used to wrap to a second line, the tile's
-    /// contents then overran the tile, and the old layout pass turned
-    /// scrolling on INSIDE the tile - the stray bars that showed across
-    /// "classes racing".
-    /// </summary>
-    private sealed class Tile
-    {
-        public readonly TileCard Panel = new();
-
-        public readonly Label Value = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextDark };
-        public readonly Label Caption = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextMuted };
-
-        public Tile()
-        {
-            Panel.Controls.Add(Value);
-            Panel.Controls.Add(Caption);
-        }
-
-        public void Set(string value, string caption)
-        {
-            Value.Text = value;
-            Caption.Text = AppTheme.Spaced(caption.ToUpperInvariant());
-        }
-    }
-
-    /// <summary>A tile's card: the theme's rounded surface, the page's colour in the corners - as Section paints itself.</summary>
-    private sealed class TileCard : Panel
-    {
-        public TileCard()
-        {
-            BackColor = AppTheme.Surface;
-            Tag = AppTheme.KeepBackColor;
-            DoubleBuffered = true;
-            ResizeRedraw = true;
-        }
-
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
-            {
-                e.Graphics.FillRectangle(behind, ClientRectangle);
-            }
-
-            AppTheme.DrawCard(e.Graphics, new RectangleF(0, 0, Width, Height));
-        }
-    }
-
-    /// <summary>
-    /// The tiles, across the page in one row, sharing its width equally and
-    /// as tall as a value and a caption in the fonts in use. They get
-    /// narrower with the page rather than scrolling it sideways, and a value
-    /// too long for its tile ends in "...".
-    /// </summary>
-    private sealed class TileStrip : Panel
-    {
-        private readonly IReadOnlyList<Tile> _tiles;
-
-        public TileStrip(IReadOnlyList<Tile> tiles)
-        {
-            _tiles = tiles;
-
-            AutoSize = true;
-            AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            Margin = Padding.Empty;
-            Padding = Padding.Empty;
-            Tag = AppTheme.KeepBackColor;
-
-            foreach (var tile in tiles)
-            {
-                Controls.Add(tile.Panel);
-            }
-        }
-
-        /// <summary>Room inside a tile, and between two.</summary>
-        private const int Pad = UiLayout.RowGap;
-
-        private static int ValueHeight => AppTheme.TitleFont.Height + 2;
-
-        private static int CaptionHeight => AppTheme.MicroFont.Height + 2;
-
-        private static int TileHeight => Pad + ValueHeight + UiLayout.HintGap + CaptionHeight + Pad;
-
-        public override Size GetPreferredSize(Size proposedSize) =>
-            new(proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width, TileHeight);
-
-        protected override void OnLayout(LayoutEventArgs levent)
-        {
-            base.OnLayout(levent);
-
-            if (_tiles.Count == 0)
-            {
-                return;
-            }
-
-            var height = TileHeight;
-            var room = Math.Max(0, ClientSize.Width - Pad * (_tiles.Count - 1));
-
-            for (var i = 0; i < _tiles.Count; i++)
-            {
-                // Shared out to the pixel: the last tile ends on the edge.
-                var left = i * (room / _tiles.Count) + i * Pad;
-                var width = i == _tiles.Count - 1 ? ClientSize.Width - left : room / _tiles.Count;
-                var tile = _tiles[i];
-
-                tile.Panel.Bounds = new Rectangle(left, 0, Math.Max(1, width), height);
-                tile.Value.Bounds = new Rectangle(Pad, Pad, Math.Max(1, width - Pad * 2), ValueHeight);
-                tile.Caption.Bounds = new Rectangle(Pad, Pad + ValueHeight + UiLayout.HintGap, Math.Max(1, width - Pad * 2), CaptionHeight);
-            }
-        }
     }
 
     /// <summary>

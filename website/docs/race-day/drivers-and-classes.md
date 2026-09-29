@@ -355,7 +355,7 @@ Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe
 
 <!-- screenshot: Track Layouts page with the layout list and the Selected Track preview -->
 
-The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its picture under **Selected Track**.
+The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its name and picture beside the list, under **Selected track**.
 
 ### Add or edit a layout
 

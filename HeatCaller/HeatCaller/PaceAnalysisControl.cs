@@ -65,28 +65,64 @@ public sealed class PaceAnalysisControl : UserControl
         _pinned = pinned;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once: on Race Analytics this
+        // sits in a tab whose row is drawn in the bold face, which it would
+        // otherwise take. See TextSize.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
+
+        // It is also the whole of PaceAnalysisForm, and the repair pass
+        // watches dialogs: it is told to keep out, since everything in here
+        // is placed by the layout pieces, and two things moving the same
+        // control is worse than neither. See LayoutDoctor.LeaveAlone.
+        LayoutDoctor.LeaveAlone(this);
+
         RefreshAll();
     }
 
+    /// <summary>What this control keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The race picker's width at the normal text size.</summary>
+    private const int SessionPickerWidth = 420;
+
+    /// <summary>The control's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this control through its tab's bold face - the only way it does, since it wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The race picker (on Race Analytics - not when the race is already
+    /// decided), the summary, and the table taking the height that is left,
+    /// in a card. On the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand.
+    ///
+    /// It used to be a header placed by hand - the summary capped at
+    /// 1040px whatever the width - over the table docked to fill the rest.
+    /// </summary>
     private void BuildLayout()
     {
         BuildGrid();
 
-        var header = new Panel { Dock = DockStyle.Top };
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
 
-        var y = UiLayout.PageTop;
+        var page = new FillPage();
 
         if (_pinned is null)
         {
-            _lblPick.Text = "Race:";
-            _lblPick.AutoSize = true;
-
-            _cmbSession.Font = AppTheme.BodyFont;
             _cmbSession.DropDownStyle = ComboBoxStyle.DropDownList;
-            _cmbSession.Width = 420;
             _cmbSession.SelectedIndexChanged += (_, _) =>
             {
                 if (!_loading)
@@ -95,35 +131,33 @@ public sealed class PaceAnalysisControl : UserControl
                 }
             };
 
-            _lblPick.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(_lblPick, y, _cmbSession.Height));
-            _cmbSession.Location = new Point(UiLayout.After(_lblPick), y);
+            var pickRow = new FieldRow();
 
-            header.Controls.Add(_lblPick);
-            header.Controls.Add(_cmbSession);
+            _lblPick.Text = "Race:";
+            pickRow.Add(_lblPick, _cmbSession, () => UiLayout.AtTextSize(SessionPickerWidth));
 
-            y = UiLayout.Below(_cmbSession, UiLayout.RowGap);
+            page.Add(pickRow, gapBelow: UiLayout.RowGap);
         }
 
-        _lblSummary.Font = AppTheme.BodyFont;
+        // Two lines kept whether or not the summary needs them, so the table
+        // below does not jump when a different race is picked and the
+        // sentence gets longer. It wraps to the page, and grows past them
+        // for more.
         _lblSummary.ForeColor = AppTheme.TextMuted;
         _lblSummary.AutoSize = true;
-        _lblSummary.MaximumSize = new Size(1040, 0);
-        _lblSummary.Location = new Point(UiLayout.PageLeft, y);
+        _textSize.Wear(_lblSummary, () => AppTheme.BodyFont);
+        _textSize.ReserveLines(_lblSummary, 2);
 
-        header.Controls.Add(_lblSummary);
+        page.Add(_lblSummary);
 
-        // Two lines' worth reserved whether or not the summary needs them,
-        // so the table below does not jump when a different race is picked
-        // and the sentence gets longer.
-        header.Height = _lblSummary.Top + AppTheme.BodyFont.Height * 2 + UiLayout.RowGap;
+        // The table in a card, taking the height that is left.
+        var table = new Section();
 
-        _grid.Dock = DockStyle.Fill;
+        table.AddFill(_grid, () => _grid.ColumnHeadersHeight + 4 * _grid.RowTemplate.Height, gapBelow: 0);
 
-        // Fill first, header second: docking resolves from the last child
-        // backwards, so the Fill control has to be added before the edges it
-        // gives way to.
-        Controls.Add(_grid);
-        Controls.Add(header);
+        page.AddFill(table, table.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     /// <summary>
