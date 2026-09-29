@@ -35,16 +35,16 @@ The tab has three parts.
 | **Track** | The track layout, or "-". |
 | **Status** | **Recorded** (run and saved), **NEXT** (the next round to run, highlighted), or **Scheduled**. |
 
-Only rounds that belong to the current race day are listed, so last week's heats don't appear. The **Class:** filter at the bottom shows one class at a time (**All classes** shows everything). **NEXT** is always the next round for the whole day, whichever class you're looking at.
+Only rounds that belong to the current race day are listed, so last week's heats don't appear. The **Class:** filter above the list shows one class at a time (**All classes** shows everything). **NEXT** is always the next round for the whole day, whichever class you're looking at.
 
 **The footer** has two groups of buttons:
 
-- On the left, buttons that act on the **selected round**: **Start Selected**, **Edit Drivers...** and **More...**.
-- On the right, tools that act on **a class**: the **Class:** filter, **Standings...**, **Marshals...** and **Bump-Ups...**.
+- On the left, buttons that act on the **selected round**: **Start Selected** and **Edit Drivers**.
+- On the right, tools for the day and its classes: **Timetable**, **Standings** (**Tonight's Standings** on a club night), **Marshals**, **Move the Top Finishers Up** (not on a club night) and **Glossary**.
 
 The class tools work on the class chosen in the **Class:** filter. If the filter shows all classes, they use the class of the selected round, or the only class racing. If none of those settles it, HeatCaller asks you to pick a class.
 
-**More...** opens the round menu, which you can also get by right-clicking a round:
+Everything else is on the round menu. Right-click the list to open it: on a round to act on that round, or anywhere in the list for the commands that don't need one.
 
 | Menu item | What it does |
 |---|---|
@@ -53,9 +53,9 @@ The class tools work on the class chosen in the **Class:** filter. If the filter
 | **Edit Drivers...** | Changes who's in the round. |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |
-| **Build the Qualifying Programme...** | Builds (or rebuilds) the qualifying heats. |
-| **Seed the Mains from Qualifying...** | Seeds a class's mains. |
-| **Add a Main by Hand...** | Adds a main you choose the drivers for. |
+| **Build Tonight's Heats...** | Builds (or rebuilds) the qualifying heats. On a club night it's **Build Tonight's Races...**. |
+| **Build the Finals from Qualifying...** | Seeds a class's mains. Not shown on a club night. |
+| **Add a Main by Hand...** | Adds a main you choose the drivers for. Not shown on a club night. |
 | **Save Heat Sheet...** | Saves a printable heat sheet for a class. |
 | **Delete** | Deletes the selected rounds from the program (it says **Delete 3 Rounds** when several are selected). |
 
@@ -82,7 +82,7 @@ Bump-ups come *before* starting the next round on purpose: once the upper main h
 
 ## Build the qualifying program
 
-1. Click **Build the Qualifying Programme** on the banner (or choose **Build the Qualifying Programme...** from **More...**).
+1. Click **Build tonight's heats** on the **Next Steps** card above the program (or right-click the list and choose **Build Tonight's Heats...**).
 2. Check the summary: how many heats per class, how many drivers, the heat size, the track, and whether only checked-in drivers are used. It also says how many unrun qualifiers will be replaced (only today's are counted and replaced).
 3. Click **Yes**.
 
@@ -113,7 +113,7 @@ If the round has already run, HeatCaller warns you that changing its drivers onl
 
 ### Balance heats
 
-**Move Drivers Between Heats...** (in the **More...** menu) shows all of a class's rounds for the day side by side, one column per round, so you can see everyone at once.
+**Move Drivers Between Heats...** (on the round menu: right-click the list) shows all of a class's rounds for the day side by side, one column per round, so you can see everyone at once.
 
 <!-- screenshot: Move drivers between heats window with several heat columns and the NOT IN A HEAT column -->
 
@@ -127,7 +127,7 @@ Nothing is saved until you click **Save**, and **Cancel** discards everything. I
 
 ### Change the running order
 
-Drag rounds up or down the list to reorder them — a line shows where they'll land. You can drag several selected rounds together. **Move Up** and **Move Down** in the **More...** menu do the same one place at a time.
+Drag rounds up or down the list to reorder them — a line shows where they'll land. You can drag several selected rounds together. **Move Up** and **Move Down** on the round menu do the same one place at a time.
 
 When the list is filtered to one class, moves are made relative to what you can see.
 
@@ -136,7 +136,7 @@ When the list is filtered to one class, moves are made relative to what you can 
 
 ### Delete rounds
 
-Select one or more rounds and choose **Delete** from **More...**. Deleting a round removes it from the program but doesn't delete any recorded results. Undo puts the rounds back in their original places in the running order.
+Select one or more rounds, right-click them and choose **Delete**. Deleting a round removes it from the program but doesn't delete any recorded results. Undo puts the rounds back in their original places in the running order.
 
 ## Start a round
 
@@ -216,9 +216,9 @@ If no qualifier is running, the window says so.
 
 ## Seed the mains
 
-When a class has finished qualifying, the banner offers **Seed the Mains** (it's also **Seed the Mains from Qualifying...** in the **More...** menu, available at any time).
+When a class has finished qualifying, the **Next Steps** card offers **Build the finals from qualifying** (it's also **Build the Finals from Qualifying...** on the round menu, available at any time: right-click the list).
 
-1. Click **Seed the Mains**.
+1. Click **Build the finals from qualifying**.
 2. Check the summary — how many mains and how many drivers in each, and whether bump-ups are on.
 3. Click **Yes**.
 
@@ -233,7 +233,7 @@ Seeding only looks at the current race day's mains. If the class already has mai
 
 ### Add a main by hand
 
-For a one-off main, choose **Add a Main by Hand...** from **More...**. In the **Add Main** dialog, enter a **Round Label:** (it suggests "A-Main", then "B-Main", based on the mains already in today's program), pick a **Track Layout:**, and tick the drivers. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
+For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** dialog, enter a **Round Label:** (it suggests "A-Main", then "B-Main", based on the mains already in today's program), pick a **Track Layout:**, and tick the drivers. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
 
 A hand-added main takes part in bump-ups only if its label names a tier — "A-Main", "B Main", "C" and so on. A label like "Consolation" isn't treated as a tier.
 
@@ -291,7 +291,7 @@ The same marshal list is what the announcer reads out for the `{marshals}` place
 
 A heat sheet is a printable page for the pit table: the current race day's rounds of a class with its drivers, cars, transponders and blank columns to write laps and times in.
 
-1. Choose **Save Heat Sheet...** from the **More...** menu. It uses the class in the **Class:** filter (or the selected round's class).
+1. Right-click the list and choose **Save Heat Sheet...**. It uses the class in the **Class:** filter (or the selected round's class).
 2. Choose where to save the PNG.
 3. Open it and print it at full page size.
 

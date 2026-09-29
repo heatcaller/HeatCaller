@@ -305,21 +305,21 @@ The event report also lists any units still out. See [Results and championships]
 
 The **Batteries** page answers one question: are you slower on a particular battery pack? You tag each session with the pack that was in the car, and HeatCaller compares the lap times. There's no charge logging.
 
-<!-- screenshot: Batteries page with the PACKS list, PACE BY PACK comparison and the session list -->
+<!-- screenshot: Batteries page with the Packs list, Pace by pack comparison and the session list -->
 
 ### Set up your packs
 
-Under **PACKS**, click **Add Pack...**. Give it a **Label:** (whatever's written on the pack, like "3" or "Blue tape") and a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own). Tick **Retired (out of rotation, keeps its history)** for a pack you've stopped using — it keeps its pace history but isn't offered when you tag sessions.
+Under **Packs**, click **Add Pack**. Give it a **Label:** (whatever's written on the pack, like "3" or "Blue tape") and a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own). Tick **Retired (out of rotation, keeps its history)** for a pack you've stopped using — it keeps its pace history but isn't offered when you tag sessions.
 
 Deleting a pack removes its tags from any sessions, so its pace history is lost. Retire it instead if you want to keep the history.
 
 ### Tag sessions
 
-The **TAG A SESSION** list shows your recent sessions with the columns **When**, **Session**, **Track**, **Drivers** and **Pack used**. Double-click a session (or select it and click **Set Pack...**) and pick the pack. **Clear Pack** removes the tag. The line under the list shows how many sessions are tagged.
+The **Tag a session** list shows your recent sessions with the columns **When**, **Session**, **Track**, **Drivers** and **Pack used**. Double-click a session (or select it and click **Set Pack**) and pick the pack. **Clear Pack** removes the tag. The line under the list shows how many sessions are tagged.
 
 ### Compare pace
 
-Under **PACE BY PACK**, pick a driver. The comparison is per driver, because pack pace means nothing across different people. For each pack you see **Sessions**, **Best lap**, **Avg best lap** (the average of each session's best lap) and **Gap** to the quickest pack. A gap of 0.1 seconds or more is highlighted in red.
+Under **Pace by pack**, pick a **Driver:**. The comparison is per driver, because pack pace means nothing across different people. For each pack you see **Sessions**, **Best lap**, **Avg best lap** (the average of each session's best lap) and **Gap** to the quickest pack. A gap of 0.1 seconds or more is highlighted in red.
 
 ## Venues
 

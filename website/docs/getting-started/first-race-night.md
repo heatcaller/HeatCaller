@@ -82,11 +82,11 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 
 ## Step 6: Build the program
 
-1. Open **Race Day → Program**.
-2. The banner at the top tells you what's next. With classes ticked and drivers entered, it says "Nothing is scheduled yet." and offers **Build the Qualifying Programme**. Click it.
-3. Look over the heats. If they look lopsided, right-click the list, or use **More**, and choose **Move Drivers Between Heats...**.
+1. Open **Race Day → Next Steps**.
+2. The card at the top tells you what's next. With classes ticked and drivers entered, it says "Nothing is scheduled yet." and offers **Build tonight's heats**. Click it.
+3. Look over the heats. If they look lopsided, right-click the list and choose **Move Drivers Between Heats...**.
 
-If the banner says "No race day is open." or "This race day has no classes yet.", its button takes you back to the **Event** tab to fix it.
+If the card says something else comes first, such as "No race day is open.", its button does that instead.
 
 Optional: on **Race Day → Run Sheet**, click **Build from Program** for a timed running order that ticks itself off as heats are recorded.
 

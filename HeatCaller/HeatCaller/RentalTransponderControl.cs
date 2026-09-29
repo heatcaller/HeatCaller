@@ -31,6 +31,9 @@ public sealed class RentalTransponderControl : UserControl
     public event Action<int>? OutstandingCountChanged;
     private readonly Label _lblStatus = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
     public RentalTransponderControl(RentalTransponderStore store, ProfileStore profiles, UndoService undo)
     {
         _store = store;
@@ -38,48 +41,76 @@ public sealed class RentalTransponderControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        // Design size before the layout is built, so bottom-anchored
-        // controls resolve their offsets against real dimensions.
-        Size = new Size(980, 560);
-        MinimumSize = new Size(900, 540);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize: the 900x540 floor was honoured
+        // over the size the page was given, and a small window lost the
+        // buttons off the bottom. A short window scrolls the page instead
+        // (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshGrid();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, the count of units still out, then one card: the units
+    /// taking the height that is left, the buttons under them and the
+    /// status line. On the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand.
+    ///
+    /// It used to be: the grid at a fixed height, the buttons placed from
+    /// its bottom and the count in a banner 64px tall, over a 900x540 floor
+    /// the page kept however small its window - and the count's 26pt face
+    /// set once, so it never followed the text size.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Club transponders loaned to drivers without their own. Units still out are listed first and highlighted - "
                  + "check the count before packing up.",
-            Location = new Point(12, 12),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
-        // The wrap width comes from the page, not from a literal.
-        //
-        // It was capped at 940 while this control's MINIMUM width is 900,
-        // so on a narrow window the paragraph was 939px wide inside a
-        // 900px page - the 51px this page has reported running past its
-        // right edge since it was written. Twelve pixels of margin at each
-        // side, measured against whatever width the page actually has.
-        void FitIntro() => lblIntro.MaximumSize = new Size(Math.Max(120, ClientSize.Width - 24), 0);
-
-        Resize += (_, _) => FitIntro();
-        FitIntro();
-
-        _bannerOutstanding.Location = new Point(12, 56);
-        _bannerOutstanding.Size = new Size(956, 64);
-        _bannerOutstanding.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        // The count, as big as the stat tiles' numbers, in a band as tall as
+        // it needs. Its colours are the page's to set (ApplyBannerColors),
+        // not the theme pass's - left to it, the band went the page's
+        // colour whenever the look or the text size changed, until the next
+        // refresh.
+        _bannerOutstanding.Tag = AppTheme.KeepBackColor;
 
         _lblOutstanding.Dock = DockStyle.Fill;
         _lblOutstanding.TextAlign = ContentAlignment.MiddleCenter;
-        _lblOutstanding.Font = new Font(AppTheme.BodyFont.FontFamily, 26F, FontStyle.Bold);
+        _textSize.Wear(_lblOutstanding, () => AppTheme.StatFont);
+        _textSize.Keep(() =>
+        {
+            var height = AppTheme.StatFont.Height + UiLayout.RowGap * 2;
+
+            if (_bannerOutstanding.Height != height)
+            {
+                _bannerOutstanding.Height = height;
+            }
+        });
+
         _bannerOutstanding.Controls.Add(_lblOutstanding);
 
         _pulse.Tick += (_, _) =>
@@ -88,12 +119,6 @@ public sealed class RentalTransponderControl : UserControl
             ApplyBannerColors();
         };
 
-        _grid.Location = new Point(12, 132);
-        _grid.Size = new Size(956, 332);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -111,6 +136,9 @@ public sealed class RentalTransponderControl : UserControl
             new DataGridViewTextBoxColumn { Name = "loans", HeaderText = "Loans", FillWeight = 35 },
             new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 90 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
         _grid.CellDoubleClick += (_, args) =>
         {
             if (args.RowIndex >= 0)
@@ -137,27 +165,23 @@ public sealed class RentalTransponderControl : UserControl
         var btnDelete = new Button { Text = "Delete", };
         btnDelete.Click += (_, _) => DeleteSelected();
 
-        // NOT Bottom-anchored - the grid above is not either.
-        //
-        // The grid is Top|Left|Right at a fixed height, so its bottom edge
-        // never moves. These were anchored to the PAGE's bottom, which
-        // means on a window shorter than the height these literals assume
-        // they ride up and are drawn over the last rows of the grid. Same
-        // fault the Batteries page had.
-        //
-        // Placed from the grid instead, so the clearance is a fact.
-        var buttonsTop = UiLayout.Below(_grid, UiLayout.RowGap);
-        AppTheme.LayoutButtonRow(12, buttonsTop, 8, btnCheckOut, btnCheckIn, btnAdd, btnEdit, btnHistory, btnDelete);
-
-        _lblStatus.Location = new Point(12, buttonsTop + UiLayout.ButtonHeight + UiLayout.RowGap);
+        // What the last command did.
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, _bannerOutstanding, _grid,
-            btnCheckOut, btnCheckIn, btnAdd, btnEdit, btnHistory, btnDelete, _lblStatus,
-        });
+        var units = new Section("Transponders");
+
+        units.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
+        units.Add(new ButtonBar().With(btnCheckOut, btnCheckIn, btnAdd, btnEdit, btnHistory, btnDelete));
+        units.Add(_lblStatus, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.Add(_bannerOutstanding);
+        page.AddFill(units, units.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     protected override void Dispose(bool disposing)

@@ -118,7 +118,7 @@ Every race is saved to **Race History** automatically when it finishes. A result
 
 ### Can I print heat sheets?
 
-Yes. On **Race Day → Program**, use **More** (or right-click the list) and choose **Save Heat Sheet...**. It saves a PNG image for you to print. See [Program and mains](../race-day/program-and-mains.md).
+Yes. On **Race Day → Next Steps**, right-click the program list and choose **Save Heat Sheet...**. It saves a PNG image for you to print. See [Program and mains](../race-day/program-and-mains.md).
 
 ## Phones, screens and online
 

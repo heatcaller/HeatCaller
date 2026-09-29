@@ -1607,20 +1607,42 @@ public static class AppTheme
         // Spacing is only applied to short headers. On a long one - the
         // leaderboard has a few - the thin spaces push it past the column
         // width and it ends up ellipsised into uselessness.
+        //
+        // And only while the spaced one fits. At a larger text size, or in
+        // a narrow column, the thin spaces were what cut a short heading
+        // down to "PO..." when the plain capitals had room (layout pictures,
+        // 29 Sep: the championship standings at 150%).
         var label = text.ToUpperInvariant();
         if (label.Length <= 10)
         {
-            label = Spaced(label);
+            var spaced = Spaced(label);
+
+            if (TextRenderer.MeasureText(g, spaced, MicroFont, new Size(int.MaxValue, int.MaxValue), HeaderFlags).Width <= e.CellBounds.Width)
+            {
+                label = spaced;
+            }
         }
 
         // The accent, not the muted grey: still the quiet layout - surface,
         // spaced caps, hairline - but the ink is the theme's pink, so the
         // header reads as chrome on every grid, the leaderboard first.
         TextRenderer.DrawText(g, label, MicroFont, e.CellBounds, Primary,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.LeftAndRightPadding | TextFormatFlags.EndEllipsis);
+            HeaderFlags | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
         e.Handled = true;
     }
+
+    /// <summary>How a grid's column heading is laid out - see QuietHeaderPaint.</summary>
+    private const TextFormatFlags HeaderFlags = TextFormatFlags.Left | TextFormatFlags.LeftAndRightPadding | TextFormatFlags.SingleLine;
+
+    /// <summary>
+    /// The narrowest a grid column can be and still show its whole heading:
+    /// the heading in plain capitals, as QuietHeaderPaint draws it when the
+    /// spaced ones do not fit, with the room it keeps either side. Measured
+    /// in the header face in use, so it follows the text size.
+    /// </summary>
+    public static int HeaderLeastWidth(string heading) =>
+        TextRenderer.MeasureText((heading ?? string.Empty).ToUpperInvariant(), MicroFont, new Size(int.MaxValue, int.MaxValue), HeaderFlags).Width + 2;
 
     /// <summary>
     /// Turns a GroupBox into a card: rounded surface, hairline outline, and

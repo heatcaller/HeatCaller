@@ -60,9 +60,36 @@ public static class LayoutDoctor
         // coming into view blank until the scrolling stops.
         ScrollRepaint.Attach(scrollable);
 
-        if (scrollable.AutoScrollMargin.Height < ScrollBottomRoom)
+        if (scrollable.AutoScrollMargin.Height < ScrollBottomRoom && !WithoutRoomBelow.TryGetValue(scrollable, out _))
         {
             scrollable.AutoScrollMargin = new Size(scrollable.AutoScrollMargin.Width, ScrollBottomRoom);
+        }
+    }
+
+    /// <summary>The scrolling panels that keep no room under their last control - see NoRoomBelow.</summary>
+    private static readonly ConditionalWeakTable<ScrollableControl, object> WithoutRoomBelow = new();
+
+    /// <summary>
+    /// Takes the room under the last control off a panel that scrolls, and
+    /// keeps it off through every theme pass after this (ThemeScrolling).
+    ///
+    /// For the two halves of Next Steps' split. The room is there so a page
+    /// scrolled to its end does not stop hard against the window's edge; in
+    /// a half of a split, the bottom edge is the splitter or the window's,
+    /// and the room was a blank band 32px tall under each half - paid for
+    /// in what the top half could show, since the program below keeps its
+    /// least and the top gives way (29 Sep). The page's own margin stays.
+    /// </summary>
+    internal static void NoRoomBelow(ScrollableControl scrollable)
+    {
+        if (!WithoutRoomBelow.TryGetValue(scrollable, out _))
+        {
+            WithoutRoomBelow.Add(scrollable, new object());
+        }
+
+        if (scrollable.AutoScrollMargin.Height != 0)
+        {
+            scrollable.AutoScrollMargin = new Size(scrollable.AutoScrollMargin.Width, 0);
         }
     }
 

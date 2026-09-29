@@ -20,6 +20,23 @@ public sealed class BatteryPackControl : UserControl
     private readonly ComboBox _cmbDriver = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The packs card's width at the normal text size - about two fifths of the band, between these.</summary>
+    private const int PacksLeastWidth = 360;
+    private const int PacksMostWidth = 480;
+
+    /// <summary>The driver picker's width at the normal text size - it is never narrower, and is as wide as the longest name.</summary>
+    private const int DriverPickerWidth = 240;
+
+    /// <summary>The packs' buttons - while there is room, their card keeps them on one line. See PaceWidth.</summary>
+    private ButtonBar? _packButtons;
+
+    /// <summary>The line with the driver picker, and the picker's width as last measured (see Pieces.PickerWidth) - forgotten when the list is refilled.</summary>
+    private FieldRow? _driverRow;
+    private (Font Font, int Count, int Width)? _driverWidth;
+
     public BatteryPackControl(BatteryPackStore store, SessionHistoryStore history,
         ProfileStore profiles, UndoService undo)
     {
@@ -29,70 +46,59 @@ public sealed class BatteryPackControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 600);
-        MinimumSize = new Size(900, 560);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize: the 900x560 floor was honoured
+        // over the size the page was given, and a small window lost the
+        // session buttons and the status line off the bottom. A short
+        // window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro; the packs and the pace by pack, two cards side by side and
+    /// the same height; and the sessions to tag, taking the height that is
+    /// left. On the layout pieces (LayoutPieces.cs), so nothing is placed by
+    /// hand.
+    ///
+    /// It used to be: a heading row measured from the intro, the two grids
+    /// at 190px each with the packs one 400px wide, everything under them
+    /// shifted down by however far the heading row had moved, and the
+    /// sessions grid at a fixed height with its buttons placed from its
+    /// bottom - over a 900x560 floor the page kept however small its
+    /// window, and in faces handed out once, at build.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Tag each session with the pack that was in the car, and the comparison below shows whether any pack "
                  + "is costing you time. One choice per session - no charge logging.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
-
-            // Set here because the heading row below is measured from this
-            // label's height, and an unparented label measures at the
-            // WinForms default font rather than the one it is drawn in.
-            Font = AppTheme.BodyFont,
         };
 
-        // Both section headings share a row, and that row is measured off
-        // the intro rather than parked at y=58. The intro wraps, and how
-        // many lines it wraps to depends on the text size - so a fixed 58
-        // is only far enough down at one of them, and at the others the
-        // headings sat hard against the paragraph above.
-        var headingY = UiLayout.Below(lblIntro, UiLayout.SectionGap);
-
-        // --- Packs ---
-        var lblPacks = new Label { Text = "PACKS", AutoSize = true, Font = AppTheme.BoldFont, ForeColor = AppTheme.Primary };
-
-        // --- Pace comparison, whose heading shares the row with a picker ---
-        var lblPace = new Label { Text = "PACE BY PACK", AutoSize = true, Font = AppTheme.BoldFont, ForeColor = AppTheme.Primary };
-
-        _cmbDriver.Font = AppTheme.BodyFont;
-        _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbDriver.SelectedIndexChanged += (_, _) => RefreshPace();
-
-        var headingHeight = Math.Max(_cmbDriver.Height, AppTheme.BoldFont.Height);
-
-        lblPacks.Location = new Point(12, UiLayout.CentreOn(lblPacks, headingY, headingHeight));
-        lblPace.Location = new Point(430, UiLayout.CentreOn(lblPace, headingY, headingHeight));
-
-        // Placed AFTER its heading, measured, instead of at a remembered
-        // x=556 that assumed "PACE BY PACK" was 126px wide. It is wider
-        // than that as soon as the text grows, and the heading ran into
-        // the picker.
-        _cmbDriver.Location = new Point(UiLayout.After(lblPace) + UiLayout.RowGap, headingY);
-        _cmbDriver.Width = Math.Clamp(968 - _cmbDriver.Left, 140, 260);
-
-        var gridTop = UiLayout.Below(_cmbDriver, UiLayout.RowGap);
-
-        // Everything below the heading row moves with it.
-        var shift = gridTop - 82;
-
-        _gridPacks.Location = new Point(12, gridTop);
-        _gridPacks.Size = new Size(400, 190);
-        _gridPacks.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        // --- The packs ---
         _gridPacks.ReadOnly = true;
         _gridPacks.AllowUserToAddRows = false;
         _gridPacks.RowHeadersVisible = false;
@@ -105,6 +111,9 @@ public sealed class BatteryPackControl : UserControl
             new DataGridViewTextBoxColumn { Name = "used", HeaderText = "Sessions", FillWeight = 35 },
             new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 70 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridPacks));
         _gridPacks.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { AddOrEditPack(SelectedPack()); } };
 
         var btnAdd = new Button { Text = "Add Pack..." };
@@ -116,11 +125,23 @@ public sealed class BatteryPackControl : UserControl
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeletePack();
 
-        AppTheme.LayoutButtonRow(12, 280 + shift, 8, btnAdd, btnEdit, btnDelete);
+        var packs = new Section("Packs");
 
-        _gridPace.Location = new Point(430, gridTop);
-        _gridPace.Size = new Size(538, 190);
-        _gridPace.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        packs.AddFill(_gridPacks, () => GridLeast(_gridPacks, 4));
+        _packButtons = packs.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete), gapBelow: 0);
+
+        // --- The pace by pack, for one driver ---
+        _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbDriver.SelectedIndexChanged += (_, _) => RefreshPace();
+
+        var driverRow = new FieldRow();
+
+        // As wide as the longest name, not the whole card: a picker
+        // stretched across the card read as a text box (layout pictures,
+        // 29 Sep).
+        driverRow.Add(new Label { Text = "Driver:" }, _cmbDriver, DriverWidth);
+        _driverRow = driverRow;
+
         _gridPace.ReadOnly = true;
         _gridPace.AllowUserToAddRows = false;
         _gridPace.RowHeadersVisible = false;
@@ -135,22 +156,15 @@ public sealed class BatteryPackControl : UserControl
             new DataGridViewTextBoxColumn { Name = "gap", HeaderText = "Gap", FillWeight = 30 }
         );
 
-        // --- Session assignment ---
-        var lblSessions = new Label
-        {
-            Text = "TAG A SESSION - double-click a row to set which pack was in the car",
-            Location = new Point(12, 322 + shift),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridPace));
 
-        _gridSessions.Location = new Point(12, 346 + shift);
-        _gridSessions.Size = new Size(956, 190);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _gridSessions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        var pace = new Section("Pace by pack");
+
+        pace.Add(driverRow);
+        pace.AddFill(_gridPace, () => GridLeast(_gridPace, 4), gapBelow: 0);
+
+        // --- The sessions to tag ---
         _gridSessions.ReadOnly = true;
         _gridSessions.AllowUserToAddRows = false;
         _gridSessions.RowHeadersVisible = false;
@@ -164,40 +178,98 @@ public sealed class BatteryPackControl : UserControl
             new DataGridViewTextBoxColumn { Name = "drivers", HeaderText = "Drivers", FillWeight = 35 },
             new DataGridViewTextBoxColumn { Name = "pack", HeaderText = "Pack used", FillWeight = 60 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridSessions));
         _gridSessions.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { AssignPack(); } };
 
-        // NOT anchored to the bottom, which is what used to draw these
-        // over the grid.
-        //
-        // The grid above is fixed at y=346 with a height of 190, and these
-        // sat at 548 - twelve pixels of clearance, measured once, at one
-        // text size. Bottom anchoring then moves them relative to the
-        // PAGE's bottom edge: on a window shorter than the height those
-        // literals assumed - which at 150% text scaling it always is -
-        // they ride up, straight over the last rows of the grid.
-        //
-        // Placed from the grid instead, so the clearance is a fact rather
-        // than a coincidence, and anchored to the top like the grid is.
         var btnAssign = new Button { Text = "Set Pack..." };
         btnAssign.Click += (_, _) => AssignPack();
 
         var btnClearAssign = new Button { Text = "Clear Pack" };
         btnClearAssign.Click += (_, _) => ClearAssignment();
 
-        var buttonsTop = UiLayout.Below(_gridSessions, UiLayout.RowGap);
-        AppTheme.LayoutButtonRow(12, buttonsTop, 8, btnAssign, btnClearAssign);
+        var sessionsHint = new Label { Text = "Double-click a session to set which pack was in the car.", AutoSize = true, ForeColor = AppTheme.TextMuted };
 
-        _lblStatus.Location = new Point(12, buttonsTop + UiLayout.ButtonHeight + UiLayout.RowGap);
+        _textSize.Wear(sessionsHint, () => AppTheme.SmallFont);
+
+        // How many sessions are tagged.
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
+        var sessions = new Section("Tag a session");
+
+        sessions.Add(sessionsHint);
+        sessions.AddFill(_gridSessions, () => GridLeast(_gridSessions, 3));
+        sessions.Add(new ButtonBar().With(btnAssign, btnClearAssign));
+        sessions.Add(_lblStatus, gapBelow: 0);
+
+        // --- The page ---
+        //
+        // The two cards side by side in a band as tall as the taller needs:
+        // the packs down the left, the pace down the right and filling the
+        // band's height, so the two end level.
+        Beside? band = null;
+
+        band = new Beside(() => PaceWidth(band?.Width ?? 0))
         {
-            lblIntro, lblPacks, _gridPacks, btnAdd, btnEdit, btnDelete,
-            lblPace, _cmbDriver, _gridPace,
-            lblSessions, _gridSessions, btnAssign, btnClearAssign, _lblStatus,
-        });
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        band.AddFill(packs, packs.LeastHeight);
+        band.AddSideFill(pace, pace.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.Add(band);
+        page.AddFill(sessions, sessions.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>
+    /// The pace card's width: what the packs card leaves of the band - the
+    /// packs card about two fifths of it, between 360px and 480px at the
+    /// normal text size, at the size in use - and never under 300px there.
+    ///
+    /// Too narrow for both at that - a small window at the largest text
+    /// size - and each gives up the same share of its width, rather than
+    /// the packs card, whose width is only what the pace card leaves,
+    /// giving up all of its own. Nothing here scrolls sideways (FillPage).
+    ///
+    /// And while there is room, the packs card is wide enough for its three
+    /// buttons on one line: at 480px Delete went onto a line of its own
+    /// (layout pictures, 29 Sep).
+    /// </summary>
+    private int PaceWidth(int band)
+    {
+        var packs = Math.Max(
+            Math.Clamp((int)(band * 0.4f), UiLayout.AtTextSize(PacksLeastWidth), UiLayout.AtTextSize(PacksMostWidth)),
+            (_packButtons?.OneLineWidth ?? 0) + Section.Inset.Horizontal);
+
+        var paceLeast = UiLayout.AtTextSize(300);
+
+        // What the two share: all of the band but the gap a Beside leaves
+        // between its parts and its column.
+        var room = Math.Max(0, band - UiLayout.RowGap);
+
+        if (packs + paceLeast > room)
+        {
+            packs = (int)((long)packs * room / (packs + paceLeast));
+        }
+
+        return Math.Max(0, room - packs);
+    }
+
+    /// <summary>The driver picker: as wide as the longest name, and never under its width at the normal text size.</summary>
+    private int DriverWidth() =>
+        Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(_cmbDriver, ref _driverWidth));
+
+    /// <summary>The least a grid can do with: its headings and <paramref name="rows"/> rows. Below that the page scrolls instead - see FillPage.</summary>
+    private static int GridLeast(DataGridView grid, int rows) =>
+        grid.ColumnHeadersHeight + rows * grid.RowTemplate.Height;
 
     private BatteryPack? SelectedPack() =>
         _gridPacks.CurrentRow?.Tag is string id ? _store.Get(id) : null;
@@ -222,6 +294,11 @@ public sealed class BatteryPackControl : UserControl
         {
             _cmbDriver.Items.Add(new DriverItem(profile.Transponder, profile.DriverName));
         }
+
+        // The longest name may have come or gone: measured again, and the
+        // line with it.
+        _driverWidth = null;
+        _driverRow?.PerformLayout();
 
         if (previous is not null)
         {

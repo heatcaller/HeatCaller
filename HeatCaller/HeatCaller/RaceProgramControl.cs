@@ -41,8 +41,12 @@ namespace HeatCaller;
 ///
 /// The buttons that remain are in two groups with a real distinction
 /// between them: the left group acts on the SELECTED round, the right
-/// group on the day. Everything else went into the right-click menu,
-/// which the "More" button opens too - one menu, two ways to reach it.
+/// group on the day. Everything else went into the right-click menu.
+///
+/// A "More" button opened that menu too, until it came off (29 Sep) to
+/// give Next Steps' top half the room - Asher's call, looking at it. The
+/// status line says where the menu is until the first command's message
+/// takes its place.
 /// </summary>
 public sealed class RaceProgramControl : UserControl
 {
@@ -78,7 +82,6 @@ public sealed class RaceProgramControl : UserControl
 
     // --- The list ---
     private readonly DataGridView _grid = new();
-    private ContextMenuStrip? _roundMenu;
 
     // --- Dragging rounds into a new order ---
     //
@@ -94,7 +97,6 @@ public sealed class RaceProgramControl : UserControl
     // --- The footer ---
     private readonly Button _btnStart = new();
     private readonly Button _btnEditDrivers = new();
-    private readonly Button _btnMore = new();
     private readonly ComboBox _cmbFilter = new();
     private readonly Button _btnStandings = new();
     private readonly Button _btnMarshals = new();
@@ -333,6 +335,11 @@ public sealed class RaceProgramControl : UserControl
         _textSize.Wear(_lblStatus, () => AppTheme.SmallFont);
         _textSize.ReserveLines(_lblStatus, 2);
 
+        // Until a command says what it did: where everything that is not a
+        // button is. The menu has no button of its own - see the summary.
+        _lblStatus.Text = "Right-click the list for everything else - building tonight's program, the heat sheet, "
+            + "moving and deleting rounds, and more.";
+
         // --- The card ---
         //
         // The split is the point of the two bars. Every button on the left
@@ -341,7 +348,7 @@ public sealed class RaceProgramControl : UserControl
         // of ten buttons had no way to express. The glossary - the one thing
         // here that is not an action on the day - ends up hard against the
         // right-hand edge, where help is looked for.
-        var roundCommands = new ButtonBar().With(_btnStart, _btnEditDrivers, _btnMore);
+        var roundCommands = new ButtonBar().With(_btnStart, _btnEditDrivers);
         var dayTools = new ButtonBar(alignRight: true).With(_btnWords, _btnBumpUps, _btnMarshals, _btnStandings, _btnTimetable);
 
         var list = new Section("Tonight's program");
@@ -355,6 +362,12 @@ public sealed class RaceProgramControl : UserControl
 
         page.AddFill(list, list.LeastHeight, gapBelow: 0);
         page.LeastHeightChanged += PostLeastPaneHeightChanged;
+
+        // No blank band under the card: this pane's bottom edge is the
+        // window's, and the room the theme leaves under a scrolling page
+        // was 32px taken from the half above, which gives way to this one's
+        // least. See LayoutDoctor.NoRoomBelow.
+        LayoutDoctor.NoRoomBelow(page);
 
         _page = page;
         Controls.Add(page);
@@ -486,9 +499,6 @@ public sealed class RaceProgramControl : UserControl
         _btnEditDrivers.Text = "Edit Drivers...";
         _btnEditDrivers.Click += (_, _) => EditRoundRoster();
 
-        _btnMore.Text = "More...";
-        _btnMore.Click += (_, _) => _roundMenu?.Show(_btnMore, new Point(0, _btnMore.Height));
-
         _btnStandings.Text = "Standings...";
         _btnStandings.Click += (_, _) => ShowStandings();
 
@@ -541,9 +551,9 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
-    /// The round menu, shared by the grid's right-click and the "More"
-    /// button - so there is one list of what can be done to a round rather
-    /// than a button strip and a menu drifting apart from each other.
+    /// The round menu, on the grid's right-click - one list of what can be
+    /// done to a round, rather than a button strip and a menu drifting apart
+    /// from each other.
     /// </summary>
     private void BuildRoundMenu()
     {
@@ -623,8 +633,8 @@ public sealed class RaceProgramControl : UserControl
 
             // Add Main and the heat sheet are about the CLASS, not about a
             // round, so they stay available with nothing selected - which
-            // is also what lets the "More" button be useful on an empty
-            // programme.
+            // is also what makes the menu useful on an empty program: it
+            // opens wherever the list is right-clicked, rows or not.
             var single = selected == 1;
 
             miStart.Enabled = single;
@@ -649,7 +659,6 @@ public sealed class RaceProgramControl : UserControl
 
         AppTheme.StyleContextMenu(menu);
 
-        _roundMenu = menu;
         _grid.ContextMenuStrip = menu;
 
         // Right-clicking a row selects it first, the way Explorer does -

@@ -213,22 +213,22 @@ For more on signal strength and transponder problems, see [Transponders](../timi
 
 ## Championship → Calendar
 
-The **Calendar** tab, on the **Championship** page, lists every event with what it covered. It's where you look back at past race days, and it's another place to switch the active event.
+The **Calendar** tab, on the **Championship** page, lists every race day with what it covered. It's where you look back at past race days, and another place to switch which one is current.
 
-<!-- screenshot: Championship Calendar tab listing events -->
+<!-- screenshot: Championship Calendar tab listing race days -->
 
-The heading shows the active event ("Active: *name*") or "No active event - rounds aren't being grouped". The list has these columns: **Event**, **State** (**Open** or **Closed**), **Started**, **Days run** (worked out from when its rounds were actually raced), **Rounds**, **Recorded** and **Notes**. The active event is marked **[ACTIVE]**.
+The line above the list names the current race day ("Current: *name*"), adds "(closed - nothing new joins it)" when that day is closed, or says "No race day is open - rounds aren't being grouped". The list has these columns: **Race day**, **State** (**Open** or **Closed**), **Started**, **Days run** (worked out from when its rounds were actually raced), **Rounds**, **Recorded** and **Notes**. The current race day is marked **[CURRENT]**.
 
 | Button | What it does |
 |---|---|
-| **New Event...** | Creates an event with a **Name:** and **Notes:**, and makes it active. |
-| **Edit...** | Renames the event or changes its notes. |
-| **Make Active** | New rounds join this event. You can also double-click an event. A closed event has to be reopened first. |
-| **Close Event** | Stops new rounds joining the selected event. Select a closed event and click it again to reopen it. |
-| **Rounds...** | Lists the event's rounds by class, and whether each has been run. |
-| **Delete** | Deletes the event. Its rounds and results are **not** deleted — they just stop being grouped, so qualifying will count them alongside everything else. |
+| **New Race Day** | Starts a race day with the same dialog as **Race Day → Setup**: it asks what kind of night it is and which classes are racing, and carries the rest over from the last day. You stay on the Calendar. |
+| **Rename** | Changes the selected race day's **Name:** and **Notes:**. |
+| **Switch to This Day** | Makes the selected race day current, so check-in, tech, the program and the run sheet follow it. You can also double-click a race day. A closed day can be switched to, to look at its results — nothing new joins it until you reopen it. |
+| **Close Day** | Asks first, then stops new rounds joining the selected race day. Its rounds and results are kept. Select a closed day and click it again to reopen it; a reopened day becomes current if no other day is. |
+| **Rounds** | Lists the race day's rounds by class, and whether each has been run. |
+| **Delete Day** | Deletes the selected race day, or all of them if you select several (Ctrl+A selects the lot). It's the same delete as on **Race Day → Setup**: the heats and finals go with the day, and you choose whether its saved races, the track records set in them, championship picks and badges go too. With several days selected, one question covers them all. The legacy event is never deleted. |
 
-All of these can be undone with the **Undo** button in the sidebar. An undo only reverses that one action: rounds generated since are kept, and if it changes which event is active, check-in, tech and the run sheet switch with it.
+All of these can be undone with the **Undo** button in the sidebar. An undo only reverses that one action, and a deleted day comes back one day at a time. If an undo changes which race day is current, check-in, tech and the run sheet switch with it.
 
 !!! tip
-    **Make Active** here and **Make Current** on the **Race Day → Event** tab do the same thing. Use whichever page you happen to be on.
+    Picking a day in the **Working on:** box on **Race Day → Setup** switches to it too. Use whichever page you happen to be on.

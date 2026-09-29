@@ -115,16 +115,16 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 
 ### Create a championship
 
-1. Under **Seasons / Championships**, press **New...** and enter a **Season name:**.
-2. Press **Scoring Rules...** and set what counts (see below).
-3. Check the points table under **Points scheme (edit the Points column)**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Click a **Points** value to change it. **Reset to Default** puts the default table back.
-4. Check the races ticked under **Sessions counted toward this season:**.
+1. Under **Championships**, press **New** and enter a **Season name:**.
+2. Press **Scoring Rules** and set what counts (see below).
+3. Check the points table under **Points scheme**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Click a **Points** value to change it. **Reset to Default** puts the default table back.
+4. Check the races ticked under **Races counted**.
 
-**Rename...** and **Delete** work on the selected championship. Deleting a championship doesn't delete any races, and you can undo it.
+**Rename** and **Delete** work on the selected championship. Deleting a championship doesn't delete any races, and you can undo it.
 
 ### Scoring rules
 
-**Scoring Rules...** opens the rules for the selected championship:
+**Scoring Rules** opens the rules for the selected championship:
 
 | Setting | What it does | Default for a new championship |
 |---|---|---|
@@ -140,7 +140,7 @@ Championships created before the rules existed stay hand-picked until you turn t
 
 ### Ticking races in and out
 
-The list under **Sessions counted toward this season:** shows every saved race, marked with its class and kind (or "(freeform)"). A tick means the race counts.
+The list under **Races counted** shows every saved race, marked with its class and kind (or "(freeform)"). A tick means the race counts.
 
 - Untick a race the rule included (a rained-off round, say) to force it out. It stays out even if the rule would include it later.
 - Tick a race the rule doesn't include to force it in.
@@ -174,13 +174,13 @@ A club that switches to HeatCaller part way through a season can bring its stand
 There are two ways to carry points in:
 
 - **Import them with the drivers.** Import the old software's standings with **Import from CSV** on **Driver Profiles**, with the points column set to **Points so far**. See [Import drivers from a spreadsheet](../race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
-- **Type them in.** Select the championship and click **Points Carried In**, above the standings. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
+- **Type them in.** Select the championship and click **Points Carried In**, under the standings. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
 
 Either way, the sidebar **Undo** button puts the points back as they were.
 
 ### Export standings
 
-**Export Standings to CSV...** saves the table with **Rank**, **Driver**, **Points**, **Wins**, **Podiums**, **Sessions Counted**, **DNF**, **Best Finish** and **Carried In**. The file is UTF-8 with a byte order mark and formula-safe, like the other exports.
+**Export Standings to CSV** saves the table with **Rank**, **Driver**, **Points**, **Wins**, **Podiums**, **Sessions Counted**, **DNF**, **Best Finish** and **Carried In**. The file is UTF-8 with a byte order mark and formula-safe, like the other exports.
 
 ## Race Analytics
 

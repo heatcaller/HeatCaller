@@ -157,7 +157,8 @@ day: the layout overhaul is finished before the beta rather than after it
    and the overhaul is visual risk only. Page by page in race-night order,
    one per commit, each held to a clean layout report and checked by eye;
    then the drawn controls, then `PerMonitorV2`. Race Control, Race Day,
-   Connection, Driver Profiles and Classes are done.
+   Connection, Driver Profiles, Classes, Championship, Rentals, Handicaps
+   and Batteries are done.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -618,7 +619,40 @@ from. Ranked by what decides whether a club switches, and stays.
    "H" once per font and finds its ink - the typeface's own metrics moved it
    one pixel of the three it was out), and
    Next Steps' top half is exactly as tall as its content until the line is
-   dragged. Next: Championship, then the rest of the sidebar in its order.
+   dragged.
+
+   **Championship, Rentals, Handicaps and Batteries converted (29 Sep).**
+   Championship's Standings is four cards in three columns - two
+   `Beside`s, one inside the other: the standings down the right of
+   everything else, and the points scheme over the races that count down
+   the right of the championships. The three widths come from one method,
+   so that too narrow for all three at their least, each gives up the same
+   share rather than the left-hand column, whose width is only what the
+   others leave, giving up all of its own. Its Calendar, Rentals and
+   Handicaps are each one card on a `FillPage`; Rentals' count wears the
+   stat face and keeps its colours through the theme pass, and Handicaps'
+   pickers and its "OFF" warning are a `FieldRow`, the warning moving onto
+   a line of its own rather than being cut short. Batteries is two cards
+   side by side in a `Beside` that sizes itself, over the sessions to
+   tag. All four lost the `MinimumSize` WinForms honoured over the page's
+   own size, and wear the body face through `TextSize`. Next Steps lost
+   its **More** button at Asher's request, to give the top half room -
+   the menu is on the list's right-click, and the status line says so -
+   and both halves of its split lost the theme's 32px room under their
+   last control (`LayoutDoctor.NoRoomBelow`), a blank band each that the
+   top half paid for. The pictures then asked for three things: every grid
+   on these pages keeps each column as wide as its heading
+   (`Pieces.KeepHeadingsWhole`, scrolling sideways past that) and the
+   header painter drops the letter-spacing when it would cut a heading
+   short, app-wide; the standings take width from the other two columns;
+   and the championships' and the packs' buttons stay on one line where
+   they can (a tight bar; `ButtonBar.OneLineWidth`). The pictures after
+   that: a grid now keeps the fill weights it was built with - one whose
+   column was pushed to its new minimum took that as the column's weight,
+   and the transponder column took half the list - and the championships'
+   column is never narrower than its caption (`Section.CaptionWidth`),
+   which wrapped between its spaced letters. Next: Track Layouts, then the
+   rest of the sidebar in its order.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.

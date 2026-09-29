@@ -699,6 +699,14 @@ internal sealed class Section : TableLayoutPanel
     }
 
     /// <summary>
+    /// How wide the caption is on one line - for a column that should never
+    /// be narrower than its card's caption. Narrower, the caption wraps, and
+    /// between its spaced letters rather than its words: "CHAMPIONSHIP" over
+    /// a lone "S" (layout pictures, 29 Sep). 0 for a card without one.
+    /// </summary>
+    public int CaptionWidth => _caption is null ? 0 : _caption.GetPreferredSize(Size.Empty).Width + _caption.Margin.Horizontal;
+
+    /// <summary>
     /// The least height this card can do with at <paramref name="width"/>:
     /// its inset, every part as tall as it needs to be at that width with
     /// the gap under it, and the part added with AddFill at its least - for
@@ -1369,6 +1377,27 @@ internal sealed class ButtonBar : FlowLayoutPanel
 
     /// <summary>The gap between buttons, across and down.</summary>
     private int Gap => _tight ? UiLayout.TightButtonGap : UiLayout.ButtonGap;
+
+    /// <summary>
+    /// How wide the bar is with everything in it on one line - for a column
+    /// made wide enough that its bar does not wrap (Batteries' packs).
+    /// Known before the bar is laid out: each
+    /// button is sized as it is added, and again when its caption or font
+    /// changes. Hidden in its own right leaves a button out, as in
+    /// Pieces.TrailingGap.
+    /// </summary>
+    public int OneLineWidth
+    {
+        get
+        {
+            // Each with its margin, the last one's gap included: the flow
+            // counts a button's margin when it decides whether the button
+            // fits on the line, so a bar exactly this wide stays on one.
+            return Controls.OfType<Control>()
+                .Where(part => !Visible || part.Visible)
+                .Sum(part => part.Width + part.Margin.Horizontal);
+        }
+    }
 
     /// <summary>Adds buttons (or anything else) in order.</summary>
     public ButtonBar With(params Control[] items)
@@ -2748,6 +2777,73 @@ internal sealed class TextSize
 /// <summary>What the pieces share.</summary>
 internal static class Pieces
 {
+    /// <summary>
+    /// Keeps every column of a grid at least as wide as its whole heading
+    /// (AppTheme.HeaderLeastWidth). Past that, a grid whose columns fill it
+    /// shares out what is left by their weights; one too narrow for all the
+    /// headings together scrolls sideways rather than cutting them to
+    /// "...". Run again when the text size changes - through TextSize.Keep -
+    /// since the heading face grows with it.
+    ///
+    /// Weights alone gave every column its share whatever its heading
+    /// needed: "CARRIED IN" cut short at the normal text size beside a
+    /// driver column with room to spare, and every heading of the
+    /// championship standings cut short at 150% (layout pictures, 29 Sep).
+    /// </summary>
+    internal static void KeepHeadingsWhole(DataGridView grid)
+    {
+        // The weights the grid was built with, kept the first time - see
+        // KeepFillWeights.
+        if (!BuiltWeights.TryGetValue(grid, out _))
+        {
+            BuiltWeights.Add(grid, grid.Columns.Cast<DataGridViewColumn>().Select(column => column.FillWeight).ToArray());
+            grid.SizeChanged += (_, _) => KeepFillWeights(grid);
+        }
+
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            var least = Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText));
+
+            if (column.MinimumWidth != least)
+            {
+                column.MinimumWidth = least;
+            }
+        }
+
+        KeepFillWeights(grid);
+    }
+
+    /// <summary>The fill weights each grid given KeepHeadingsWhole was built with.</summary>
+    private static readonly ConditionalWeakTable<DataGridView, float[]> BuiltWeights = new();
+
+    /// <summary>
+    /// Puts a grid's fill weights back to the ones it was built with.
+    ///
+    /// A grid whose columns fill it takes a column pushed to a new width -
+    /// by its minimum, or by being squeezed down to it - as a new weight for
+    /// that column, and keeps it: once the minimums went on, the transponder
+    /// column on Handicaps and the asset tag on Rentals took half the list
+    /// at every size after, the others squeezed up beside them (layout
+    /// pictures, 29 Sep). So the weights are put back after the minimums
+    /// are set and whenever the grid is resized. A grid whose columns have
+    /// changed since is left alone.
+    /// </summary>
+    private static void KeepFillWeights(DataGridView grid)
+    {
+        if (!BuiltWeights.TryGetValue(grid, out var weights) || weights.Length != grid.Columns.Count)
+        {
+            return;
+        }
+
+        for (var i = 0; i < weights.Length; i++)
+        {
+            if (grid.Columns[i].FillWeight != weights[i])
+            {
+                grid.Columns[i].FillWeight = weights[i];
+            }
+        }
+    }
+
     /// <summary>
     /// Puts a part on the next row of a one-column table: stretched across
     /// it, or at its own width on the left, with a gap below.

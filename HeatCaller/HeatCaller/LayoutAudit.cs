@@ -53,6 +53,18 @@ internal static class LayoutAudit
 
         // The grid of classes (RaceClassesControl).
         "Classes",
+
+        // Both tabs: Standings (SeasonsControl) and Calendar (EventsControl).
+        "Championship",
+
+        // The loan units and the count still out (RentalTransponderControl).
+        "Rentals",
+
+        // The drivers of a class and their handicaps (HandicapControl).
+        "Handicaps",
+
+        // The packs, the pace by pack and the sessions to tag (BatteryPackControl).
+        "Batteries",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>

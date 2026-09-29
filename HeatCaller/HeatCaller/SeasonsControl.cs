@@ -48,64 +48,96 @@ public sealed class SeasonsControl : UserControl
         _profiles = profiles;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
 
-        // Set the design size BEFORE building the layout. Anchors are
-        // resolved against whatever size the control has when a child is
-        // added, so without this they were computed against WinForms'
-        // tiny default - which pushed every bottom-anchored control
-        // (New / Rename / Delete, Export Standings) off the bottom of the
-        // page once it was docked to fill.
-        Size = new Size(1000, 510);
-        MinimumSize = new Size(900, 510);
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take, and set once it stayed at the size it was built at when the
+        // text size changed. See TextSize.
+        //
+        // No design size and no MinimumSize. The 900x510 floor was honoured
+        // over the size the page was given, so a small window cut the
+        // bottom of all three columns off - buttons included. A short
+        // window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshSeasonList();
     }
 
-    // The page measures itself on every resize - see LayoutPage - so
-    // everything it has to place is held rather than left as a local.
-    private Label _lblSeasons = new();
-    private Label _lblScheme = new();
-    private Label _lblSessions = new();
-    private Label _lblStandings = new();
-    private Label _lblHint = new();
-    private Button _btnNew = new();
-    private Button _btnRename = new();
-    private Button _btnDeleteSeason = new();
-    private Button _btnResetScheme = new();
-    private Button _btnRules = new();
-    private Button _btnExportStandings = new();
-    private Button _btnCarried = new();
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
 
+    /// <summary>Rows of the points scheme shown without scrolling - the rest are a scroll away.</summary>
+    private const int SchemeRowsShown = 5;
+
+    /// <summary>The championships' buttons - while there is room, the column is no narrower than the widest of them. See ColumnWidths.</summary>
+    private ButtonBar? _seasonButtons;
+
+    /// <summary>The championships' card - while there is room, the column is no narrower than its caption. See ColumnWidths.</summary>
+    private Section? _seasonsCard;
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Four cards in three columns, on the layout pieces (LayoutPieces.cs):
+    /// the championships, their buttons under the list; the points scheme
+    /// over the races that count; and the standings, the widest column.
+    /// Every list takes the height its card has left, down to its headings
+    /// and a few rows, and past that the page scrolls. Nothing is placed by
+    /// hand.
+    ///
+    /// It used to be three columns placed on every resize, their widths
+    /// shares of the page and their lists stretched to a common floor, over
+    /// a 900x510 minimum the page kept however small its window - and every
+    /// heading, list and button in its own fixed font, so none of it
+    /// followed the text size.
+    ///
+    /// The columns are two Besides, one inside the other: the standings
+    /// down the right of everything else, and the scheme and races down
+    /// the right of the championships.
+    /// </summary>
     private void BuildLayout()
     {
-        // --- Column 1: season list ---
-        _lblSeasons.Text = "Seasons / Championships";
-        _lblSeasons.AutoSize = true;
-        _lblSeasons.Font = AppTheme.BoldFont;
-
-        _lstSeasons.Font = AppTheme.BodyFont;
+        // --- The championships ---
         _lstSeasons.SelectedIndexChanged += (_, _) => LoadSelectedSeasonIntoUi();
 
-        var btnNew = _btnNew;
-        btnNew.Text = "New...";
+        // The lists fill their cards to the pixel: a list that keeps to
+        // whole rows stops short of the room it is given, and its outline
+        // with it.
+        _lstSeasons.IntegralHeight = false;
+
+        var btnNew = new Button { Text = "New..." };
         btnNew.Click += BtnNewSeason_Click;
 
-        var btnRename = _btnRename;
-        btnRename.Text = "Rename...";
+        var btnRename = new Button { Text = "Rename..." };
         btnRename.Click += BtnRenameSeason_Click;
 
-        var btnDeleteSeason = _btnDeleteSeason;
-        btnDeleteSeason.Text = "Delete";
+        var btnDeleteSeason = new Button { Text = "Delete" };
         btnDeleteSeason.Click += BtnDeleteSeason_Click;
 
-        // --- Column 2: points scheme + session picker ---
-        var lblScheme = _lblScheme;
-        lblScheme.Text = "Points scheme (edit the Points column)";
-        lblScheme.AutoSize = true;
-        lblScheme.Font = AppTheme.BoldFont;
+        var seasons = new Section("Championships");
+        _seasonsCard = seasons;
 
+        seasons.AddFill(_lstSeasons, () => ListLeast(_lstSeasons, 3));
+        // Each only as wide as its caption: three short words, which as
+        // standard buttons - never under 148px - went one under another in
+        // a column this narrow (layout pictures, 29 Sep).
+        _seasonButtons = seasons.Add(new ButtonBar(tight: true).With(btnNew, btnRename, btnDeleteSeason), gapBelow: 0);
+
+        // --- The points scheme ---
+        var schemeHint = new Label { Text = "Type in the Points column to change what each place scores.", AutoSize = true, ForeColor = AppTheme.TextMuted };
 
         _dgvPointsScheme.AllowUserToAddRows = false;
         _dgvPointsScheme.AllowUserToDeleteRows = false;
@@ -115,20 +147,23 @@ public sealed class SeasonsControl : UserControl
         _dgvPointsScheme.Columns.Add(new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 70 });
         _dgvPointsScheme.CellEndEdit += (_, _) => { if (!_suppressEvents) { SaveCurrentSeasonFromUi(); RecomputeStandings(); } };
 
-        var btnResetScheme = _btnResetScheme;
-        btnResetScheme.Text = "Reset to Default";
-
-        _btnRules.Text = "Scoring Rules...";
-        _btnRules.Click += (_, _) => EditRules();
+        var btnResetScheme = new Button { Text = "Reset to Default" };
         btnResetScheme.Click += BtnResetScheme_Click;
 
-        var lblSessions = _lblSessions;
-        lblSessions.Text = "Sessions counted toward this season:";
-        lblSessions.AutoSize = true;
-        lblSessions.Font = AppTheme.BoldFont;
+        var btnRules = new Button { Text = "Scoring Rules..." };
+        btnRules.Click += (_, _) => EditRules();
 
-        _clbSessions.Font = AppTheme.BodyFont;
+        // A short table, shown a few places tall: the card is as tall as it
+        // needs to be for that, and the races under it get the rest.
+        var scheme = new Section("Points scheme");
+
+        scheme.Add(schemeHint);
+        scheme.AddFill(_dgvPointsScheme, SchemeHeight);
+        scheme.Add(new ButtonBar().With(btnResetScheme, btnRules), gapBelow: 0);
+
+        // --- The races that count ---
         _clbSessions.CheckOnClick = true;
+        _clbSessions.IntegralHeight = false;
         _clbSessions.ItemCheck += (_, _) =>
         {
             // ItemCheck fires BEFORE the check state is applied, so defer
@@ -148,13 +183,19 @@ public sealed class SeasonsControl : UserControl
             BeginInvoke(() => { SaveCurrentSeasonFromUi(); RecomputeStandings(); });
         };
 
-        // --- Column 3: standings ---
-        var lblStandings = _lblStandings;
-        lblStandings.Text = "Standings";
-        lblStandings.AutoSize = true;
-        lblStandings.Font = AppTheme.BoldFont;
+        var sessionsHint = new Label
+        {
+            Text = "Only sessions recorded as \"Race\" type appear below. Practice sessions never count toward points.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
 
+        var sessions = new Section("Races counted");
 
+        sessions.Add(sessionsHint);
+        sessions.AddFill(_clbSessions, () => ListLeast(_clbSessions, 4), gapBelow: 0);
+
+        // --- The standings ---
         _dgvStandings.ReadOnly = true;
         _dgvStandings.AllowUserToAddRows = false;
         _dgvStandings.AllowUserToDeleteRows = false;
@@ -176,178 +217,109 @@ public sealed class SeasonsControl : UserControl
             new DataGridViewTextBoxColumn { Name = "best", HeaderText = "Best Finish", FillWeight = 60 }
         );
 
-        _lblStatus.AutoSize = false;
+        // What the table adds up: how many drivers and races, and the rule
+        // it scored them by. It wraps rather than being cut short - with a
+        // few drivers carrying points in and races forced out, it runs long.
+        _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Font = AppTheme.BodyFont;
 
-        var lblHint = _lblHint;
-        lblHint.Text = "Only sessions recorded as \"Race\" type appear below. Practice sessions never count toward points.";
-        lblHint.AutoSize = true;
-        lblHint.ForeColor = AppTheme.TextMuted;
-        lblHint.Font = AppTheme.SmallFont;
-
-        Controls.Add(_lblSeasons);
-        Controls.Add(_lstSeasons);
-        Controls.Add(btnNew);
-        Controls.Add(btnRename);
-        Controls.Add(btnDeleteSeason);
-        Controls.Add(lblScheme);
-        Controls.Add(_dgvPointsScheme);
-        var btnExportStandings = _btnExportStandings;
-        btnExportStandings.Text = "Export Standings to CSV...";
+        var btnExportStandings = new Button { Text = "Export Standings to CSV..." };
         btnExportStandings.Click += (_, _) => ExportStandings();
-        Controls.Add(btnExportStandings);
 
-        _btnCarried.Text = "Points Carried In...";
-        _btnCarried.Click += (_, _) => EditCarriedPoints();
-        Controls.Add(_btnCarried);
+        var btnCarried = new Button { Text = "Points Carried In..." };
+        btnCarried.Click += (_, _) => EditCarriedPoints();
 
-        Controls.Add(btnResetScheme);
-        Controls.Add(_btnRules);
-        Controls.Add(lblSessions);
-        Controls.Add(_clbSessions);
-        Controls.Add(lblHint);
-        Controls.Add(lblStandings);
-        Controls.Add(_dgvStandings);
-        Controls.Add(_lblStatus);
+        var standings = new Section("Standings");
 
+        standings.AddFill(_dgvStandings, () => GridLeast(_dgvStandings, 3));
+        standings.Add(_lblStatus);
+        standings.Add(new ButtonBar().With(btnExportStandings, btnCarried), gapBelow: 0);
 
-        // This page places every one of its children on every resize, so
-        // the repair pass is told to keep out - two things moving the same
-        // control is worse than neither doing it. See
-        // LayoutDoctor.LeaveAlone.
-        LayoutDoctor.LeaveAlone(this);
-        LayoutPage();
+        // The hints in the small type, at the text size in use.
+        _textSize.Wear(schemeHint, () => AppTheme.SmallFont);
+        _textSize.Wear(sessionsHint, () => AppTheme.SmallFont);
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_dgvPointsScheme));
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_dgvStandings));
+
+        // --- The page ---
+        Beside? outer = null;
+
+        outer = new Beside(() => ColumnWidths(outer?.Width ?? 0).Standings);
+
+        var inner = new Beside(() => ColumnWidths(outer?.Width ?? 0).Middle);
+
+        inner.AddFill(seasons, seasons.LeastHeight);
+        inner.AddSideCard(scheme);
+        inner.AddSideFill(sessions, sessions.LeastHeight, gapBelow: 0);
+
+        outer.AddFill(inner, inner.LeastHeight);
+        outer.AddSideFill(standings, standings.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.AddFill(outer, outer.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     /// <summary>
-    /// Three columns, measured, all ending on the same line.
+    /// The three columns' widths, given the width of all three: the
+    /// championships under a fifth and the middle column a quarter,
+    /// between 160-280px and 260-420px at the normal text size, at the size
+    /// in use - the championships never too narrow for the widest of their
+    /// buttons or their caption - and the standings the rest, never under 240px at the
+    /// normal text size.
     ///
-    /// They used to be three fixed-width stacks of literal coordinates -
-    /// the season list at x=12 exactly 380 tall, the points scheme at 216
-    /// exactly 180, the standings at 592 exactly 420 - with a mixture of
-    /// anchors on top. Two of the three stretched with the window and the
-    /// standings grid did not, so on anything taller than the size this
-    /// was drawn at, the right-hand third of the page was empty below the
-    /// grid while the other two columns ran on past it. That is the dead
-    /// quarter-screen.
+    /// The standings get the most because they need it: nine columns, each
+    /// kept as wide as its heading (Pieces.KeepHeadingsWhole), and past what
+    /// those need the list scrolls sideways. The other two were a fifth and
+    /// a third, up to 460px, and at 150% every standings heading was cut
+    /// short while the scheme's two columns had room to spare (layout
+    /// pictures, 29 Sep).
     ///
-    /// Now every column is given its share of the width, every list and
-    /// grid takes the height that is left in its own column after the
-    /// headings and buttons are accounted for, and all three finish level.
+    /// Too narrow for all three at that - a small window at the largest
+    /// text size - and each gives up the same share of its width. Left to
+    /// the two Besides, the standings would keep their least and the
+    /// championships, whose width is only what the other two leave, would
+    /// give up all of theirs. Nothing here scrolls sideways (FillPage).
     /// </summary>
-    private void LayoutPage()
+    private (int Seasons, int Middle, int Standings) ColumnWidths(int content)
     {
-        if (Width < 200 || Height < 200 || _lblSeasons.IsDisposed)
+        var widestButton = _seasonButtons?.Controls.OfType<Button>().Select(button => button.Width).DefaultIfEmpty(0).Max() ?? 0;
+
+        var seasons = Math.Max(
+            Math.Clamp((int)(content * 0.18f), UiLayout.AtTextSize(160), UiLayout.AtTextSize(280)),
+            Math.Max(widestButton, _seasonsCard?.CaptionWidth ?? 0) + Section.Inset.Horizontal);
+
+        var middle = Math.Clamp((int)(content * 0.25f), UiLayout.AtTextSize(260), UiLayout.AtTextSize(420));
+
+        // What the three share: all of it but the gap between each two -
+        // the gap a Beside leaves between its parts and its column.
+        var room = Math.Max(0, content - UiLayout.RowGap * 2);
+        var least = seasons + middle + UiLayout.AtTextSize(240);
+
+        if (least > room)
         {
-            return;
+            seasons = (int)((long)seasons * room / least);
+            middle = (int)((long)middle * room / least);
         }
 
-        var left = UiLayout.PageLeft;
-        var right = Width - UiLayout.PageRight;
-        var top = UiLayout.PageTop;
-        var bottom = Height - UiLayout.PageTop;
-
-        var content = Math.Max(300, right - left);
-        var gap = UiLayout.SectionGap;
-
-        // The season list needs the least room and the standings the most.
-        var seasonsWidth = Math.Clamp((int)(content * 0.20f), 160, 280);
-        var middleWidth = Math.Clamp((int)(content * 0.34f), 260, 460);
-        var standingsWidth = Math.Max(240, content - seasonsWidth - middleWidth - gap * 2);
-
-        var seasonsLeft = left;
-        var middleLeft = seasonsLeft + seasonsWidth + gap;
-        var standingsLeft = middleLeft + middleWidth + gap;
-
-        foreach (var button in new[] { _btnNew, _btnRename, _btnDeleteSeason, _btnResetScheme, _btnRules, _btnExportStandings, _btnCarried })
-        {
-            var text = TextRenderer.MeasureText(
-                button.Text,
-                AppTheme.BoldFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-
-            button.Size = new Size(text.Width + 26, UiLayout.ButtonHeight);
-        }
-
-        // --- Column one: the seasons, with its buttons on the floor ---
-        _lblSeasons.Location = new Point(seasonsLeft, top);
-
-        var seasonsButtonsTop = bottom - UiLayout.ButtonHeight;
-        var x = seasonsLeft;
-
-        foreach (var button in new[] { _btnNew, _btnRename, _btnDeleteSeason })
-        {
-            button.Location = new Point(x, seasonsButtonsTop);
-            x += button.Width + UiLayout.ButtonGap;
-        }
-
-        var listTop = UiLayout.Below(_lblSeasons, UiLayout.RowGap);
-
-        _lstSeasons.Location = new Point(seasonsLeft, listTop);
-        _lstSeasons.Size = new Size(seasonsWidth, Math.Max(80, seasonsButtonsTop - UiLayout.RowGap - listTop));
-
-        // --- Column two: points scheme over the session list ---
-        _lblScheme.Location = new Point(middleLeft, top);
-
-        var schemeTop = UiLayout.Below(_lblScheme, UiLayout.RowGap);
-
-        // The scheme is a short fixed table; the session list gets the rest
-        // of the column. A third of the available height each way reads
-        // about right and keeps both usable.
-        var columnHeight = bottom - schemeTop;
-        var schemeHeight = Math.Clamp((int)(columnHeight * 0.34f), 120, 260);
-
-        _dgvPointsScheme.Location = new Point(middleLeft, schemeTop);
-        _dgvPointsScheme.Size = new Size(middleWidth, schemeHeight);
-
-        var schemeButtonsTop = UiLayout.Below(_dgvPointsScheme, UiLayout.RowGap);
-
-        UiLayout.TightButtonRow(middleLeft, schemeButtonsTop, _btnResetScheme, _btnRules);
-
-        _lblSessions.Location = new Point(middleLeft, UiLayout.Below(_btnResetScheme, UiLayout.SectionGap));
-
-        _lblHint.MaximumSize = new Size(middleWidth, 0);
-        _lblHint.Location = new Point(middleLeft, bottom - _lblHint.PreferredSize.Height);
-
-        var sessionsTop = UiLayout.Below(_lblSessions, UiLayout.RowGap);
-
-        _clbSessions.Location = new Point(middleLeft, sessionsTop);
-        _clbSessions.Size = new Size(
-            middleWidth,
-            Math.Max(80, _lblHint.Top - UiLayout.RowGap - sessionsTop));
-
-        // --- Column three: the standings, down to the same floor ---
-        _lblStandings.Location = new Point(standingsLeft, top);
-
-        _btnExportStandings.Location = new Point(standingsLeft, bottom - UiLayout.ButtonHeight);
-
-        // Level with the heading, at the column's right edge - beside Export
-        // Standings the two did not fit the column at the page's narrowest.
-        _btnCarried.Location = new Point(standingsLeft + standingsWidth - _btnCarried.Width, top);
-
-        var statusHeight = AppTheme.BodyFont.Height + 2;
-
-        _lblStatus.Location = new Point(
-            standingsLeft,
-            _btnExportStandings.Top - UiLayout.RowGap - statusHeight);
-
-        _lblStatus.Size = new Size(standingsWidth, statusHeight);
-
-        var standingsTop = Math.Max(UiLayout.Below(_lblStandings, UiLayout.RowGap), UiLayout.Below(_btnCarried, UiLayout.RowGap));
-
-        _dgvStandings.Location = new Point(standingsLeft, standingsTop);
-        _dgvStandings.Size = new Size(
-            standingsWidth,
-            Math.Max(100, _lblStatus.Top - UiLayout.RowGap - standingsTop));
+        return (seasons, middle, Math.Max(0, room - seasons - middle));
     }
 
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        LayoutPage();
-    }
+    /// <summary>The points scheme's height: its headings and a few places, as the theme sizes its rows - asked whenever the card is measured, so it follows the text size.</summary>
+    private int SchemeHeight() =>
+        _dgvPointsScheme.ColumnHeadersHeight + SchemeRowsShown * _dgvPointsScheme.RowTemplate.Height + 2;
+
+    /// <summary>The least a grid can do with: its headings and <paramref name="rows"/> rows. Below that the page scrolls instead - see FillPage.</summary>
+    private static int GridLeast(DataGridView grid, int rows) =>
+        grid.ColumnHeadersHeight + rows * grid.RowTemplate.Height;
+
+    /// <summary>The least a list can do with: <paramref name="rows"/> of its items and its border.</summary>
+    private static int ListLeast(ListBox list, int rows) =>
+        rows * list.ItemHeight + 6;
 
     /// <summary>Opens the scoring rules, then re-runs them over the whole history.</summary>
     private void EditRules()

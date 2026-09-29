@@ -35,6 +35,9 @@ public sealed class EventsControl : UserControl
     private readonly Label _lblActive = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
     public EventsControl(RaceEventStore events, RoundDefinitionStore rounds,
         SessionHistoryStore history, UndoService undo,
         SeasonStore? seasons = null, TrackLayoutStore? layouts = null)
@@ -47,16 +50,48 @@ public sealed class EventsControl : UserControl
         _layouts = layouts;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 560);
-        MinimumSize = new Size(900, 540);
+        // The body face, worn rather than set once: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise
+        // take, and set once it stayed at the size it was built at when the
+        // text size changed. See TextSize.
+        //
+        // No design size and no MinimumSize: the 900x540 floor was honoured
+        // over the size the page was given, and a small window lost the
+        // buttons and the status line off the bottom. A short window
+        // scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then one card: which day is current, the grid of every
+    /// day taking the height that is left, the buttons under it and the
+    /// status line. On the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand.
+    ///
+    /// It used to be: the intro measured and the rest placed under it once,
+    /// the grid anchored to stretch and the buttons to the bottom, over a
+    /// 900x540 floor - and the intro capped at a width that fitted that
+    /// floor, so it wrapped short of the page on any wider one.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
@@ -66,40 +101,15 @@ public sealed class EventsControl : UserControl
                  + "race day would seed its mains from both days mixed together.\r\n\r\n"
                  + "The same days Race Day > Setup works on, and the same words - this page is where a club looks across all of "
                  + "them and picks the one to work on.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
         };
 
-        // MEASURED, not placed at a remembered number.
-        //
-        // The intro is two paragraphs and wraps to about five lines, which
-        // reaches y=107 - and the current-day line and the grid were pinned
-        // at 62 and 96, written when this text was one short sentence. The
-        // result was the intro drawn straight over the grid's header and
-        // first row. Parented before it is measured, because a label
-        // measures itself in the font it currently has and does not have
-        // this page's until it is added.
-        Controls.Add(lblIntro);
-
+        // Which day is current, in the heading face - and in the success
+        // colour while it is open (RefreshGrid).
         _lblActive.AutoSize = true;
-        _lblActive.Font = new Font(AppTheme.BodyFont.FontFamily, 12F, FontStyle.Bold);
+        _textSize.Wear(_lblActive, () => AppTheme.HeadingFont);
 
-        Controls.Add(_lblActive);
-        _lblActive.Location = new Point(12, UiLayout.Below(lblIntro, UiLayout.RowGap));
-
-        _grid.Location = new Point(12, UiLayout.Below(_lblActive, UiLayout.RowGap));
-
-        // Down to the button row rather than a fixed 368. The grid is
-        // anchored on all four sides, so this is only its starting height -
-        // but a starting height taller than the space left runs it under
-        // the buttons at 476 before the first resize.
-        _grid.Size = new Size(956, Math.Max(160, 470 - _grid.Top));
-        // All four sides. The old warning against Bottom predates the
-        // buttons below being bottom-anchored; they are now, so the grid
-        // growing down fills exactly the gap that opens above them.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.RowHeadersVisible = false;
@@ -120,6 +130,9 @@ public sealed class EventsControl : UserControl
             new DataGridViewTextBoxColumn { Name = "recorded", HeaderText = "Recorded", FillWeight = 45 },
             new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 90 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
         // Double-click switches to the day, matching what selecting one in
         // The Day's picker does. Not a rename: switching is the thing this
         // page is for, and the one that is safe to do by accident - it is
@@ -134,38 +147,41 @@ public sealed class EventsControl : UserControl
 
         // The same command The Day's button runs, through the host - not a
         // second way to make a race day. See StartRaceDayRequested.
-        var btnNew = new Button { Text = "New Race Day...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnNew = new Button { Text = "New Race Day..." };
         btnNew.Click += (_, _) => StartRaceDayRequested?.Invoke();
 
-        var btnEdit = new Button { Text = "Rename...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnEdit = new Button { Text = "Rename..." };
         btnEdit.Click += (_, _) => AddOrEdit(Selected());
 
-        var btnActive = new Button { Text = "Switch to This Day", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnActive = new Button { Text = "Switch to This Day" };
         btnActive.Click += (_, _) => MakeActive();
 
-        var btnClose = new Button { Text = "Close Day", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnClose = new Button { Text = "Close Day" };
         btnClose.Click += (_, _) => CloseOrReopen();
 
-        var btnRounds = new Button { Text = "Rounds...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnRounds = new Button { Text = "Rounds..." };
         btnRounds.Click += (_, _) => ShowRounds();
 
-        var btnDelete = new Button { Text = "Delete Day...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnDelete = new Button { Text = "Delete Day..." };
         btnDelete.Click += (_, _) => DeleteSelected();
 
-        AppTheme.LayoutButtonRow(12, 476, 8, btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete);
-
-        _lblStatus.Location = new Point(12, 516);
+        // What the last command did - a sentence or two, wrapping.
         _lblStatus.AutoSize = true;
-        _lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
-        {
-            // lblIntro and _lblActive are already parented above - they had
-            // to be, to be measured.
-            _grid,
-            btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete, _lblStatus,
-        });
+        var days = new Section("Race days");
+
+        days.Add(_lblActive);
+        days.AddFill(_grid, () => _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height);
+        days.Add(new ButtonBar().With(btnNew, btnEdit, btnActive, btnClose, btnRounds, btnDelete));
+        days.Add(_lblStatus, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(days, days.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     private RaceEvent? Selected() =>
