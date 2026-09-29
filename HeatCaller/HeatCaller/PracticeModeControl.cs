@@ -70,7 +70,40 @@ public sealed class PracticeModeControl : UserControl
     private readonly GhostStore _ghostStore;
     private readonly CheckBox _chkGhosts = new();
     private readonly CheckedListBox _clbGhosts = new();
-    private readonly Label _lblGhostHint = new();
+    private readonly SteadyLabel _lblGhostHint = new();
+
+    /// <summary>The ghosts' card and its button, which the card's width is measured from - see GhostsWidth.</summary>
+    private Section? _ghostsCard;
+    private ButtonBar? _ghostButtons;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The track picker's width as last measured - see Pieces.PickerWidth. Forgotten when the layouts are read again (RefreshAll).</summary>
+    private (Font Font, int Count, int Width)? _trackWidth;
+
+    /// <summary>The clock column's width at its narrowest - the clock, and Open Big Screen under it. Wider when that button's caption needs it.</summary>
+    private const int ClockWidth = 260;
+
+    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given.</summary>
+    private const int ClockHeight = 206;
+
+    /// <summary>The ghost card's width at the normal text size, at its narrowest and widest - see GhostsWidth.</summary>
+    private const int GhostsLeastWidth = 260;
+    private const int GhostsMostWidth = 360;
+
+    /// <summary>The narrowest the setup card beside it gets, at the normal text size.</summary>
+    private const int SetupLeastWidth = 420;
+
+    /// <summary>The fewest ghosts the ghost list shows before the page scrolls instead.</summary>
+    private const int GhostListLeastRows = 3;
+
+    /// <summary>The fewest drivers this session's table shows under its headings before the page scrolls instead.</summary>
+    private const int GridLeastRows = 3;
+
+    /// <summary>What the ghost hint says with no ghosts, and with them switched off - the longest of what it says, with the count, is measured for it (SteadyLabel).</summary>
+    private const string NoGhostsHint = "No ghosts set up yet - press Manage to create one.";
+    private const string GhostsOffHint = "Ghosts are switched off for now.";
 
     // True while RefreshGhosts is loading the list from the store, so the
     // ItemCheck / CheckedChanged handlers don't treat those programmatic
@@ -97,13 +130,14 @@ public sealed class PracticeModeControl : UserControl
         _settings = settings;
 
         Dock = DockStyle.Fill;
-        // Was 1120 - driven by the grid's own initial Size, not by anything
-        // that actually needs to be visible without scrolling. The grid
-        // itself stretches/compresses fine at any width (Fill-anchored,
-        // AutoSizeColumnsMode.Fill), so the real floor is whatever the
-        // clock and Big Screen button need at their new, closer-in position.
-        MinimumSize = new Size(980, 590);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize: the 980x590 floor was honoured over the size the
+        // page was given, and a small window lost the table off the bottom.
+        // A short window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
 
@@ -115,14 +149,6 @@ public sealed class PracticeModeControl : UserControl
         RebuildColumns();
 
         RefreshGhosts();
-
-        // The intro text's wrap width has to track the clock's actual
-        // current position, not a fixed guess - the clock is Right-anchored
-        // and genuinely moves as the window resizes, and a static wrap
-        // width either overlaps it (too wide) or wraps needlessly early on
-        // a big window (too narrow).
-        Resize += (_, _) => UpdateIntroWrapWidth();
-        UpdateIntroWrapWidth();
 
         _refreshTimer.Tick += (_, _) =>
         {
@@ -140,18 +166,18 @@ public sealed class PracticeModeControl : UserControl
         _clockRefreshTimer.Start();
     }
 
-    /// <summary>
-    /// Re-wraps the intro text to stop just short of the clock's LEFT edge -
-    /// read live from <c>_clock.Left</c> rather than recomputed by hand, so
-    /// this can't drift out of step with whatever the anchor math actually
-    /// places the clock at. Floors at a sane minimum so a very narrow window
-    /// still gets a readable multi-line block rather than a near-zero-width
-    /// column of text.
-    /// </summary>
-    private void UpdateIntroWrapWidth()
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
     {
-        var available = _clock.Left - _lblIntro.Left - 16;
-        _lblIntro.MaximumSize = new Size(Math.Max(220, available), 0);
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
 
@@ -203,7 +229,7 @@ public sealed class PracticeModeControl : UserControl
 
         if (_ghostStore.Current.Ghosts.Count == 0)
         {
-            _lblGhostHint.Text = "No ghosts set up yet - press Manage to create one.";
+            _lblGhostHint.Text = NoGhostsHint;
             return;
         }
 
@@ -211,82 +237,55 @@ public sealed class PracticeModeControl : UserControl
 
         _lblGhostHint.Text = _chkGhosts.Checked
             ? $"{Plural.Of(on, "ghost")} will join this practice session."
-            : "Ghosts are switched off for now.";
+            : GhostsOffHint;
     }
 
+    /// <summary>
+    /// What practice is, the buttons that start and stop it and the two
+    /// switches that go with them, then two cards side by side - how it is
+    /// set up, and the ghosts it runs against - with the clock and Open Big
+    /// Screen down the right beside all of it. Under that, this session's
+    /// table in a card that takes the height left over. On the layout
+    /// pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels against a 980px page: the intro
+    /// wrapped to wherever the clock happened to be, the ghost list was
+    /// 280x74 at every text size, the captions sat in a column 180px wide
+    /// whatever they said, and under all of it a 980x590 floor the page kept
+    /// however small its window. And the table's columns were never told to
+    /// fill it, so they sat at 100px each whatever its width.
+    /// </summary>
     private void BuildLayout()
     {
-        // Rebuilt against UiLayout. This page had grown three different left
-        // edges, four control heights sharing one band, and a full-width
-        // intro sitting over a cramped grid - each addition reasonable on
-        // its own, incoherent together.
-        //
-        // Structure now: what practice IS, then the controls that start and
-        // stop it, then how it's configured, then the results.
-        var y = UiLayout.PageTop;
-        const int clockWidth = 260;
-
-        // Derived from the page's own minimum width rather than a guessed
-        // 1108. Hardcoding a wider number put the clock and the grid past
-        // the right edge of the content panel, which is narrower than the
-        // window once the sidebar takes its share.
-        const int pageWidth = 980;
-        var contentRight = pageWidth - UiLayout.PageRight;
-        var textWidth = contentRight - clockWidth - 24;
-
-        // --- What this page does -----------------------------------------
+        // --- What this page does ---
 
         _lblIntro.Text =
             "Open lapping with no race structure - every transponder crossing the line is tracked, without touching "
             + "track records or standings. Saved to Race History flagged as Practice, so it feeds Personal Bests and "
             + "the Lap Times chart but never counts toward records or season points.";
-        _lblIntro.Location = new Point(UiLayout.PageLeft, y);
         _lblIntro.AutoSize = true;
-        _lblIntro.MaximumSize = new Size(textWidth, 0);
         _lblIntro.ForeColor = AppTheme.TextMuted;
-        _lblIntro.Font = AppTheme.SmallFont;
 
-        // Measured, not advanced by a literal 48. This is a wrapping
-        // paragraph: how tall it is depends on how many lines it takes,
-        // which depends on the text size. At a larger one it ran three
-        // lines into four and the buttons below started underneath it.
-        y = UiLayout.Below(_lblIntro, UiLayout.RowGap);
+        // --- Starting and stopping ---
 
-        // --- Session controls ---------------------------------------------
-
-        var btnStart = new Button { Text = "Start Practice", Width = 130, Height = UiLayout.ButtonHeight };
+        var btnStart = new Button { Text = "Start Practice" };
         btnStart.Click += (_, _) => StartPractice();
 
-        var btnStop = new Button { Text = "Stop", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnStop = new Button { Text = "Stop" };
         btnStop.Click += (_, _) => StopPractice();
 
-        var btnClear = new Button { Text = "Clear Stats", Width = 110, Height = UiLayout.ButtonHeight };
+        var btnClear = new Button { Text = "Clear Stats" };
         btnClear.Click += (_, _) => ClearStats();
 
-        var btnSave = new Button { Text = "Save Session", Width = 120, Height = UiLayout.ButtonHeight };
+        var btnSave = new Button { Text = "Save Session" };
         btnSave.Click += (_, _) => SaveSession(silent: false);
 
-        y = UiLayout.Row(y, btnStart, btnStop, btnClear, btnSave);
-
-        // Explicit fonts on everything this layout MEASURES.
-        //
-        // UiLayout.After reads a control's PreferredSize, and a control
-        // that has not been parented yet is still carrying the WinForms
-        // default font - so it reports a width for a size it will never be
-        // drawn at, and the field after it lands short. The page sets its
-        // own Font, but a child only inherits that once it is added.
-        _chkAutoSave.Font = AppTheme.BodyFont;
-        _chkAutoStartOnGate.Font = AppTheme.BodyFont;
-        _chkGhosts.Font = AppTheme.BodyFont;
-
         _chkAutoSave.Text = "Save automatically on stop";
-        _chkAutoSave.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
         _chkAutoSave.AutoSize = true;
         _chkAutoSave.Checked = _settings.AutoSavePractice;
         _chkAutoSave.CheckedChanged += (_, _) => { _settings.AutoSavePractice = _chkAutoSave.Checked; _settings.Save(); };
 
         _chkAutoStartOnGate.Text = "Start automatically when a car crosses the gate";
-        _chkAutoStartOnGate.Location = new Point(UiLayout.After(_chkAutoSave) + UiLayout.SectionGap, UiLayout.LabelY(y));
         _chkAutoStartOnGate.AutoSize = true;
         _chkAutoStartOnGate.Checked = _settings.PracticeAutoStartOnGatePass;
         _chkAutoStartOnGate.CheckedChanged += (_, _) =>
@@ -294,15 +293,77 @@ public sealed class PracticeModeControl : UserControl
             _settings.PracticeAutoStartOnGatePass = _chkAutoStartOnGate.Checked;
             _settings.Save();
         };
-        y = UiLayout.NextRow(y);
 
-        // --- Ghosts ---------------------------------------------------------
+        // Side by side, and one under the other when the line is too narrow
+        // for both (FieldRow).
+        var switches = new FieldRow();
+
+        switches.Add(null, _chkAutoSave);
+        switches.Add(null, _chkAutoStartOnGate);
+
+        // --- Setup ---
+
+        _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbTrack.SelectedIndexChanged += (_, _) =>
+        {
+            if (_repopulatingTracks)
+            {
+                return;
+            }
+
+            var selected = _cmbTrack.SelectedItem as string;
+            _settings.PracticeTrackLayout = selected is null or "(none)" ? string.Empty : selected;
+            _settings.Save();
+        };
+
+        _numLapTarget.Minimum = 0;
+        _numLapTarget.Maximum = 9999;
+        _numLapTarget.Value = Math.Clamp(_settings.PracticeLapLimit, 0, 9999);
+        _numLapTarget.ValueChanged += (_, _) => { _settings.PracticeLapLimit = (int)_numLapTarget.Value; _settings.Save(); };
+
+        _numTimeTarget.Minimum = 0;
+        _numTimeTarget.Maximum = 180;
+        _numTimeTarget.Value = Math.Clamp(_settings.PracticeTimeLimitMinutes, 0, 180);
+        _numTimeTarget.ValueChanged += (_, _) => { _settings.PracticeTimeLimitMinutes = (int)_numTimeTarget.Value; _settings.Save(); };
+
+        _numRollingWindow.Minimum = 2;
+        _numRollingWindow.Maximum = 50;
+
+        // Not persisted - matches the original behaviour rather than
+        // inventing a setting that nothing else reads.
+        _numRollingWindow.Value = 5;
+        _numRollingWindow.ValueChanged += (_, _) => RefreshGrid();
+
+        // The number boxes as wide as they were at the normal text size, at
+        // the size in use, and the track picker as wide as its longest
+        // layout - again when the text size changes, and when the layouts
+        // are read again (RefreshAll).
+        _textSize.Keep(SizeFields);
+
+        var fields = new FieldGrid();
+
+        fields.AddRow("Track:", _cmbTrack);
+        // Each box with its unit, so a narrow card puts "0 minutes" under
+        // "0 laps" rather than leaving "minutes" on a line of its own
+        // (layout pictures, 29 Sep: 1280x720 and 200%).
+        fields.AddRow("Practice length:", FieldGrid.Inline(
+            FieldGrid.Inline(_numLapTarget, new Label { Text = "laps" }),
+            FieldGrid.Inline(_numTimeTarget, new Label { Text = "minutes" })));
+        fields.AddHint("0 = no limit. Practice stops by itself when either is reached.");
+        fields.AddRow("Rolling average over:", FieldGrid.Inline(_numRollingWindow, new Label { Text = "laps" }));
+        fields.AddHint("Streak = clean laps now; Best Streak = longest this session; Streak Pace = average lap in the current streak.");
+
+        var setup = new Section("Setup");
+
+        setup.Add(fields, gapBelow: 0);
+
+        // --- Ghost cars ---
+        //
         // On the practice page because this is what ghosts are FOR: racing
         // something when nobody else is on track. Making someone configure
         // them on another page first, then come back, misses the point.
 
-        _chkGhosts.Text = "Race ghost cars:";
-        _chkGhosts.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
+        _chkGhosts.Text = "Race ghost cars";
         _chkGhosts.AutoSize = true;
         _chkGhosts.Checked = _ghostStore.Current.Enabled;
         _chkGhosts.CheckedChanged += (_, _) =>
@@ -313,12 +374,12 @@ public sealed class PracticeModeControl : UserControl
             UpdateGhostState();
         };
 
-        // After its own caption. The 150px gutter fitted "Race ghost cars:"
-        // at the normal text size and nothing above it.
-        _clbGhosts.Location = new Point(UiLayout.After(_chkGhosts) + UiLayout.RowGap, y - 2);
-        _clbGhosts.Size = new Size(280, 74);
         _clbGhosts.CheckOnClick = true;
         _clbGhosts.BorderStyle = BorderStyle.FixedSingle;
+
+        // Off, or the list rounds its height down to a whole number of rows
+        // and leaves a gap under it that nothing in the layout explains.
+        _clbGhosts.IntegralHeight = false;
         _clbGhosts.ItemCheck += (_, args) =>
         {
             // ItemCheck fires BEFORE the state changes, so GetItemChecked would
@@ -336,52 +397,90 @@ public sealed class PracticeModeControl : UserControl
             }
         };
 
-        var btnManageGhosts = new Button { Text = "Manage...", Width = 96, Height = UiLayout.ButtonHeight };
+        // As tall as the longest thing it says, so rewording it never moves
+        // the button under it.
+        _lblGhostHint.ForeColor = AppTheme.TextMuted;
+        _lblGhostHint.Wordings = new[] { NoGhostsHint, GhostsOffHint, "99 ghosts will join this practice session." };
+        _textSize.Wear(_lblGhostHint, () => AppTheme.SmallFont);
+
+        var btnManageGhosts = new Button { Text = "Manage..." };
         btnManageGhosts.Click += (_, _) => GhostsPageRequested?.Invoke();
 
-        _lblGhostHint.Location = new Point(UiLayout.After(_clbGhosts) + UiLayout.RowGap, y + 2);
-        _lblGhostHint.AutoSize = true;
-        _lblGhostHint.MaximumSize = new Size(300, 0);
-        _lblGhostHint.ForeColor = AppTheme.TextMuted;
-        _lblGhostHint.Font = AppTheme.SmallFont;
+        _ghostButtons = new ButtonBar().With(btnManageGhosts);
 
-        // Under the hint, not at a fixed 44px below the row - the hint
-        // wraps, and a fourth line used to land on top of this button.
-        btnManageGhosts.Location = new Point(_lblGhostHint.Left, UiLayout.Below(_lblGhostHint, UiLayout.RowGap));
+        _ghostsCard = new Section("Ghost cars");
 
-        Controls.Add(_chkGhosts);
-        Controls.Add(_clbGhosts);
-        Controls.Add(btnManageGhosts);
-        Controls.Add(_lblGhostHint);
+        _ghostsCard.Add(_chkGhosts, stretch: false);
+        _ghostsCard.AddFill(_clbGhosts, () => GhostListItemHeight() * GhostListLeastRows + 4);
+        _ghostsCard.Add(_lblGhostHint);
+        _ghostsCard.Add(_ghostButtons, gapBelow: 0);
 
-        // The block is as tall as whichever of its three columns is
-        // tallest. It used to declare itself 82px and was really 80 - two
-        // pixels of clearance, and negative as soon as the button grew.
-        y = Math.Max(
-            UiLayout.Below(_clbGhosts, UiLayout.RowGap),
-            UiLayout.Below(btnManageGhosts, UiLayout.RowGap));
+        // The two cards side by side in a band as tall as the taller needs,
+        // the ghosts down the right and filling the band's height, so the
+        // two end level.
+        Beside? cards = null;
 
-        // --- Setup ---------------------------------------------------------
-
-        var lblSetup = new Label { Text = "SETUP" };
-        y = UiLayout.SectionHeading(UiLayout.SectionAfter(y - UiLayout.RowGap), lblSetup);
-
-        var lblTrack = new Label { Text = "Track:", AutoSize = false, Width = UiLayout.LabelWidth };
-        _cmbTrack.Width = UiLayout.FieldWidth;
-        _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbTrack.SelectedIndexChanged += (_, _) =>
+        cards = new Beside(() => GhostsWidth(cards?.Width ?? 0))
         {
-            if (_repopulatingTracks)
-            {
-                return;
-            }
-
-            var selected = _cmbTrack.SelectedItem as string;
-            _settings.PracticeTrackLayout = selected is null or "(none)" ? string.Empty : selected;
-            _settings.Save();
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        var btnColumns = new Button { Text = "Choose Columns...", Width = 150, Height = UiLayout.ButtonHeight };
+        cards.AddFill(setup, setup.LeastHeight);
+        cards.AddSideFill(_ghostsCard, _ghostsCard.LeastHeight, gapBelow: 0);
+
+        // --- The clock and the Big Screen, down the right ---
+
+        _clock.Height = ClockHeight;
+
+        _btnBigScreen.Text = "Open Big Screen";
+        _btnBigScreen.Enabled = _announcer is not null;
+        _btnBigScreen.Click += (_, _) =>
+        {
+            if (_announcer is not null)
+            {
+                new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings).Show();
+            }
+        };
+
+        var top = new Beside(sideLeastWidth: ClockWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        top.Add(_lblIntro);
+        top.Add(new ButtonBar().With(btnStart, btnStop, btnClear, btnSave));
+        top.Add(switches);
+        top.Add(cards, gapBelow: 0);
+
+        top.AddSide(_clock);
+        top.AddSide(_btnBigScreen, gapBelow: 0);
+
+        // --- This session ---
+
+        // Its own face, so the line kept for it is measured in the face it
+        // is drawn in - see TextSize.ReserveLines. It says something from
+        // the start: an empty line over the table read as a gap.
+        _lblStatus.Text = "Not running.";
+        _lblStatus.AutoSize = true;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblStatus, () => AppTheme.BodyFont);
+        _textSize.ReserveLines(_lblStatus, 1);
+
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.RowHeadersVisible = false;
+        _grid.MultiSelect = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+        // Every heading whole, at the text size in use - see
+        // Pieces.KeepHeadingsWhole. Given again whenever the columns are
+        // built again (RebuildColumns).
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var btnColumns = new Button { Text = "Choose Columns..." };
         btnColumns.Click += (_, _) =>
         {
             using var form = new KpiPickerForm("Practice", _settings.PracticeKpis, KpiCatalog.DefaultPractice);
@@ -412,145 +511,81 @@ public sealed class PracticeModeControl : UserControl
             }
         };
 
-        y = UiLayout.LabelledRow(y, lblTrack, _cmbTrack, btnColumns);
+        var session = new Section("This session");
 
-        var lblLength = new Label { Text = "Practice length:", AutoSize = false, Width = UiLayout.LabelWidth };
+        session.Add(_lblStatus);
+        session.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
+        session.Add(new ButtonBar().With(btnColumns), gapBelow: 0);
 
-        _numLapTarget.Width = UiLayout.NumericWidth;
-        _numLapTarget.Minimum = 0;
-        _numLapTarget.Maximum = 9999;
-        _numLapTarget.Value = Math.Clamp(_settings.PracticeLapLimit, 0, 9999);
-        _numLapTarget.ValueChanged += (_, _) => { _settings.PracticeLapLimit = (int)_numLapTarget.Value; _settings.Save(); };
+        var page = new FillPage();
 
-        // AutoSize, so the row after it is measured against the word
-        // rather than against a 40px box the word outgrows.
-        var lblLaps = new Label { Text = "laps", AutoSize = true };
+        page.Add(top);
+        page.AddFill(session, session.LeastHeight, gapBelow: 0);
 
-        _numTimeTarget.Width = UiLayout.NumericWidth;
-        _numTimeTarget.Minimum = 0;
-        _numTimeTarget.Maximum = 180;
-        _numTimeTarget.Value = Math.Clamp(_settings.PracticeTimeLimitMinutes, 0, 180);
-        _numTimeTarget.ValueChanged += (_, _) => { _settings.PracticeTimeLimitMinutes = (int)_numTimeTarget.Value; _settings.Save(); };
-
-        var lblMins = new Label
-        {
-            Text = "minutes    (0 = no limit; stops automatically when either is reached)",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        // Each suffix is placed AFTER the spinner it belongs to, rather
-        // than at FieldLeft + 72. NumericWidth is 74, so that literal put
-        // the word "laps" two pixels inside its own spinner - already
-        // overlapping at the normal text size, and further in at any
-        // larger one. Three rows on this page had the same stale 72.
-        lblLength.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
-        _numLapTarget.Location = new Point(UiLayout.FieldLeft, y);
-        lblLaps.Font = AppTheme.BodyFont;
-        lblLaps.Location = new Point(UiLayout.After(_numLapTarget), UiLayout.LabelY(y));
-        _numTimeTarget.Location = new Point(UiLayout.After(lblLaps) + UiLayout.RowGap, y);
-        lblMins.Font = AppTheme.BodyFont;
-        lblMins.Location = new Point(UiLayout.After(_numTimeTarget), UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
-
-        var lblRolling = new Label { Text = "Rolling average over:", AutoSize = false, Width = UiLayout.LabelWidth };
-        _numRollingWindow.Width = UiLayout.NumericWidth;
-        _numRollingWindow.Minimum = 2;
-        _numRollingWindow.Maximum = 50;
-        // Not persisted - matches the original behaviour rather than
-        // inventing a setting that nothing else reads.
-        _numRollingWindow.Value = 5;
-        _numRollingWindow.ValueChanged += (_, _) => RefreshGrid();
-
-        var lblRollingSuffix = new Label
-        {
-            Text = "laps    (Streak = clean laps now; Best Streak = longest this session; Streak Pace = average lap in the current streak)",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        lblRolling.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
-        _numRollingWindow.Location = new Point(UiLayout.FieldLeft, y);
-        lblRollingSuffix.Location = new Point(UiLayout.After(_numRollingWindow), UiLayout.LabelY(y));
-
-        // Capped against where it ACTUALLY starts, not against the page's
-        // text width. It was allowed "textWidth - FieldLeft" while sitting
-        // a spinner's width further right than FieldLeft, so it overran the
-        // clock column by exactly that much - and the repair pass, finding
-        // a label lying across the Open Big Screen button, shoved the
-        // button left to separate them. That is the misalignment: the
-        // button and the clock are the same width and were given the same
-        // x, and something moved one of them afterwards.
-        lblRollingSuffix.MaximumSize = new Size(
-            Math.Max(160, textWidth - lblRollingSuffix.Left), 0);
-        y = UiLayout.NextRow(y);
-
-        // --- Clock and big screen, pinned top-right ------------------------
-
-        _clock.Location = new Point(contentRight - clockWidth, UiLayout.PageTop);
-        _clock.Size = new Size(clockWidth, 206);
-        _clock.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
-        _btnBigScreen.Text = "Open Big Screen";
-        _btnBigScreen.Location = new Point(contentRight - clockWidth, UiLayout.PageTop + 214);
-        _btnBigScreen.Size = new Size(clockWidth, UiLayout.ButtonHeight + 4);
-        _btnBigScreen.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        _btnBigScreen.Enabled = _announcer is not null;
-        _btnBigScreen.Click += (_, _) =>
-        {
-            if (_announcer is not null)
-            {
-                new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings).Show();
-            }
-        };
-
-        // --- Results --------------------------------------------------------
-
-        var resultsY = UiLayout.SectionAfter(Math.Max(y - UiLayout.RowGap, UiLayout.PageTop + 258));
-
-        var lblResults = new Label { Text = "THIS SESSION" };
-        y = UiLayout.SectionHeading(resultsY, lblResults);
-
-        // Measured from the heading it sits beside, not parked at x=140.
-        // The heading is drawn in the bold face at whatever the text-size
-        // setting is, and at the larger sizes "THIS SESSION" is wider than
-        // 140 - so the status line started inside it.
-        var statusLeft = UiLayout.After(lblResults, AppTheme.BoldFont) + UiLayout.RowGap;
-
-        _lblStatus.Location = new Point(statusLeft, resultsY + 2);
-        _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(Math.Max(120, contentRight - statusLeft), 0);
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-
-        _grid.Location = new Point(UiLayout.PageLeft, y);
-        _grid.Size = new Size(contentRight - UiLayout.PageLeft, 240);
-        // Anchored so a wider window grows the grid rather than leaving a
-        // gap - the fixed width above is the MINIMUM, not the only size.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _grid.ReadOnly = true;
-        _grid.AllowUserToAddRows = false;
-        _grid.RowHeadersVisible = false;
-        _grid.MultiSelect = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-
-        Controls.AddRange(new Control[]
-        {
-            _lblIntro,
-            btnStart, btnStop, btnClear, btnSave,
-            _chkAutoSave, _chkAutoStartOnGate,
-            lblSetup,
-            lblTrack, _cmbTrack, btnColumns,
-            lblLength, _numLapTarget, lblLaps, _numTimeTarget, lblMins,
-            lblRolling, _numRollingWindow, lblRollingSuffix,
-            _clock, _btnBigScreen,
-            lblResults, _lblStatus, _grid,
-        });
-
-        MinimumSize = new Size(pageWidth, 560);
-        Size = new Size(pageWidth, y + 300);
+        Controls.Add(page);
     }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use: the number boxes the width
+    /// they were at the normal text size, at this size, and the track picker
+    /// as wide as its longest layout and never narrower than a field was
+    /// then. Run again when the text size changes (TextSize.Keep) and when
+    /// the layouts are read again (RefreshAll).
+    /// </summary>
+    private void SizeFields()
+    {
+        var number = UiLayout.AtTextSize(UiLayout.NumericWidth);
+
+        Fit(_cmbTrack, Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbTrack, ref _trackWidth)));
+        Fit(_numLapTarget, number);
+        Fit(_numTimeTarget, number);
+        Fit(_numRollingWindow, number);
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The ghost card's width: about a third of the band, between 260px and
+    /// 360px at the normal text size, at the size in use - and never
+    /// narrower than its caption, its switch or its button need. The setup
+    /// card has the rest, and never less than 420px at the text size in
+    /// use; too narrow for both at that, and each gives up the same share
+    /// of its width, as Batteries' two cards do. Nothing here scrolls
+    /// sideways (FillPage).
+    /// </summary>
+    private int GhostsWidth(int band)
+    {
+        var needs = Math.Max(
+            Math.Max(_ghostsCard?.CaptionWidth ?? 0, _chkGhosts.GetPreferredSize(Size.Empty).Width),
+            _ghostButtons?.OneLineWidth ?? 0) + Section.Inset.Horizontal;
+
+        var ghosts = Math.Max(
+            Math.Clamp((int)(band * 0.34f), UiLayout.AtTextSize(GhostsLeastWidth), UiLayout.AtTextSize(GhostsMostWidth)),
+            needs);
+
+        var setupLeast = UiLayout.AtTextSize(SetupLeastWidth);
+
+        // What the two share: all of the band but the gap a Beside leaves
+        // between its parts and its column.
+        var room = Math.Max(0, band - UiLayout.RowGap);
+
+        if (ghosts + setupLeast > room)
+        {
+            ghosts = (int)((long)ghosts * room / (ghosts + setupLeast));
+        }
+
+        return Math.Max(0, ghosts);
+    }
+
+    /// <summary>A row of the ghost list, in the face it is drawn in.</summary>
+    private int GhostListItemHeight() => Math.Max(_clbGhosts.ItemHeight, _clbGhosts.Font.Height);
 
     /// <summary>
     /// Starts practice from outside - used by the gate-pass auto-start.
@@ -633,7 +668,7 @@ public sealed class PracticeModeControl : UserControl
                 var answer = AppDialog.Show(this,
                     "The last race's finishing order is still on the Race Control board.\r\n\r\n"
                     + "Its result was saved to Race History when the checkered flag fell (a demo race is only "
-                    + "saved if \"Save demo races to history\" is ticked). Starting practice clears the board.\r\n\r\n"
+                    + "saved if \"Save demo races to Race History\" is ticked). Starting practice clears the board.\r\n\r\n"
                     + "Start practice now?",
                     "Clear the finished race?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 return answer == DialogResult.Yes;
@@ -919,6 +954,9 @@ public sealed class PracticeModeControl : UserControl
                 FillWeight = kpi.Weight,
             });
         }
+
+        // New columns: each kept as wide as its heading, at its own weight.
+        Pieces.KeepHeadingsWhole(_grid);
     }
 
     private void RefreshGrid()
@@ -1029,6 +1067,10 @@ public sealed class PracticeModeControl : UserControl
         {
             _repopulatingTracks = false;
         }
+
+        // The longest layout may have come or gone: measured again.
+        _trackWidth = null;
+        SizeFields();
     }
 
     /// <summary>

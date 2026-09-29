@@ -37,7 +37,7 @@ public sealed class DemoModeControl : UserControl
     private readonly Button _btnStop = new();
     private readonly TextBox _txtLog = new();
     private readonly Label _lblStatus = new();
-    private readonly Label _lblPaceHint = new();
+    private readonly SteadyLabel _lblPaceHint = new();
 
     /// <summary>
     /// The ghost cars and whether they are switched on, so a demo of ghosts
@@ -62,17 +62,32 @@ public sealed class DemoModeControl : UserControl
 
         Dock = DockStyle.Fill;
 
-        // Design size set before the layout is built, so bottom-anchored
-        // children resolve their offsets against real dimensions rather
-        // than WinForms' default.
-        Size = new Size(960, 560);
-        MinimumSize = new Size(900, 560);
-        Font = AppTheme.BodyFont;
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize: the 900x560 floor was honoured
+        // over the size the page was given, and a small window lost the log
+        // off the bottom. A short window scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshTrackCombo();
         RefreshRoundCombo();
         RefreshDriverList();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>The programme, when the host has one to give. Null leaves the round picker out.</summary>
@@ -84,99 +99,68 @@ public sealed class DemoModeControl : UserControl
     /// <summary>The free-form entry, which is index 0 and never a round.</summary>
     private const string FreeForm = "Free-form - use the drivers ticked below";
 
-    /// <summary>The gap between a group box's own edge and the controls inside it.</summary>
-    private const int Inset = 12;
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The save-to-history box, and the settings' captions, measured for the least the cards beside the racers can do with - see RacersWidth.</summary>
+    private readonly CheckBox _chkSaveDemo = new();
+    private readonly List<Label> _settingsCaptions = new();
+
+    /// <summary>The racers' card and the caption of its round picker, which the column's width is measured from - see RacersWidth.</summary>
+    private Section? _racers;
+    private Label? _lblRun;
+
+    /// <summary>The cards and the racers' column beside them, laid out again when the round list is refilled - its longest round can widen the column.</summary>
+    private Beside? _band;
+
+    /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled.</summary>
+    private (Font Font, int Count, int Width)? _trackWidth;
+    private (Font Font, int Count, int Width)? _roundWidth;
+
+    /// <summary>The log's monospaced face, made for the text size in use.</summary>
+    private Font? _logFont;
+
+    /// <summary>The racers' column at the normal text size, at its narrowest and widest - see RacersWidth.</summary>
+    private const int RacersLeastWidth = 320;
+    private const int RacersMostWidth = 480;
+
+    /// <summary>The narrowest the cards beside the racers get, at the normal text size.</summary>
+    private const int OthersLeastWidth = 440;
+
+    /// <summary>The fewest drivers the list shows before the page scrolls instead.</summary>
+    private const int DriverListLeastRows = 4;
+
+    /// <summary>The fewest lines the log shows before the page scrolls instead.</summary>
+    private const int LogLeastLines = 5;
 
     /// <summary>
-    /// Builds the page.
+    /// Builds the page: what a demo is; then, down the left, the buttons
+    /// that start and stop it with what it is doing beside them, the
+    /// settings card, and the log taking the height that is left - and down
+    /// the right, beside all of it, the racers, their list taking the
+    /// column's height. On the layout pieces (LayoutPieces.cs), so nothing
+    /// is placed by hand.
     ///
-    /// Two structural changes over what was here before, both of which the
-    /// layout pass was previously left to paper over on every launch.
-    ///
-    /// The log is now docked to the bottom and the rest of the page sits in
-    /// a scrolling panel above it. It used to be placed at a fixed y of 498
-    /// in a page 560 tall, so it ran 98 pixels off the end before anybody
-    /// changed a font.
-    ///
-    /// And every position is derived from the control above or beside it
-    /// rather than written down. The wrapped paragraphs are the reason: the
-    /// intro, the driver-list caption and the save-to-history note all grow
-    /// by a line or two at the current body size, and each one was sitting
-    /// directly on top of whatever had been placed beneath it.
+    /// It used to be two group boxes side by side, each half of a 900px
+    /// page, levelled by hand; the settings, the buttons and a log 14 lines
+    /// tall stacked under them, all in pixels measured once at build - and a
+    /// 900x560 floor the page kept however small its window. The log's type
+    /// was set once, so it never followed the text size.
     /// </summary>
     private void BuildLayout()
     {
-        var content = MinimumSize.Width - UiLayout.PageLeft - UiLayout.PageRight;
-        var column = (content - UiLayout.RowGap) / 2;
-
-        var body = new Panel { Dock = DockStyle.Fill };
-
-        // Scrolls down only - switched off before AutoScroll goes on, or
-        // AutoScroll brings it back. A few pixels of overflow across made a
-        // full-width sideways bar that looked like a divider between the
-        // page and its log.
-        body.HorizontalScroll.Maximum = 0;
-        body.HorizontalScroll.Enabled = false;
-        body.HorizontalScroll.Visible = false;
-        body.AutoScroll = true;
-
         var lblIntro = new Label
         {
             Text = "Runs a fake race through the same race-control logic as a real one - no decoder needed. " +
                    "Voice announcements and sound effects fire for real, so this is a genuine rehearsal of your setup before race day. " +
-                   "Switch to the Race Control tab to watch it play out on the actual leaderboard and clock.\n\n" +
+                   "Switch to the Race Control page to watch it play out on the actual leaderboard and clock.\n\n" +
                    "Demo races never set track records, and are only kept in Race History if you tick the box below - even then " +
                    "they are marked [DEMO] and never count for championship points, heats, badges or personal bests.",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
             AutoSize = true,
-            MaximumSize = new Size(content, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var groupTop = UiLayout.Below(lblIntro, UiLayout.SectionGap);
-
-        var grpTrack = BuildTrackGroup(column);
-        grpTrack.Location = new Point(UiLayout.PageLeft, groupTop);
-
-        var grpRacers = BuildRacersGroup(column);
-        grpRacers.Location = new Point(UiLayout.PageLeft + column + UiLayout.RowGap, groupTop);
-
-        // Levelled, so two boxes side by side read as a pair rather than as
-        // one box and a shorter box.
-        var tallest = Math.Max(grpTrack.Height, grpRacers.Height);
-        grpTrack.Height = tallest;
-        grpRacers.Height = tallest;
-
-        var y = groupTop + tallest + UiLayout.SectionGap;
-
-        var chkSaveDemo = new CheckBox
-        {
-            Text = "Save demo races to Race History (marked [DEMO], never scored)",
-            Location = new Point(UiLayout.PageLeft, y),
-            AutoSize = true,
-            Checked = _settings.SaveDemoSessions,
-        };
-
-        chkSaveDemo.CheckedChanged += (_, _) =>
-        {
-            _settings.SaveDemoSessions = chkSaveDemo.Checked;
-            _settings.Save();
-        };
-
-        var lblSaveDemoHint = new Label
-        {
-            Text = "Off by default so fake results stay out of your real history. Turn it on to keep a copy of each demo "
-                 + "race to look back over or print a results card from. A saved demo is never linked to a heat - even if "
-                 + "a round is picked in the Round: box on Race Control - and never earns championship points, badges, "
-                 + "personal bests or track records.",
-            AutoSize = true,
-            MaximumSize = new Size(content - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(UiLayout.PageLeft + UiLayout.Indent, UiLayout.Below(chkSaveDemo, UiLayout.HintGap)),
-        };
-
-        y = UiLayout.Below(lblSaveDemoHint, UiLayout.SectionGap);
+        // --- Starting and stopping, and what it is doing ---
 
         _btnStart.Text = "Start Demo Race";
         _btnStart.Click += BtnStart_Click;
@@ -185,85 +169,22 @@ public sealed class DemoModeControl : UserControl
         _btnStop.Enabled = false;
         _btnStop.Click += BtnStop_Click;
 
-        // Sized to their captions in the bold face the theme gives buttons,
-        // rather than to the 160x32 that "Start Demo Race" outgrew.
-        UiLayout.ButtonRow(UiLayout.PageLeft, y, _btnStart, _btnStop);
-
+        // At the end of the buttons' line, cut short with "..." rather than
+        // wrapped - or on a line of its own when it no longer fits there
+        // (FieldRow).
         _lblStatus.Text = "Idle.";
-        _lblStatus.AutoSize = true;
-        _lblStatus.Font = AppTheme.BoldFont;
-        _lblStatus.Location = new Point(UiLayout.PageLeft, UiLayout.Below(_btnStart, UiLayout.RowGap));
+        _lblStatus.AutoSize = false;
+        _lblStatus.AutoEllipsis = true;
+        _textSize.Wear(_lblStatus, () => AppTheme.BoldFont);
 
-        // --- The log, part of the page under the buttons ---
-        //
-        // It used to be pinned to the bottom of the window in a strip of
-        // its own, cut off from the buttons that drive it. Now it follows
-        // straight on from the status line, the same width as everything
-        // above, and scrolls inside itself as the demo writes to it.
-        var lblLog = new Label
-        {
-            Text = "LOG",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-            Location = new Point(UiLayout.PageLeft, UiLayout.Below(_lblStatus, UiLayout.SectionGap)),
-        };
+        var run = new FieldRow();
 
-        _txtLog.Multiline = true;
-        _txtLog.ReadOnly = true;
-        _txtLog.ScrollBars = ScrollBars.Vertical;
-        _txtLog.WordWrap = true;
+        run.Add(null, new ButtonBar().With(_btnStart, _btnStop));
+        run.AddLast(null, _lblStatus, () => _lblStatus.GetPreferredSize(Size.Empty).Width);
 
-        // Monospaced so timestamps line up, sized off the body font so it
-        // still follows Ctrl+ and Ctrl- like the rest of the app.
-        _txtLog.Font = new Font("Consolas", Math.Max(7.5F, AppTheme.BodyFont.SizeInPoints - 2F));
-        _txtLog.Location = new Point(UiLayout.PageLeft, UiLayout.Below(lblLog, UiLayout.HeadingGap));
-        _txtLog.Size = new Size(content, _txtLog.Font.Height * 14 + 8);
-
-        body.Controls.AddRange(new Control[]
-        {
-            lblIntro, grpTrack, grpRacers, chkSaveDemo, lblSaveDemoHint, _btnStart, _btnStop, _lblStatus, lblLog, _txtLog,
-        });
-
-        Controls.Add(body);
-    }
-
-    private GroupBox BuildTrackGroup(int column)
-    {
-        var group = new GroupBox
-        {
-            Text = "Track && Timing",
-            Font = AppTheme.BodyFont,
-            Width = column,
-        };
-
-        _cmbTrackLayout.Font = AppTheme.BodyFont;
-        _numStagingSeconds.Font = AppTheme.BodyFont;
-        _numCountdownSeconds.Font = AppTheme.BodyFont;
-
-        var lblTrack = new Label { Text = "Track layout:", AutoSize = true };
-        var lblStaging = new Label { Text = "Staging duration (sec):", AutoSize = true };
-        var lblCountdown = new Label { Text = "Countdown duration (sec):", AutoSize = true };
-
-        // One field column for the whole box, wide enough for the longest
-        // caption in it. Three captions of different lengths each pushing
-        // their own field to a different x is what makes a box look
-        // unfinished even when nothing overlaps.
-        //
-        // MEASURED IN THE FONT THEY ARE ABOUT TO BE DRAWN IN. PreferredWidth
-        // on a label that has not been added to anything yet is measured in
-        // the WinForms default font, which is smaller than this app's - so
-        // the column came out narrow and "Countdown duration (sec):" ran
-        // into the box beside it. Same trap as UiLayout.After's
-        // single-argument overload, and the same answer.
-        var fieldLeft = Inset + new[] { lblTrack, lblStaging, lblCountdown }
-            .Max(l => TextRenderer.MeasureText(l.Text, AppTheme.BodyFont).Width) + UiLayout.LabelGap;
-
-        var y = UiLayout.InsideGroup(group);
+        // --- Settings ---
 
         _cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbTrackLayout.Width = Math.Max(120, column - Inset - fieldLeft);
-        _cmbTrackLayout.Location = new Point(fieldLeft, y);
         _cmbTrackLayout.SelectedIndexChanged += (_, _) =>
         {
             UpdatePaceHint();
@@ -272,136 +193,117 @@ public sealed class DemoModeControl : UserControl
             _settings.Save();
         };
 
-        lblTrack.Location = new Point(Inset, UiLayout.CentreOn(lblTrack, y, _cmbTrackLayout.Height));
+        // As tall as the longest thing it says, before it says anything -
+        // UpdatePaceHint fills it once a track is picked - so the rows under
+        // it are where they belong from the start, and a track picked later
+        // never moves them (SteadyLabel). It used to be measured once, at
+        // build, against a width worked out by hand.
+        _lblPaceHint.Wordings = new[] { NoPaceHint, "Pacing laps around 999.99s (this track's average)." };
 
-        _lblPaceHint.AutoSize = true;
-        _lblPaceHint.MaximumSize = new Size(_cmbTrackLayout.Width, 0);
-        _lblPaceHint.ForeColor = AppTheme.TextMuted;
-        _lblPaceHint.Font = AppTheme.SmallFont;
-        _lblPaceHint.Location = new Point(fieldLeft, UiLayout.Below(_cmbTrackLayout, UiLayout.HintGap));
-
-        // Room for the longest thing the hint can ever say, reserved before
-        // it says anything.
-        //
-        // The text arrives later - UpdatePaceHint fills it once a track is
-        // picked - so while this runs the label is empty and measures as
-        // nothing. Two lines used to be reserved on the assumption that was
-        // enough. The no-average-lap wording runs to four at this width, and
-        // the label, sitting above the spinner in the z-order, grew straight
-        // down over Staging duration: the box was not just covered, it was
-        // unclickable, because every click landed on the label in front of
-        // it. Measuring the worst case here means the rows below are in the
-        // right place before a word of it exists, at any text size.
-        var hintWidth = Math.Max(40, _lblPaceHint.MaximumSize.Width);
-        var reserved = Math.Max(
-            TextRenderer.MeasureText(NoPaceHint, AppTheme.SmallFont, new Size(hintWidth, int.MaxValue), TextFormatFlags.WordBreak).Height,
-            _lblPaceHint.PreferredSize.Height);
-
-        y = _lblPaceHint.Top + reserved + UiLayout.RowGap;
-
-        _numStagingSeconds.Width = UiLayout.NumericWidth;
         _numStagingSeconds.Minimum = 1;
         _numStagingSeconds.Maximum = 60;
         _numStagingSeconds.Value = Math.Clamp(_settings.LastDemoStagingSeconds, (int)_numStagingSeconds.Minimum, (int)_numStagingSeconds.Maximum);
-        _numStagingSeconds.Location = new Point(fieldLeft, y);
         _numStagingSeconds.ValueChanged += (_, _) =>
         {
             _settings.LastDemoStagingSeconds = (int)_numStagingSeconds.Value;
             _settings.Save();
         };
 
-        lblStaging.Location = new Point(Inset, UiLayout.CentreOn(lblStaging, y, _numStagingSeconds.Height));
-
-        y = UiLayout.Below(_numStagingSeconds, UiLayout.RowGap);
-
-        _numCountdownSeconds.Width = UiLayout.NumericWidth;
         _numCountdownSeconds.Minimum = 1;
         _numCountdownSeconds.Maximum = 30;
         _numCountdownSeconds.Value = Math.Clamp(_settings.LastDemoCountdownSeconds, (int)_numCountdownSeconds.Minimum, (int)_numCountdownSeconds.Maximum);
-        _numCountdownSeconds.Location = new Point(fieldLeft, y);
         _numCountdownSeconds.ValueChanged += (_, _) =>
         {
             _settings.LastDemoCountdownSeconds = (int)_numCountdownSeconds.Value;
             _settings.Save();
         };
 
-        lblCountdown.Location = new Point(Inset, UiLayout.CentreOn(lblCountdown, y, _numCountdownSeconds.Height));
-
-        group.Controls.AddRange(new Control[]
+        // Short, with what a saved demo is in the hint under it: at a large
+        // text size the whole of it in the box's caption was wider than the
+        // card beside the racers could be.
+        _chkSaveDemo.Text = "Save demo races to Race History";
+        _chkSaveDemo.AutoSize = true;
+        _chkSaveDemo.Checked = _settings.SaveDemoSessions;
+        _chkSaveDemo.CheckedChanged += (_, _) =>
         {
-            lblTrack, _cmbTrackLayout, _lblPaceHint, lblStaging, _numStagingSeconds, lblCountdown, _numCountdownSeconds,
+            _settings.SaveDemoSessions = _chkSaveDemo.Checked;
+            _settings.Save();
+        };
+
+        var lblSaveDemoHint = new Label
+        {
+            Text = "Off by default so fake results stay out of your real history. Turn it on to keep a copy of each demo "
+                 + "race, marked [DEMO], to look back over or print a results card from. A saved demo is never scored: it is "
+                 + "never linked to a heat - even if a round is picked in the Round: box on Race Control - and never earns "
+                 + "championship points, badges, personal bests or track records.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblSaveDemoHint, () => AppTheme.SmallFont);
+
+        var fields = new FieldGrid();
+
+        // Short captions: "Countdown duration (sec):" set the caption column,
+        // and at 200% took the room the track picker needed beside the
+        // racers (layout test, 29 Sep).
+        _settingsCaptions.Add(fields.AddRow("Track layout:", _cmbTrackLayout));
+        fields.AddHint(_lblPaceHint);
+        _settingsCaptions.Add(fields.AddRow("Staging (sec):", _numStagingSeconds));
+        _settingsCaptions.Add(fields.AddRow("Countdown (sec):", _numCountdownSeconds));
+
+        var settings = new Section("Settings");
+
+        settings.Add(fields);
+        settings.Add(_chkSaveDemo, stretch: false, gapBelow: UiLayout.HintGap);
+        settings.Add(lblSaveDemoHint, gapBelow: 0);
+
+        // --- The log ---
+
+        _txtLog.Multiline = true;
+        _txtLog.ReadOnly = true;
+        _txtLog.ScrollBars = ScrollBars.Vertical;
+        _txtLog.WordWrap = true;
+
+        // Monospaced so timestamps line up, a size under the body face -
+        // made again for a new text size, which it never was when it was
+        // set once here.
+        _textSize.Keep(() =>
+        {
+            var size = Math.Max(7.5F, AppTheme.BodyFont.SizeInPoints - 2F);
+
+            if (_logFont is not null && Math.Abs(_logFont.SizeInPoints - size) < 0.01F)
+            {
+                return;
+            }
+
+            var old = _logFont;
+
+            _logFont = new Font("Consolas", size);
+            _txtLog.Font = _logFont;
+            old?.Dispose();
         });
 
-        // In front of the hint above them. The reservation should mean they
-        // never meet, but a spin box that a label can cover is a control
-        // that silently stops working, and the z-order costs nothing.
-        _numStagingSeconds.BringToFront();
-        _numCountdownSeconds.BringToFront();
+        var log = new Section("Log");
 
-        group.Height = UiLayout.Below(_numCountdownSeconds, Inset);
+        log.AddFill(_txtLog, () => _txtLog.Font.Height * LogLeastLines + 8, gapBelow: 0);
 
-        return group;
-    }
+        // --- Racers ---
 
-    private GroupBox BuildRacersGroup(int column)
-    {
-        var group = new GroupBox
-        {
-            Text = "Racers",
-            Font = AppTheme.BodyFont,
-            Width = column,
-        };
-
-        var inner = column - Inset * 2;
-
-        var groupTop = UiLayout.InsideGroup(group);
-
-        // --- What to run ---
-        //
-        // Above the tick list rather than beside it: this is the choice
-        // that decides whether the tick list means anything at all, and a
-        // control that governs another one belongs before it.
-        var lblRound = new Label
-        {
-            Text = "Run:",
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-        };
-
-        _cmbRound.Font = AppTheme.BodyFont;
         _cmbRound.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbRound.SelectedIndexChanged += (_, _) => UpdateRoundMode();
-
-        lblRound.Location = new Point(Inset, UiLayout.CentreOn(lblRound, groupTop, _cmbRound.Height));
-
-        var roundFieldLeft = UiLayout.After(lblRound, AppTheme.BodyFont);
-
-        _cmbRound.Location = new Point(roundFieldLeft, groupTop);
-        _cmbRound.Width = Math.Max(160, column - Inset - roundFieldLeft);
-
-        _lblRoundHint.AutoSize = true;
-        _lblRoundHint.MaximumSize = new Size(inner, 0);
-        _lblRoundHint.Font = AppTheme.SmallFont;
-        _lblRoundHint.ForeColor = AppTheme.TextMuted;
-        _lblRoundHint.Location = new Point(Inset, UiLayout.Below(_cmbRound, UiLayout.HintGap));
 
         var lblDrivers = new Label
         {
             Text = "Check driver profiles to include (uses their real names - exercises real announcer/rivalry behavior):",
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            Location = new Point(Inset, UiLayout.Below(_lblRoundHint, UiLayout.SectionGap)),
         };
 
-        _clbDrivers.Font = AppTheme.BodyFont;
         _clbDrivers.CheckOnClick = true;
 
         // Off, or the list rounds its height down to a whole number of rows
         // and leaves a gap underneath that nothing in the layout explains.
         _clbDrivers.IntegralHeight = false;
-
-        _clbDrivers.Location = new Point(Inset, UiLayout.Below(lblDrivers, UiLayout.RowGap));
-        _clbDrivers.Size = new Size(inner, AppTheme.BodyFont.Height * 8);
         _clbDrivers.ItemCheck += (_, _) =>
         {
             // BeginInvoke throws if the handle doesn't exist yet, and
@@ -415,16 +317,6 @@ public sealed class DemoModeControl : UserControl
             BeginInvoke(SaveCheckedDrivers);
         };
 
-        var lblPlaceholder = new Label
-        {
-            Text = "Plus this many made-up placeholder racers:",
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            Location = new Point(Inset, UiLayout.Below(_clbDrivers, UiLayout.RowGap)),
-        };
-
-        _numPlaceholderCount.Font = AppTheme.BodyFont;
-        _numPlaceholderCount.Width = UiLayout.NumericWidth;
         _numPlaceholderCount.Minimum = 0;
         _numPlaceholderCount.Maximum = 8;
         _numPlaceholderCount.Value = Math.Clamp(_settings.LastDemoPlaceholderCount, (int)_numPlaceholderCount.Minimum, (int)_numPlaceholderCount.Maximum);
@@ -434,20 +326,125 @@ public sealed class DemoModeControl : UserControl
             _settings.Save();
         };
 
-        // Under its caption rather than beside it: the caption wraps at this
-        // column width, and a spinner placed after a two-line label sits
-        // level with the wrong line of it.
-        _numPlaceholderCount.Location = new Point(Inset, UiLayout.Below(lblPlaceholder, UiLayout.HintGap));
+        // What to run above the tick list rather than beside it: this is the
+        // choice that decides whether the tick list means anything at all,
+        // and a control that governs another one belongs before it.
+        var runGrid = new FieldGrid();
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblRound, _cmbRound, _lblRoundHint, lblDrivers, _clbDrivers, lblPlaceholder, _numPlaceholderCount,
-        });
+        _lblRun = runGrid.AddRow("Run:", _cmbRound, stretch: true);
+        runGrid.AddHint(_lblRoundHint);
 
-        group.Height = UiLayout.Below(_numPlaceholderCount, Inset);
+        _racers = new Section("Racers");
 
-        return group;
+        _racers.Add(runGrid);
+        _racers.Add(lblDrivers);
+        _racers.AddFill(_clbDrivers, () => DriverListItemHeight() * DriverListLeastRows + 4);
+
+        // The spinner after its caption, and under it when the column is too
+        // narrow for both on one line.
+        _racers.Add(FieldGrid.Inline(new Label { Text = "Plus this many made-up placeholder racers:" }, _numPlaceholderCount), gapBelow: 0);
+
+        // The pickers and the boxes at the text size in use - see SizeFields.
+        _textSize.Keep(SizeFields);
+
+        // --- The page ---
+
+        Beside? band = null;
+
+        band = new Beside(() => RacersWidth(band?.Width ?? 0));
+
+        band.Add(run);
+        band.Add(settings);
+        band.AddFill(log, log.LeastHeight);
+        band.AddSideFill(_racers, _racers.LeastHeight, gapBelow: 0);
+
+        _band = band;
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use: the number boxes the width
+    /// they were at the normal text size, at this size, and the track picker
+    /// as wide as its longest choice and never narrower than a field was
+    /// then. Run again when the text size changes (TextSize.Keep) and when
+    /// the lists are refilled.
+    /// </summary>
+    private void SizeFields()
+    {
+        var number = UiLayout.AtTextSize(UiLayout.NumericWidth);
+
+        Fit(_cmbTrackLayout, TrackPickerWidth());
+        Fit(_numStagingSeconds, number);
+        Fit(_numCountdownSeconds, number);
+        Fit(_numPlaceholderCount, number);
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The racers' column: about two fifths of the page, between 320px and
+    /// 480px at the normal text size, at the size in use - and never
+    /// narrower than its caption, or than Run: and a picker as wide as its
+    /// longest choice need. The other cards have the rest, and never less
+    /// than 440px at the text size in use, or than the settings' captions
+    /// and fields or the save box need; too narrow for both at that, and
+    /// each gives up the same share of its width, as Batteries' two cards
+    /// do. Nothing here scrolls sideways (FillPage).
+    /// </summary>
+    private int RacersWidth(int band)
+    {
+        var run = (_lblRun?.GetPreferredSize(Size.Empty).Width ?? 0) + UiLayout.LabelGap
+            + Pieces.PickerWidth(_cmbRound, ref _roundWidth);
+
+        var needs = Math.Max(_racers?.CaptionWidth ?? 0, run) + Section.Inset.Horizontal;
+
+        var racers = Math.Max(
+            Math.Clamp((int)(band * 0.4f), UiLayout.AtTextSize(RacersLeastWidth), UiLayout.AtTextSize(RacersMostWidth)),
+            needs);
+
+        // The settings' caption column and their widest field, as the grid
+        // lays them out - not the grid's own width on one line, which counts
+        // the pace hint unwrapped. The picker's width as it is meant to be,
+        // not as it is: a table cuts a field down to the column it has.
+        var settings = _settingsCaptions.Select(caption => caption.GetPreferredSize(Size.Empty).Width).DefaultIfEmpty(0).Max()
+            + UiLayout.LabelGap
+            + Math.Max(TrackPickerWidth(), Math.Max(_numStagingSeconds.Width, _numCountdownSeconds.Width));
+
+        var othersLeast = Math.Max(
+            UiLayout.AtTextSize(OthersLeastWidth),
+            Math.Max(settings, _chkSaveDemo.GetPreferredSize(Size.Empty).Width) + Section.Inset.Horizontal);
+
+        // What the two share: all of the band but the gap a Beside leaves
+        // between its parts and its column.
+        var room = Math.Max(0, band - UiLayout.RowGap);
+
+        if (racers + othersLeast > room)
+        {
+            racers = (int)((long)racers * room / (racers + othersLeast));
+        }
+
+        return Math.Max(0, racers);
+    }
+
+    /// <summary>The track picker: as wide as its longest choice, and never narrower than a field was at the normal text size.</summary>
+    private int TrackPickerWidth() =>
+        Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbTrackLayout, ref _trackWidth));
+
+    /// <summary>A row of the driver list, in the face it is drawn in.</summary>
+    private int DriverListItemHeight() => Math.Max(_clbDrivers.ItemHeight, _clbDrivers.Font.Height);
 
     /// <summary>Call whenever this tab becomes visible, since track layouts and driver profiles can be added/edited elsewhere while it's not active.</summary>
     public void RefreshAvailableData()
@@ -531,6 +528,11 @@ public sealed class DemoModeControl : UserControl
 
         _cmbRound.SelectedIndex = index;
         UpdateRoundMode();
+
+        // The longest round may have come or gone, and the racers' column is
+        // as wide as it needs - see RacersWidth.
+        _roundWidth = null;
+        _band?.PerformLayout();
     }
 
     /// <summary>
@@ -580,6 +582,10 @@ public sealed class DemoModeControl : UserControl
         var idx = previous is not null ? _cmbTrackLayout.Items.IndexOf(previous) : -1;
         _cmbTrackLayout.SelectedIndex = idx >= 0 ? idx : 0;
         UpdatePaceHint();
+
+        // The longest layout may have come or gone: measured again.
+        _trackWidth = null;
+        SizeFields();
     }
 
     private void RefreshDriverList()
@@ -745,7 +751,7 @@ public sealed class DemoModeControl : UserControl
         }
 
         _txtLog.AppendText($"{AppTime.LogStampNow()}  In this demo: {(names.Count == 0 ? "nobody" : string.Join(", ", names))}. "
-            + $"Ghost cars run only if ticked above.{Environment.NewLine}");
+            + $"Ghost cars run only if ticked under Racers.{Environment.NewLine}");
 
         _btnStart.Enabled = false;
         _btnStop.Enabled = true;
@@ -861,6 +867,13 @@ public sealed class DemoModeControl : UserControl
             _simulator.Dispose();
         }
         base.Dispose(disposing);
+
+        // After the log that wears it is gone.
+        if (disposing)
+        {
+            _logFont?.Dispose();
+            _logFont = null;
+        }
     }
 
     private sealed record DriverListItem(DriverProfile Profile)

@@ -14,7 +14,6 @@ public sealed class VenuesControl : UserControl
     private readonly ThemeStore _themes;
 
     private readonly ListBox _list = new();
-    private readonly GroupBox _grpEdit = new();
     private readonly TextBox _txtName = new();
     private readonly ComboBox _cmbConnectionType = new();
     private readonly ComboBox _cmbTrackLayout = new();
@@ -24,6 +23,26 @@ public sealed class VenuesControl : UserControl
     private readonly NumericUpDown _numMinLapTimeMs = new();
     private readonly NumericUpDown _numStreakSlowMultiplier = new();
     private readonly Label _lblStatus = new();
+    private readonly Button _btnApply = new();
+
+    /// <summary>The venues' card and its buttons, which the column's width is measured from - see VenuesWidth.</summary>
+    private Section? _venuesCard;
+    private ButtonBar? _listButtons;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled.</summary>
+    private (Font Font, int Count, int Width)? _connectionWidth;
+    private (Font Font, int Count, int Width)? _trackWidth;
+    private (Font Font, int Count, int Width)? _themeWidth;
+
+    /// <summary>The venues' column and the settings' fields at the normal text size.</summary>
+    private const int ListWidth = 240;
+    private const int FieldWidth = 280;
+
+    /// <summary>The fewest venues the list shows before the page scrolls instead.</summary>
+    private const int ListLeastRows = 4;
 
     private bool _suppressEvents;
 
@@ -38,30 +57,55 @@ public sealed class VenuesControl : UserControl
         _themes = themes;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshDropdownSources();
         RefreshList();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then the venues down the left in a card of their own, the
+    /// list taking the page's height and its buttons under it - and beside
+    /// them the selected venue's settings: its own details, then its race
+    /// defaults, each group with a caption column of its own, and Apply
+    /// This Venue under them. On the layout pieces (LayoutPieces.cs), so
+    /// nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels: the list 220x360 whatever the window,
+    /// the settings in a group box sized once at build, and the fields 280px
+    /// wide at every text size.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
-            Text = "Save everything specific to one physical track - its decoder, preferred track layout, announcer style, and race defaults - " +
+            Text = "Save everything specific to one physical track - its decoder, preferred track layout, soundscape, and race defaults - " +
                    "and apply them all together with one click instead of reconfiguring each piece by hand.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(800, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var lblListCaption = new Label { Text = "Venues:", Location = new Point(12, 60), AutoSize = true, Font = AppTheme.BoldFont };
+        // --- The venues ---
 
-        _list.Location = new Point(12, 82);
-        _list.Size = new Size(220, 360);
-        _list.Font = AppTheme.BodyFont;
+        _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => LoadSelectedIntoUi();
 
         var btnNew = new Button { Text = "New Venue" };
@@ -70,51 +114,38 @@ public sealed class VenuesControl : UserControl
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += BtnDelete_Click;
 
-        // Under the list, measured - not at a remembered 450 that assumed
-        // the list was exactly 360 tall.
-        UiLayout.TightButtonRow(12, UiLayout.Below(_list, UiLayout.RowGap), btnNew, btnDelete);
+        _listButtons = new ButtonBar(tight: true).With(btnNew, btnDelete);
 
-        _grpEdit.Text = "Venue Settings";
-        _grpEdit.Location = new Point(248, 60);
-        _grpEdit.Size = new Size(520, 440);
+        _venuesCard = new Section("Venues");
 
-        var lblName = new Label { Text = "Name:", AutoSize = true };
+        _venuesCard.AddFill(_list, () => _list.ItemHeight * ListLeastRows + 4);
+        _venuesCard.Add(_listButtons, gapBelow: 0);
+
+        // --- The selected venue ---
+
         _txtName.Leave += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblConnection = new Label { Text = "Connect via:", AutoSize = true };
         _cmbConnectionType.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbConnectionType.Items.AddRange(DecoderConnection.Items());
         _cmbConnectionType.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblTrack = new Label { Text = "Preferred track:", AutoSize = true };
         _cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTrackLayout.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblTheme = new Label { Text = "Preferred soundscape:", AutoSize = true };
         _cmbTheme.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTheme.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblDefaultsCaption = new Label { Text = "Race defaults for this venue:", AutoSize = true, Font = AppTheme.BoldFont };
-
-        var lblLapLimit = new Label { Text = "Lap limit (0 = none):", AutoSize = true };
-        _numLapLimit.Width = 70;
         _numLapLimit.Maximum = 9999;
         _numLapLimit.ValueChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblTimeLimit = new Label { Text = "Time limit, min (0 = none):", AutoSize = true };
-        _numTimeLimitMinutes.Width = 70;
         _numTimeLimitMinutes.Maximum = 180;
         _numTimeLimitMinutes.ValueChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblMinLap = new Label { Text = "Minimum lap time (ms):", AutoSize = true };
-        _numMinLapTimeMs.Width = 80;
         _numMinLapTimeMs.Maximum = 30000;
         _numMinLapTimeMs.Increment = 100;
         _numMinLapTimeMs.Value = 3000;
         _numMinLapTimeMs.ValueChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblStreakMult = new Label { Text = "Streak slow-lap multiplier:", AutoSize = true };
-        _numStreakSlowMultiplier.Width = 80;
         _numStreakSlowMultiplier.DecimalPlaces = 2;
         _numStreakSlowMultiplier.Increment = 0.1m;
         _numStreakSlowMultiplier.Minimum = 1.0m;
@@ -122,123 +153,110 @@ public sealed class VenuesControl : UserControl
         _numStreakSlowMultiplier.Value = 1.5m;
         _numStreakSlowMultiplier.ValueChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var btnApply = new Button { Text = "Apply This Venue" };
-        btnApply.Click += BtnApply_Click;
+        _btnApply.Text = "Apply This Venue";
+        _btnApply.Click += BtnApply_Click;
 
-        // --- TWO measured field columns, not one ---
-        //
-        // One column for the whole card was the obvious thing to do and it
-        // was wrong: "Streak slow-lap multiplier:" is more than three times
-        // the width of "Name:", so aligning everything to the widest
-        // caption left the short rows with a gutter you could park a bus
-        // in, and pushed the card out to match.
-        //
-        // The card has two groups of rows that do not need to line up with
-        // each other - the venue's own details and the race defaults - so
-        // each gets its own column, measured against its own captions.
-        var topCaptions = new[] { lblName, lblConnection, lblTrack, lblTheme };
-        var defaultCaptions = new[] { lblLapLimit, lblTimeLimit, lblMinLap, lblStreakMult };
+        // The fields at the text size in use - see SizeFields.
+        _textSize.Keep(SizeFields);
 
-        foreach (var caption in topCaptions.Concat(defaultCaptions).Append(lblDefaultsCaption))
-        {
-            caption.Font = caption == lblDefaultsCaption ? AppTheme.BoldFont : AppTheme.BodyFont;
-        }
+        // TWO caption columns, not one. "Streak slow-lap multiplier:" is more
+        // than three times the width of "Name:", so one column for the whole
+        // card left the short rows with a gutter you could park a bus in.
+        // The venue's own details and its race defaults do not need to line
+        // up with each other, so each group is a grid of its own, measured
+        // against its own captions.
+        var details = new FieldGrid();
 
-        // Measured against the font they are drawn in. None of these has
-        // been parented yet, so PreferredWidth would report a size they
-        // are never drawn at.
-        int CaptionWidth(Label caption) =>
-            TextRenderer.MeasureText(caption.Text, caption.Font).Width;
+        details.AddRow("Name:", _txtName);
+        details.AddRow("Connect via:", _cmbConnectionType);
+        details.AddRow("Preferred track:", _cmbTrackLayout);
+        details.AddRow("Preferred soundscape:", _cmbTheme);
 
-        var topLeft = 12 + UiLayout.LabelGap + topCaptions.Max(CaptionWidth);
-        var defaultsLeft = 12 + UiLayout.LabelGap + defaultCaptions.Max(CaptionWidth);
+        var lblDefaults = new Label { Text = "Race defaults for this venue:", AutoSize = true };
+        _textSize.Wear(lblDefaults, () => AppTheme.BoldFont);
 
-        // Wide enough for its digits and its spinner, rather than a
-        // remembered 70 that the repair pass then had to stretch.
-        var numericWidth = TextRenderer.MeasureText("000000", AppTheme.BodyFont).Width + 34;
+        var defaults = new FieldGrid();
 
-        foreach (var spinner in new NumericUpDown[] { _numLapLimit, _numTimeLimitMinutes, _numMinLapTimeMs, _numStreakSlowMultiplier })
-        {
-            spinner.Font = AppTheme.BodyFont;
-            spinner.Width = numericWidth;
-        }
+        defaults.AddRow("Lap limit (0 = none):", _numLapLimit);
+        defaults.AddRow("Time limit, min (0 = none):", _numTimeLimitMinutes);
+        defaults.AddRow("Minimum lap time (ms):", _numMinLapTimeMs);
+        defaults.AddRow("Streak slow-lap multiplier:", _numStreakSlowMultiplier);
 
-        // Capped, not stretched. A venue name is a few words; a 600px box
-        // for it just looks like a mistake.
-        const int fieldWidth = 280;
-
-        _txtName.Font = AppTheme.BodyFont;
-        _txtName.Width = fieldWidth;
-        _cmbConnectionType.Font = AppTheme.BodyFont;
-        _cmbConnectionType.Width = fieldWidth;
-        _cmbTrackLayout.Font = AppTheme.BodyFont;
-        _cmbTrackLayout.Width = fieldWidth;
-        _cmbTheme.Font = AppTheme.BodyFont;
-        _cmbTheme.Width = fieldWidth;
-
-        var y = UiLayout.InsideGroup(_grpEdit);
-
-        int Row(Label caption, Control field, int fieldLeft, int top)
-        {
-            caption.Location = new Point(12, UiLayout.CentreOn(caption, top, field.Height));
-            field.Location = new Point(fieldLeft, top);
-
-            return UiLayout.Below(field, UiLayout.RowGap);
-        }
-
-        y = Row(lblName, _txtName, topLeft, y);
-        y = Row(lblConnection, _cmbConnectionType, topLeft, y);
-        y = Row(lblTrack, _cmbTrackLayout, topLeft, y);
-        y = Row(lblTheme, _cmbTheme, topLeft, y);
-
-        y += UiLayout.RowGap;
-        lblDefaultsCaption.Location = new Point(12, y);
-        y = UiLayout.Below(lblDefaultsCaption, UiLayout.RowGap);
-
-        y = Row(lblLapLimit, _numLapLimit, defaultsLeft, y);
-        y = Row(lblTimeLimit, _numTimeLimitMinutes, defaultsLeft, y);
-        y = Row(lblMinLap, _numMinLapTimeMs, defaultsLeft, y);
-        y = Row(lblStreakMult, _numStreakSlowMultiplier, defaultsLeft, y);
-
-        // Directly after the last row. It used to be pinned at y=380 in a
-        // group 440 tall, which left sixty pixels of nothing under it.
-        y += UiLayout.RowGap;
-
-        btnApply.Size = new Size(UiLayout.WidthFor(btnApply), UiLayout.ButtonHeight);
-        btnApply.Location = new Point(12, y);
-
-        // As wide as the widest row actually needs, rather than a column
-        // width plus a guess.
-        _grpEdit.Width = Math.Max(topLeft + fieldWidth, defaultsLeft + numericWidth) + 12;
-
-        _grpEdit.Height = UiLayout.Below(btnApply, 16);
-
-        // Every child in here is placed by the code above, so the repair
-        // pass keeps out - it was the thing stretching the spinners.
-        LayoutDoctor.LeaveAlone(_grpEdit);
-
-        _grpEdit.Controls.AddRange(new Control[]
-        {
-            lblName, _txtName, lblConnection, _cmbConnectionType,
-            lblTrack, _cmbTrackLayout, lblTheme, _cmbTheme, lblDefaultsCaption,
-            lblLapLimit, _numLapLimit, lblTimeLimit, _numTimeLimitMinutes,
-            lblMinLap, _numMinLapTimeMs, lblStreakMult, _numStreakSlowMultiplier, btnApply,
-        });
-
-        _lblStatus.Location = new Point(248, UiLayout.Below(_grpEdit, UiLayout.RowGap));
+        // What the last change did.
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblListCaption);
-        Controls.Add(_list);
-        Controls.Add(btnNew);
-        Controls.Add(btnDelete);
-        Controls.Add(_grpEdit);
-        Controls.Add(_lblStatus);
+        var settings = new Section("Venue settings");
+
+        settings.Add(details);
+        settings.Add(lblDefaults, stretch: false);
+        settings.Add(defaults);
+        settings.Add(new ButtonBar().With(_btnApply));
+        settings.Add(_lblStatus, gapBelow: 0);
+
+        // --- The page ---
+
+        var band = new Beside(VenuesWidth) { SideOnLeft = true };
+
+        band.Add(settings, gapBelow: 0);
+        band.AddSideFill(_venuesCard, _venuesCard.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
 
         SetEditEnabled(false);
     }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use. The name box is the width
+    /// it was at the normal text size, at this size - capped, not stretched:
+    /// a venue's name is a few words, and a box across the page for it just
+    /// looks like a mistake. The pickers are that wide or as wide as their
+    /// longest choice, and the number boxes as wide as six digits and their
+    /// arrows need.
+    ///
+    /// Run again when the text size changes (TextSize.Keep) and when the
+    /// pickers' lists are refilled (RefillDropdowns).
+    /// </summary>
+    private void SizeFields()
+    {
+        var field = UiLayout.AtTextSize(FieldWidth);
+
+        Fit(_txtName, field);
+        Fit(_cmbConnectionType, Math.Max(field, Pieces.PickerWidth(_cmbConnectionType, ref _connectionWidth)));
+        Fit(_cmbTrackLayout, Math.Max(field, Pieces.PickerWidth(_cmbTrackLayout, ref _trackWidth)));
+        Fit(_cmbTheme, Math.Max(field, Pieces.PickerWidth(_cmbTheme, ref _themeWidth)));
+
+        var number = TextRenderer.MeasureText("000000", Font).Width + 34;
+
+        foreach (var spinner in new NumericUpDown[] { _numLapLimit, _numTimeLimitMinutes, _numMinLapTimeMs, _numStreakSlowMultiplier })
+        {
+            Fit(spinner, number);
+        }
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control control, int width)
+        {
+            if (control.Width != width)
+            {
+                control.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The venues' column: the width the list was at the normal text size,
+    /// at the size in use - and never narrower than its caption or its two
+    /// buttons on one line need.
+    /// </summary>
+    private int VenuesWidth() =>
+        Math.Max(
+            UiLayout.AtTextSize(ListWidth),
+            Math.Max(_venuesCard?.CaptionWidth ?? 0, _listButtons?.OneLineWidth ?? 0) + Section.Inset.Horizontal);
 
     /// <summary>Call whenever this tab becomes visible - track layouts and themes can change elsewhere while it's not active.</summary>
     public void RefreshDropdownSources()
@@ -302,6 +320,20 @@ public sealed class VenuesControl : UserControl
             SelectStoredName(_cmbTrackLayout, venue.PreferredTrackLayoutName);
             SelectStoredName(_cmbTheme, ThemeNameToShow(venue.PreferredThemeName));
         }
+
+        // The longest choice may have come or gone: measured again.
+        RefitPickers();
+    }
+
+    /// <summary>
+    /// The pickers measured again after their lists changed - refilled, or
+    /// given a "(missing: ...)" entry - which can change the longest choice
+    /// without changing how many there are.
+    /// </summary>
+    private void RefitPickers()
+    {
+        _trackWidth = _themeWidth = null;
+        SizeFields();
     }
 
     /// <summary>A built-in renamed since the venue was saved shows under its new name.</summary>
@@ -408,21 +440,17 @@ public sealed class VenuesControl : UserControl
         // Buttons are unaffected here; their disabled state is already
         // themed correctly (see AppTheme.StyleButton's EnabledChanged
         // handler), so toggling Enabled on them is fine as-is.
-        foreach (Control c in _grpEdit.Controls)
+        //
+        // Named rather than found: the fields used to be the children of
+        // one group box, and are now in two grids inside a card.
+        _txtName.ReadOnly = !enabled;
+
+        foreach (var spinner in new[] { _numLapLimit, _numTimeLimitMinutes, _numMinLapTimeMs, _numStreakSlowMultiplier })
         {
-            switch (c)
-            {
-                case TextBox textBox:
-                    textBox.ReadOnly = !enabled;
-                    break;
-                case NumericUpDown numericUpDown:
-                    numericUpDown.ReadOnly = !enabled;
-                    break;
-                case Button button:
-                    button.Enabled = enabled;
-                    break;
-            }
+            spinner.ReadOnly = !enabled;
         }
+
+        _btnApply.Enabled = enabled;
     }
 
     private void LoadSelectedIntoUi()
@@ -452,6 +480,10 @@ public sealed class VenuesControl : UserControl
         {
             _suppressEvents = false;
         }
+
+        // A saved choice that has gone shows as "(missing: ...)", which may
+        // be longer than anything else in the list.
+        RefitPickers();
     }
 
     private void SaveCurrentFromUi()

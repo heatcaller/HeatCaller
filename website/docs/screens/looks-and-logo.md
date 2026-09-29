@@ -1,17 +1,17 @@
 # Looks and the club logo
 
-A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page, on the **Looks** tab.
+A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page.
 
-You can open the tab in two ways:
+You can open the page in two ways:
 
-- Open **Themes** in the sidebar and click the **Looks** tab.
+- Click **Themes** in the sidebar.
 - Click **Open Looks** in the **Look** group on the **Club Website** page.
 
 Typing `look`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo` or `24-hour` in the **Search pages...** box also opens it.
 
-The other tab on the **Themes** page, **Announcer Style**, is about how the app sounds, not how it looks. See [Announcer styles](../announcer/sounds-and-music.md#announcer-styles).
+How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Announcer styles](../announcer/sounds-and-music.md#announcer-styles).
 
-<!-- screenshot: Themes page, Looks tab, with the list of looks, the preview and the Club logo group -->
+<!-- screenshot: Themes page with the Looks card (the list of looks beside the preview) and the Club logo card -->
 
 ## Where a look applies
 
@@ -57,18 +57,18 @@ HeatCaller comes with 18 looks. Built-in looks can't be changed or deleted, but 
 
 Only looks with Synthwave effects get the animated sunset header in the sidebar and the neon race clock.
 
-## Reading the Looks tab
+## Reading the Looks card
 
-The **Looks:** list shows the built-in looks first, then your own under **Your looks**. Each row has a strip of five of the look's colors (page, cards, primary, accent and text) and its name. Two markers show what's in use:
+The list down the left of the **Looks** card shows the built-in looks first, then your own under **Your looks**. Each row has a strip of five of the look's colors (page, cards, primary, accent and text) and its name. Two markers show what's in use:
 
 - **App**: the look the app is running now.
 - **Screens**: the look the crowd screens are showing now.
 
-Select a look to see a preview of the app wearing it, with its name and description under it. The line under the description says whether it's built in or one of yours, and whether it's in use. If you've chosen a new look for the app and haven't restarted yet, it says so, for example "The app switches to this look when it next starts."
+Select a look to see a preview of the app wearing it beside the list, with its name and description under it. The line under the description says whether it's built in or one of yours, and whether it's in use. If you've chosen a new look for the app and haven't restarted yet, it says so, for example "The app switches to this look when it next starts."
 
 ## Choose the app's look
 
-1. Select the look in the **Looks:** list.
+1. Select the look in the **Looks** list.
 2. Click **Use for the App**.
 3. HeatCaller asks, for example, 'Use "Paddock" for the app? The app needs to restart for this to take effect.' If the crowd screens are set to match the app, it adds that they will change with it.
 4. Click **Yes**. HeatCaller saves the choice, closes and reopens in the new look.
@@ -80,7 +80,7 @@ Select a look to see a preview of the app wearing it, with its name and descript
 
 ## Choose the crowd screens' look
 
-Pick the look in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
+Pick the look in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**, under the buttons in the **Looks** card, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
 
 The first choice in the list is **Match the app**, with the name of the look the app is running in brackets, for example **Match the app (Midnight)**. It follows the look the app is running now, not one waiting for a restart.
 
@@ -105,7 +105,7 @@ The new look appears under **Your looks**, selected. It isn't used anywhere yet:
 | Field | What it does |
 |---|---|
 | **Name:** | Up to 40 characters. Required. |
-| **Description:** | Optional, up to 200 characters. Shown under the preview on the **Looks** tab. |
+| **Description:** | Optional, up to 200 characters. Shown under the preview on the **Themes** page. |
 | **Style:** | **Light**, **Dark** or **Synthwave effects**. Light or Dark sets how phones and the online pages treat the page. **Synthwave effects** is a dark page that also gets the animated sunset header and the neon race clock. |
 
 Under **Colours** there are eleven colors:
@@ -143,7 +143,7 @@ Under **Readability**, the editor lists color pairs that may be hard to read, ea
 | The "good" colour is hard to see on cards | 3:1 or more |
 | The "bad" colour is hard to see on cards | 3:1 or more |
 
-These are only warnings: "You can still save it - these are only warnings." The same list shows on the **Looks** tab when you select one of your looks ("Reads comfortably." when there are none). Built-in looks show no warnings.
+These are only warnings: "You can still save it - these are only warnings." The same list shows on the **Themes** page when you select one of your looks ("Reads comfortably." when there are none). Built-in looks show no warnings.
 
 A look on a wall across the room needs more contrast than one on a laptop, so it's worth fixing warnings on a look you'll use for the crowd screens.
 
@@ -165,7 +165,7 @@ Your looks are saved in `looks.json` in the data folder and are included in back
 
 ## The club logo
 
-The **Club logo** group sets one logo for the whole app. It shows:
+The **Club logo** card sets one logo for the whole app. It shows:
 
 - **In the app's top-left corner**, in place of the **HEATCALLER** title (or the Synthwave scene). The header grows taller to give it room.
 - **On the Big Screen**, in the top-left corner.
@@ -220,8 +220,8 @@ On the online pages the logo is drawn between 72 and 180 pixels across, dependin
 
 - **The app looks the same.** Light mode is now the **Daylight** look, Dark is **Midnight** and Synthwave is **Synthwave**, color for color.
 - **The Big Screen and the Wi-Fi pages now use the crowd-screen look.** It starts as whatever you'd chosen for the online pages on the **Club Website** page, which is **Match the app** unless you changed it. So with a **Daylight** app, the Big Screen turns light. For the dark Big Screen of earlier versions, choose **Race Wall** for the crowd screens. If you'd ticked **Use the Synthwave palette on the Big Screen** on the **Local Screens** page, that box has gone; choose **Synthwave** instead.
-- **A logo you'd already set on the Club Website page** now also appears in the app's top-left corner and on the Big Screen and Wi-Fi pages. Untick the two checkboxes in the **Club logo** group if you don't want that.
-- **The sidebar's Switch to ... Mode button is gone.** Open **Themes** in the sidebar and click the **Looks** tab instead.
+- **A logo you'd already set on the Club Website page** now also appears in the app's top-left corner and on the Big Screen and Wi-Fi pages. Untick the two checkboxes in the **Club logo** card if you don't want that.
+- **The sidebar's Switch to ... Mode button is gone.** Open **Themes** in the sidebar instead.
 - **Club admins should redeploy the relay** for the bigger logo and its plate. See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 ## Troubleshooting

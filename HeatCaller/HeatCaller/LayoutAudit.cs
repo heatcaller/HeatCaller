@@ -83,6 +83,22 @@ internal static class LayoutAudit
 
         // The filter, the wall of cars and its buttons (GarageControl).
         "Garage",
+
+        // The buttons, the setup and ghost cards beside the clock, and this
+        // session's table (PracticeModeControl).
+        "Practice",
+
+        // The switches and the list of ghosts (GhostControl).
+        "Ghost Cars",
+
+        // The settings and the log beside the racers (DemoModeControl).
+        "Demo Mode",
+
+        // The venues beside the selected one's settings (VenuesControl).
+        "Venues",
+
+        // The looks, the club logo and the appearance options (LooksControl).
+        "Themes",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>

@@ -166,7 +166,7 @@ public sealed partial class RaceControlControl
         var answer = isDemo
             ? AppDialog.Show(this,
                 $"A demo is running. If you {action} now, the demo ends: it is not saved to Race History "
-                + "(even with \"Save demo races to history\" ticked), and Undo does not bring it back.\n\n"
+                + "(even with \"Save demo races to Race History\" ticked), and Undo does not bring it back.\n\n"
                 + "End the demo?",
                 "Demo in progress",
                 MessageBoxButtons.YesNo,

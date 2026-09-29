@@ -1110,8 +1110,8 @@ public sealed partial class RaceControlControl
         if (_currentRaceIsDemo && !_settings.SaveDemoSessions)
         {
             StatusMessage?.Invoke(
-                "[session] Demo race finished but was NOT saved - tick \"Save demo races to history\" "
-                + "on the Demo Mode page to keep a copy in Race History (marked [DEMO], never scored).");
+                "[session] Demo race finished but was NOT saved - tick \"Save demo races to Race History\" "
+                + "on the Demo Mode page to keep a copy there (marked [DEMO], never scored).");
 
             // Never reaches the recap, which is what normally signals the end
             // of the broadcast - so it is signalled here, or music set to

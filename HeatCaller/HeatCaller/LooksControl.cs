@@ -19,9 +19,29 @@ namespace HeatCaller;
 /// </summary>
 public sealed class LooksControl : UserControl
 {
-    private const int Inset = 12;
-    private const int PageWidth = 800;
+    /// <summary>The looks list's least width at the normal text size - see ListColumnWidth.</summary>
     private const int ListWidth = 300;
+
+    /// <summary>The looks list and the preview beside it, laid out again when the list is filled - a new look's name can widen the list.</summary>
+    private Beside? _looksBand;
+
+    /// <summary>The preview's height, the logo's side and the crowd screens' picker's width, at the normal text size.</summary>
+    private const int PreviewHeight = 236;
+    private const int LogoSide = 96;
+    private const int ScreensPickerWidth = 300;
+
+    /// <summary>The lines kept for a look's description and for its warnings - see BuildLayout.</summary>
+    private const int DescriptionLines = 5;
+    private const int WarningLines = 6;
+
+    /// <summary>The fewest rows the looks list shows before the page scrolls instead.</summary>
+    private const int ListLeastRows = 6;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The crowd screens' picker's width as last measured - see Pieces.PickerWidth. Forgotten when its choices are filled in again.</summary>
+    private (Font Font, int Count, int Width)? _screensWidth;
 
     private readonly AppSettings _settings;
     private readonly UndoService _undo;
@@ -75,21 +95,15 @@ public sealed class LooksControl : UserControl
         _restartApp = restartApp;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        // Scrolls rather than clips: the page is taller than a laptop
-        // screen at the larger text sizes, and no MinimumSize, since a
-        // docked control held at a minimum simply runs off the tab page -
-        // it is the page's own scrollbar that makes the bottom reachable.
-        AutoScroll = true;
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No MinimumSize: the page is taller than a
+        // laptop screen at the larger text sizes, and scrolls (PageStack).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
-
-        // Placed from the block above on every build; the repair pass
-        // would only fight it.
-        LayoutDoctor.LeaveAlone(this);
 
         Disposed += (_, _) =>
         {
@@ -98,70 +112,51 @@ public sealed class LooksControl : UserControl
         };
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
     // ------------------------------------------------------------------
     // Layout
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// The intro, then four cards down the page. Looks: the list down the
+    /// left, as tall as the preview and what is said under it on the right,
+    /// the buttons under both and the crowd screens' choice under them.
+    /// Club logo: the logo on the left, its buttons and where it shows
+    /// beside it. Appearance. Then what the last change did. On the layout
+    /// pieces (LayoutPieces.cs), so nothing is placed by hand; the page
+    /// scrolls when it is taller than the window (PageStack).
+    ///
+    /// It used to be placed in pixels against an 800px page: the preview
+    /// 236px tall and the logo 96px square at every text size, the group
+    /// boxes sized once at build, and the page kept out of the repair pass
+    /// because every position in it was worked out here by hand.
+    /// </summary>
     private void BuildLayout()
     {
-        var body = AppTheme.BodyFont;
-
         var lblIntro = new Label
         {
             Text = "A look is the set of colours HeatCaller paints with. Choose one for the app itself (it restarts to "
                  + "apply it) and one for the crowd screens - the Big Screen, the Wi-Fi pages and the club's online "
                  + "pages - or let the screens match the app. New Look makes your own from any of them.",
-            Location = new Point(Inset, Inset),
             AutoSize = true,
-            MaximumSize = new Size(PageWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = body,
         };
 
-        var lblListCaption = new Label
-        {
-            Text = "Looks:",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            Location = new Point(Inset, UiLayout.Below(lblIntro, UiLayout.RowGap)),
-        };
+        // --- The looks ---
 
-        var listTop = UiLayout.Below(lblListCaption, UiLayout.HintGap + 2);
-        var rightLeft = Inset + ListWidth + 16;
-        var rightWidth = Inset + PageWidth - rightLeft;
-
-        _preview.Location = new Point(rightLeft, listTop);
-        _preview.Size = new Size(rightWidth, 236);
-
-        _lblName.Location = new Point(rightLeft, UiLayout.Below(_preview, UiLayout.RowGap));
-        _lblName.AutoSize = false;
-        _lblName.Size = new Size(rightWidth, AppTheme.BoldFont.Height + 4);
-        _lblName.Font = AppTheme.BoldFont;
-        _lblName.AutoEllipsis = true;
-
-        _lblDescription.Location = new Point(rightLeft, UiLayout.Below(_lblName, 2));
-        _lblDescription.AutoSize = false;
-        // Room for a two-line description plus the "Built in... In use
-        // for the app and the crowd screens." line, which wraps to two
-        // itself - three lines cut that last line off on Daylight, the
-        // look most people start on. AutoEllipsis puts the whole text in a
-        // tooltip if a larger text size still overflows it.
-        _lblDescription.Size = new Size(rightWidth, AppTheme.SmallFont.Height * 5 + 6);
-        _lblDescription.Font = AppTheme.SmallFont;
-        _lblDescription.AutoEllipsis = true;
-        _lblDescription.ForeColor = AppTheme.TextMuted;
-
-        _lblWarnings.Location = new Point(rightLeft, UiLayout.Below(_lblDescription, UiLayout.HintGap));
-        _lblWarnings.AutoSize = false;
-        _lblWarnings.Size = new Size(rightWidth, AppTheme.SmallFont.Height * 6 + 6);
-        _lblWarnings.Font = AppTheme.SmallFont;
-        _lblWarnings.AutoEllipsis = true;
-
-        // The list runs the full height of the right-hand column, so the
-        // two sides end together.
-        _list.Location = new Point(Inset, listTop);
-        _list.Size = new Size(ListWidth, Math.Max(300, _lblWarnings.Bottom - listTop));
-        _list.Font = body;
         _list.IntegralHeight = false;
         _list.DrawMode = DrawMode.OwnerDrawFixed;
         _list.DrawItem += List_DrawItem;
@@ -182,6 +177,77 @@ public sealed class LooksControl : UserControl
             }
         };
         _list.AccessibleName = "Looks";
+
+        // A row as tall as its name and its strip of colours need, at the
+        // text size in use - measured on every fill too (FillList), and now
+        // whenever the text size changes, not only the next time the page
+        // is shown.
+        _textSize.Keep(() =>
+        {
+            var height = ListItemHeight();
+
+            if (_list.ItemHeight != height)
+            {
+                _list.ItemHeight = height;
+            }
+        });
+
+        // The preview is drawn in the app's own faces, so it grows with the
+        // text size; the name is one line of the bold face.
+        _textSize.Keep(() =>
+        {
+            var preview = UiLayout.AtTextSize(PreviewHeight);
+
+            if (_preview.Height != preview)
+            {
+                _preview.Height = preview;
+            }
+
+            var name = AppTheme.BoldFont.Height + 4;
+
+            if (_lblName.Height != name)
+            {
+                _lblName.Height = name;
+            }
+        });
+
+        _lblName.AutoSize = false;
+        _lblName.AutoEllipsis = true;
+        _textSize.Wear(_lblName, () => AppTheme.BoldFont);
+
+        // Room kept for a two-line description plus the "Built in... In use
+        // for the app and the crowd screens." line, which wraps to two
+        // itself - and for a list of warnings - so choosing another look
+        // does not move the buttons under them. Both still grow past that
+        // for more.
+        _lblDescription.AutoSize = true;
+        _lblDescription.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblDescription, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(_lblDescription, DescriptionLines);
+
+        _lblWarnings.AutoSize = true;
+        _textSize.Wear(_lblWarnings, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(_lblWarnings, WarningLines);
+
+        // The list down the left, running the height of the preview and
+        // what is said under it, so the two sides end together - and as
+        // wide as its rows need (ListColumnWidth).
+        Beside? band = null;
+
+        band = new Beside(() => ListColumnWidth(band?.Width ?? 0))
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        _looksBand = band;
+
+        band.Add(_preview);
+        band.Add(_lblName, gapBelow: 2);
+        band.Add(_lblDescription, gapBelow: UiLayout.HintGap);
+        band.Add(_lblWarnings, gapBelow: 0);
+        band.AddSideFill(_list, _ => _list.ItemHeight * ListLeastRows + 4, gapBelow: 0);
 
         // --- The buttons under both columns ---
         _btnUseApp.Text = "Use for the App...";
@@ -205,26 +271,8 @@ public sealed class LooksControl : UserControl
         _btnDelete.Text = "Delete";
         _btnDelete.Click += (_, _) => DeleteSelected();
 
-        foreach (var button in new[] { _btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete })
-        {
-            button.Font = body;
-        }
-
-        var buttonsTop = Math.Max(_list.Bottom, _lblWarnings.Bottom) + UiLayout.RowGap;
-        var buttonsBottom = UiLayout.FlowButtons(Inset, buttonsTop, Inset + PageWidth,
-            _btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete);
-
         // --- Crowd screens ---
-        var lblScreens = new Label
-        {
-            Text = "Crowd screens (Big Screen, Wi-Fi pages, online pages):",
-            AutoSize = true,
-            Font = body,
-        };
-
-        _cmbScreens.Font = body;
         _cmbScreens.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbScreens.Width = 300;
         _cmbScreens.AccessibleName = "Crowd screens look";
         _cmbScreens.SelectedIndexChanged += (_, _) =>
         {
@@ -236,108 +284,136 @@ public sealed class LooksControl : UserControl
             SetDisplayLook(choice.Key);
         };
 
-        var screensTop = buttonsBottom + UiLayout.SectionGap;
-        var captionWidth = TextRenderer.MeasureText(lblScreens.Text, body).Width;
+        // As wide as its longest choice, and never narrower than it was at
+        // the normal text size - again when the text size changes, and when
+        // the choices are filled in (RefreshAll).
+        _textSize.Keep(SizeScreensPicker);
 
-        // Beside its caption when the two fit across the page, under it
-        // when a larger text size says they don't.
-        if (Inset + captionWidth + UiLayout.LabelGap + _cmbScreens.Width <= Inset + PageWidth)
-        {
-            lblScreens.Location = new Point(Inset, UiLayout.CentreOn(lblScreens, screensTop, _cmbScreens.Height));
-            _cmbScreens.Location = new Point(Inset + captionWidth + UiLayout.LabelGap, screensTop);
-        }
-        else
-        {
-            lblScreens.Location = new Point(Inset, screensTop);
-            _cmbScreens.Location = new Point(Inset, UiLayout.Below(lblScreens, UiLayout.HintGap));
-        }
+        // Beside its caption when the two fit across the card, under it when
+        // they don't (FieldRow).
+        var screens = new FieldRow();
+
+        screens.Add(new Label { Text = "Crowd screens (Big Screen, Wi-Fi pages, online pages):" }, _cmbScreens);
 
         var lblScreensHint = new Label
         {
             Text = "Same choice as the Use for Crowd Screens button. The Big Screen changes straight away, the Wi-Fi "
                  + "pages within about 5 seconds, the online pages within a few seconds. \"Match the app\" follows "
                  + "the look the app is running now.",
-            Location = new Point(Inset, UiLayout.Below(_cmbScreens, UiLayout.HintGap)),
             AutoSize = true,
-            MaximumSize = new Size(PageWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        // --- Club logo ---
-        var grpLogo = new GroupBox
-        {
-            Text = "Club logo",
-            Location = new Point(Inset, UiLayout.Below(lblScreensHint, UiLayout.SectionGap)),
-            Width = PageWidth,
-            Font = body,
-        };
+        _textSize.Wear(lblScreensHint, () => AppTheme.SmallFont);
 
-        BuildLogoGroup(grpLogo);
+        var looks = new Section("Looks");
 
-        // --- Appearance, moved here from the Announcer Style tab ---
-        var grpAppearance = new GroupBox
-        {
-            Text = "Appearance",
-            Location = new Point(Inset, UiLayout.Below(grpLogo, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = body,
-        };
+        looks.Add(band);
+        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete), gapBelow: UiLayout.SectionGap);
+        looks.Add(screens, gapBelow: UiLayout.HintGap);
+        looks.Add(lblScreensHint, gapBelow: 0);
 
-        BuildAppearanceGroup(grpAppearance);
+        // --- Club logo, and Appearance ---
+        var logo = BuildLogoCard();
+        var appearance = BuildAppearanceCard();
 
-        _lblStatus.Location = new Point(Inset, UiLayout.Below(grpAppearance, UiLayout.RowGap));
         _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(PageWidth, 0);
         _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Font = body;
 
-        // Added in reading order, and tab order set to match it.
-        var ordered = new Control[]
-        {
-            lblIntro, lblListCaption, _list, _preview, _lblName, _lblDescription, _lblWarnings,
-            _btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete,
-            lblScreens, _cmbScreens, lblScreensHint, grpLogo, grpAppearance, _lblStatus,
-        };
+        var page = new PageStack();
 
-        for (var i = 0; i < ordered.Length; i++)
-        {
-            ordered[i].TabIndex = i;
-        }
+        page.Add(lblIntro);
+        page.Add(looks);
+        page.Add(logo);
+        page.Add(appearance, gapBelow: UiLayout.RowGap);
+        page.Add(_lblStatus, gapBelow: 0);
 
-        Controls.AddRange(ordered);
+        Controls.Add(page);
     }
 
-    /// <summary>The logo preview, Choose/Remove, and where the logo is shown.</summary>
-    private void BuildLogoGroup(GroupBox group)
+    /// <summary>The picker for the crowd screens' look: as wide as its longest choice, and never narrower than it was at the normal text size.</summary>
+    private void SizeScreensPicker()
     {
-        var body = AppTheme.BodyFont;
-        var top = UiLayout.InsideGroup(group);
+        var width = Math.Max(UiLayout.AtTextSize(ScreensPickerWidth), Pieces.PickerWidth(_cmbScreens, ref _screensWidth));
 
-        _logoPreview.Location = new Point(Inset, top);
-        _logoPreview.Size = new Size(96, 96);
+        // Only when it changed: a new width lays the row out again.
+        if (_cmbScreens.Width != width)
+        {
+            _cmbScreens.Width = width;
+        }
+    }
+
+    /// <summary>
+    /// The looks list's width: what its widest row needs - the strip of
+    /// colours, the longest name, and both the App and Screens markers
+    /// beside it, the way List_DrawItem lays a row out - with the list's
+    /// scrollbar. Never under 300px at the normal text size, at the size in
+    /// use, and never over half the card, so a club's long-named look ends
+    /// in "..." rather than taking the preview's room.
+    ///
+    /// It was 300px whatever the rows said, and the look in use - the one
+    /// with both markers - was "Daylig..." at the normal text size (layout
+    /// pictures, 29 Sep).
+    /// </summary>
+    private int ListColumnWidth(int band)
+    {
+        var chip = Math.Max(8, ListItemHeight() - 16);
+        var strip = Math.Max(8, chip * 3 / 4) * 5;
+
+        static int Marker(string text) =>
+            TextRenderer.MeasureText(text, AppTheme.MicroFont, Size.Empty, TextFormatFlags.NoPadding).Width + 12 + 4;
+
+        var name = Looks.All
+            .Select(look => TextRenderer.MeasureText(look.Name, AppTheme.BodyFont, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        // In from the row's edge, the strip, the gap after it, the name,
+        // both markers and the room kept at the row's end - then the bar.
+        var needed = 10 + strip + 10 + name + Marker("App") + Marker("Screens") + 8
+            + SystemInformation.VerticalScrollBarWidth + 4;
+
+        var least = UiLayout.AtTextSize(ListWidth);
+        var most = Math.Max(least, band / 2);
+
+        return Math.Clamp(needed, least, most);
+    }
+
+    /// <summary>A row of the looks list: its name, or a caption, and the strip of colours, at the text size in use.</summary>
+    private static int ListItemHeight() =>
+        Math.Min(255, Math.Max(AppTheme.BodyFont.Height, AppTheme.MicroFont.Height + 8) + 14);
+
+    /// <summary>
+    /// The logo on the left, the size it was at the normal text size at the
+    /// size in use; beside it Choose and Remove, where the logo is shown,
+    /// and a note on the online pages.
+    /// </summary>
+    private Section BuildLogoCard()
+    {
         _logoPreview.Paint += PaintLogo;
         _logoPreview.AccessibleName = "Club logo preview";
         _logoPreview.AccessibleRole = AccessibleRole.Graphic;
         AppTheme.EnableDoubleBuffering(_logoPreview);
 
-        var left = _logoPreview.Right + 16;
-        var right = group.Width - Inset;
+        // Square - the column gives it its width, and this its height.
+        _textSize.Keep(() =>
+        {
+            var side = UiLayout.AtTextSize(LogoSide);
+
+            if (_logoPreview.Height != side)
+            {
+                _logoPreview.Height = side;
+            }
+        });
 
         _btnChooseLogo.Text = "Choose Logo...";
-        _btnChooseLogo.Font = body;
         _btnChooseLogo.Click += (_, _) => ChooseLogo();
 
         _btnRemoveLogo.Text = "Remove Logo";
-        _btnRemoveLogo.Font = body;
         _btnRemoveLogo.Click += (_, _) => RemoveLogo();
-
-        var buttonsBottom = UiLayout.FlowButtons(left, top, right, _btnChooseLogo, _btnRemoveLogo);
 
         _chkLogoInApp.Text = "Show the logo in the app's top-left corner";
         _chkLogoInApp.AutoSize = true;
-        _chkLogoInApp.Font = body;
-        _chkLogoInApp.Location = new Point(left, buttonsBottom + UiLayout.RowGap);
         _chkLogoInApp.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -352,8 +428,6 @@ public sealed class LooksControl : UserControl
 
         _chkLogoOnScreens.Text = "Show the logo on the Big Screen and Wi-Fi pages";
         _chkLogoOnScreens.AutoSize = true;
-        _chkLogoOnScreens.Font = body;
-        _chkLogoOnScreens.Location = new Point(left, UiLayout.Below(_chkLogoInApp, UiLayout.HintGap + 2));
         _chkLogoOnScreens.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -370,31 +444,37 @@ public sealed class LooksControl : UserControl
         {
             Text = "Online pages always show the logo, beside the club's name, and use it as the icon when somebody "
                  + "adds them to a phone's home screen. A square logo on a transparent background looks best.",
-            Location = new Point(left, UiLayout.Below(_chkLogoOnScreens, UiLayout.HintGap)),
             AutoSize = true,
-            MaximumSize = new Size(right - left, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        group.Controls.AddRange(new Control[]
-        {
-            _logoPreview, _btnChooseLogo, _btnRemoveLogo, _chkLogoInApp, _chkLogoOnScreens, lblNote,
-        });
+        _textSize.Wear(lblNote, () => AppTheme.SmallFont);
 
-        group.Height = Math.Max(_logoPreview.Bottom, UiLayout.Below(lblNote, 0)) + Inset;
+        var band = new Beside(() => UiLayout.AtTextSize(LogoSide))
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        band.Add(new ButtonBar().With(_btnChooseLogo, _btnRemoveLogo));
+        band.Add(_chkLogoInApp, stretch: false, gapBelow: UiLayout.HintGap);
+        band.Add(_chkLogoOnScreens, stretch: false, gapBelow: UiLayout.HintGap);
+        band.Add(lblNote, gapBelow: 0);
+        band.AddSide(_logoPreview, gapBelow: 0);
+
+        var card = new Section("Club logo");
+
+        card.Add(band, gapBelow: 0);
+
+        return card;
     }
 
     /// <summary>The header animation and 24-hour time options - the same settings and callbacks the Announcer Style tab used to hold.</summary>
-    private void BuildAppearanceGroup(GroupBox group)
+    private Section BuildAppearanceCard()
     {
-        var body = AppTheme.BodyFont;
-        var top = UiLayout.InsideGroup(group);
-
         _chkAnimate.Text = "Animate the Synthwave sidebar header (scrolling grid, twinkling stars)";
         _chkAnimate.AutoSize = true;
-        _chkAnimate.Font = body;
-        _chkAnimate.Location = new Point(Inset, top);
         _chkAnimate.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -411,17 +491,14 @@ public sealed class LooksControl : UserControl
         {
             Text = "Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off "
                  + "for a still image if you'd rather avoid the motion.",
-            Location = new Point(Inset + UiLayout.Indent, UiLayout.Below(_chkAnimate, 2)),
             AutoSize = true,
-            MaximumSize = new Size(group.Width - Inset * 2 - UiLayout.Indent, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
+
+        _textSize.Wear(lblAnimateHint, () => AppTheme.SmallFont);
 
         _chk24Hour.Text = "Use 24-hour (military) time";
         _chk24Hour.AutoSize = true;
-        _chk24Hour.Font = body;
-        _chk24Hour.Location = new Point(Inset, UiLayout.Below(lblAnimateHint, UiLayout.RowGap));
         _chk24Hour.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -436,8 +513,13 @@ public sealed class LooksControl : UserControl
             _lblStatus.Text = "Time format changed. Lists and pickers already open will update as they refresh.";
         };
 
-        group.Controls.AddRange(new Control[] { _chkAnimate, lblAnimateHint, _chk24Hour });
-        group.Height = UiLayout.Below(_chk24Hour, Inset);
+        var card = new Section("Appearance");
+
+        card.Add(_chkAnimate, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblAnimateHint);
+        card.Add(_chk24Hour, stretch: false, gapBelow: 0);
+
+        return card;
     }
 
     // ------------------------------------------------------------------
@@ -518,9 +600,9 @@ public sealed class LooksControl : UserControl
 
         try
         {
-            // Measured every fill rather than once, so a text-size change
-            // is picked up the next time the tab is shown.
-            _list.ItemHeight = Math.Min(255, Math.Max(AppTheme.BodyFont.Height, AppTheme.MicroFont.Height + 8) + 14);
+            // Measured every fill too, as well as when the text size changes
+            // (BuildLayout).
+            _list.ItemHeight = ListItemHeight();
             _list.Items.Clear();
 
             foreach (var look in Looks.BuiltIn)
@@ -549,6 +631,9 @@ public sealed class LooksControl : UserControl
             _list.EndUpdate();
             _adjustingSelection = false;
         }
+
+        // A look made or deleted can change the longest name - see ListColumnWidth.
+        _looksBand?.PerformLayout();
     }
 
     private int IndexOfKey(string? key)
@@ -597,6 +682,10 @@ public sealed class LooksControl : UserControl
         {
             _cmbScreens.EndUpdate();
         }
+
+        // The longest choice may have come or gone: measured again.
+        _screensWidth = null;
+        SizeScreensPicker();
     }
 
     private Look? SelectedLook() => (_list.SelectedItem as LookItem)?.Look;

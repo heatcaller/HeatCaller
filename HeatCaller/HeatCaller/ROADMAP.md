@@ -159,8 +159,8 @@ day: the layout overhaul is finished before the beta rather than after it
    then the drawn controls, then `PerMonitorV2`. Race Control, Race Day,
    Connection, Driver Profiles, Classes, Championship, Rentals, Handicaps,
    Batteries, Track Layouts, Race History, Race Analytics (all six tabs),
-   Achievements and Garage are done. Left: Practice, Ghost Cars, Demo
-   Mode, Venues, Themes, Sponsors, Local Screens, Club Website, Voice (four
+   Achievements, Garage, Practice, Ghost Cars, Demo Mode, Venues and Themes
+   are done. Left: Sponsors, Local Screens, Club Website, Voice (four
    tabs), Sounds (six tabs) and Backup & Restore.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
@@ -676,7 +676,40 @@ from. Ranked by what decides whether a club switches, and stays.
    header, which the screen never does - and falls back to plain capitals
    when the spaced ones don't fit, as the grids' headers do; its
    `LeastWidth` is now the one measure `FitListColumns` and the roster hold
-   columns to. Next: Practice, then the rest of the sidebar in its order.
+   columns to.
+
+   **Practice, Ghost Cars, Demo Mode, Venues and Themes converted (29
+   Sep).** Practice: the buttons and switches over Setup and Ghost cars side
+   by side (an AutoSize `Beside` inside another), the clock and Open Big
+   Screen down the right beside all of it, and This session filling the
+   rest - the table's columns now fill it (`AutoSizeColumnsMode` was never
+   set, so they sat at 100px each). `Pieces.KeepHeadingsWhole` now keeps
+   the built weights per column rather than per grid, so a grid whose
+   columns are rebuilt (Practice's, from Choose Columns) is given it again
+   after each rebuild without the old columns' weights landing on the new.
+   Demo Mode: Settings and the log down the left, Racers beside them with
+   its driver list taking the height; the log's monospaced face follows the
+   text size. Venues: the list's card down the left (`SideOnLeft`) beside
+   the settings' two grids; `SetEditEnabled` names its fields now they are
+   no longer one group box's children. Themes: a `PageStack` of cards, the
+   looks list beside the preview; the preview and the logo scale with the
+   text size; `LayoutDoctor.LeaveAlone` gone (converted pages are skipped by
+   name). The layout test then caught Demo Mode at 150% and 200%: its
+   drop-downs were centred on rows made for the height they were built at
+   (28px) and then drawn 36/45px tall, over the hint under them. A table
+   lays out a part that does not size itself by the size it was last
+   given, and a drop-down's own window settles its height without going
+   through that - so `Pieces.KeepHeightTold` gives a drop-down in a
+   FieldGrid, FieldRow or Inline its height again whenever it changes (a
+   nudge down and back, with the height; never the width). Everywhere else
+   the row gap had hidden it. At 200% the settings and the racers did not
+   fit side by side either: shorter captions (Staging (sec):, Countdown
+   (sec):) and the picker's intended width in the sum. From the pictures:
+   the hook also covers one-line text boxes and number boxes (Setup's and
+   Venues' Name: sat at the top of a row made for its old border, its
+   outline's top cut off); Practice pairs each length box with its unit;
+   Themes' list is as wide as its widest row with both markers. Next:
+   Sponsors, then the rest of the sidebar in its order.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.

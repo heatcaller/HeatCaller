@@ -929,8 +929,18 @@ internal sealed class FieldGrid : TableLayoutPanel
     {
         var stretched = stretch || field is FlowLayoutPanel;
 
+        // A box the theme outlines has its ring drawn a pixel outside it,
+        // on this grid (InputOutline) - so a pixel is kept for it inside the
+        // grid. Without it the ring round a box in the first row lost its
+        // top line to the grid's edge, and a stretched box its right-hand
+        // one (layout pictures, 29 Sep: Setup's and Venues' Name:). A
+        // drop-down draws its own edge, inside itself.
+        var outlined = field is TextBoxBase or UpDownBase or ListBox;
+
         field.Anchor = stretched ? AnchorStyles.Left | AnchorStyles.Right : AnchorStyles.Left;
-        field.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+        field.Margin = new Padding(0, outlined ? 1 : 0, outlined && stretched ? 1 : 0, UiLayout.RowGap);
+
+        Pieces.KeepHeightTold(field);
     }
 
     /// <summary>
@@ -945,6 +955,8 @@ internal sealed class FieldGrid : TableLayoutPanel
     {
         control.Anchor = stretch ? AnchorStyles.Left | AnchorStyles.Right : AnchorStyles.Left;
         control.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+
+        Pieces.KeepHeightTold(control);
 
         RowCount++;
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -1431,6 +1443,9 @@ internal sealed class ButtonBar : FlowLayoutPanel
             button.FontChanged += ButtonChanged;
             Fit(button);
         }
+
+        // A drop-down or a box among the buttons (FieldGrid.Inline) - see Pieces.KeepHeightTold.
+        Pieces.KeepHeightTold(control);
     }
 
     protected override void OnControlRemoved(ControlEventArgs e)
@@ -1617,6 +1632,8 @@ internal sealed class FieldRow : Panel
         }
 
         field.Margin = Padding.Empty;
+
+        Pieces.KeepHeightTold(field);
 
         _pairs.Add((caption, field, width));
         Controls.Add(field);
@@ -2915,19 +2932,28 @@ internal static class Pieces
     /// needed: "CARRIED IN" cut short at the normal text size beside a
     /// driver column with room to spare, and every heading of the
     /// championship standings cut short at 150% (layout pictures, 29 Sep).
+    ///
+    /// A grid whose columns are built again - Practice's, from the columns
+    /// picked for it - is given this again after each rebuild, which keeps
+    /// the new columns' weights and headings the same way.
     /// </summary>
     internal static void KeepHeadingsWhole(DataGridView grid)
     {
-        // The weights the grid was built with, kept the first time - see
-        // KeepFillWeights.
-        if (!BuiltWeights.TryGetValue(grid, out _))
+        if (!Kept.TryGetValue(grid, out _))
         {
-            BuiltWeights.Add(grid, grid.Columns.Cast<DataGridViewColumn>().Select(column => column.FillWeight).ToArray());
+            Kept.Add(grid, new object());
             grid.SizeChanged += (_, _) => KeepFillWeights(grid);
         }
 
         foreach (DataGridViewColumn column in grid.Columns)
         {
+            // The weight the column was built with, kept the first time it
+            // is seen - see KeepFillWeights.
+            if (!BuiltWeights.TryGetValue(column, out _))
+            {
+                BuiltWeights.Add(column, new StrongBox<float>(column.FillWeight));
+            }
+
             var least = Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText));
 
             if (column.MinimumWidth != least)
@@ -2939,8 +2965,15 @@ internal static class Pieces
         KeepFillWeights(grid);
     }
 
-    /// <summary>The fill weights each grid given KeepHeadingsWhole was built with.</summary>
-    private static readonly ConditionalWeakTable<DataGridView, float[]> BuiltWeights = new();
+    /// <summary>The grids given KeepHeadingsWhole, each watched for a new size once.</summary>
+    private static readonly ConditionalWeakTable<DataGridView, object> Kept = new();
+
+    /// <summary>
+    /// The fill weight each column of those grids was built with. Kept per
+    /// column rather than per grid, so a grid whose columns are built again
+    /// never has the old ones' weights put on the new.
+    /// </summary>
+    private static readonly ConditionalWeakTable<DataGridViewColumn, StrongBox<float>> BuiltWeights = new();
 
     /// <summary>
     /// Puts a grid's fill weights back to the ones it was built with.
@@ -2951,21 +2984,16 @@ internal static class Pieces
     /// column on Handicaps and the asset tag on Rentals took half the list
     /// at every size after, the others squeezed up beside them (layout
     /// pictures, 29 Sep). So the weights are put back after the minimums
-    /// are set and whenever the grid is resized. A grid whose columns have
-    /// changed since is left alone.
+    /// are set and whenever the grid is resized. A column added since the
+    /// grid was last given KeepHeadingsWhole is left alone until it is.
     /// </summary>
     private static void KeepFillWeights(DataGridView grid)
     {
-        if (!BuiltWeights.TryGetValue(grid, out var weights) || weights.Length != grid.Columns.Count)
+        foreach (DataGridViewColumn column in grid.Columns)
         {
-            return;
-        }
-
-        for (var i = 0; i < weights.Length; i++)
-        {
-            if (grid.Columns[i].FillWeight != weights[i])
+            if (BuiltWeights.TryGetValue(column, out var weight) && column.FillWeight != weight.Value)
             {
-                grid.Columns[i].FillWeight = weights[i];
+                column.FillWeight = weight.Value;
             }
         }
     }
@@ -3147,6 +3175,66 @@ internal static class Pieces
         kept = (picker.Font, picker.Items.Count, width);
         return width;
     }
+
+    /// <summary>
+    /// Keeps the height the layouts go by for a drop-down, a one-line text
+    /// box or a number box in step with the height it really has.
+    ///
+    /// Their heights are their own to decide - a drop-down's from its font
+    /// and, once the theme draws it, its row height; a box's from its font
+    /// and its border, which the theme takes off (InputOutline) - and they
+    /// settle them when their window is made, their font changes or their
+    /// border goes. That does not go through the size the layouts were
+    /// given: a table measures a part that does not size itself by the
+    /// size it was last given, and nothing told it again. So a drop-down
+    /// built at one height and drawn at another was centred on a row made
+    /// for the first, and ran over the hint under it by the difference -
+    /// Demo Mode's two pickers at 150% and 200% (layout test, 29 Sep); and a
+    /// name box sat at the top of a row made for it with its border, beside
+    /// a caption centred lower down, the top of its outline cut off by the
+    /// grid's edge (Setup's and Venues' Name:, layout pictures, 29 Sep).
+    ///
+    /// So when its height changes, it is given that height, and the layout
+    /// it is in lays it out at that. With a nudge down a pixel and back,
+    /// the height passed with each: given the bounds it already has, a
+    /// control does nothing at all. Never its width - a width passed here
+    /// would become the one the layouts go by, and one a table had cut to a
+    /// cell (a page not yet at its size) would stay cut. Once per drop-down,
+    /// however many pieces it passes through.
+    /// </summary>
+    internal static void KeepHeightTold(Control field)
+    {
+        if (field is not (ComboBox or UpDownBase or TextBoxBase) || HeightsTold.TryGetValue(field, out _))
+        {
+            return;
+        }
+
+        var told = new StrongBox<int>(field.Height);
+        HeightsTold.Add(field, told);
+
+        field.SizeChanged += (_, _) =>
+        {
+            // Anything it is told below comes back here with the height it
+            // was just told, and stops. A box of several lines is given its
+            // height by its page, which the layouts already go by.
+            if (field.IsDisposed || field.Height == told.Value || field is TextBoxBase { Multiline: true })
+            {
+                return;
+            }
+
+            told.Value = field.Height;
+
+            // A move raises no SizeChanged; the second is nothing when the
+            // layout has already put it back.
+            var top = field.Top;
+
+            field.SetBounds(0, top + 1, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
+            field.SetBounds(0, top, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
+        };
+    }
+
+    /// <summary>The height each field given KeepHeightTold was last given, so its own changes are told apart from the window's.</summary>
+    private static readonly ConditionalWeakTable<Control, StrongBox<int>> HeightsTold = new();
 
     /// <summary>
     /// Whether a part sizes itself - is asked how big it wants to be -

@@ -2,9 +2,6 @@ namespace HeatCaller;
 
 /// <summary>
 /// Virtual opponents for solo practice.
-///
-/// Laid out against UiLayout so it matches the pages reworked earlier
-/// rather than inventing another set of margins.
 /// </summary>
 public sealed class GhostControl : UserControl
 {
@@ -18,6 +15,12 @@ public sealed class GhostControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The fewest ghosts the list shows under its headings before the page scrolls instead.</summary>
+    private const int GridLeastRows = 3;
+
     public GhostControl(GhostStore store, ProfileStore profiles, SessionHistoryStore history, UndoService undo)
     {
         _store = store;
@@ -26,41 +29,60 @@ public sealed class GhostControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        // Tall enough to contain the grid plus the anchored button row -
-        // a page shorter than its own content leaves the bottom-anchored
-        // controls with nowhere to sit.
-        Size = new Size(980, 520);
-        MinimumSize = new Size(900, 480);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize: the 900x480 floor was honoured
+        // over the size the page was given, and a small window lost the
+        // buttons off the bottom. A short window scrolls the page instead
+        // (FillPage), which also does away with the page's own scrolling.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshGrid();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro and the two switches along a line, then one card: the
+    /// ghosts taking the height that is left, their buttons, the hint about
+    /// Quick Rival and the status line. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels: the second switch at x=240 whatever
+    /// the first one's caption came to at the text size in use, the grid
+    /// 230px tall with the buttons anchored to the bottom of the page under
+    /// it, and a 900x480 floor the page kept however small its window.
+    /// </summary>
     private void BuildLayout()
     {
-        var y = UiLayout.PageTop;
-        var contentWidth = UiLayout.ContentWidth(980);
-
         var lblIntro = new Label
         {
             Text = "Race virtual opponents when you're on track alone. Ghosts run through the same timing pipeline "
                  + "as real cars, so they appear in the standings, get announced, and show on the big screen - "
                  + "but they never count toward track records.",
-            Location = new Point(UiLayout.PageLeft, y),
             AutoSize = true,
-            MaximumSize = new Size(contentWidth, 0),
             ForeColor = AppTheme.TextMuted,
         };
-        y += 48;
 
         _chkEnabled.Text = "Enable ghost cars";
-        _chkEnabled.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.Checked = _store.Current.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
         {
@@ -70,7 +92,6 @@ public sealed class GhostControl : UserControl
         };
 
         _chkAnnounce.Text = "Announce ghosts like real drivers";
-        _chkAnnounce.Location = new Point(240, UiLayout.LabelY(y));
         _chkAnnounce.AutoSize = true;
         _chkAnnounce.Checked = _store.Current.AnnounceGhosts;
         _chkAnnounce.CheckedChanged += (_, _) =>
@@ -78,23 +99,20 @@ public sealed class GhostControl : UserControl
             _store.Current.AnnounceGhosts = _chkAnnounce.Checked;
             _store.Save();
         };
-        y = UiLayout.NextRow(y);
 
-        // --- The garage -----------------------------------------------------
+        // Side by side, and one under the other when the line is too narrow
+        // for both (FieldRow).
+        var switches = new FieldRow();
 
-        var lblGhosts = new Label { Text = "YOUR GHOSTS" };
-        y = UiLayout.SectionHeading(UiLayout.SectionAfter(y - UiLayout.RowGap), lblGhosts);
+        switches.Add(null, _chkEnabled);
+        switches.Add(null, _chkAnnounce);
 
-        _grid.Location = new Point(UiLayout.PageLeft, y);
-        _grid.Size = new Size(contentWidth, 230);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring made the grid
-        // stretch downward on a taller window and swallow the buttons
-        // below it. The leaderboard on Race Control hit this exact bug
-        // and carries the same note.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        // --- The garage ---
+
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.RowHeadersVisible = false;
+
         // Multi-select: toggling or deleting several ghosts at once is the
         // normal case when you keep a few and swap between them.
         _grid.MultiSelect = true;
@@ -109,59 +127,53 @@ public sealed class GhostControl : UserControl
             new DataGridViewTextBoxColumn { Name = "consistency", HeaderText = "Consistency", FillWeight = 60 }
         );
         _grid.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { EditGhost(Selected()); } };
-        y += 230 + UiLayout.RowGap;
 
-        var btnAdd = new Button { Text = "Add Ghost...", Width = UiLayout.ButtonWidth, Height = UiLayout.ButtonHeight };
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var btnAdd = new Button { Text = "Add Ghost..." };
         btnAdd.Click += (_, _) => EditGhost(null);
 
-        var btnEdit = new Button { Text = "Edit...", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnEdit = new Button { Text = "Edit..." };
         btnEdit.Click += (_, _) => EditGhost(Selected());
 
-        var btnToggle = new Button { Text = "On / Off", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnToggle = new Button { Text = "On / Off" };
         btnToggle.Click += (_, _) => ToggleSelected();
 
-        var btnDelete = new Button { Text = "Delete", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteSelected();
 
-        var btnQuickRival = new Button { Text = "Quick Rival", Width = 110, Height = UiLayout.ButtonHeight };
+        var btnQuickRival = new Button { Text = "Quick Rival" };
         btnQuickRival.Click += (_, _) => AddQuickRival();
-
-        y = UiLayout.Row(y, btnAdd, btnEdit, btnToggle, btnDelete, btnQuickRival);
-
-        // Anchored to the BOTTOM. The grid grows with the page, and these
-        // were left at a fixed y with the default top anchor - so the grid
-        // expanded straight over them and they vanished off-screen.
-        foreach (var button in new[] { btnAdd, btnEdit, btnToggle, btnDelete, btnQuickRival })
-        {
-            button.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-        }
 
         var lblQuickHint = new Label
         {
             Text = "Quick Rival adds a ghost set to 98% of your own best lap - something you can't quite beat yet, "
                  + "which is the point.",
-            Location = new Point(UiLayout.PageLeft, y),
             AutoSize = true,
-            MaximumSize = new Size(contentWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
         };
-        y += UiLayout.HintHeight + UiLayout.RowGap;
 
-        _lblStatus.Location = new Point(UiLayout.PageLeft, y + UiLayout.RowGap);
+        _textSize.Wear(lblQuickHint, () => AppTheme.SmallFont);
+
+        // What the list comes to.
         _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(contentWidth, 0);
         _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, _chkEnabled, _chkAnnounce,
-            lblGhosts, _grid,
-            btnAdd, btnEdit, btnToggle, btnDelete, btnQuickRival,
-            lblQuickHint, _lblStatus,
-        });
+        var ghosts = new Section("Your ghosts");
+
+        ghosts.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
+        ghosts.Add(new ButtonBar().With(btnAdd, btnEdit, btnToggle, btnDelete, btnQuickRival), gapBelow: UiLayout.HintGap);
+        ghosts.Add(lblQuickHint);
+        ghosts.Add(_lblStatus, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(switches);
+        page.AddFill(ghosts, ghosts.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
 
         UpdateEnabledState();
     }

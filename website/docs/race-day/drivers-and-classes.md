@@ -325,16 +325,16 @@ Under **Pace by pack**, pick a **Driver:**. The comparison is per driver, becaus
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
 
-<!-- screenshot: Venues page with the venue list and Venue Settings panel -->
+<!-- screenshot: Venues page with the Venues card beside the Venue settings card -->
 
-Click **New Venue**, then fill in **Venue Settings**. Changes save as you go (the status line shows **Saved.**).
+Click **New Venue**, then fill in **Venue settings**, beside the list. Changes save as you go (the status line shows **Saved.**).
 
 | Setting | What it does |
 |---|---|
 | **Name:** | The venue's name. |
 | **Connect via:** | Which decoder this venue uses. See [Decoders](../timing/decoders.md). |
 | **Preferred track:** | A saved track layout to select, or **(none)**. |
-| **Preferred announcer style:** | A saved announcer style to apply, or **(none)**. |
+| **Preferred soundscape:** | A soundscape to apply, or **(none)**. |
 | **Lap limit (0 = none):** | Race default for this venue. |
 | **Time limit, min (0 = none):** | Race default for this venue. |
 | **Minimum lap time (ms):** | Race default for this venue. |
@@ -344,7 +344,7 @@ To use a venue, select it and click **Apply This Venue**, then confirm. HeatCall
 
 - sets **Connect via:** on the **Connection** page (a venue saved for Next Level Timing, which was retired in 0.50.0, gets the EasyLap decoder, and the console says so);
 - selects the preferred track layout, if it still exists;
-- applies the preferred announcer style, if it still exists, the same way **Apply Selected Style** does: this PC's playback volume, wireless-speaker setting, output format and **Speak With** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
+- applies the preferred soundscape, if it still exists, the same way **Apply** on **Sounds → Soundscapes** does: this PC's playback volume, wireless-speaker setting, output format and **Speak With** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
 - writes the race defaults into the **app default** race format.
 
 Because the race defaults go into the app default, a class or round with its own format still uses its own settings.
