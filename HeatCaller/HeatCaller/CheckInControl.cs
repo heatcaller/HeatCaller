@@ -28,21 +28,18 @@ public sealed class CheckInControl : UserControl
     private readonly RaceEventStore? _events;
 
     /// <summary>The "no race day is open" banner, hidden whenever one is.</summary>
-    private Panel? _pnlNoDay;
+    private Section? _pnlNoDay;
 
     /// <summary>
     /// Whether the banner is MEANT to be showing.
     ///
     /// Held separately because Control.Visible reports effective
     /// visibility: on a page that is not the one being shown it answers
-    /// false however the banner was set, and both the decision to show it
-    /// and the layout underneath it were reading that. Starts false, which
-    /// is how BuildNoDayBanner builds the panel.
+    /// false however the banner was set, and deciding whether to show it
+    /// from that got the answer wrong. Starts false, which is how
+    /// BuildNoDayBanner builds the card.
     /// </summary>
     private bool _noDayBannerShown;
-
-    /// <summary>The "Class:" caption, held so it moves with its combo when the banner appears.</summary>
-    private Label? _lblFilter;
 
     /// <summary>Raised when the desk asks, from the banner, for a race day to start. The host owns making one.</summary>
     public event Action? StartRaceDayRequested;
@@ -93,7 +90,7 @@ public sealed class CheckInControl : UserControl
     /// </summary>
     private readonly CheckBox _chkNeedsTech = new();
 
-    /// <summary>Opens the scrutineer's full record list. Hidden when there is no tech store.</summary>
+    /// <summary>Opens the scrutineer's full record list. Not on the page when there is no tech store.</summary>
     private readonly Button _btnTechLog = new() { Text = "Scrutineering Log..." };
 
     /// <summary>The Online Sign-ups button, held so its caption can say how many are waiting.</summary>
@@ -104,23 +101,45 @@ public sealed class CheckInControl : UserControl
     private readonly DataGridView _grid = new();
 
     /// <summary>
-    /// The row under the grid, held so the stretch pass can flow it against
-    /// the real width and pin it to the bottom edge.
-    ///
-    /// Only the buttons that actually exist: a club with no tech store gets
-    /// neither Inspect nor the log, and a hidden button left in here would be
-    /// flowed like any other and leave a hole in the row. Membership is decided
-    /// at build time rather than from Visible, because Control.Visible reports
-    /// EFFECTIVE visibility - false for everything on a page that has not been
-    /// shown yet, which is exactly when this is built.
+    /// The count, and the rule the heats are built by - see UpdateSummary.
+    /// As tall as its longest form at the width it has, so the list under
+    /// it does not hop as drivers are ticked in.
     /// </summary>
-    private Button[] _actionButtons = Array.Empty<Button>();
+    private readonly SteadyLabel _lblSummary = new()
+    {
+        Wordings = new[]
+        {
+            LongestCount + RuleClubNightCheckedIn,
+            LongestCount + RuleCheckedIn,
+            LongestCount + RuleClubNightEveryone,
+            LongestCount + RuleEveryone,
+        },
+    };
 
-    /// <summary>The scan panel, held so the stretch pass can pin it to the right edge.</summary>
-    private GroupBox? _grpScan;
-    private readonly Label _lblSummary = new();
+    // What the summary says after the count - which way the day builds its
+    // heats. See UpdateSummary.
+    private const string RuleClubNightCheckedIn = "   —   tonight's races are built from checked-in drivers only";
+    private const string RuleCheckedIn = "   —   heats are built from checked-in drivers only";
+    private const string RuleClubNightEveryone = "   —   everyone in a racing class is in tonight's races, checked in or not";
+    private const string RuleEveryone = "   —   everyone in a racing class is in the heats, checked in or not";
+
+    /// <summary>The count at its longest, for the summary's height - see _lblSummary.</summary>
+    private const string LongestCount = "999 of 999 checked in (999 total checked in across all classes)";
+
     private readonly TextBox _txtScan = new();
     private readonly Label _lblScanStatus = new();
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The class filter, its caption and the tech filter - held so a rebuilt class list can re-measure it.</summary>
+    private FieldRow? _filterRow;
+
+    /// <summary>The class filter's width, measured from its choices - see Pieces.PickerWidth. Forgotten when the list is rebuilt.</summary>
+    private (Font Font, int Count, int Width)? _classPickerWidth;
+
+    /// <summary>The width the scan card was designed at, at the normal text size - see ScanColumnWidth.</summary>
+    private const int ScanWidth = 300;
 
     private bool _suppressGridEvents;
 
@@ -137,71 +156,74 @@ public sealed class CheckInControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(910, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than inherited: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise take.
+        // No MinimumSize: the page scrolls when the window is too short for
+        // it (FillPage), rather than running off the bottom of its tab.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// A new text size, reaching this page through its tab's bold face -
+    /// the only way it does, since the page wears a face of its own. See
+    /// TextSize.
+    /// </summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Builds the page on the layout pieces (LayoutPieces.cs): the intro,
+    /// the no-day banner when there is no race day, and then the roster
+    /// card - its filter row, the grid taking the height that is left, the
+    /// buttons under it - beside the scan card. Nothing here is placed by
+    /// hand.
+    ///
+    /// It used to be. Every row flowed from the one above it by measuring,
+    /// the grid, the scan panel and the button row were pinned to the edges
+    /// on every resize, and the whole filter row was moved down by hand
+    /// when the banner appeared - three authorities for one page, and a
+    /// 910x560 floor under it that ran the buttons off the bottom of a
+    /// short window. A short window now scrolls the page instead, and the
+    /// grid never goes below its headings and three drivers.
+    /// </summary>
     private void BuildLayout()
     {
+        // "Race Program" was a page name that no longer exists - the
+        // programme is the lower half of Today, and the setting that limits
+        // the build to checked-in drivers is on The Day.
+        //
+        // "what it builds", not "heat building": this page is the same page
+        // on a club night, where the programme is races rather than heats,
+        // and this text is written once for both.
         var lblIntro = new Label
         {
-            // "Race Program" was a page name that no longer exists - the
-            // programme is the lower half of Today, and the setting that
-            // limits the build to checked-in drivers is on The Day.
-            //
-            // "what it builds", not "heat building": this page is the same
-            // page on a club night, where the programme is races rather
-            // than heats, and this text is written once for both.
             Text = "Mark who's actually here today. The Setup tab can optionally build tonight's program from checked-in drivers only, " +
                    "so a class roster that includes everyone who's ever raced doesn't get used wholesale on a day when half of " +
                    "them are missing. Scrutineering is here too: the Tech column is the gate, the filter beside the class list " +
                    "shows who is still to be looked at, and Scrutineering Log holds the full record.",
             AutoSize = true,
-            MaximumSize = new Size(880, 0),
             ForeColor = AppTheme.TextMuted,
-
-            // Set here, not inherited.
-            //
-            // Everything below is positioned by measuring the control above
-            // it, and a control measures itself in the font it currently
-            // has. Until it is added to this page it does not have this
-            // page's font - it has the WinForms default, which is smaller.
-            // So every measurement taken in this method would be of a
-            // control that is about to grow, which is the same class of
-            // mistake as the hardcoded coordinates being replaced.
-            Font = AppTheme.BodyFont,
         };
 
-        // Every row on this page now flows from the one above it.
-        //
-        // The coordinates that used to be here were picked against a
-        // smaller font, and the intro is the one that gave way first: it
-        // was allowed two lines and takes three, so its last line came down
-        // across the class filter and the summary beside it. The scan panel
-        // had the same fault a second time over, with its instructions
-        // sitting on top of the scan box they describe.
-        var y = UiLayout.PageTop;
-
-        lblIntro.Location = new Point(UiLayout.PageLeft, y);
-
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
         _pnlNoDay = BuildNoDayBanner();
-        _pnlNoDay.Location = new Point(UiLayout.PageLeft, y);
 
-        // The rows below start under the banner when it is showing and
-        // where it is when it is not, so the page does not leave a hole on
-        // the ordinary day when everything is set up.
-        y = UiLayout.Below(_pnlNoDay, UiLayout.RowGap);
+        // --- The filter row ---
+        var lblFilter = new Label { Text = "Class:" };
 
-        var lblFilter = new Label { Text = "Class:", AutoSize = true, Font = AppTheme.BodyFont };
-        _lblFilter = lblFilter;
-
-        _cmbClassFilter.Font = AppTheme.BodyFont;
-        _cmbClassFilter.Width = 220;
         _cmbClassFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbClassFilter.SelectedIndexChanged += (_, _) =>
         {
@@ -213,50 +235,29 @@ public sealed class CheckInControl : UserControl
 
         _chkNeedsTech.Text = "Only those not through tech";
         _chkNeedsTech.AutoSize = true;
-        _chkNeedsTech.Font = AppTheme.BodyFont;
-        _chkNeedsTech.Visible = _tech is not null;
         _chkNeedsTech.CheckedChanged += (_, _) => RefreshDriverList();
 
-        // Sized by the room left on the row rather than by its own text.
+        var filterRow = new FieldRow();
+
+        filterRow.Add(lblFilter, _cmbClassFilter, ClassFilterWidth);
+
+        // Only with a tech store to ask - see _chkNeedsTech.
+        if (_tech is not null)
+        {
+            filterRow.Add(null, _chkNeedsTech);
+        }
+
+        _filterRow = filterRow;
+
+        // On a line of its own under the filter, wrapping to the card.
         //
-        // It now carries the check-in RULE as well as the count, which is
-        // more than will fit on a narrow window - and an AutoSize label
-        // simply runs off the right-hand edge, where nothing reports it.
-        // Bounded here and re-bounded on every resize by LayoutStretch, with
-        // AutoEllipsis so the tail degrades to "..." instead of vanishing.
-        _lblSummary.AutoSize = false;
-        _lblSummary.AutoEllipsis = true;
-        _lblSummary.Font = AppTheme.BodyFont;
+        // It carries the check-in RULE as well as the count - more than fits
+        // beside the filter at almost any size - and it used to sit there
+        // anyway, bounded by what was left of the row and ended with "...":
+        // the rule is the half that was cut, and a rule cut off is not said.
         _lblSummary.ForeColor = AppTheme.TextMuted;
-        _lblSummary.Height = AppTheme.BodyFont.Height + 2;
 
-        lblFilter.Location = new Point(
-            UiLayout.PageLeft, UiLayout.CentreOn(lblFilter, y, _cmbClassFilter.Height));
-
-        _cmbClassFilter.Location = new Point(UiLayout.After(lblFilter), y);
-
-        _chkNeedsTech.Location = new Point(
-            UiLayout.After(_cmbClassFilter) + UiLayout.SectionGap,
-            UiLayout.CentreOn(_chkNeedsTech, y, _cmbClassFilter.Height));
-
-        // Centred on the font rather than on itself: the summary has no
-        // text yet at this point - RefreshAll fills it - so measuring the
-        // label would centre an empty box.
-        //
-        // Placed after whichever control is actually to its left, so a club
-        // with no tech store does not get a gap where the filter would be.
-        _lblSummary.Location = new Point(
-            (_chkNeedsTech.Visible ? UiLayout.After(_chkNeedsTech) : UiLayout.After(_cmbClassFilter)) + UiLayout.SectionGap,
-            y + Math.Max(0, (_cmbClassFilter.Height - AppTheme.BodyFont.Height) / 2));
-
-        y = UiLayout.Below(_cmbClassFilter, UiLayout.RowGap);
-
-        _grid.Location = new Point(UiLayout.PageLeft, y);
-
-        // A starting size only. The stretch pass below owns the real one,
-        // recomputed on every resize - see LayoutStretch.
-        _grid.Size = new Size(560, 400);
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        // --- The roster ---
         _grid.ReadOnly = false;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -306,10 +307,8 @@ public sealed class CheckInControl : UserControl
         // button that works on a single row the only one that did not.
         var btnInspect = new Button { Text = "Inspect Selected Car..." };
         btnInspect.Click += (_, _) => RequestInspection();
-        btnInspect.Visible = _tech is not null;
 
         _btnTechLog.Click += (_, _) => TechLogRequested?.Invoke();
-        _btnTechLog.Visible = _tech is not null;
         btnCheckOutAll.Click += (_, _) =>
         {
             if (AppDialog.Show(this, "Clear all check-ins? Do this at the start of a new event day.",
@@ -350,140 +349,110 @@ public sealed class CheckInControl : UserControl
 
         _btnSignups.Click += (_, _) => SignupsRequested?.Invoke();
 
-        // --- The row under the grid ---
-        //
-        // Not laid out here: LayoutStretch owns it, so there is one authority
-        // on this row rather than a build-time placement and a resize-time one
-        // disagreeing about it. All this does is give the sign-ups button its
-        // opening caption.
+        // Its opening caption. The bar it goes in sizes it to whatever it
+        // says, and again every time the count changes.
         SetSignupCount(0);
 
-        // --- QR scan panel ---
+        // Only the buttons that exist: a club with no tech store gets neither
+        // Inspect nor the log.
+        var actions = new ButtonBar().With(btnAddDriver, btnCheckInAll, btnCheckOutAll);
+
+        if (_tech is not null)
+        {
+            actions.With(btnInspect, _btnTechLog);
+        }
+
+        actions.With(_btnSignups);
+
+        var roster = new Section("Drivers");
+
+        roster.Add(filterRow);
+        roster.Add(_lblSummary);
+        roster.AddFill(_grid, LeastGridHeight);
+        roster.Add(actions, gapBelow: 0);
+
+        // --- The scan card ---
         //
-        // Beside the grid and on the same top line as it, with its height
-        // taken from what ends up inside rather than guessed at - see the
-        // end of this block.
-        var grpScan = new GroupBox
-        {
-            Text = "Scan to Check In",
-            Location = new Point(_grid.Right + UiLayout.SectionGap, y),
-            Width = 300,
+        // A card beside the roster, as tall as what is in it at the column's
+        // width: the help wraps to it, and the status line keeps two lines
+        // of its own so the buttons under it do not hop as drivers are
+        // scanned in.
+        var lblScanHelp = _textSize.Wear(
+            new Label
+            {
+                Text = "Click the box below, then scan a driver's QR check-in with any USB barcode scanner - they plug in and " +
+                       "type like a keyboard, so no extra setup is needed. The driver is checked in instantly.\r\n\r\n" +
+                       "Or let drivers sign themselves on: start the web server and put the poster below on the wall. " +
+                       "They find their own name and tap it, and it appears here.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
-            // For the same reason as the intro above - InsideGroup works
-            // off the group's own font to clear its caption.
-            Font = AppTheme.BodyFont,
-        };
-
-        const int scanInset = 12;
-        var scanWidth = grpScan.Width - scanInset * 2;
-
-        var lblScanHelp = new Label
-        {
-            Text = "Click the box below, then scan a driver's QR check-in with any USB barcode scanner - they plug in and " +
-                   "type like a keyboard, so no extra setup is needed. The driver is checked in instantly.\r\n\r\n" +
-                   "Or let drivers sign themselves on: start the web server and put the poster below on the wall. " +
-                   "They find their own name and tap it, and it appears here.",
-            AutoSize = true,
-            MaximumSize = new Size(scanWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        var scanY = UiLayout.InsideGroup(grpScan);
-
-        lblScanHelp.Location = new Point(scanInset, scanY);
-
-        scanY = UiLayout.Below(lblScanHelp, UiLayout.RowGap);
-
-        // Width and font first, then the position: a text box sizes its own
-        // height off its font, and placing it before that is set measures
-        // the wrong box.
-        _txtScan.Width = scanWidth;
-        _txtScan.Font = new Font(AppTheme.BodyFont.FontFamily, 11F);
+        // In the page's own face now. It was a fixed 11pt, which neither
+        // grew with the text size nor matched anything else on the page.
         _txtScan.PlaceholderText = "Waiting for scan...";
         _txtScan.KeyDown += TxtScan_KeyDown;
-        _txtScan.Location = new Point(scanInset, scanY);
 
-        scanY = UiLayout.Below(_txtScan, UiLayout.HintGap);
-
-        // Two lines reserved whether or not there is a message, so the
-        // button underneath does not hop as drivers are scanned in.
-        _lblScanStatus.AutoSize = false;
-        _lblScanStatus.Font = AppTheme.BoldFont;
+        _lblScanStatus.AutoSize = true;
         _lblScanStatus.Text = string.Empty;
-        _lblScanStatus.Location = new Point(scanInset, scanY);
-        _lblScanStatus.Size = new Size(scanWidth, AppTheme.BoldFont.Height * 2);
+        _textSize.Wear(_lblScanStatus, () => AppTheme.BoldFont);
+        _textSize.ReserveLines(_lblScanStatus, 2);
 
-        scanY = UiLayout.Below(_lblScanStatus, UiLayout.RowGap);
-
-        var btnBadges = new Button
-        {
-            Text = "Print QR Check-ins...",
-            Location = new Point(scanInset, scanY),
-            Font = AppTheme.BodyFont,
-        };
-
-        btnBadges.Size = new Size(UiLayout.WidthFor(btnBadges), UiLayout.ButtonHeight);
+        var btnBadges = new Button { Text = "Print QR Check-ins..." };
         btnBadges.Click += (_, _) => GenerateBadges();
 
-        scanY = UiLayout.Below(btnBadges, UiLayout.RowGap);
-
-        var btnPoster = new Button
-        {
-            Text = "Self Check-In Poster...",
-            Location = new Point(scanInset, scanY),
-            Font = AppTheme.BodyFont,
-        };
-
-        btnPoster.Size = new Size(UiLayout.WidthFor(btnPoster), UiLayout.ButtonHeight);
+        var btnPoster = new Button { Text = "Self Check-In Poster..." };
         btnPoster.Click += (_, _) => ShowSelfCheckInPoster();
 
-        // The group is as tall as its contents. 250 was a guess, and the
-        // Print button was falling out of the bottom of it.
-        grpScan.Height = UiLayout.Below(btnPoster, UiLayout.RowGap);
+        var scan = new Section("Scan to Check In");
 
-        grpScan.Controls.Add(lblScanHelp);
-        grpScan.Controls.Add(_txtScan);
-        grpScan.Controls.Add(_lblScanStatus);
-        grpScan.Controls.Add(btnBadges);
-        grpScan.Controls.Add(btnPoster);
+        scan.Add(lblScanHelp);
+        scan.Add(_txtScan, gapBelow: UiLayout.HintGap);
+        scan.Add(_lblScanStatus);
 
-        // Everything the stretch pass moves, captured now that it exists.
-        _grpScan = grpScan;
+        var scanButtons = scan.Add(new ButtonBar().With(btnBadges, btnPoster), gapBelow: 0);
 
-        _actionButtons = _tech is not null
-            ? new[] { btnAddDriver, btnCheckInAll, btnCheckOutAll, btnInspect, _btnTechLog, _btnSignups }
-            : new[] { btnAddDriver, btnCheckInAll, btnCheckOutAll, _btnSignups };
+        var body = new Beside(() => ScanColumnWidth(scanButtons));
 
-        Controls.Add(lblIntro);
-        Controls.Add(_pnlNoDay);
-        Controls.Add(lblFilter);
-        Controls.Add(_cmbClassFilter);
-        Controls.Add(_chkNeedsTech);
-        Controls.Add(_lblSummary);
-        Controls.Add(_grid);
-        Controls.Add(grpScan);
-        Controls.Add(btnAddDriver);
-        Controls.Add(btnCheckInAll);
-        Controls.Add(btnCheckOutAll);
-        Controls.Add(btnInspect);
-        Controls.Add(_btnTechLog);
-        Controls.Add(_btnSignups);
+        body.AddFill(roster, roster.LeastHeight);
+        body.AddSideCard(scan);
 
-        LayoutStretch();
+        // --- The page ---
+        var page = new FillPage();
 
-        // This page places the grid and every button on itself, on every
-        // resize - LayoutStretch is the authority, which the notes above
-        // say twice. The repair pass was never told, so it measured the
-        // grid at its STARTING 560x400 before the stretch had run and
-        // shoved the buttons clear of a size that was never real: "moved
-        // Inspect Selected Car 175px right", "moved Scan to Check In 185px
-        // right", every launch.
-        //
-        // Two things moving the same control is worse than neither doing
-        // it - the same reason Race History and Race Control keep it out.
-        LayoutDoctor.LeaveAlone(this);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+
+        // In the flow rather than floating over the page - a warning that
+        // covered the class filter would be its own bug - and taking no room
+        // at all while it is hidden.
+        page.Add(_pnlNoDay, gapBelow: UiLayout.RowGap);
+        page.AddFill(body, body.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
+
+    /// <summary>
+    /// The class filter: wide enough for the longest class name, and never
+    /// under the 220px it always had at the normal text size.
+    /// </summary>
+    private int ClassFilterWidth() =>
+        Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbClassFilter, ref _classPickerWidth, "(all classes)"));
+
+    /// <summary>The least height the roster's grid can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastGridHeight() =>
+        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height;
+
+    /// <summary>
+    /// The scan card's width: the 300px it was designed at, at the text size
+    /// in use - so its help wraps to a column about as many words wide
+    /// whatever the size, not to a sliver at 200% - and never too narrow for
+    /// the wider of its two buttons, whose captions the column cannot see.
+    /// </summary>
+    private static int ScanColumnWidth(ButtonBar buttons) =>
+        Math.Max(
+            UiLayout.AtTextSize(ScanWidth),
+            buttons.Controls.OfType<Button>().Select(button => button.Width).DefaultIfEmpty(0).Max() + Section.Inset.Horizontal);
 
     /// <summary>
     /// "No race day is open", and one press that opens one.
@@ -494,50 +463,38 @@ public sealed class CheckInControl : UserControl
     /// So the order of a first evening was: find Entries, tick everyone in, go
     /// one tab further, and read that none of it had been filed anywhere.
     /// </summary>
-    private Panel BuildNoDayBanner()
+    private Section BuildNoDayBanner()
     {
-        var panel = new Panel
-        {
-            Width = 880,
-            BackColor = AppTheme.Surface,
-            Visible = false,
-        };
-
-        var headline = new Label
-        {
-            Text = "No race day is open.",
-            AutoSize = true,
-            Font = AppTheme.HeadingFont,
-            ForeColor = AppTheme.Warning,
-        };
+        var headline = _textSize.Wear(
+            new Label
+            {
+                Text = "No race day is open.",
+                AutoSize = true,
+                ForeColor = AppTheme.Warning,
+            },
+            () => AppTheme.HeadingFont);
 
         var detail = new Label
         {
             Text = "Check-ins are filed against a race day, so ticks made now are not kept with tonight's racing "
                  + "and the heats cannot be built from them. Start one and this page starts counting.",
             AutoSize = true,
-            MaximumSize = new Size(620, 0),
-            Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextDark,
         };
 
         var start = new Button { Text = "Start a Race Day" };
         start.Click += (_, _) => StartRaceDayRequested?.Invoke();
 
-        panel.Controls.Add(headline);
-        panel.Controls.Add(detail);
-        panel.Controls.Add(start);
-
-        headline.Location = new Point(UiLayout.PageLeft, UiLayout.RowGap);
-        detail.Location = new Point(UiLayout.PageLeft, UiLayout.Below(headline, UiLayout.HintGap));
-
         AppTheme.StyleButton(start, AppTheme.ButtonKind.Primary);
-        start.Size = new Size(UiLayout.WidthFor(start), UiLayout.ButtonHeight);
-        start.Location = new Point(UiLayout.PageLeft, UiLayout.Below(detail, UiLayout.RowGap));
 
-        panel.Height = UiLayout.Below(start, UiLayout.RowGap);
+        // Hidden until RefreshNoDayBanner says otherwise - see _noDayBannerShown.
+        var banner = new Section { Visible = false };
 
-        return panel;
+        banner.Add(headline, gapBelow: UiLayout.HintGap);
+        banner.Add(detail);
+        banner.Add(new ButtonBar().With(start), gapBelow: 0);
+
+        return banner;
     }
 
     /// <summary>
@@ -570,51 +527,10 @@ public sealed class CheckInControl : UserControl
         }
 
         _noDayBannerShown = wanted;
+
+        // Everything under it moves with it: the banner is one of the page's
+        // parts, and a part hidden takes no room (FillPage).
         panel.Visible = wanted;
-
-        // Everything under it moves, because the banner is in the flow
-        // rather than floating over the page - a warning that covered the
-        // class filter would be its own bug.
-        ReflowUnderBanner();
-    }
-
-    /// <summary>
-    /// Puts the filter row, the summary and the grid back under the banner
-    /// - or back up where it was - after it has appeared or gone.
-    /// </summary>
-    private void ReflowUnderBanner()
-    {
-        if (_pnlNoDay is not { } panel || _cmbClassFilter.Parent is null)
-        {
-            return;
-        }
-
-        // The field, for the reason given in RefreshNoDayBanner: on a page
-        // that is not being shown, panel.Visible is false whatever it was
-        // set to, and this would lay the page out as if the banner were not
-        // there while it was.
-        var top = _noDayBannerShown
-            ? UiLayout.Below(panel, UiLayout.RowGap)
-            : panel.Top;
-
-        var shift = top - _cmbClassFilter.Top;
-
-        if (shift == 0)
-        {
-            return;
-        }
-
-        _cmbClassFilter.Top += shift;
-        _chkNeedsTech.Top += shift;
-        _lblSummary.Top += shift;
-        _grid.Top += shift;
-
-        if (_lblFilter is { } caption)
-        {
-            caption.Top += shift;
-        }
-
-        LayoutStretch();
     }
 
     /// <summary>
@@ -637,68 +553,9 @@ public sealed class CheckInControl : UserControl
     /// <summary>Shows how many online sign-ups are waiting for the desk on the button that opens them.</summary>
     public void SetSignupCount(int waiting)
     {
+        // The bar it is in re-measures it: the caption gets longer or
+        // shorter with the count, and the button with it.
         _btnSignups.Text = waiting > 0 ? $"Online Sign-ups ({Math.Min(waiting, 99)})" : "Online Sign-ups";
-
-        // The caption just got longer or shorter, and the row is measured from
-        // its captions. It used to be sized once, with room for a two-digit
-        // count reserved up front; now that the row flows, the honest answer is
-        // to flow it again.
-        LayoutStretch();
-    }
-
-    /// <summary>
-    /// The page against its real size: the scan panel pinned to the right
-    /// edge, the action row pinned to the bottom, and the roster grid given
-    /// everything in between. On the wide monitor this app now starts
-    /// maximised on, the fixed 560x400 grid left half the page as empty
-    /// background - the roster IS this page, so the roster gets the room.
-    /// </summary>
-    private void LayoutStretch()
-    {
-        if (_grpScan is not { } scan || _actionButtons.Length == 0)
-        {
-            return;
-        }
-
-        // Clamped to the minimum size, so a page measured before it is
-        // docked lays out sanely rather than at its default 150px.
-        var width = Math.Max(MinimumSize.Width, ClientSize.Width);
-        var height = Math.Max(MinimumSize.Height, ClientSize.Height);
-
-        scan.Left = width - UiLayout.PageRight - scan.Width;
-
-        // Flowed against the real width, then the whole block dropped so its
-        // last row rests on the bottom margin - rather than placed at a
-        // guessed bottom, which either clips a second row or leaves a gap
-        // under a single one.
-        //
-        // Flowed rather than laid in one row, because it is five buttons now.
-        // Five fit across the page at the default text size and stop fitting a
-        // notch or two up, and a single-row layout gets that wrong silently,
-        // by running the last button off the right-hand edge where nothing
-        // reports it.
-        var flowBottom = UiLayout.FlowButtons(
-            UiLayout.PageLeft, 0, width - UiLayout.PageRight, _actionButtons);
-
-        var buttonsTop = height - UiLayout.PageTop - flowBottom;
-
-        foreach (var button in _actionButtons)
-        {
-            button.Top += buttonsTop;
-        }
-
-        _grid.Width = Math.Max(400, scan.Left - UiLayout.SectionGap - _grid.Left);
-        _grid.Height = Math.Max(200, buttonsTop - UiLayout.RowGap - _grid.Top);
-
-        // Whatever is left of the filter row. See where it is built: it is
-        // the only control on this page whose text can outgrow the window.
-        _lblSummary.Width = Math.Max(160, width - UiLayout.PageRight - _lblSummary.Left);
-    }
-
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        LayoutStretch();
     }
 
     /// <summary>
@@ -1009,6 +866,11 @@ public sealed class CheckInControl : UserControl
         }
         var idx = previous is not null ? _cmbClassFilter.Items.IndexOf(previous) : -1;
         _cmbClassFilter.SelectedIndex = idx >= 0 ? idx : 0;
+
+        // The longest class may have come or gone: measured again, and the
+        // row with it.
+        _classPickerWidth = null;
+        _filterRow?.PerformLayout();
     }
 
     private List<DriverProfile> CurrentlyShownProfiles()
@@ -1144,10 +1006,10 @@ public sealed class CheckInControl : UserControl
         var rule = _events?.Active switch
         {
             null or { IsLegacy: true } => string.Empty,
-            { CheckedInDriversOnly: true, IsClubNight: true } => "   —   tonight's races are built from checked-in drivers only",
-            { CheckedInDriversOnly: true } => "   —   heats are built from checked-in drivers only",
-            { IsClubNight: true } => "   —   everyone in a racing class is in tonight's races, checked in or not",
-            _ => "   —   everyone in a racing class is in the heats, checked in or not",
+            { CheckedInDriversOnly: true, IsClubNight: true } => RuleClubNightCheckedIn,
+            { CheckedInDriversOnly: true } => RuleCheckedIn,
+            { IsClubNight: true } => RuleClubNightEveryone,
+            _ => RuleEveryone,
         };
 
         _lblSummary.Text =

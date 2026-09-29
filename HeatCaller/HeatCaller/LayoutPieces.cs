@@ -30,12 +30,19 @@ namespace HeatCaller;
 //               the width left, wrapping when the line is too narrow.
 //   Beside      a column down the right-hand side of the page's main parts -
 //               Race Control's clock beside its flags and leaderboard.
+//   SplitBar    two rows of buttons on one line, one against each edge.
+//   SteadyLabel a label as tall as the longest thing it can say, so
+//               rewording it never moves what is under it.
+//   TextSize    what a page keeps in step with the text size: the controls
+//               that wear a face of their own, and anything sized from the
+//               fonts.
 //
 // The rules, so a page built from these stays built from them:
 //   - Nothing gets a Location. The piece places it.
 //   - Nothing gets a width from a literal unless it is a field sized for
-//     what goes IN it (a spinner for three digits). Captions, buttons and
-//     hints are measured.
+//     what goes IN it (a spinner for three digits), and then at the text
+//     size in use (UiLayout.AtTextSize). Captions, buttons, hints and the
+//     choices in a drop-down are measured.
 //   - A page that uses these goes on LayoutAudit.ConvertedPages, and the
 //     layout test holds it to nothing overlapping or cut off at every size.
 //
@@ -79,6 +86,21 @@ internal sealed class PageStack : Panel
     }
 
     /// <summary>
+    /// How tall the page would have to be to show all of it without
+    /// scrolling, at the width it has - for a host that sizes the page to
+    /// fit, as MainForm sizes Next Steps' half of its split.
+    /// </summary>
+    public int ContentHeight { get; private set; }
+
+    /// <summary>
+    /// Raised when <see cref="ContentHeight"/> changes. Raised from inside
+    /// this page's layout, so a handler that answers by resizing the page
+    /// has to wait for the layout to finish (BeginInvoke) - WinForms drops
+    /// a layout asked for while one is running.
+    /// </summary>
+    public event Action? ContentHeightChanged;
+
+    /// <summary>
     /// Places the column: the page's width, less its margins, and as tall as
     /// its content is at that width.
     ///
@@ -112,6 +134,14 @@ internal sealed class PageStack : Panel
         if (PlaceColumn())
         {
             base.OnLayout(levent);
+        }
+
+        var content = _column.Height + Padding.Vertical;
+
+        if (ContentHeight != content)
+        {
+            ContentHeight = content;
+            ContentHeightChanged?.Invoke();
         }
     }
 
@@ -160,6 +190,40 @@ internal sealed class PageStack : Panel
             Tag = AppTheme.KeepBackColor;
 
             ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        }
+
+        /// <summary>
+        /// As tall as the parts need at the width proposed, worked out here
+        /// part by part, as Section works its own height out, and for the
+        /// same reason: asked, the table kept the height its parts had grown
+        /// to while the page was narrow after it was widened again
+        /// (dotnet/winforms issue 10379) - a page that scrolled on into empty
+        /// space, and Next Steps' half of its split held open for content
+        /// that was no longer there (LayoutPiecesTests, 29 Sep).
+        /// </summary>
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
+            var total = 0;
+
+            foreach (Control part in Controls)
+            {
+                // As in Pieces.TrailingGap.
+                if (Visible && !part.Visible || part is ThinScrollBar)
+                {
+                    continue;
+                }
+
+                var inside = Math.Max(1, width - part.Margin.Horizontal);
+
+                var height = Pieces.SizesItself(part)
+                    ? part.GetPreferredSize(new Size(inside, 0)).Height
+                    : part.Height;
+
+                total += height + part.Margin.Vertical;
+            }
+
+            return new Size(width, total);
         }
 
         protected override void OnLayout(LayoutEventArgs levent)
@@ -264,6 +328,13 @@ internal sealed class FillPage : Panel
         part.Dock = DockStyle.Fill;
         part.Margin = Padding.Empty;
         holder.Controls.Add(part);
+
+        // Something in it growing or shrinking - a filter row in a card
+        // wrapping onto a second line - can change the least it can do with,
+        // and the table here only sees the holder, whose size has not
+        // changed. Asked as the part's layout starts - see
+        // LeastHeightMayHaveChanged.
+        part.Layout += (_, _) => LeastHeightMayHaveChanged();
 
         _leastHeights[holder] = leastHeight;
 
@@ -385,7 +456,7 @@ internal sealed class FillPage : Panel
 
             var height = _leastHeights.TryGetValue(part, out var leastHeight)
                 ? Math.Max(0, leastHeight(Math.Max(1, width - part.Margin.Horizontal)))
-                : part.AutoSize
+                : Pieces.SizesItself(part)
                     ? part.GetPreferredSize(new Size(Math.Max(1, width - part.Margin.Horizontal), 0)).Height
                     : part.Height;
 
@@ -554,7 +625,7 @@ internal sealed class Section : TableLayoutPanel
         {
             var height = ReferenceEquals(part, _fillHolder) && _fillLeast is not null
                 ? Math.Max(0, _fillLeast())
-                : part.AutoSize
+                : Pieces.SizesItself(part)
                     ? part.GetPreferredSize(new Size(Math.Max(1, inside - part.Margin.Horizontal), 0)).Height
                     : part.Height;
 
@@ -597,7 +668,7 @@ internal sealed class Section : TableLayoutPanel
 
         foreach (var part in Parts())
         {
-            var width = part.AutoSize ? part.GetPreferredSize(Size.Empty).Width : part.Width;
+            var width = Pieces.SizesItself(part) ? part.GetPreferredSize(Size.Empty).Width : part.Width;
 
             widest = Math.Max(widest, width + part.Margin.Horizontal);
         }
@@ -656,7 +727,9 @@ internal sealed class Section : TableLayoutPanel
 /// Caption-and-field rows. The captions share one column, as wide as the
 /// widest of them at the text size in use, and the fields line up beside
 /// them - the thing that makes a settings page look designed rather than
-/// assembled, measured rather than set at 180px and hoped for.
+/// assembled, measured rather than set at 180px and hoped for. Grids in
+/// separate cards can share one caption column (LineUp), so a page split
+/// into cards still lines up down its length.
 ///
 /// A caption is centred on its field. A hint goes under the field it is
 /// about, in the field's column, and wraps to the room there.
@@ -668,6 +741,15 @@ internal sealed class FieldGrid : TableLayoutPanel
 
     /// <summary>The hints, which wear the small font rather than this grid's.</summary>
     private readonly List<Label> _hints = new();
+
+    /// <summary>The captions, which LineUp gives a least width.</summary>
+    private readonly List<Label> _captions = new();
+
+    /// <summary>
+    /// How tall the rows came to when the table last laid them out, and
+    /// the width it did that at - see GetPreferredSize.
+    /// </summary>
+    private (int Width, int Height)? _laidOut;
 
     public FieldGrid()
     {
@@ -702,12 +784,7 @@ internal sealed class FieldGrid : TableLayoutPanel
             Margin = new Padding(0, 0, UiLayout.LabelGap, UiLayout.RowGap),
         };
 
-        // An inline row wraps to the width it is given, so it has to be
-        // given the column's.
-        var stretched = stretch || field is FlowLayoutPanel;
-
-        field.Anchor = stretched ? AnchorStyles.Left | AnchorStyles.Right : AnchorStyles.Left;
-        field.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+        PlaceField(field, stretch);
 
         RowCount++;
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -717,11 +794,48 @@ internal sealed class FieldGrid : TableLayoutPanel
         _lastRow.Clear();
         _lastRow.Add(label);
         _lastRow.Add(field);
+        _captions.Add(label);
 
         return label;
     }
 
-    /// <summary>A control with no caption - a check box, a note - across both columns.</summary>
+    /// <summary>
+    /// A field with no caption of its own, in the field column under the
+    /// fields above it - a check box that goes with them ("Only include
+    /// drivers who have checked in"), lined up with them rather than with
+    /// the captions.
+    /// </summary>
+    public T AddField<T>(T field, bool stretch = false) where T : Control
+    {
+        PlaceField(field, stretch);
+
+        RowCount++;
+        RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Controls.Add(field, 1, RowCount - 1);
+
+        _lastRow.Clear();
+        _lastRow.Add(field);
+
+        return field;
+    }
+
+    /// <summary>A field's anchor and gap. An inline row wraps to the width it is given, so it has to be given the column's.</summary>
+    private static void PlaceField(Control field, bool stretch)
+    {
+        var stretched = stretch || field is FlowLayoutPanel;
+
+        field.Anchor = stretched ? AnchorStyles.Left | AnchorStyles.Right : AnchorStyles.Left;
+        field.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+    }
+
+    /// <summary>
+    /// A control with no caption - a check box, a note - across both
+    /// columns. It has to fit in the grid's width: a note that wraps, or a
+    /// box narrower than the grid. One that wanted more would make the
+    /// table widen the caption column to find it room, which this grid's
+    /// own measure (GetPreferredSize) does not do, and the fields would
+    /// move right of where the grid was measured to put them.
+    /// </summary>
     public T AddWide<T>(T control, bool stretch = true) where T : Control
     {
         control.Anchor = stretch ? AnchorStyles.Left | AnchorStyles.Right : AnchorStyles.Left;
@@ -742,7 +856,13 @@ internal sealed class FieldGrid : TableLayoutPanel
     /// A line of help under the field above, in the field's column, in the
     /// small muted type the app's hints use, wrapping to the room there is.
     /// </summary>
-    public Label AddHint(string text)
+    public Label AddHint(string text) => AddHint(new Label { Text = text });
+
+    /// <summary>
+    /// The same, for a hint the page keeps hold of to reword - a
+    /// SteadyLabel, whose wording follows another field.
+    /// </summary>
+    public T AddHint<T>(T hint) where T : Label
     {
         // The row above sits a hint's gap from its hint, not a row's.
         foreach (var control in _lastRow)
@@ -750,15 +870,11 @@ internal sealed class FieldGrid : TableLayoutPanel
             control.Margin = new Padding(control.Margin.Left, control.Margin.Top, control.Margin.Right, UiLayout.HintGap);
         }
 
-        var hint = new Label
-        {
-            Text = text,
-            AutoSize = true,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Margin = new Padding(0, 0, 0, UiLayout.RowGap),
-            Font = AppTheme.SmallFont,
-            ForeColor = AppTheme.TextMuted,
-        };
+        hint.AutoSize = true;
+        hint.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        hint.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+        hint.Font = AppTheme.SmallFont;
+        hint.ForeColor = AppTheme.TextMuted;
 
         RowCount++;
         RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -772,13 +888,142 @@ internal sealed class FieldGrid : TableLayoutPanel
     }
 
     /// <summary>
-    /// Every row carries the gap to the next one below it, and the last row
-    /// has no next one - see Pieces.TrailingGap.
+    /// One caption column for several grids, as wide as the widest caption
+    /// in any of them - so the fields of a page split into cards still line
+    /// up down it. <paramref name="alsoFits"/> are wordings a caption can be
+    /// changed to (Setup's "Races each driver gets:" on a club night): the
+    /// column is wide enough for those too, so changing one never moves the
+    /// fields.
+    ///
+    /// Measured now, in the fonts the captions have, so it has to be run
+    /// again when the text size changes - TextSize.Keep does that. Each
+    /// caption is given the width as its least, and the column is as wide
+    /// as its widest caption, as ever.
     /// </summary>
-    public override Size GetPreferredSize(Size proposedSize) =>
-        Pieces.WithoutTrailingGap(base.GetPreferredSize(proposedSize), this);
+    internal static void LineUp(IReadOnlyCollection<FieldGrid> grids, params string[] alsoFits)
+    {
+        var widest = 0;
 
-    /// <summary>See Pieces.OutOfStep.</summary>
+        foreach (var grid in grids)
+        {
+            foreach (var caption in grid._captions)
+            {
+                widest = Math.Max(widest, CaptionWidth(caption.Text, caption) + caption.Padding.Horizontal);
+
+                foreach (var wording in alsoFits)
+                {
+                    widest = Math.Max(widest, CaptionWidth(wording, caption) + caption.Padding.Horizontal);
+                }
+            }
+        }
+
+        var least = new Size(widest, 0);
+
+        foreach (var caption in grids.SelectMany(grid => grid._captions))
+        {
+            if (caption.MinimumSize != least)
+            {
+                caption.MinimumSize = least;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A caption's width on one line in the caption's own font, measured the
+    /// way a label measures itself - TextRenderer's default, padding and all
+    /// - and never by asking the label, whose answer includes the least
+    /// width LineUp gave it last time and so could only ever grow.
+    /// </summary>
+    private static int CaptionWidth(string text, Label caption) =>
+        string.IsNullOrEmpty(text) ? 0 : TextRenderer.MeasureText(text, caption.Font).Width;
+
+    /// <summary>
+    /// As tall as the rows need at the width proposed, less the gap under
+    /// the last one (see Pieces.TrailingGap) - worked out here, row by row,
+    /// rather than by the table underneath, for the reason Section works
+    /// its own height out: a table that sizes itself grows when what is in
+    /// it wraps onto more lines, and does not shrink again when it unwraps
+    /// (dotnet/winforms issue 10379).
+    ///
+    /// Measured the way the table lays the rows out: the caption column as
+    /// wide as its widest caption, the field column the rest, each part
+    /// asked how tall it is at the width it will have, and a row as tall as
+    /// its tallest part. With no width proposed, the grid is as wide as its
+    /// widest caption and its widest field on one line.
+    ///
+    /// At the width the table last laid the rows out at, though, what they
+    /// came to is the answer, not the sum. A drop-down, a number box or a
+    /// check box can be a few pixels taller as drawn than it says it wants
+    /// to be, and the table lays its row out round the drawn one - so the
+    /// sum came out short, and the last row stuck out of the bottom of the
+    /// grid by 2 to 10 pixels (the layout test, Race Day's Setup, 29 Sep).
+    /// </summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var captions = CaptionColumnWidth();
+
+        var width = proposedSize.Width is > 0 and < int.MaxValue / 4
+            ? proposedSize.Width
+            : captions + NaturalFieldWidth();
+
+        if (_laidOut is { } laidOut && laidOut.Width == width)
+        {
+            return new Size(width, laidOut.Height);
+        }
+
+        var fields = Math.Max(1, width - captions);
+        var rows = new Dictionary<int, int>();
+
+        foreach (var part in Parts())
+        {
+            var room = GetColumnSpan(part) > 1
+                ? width
+                : GetColumn(part) == 0 ? captions : fields;
+
+            var inside = Math.Max(1, room - part.Margin.Horizontal);
+
+            var height = Pieces.SizesItself(part)
+                ? part.GetPreferredSize(new Size(inside, 0)).Height
+                : part.Height;
+
+            var row = GetRow(part);
+
+            rows[row] = Math.Max(rows.GetValueOrDefault(row), height + part.Margin.Vertical);
+        }
+
+        return new Size(width, Math.Max(0, rows.Values.Sum() - Pieces.TrailingGap(this)));
+    }
+
+    /// <summary>The caption column: as wide as the widest thing in it that is not across both columns.</summary>
+    private int CaptionColumnWidth() =>
+        Parts()
+            .Where(part => GetColumn(part) == 0 && GetColumnSpan(part) == 1)
+            .Select(part => OwnWidth(part) + part.Margin.Horizontal)
+            .DefaultIfEmpty(0)
+            .Max();
+
+    /// <summary>The field column with every field at the width it wants, on one line.</summary>
+    private int NaturalFieldWidth() =>
+        Parts()
+            .Where(part => GetColumn(part) == 1)
+            .Select(part => OwnWidth(part) + part.Margin.Horizontal)
+            .DefaultIfEmpty(0)
+            .Max();
+
+    private static int OwnWidth(Control part) => Pieces.SizesItself(part) ? part.GetPreferredSize(Size.Empty).Width : part.Width;
+
+    /// <summary>The parts that take a place in a row - see Section.Parts.</summary>
+    private IEnumerable<Control> Parts() =>
+        Controls.Cast<Control>().Where(part => (!Visible || part.Visible) && part is not ThinScrollBar);
+
+    /// <summary>
+    /// See Pieces.OutOfStep. Then notes what the rows came to (see
+    /// GetPreferredSize): the rows the table laid out, less the gap under
+    /// the last, or the lowest part's bottom when one sticks out of its row.
+    /// The rows are laid out from the top whatever height the grid is, so
+    /// the answer does not change with the height it is then given - asked
+    /// again at this width, it is the same.
+    /// </summary>
     protected override void OnLayout(LayoutEventArgs levent)
     {
         base.OnLayout(levent);
@@ -787,6 +1032,11 @@ internal sealed class FieldGrid : TableLayoutPanel
         {
             base.OnLayout(levent);
         }
+
+        var rows = GetRowHeights().Sum() - Pieces.TrailingGap(this);
+        var lowest = Parts().Select(part => part.Bottom).DefaultIfEmpty(0).Max();
+
+        _laidOut = (Width, Math.Max(0, Math.Max(rows, lowest)));
     }
 
     /// <summary>
@@ -813,15 +1063,23 @@ internal sealed class FieldGrid : TableLayoutPanel
     /// than running off the edge when the row is narrow.
     ///
     /// A ButtonBar underneath, so a button among them is measured to its
-    /// caption exactly as one in a bar is. A label among them sizes itself
-    /// and is centred on the row.
+    /// caption exactly as one in a bar is. Everything that is not a button
+    /// is centred up and down on the row - a drop-down beside a taller
+    /// button sits level with its middle - and a label sizes itself.
     /// </summary>
     public static FlowLayoutPanel Inline(params Control[] controls)
     {
-        foreach (var label in controls.OfType<Label>())
+        foreach (var control in controls)
         {
-            label.AutoSize = true;
-            label.Anchor = AnchorStyles.Left;
+            if (control is Label label)
+            {
+                label.AutoSize = true;
+            }
+
+            if (control is not Button)
+            {
+                control.Anchor = AnchorStyles.Left;
+            }
         }
 
         return new ButtonBar().With(controls);
@@ -1024,6 +1282,9 @@ internal sealed class ButtonBar : FlowLayoutPanel
 /// a round picker cut down to half a round's name is not a picker - and then
 /// runs the full width of a line of its own.
 ///
+/// A field can go without a caption: a check box says what it is itself,
+/// and a line of text at the end of a filter bar needs none.
+///
 /// A pair whose field is hidden is left out, and the line closes up behind
 /// it. Hide the caption with it.
 ///
@@ -1032,7 +1293,7 @@ internal sealed class ButtonBar : FlowLayoutPanel
 /// </summary>
 internal sealed class FieldRow : Panel
 {
-    private readonly List<(Label Caption, Control Field, Func<int>? Width)> _pairs = new();
+    private readonly List<(Label? Caption, Control Field, Func<int>? Width)> _pairs = new();
 
     /// <summary>The least width the last field can do with, when it takes the width left - see AddLast.</summary>
     private Func<int>? _lastLeast;
@@ -1047,12 +1308,13 @@ internal sealed class FieldRow : Panel
     }
 
     /// <summary>
-    /// A caption and a field that keeps the width it was given - or, with
+    /// A caption and a field. The field keeps the width it was given - or
+    /// the width it wants, when it sizes itself (a check box) - or, with
     /// <paramref name="width"/>, the width that says, asked whenever the row
     /// is measured: a drop-down as wide as its longest choice at the text
-    /// size in use. Returns the caption.
+    /// size in use. Null for a field with no caption. Returns the caption.
     /// </summary>
-    public Label Add(Label caption, Control field, Func<int>? width = null)
+    public Label? Add(Label? caption, Control field, Func<int>? width = null)
     {
         if (_lastLeast is not null)
         {
@@ -1069,7 +1331,7 @@ internal sealed class FieldRow : Panel
     /// pair goes onto a line of its own. Asked whenever the row is measured,
     /// so it can follow the text size and what the field holds.
     /// </summary>
-    public Label AddLast(Label caption, Control field, Func<int> leastWidth)
+    public Label? AddLast(Label? caption, Control field, Func<int> leastWidth)
     {
         if (_lastLeast is not null)
         {
@@ -1081,15 +1343,26 @@ internal sealed class FieldRow : Panel
         return caption;
     }
 
-    private void Pair(Label caption, Control field, Func<int>? width)
+    private void Pair(Label? caption, Control field, Func<int>? width)
     {
-        caption.AutoSize = true;
-        caption.Margin = Padding.Empty;
+        if (caption is not null)
+        {
+            caption.AutoSize = true;
+            caption.Margin = Padding.Empty;
+            Controls.Add(caption);
+        }
+
         field.Margin = Padding.Empty;
 
         _pairs.Add((caption, field, width));
-        Controls.Add(caption);
         Controls.Add(field);
+
+        // A label that sizes itself tells this row when it is rewritten;
+        // one the row sizes does not - see FieldTextChanged.
+        if (field is Label)
+        {
+            field.TextChanged += FieldTextChanged;
+        }
     }
 
     /// <summary>How tall the pairs come to at the width proposed, and how wide the widest line is.</summary>
@@ -1122,6 +1395,36 @@ internal sealed class FieldRow : Panel
         }
     }
 
+    /// <summary>
+    /// A label field the row sizes itself - the one that takes the width
+    /// left, cut short with "..." - has been rewritten. How long it is can
+    /// decide which line it goes on (Who's Racing's summary moves onto a line
+    /// of its own when it no longer fits beside the filter), and nothing
+    /// tells the row: a label only asks its parent to lay out again when it
+    /// sizes itself. So this asks - the whole row, and whatever it is in,
+    /// only when the row changes height; otherwise the pairs are just put
+    /// where they now go, which a summary rewritten on every tick at the
+    /// check-in desk makes worth sparing.
+    /// </summary>
+    private void FieldTextChanged(object? sender, EventArgs e)
+    {
+        if (sender is Label { AutoSize: true } || !Visible)
+        {
+            return;
+        }
+
+        var width = Math.Max(1, ClientSize.Width);
+
+        if (Flow(width, place: false).Height != Height)
+        {
+            PerformLayout();
+        }
+        else
+        {
+            Flow(width, place: true);
+        }
+    }
+
     /// <summary>Wider than any row will be - "no width to wrap to".</summary>
     private const int Unbounded = int.MaxValue / 4;
 
@@ -1145,7 +1448,9 @@ internal sealed class FieldRow : Panel
         // One height for every line - the tallest caption or field - so the
         // captions and fields on a line share a centre, and a second line
         // lines up under the first.
-        var lineHeight = pairs.Max(pair => Math.Max(CaptionSize(pair.Caption).Height, pair.Field.Height));
+        var lineHeight = pairs.Max(pair => Math.Max(
+            pair.Caption is null ? 0 : CaptionSize(pair.Caption).Height,
+            FieldSize(pair.Field).Height));
 
         var last = _lastLeast is null ? null : _pairs[^1].Field;
         var x = 0;
@@ -1154,15 +1459,17 @@ internal sealed class FieldRow : Panel
 
         foreach (var (caption, field, measure) in pairs)
         {
-            var captionSize = CaptionSize(caption);
+            var captionSize = caption is null ? Size.Empty : CaptionSize(caption);
+            var captionGap = caption is null ? 0 : UiLayout.LabelGap;
+            var own = FieldSize(field);
             var stretches = ReferenceEquals(field, last);
 
             var fieldWidth = stretches
                 ? Math.Max(1, _lastLeast!())
                 : measure is not null
                     ? Math.Max(1, measure())
-                    : field.Width;
-            var needed = captionSize.Width + UiLayout.LabelGap + fieldWidth;
+                    : own.Width;
+            var needed = captionSize.Width + captionGap + fieldWidth;
             var left = x == 0 ? 0 : x + UiLayout.SectionGap;
 
             if (x > 0 && left + needed > width)
@@ -1172,7 +1479,7 @@ internal sealed class FieldRow : Panel
             }
 
             var top = line * (lineHeight + UiLayout.RowGap);
-            var fieldLeft = left + captionSize.Width + UiLayout.LabelGap;
+            var fieldLeft = left + captionSize.Width + captionGap;
 
             // To the end of the line - when there is an end to go to. On a
             // line too narrow even for its least, it takes the line and no
@@ -1184,8 +1491,8 @@ internal sealed class FieldRow : Panel
 
             if (place)
             {
-                caption.SetBounds(left, top + (lineHeight - captionSize.Height) / 2, captionSize.Width, captionSize.Height);
-                field.SetBounds(fieldLeft, top + (lineHeight - field.Height) / 2, fieldWidth, field.Height);
+                caption?.SetBounds(left, top + (lineHeight - captionSize.Height) / 2, captionSize.Width, captionSize.Height);
+                field.SetBounds(fieldLeft, top + (lineHeight - own.Height) / 2, fieldWidth, own.Height);
             }
 
             x = fieldLeft + fieldWidth;
@@ -1197,24 +1504,42 @@ internal sealed class FieldRow : Panel
 
     /// <summary>A caption's size on one line, measured rather than read back: an AutoSize label has not sized itself until it has been laid out.</summary>
     private static Size CaptionSize(Label caption) => caption.GetPreferredSize(Size.Empty);
+
+    /// <summary>
+    /// A field's size on one line. A label is one line of its font, whatever
+    /// size it was given - the one that takes the width left is sized by the
+    /// row, and cut short with "..." rather than wrapped. Anything else that
+    /// sizes itself - a check box - is measured, as a caption is, and for the
+    /// same reason. A text box's "AutoSize" is only its height, which it
+    /// keeps in step itself; it and everything else are the size they were
+    /// given.
+    /// </summary>
+    private static Size FieldSize(Control field) => field switch
+    {
+        TextBoxBase => field.Size,
+        Label label => label.GetPreferredSize(Size.Empty),
+        _ when field.AutoSize => field.GetPreferredSize(Size.Empty),
+        _ => field.Size,
+    };
 }
 
 /// <summary>
 /// A column down the right-hand side, beside the page's main parts - Race
 /// Control's clock and the buttons under it, beside the flags and the
-/// leaderboard.
+/// leaderboard; Who's Racing's scan card beside its roster.
 ///
 /// On the left, parts one under another as a FillPage has them: each as
 /// tall as it needs to be, and one that takes the height left over (Add,
-/// AddFill). On the right, the column (AddSide): as wide as the widest
-/// button in it needs, and never narrower than it was told, with every part
-/// in it that wide, one under another from the top.
+/// AddFill). On the right, the column (AddSide, AddSideCard): as wide as
+/// the widest button in it needs, and never narrower than it was told, with
+/// every part in it that wide, one under another from the top.
 ///
 /// Goes in a FillPage as its filling part, with LeastHeight as the least it
 /// can do with - the column, or the left-hand parts with the filling one at
 /// its least, whichever is taller - so a window too short for either
 /// scrolls rather than squashing the list or running the column off the
-/// bottom.
+/// bottom. Or in a PageStack as a part that sizes itself (AutoSize), when
+/// it is exactly that tall: Next Steps' card and Ready to Race.
 ///
 /// The column is placed by hand rather than by a table: its width comes
 /// from the buttons' captions, not from what the parts in it would report,
@@ -1223,12 +1548,14 @@ internal sealed class FieldRow : Panel
 internal sealed class Beside : Panel
 {
     private readonly MainColumn _main;
-    private readonly List<(Control Part, int GapBelow)> _side = new();
+
+    /// <summary>The column's parts, in order. A card (Measured) is as tall as it needs to be at the column's width; anything else keeps its own height.</summary>
+    private readonly List<(Control Part, int GapBelow, bool Measured)> _side = new();
 
     /// <summary>What each button in the column needs across for its caption. The column is as wide as the widest.</summary>
     private readonly Dictionary<Button, int> _captionWidths = new();
 
-    private readonly int _sideLeastWidth;
+    private readonly Func<int> _sideLeastWidth;
 
     /// <summary>The panel holding the part on the left that takes the height left over, and the least that part can do with.</summary>
     private Control? _fillHolder;
@@ -1239,8 +1566,18 @@ internal sealed class Beside : Panel
 
     /// <param name="sideLeastWidth">The narrowest the column gets - the width its drawn parts (a clock) were designed at.</param>
     public Beside(int sideLeastWidth = 0)
+        : this(() => sideLeastWidth)
     {
-        _sideLeastWidth = Math.Max(0, sideLeastWidth);
+    }
+
+    /// <param name="sideLeastWidth">
+    /// The narrowest the column gets, asked whenever it is placed - for a
+    /// column whose least follows the text size, or the buttons inside a
+    /// card in it, which the column does not see.
+    /// </param>
+    public Beside(Func<int> sideLeastWidth)
+    {
+        _sideLeastWidth = sideLeastWidth;
 
         Margin = Padding.Empty;
         Padding = Padding.Empty;
@@ -1284,6 +1621,11 @@ internal sealed class Beside : Panel
         _fillHolder = holder;
         _fillLeast = leastHeight;
 
+        // Something in it growing or shrinking - a line of a card wrapping -
+        // can change the least this can do with, and only the part sees it.
+        // See AddSideCard.
+        part.Layout += (_, _) => PerformLayout();
+
         _main.RowCount++;
         _main.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
         _main.Controls.Add(holder, 0, _main.RowCount - 1);
@@ -1296,17 +1638,11 @@ internal sealed class Beside : Panel
     /// the column's width; its height is its own. A button is sized to its
     /// caption, and again whenever that or its font changes. Anything else
     /// keeps the height it was given, so give it one - a part in the column
-    /// is not asked how tall it wants to be.
+    /// is not asked how tall it wants to be. A card is: see AddSideCard.
     /// </summary>
     public T AddSide<T>(T part, int gapBelow = UiLayout.RowGap) where T : Control
     {
-        // Sized here, never by the layout: one that sized itself would be
-        // resized by the panel to its width on one line.
-        part.AutoSize = false;
-        part.Margin = Padding.Empty;
-
-        _side.Add((part, Math.Max(0, gapBelow)));
-        Controls.Add(part);
+        Side(part, gapBelow, measured: false);
 
         if (part is Button button)
         {
@@ -1316,6 +1652,41 @@ internal sealed class Beside : Panel
         }
 
         return part;
+    }
+
+    /// <summary>
+    /// Adds a card to the column, under the last - Who's Racing's scan card,
+    /// Next Steps' Ready to Race. It is given the column's width, and is as
+    /// tall as it needs to be at that width.
+    ///
+    /// It is asked whenever the column is placed, and the column is placed
+    /// again whenever the card lays itself out: a line in it wrapping onto a
+    /// second, or a part in it shown, is something only the card sees, and a
+    /// card placed by hand has no parent that asks it. Told as the card's
+    /// layout starts, before its rows are placed - for the reason PageStack's
+    /// column tells its stack.
+    ///
+    /// Buttons inside the card are the card's to size; make the column at
+    /// least as wide as they need (the least width, as a Func).
+    /// </summary>
+    public Section AddSideCard(Section card, int gapBelow = UiLayout.RowGap)
+    {
+        Side(card, gapBelow, measured: true);
+
+        card.Layout += (_, _) => PerformLayout();
+
+        return card;
+    }
+
+    private void Side(Control part, int gapBelow, bool measured)
+    {
+        // Sized here, never by the layout: one that sized itself would be
+        // resized by the panel to its width on one line.
+        part.AutoSize = false;
+        part.Margin = Padding.Empty;
+
+        _side.Add((part, Math.Max(0, gapBelow), measured));
+        Controls.Add(part);
     }
 
     /// <summary>
@@ -1341,7 +1712,7 @@ internal sealed class Beside : Panel
 
             var height = ReferenceEquals(part, _fillHolder) && _fillLeast is not null
                 ? Math.Max(0, _fillLeast(partWidth))
-                : part.AutoSize
+                : Pieces.SizesItself(part)
                     ? part.GetPreferredSize(new Size(partWidth, 0)).Height
                     : part.Height;
 
@@ -1349,6 +1720,19 @@ internal sealed class Beside : Panel
         }
 
         return Math.Max(side.Height, main);
+    }
+
+    /// <summary>
+    /// As tall as it can least be at the width proposed - for a Beside that
+    /// sizes itself (AutoSize), as a part of a PageStack rather than the
+    /// filling part of a FillPage. With no filling part, or one whose least
+    /// is all it needs, that is exactly as tall as what is in it.
+    /// </summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
+
+        return new Size(width, LeastHeight(width));
     }
 
     protected override void OnLayout(LayoutEventArgs levent)
@@ -1364,6 +1748,15 @@ internal sealed class Beside : Panel
         // A part in the column that grew changes the least the page can do
         // with. The page is told first - see FillPage.LeastHeightMayHaveChanged.
         Pieces.FillPageOf(this)?.LeastHeightMayHaveChanged();
+
+        // One that sizes itself, in a PageStack, asks to be given its new
+        // height first, for the same reason: asked after, the stack would
+        // resize it while it was still laying out, and that layout is
+        // dropped.
+        if (AutoSize && Parent is not null && Height != LeastHeight(Width))
+        {
+            Parent.PerformLayout(this, nameof(PreferredSize));
+        }
 
         Place();
 
@@ -1400,51 +1793,72 @@ internal sealed class Beside : Panel
         var left = client.Width - side.Width;
         var y = 0;
 
-        foreach (var (part, gapBelow) in _side)
+        foreach (var (part, gapBelow, measured) in _side)
         {
             if (!Counts(part))
             {
                 continue;
             }
 
-            var bounds = new Rectangle(left, y, side.Width, part.Height);
+            var height = SideHeight(part, measured, side.Width);
+            var bounds = new Rectangle(left, y, side.Width, height);
 
             if (part.Bounds != bounds)
             {
                 part.Bounds = bounds;
             }
 
-            y += part.Height + gapBelow;
+            y += height + gapBelow;
         }
     }
 
     /// <summary>The column's width, and how tall its parts come to one under another. Empty when it has none.</summary>
     private Size MeasureSide()
     {
-        var width = _sideLeastWidth;
-        var height = 0;
-        var gapAbove = 0;
+        var width = Math.Max(0, _sideLeastWidth());
         var any = false;
 
-        foreach (var (part, gapBelow) in _side)
+        foreach (var (part, _, _) in _side)
         {
             if (!Counts(part))
             {
                 continue;
             }
 
+            any = true;
+
             if (part is Button button && _captionWidths.TryGetValue(button, out var needs))
             {
                 width = Math.Max(width, needs);
             }
-
-            height += (any ? gapAbove : 0) + part.Height;
-            gapAbove = gapBelow;
-            any = true;
         }
 
-        return any ? new Size(width, height) : Size.Empty;
+        if (!any)
+        {
+            return Size.Empty;
+        }
+
+        // The width first: a card's height is its height at that width.
+        var height = 0;
+        var gapAbove = -1;
+
+        foreach (var (part, gapBelow, measured) in _side)
+        {
+            if (!Counts(part))
+            {
+                continue;
+            }
+
+            height += Math.Max(0, gapAbove) + SideHeight(part, measured, width);
+            gapAbove = gapBelow;
+        }
+
+        return new Size(width, height);
     }
+
+    /// <summary>A part's height in the column: a card as tall as it needs to be at the column's width, anything else its own.</summary>
+    private static int SideHeight(Control part, bool measured, int width) =>
+        measured ? part.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height : part.Height;
 
     /// <summary>What the column leaves on the left, with a gap between the two.</summary>
     private static int MainWidth(int width, Size side) =>
@@ -1519,6 +1933,13 @@ internal sealed class Beside : Panel
             if (Parent is Beside beside)
             {
                 Pieces.FillPageOf(beside)?.LeastHeightMayHaveChanged();
+
+                // And a Beside that sizes itself, likewise - see its own
+                // OnLayout.
+                if (beside.AutoSize && beside.Parent is not null && beside.Height != beside.LeastHeight(beside.Width))
+                {
+                    beside.Parent.PerformLayout(beside, nameof(PreferredSize));
+                }
             }
 
             base.OnLayout(levent);
@@ -1527,6 +1948,282 @@ internal sealed class Beside : Panel
             {
                 base.OnLayout(levent);
             }
+        }
+    }
+}
+
+/// <summary>
+/// Two bars of buttons on one line, one against each edge - on Next Steps'
+/// program, the commands for the selected round on the left and the tools
+/// for the whole day on the right, the glossary hard against the right-hand
+/// edge where help is looked for.
+///
+/// When the line is too narrow for both, the right-hand bar goes under the
+/// left, still against the right-hand edge, so both lines end in the same
+/// place; either wraps further if it has to. Make the right-hand bar a
+/// ButtonBar(alignRight: true), whose first button is furthest right.
+///
+/// Sizes itself: put it in a Section, which gives it the width.
+/// </summary>
+internal sealed class SplitBar : Panel
+{
+    private readonly ButtonBar _left;
+    private readonly ButtonBar _right;
+
+    public SplitBar(ButtonBar left, ButtonBar right)
+    {
+        _left = left;
+        _right = right;
+
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Margin = Padding.Empty;
+        Padding = Padding.Empty;
+        Tag = AppTheme.KeepBackColor;
+
+        Controls.Add(left);
+        Controls.Add(right);
+    }
+
+    /// <summary>How tall the two come to at the width proposed. With none, both on one line.</summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var width = proposedSize.Width is > 0 and < int.MaxValue / 4
+            ? proposedSize.Width
+            : _left.GetPreferredSize(Size.Empty).Width + UiLayout.SectionGap + _right.GetPreferredSize(Size.Empty).Width;
+
+        var (left, right) = Arrange(width);
+
+        return new Size(width, Math.Max(left.Bottom, right.Bottom));
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+
+        var (left, right) = Arrange(Math.Max(1, ClientSize.Width));
+
+        if (_left.Bounds != left)
+        {
+            _left.Bounds = left;
+        }
+
+        if (_right.Bounds != right)
+        {
+            _right.Bounds = right;
+        }
+    }
+
+    /// <summary>A bar shown or hidden - and the row coming into view - changes the lines, as for FieldRow.</summary>
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+
+        if (Visible)
+        {
+            PerformLayout();
+        }
+    }
+
+    /// <summary>
+    /// Where the two bars go on a line <paramref name="width"/> wide: side
+    /// by side, the left one's buttons and the right one's a section gap
+    /// apart at least, when both fit on one row each; otherwise one under
+    /// the other, each wrapped to the whole width.
+    /// </summary>
+    private (Rectangle Left, Rectangle Right) Arrange(int width)
+    {
+        // A bar hidden in its own right takes no room - askable only while
+        // this is on screen, as in Pieces.TrailingGap.
+        var leftShown = !Visible || _left.Visible;
+        var rightShown = !Visible || _right.Visible;
+
+        if (!leftShown || !rightShown)
+        {
+            var only = leftShown ? _left : _right;
+            var size = only.GetPreferredSize(new Size(width, 0));
+            var bounds = new Rectangle(leftShown ? 0 : width - Math.Min(width, size.Width), 0, Math.Min(width, size.Width), size.Height);
+
+            return leftShown ? (bounds, Rectangle.Empty) : (Rectangle.Empty, bounds);
+        }
+
+        var leftOne = _left.GetPreferredSize(Size.Empty);
+        var rightOne = _right.GetPreferredSize(Size.Empty);
+
+        if (leftOne.Width + UiLayout.SectionGap + rightOne.Width <= width)
+        {
+            var height = Math.Max(leftOne.Height, rightOne.Height);
+
+            return (
+                new Rectangle(0, (height - leftOne.Height) / 2, leftOne.Width, leftOne.Height),
+                new Rectangle(width - rightOne.Width, (height - rightOne.Height) / 2, rightOne.Width, rightOne.Height));
+        }
+
+        var left = _left.GetPreferredSize(new Size(width, 0));
+        var right = _right.GetPreferredSize(new Size(width, 0));
+
+        var leftWidth = Math.Min(width, left.Width);
+        var rightWidth = Math.Min(width, right.Width);
+
+        return (
+            new Rectangle(0, 0, leftWidth, left.Height),
+            new Rectangle(width - rightWidth, left.Height + UiLayout.RowGap, rightWidth, right.Height));
+    }
+}
+
+/// <summary>
+/// A label as tall as the longest of the things it can say, at the width it
+/// has - so rewording it never moves what is under it. Setup's hints, which
+/// change with the kind of night; a status line whose longest form is
+/// known.
+///
+/// It sizes itself and wraps to the width it is given, as any label in a
+/// piece does, and is never shorter than any of its Wordings would be
+/// there. The old way was a label of fixed size with two lines kept for it,
+/// which on a wide page was a blank line under one line of text, and at a
+/// large text size not two lines' worth.
+/// </summary>
+internal sealed class SteadyLabel : Label
+{
+    public SteadyLabel()
+    {
+        AutoSize = true;
+    }
+
+    /// <summary>Everything it can say - or, for text built from numbers, the longest it can come to. Measured alongside what it says now.</summary>
+    public IReadOnlyList<string> Wordings { get; set; } = Array.Empty<string>();
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var size = base.GetPreferredSize(proposedSize);
+
+        if (Wordings.Count == 0)
+        {
+            return size;
+        }
+
+        // A label treats a width of 1 as none at all; so does this.
+        var bounded = proposedSize.Width is > 1 and < int.MaxValue / 4;
+
+        var room = new Size(
+            bounded ? Math.Max(1, proposedSize.Width - Padding.Horizontal) : int.MaxValue,
+            int.MaxValue);
+
+        // The flags a label wraps its text with.
+        var flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
+
+        if (!UseMnemonic)
+        {
+            flags |= TextFormatFlags.NoPrefix;
+        }
+
+        foreach (var wording in Wordings)
+        {
+            if (string.IsNullOrEmpty(wording))
+            {
+                continue;
+            }
+
+            var needed = TextRenderer.MeasureText(wording, Font, room, flags);
+
+            size = new Size(
+                Math.Max(size.Width, bounded ? Math.Min(proposedSize.Width, needed.Width + Padding.Horizontal) : needed.Width + Padding.Horizontal),
+                Math.Max(size.Height, needed.Height + Padding.Vertical));
+        }
+
+        return size;
+    }
+}
+
+/// <summary>
+/// What a page keeps in step with the text size.
+///
+/// AppTheme replaces its fonts when the text size changes - it does not
+/// resize them - so a control that was handed one keeps the old size. One
+/// that wears the font it inherits needs nothing. One that wears a face of
+/// its own - a heading, a hint in the small type, a page in the body face
+/// inside a tab whose row is bold - is handed the new one here (Wear). So
+/// is anything else sized from the fonts: a list five lines tall, a status
+/// line with two lines kept for it, a field as wide as it was at the normal
+/// text size (Keep).
+///
+/// The page calls Apply when its own font changes and when its parent's
+/// does. The second is the one that matters for a page that wears a face of
+/// its own, which is not told the first way: Race Day's pages sit in tabs
+/// whose row is drawn in the bold face (AppTheme.StyleTabControl), which
+/// they would otherwise inherit, so they wear the body face themselves.
+/// </summary>
+internal sealed class TextSize
+{
+    private readonly List<Action> _kept = new();
+
+    /// <summary>Set while the kept things are being applied - one of them may change the page's own font, which calls Apply again.</summary>
+    private bool _applying;
+
+    /// <summary>Gives a control a face of its own, and keeps it at the text size in use.</summary>
+    public T Wear<T>(T control, Func<Font> face) where T : Control
+    {
+        Keep(() =>
+        {
+            var font = face();
+
+            if (!Equals(control.Font, font))
+            {
+                control.Font = font;
+            }
+        });
+
+        return control;
+    }
+
+    /// <summary>
+    /// Keeps <paramref name="lines"/> lines of its font for a label whatever
+    /// it says, so what is under it does not hop as it is rewritten - a
+    /// status line. A label that sizes itself still grows past them for
+    /// more. Give it its face first: the lines are of the font it has.
+    /// </summary>
+    public T ReserveLines<T>(T label, int lines) where T : Label
+    {
+        Keep(() =>
+        {
+            var least = new Size(0, lines * label.Font.Height + label.Padding.Vertical);
+
+            if (label.MinimumSize != least)
+            {
+                label.MinimumSize = least;
+            }
+        });
+
+        return label;
+    }
+
+    /// <summary>Anything else sized from the fonts. Done now, and again whenever the text size changes.</summary>
+    public void Keep(Action apply)
+    {
+        _kept.Add(apply);
+        apply();
+    }
+
+    /// <summary>Everything kept, at the fonts AppTheme has now. In the order they were kept, so a face goes on before anything measured in it.</summary>
+    public void Apply()
+    {
+        if (_applying)
+        {
+            return;
+        }
+
+        _applying = true;
+
+        try
+        {
+            foreach (var apply in _kept)
+            {
+                apply();
+            }
+        }
+        finally
+        {
+            _applying = false;
         }
     }
 }
@@ -1586,6 +2283,57 @@ internal static class Pieces
         }
     }
 
+    /// <summary>
+    /// What a drop-down needs across for the longest thing it shows -
+    /// measured the way LayoutAudit checks one, padding and all, with room
+    /// for the arrow and either side of the text - and never less than
+    /// <paramref name="alsoFits"/> needs, for a choice it can show that is
+    /// not in its list yet.
+    ///
+    /// Kept in <paramref name="kept"/> until the drop-down's font or the
+    /// length of its list changes: a row is measured many times in one
+    /// layout, and a round list can run to hundreds. So forget it (set it
+    /// to null) when the list is rebuilt, which can change what is in it
+    /// without changing how long it is. Capped at the first few hundred
+    /// choices, like the audit's own check - they say as much as all of
+    /// them.
+    /// </summary>
+    internal static int PickerWidth(ComboBox picker, ref (Font Font, int Count, int Width)? kept, string alsoFits = "")
+    {
+        if (kept is { } known && ReferenceEquals(known.Font, picker.Font) && known.Count == picker.Items.Count)
+        {
+            return known.Width;
+        }
+
+        var widest = string.IsNullOrEmpty(alsoFits) ? 0 : TextRenderer.MeasureText(alsoFits, picker.Font).Width;
+
+        foreach (var item in picker.Items.Cast<object>().Take(400))
+        {
+            var text = picker.GetItemText(item) ?? string.Empty;
+
+            widest = Math.Max(widest, TextRenderer.MeasureText(text, picker.Font).Width);
+        }
+
+        var width = widest + SystemInformation.VerticalScrollBarWidth + 24;
+
+        kept = (picker.Font, picker.Items.Count, width);
+        return width;
+    }
+
+    /// <summary>
+    /// Whether a part sizes itself - is asked how big it wants to be -
+    /// rather than keeping the size it was given. A text box says it does
+    /// (AutoSize) and does not, as far as WinForms' own layouts are
+    /// concerned: its "AutoSize" is only its one line's height, which it
+    /// keeps itself, and TextBoxBase does not pass it on to the layouts,
+    /// which size a text box by the bounds it was given. Asked for its size, a
+    /// three-line notes box answers with its text's - one line when empty -
+    /// so a card measuring it that way came out two lines shorter than the
+    /// table inside laid it out. Measured the way the tables measure, the
+    /// two agree.
+    /// </summary>
+    internal static bool SizesItself(Control part) => part.AutoSize && part is not TextBoxBase;
+
     /// <summary>The FillPage a control is in, however deep, or null.</summary>
     internal static FillPage? FillPageOf(Control control)
     {
@@ -1622,7 +2370,7 @@ internal static class Pieces
     {
         foreach (Control part in table.Controls)
         {
-            if (!part.Visible || !part.AutoSize || part.Dock != DockStyle.None || part is ThinScrollBar or TextBoxBase)
+            if (!part.Visible || !SizesItself(part) || part.Dock != DockStyle.None || part is ThinScrollBar)
             {
                 continue;
             }

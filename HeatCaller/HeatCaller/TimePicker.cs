@@ -79,10 +79,54 @@ public sealed class TimePicker : Control
         LayoutSegments();
     }
 
+    /// <summary>
+    /// The size its time needs in the font it is drawn in: each segment
+    /// wide enough for the widest thing it shows ("00", "PM") with a little
+    /// room either side, and as tall as a text box in the same font.
+    ///
+    /// Only asked by a layout that sizes it (AutoSize) - Setup's first race
+    /// time, which follows the text size. A picker given a size by hand
+    /// keeps it: the 120x26 it was built at held the time at the normal
+    /// text size and clipped it at any larger one.
+    /// </summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        const TextFormatFlags flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+
+        var digits = TextRenderer.MeasureText("00", Font, Size.Empty, flags).Width;
+        var meridiem = Math.Max(
+            TextRenderer.MeasureText("AM", Font, Size.Empty, flags).Width,
+            TextRenderer.MeasureText("PM", Font, Size.Empty, flags).Width);
+
+        // The room either side of the text in its segment.
+        var room = Math.Max(6, Font.Height / 2);
+
+        // See LayoutSegments: hour and minute take three tenths of the
+        // segments' width each, the meridiem four.
+        var unit = Math.Max(
+            (int)Math.Ceiling((digits + room) / 1.5),
+            (int)Math.Ceiling((meridiem + room) / 2.0));
+
+        return new Size(unit * 5 + FixedWidth + 4, Math.Max(26, Font.Height + 8));
+    }
+
+    /// <summary>The arrows' strip down the right-hand side.</summary>
+    private const int ArrowWidth = 18;
+
+    /// <summary>
+    /// Room across that is not the segments': the left inset (4), the gaps
+    /// after the hour (8) and the minute (6), and the arrows with a little
+    /// either side of them.
+    /// </summary>
+    private const int FixedWidth = 4 + 8 + 6 + ArrowWidth + 6;
+
     private void LayoutSegments()
     {
-        const int arrowWidth = 18;
-        var textWidth = Math.Max(10, Width - arrowWidth - 6);
+        // The segments share what the insets, the gaps and the arrows leave.
+        // They used to share the width less the arrows only, and the gaps
+        // came on top - so the meridiem's box ran under the arrows by the
+        // width of the gaps, and a wide "PM" was drawn into their strip.
+        var textWidth = Math.Max(10, Width - FixedWidth);
 
         // Hour and minute get equal space; the meridiem needs a little more
         // to fit "AM"/"PM" comfortably.
@@ -91,9 +135,9 @@ public sealed class TimePicker : Control
         _minuteRect = new Rectangle(_hourRect.Right + 8, 0, unit * 3 / 2, Height);
         _meridiemRect = new Rectangle(_minuteRect.Right + 6, 0, unit * 2, Height);
 
-        var arrowX = Width - arrowWidth - 2;
-        _upRect = new Rectangle(arrowX, 2, arrowWidth, Height / 2 - 2);
-        _downRect = new Rectangle(arrowX, Height / 2, arrowWidth, Height / 2 - 2);
+        var arrowX = Width - ArrowWidth - 2;
+        _upRect = new Rectangle(arrowX, 2, ArrowWidth, Height / 2 - 2);
+        _downRect = new Rectangle(arrowX, Height / 2, ArrowWidth, Height / 2 - 2);
     }
 
     protected override void OnPaint(PaintEventArgs e)

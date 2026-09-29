@@ -132,6 +132,16 @@ public static class UiLayout
     /// <summary>Indent for controls that belong under a checkbox above them.</summary>
     public const int Indent = 24;
 
+    /// <summary>
+    /// A size chosen by eye at the normal text size, at the text size in
+    /// use - for a field sized for what goes in it (a name box about forty
+    /// characters wide) or a drawn part (a progress bar), which would
+    /// otherwise hold half as much at 200%. Measure what can be measured - a
+    /// caption, a button, a drop-down's longest choice - rather than scale
+    /// a guess at it.
+    /// </summary>
+    public static int AtTextSize(int pixels) => (int)Math.Round(pixels * AppTheme.FontScale);
+
     // --- Helpers ----------------------------------------------------------
 
     /// <summary>The y of the next row down.</summary>

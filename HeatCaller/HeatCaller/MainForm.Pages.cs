@@ -807,7 +807,9 @@ public partial class MainForm
         // the checklist is six ticks and the grid is the page. Rather than
         // guess, the line is the director's to drag, and where they leave it
         // is remembered.
-        raceProgram.UseAsProgrammePane();
+        //
+        // The programme page is built for this half now - no next-step banner
+        // of its own, no height floor - so there is nothing to switch off.
 
         // How much of the page each half wants to open at. Measured rather
         // than written down, because what "enough to be useful" costs in
@@ -826,13 +828,18 @@ public partial class MainForm
         // once there is room for them, and the panels keep WinForms' own 25px
         // minimums - which are small enough to survive any window size, and
         // still stop either half being dragged away to nothing.
-        var todayTopMin = AppTheme.TitleFont.Height + AppTheme.BodyFont.Height
-                          + AppTheme.HeadingFont.Height + UiLayout.ButtonHeight
-                          + UiLayout.SectionGap * 2;
+        //
+        // Asked each time rather than worked out once, so they follow the
+        // text size as the two halves do.
+        static int TodayTopMin() =>
+            AppTheme.TitleFont.Height + AppTheme.BodyFont.Height
+            + AppTheme.HeadingFont.Height + UiLayout.ButtonHeight
+            + UiLayout.SectionGap * 2;
 
-        var todayBottomMin = UiLayout.ButtonHeight * 2 + AppTheme.SmallFont.Height * 2
-                             + AppTheme.MicroFont.Height + AppTheme.BodyFont.Height * 3
-                             + UiLayout.RowGap * 5;
+        static int TodayBottomMin() =>
+            UiLayout.ButtonHeight * 2 + AppTheme.SmallFont.Height * 2
+            + AppTheme.MicroFont.Height + AppTheme.BodyFont.Height * 3
+            + UiLayout.RowGap * 5;
 
         var todaySplit = new SplitContainer
         {
@@ -855,13 +862,13 @@ public partial class MainForm
         // the page in either dark theme.
         todaySplit.BackColor = AppTheme.Border;
 
-        // Kept out of the layout repair pass, halves and all. Both halves lay
-        // themselves out - Next Steps measures every band, the programme's
-        // header and footer are already left alone - and a SplitContainer is
-        // a scrollable control: caught mid-resize with a half hanging past
-        // its edge, the pass turned scrolling on for the WHOLE split, which
-        // put a second pair of scrollbars round the entire tab.
-        LayoutDoctor.LeaveAlone(todaySplit);
+        // The layout repair pass never comes in here: Race Day is on
+        // LayoutAudit.ConvertedPages, and both halves are built on the layout
+        // pieces. It used to have to be told to keep out of this split in
+        // particular - a SplitContainer is a scrollable control, and caught
+        // mid-resize with a half hanging past its edge, the pass turned
+        // scrolling on for the WHOLE split, which put a second pair of
+        // scrollbars round the entire tab.
 
         todaySplit.Panel1.Controls.Add(today);
         todaySplit.Panel2.Controls.Add(raceProgram);
@@ -883,7 +890,7 @@ public partial class MainForm
             // Not enough room to open at a useful size: leave WinForms to it
             // and try again on the next resize. Nothing is assigned until the
             // arithmetic below is known to be in range.
-            if (room < todayTopMin + todayBottomMin)
+            if (room < TodayTopMin() + TodayBottomMin())
             {
                 return;
             }
@@ -894,7 +901,7 @@ public partial class MainForm
             var saved = _settings.TodayProgrammeSplit;
             var wanted = saved > 0 ? saved : room * 55 / 100;
 
-            todaySplit.SplitterDistance = Math.Clamp(wanted, todayTopMin, room - todayBottomMin);
+            todaySplit.SplitterDistance = Math.Clamp(wanted, TodayTopMin(), room - TodayBottomMin());
 
             // Set last, so the assignment above - which raises SplitterMoved -
             // does not save the default back over a position the director
@@ -918,14 +925,14 @@ public partial class MainForm
             }
 
             var room = todaySplit.Height - todaySplit.SplitterWidth;
-            var most = room - todayBottomMin;
+            var most = room - TodayBottomMin();
 
-            if (most < todayTopMin)
+            if (most < TodayTopMin())
             {
                 return;
             }
 
-            var wanted = Math.Clamp(today.ContentHeight, todayTopMin, most);
+            var wanted = Math.Clamp(today.ContentHeight, TodayTopMin(), most);
 
             if (todaySplit.SplitterDistance < wanted)
             {

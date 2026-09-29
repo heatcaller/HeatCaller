@@ -40,6 +40,10 @@ internal static class LayoutAudit
     internal static readonly IReadOnlyList<string> ConvertedPages = new[]
     {
         "Race Control",
+
+        // All three tabs: Next Steps (TodayControl over RaceProgramControl),
+        // Setup (RaceDayEventControl) and Who's Racing (CheckInControl).
+        "Race Day",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>
@@ -228,12 +232,14 @@ internal static class LayoutAudit
     /// MaximumSize - and then it is asked how tall it wanted to be at the
     /// width it was given.
     ///
-    /// One that ends in "..." on purpose (AutoEllipsis) has chosen to be
-    /// cut short, and is left alone.
+    /// One that ends in "..." on purpose has chosen to be cut short, and is
+    /// left alone: AutoEllipsis, or QuietEllipsis - which the theme pass
+    /// swaps every AutoEllipsis label over to, turning AutoEllipsis off, so
+    /// asking AutoEllipsis alone reported every one of them as cut off.
     /// </summary>
     private static void CheckLabel(Label label, string where, List<Finding> findings)
     {
-        if (label.AutoEllipsis || string.IsNullOrWhiteSpace(label.Text))
+        if (label.AutoEllipsis || QuietEllipsis.IsAttached(label) || string.IsNullOrWhiteSpace(label.Text))
         {
             return;
         }

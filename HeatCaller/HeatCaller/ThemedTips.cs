@@ -272,6 +272,14 @@ internal static class QuietEllipsis
         label.TextChanged += (_, _) => label.Invalidate();
     }
 
+    /// <summary>
+    /// Whether a label ends in "..." this way - chose to be cut short when
+    /// its text does not fit, as one with AutoEllipsis does. The theme pass
+    /// swaps every AutoEllipsis label over to this, so LayoutAudit asks here
+    /// as well as there.
+    /// </summary>
+    public static bool IsAttached(Label label) => Attached.TryGetValue(label, out _);
+
     private static void Repaint(Label label, Graphics g)
     {
         var text = label.Text;

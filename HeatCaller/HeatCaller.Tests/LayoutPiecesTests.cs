@@ -13,7 +13,12 @@ namespace HeatCaller.Tests;
 /// least the list can do with scrolls instead of squashing it. So is the
 /// same promise made through a Beside, the way Race Control is built: a
 /// Session row handed over afterwards, a column down the side, and a card
-/// with a list that fills it.
+/// with a list that fills it. And the pieces Race Day's tabs are built
+/// from: grids in separate cards lined up down the page, a hint that holds
+/// still when it is reworded, a filter row whose summary moves onto a line
+/// of its own, two cards side by side in a page that sizes its parts, two
+/// bars of buttons against opposite edges - and the fonts they keep in step
+/// with the text size.
 /// </summary>
 public sealed class LayoutPiecesTests
 {
@@ -536,6 +541,373 @@ public sealed class LayoutPiecesTests
         finally
         {
             Application.ThreadException -= Threw;
+        }
+
+        return problems;
+    }
+
+    [Fact]
+    public void CardsLineUpHoldStillAndComeBackDownWhenWidenedAgain()
+    {
+        var problems = StaThread.Run(CheckCards, TimeSpan.FromMinutes(1), () => _now);
+
+        Assert.True(problems.Count == 0, "The cards did not lay out as they should:\n" + string.Join("\n", problems));
+    }
+
+    [Fact]
+    public void WhatAPageKeepsFollowsTheTextSize()
+    {
+        var problems = StaThread.Run(CheckTextSize, TimeSpan.FromMinutes(1), () => _now);
+
+        Assert.True(problems.Count == 0, "TextSize did not follow the text size:\n" + string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// A page built the way Race Day's tabs are: field grids in separate
+    /// cards sharing one caption column, a hint that says one of two
+    /// things, a filter row whose summary moves onto a line of its own when
+    /// it no longer fits, two cards side by side in a page that sizes its
+    /// parts, and two bars of buttons against opposite edges. Wide, narrow,
+    /// and wide again - where what wrapped has to come back up.
+    /// </summary>
+    private static List<string> CheckCards()
+    {
+        _now = "a page of cards";
+
+        var problems = new List<string>();
+
+        void Threw(object? sender, ThreadExceptionEventArgs e) =>
+            problems.Add($"{_now}: {e.Exception.GetType().Name}: {e.Exception.Message}");
+
+        Application.ThreadException += Threw;
+
+        try
+        {
+            using var window = new QuietWindow();
+            var page = new Panel { Bounds = new Rectangle(0, 0, 1200, 900) };
+
+            window.Controls.Add(page);
+
+            var stack = new PageStack();
+            page.Controls.Add(stack);
+
+            // --- Two grids in two cards, lined up ---
+            var about = stack.Add(new Section("About the day"));
+            var aboutGrid = about.Add(new FieldGrid(), gapBelow: 0);
+
+            var name = new TextBox { Width = 200 };
+            aboutGrid.AddRow("Name:", name);
+
+            const string shortWording = "Qualifying heats, then finals.";
+            const string longWording =
+                "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them, "
+                + "checked in or not, and the night's standings are simply the order they finished in.";
+
+            var hint = aboutGrid.AddHint(new SteadyLabel { Wordings = new[] { shortWording, longWording } });
+            hint.Text = shortWording;
+
+            var only = aboutGrid.AddField(new CheckBox { Text = "Checked-in drivers only", AutoSize = true });
+
+            var program = stack.Add(new Section("Building the program"));
+            var programGrid = program.Add(new FieldGrid(), gapBelow: 0);
+
+            var rounds = new NumericUpDown { Width = 70, Minimum = 1, Maximum = 10, Value = 3 };
+            var roundsCaption = programGrid.AddRow("Heats each driver gets:", rounds);
+
+            var scope = new ComboBox { Width = 260, DropDownStyle = ComboBoxStyle.DropDownList };
+            scope.Items.Add("the class that was racing");
+            scope.SelectedIndex = 0;
+            programGrid.AddRow("Next race is:", scope);
+
+            // --- Two cards side by side, in a page that sizes its parts ---
+            var step = new Section();
+            step.Add(new Label { Text = "NEXT STEP", AutoSize = true });
+            step.Add(new Label { Text = "Build tonight's heats", AutoSize = true });
+            step.Add(new ButtonBar().With(new Button { Text = "Build" }), gapBelow: 0);
+
+            var ready = new Section("Ready to race");
+            var todo = ready.Add(new Label
+            {
+                Text = "Still to do: choose tonight's classes  ·  add drivers to tonight's classes  ·  build the program  ·  connect the timer",
+                AutoSize = true,
+            });
+            var finish = ready.Add(new ButtonBar().With(new Button { Text = "Finish Setting Up..." }), gapBelow: 0);
+
+            var band = stack.Add(new Beside(() => 260) { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink });
+            band.AddFill(step, width => step.GetPreferredSize(new Size(width, 0)).Height);
+            band.AddSideCard(ready);
+
+            // --- A filter row with a summary that moves ---
+            var filters = stack.Add(new Section("Drivers"));
+            var row = filters.Add(new FieldRow(), gapBelow: 0);
+
+            var classes = new ComboBox { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList };
+            classes.Items.Add("(all classes)");
+            classes.SelectedIndex = 0;
+
+            var tech = new CheckBox { Text = "Only those not through tech", AutoSize = true };
+            var summary = new Label { AutoSize = false, AutoEllipsis = true, Text = "3 of 12 checked in" };
+
+            row.Add(new Label { Text = "Class:" }, classes);
+            row.Add(null, tech);
+            row.AddLast(null, summary, () => TextRenderer.MeasureText(summary.Text, summary.Font).Width);
+
+            // --- Two bars against opposite edges ---
+            var bars = stack.Add(new Section("Tonight's program"), gapBelow: 0);
+
+            var commands = new[] { "Start Selected", "Edit Drivers...", "More..." }
+                .Select(caption => new Button { Text = caption })
+                .ToArray();
+
+            var tools = new[] { "Glossary...", "Standings...", "Timetable..." }
+                .Select(caption => new Button { Text = caption })
+                .ToArray();
+
+            var split = bars.Add(new SplitBar(new ButtonBar().With(commands), new ButtonBar(alignRight: true).With(tools)), gapBelow: 0);
+
+            // Where a button in either bar is in the SplitBar - each bar
+            // places its own buttons from its own top.
+            static int TopIn(Button button) => button.Parent!.Top + button.Top;
+            static int BottomIn(Button button) => button.Parent!.Top + button.Bottom;
+
+            AppTheme.ApplyRecursively(page);
+
+            // After the theme pass, as a page does it: the captions are in
+            // the font they will be drawn in by then.
+            FieldGrid.LineUp(new[] { aboutGrid, programGrid }, "Races each driver gets:");
+
+            window.Show();
+            StaThread.Settle();
+
+            _now = "a page of cards, 1200 wide";
+
+            CheckLinedUp();
+            CheckSnug();
+            CheckBand();
+            Audit();
+
+            if (commands.Concat(tools).Select(TopIn).Distinct().Count() != 1)
+            {
+                problems.Add($"{_now}: the two bars are not on one line - there is room for both");
+            }
+
+            if (tools[0].Right != tools[0].Parent!.Width || tools[0].Parent!.Right != split.ClientSize.Width)
+            {
+                problems.Add($"{_now}: the glossary ends at {tools[0].Right} in a bar ending at {tools[0].Parent!.Right} - both should be against the right-hand edge ({split.ClientSize.Width})");
+            }
+
+            if (summary.Top > classes.Bottom)
+            {
+                problems.Add($"{_now}: the summary is on a line of its own - it fits beside the filter");
+            }
+
+            // Reworded: the hint is as tall as its longer wording already,
+            // so nothing under it moves.
+            var onlyTop = only.Top;
+            hint.Text = longWording;
+            StaThread.Settle();
+
+            if (only.Top != onlyTop)
+            {
+                problems.Add($"{_now}: the check box under the hint moved from {onlyTop} to {only.Top} when the hint was reworded");
+            }
+
+            // A summary that no longer fits beside the filter goes onto a
+            // line of its own - told by nothing but its own text changing.
+            summary.Text = "3 of 12 checked in (40 total checked in across all classes)   —   heats are built from checked-in drivers only, "
+                + "and everyone else waits for the next race day";
+            StaThread.Settle();
+
+            if (summary.Top <= classes.Bottom)
+            {
+                problems.Add($"{_now}: the long summary is still beside the filter, {summary.Width}px wide - it should have gone onto a line of its own");
+            }
+
+            CheckSnug();
+            Audit();
+
+            page.Bounds = new Rectangle(0, 0, 560, 900);
+            StaThread.Settle();
+
+            _now = "a page of cards, 560 wide";
+
+            if (tools.Select(TopIn).Min() < commands.Select(BottomIn).Max())
+            {
+                problems.Add($"{_now}: the day tools are beside the round commands - there is not room, and they should have gone under");
+            }
+
+            if (tools[0].Parent!.Right != split.ClientSize.Width)
+            {
+                problems.Add($"{_now}: the day tools end at {tools[0].Parent!.Right}, not against the right-hand edge at {split.ClientSize.Width}");
+            }
+
+            if (todo.Height < 2 * todo.Font.Height)
+            {
+                problems.Add($"{_now}: what is left to do is {todo.Height}px tall - in a 260px card it should wrap");
+            }
+
+            CheckLinedUp();
+            CheckSnug();
+            CheckBand();
+            Audit();
+
+            summary.Text = "3 of 12 checked in";
+            page.Bounds = new Rectangle(0, 0, 1200, 900);
+            StaThread.Settle();
+
+            _now = "a page of cards, narrow and then 1200 wide again";
+
+            if (commands.Concat(tools).Select(TopIn).Distinct().Count() != 1)
+            {
+                problems.Add($"{_now}: the two bars did not come back onto one line");
+            }
+
+            if (summary.Top > classes.Bottom)
+            {
+                problems.Add($"{_now}: the short summary did not come back beside the filter");
+            }
+
+            CheckLinedUp();
+            CheckSnug();
+            CheckBand();
+            Audit();
+
+            if (stack.ContentHeight != bars.Bottom + stack.Padding.Vertical)
+            {
+                problems.Add($"{_now}: the page says its content is {stack.ContentHeight}px tall - it is {bars.Bottom + stack.Padding.Vertical}px");
+            }
+
+            // The two grids share a caption column, however wide their own
+            // captions are, so their fields start at one x.
+            void CheckLinedUp()
+            {
+                if (name.Left != rounds.Left || hint.Left != name.Left || only.Left != name.Left)
+                {
+                    problems.Add($"{_now}: the fields start at {name.Left} (Name), {hint.Left} (the hint), {only.Left} (the check box) "
+                        + $"and {rounds.Left} (Heats) - one column, lined up");
+                }
+
+                var reworded = TextRenderer.MeasureText("Races each driver gets:", roundsCaption.Font).Width;
+
+                if (roundsCaption.Width < reworded)
+                {
+                    problems.Add($"{_now}: the caption column is {roundsCaption.Width}px - the other wording needs {reworded}px, so rewording would move the fields");
+                }
+            }
+
+            // A card or grid that sizes itself is as tall as what is in it
+            // and no taller - including after it was narrow. The audit
+            // cannot see empty space.
+            void CheckSnug()
+            {
+                foreach (var card in new[] { about, program, filters, bars })
+                {
+                    var bottom = card.Controls.Cast<Control>()
+                        .Where(part => part.Visible && part is not ThinScrollBar)
+                        .Max(part => part.Bottom);
+
+                    var spare = card.Height - bottom - Section.Inset.Bottom;
+
+                    if (Math.Abs(spare) > 1)
+                    {
+                        problems.Add($"{_now}: the \"{card.Controls[0].Text}\" card has {spare + Section.Inset.Bottom}px under its last part - it should have its inset, {Section.Inset.Bottom}px");
+                    }
+                }
+
+                foreach (var grid in new[] { aboutGrid, programGrid })
+                {
+                    var bottom = grid.Controls.Cast<Control>().Where(part => part.Visible).Max(part => part.Bottom);
+
+                    if (Math.Abs(grid.Height - bottom) > 1)
+                    {
+                        problems.Add($"{_now}: a field grid is {grid.Height}px tall and its last row ends at {bottom}");
+                    }
+                }
+            }
+
+            // Side by side: the card on the left as tall as the pair, the
+            // one on the right against the right-hand edge, at least 260px.
+            void CheckBand()
+            {
+                if (step.Height != band.ClientSize.Height || ready.Height > band.ClientSize.Height)
+                {
+                    problems.Add($"{_now}: the cards are {step.Height}px and {ready.Height}px tall in a band {band.ClientSize.Height}px tall - "
+                        + "the left one should fill it, and the right one fit in it");
+                }
+
+                if (ready.Right != band.ClientSize.Width || ready.Width < 260)
+                {
+                    problems.Add($"{_now}: the side card is {ready.Width}px wide ending at {ready.Right} - at least 260, against the edge at {band.ClientSize.Width}");
+                }
+
+                if (finish.Bottom > ready.ClientSize.Height)
+                {
+                    problems.Add($"{_now}: the side card's button runs off its bottom");
+                }
+            }
+
+            void Audit()
+            {
+                foreach (var finding in LayoutAudit.Check(page, "Cards", StaThread.Settle))
+                {
+                    problems.Add($"{_now}: [{finding.Kind}] {finding.Detail}");
+                }
+            }
+        }
+        finally
+        {
+            Application.ThreadException -= Threw;
+        }
+
+        return problems;
+    }
+
+    /// <summary>
+    /// A face worn through TextSize, and a label with lines kept for it,
+    /// after the text size changes - the fonts are replaced then, not
+    /// resized, so anything handed one has to be handed the new one.
+    /// </summary>
+    private static List<string> CheckTextSize()
+    {
+        _now = "a text size change";
+
+        var problems = new List<string>();
+
+        try
+        {
+            AppTheme.SetFontScale(1f);
+
+            var keeper = new TextSize();
+
+            using var hint = keeper.Wear(new Label { Text = "A hint." }, () => AppTheme.SmallFont);
+            using var status = keeper.Wear(new Label { Text = string.Empty, AutoSize = true }, () => AppTheme.BoldFont);
+
+            keeper.ReserveLines(status, 2);
+
+            var kept = 0;
+            keeper.Keep(() => kept++);
+
+            AppTheme.SetFontScale(1.5f);
+            keeper.Apply();
+
+            if (!Equals(hint.Font, AppTheme.SmallFont))
+            {
+                problems.Add($"{_now}: the hint is still in {hint.Font.Size}pt - the small face is {AppTheme.SmallFont.Size}pt now");
+            }
+
+            if (status.MinimumSize.Height != 2 * AppTheme.BoldFont.Height)
+            {
+                problems.Add($"{_now}: the status keeps {status.MinimumSize.Height}px - two lines of the bold face are {2 * AppTheme.BoldFont.Height}px now");
+            }
+
+            if (kept != 2)
+            {
+                problems.Add($"{_now}: something kept was done {kept} times - once when kept, once at the new size");
+            }
+        }
+        finally
+        {
+            AppTheme.SetFontScale(1f);
         }
 
         return problems;

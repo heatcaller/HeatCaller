@@ -32,7 +32,22 @@ public sealed class RaceDayEventControl : UserControl
     private readonly UndoService? _undo;
 
     private readonly ComboBox _cmbEvent = new();
-    private readonly Label _lblStatus = new();
+
+    /// <summary>
+    /// What the picked day already holds. As tall as its longest form needs
+    /// at the width it has, so the cards below do not hop when a day that is
+    /// the current one - which adds a sentence - is picked or left.
+    /// </summary>
+    private readonly SteadyLabel _lblStatus = new()
+    {
+        Wordings = new[]
+        {
+            CurrentDaySentence + "999 checked in · 99 classes racing · 999 rounds in the program, 999 recorded · 999 timetable lines",
+        },
+    };
+
+    /// <summary>What the status line says first when the picked day is the current one.</summary>
+    private const string CurrentDaySentence = "CURRENT - the whole page is about this race day.  ";
     private readonly TextBox _txtName = new();
 
     /// <summary>
@@ -126,13 +141,42 @@ public sealed class RaceDayEventControl : UserControl
     /// <summary>What kind of night this day is - see <see cref="RaceDayShape"/>. The most consequential field on the page, so it sits near the top.</summary>
     private readonly ComboBox _cmbShape = new();
 
-    private readonly Label _lblShapeHint = new();
+    /// <summary>The hint under the shape picker, worded from it - as tall as the longer wording, so the fields below never move as the box is used.</summary>
+    private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
+
+    private const string RaceDayShapeHint =
+        "Qualifying heats, then finals built from them. Heats are built from drivers who have checked in.";
+
+    private const string ClubNightShapeHint =
+        "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them.";
 
     /// <summary>The rounds-per-driver caption, held because its wording comes from the shape.</summary>
     private Label? _lblQualRounds;
 
-    /// <summary>The hint under the class tick list - also worded from the shape.</summary>
-    private Label? _lblClassHint;
+    /// <summary>The hint under the class tick list - also worded from the shape, and as tall as the longer wording.</summary>
+    private readonly SteadyLabel _lblClassHint = new() { Wordings = new[] { RaceDayClassHint, ClubNightClassHint } };
+
+    private const string RaceDayClassHint =
+        "Tick the classes running today. Next Steps builds all of tonight's heats for every one of them in one press.";
+
+    private const string ClubNightClassHint =
+        "Tick the classes running today. Next Steps builds all of tonight's races for every one of them in one press.";
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>
+    /// The drop-downs' widths, measured from their choices - see
+    /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
+    /// RefitFields).
+    /// </summary>
+    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth;
+
+    /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
+    private const int FieldWidth = 320;
+    private const int EventPickerWidth = 420;
+    private const int ScopePickerWidth = 260;
+    private const int NumberWidth = 70;
 
     /// <summary>Says "Saved" for a moment after a change goes in, so saving-as-you-type is visible rather than assumed.</summary>
     private readonly Label _lblSaved = new();
@@ -209,16 +253,47 @@ public sealed class RaceDayEventControl : UserControl
         _raceClasses = raceClasses;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than inherited: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise take.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// A new text size, reaching this page through its tab's bold face -
+    /// the only way it does, since the page wears a face of its own. See
+    /// TextSize.
+    /// </summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Builds the page on the layout pieces (LayoutPieces.cs): the intro,
+    /// then three cards - which day, what the day is, and how its program
+    /// is built - with their fields lined up down the page, then Close Day
+    /// and Delete Day. Nothing is placed by hand, and the page scrolls when
+    /// the window is too short for it.
+    ///
+    /// It was one long column placed row by row from a field column
+    /// measured once, with the hints held to two lines at 560px and the
+    /// fields at widths chosen by eye at the normal text size - and no way
+    /// to scroll, so at 1280x720 the bottom of it was simply not there.
+    /// </summary>
     private void BuildLayout()
     {
-        var y = UiLayout.PageTop;
-
         var lblIntro = new Label
         {
             Text = "The race day everything on this page belongs to. Check-ins, scrutineering, the heats and the "
@@ -226,20 +301,10 @@ public sealed class RaceDayEventControl : UserControl
                  + "and last week's are kept under last week's day instead of being cleared away. Changes here save "
                  + "themselves as you make them.",
             AutoSize = true,
-            MaximumSize = new Size(880, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
         };
 
-        lblIntro.Location = new Point(UiLayout.PageLeft, y);
-
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        // --- The picker row ---
-        var lblWorking = new Label { Text = "Working on:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _cmbEvent.Font = AppTheme.BodyFont;
-        _cmbEvent.Width = 420;
+        // --- Which race day ---
         _cmbEvent.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbEvent.SelectedIndexChanged += (_, _) =>
         {
@@ -282,219 +347,113 @@ public sealed class RaceDayEventControl : UserControl
             }
         };
 
-        lblWorking.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lblWorking, y, _cmbEvent.Height));
-        _cmbEvent.Location = new Point(UiLayout.After(lblWorking), y);
-
         _btnNew.Text = "New Race Day";
-        _btnNew.Font = AppTheme.BodyFont;
-        _btnNew.Size = new Size(UiLayout.WidthFor(_btnNew), UiLayout.ButtonHeight);
-        _btnNew.Location = new Point(UiLayout.After(_cmbEvent) + UiLayout.RowGap, y);
         _btnNew.Click += (_, _) => _ = StartNewDay();
 
         // The wizard's front door, beside the button that starts a day the
         // short way. Both are here because both are "I am setting up
         // tonight" - one for somebody who knows what they want, one for
-        // somebody who would rather be asked.
+        // somebody who would rather be asked. On the same line as the picker
+        // when there is room for all three, and wrapping under it when there
+        // is not - at a larger text size, or on a narrow window.
         _btnWizard.Text = "Set Up Tonight...";
-        _btnWizard.Font = AppTheme.BodyFont;
-        _btnWizard.Size = new Size(UiLayout.WidthFor(_btnWizard), UiLayout.ButtonHeight);
         _btnWizard.Click += (_, _) => SetUpTonightRequested?.Invoke();
 
-        // Measured from the TALLEST thing on the row above, not from the
-        // combo box. A button is 36 high and the combo box 28, so clearing
-        // the box left this row four pixels inside "New Race Day" and the
-        // doctor shunted it down ten every startup.
-        y = Math.Max(
-            UiLayout.Below(_cmbEvent, UiLayout.RowGap),
-            UiLayout.Below(_btnNew, UiLayout.RowGap));
-
-        // Its own row, under the picker, rather than fourth on the row
-        // above. That row is already a caption, a 420px combo and a button,
-        // which lands this one at about x=720 - inside the page at the
-        // default text size and off the end of it at the next notch up, or
-        // on a narrower window. A button nobody can see is the same as no
-        // button, which is what happened.
-        _btnWizard.Location = new Point(UiLayout.PageLeft, y);
-
-        y = UiLayout.Below(_btnWizard, UiLayout.RowGap);
-
-        // Two lines reserved whether or not the status needs them, so the
-        // fields below do not hop when a different event is picked.
-        _lblStatus.AutoSize = false;
-        _lblStatus.Font = AppTheme.BodyFont;
         _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Location = new Point(UiLayout.PageLeft, y);
-        _lblStatus.Size = new Size(880, AppTheme.BodyFont.Height * 2 + 4);
 
-        y = UiLayout.Below(_lblStatus, UiLayout.RowGap);
+        var dayGrid = new FieldGrid();
 
-        // --- The fields ---
-        //
-        // The field column used to be the literal 190, which was wide enough
-        // for "Championship:" and for nothing longer. "Heats each driver
-        // gets:" - the plain-English replacement for "Qualifying rounds:" -
-        // is half as wide again, and at one notch up on the text-size setting
-        // the old column clipped it. Measured from the captions themselves,
-        // with the old 190 kept as a floor so the page looks unchanged at the
-        // default size.
-        var fieldLeft = 190;
+        dayGrid.AddRow("Working on:", FieldGrid.Inline(_cmbEvent, _btnNew, _btnWizard));
 
-        foreach (var caption in new[]
-                 {
-                     "Name:", ShapeCaption, "Venue:", "Track layout:", "Championship:",
-                     HeatsPerDriverCaption, RacesPerDriverCaption, FirstRaceCaption,
-                     "Classes racing:", "Drivers per heat:", "Next race is:", "Notes:",
-                 })
-        {
-            var measured = TextRenderer.MeasureText(
-                caption,
-                AppTheme.BodyFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        var which = new Section("Which race day");
 
-            fieldLeft = Math.Max(fieldLeft, UiLayout.PageLeft + measured.Width + UiLayout.LabelGap * 2);
-        }
+        which.Add(dayGrid);
+        which.Add(_lblStatus, gapBelow: 0);
 
-        // Returns the CAPTION, not the new y: two of these rows are worded
-        // from the day's shape, and a caption created as a local inside here
-        // could never be reworded afterwards. No caller used the y.
-        Label Row(string caption, Control field, int width)
-        {
-            var lbl = new Label { Text = caption, AutoSize = true, Font = AppTheme.BodyFont };
+        // --- What the day is ---
+        var aboutGrid = new FieldGrid();
 
-            field.Font = AppTheme.BodyFont;
-            field.Width = width;
-            field.Location = new Point(fieldLeft, y);
-            lbl.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lbl, y, field.Height));
+        aboutGrid.AddRow("Name:", _txtName);
 
-            Controls.Add(lbl);
-            Controls.Add(field);
-
-            y = UiLayout.Below(field, UiLayout.RowGap);
-
-            return lbl;
-        }
-
-        Row("Name:", _txtName, 320);
-
-        // --- What kind of night ---
-        //
-        // Second, right under the name, because it decides more about what
-        // the rest of the app shows than every field below it put together.
-        // A day saved before this existed has no shape in its file and reads
-        // back as a race day, which is what it has always behaved as.
+        // What kind of night: second, right under the name, because it
+        // decides more about what the rest of the app shows than every field
+        // below it put together. A day saved before this existed has no
+        // shape in its file and reads back as a race day, which is what it
+        // has always behaved as.
         _cmbShape.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.RaceDay, "Race day - heats, then finals"));
         _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.ClubNight, "Club night - just races"));
         _cmbShape.SelectedIndex = 0;
 
-        Row(ShapeCaption, _cmbShape, 320);
-
-        // Two lines reserved whatever the wording needs, the same as the
-        // status line above: this label is rewritten when the shape changes,
-        // and an AutoSize one would grow by a line and push every field
-        // below it down the page as the box was used.
-        _lblShapeHint.AutoSize = false;
-        _lblShapeHint.ForeColor = AppTheme.TextMuted;
-        _lblShapeHint.Font = AppTheme.SmallFont;
-        _lblShapeHint.Location = new Point(fieldLeft, y);
-        _lblShapeHint.Size = new Size(560, AppTheme.SmallFont.Height * 2 + 4);
-
-        Controls.Add(_lblShapeHint);
-
-        y = UiLayout.Below(_lblShapeHint, UiLayout.RowGap);
+        aboutGrid.AddRow(ShapeCaption, _cmbShape);
+        aboutGrid.AddHint(_lblShapeHint);
 
         // Editable combos: the venue and layout lists are suggestions, not
         // gatekeepers - a club night at a friend's garage should not need a
         // venue profile made first.
         _cmbVenue.DropDownStyle = ComboBoxStyle.DropDown;
-        Row("Venue:", _cmbVenue, 320);
+        aboutGrid.AddRow("Venue:", _cmbVenue);
 
         _cmbLayout.DropDownStyle = ComboBoxStyle.DropDown;
-        Row("Track layout:", _cmbLayout, 320);
+        aboutGrid.AddRow("Track layout:", _cmbLayout);
 
         _cmbChampionship.DropDownStyle = ComboBoxStyle.DropDownList;
-        Row("Championship:", _cmbChampionship, 320);
-
-        _numQualRounds.Minimum = 1;
-        _numQualRounds.Maximum = 10;
-        _numQualRounds.Value = 3;
-        _lblQualRounds = Row(HeatsPerDriverCaption, _numQualRounds, 70);
+        aboutGrid.AddRow("Championship:", _cmbChampionship);
 
         // --- When it starts ---
         //
         // A tick and a picker on one row: the property is nullable, and a
-        // time picker cannot say "not set". Placed by hand rather than
-        // through Row, which takes one field.
+        // time picker cannot say "not set".
+        //
         // TimePicker, not WinForms' DateTimePicker. That one wraps a native
         // Windows control which ignores BackColor and ForeColor almost
         // entirely, so its spinner came out in system grey against the dark
         // theme - a pasted-on white block - and clipped its own text at any
         // sensible width. TimePicker paints every pixel itself and is what
-        // the rest of the app already uses for a time of day.
-        _dtpFirstRace.Size = new Size(130, 26);
+        // the rest of the app already uses for a time of day. It sizes
+        // itself to its time in its font (AutoSize), and wears the body face
+        // it was built with at the text size in use.
+        _dtpFirstRace.AutoSize = true;
         _dtpFirstRace.Value = TimeSpan.FromHours(10);
-        _dtpFirstRace.Location = new Point(fieldLeft, y);
+        _textSize.Wear(_dtpFirstRace, () => AppTheme.BodyFont);
 
         _chkFirstRace.Text = "Set";
         _chkFirstRace.AutoSize = true;
-        _chkFirstRace.Font = AppTheme.BodyFont;
-        _chkFirstRace.Location = new Point(
-            UiLayout.After(_dtpFirstRace) + UiLayout.RowGap,
-            UiLayout.CentreOn(_chkFirstRace, y, _dtpFirstRace.Height));
 
-        var lblFirstRace = new Label { Text = FirstRaceCaption, AutoSize = true, Font = AppTheme.BodyFont };
+        aboutGrid.AddRow(FirstRaceCaption, FieldGrid.Inline(_dtpFirstRace, _chkFirstRace));
 
-        // Centred on itself against the picker's height, the same as Row
-        // does for the fields above and below.
-        lblFirstRace.Location = new Point(
-            UiLayout.PageLeft,
-            UiLayout.CentreOn(lblFirstRace, y, _dtpFirstRace.Height));
+        _txtNotes.Multiline = true;
+        _txtNotes.AcceptsReturn = true;
+        _txtNotes.ScrollBars = ScrollBars.Vertical;
+        aboutGrid.AddRow("Notes:", _txtNotes);
 
-        Controls.Add(lblFirstRace);
-        Controls.Add(_dtpFirstRace);
-        Controls.Add(_chkFirstRace);
+        var about = new Section("About the day");
 
-        y = UiLayout.Below(_dtpFirstRace, UiLayout.RowGap);
+        about.Add(aboutGrid, gapBelow: 0);
 
-        // --- What the Program tab builds from ---
+        // --- What the program is built from ---
+        _numQualRounds.Minimum = 1;
+        _numQualRounds.Maximum = 10;
+        _numQualRounds.Value = 3;
+
+        var programGrid = new FieldGrid();
+
+        _lblQualRounds = programGrid.AddRow(HeatsPerDriverCaption, _numQualRounds);
 
         _lstClasses.CheckOnClick = true;
         _lstClasses.BorderStyle = BorderStyle.None;
         _lstClasses.IntegralHeight = false;
-        _lstClasses.Height = AppTheme.BodyFont.Height * 5 + 12;
-        Row("Classes racing:", _lstClasses, 320);
-
-        // Two lines reserved, for the same reason as the shape hint above:
-        // the wording changes with the shape.
-        var lblClassHint = new Label
-        {
-            AutoSize = false,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(fieldLeft, y),
-            Size = new Size(560, AppTheme.SmallFont.Height * 2 + 4),
-        };
-
-        _lblClassHint = lblClassHint;
-
-        Controls.Add(lblClassHint);
-
-        y = UiLayout.Below(lblClassHint, UiLayout.RowGap);
+        programGrid.AddRow("Classes racing:", _lstClasses);
+        programGrid.AddHint(_lblClassHint);
 
         _numHeatSize.Minimum = 2;
         _numHeatSize.Maximum = 20;
         _numHeatSize.Value = 8;
-        Row("Drivers per heat:", _numHeatSize, 70);
+        programGrid.AddRow("Drivers per heat:", _numHeatSize);
 
         _chkCheckedInOnly.Text = "Only include drivers who have checked in";
         _chkCheckedInOnly.AutoSize = true;
-        _chkCheckedInOnly.Font = AppTheme.BodyFont;
-        _chkCheckedInOnly.Location = new Point(fieldLeft, y);
-
-        Controls.Add(_chkCheckedInOnly);
-
-        y = UiLayout.Below(_chkCheckedInOnly, UiLayout.RowGap);
+        programGrid.AddField(_chkCheckedInOnly);
 
         // Rolling into the next race. It used to be a strip at the bottom
         // of the programme, among the buttons pressed every ten minutes -
@@ -508,37 +467,17 @@ public sealed class RaceDayEventControl : UserControl
         // has to be able to tell apart from the label alone.
         _chkAutoAdvance.Text = "Start the next race automatically";
         _chkAutoAdvance.AutoSize = true;
-        _chkAutoAdvance.Font = AppTheme.BodyFont;
-        _chkAutoAdvance.Location = new Point(fieldLeft, y);
-
-        Controls.Add(_chkAutoAdvance);
-
-        y = UiLayout.Below(_chkAutoAdvance, UiLayout.RowGap);
+        programGrid.AddField(_chkAutoAdvance);
 
         _cmbAutoAdvanceScope.DropDownStyle = ComboBoxStyle.DropDownList;
-        _lblAutoAdvanceScope = Row("Next race is:", _cmbAutoAdvanceScope, 260);
+        _lblAutoAdvanceScope = programGrid.AddRow("Next race is:", _cmbAutoAdvanceScope);
 
         _lblAutoAdvanceHint.Text = "Which race it reaches for when the one that just finished is recorded.";
-        _lblAutoAdvanceHint.AutoSize = false;
-        _lblAutoAdvanceHint.Size = new Size(Math.Max(240, 880 - fieldLeft), AppTheme.SmallFont.Height + 4);
-        _lblAutoAdvanceHint.Font = AppTheme.SmallFont;
-        _lblAutoAdvanceHint.ForeColor = AppTheme.TextMuted;
-        _lblAutoAdvanceHint.Location = new Point(fieldLeft, y);
+        programGrid.AddHint(_lblAutoAdvanceHint);
 
-        Controls.Add(_lblAutoAdvanceHint);
+        var program = new Section("Building the program");
 
-        y = UiLayout.Below(_lblAutoAdvanceHint, UiLayout.RowGap);
-
-        _txtNotes.Multiline = true;
-        _txtNotes.AcceptsReturn = true;
-        _txtNotes.ScrollBars = ScrollBars.Vertical;
-
-        // Three lines of the font it is drawn in, so Ctrl +/- takes it
-        // with everything else rather than leaving a box measured once.
-        _txtNotes.Height = AppTheme.BodyFont.Height * 3 + UiLayout.HintGap * 2;
-        Row("Notes:", _txtNotes, 320);
-
-        y += UiLayout.RowGap;
+        program.Add(programGrid, gapBelow: 0);
 
         // --- The actions ---
         //
@@ -562,40 +501,40 @@ public sealed class RaceDayEventControl : UserControl
         _btnDeleteDay.Text = "Delete Day...";
         _btnDeleteDay.Click += (_, _) => DeleteDay();
 
-        AppTheme.LayoutButtonRow(UiLayout.PageLeft, y, UiLayout.ButtonGap, _btnCloseDay, _btnDeleteDay);
-
-        _lblSaved.AutoSize = true;
-        _lblSaved.Font = AppTheme.BodyFont;
         _lblSaved.ForeColor = AppTheme.Success;
         _lblSaved.Visible = false;
-        _lblSaved.Location = new Point(
-            UiLayout.After(_btnDeleteDay) + UiLayout.RowGap,
-            UiLayout.CentreOn(_lblSaved, y, UiLayout.ButtonHeight));
 
-        y = UiLayout.Below(_btnCloseDay, UiLayout.RowGap);
+        var lblHint = _textSize.Wear(
+            new Label
+            {
+                Text = "Picking a day above points check-in, scrutineering, the heats and the timetable at it. "
+                     + "Close Day stops new rounds joining it - results and standings keep reading it forever. "
+                     + "The legacy day holds everything recorded before race days were tracked, and is read-only here.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
-        var lblHint = new Label
-        {
-            Text = "Picking a day above points check-in, scrutineering, the heats and the timetable at it. "
-                 + "Close Day stops new rounds joining it - results and standings keep reading it forever. "
-                 + "The legacy day holds everything recorded before race days were tracked, and is read-only here.",
-            AutoSize = true,
-            MaximumSize = new Size(880, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(UiLayout.PageLeft, y),
-        };
+        // --- The page ---
+        var page = new PageStack();
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblWorking);
-        Controls.Add(_cmbEvent);
-        Controls.Add(_btnNew);
-        Controls.Add(_btnWizard);
-        Controls.Add(_lblStatus);
-        Controls.Add(_lblSaved);
-        Controls.Add(_btnCloseDay);
-        Controls.Add(_btnDeleteDay);
-        Controls.Add(lblHint);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(which);
+        page.Add(about);
+        page.Add(program);
+        page.Add(FieldGrid.Inline(_btnCloseDay, _btnDeleteDay, _lblSaved), gapBelow: UiLayout.RowGap);
+        page.Add(lblHint, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Once the fields are on the page and wear its face - what they are
+        // measured in.
+        //
+        // One caption column down all three cards, wide enough for both
+        // wordings of the rounds-per-driver caption, so neither the text
+        // size nor the kind of night ever moves the fields sideways.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { dayGrid, aboutGrid, programGrid }, HeatsPerDriverCaption, RacesPerDriverCaption));
+        _textSize.Keep(SizeFields);
 
         // The two shape-worded captions and the two hints, filled once here
         // so the page is never briefly blank in those spots - LoadFields
@@ -603,6 +542,55 @@ public sealed class RaceDayEventControl : UserControl
         ApplyShapeWording();
 
         WireAutoSave();
+    }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use. The drop-downs are as wide
+    /// as their longest choice, and never narrower than they were at the
+    /// normal text size; the boxes are the width they were then, at this
+    /// size; the class list is five lines tall and the notes three, of the
+    /// font they are drawn in.
+    ///
+    /// Run again when the text size changes (TextSize.Keep) and when the
+    /// lists are rebuilt (RefitFields).
+    /// </summary>
+    private void SizeFields()
+    {
+        var wide = UiLayout.AtTextSize(FieldWidth);
+        var number = UiLayout.AtTextSize(NumberWidth);
+
+        Fit(_cmbEvent, Math.Max(UiLayout.AtTextSize(EventPickerWidth), Pieces.PickerWidth(_cmbEvent, ref _eventWidth)));
+        Fit(_txtName, wide);
+        Fit(_cmbShape, Math.Max(wide, Pieces.PickerWidth(_cmbShape, ref _shapeWidth)));
+        Fit(_cmbVenue, Math.Max(wide, Pieces.PickerWidth(_cmbVenue, ref _venueWidth)));
+        Fit(_cmbLayout, Math.Max(wide, Pieces.PickerWidth(_cmbLayout, ref _layoutWidth)));
+        Fit(_cmbChampionship, Math.Max(wide, Pieces.PickerWidth(_cmbChampionship, ref _championshipWidth)));
+        Fit(_txtNotes, wide, _txtNotes.Font.Height * 3 + UiLayout.HintGap * 2);
+        Fit(_numQualRounds, number);
+        Fit(_lstClasses, wide, _lstClasses.Font.Height * 5 + 12);
+        Fit(_numHeatSize, number);
+        Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
+
+        // Only when it changed: a new size lays the grid out again.
+        static void Fit(Control field, int width, int? height = null)
+        {
+            var size = new Size(width, height ?? field.Height);
+
+            if (field.Size != size)
+            {
+                field.Size = size;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The drop-downs measured again after their lists were rebuilt, which
+    /// can change their longest choice without changing how many they hold.
+    /// </summary>
+    private void RefitFields()
+    {
+        _eventWidth = _shapeWidth = _venueWidth = _layoutWidth = _championshipWidth = _scopeWidth = null;
+        SizeFields();
     }
 
     // ------------------------------------------------------------------
@@ -874,6 +862,10 @@ public sealed class RaceDayEventControl : UserControl
         }
 
         LoadSelected();
+
+        // Every list was rebuilt from the stores - a longer venue or
+        // championship name, a day added.
+        RefitFields();
     }
 
     private sealed record SeasonChoice(Season Season)
@@ -959,10 +951,11 @@ public sealed class RaceDayEventControl : UserControl
     /// Puts the captions and hints that depend on the day's shape in line
     /// with the picker.
     ///
-    /// Only wording: no control moves, and both variants of every caption
-    /// are in the column measurement at the top of BuildLayout, so the field
-    /// column is the same width either way and nothing shifts as the box is
-    /// used. The two hints are fixed at two lines for the same reason.
+    /// Only wording: no control moves. Both variants of the caption are in
+    /// the caption column's measurement (FieldGrid.LineUp in BuildLayout),
+    /// so the column is the same width either way and nothing shifts as the
+    /// box is used; the two hints are as tall as their longer wording
+    /// (SteadyLabel) for the same reason.
     /// </summary>
     private void ApplyShapeWording()
     {
@@ -976,16 +969,8 @@ public sealed class RaceDayEventControl : UserControl
         // The check-in rule is named here rather than left to the tick box
         // below, because it is set FROM this choice when the day is started
         // and somebody reading the two options needs to know that.
-        _lblShapeHint.Text = clubNight
-            ? "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them."
-            : "Qualifying heats, then finals built from them. Heats are built from drivers who have checked in.";
-
-        if (_lblClassHint is not null)
-        {
-            _lblClassHint.Text = clubNight
-                ? "Tick the classes running today. Next Steps builds all of tonight's races for every one of them in one press."
-                : "Tick the classes running today. Next Steps builds all of tonight's heats for every one of them in one press.";
-        }
+        _lblShapeHint.Text = clubNight ? ClubNightShapeHint : RaceDayShapeHint;
+        _lblClassHint.Text = clubNight ? ClubNightClassHint : RaceDayClassHint;
     }
 
     private void LoadFields(RaceEvent raceEvent)
@@ -1033,6 +1018,10 @@ public sealed class RaceDayEventControl : UserControl
         LoadAutoAdvanceScope(
             raceEvent.AutoAdvanceScopeOr(_settings?.AutoAdvanceScope ?? "drivers"),
             raceEvent.AutoAdvanceClassOr(_settings?.AutoAdvanceClassName ?? string.Empty));
+
+        // Rebuilt from the classes that exist now, so measured again.
+        _scopeWidth = null;
+        SizeFields();
 
         for (var i = 0; i < _lstClasses.Items.Count; i++)
         {
@@ -1114,7 +1103,7 @@ public sealed class RaceDayEventControl : UserControl
             string.Equals(e.EventId, raceEvent.Id, StringComparison.Ordinal));
 
         var current = string.Equals(raceEvent.Id, _events.CurrentId, StringComparison.Ordinal)
-            ? "CURRENT - the whole page is about this race day.  "
+            ? CurrentDaySentence
             : string.Empty;
 
         var classCount = raceEvent.ClassNames.Count;

@@ -31,10 +31,13 @@ namespace HeatCaller;
 /// whether they read the round count - collapse into one command that
 /// builds the whole programme for every class at once.
 ///
-/// THIRD, and this is the point of the exercise: the banner. One sentence
-/// saying where the day has got to, and one button that does the next
-/// thing. The logic behind it is in ProgramNextStep, kept separate
-/// because it has to be right rather than merely tidy.
+/// THIRD, and this is the point of the exercise: the next step. One
+/// sentence saying where the day has got to, and one button that does the
+/// next thing. The logic behind it is in ProgramNextStep, kept separate
+/// because it has to be right rather than merely tidy. This page used to
+/// show it as a banner over the list; it is Next Steps' card now, above
+/// this page (see TodayControl), and this page works it out for that card
+/// and for Race Control's Next Up bar.
 ///
 /// The buttons that remain are in two groups with a real distinction
 /// between them: the left group acts on the SELECTED round, the right
@@ -53,12 +56,19 @@ public sealed class RaceProgramControl : UserControl
     private readonly UndoService _undo;
     private readonly RaceEventStore? _events;
 
-    // --- The banner ---
-    private readonly Panel _banner = new();
-    private readonly Label _lblKicker = new();
-    private readonly Label _lblHeadline = new();
-    private readonly Label _lblDetail = new();
-    private readonly Button _btnPrimary = new();
+    // --- The page ---
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The class filter and its caption - held so a rebuilt class list can re-measure it.</summary>
+    private FieldRow? _filterRow;
+
+    /// <summary>The class filter's width, measured from its choices - see Pieces.PickerWidth. Forgotten when the list is rebuilt.</summary>
+    private (Font Font, int Count, int Width)? _filterWidth;
+
+    /// <summary>The class filter's width at the normal text size, before it is measured - see FilterWidth.</summary>
+    private const int FilterPickerWidth = 190;
 
     // --- The list ---
     private readonly DataGridView _grid = new();
@@ -108,31 +118,22 @@ public sealed class RaceProgramControl : UserControl
     /// <summary>The timetable, read-only - only for the grid's Due column. Null when the host did not pass one.</summary>
     private readonly DayScheduleStore? _schedule;
 
-    /// <summary>The "Class:" caption, held so the footer can be re-laid-out from outside its Resize handler.</summary>
-    private Label? _lblFilter;
-
     /// <summary>
-    /// The strip above the grid: what the list is, on the left, and the
-    /// class filter that narrows it, on the right - over the list it filters
-    /// rather than down in the footer with the buttons.
-    /// </summary>
-    private readonly Panel _listHeader = new();
-    private readonly Label _lblListCaption = new();
-
-    /// <summary>
-    /// What the footer and the round menu were last BUILT for.
+    /// What the buttons and the round menu were last set up for.
     ///
-    /// A field rather than a read of the day, because the layout arrays and
-    /// the menu's Opening handler both have to agree about which buttons
+    /// A field rather than a read of the day, because the buttons and the
+    /// menu's Opening handler both have to agree about which commands
     /// exist, and asking the store twice invites them to disagree halfway
     /// through a rebuild. Set only by ApplyDayShape.
     /// </summary>
     private bool _clubNight;
 
-    private readonly Label _lblStatus = new();
-    private readonly Panel _footer = new();
+    /// <summary>Whether ApplyDayShape has run once - before it has, the buttons have never been set up for any kind of night.</summary>
+    private bool _shapeApplied;
 
-    /// <summary>What the banner is currently offering. Set by RefreshBanner, read by the button.</summary>
+    private readonly Label _lblStatus = new();
+
+    /// <summary>The next step, as last worked out by RefreshNextStep. Run by RunPrimaryAction.</summary>
     private ProgramStep _step = new(ProgramStage.NoEvent, string.Empty, string.Empty, "...");
 
     /// <summary>Raised when the director wants a round on track now. MainForm applies it and starts the countdown.</summary>
@@ -146,7 +147,7 @@ public sealed class RaceProgramControl : UserControl
 
     /// <summary>
     /// Raised when the next step is something that has to be done on the
-    /// Event tab. The banner offers the button; MainForm knows how to
+    /// Event tab. Next Steps' card offers the button; MainForm knows how to
     /// switch tabs, and this control deliberately does not.
     /// </summary>
     public event Action? GoToEventTab;
@@ -217,17 +218,38 @@ public sealed class RaceProgramControl : UserControl
         _events = events;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
-        // Unchanged from the page this replaced. It is only a floor for the
-        // bands' initial width; everything in them is measured against the
-        // real width on every resize.
-        MinimumSize = new Size(920, 560);
+
+        // The body face, worn rather than inherited: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise take.
+        //
+        // No MinimumSize. This page is the lower half of Next Steps' split,
+        // and WinForms honours MinimumSize over the size its parent hands
+        // out - the 560px floor it once had pushed the buttons off the
+        // bottom of the pane. A pane too short for the list's least scrolls
+        // instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
-    private const int Inset = 16;
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// A new text size, reaching this page through its tab's bold face -
+    /// the only way it does, since the page wears a face of its own. See
+    /// TextSize.
+    /// </summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
 
     /// <summary>
     /// The title of one particular refusal, named rather than written out
@@ -245,176 +267,96 @@ public sealed class RaceProgramControl : UserControl
     /// <summary>The other seeding refusal, named for the same reason - it picks the dialog's icon.</summary>
     private const string MainsAlreadyRunTitle = "Mains already run";
 
-    /// <summary>
-    /// Turns this page into the lower half of Today: no next-step card, and
-    /// no height floor.
-    ///
-    /// Heats &amp; Mains is no longer a tab of its own. The grid and its
-    /// commands sit under Today's next-step card now, and the card this page
-    /// carried was pure duplication - both ask ProgramNextStep and both print
-    /// the same sentence, so stacked one above the other they read as two
-    /// different instructions.
-    ///
-    /// The card is HIDDEN rather than unparented. A Top-docked control that
-    /// is not visible is left out of the docking arithmetic, so the grid takes
-    /// the room; but the card's labels and its button stay parented and
-    /// themed, which means RefreshBanner keeps working and _step - which
-    /// RunPrimaryAction and Race Control's Next Up bar both read - is still
-    /// brought up to date on every refresh. Taking the panel out of Controls
-    /// would have left those children measuring themselves against the
-    /// WinForms default font.
-    ///
-    /// MinimumSize goes because it has to. A whole-tab page could afford a
-    /// 560px floor; half of a split pane cannot, and WinForms honours
-    /// MinimumSize over its parent's size - so the floor would have pushed the
-    /// footer off the bottom of the pane and put the six buttons on it out of
-    /// reach. Nothing here needs it: every band measures itself against the
-    /// real width on every resize, which is what the floor was standing in for
-    /// during construction, and by now construction is over.
-    /// </summary>
-    public void UseAsProgrammePane()
-    {
-        _banner.Visible = false;
-        MinimumSize = Size.Empty;
-    }
-
     // ------------------------------------------------------------------
     //  Layout
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// The page is one card, filling the lower half of Next Steps: the
+    /// class filter, the list of rounds taking whatever height is left,
+    /// the buttons under it - the ones for the selected round on the left,
+    /// the ones for the day on the right - and the status line. Built on
+    /// the layout pieces (LayoutPieces.cs); nothing is placed by hand.
+    ///
+    /// Heats &amp; Mains is no longer a tab of its own, and this page no
+    /// longer carries the next-step banner it had then: Next Steps' card
+    /// says the same sentence, because both ask ProgramNextStep, and
+    /// stacked one above the other they read as two different
+    /// instructions. The banner was hidden for as long as this page has
+    /// been Next Steps' lower half, and has gone; the step it showed is
+    /// still worked out here (RefreshNextStep).
+    ///
+    /// It used to be three bands docked top and bottom, each placing its
+    /// own children on every resize - the strip over the list, the list,
+    /// and a two-row footer that decided for itself whether the day tools
+    /// fitted beside the round commands.
+    /// </summary>
     private void BuildLayout()
     {
-        BuildBanner();
         BuildGrid();
-        BuildFooter();
+        BuildButtons();
 
-        var list = new Panel
+        // --- The class filter, over the list it narrows ---
+        _cmbFilter.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbFilter.SelectedIndexChanged += (_, _) =>
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(UiLayout.PageLeft, UiLayout.RowGap, UiLayout.PageRight, UiLayout.RowGap),
+            _settings.LastRaceProgramClass = FilterClass;
+            _settings.Save();
+            RefreshGrid();
         };
 
-        list.Controls.Add(_grid);
+        var filterRow = new FieldRow();
 
-        // Added after the Fill, so it docks first and the grid takes what is
-        // left under it. Inside the list's padding, so its left and right
-        // edges are the grid's.
-        list.Controls.Add(_listHeader);
+        filterRow.Add(new Label { Text = "Class:" }, _cmbFilter, FilterWidth);
+        _filterRow = filterRow;
 
-        // Both bands measure and place their own children on every resize,
-        // so the repair pass is told to keep out of them. Without this the
-        // two would take turns moving the same buttons - see
-        // LayoutDoctor.LeaveAlone.
-        LayoutDoctor.LeaveAlone(_banner);
-        LayoutDoctor.LeaveAlone(_footer);
-        LayoutDoctor.LeaveAlone(_listHeader);
+        // --- The status line ---
+        //
+        // What the last command did. Two lines kept for it whatever it says,
+        // so the buttons above it do not hop as the messages come and go.
+        _lblStatus.AutoSize = true;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblStatus, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(_lblStatus, 2);
 
-        // Fill is added FIRST and docks LAST: WinForms resolves docking
-        // from the end of the collection backwards, so whatever is added
-        // first is left with whatever the others did not take.
-        Controls.Add(list);
-        Controls.Add(_footer);
-        Controls.Add(_banner);
-    }
+        // --- The card ---
+        //
+        // The split is the point of the two bars. Every button on the left
+        // needs a round chosen and is disabled without one; nothing on the
+        // right does. That is the distinction the old single wrapping row
+        // of ten buttons had no way to express. The glossary - the one thing
+        // here that is not an action on the day - ends up hard against the
+        // right-hand edge, where help is looked for.
+        var roundCommands = new ButtonBar().With(_btnStart, _btnEditDrivers, _btnMore);
+        var dayTools = new ButtonBar(alignRight: true).With(_btnWords, _btnBumpUps, _btnMarshals, _btnStandings, _btnTimetable);
 
-    private void BuildBanner()
-    {
-        _banner.Dock = DockStyle.Top;
-        // A starting height only - LayoutBanner sets the real one from the
-        // text once there is any.
-        _banner.Height = 108;
+        var list = new Section("Tonight's program");
 
-        _banner.Paint += (_, e) =>
-        {
-            var card = new RectangleF(
-                UiLayout.PageLeft,
-                UiLayout.RowGap,
-                Math.Max(10, _banner.Width - UiLayout.PageLeft - UiLayout.PageRight),
-                Math.Max(10, _banner.Height - UiLayout.RowGap));
+        list.Add(filterRow);
+        list.AddFill(_grid, LeastGridHeight);
+        list.Add(new SplitBar(roundCommands, dayTools));
+        list.Add(_lblStatus, gapBelow: 0);
 
-            // The one accented card in the app's vocabulary, and the only
-            // one on this page - which is what makes it read as "look here
-            // first" rather than as another box.
-            AppTheme.DrawCard(e.Graphics, card, AppTheme.Primary);
-        };
+        var page = new FillPage();
 
-        _lblKicker.AutoSize = true;
-        _lblKicker.Font = AppTheme.MicroFont;
-        _lblKicker.ForeColor = AppTheme.Primary;
+        page.AddFill(list, list.LeastHeight, gapBelow: 0);
 
-        _lblHeadline.AutoSize = true;
-        _lblHeadline.Font = AppTheme.HeadingFont;
-        _lblHeadline.ForeColor = AppTheme.TextDark;
-
-        _lblDetail.AutoSize = true;
-        _lblDetail.Font = AppTheme.SmallFont;
-        _lblDetail.ForeColor = AppTheme.TextMuted;
-
-        _btnPrimary.Click += (_, _) => RunPrimaryAction();
-
-        _banner.Controls.AddRange(new Control[] { _lblKicker, _lblHeadline, _lblDetail, _btnPrimary });
-        _banner.Resize += (_, _) => LayoutBanner();
+        Controls.Add(page);
     }
 
     /// <summary>
-    /// Places the banner's four children and sizes the band to fit them.
-    ///
-    /// Measured rather than placed at remembered coordinates: the headline
-    /// and the detail are both sentences that change with the state of the
-    /// day, the button's caption changes with them, and all three are drawn
-    /// in fonts that follow the text-size setting. Nothing here can be a
-    /// literal without being wrong at some size.
+    /// The class filter: wide enough for the longest class name, and never
+    /// under the 190px it had at the normal text size.
     /// </summary>
-    private void LayoutBanner()
-    {
-        var cardLeft = UiLayout.PageLeft;
-        var cardRight = Math.Max(cardLeft + 60, _banner.Width - UiLayout.PageRight);
+    private int FilterWidth() =>
+        Math.Max(UiLayout.AtTextSize(FilterPickerWidth), Pieces.PickerWidth(_cmbFilter, ref _filterWidth, AllClasses));
 
-        _btnPrimary.Width = Math.Max(UiLayout.ButtonWidth, UiLayout.WidthFor(_btnPrimary));
-
-        var buttonLeft = cardRight - Inset - _btnPrimary.Width;
-        var textRight = buttonLeft - UiLayout.RowGap * 2;
-
-        var textLeft = cardLeft + Inset;
-        var textWidth = Math.Max(120, textRight - textLeft);
-
-        _lblHeadline.MaximumSize = new Size(textWidth, 0);
-        _lblDetail.MaximumSize = new Size(textWidth, 0);
-
-        var y = UiLayout.RowGap + Inset - 2;
-
-        _lblKicker.Location = new Point(textLeft, y);
-        y = UiLayout.Below(_lblKicker, 6);
-
-        _lblHeadline.Location = new Point(textLeft, y);
-        y = UiLayout.Below(_lblHeadline, 4);
-
-        _lblDetail.Location = new Point(textLeft, y);
-
-        var contentBottom = UiLayout.Below(_lblDetail, Inset);
-
-        // Centred against the text block as a whole, not against any one
-        // line of it, so the button does not slide up and down as the
-        // detail wraps to one line or two.
-        _btnPrimary.Location = new Point(
-            buttonLeft,
-            UiLayout.RowGap + Math.Max(Inset, (contentBottom - UiLayout.RowGap - _btnPrimary.Height) / 2));
-
-        var wanted = Math.Max(contentBottom, UiLayout.Below(_btnPrimary, Inset));
-
-        if (_banner.Height != wanted)
-        {
-            // Assigning Height re-runs this through Resize, so it is only
-            // ever assigned when it actually changed.
-            _banner.Height = wanted;
-        }
-
-        _banner.Invalidate();
-    }
+    /// <summary>The least height the list can do with: its headings and three rounds. Below that the pane scrolls instead - see FillPage.</summary>
+    private int LeastGridHeight() =>
+        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height;
 
     private void BuildGrid()
     {
-        _grid.Dock = DockStyle.Fill;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -482,11 +424,9 @@ public sealed class RaceProgramControl : UserControl
             new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 70 });
     }
 
-    private void BuildFooter()
+    /// <summary>The buttons under the list, and what each does. Their bars size them to their captions - see BuildLayout.</summary>
+    private void BuildButtons()
     {
-        _footer.Dock = DockStyle.Bottom;
-        _footer.Width = MinimumSize.Width;
-
         _btnStart.Text = "Start Selected";
         _btnStart.Click += (_, _) => StartSelectedRound();
 
@@ -509,141 +449,35 @@ public sealed class RaceProgramControl : UserControl
         _btnBumpUps.Text = "Move the Top Finishers Up...";
         _btnBumpUps.Click += (_, _) => ApplyBumpUps(null);
 
-        // Short, so the footer fits on one line. The window it opens is
-        // titled "What these words mean", which says the rest.
+        // Short, so the day tools fit beside the round commands where they
+        // can. The window it opens is titled "What these words mean", which
+        // says the rest.
         _btnWords.Text = "Glossary...";
         _btnWords.Click += (_, _) => RacingWordsForm.ShowFor(FindForm());
 
         _btnTimetable.Text = "Timetable...";
         _btnTimetable.Click += (_, _) => TimetableRequested?.Invoke();
-
-        _cmbFilter.Font = AppTheme.BodyFont;
-        _cmbFilter.Width = UiLayout.FieldWidth;
-        _cmbFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbFilter.SelectedIndexChanged += (_, _) =>
-        {
-            _settings.LastRaceProgramClass = FilterClass;
-            _settings.Save();
-            RefreshGrid();
-        };
-
-        var lblFilter = new Label { Text = "Class:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        // Held so the footer can be laid out again when the day's shape
-        // changes, which alters which buttons are on it. LayoutFooter used to
-        // reach it only through the Resize closure.
-        _lblFilter = lblFilter;
-
-        _lblStatus.AutoSize = false;
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Font = AppTheme.SmallFont;
-
-        _footer.Controls.AddRange(new Control[]
-        {
-            _btnStart, _btnEditDrivers, _btnMore,
-            _btnTimetable, _btnStandings, _btnMarshals, _btnBumpUps, _btnWords,
-            _lblStatus,
-        });
-
-        _footer.Resize += (_, _) => LayoutFooter();
-        LayoutFooter();
-
-        // --- The strip above the grid ---
-        _listHeader.Dock = DockStyle.Top;
-
-        _lblListCaption.AutoSize = true;
-        _lblListCaption.Font = AppTheme.MicroFont;
-        _lblListCaption.ForeColor = AppTheme.TextMuted;
-        _lblListCaption.Text = AppTheme.Spaced("TONIGHT'S PROGRAM");
-
-        _listHeader.Controls.Add(_lblListCaption);
-        _listHeader.Controls.Add(lblFilter);
-        _listHeader.Controls.Add(_cmbFilter);
-
-        _listHeader.Resize += (_, _) => LayoutListHeader();
-        LayoutListHeader();
     }
 
     /// <summary>
-    /// The caption on the left, "Class: [ ]" hard against the right - the
-    /// right edge of the grid underneath, since both sit inside the list's
-    /// padding.
-    /// </summary>
-    private void LayoutListHeader()
-    {
-        if (_lblFilter is not { } lblFilter)
-        {
-            return;
-        }
-
-        _cmbFilter.Width = 190;
-
-        // A closed drop-down only settles on its final height once it is
-        // skinned, so the strip is cut for at least the height it grows to.
-        var rowHeight = Math.Max(_cmbFilter.Height, AppTheme.BodyFont.Height + 10);
-        var right = Math.Max(_cmbFilter.Width + 200, _listHeader.ClientSize.Width);
-
-        _cmbFilter.Location = new Point(right - _cmbFilter.Width, Math.Max(0, (rowHeight - _cmbFilter.Height) / 2));
-
-        // Measured in the font it is drawn in, the way the layout pass
-        // measures it - PreferredWidth runs a few pixels short.
-        var caption = TextRenderer.MeasureText(lblFilter.Text, AppTheme.BodyFont).Width;
-
-        lblFilter.Location = new Point(
-            _cmbFilter.Left - UiLayout.LabelGap - caption,
-            UiLayout.CentreOn(lblFilter, 0, rowHeight));
-
-        _lblListCaption.Location = new Point(0, UiLayout.CentreOn(_lblListCaption, 0, rowHeight));
-
-        // Room under it before the grid starts. Only when it changed, since
-        // assigning Height re-runs this through Resize.
-        var wanted = rowHeight + UiLayout.RowGap;
-
-        if (_listHeader.Height != wanted)
-        {
-            _listHeader.Height = wanted;
-        }
-    }
-
-    /// <summary>
-    /// Two rows. Selection actions on the left of the first, day tools on
-    /// the right of it; the status line and the auto-advance strip share
-    /// the second.
-    ///
-    /// The split is the point. Every button on the left needs a round
-    /// chosen and is disabled without one; nothing on the right does. That
-    /// is the distinction the old single wrapping row of ten buttons had
-    /// no way to express.
-    /// </summary>
-    /// <summary>
-    /// The day-tool buttons that are actually on the footer, LEFT TO RIGHT.
-    ///
-    /// Built from <see cref="_clubNight"/> and never from Control.Visible:
-    /// that getter reports EFFECTIVE visibility, so on a Race Day page that
-    /// is not the one being shown it answers false for every button and the
-    /// footer would lay itself out as if it were empty.
-    ///
-    /// "Move the Top Finishers Up..." goes on a club night because there is
-    /// nothing above for anyone to move up into.
-    /// </summary>
-    private Button[] ToolButtons() => _clubNight
-        ? new[] { _btnTimetable, _btnStandings, _btnMarshals, _btnWords }
-        : new[] { _btnTimetable, _btnStandings, _btnMarshals, _btnBumpUps, _btnWords };
-
-    /// <summary>
-    /// Brings the footer and the round menu into line with what kind of
+    /// Brings the buttons and the round menu into line with what kind of
     /// night the open day is. Cheap, and safe to call on every refresh: it
-    /// returns without touching the layout when nothing has changed.
+    /// returns without touching anything when nothing has changed.
+    ///
+    /// "Move the Top Finishers Up..." goes on a club night, because there
+    /// is nothing above for anyone to move up into; its bar closes up
+    /// behind it.
     /// </summary>
     private void ApplyDayShape()
     {
         var wanted = ActiveDay?.IsClubNight == true;
 
-        if (wanted == _clubNight && _lblFilter is not null)
+        if (_shapeApplied && wanted == _clubNight)
         {
             return;
         }
 
+        _shapeApplied = true;
         _clubNight = wanted;
 
         _btnBumpUps.Visible = !_clubNight;
@@ -651,111 +485,6 @@ public sealed class RaceProgramControl : UserControl
         // On a club night there is no TQ, so the same list is simply the
         // night's order.
         _btnStandings.Text = _clubNight ? "Tonight's Standings..." : "Standings...";
-
-        if (_lblFilter is not null)
-        {
-            LayoutFooter();
-        }
-    }
-
-    private void LayoutFooter()
-    {
-        var right = Math.Max(420, _footer.Width - UiLayout.PageRight);
-        var row = UiLayout.RowGap;
-
-        // Every button sized to its own caption, tightly. The standard
-        // width would put six of them past the right edge of the page at
-        // any text size above the smallest, and this row has to survive
-        // Ctrl+ as well as a narrow window.
-        foreach (var button in new[] { _btnStart, _btnEditDrivers, _btnMore }.Concat(ToolButtons()))
-        {
-            // Measured without the trailing "..." the theme takes off before
-            // drawing - measuring it left every such button a dot-dot-dot
-            // wider than its caption.
-            button.Text = AppTheme.Caption(button.Text);
-
-            var text = TextRenderer.MeasureText(
-                button.Text,
-                AppTheme.BoldFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-
-            // The theme's own padding either side, as UiLayout.WidthFor
-            // uses - 13 a side clipped the longer captions, the W of "What
-            // Do These Mean?" cut off at the button's edge.
-            button.Size = new Size(text.Width + UiLayout.ButtonPaddingX * 2, UiLayout.ButtonHeight);
-        }
-
-        // --- Left: what can be done to the selected round ---
-        var x = UiLayout.PageLeft;
-
-        foreach (var button in new[] { _btnStart, _btnEditDrivers, _btnMore })
-        {
-            button.Location = new Point(x, row);
-            x += button.Width + UiLayout.ButtonGap;
-        }
-
-        var leftEnd = x - UiLayout.ButtonGap;
-
-        // --- Right: what can be done to the day ---
-        //
-        // The class filter is not down here any more - it is in the strip
-        // above the grid, over the list it narrows - which is what lets the
-        // whole footer sit on one line.
-        var tools = ToolButtons();
-        var toolsWidth = tools.Sum(b => b.Width) + UiLayout.ButtonGap * Math.Max(0, tools.Length - 1);
-
-        if (leftEnd + UiLayout.SectionGap + toolsWidth <= right)
-        {
-            x = right;
-
-            // Right to left, so the glossary - the one thing here that is not
-            // an action on the day - ends up hard against the right edge
-            // where help is looked for.
-            foreach (var button in tools.Reverse())
-            {
-                x -= button.Width;
-                button.Location = new Point(x, row);
-                x -= UiLayout.ButtonGap;
-            }
-        }
-        else
-        {
-            // Too narrow for one line (a small window, or Ctrl+ a few
-            // notches): the day tools drop to a second row, still packed
-            // against the right edge so both rows end in the same place.
-            var toolRow = UiLayout.Below(_btnStart, UiLayout.RowGap);
-            x = right;
-
-            foreach (var button in tools.Reverse())
-            {
-                x -= button.Width;
-                button.Location = new Point(Math.Max(UiLayout.PageLeft, x), toolRow);
-                x -= UiLayout.ButtonGap;
-            }
-        }
-
-        // --- Second row: the status line ---
-        //
-        // The whole row now. The auto-advance strip used to sit on the
-        // right of it, with the status line squeezed into what was left -
-        // that setting lives on The Day, where the rest of the night's
-        // settings are.
-        row = UiLayout.Below(_btnStandings, UiLayout.RowGap);
-
-        _lblStatus.Location = new Point(UiLayout.PageLeft, row);
-        _lblStatus.Size = new Size(
-            Math.Max(160, right - UiLayout.PageLeft),
-            AppTheme.SmallFont.Height * 2 + 2);
-
-        var wanted = UiLayout.Below(_lblStatus, UiLayout.RowGap);
-
-        // Only when it changed: assigning Height re-runs this through
-        // Resize, and an unconditional assignment would never settle.
-        if (_footer.Height != wanted)
-        {
-            _footer.Height = wanted;
-        }
     }
 
     /// <summary>
@@ -786,7 +515,7 @@ public sealed class RaceProgramControl : UserControl
         // THE BANNER IS A SHORTCUT, NEVER THE ONLY DOOR. That is the rule,
         // and both of these are here because it was broken twice.
         //
-        // The banner offers exactly one thing: whatever is due next. It has
+        // The next step offers exactly one thing: whatever is due next. It has
         // to, or it is not a next step - it is a toolbar with an opinion.
         // But "due next" is a judgement about the usual shape of a race
         // day, and a race day that is not shaped that way still needs the
@@ -927,7 +656,7 @@ public sealed class RaceProgramControl : UserControl
     /// Scoped to the race day when there is one, so last week's heats do
     /// not appear in this week's list. With no race day open it falls back
     /// to the whole store rather than showing nothing - a club that has
-    /// never made an event still has a programme, and the banner is what
+    /// never made an event still has a programme, and the next step is what
     /// tells them to start filing it properly.
     /// </summary>
     private List<RoundDefinition> DayRounds()
@@ -1031,7 +760,7 @@ public sealed class RaceProgramControl : UserControl
     /// field. The two tabs refresh at different moments, and a button
     /// captioned "Start Q1 Heat 2" must run that round and not whatever
     /// this tab last happened to work out. Setting it first also keeps the
-    /// one rule this banner has: the command and the sentence describing
+    /// one rule the next step has: the command and the sentence describing
     /// it always come from the same ProgramStep.
     /// </summary>
     internal void RunStep(ProgramStep step)
@@ -1040,7 +769,7 @@ public sealed class RaceProgramControl : UserControl
         RunPrimaryAction();
     }
 
-    /// <summary>What the banner says right now: the one next thing to do.</summary>
+    /// <summary>What Next Steps' card says right now: the one next thing to do.</summary>
     internal ProgramStep NextStep() =>
         ProgramNextStep.Evaluate(_events?.Active, DayRounds(), RacingClasses(), PlannedQualifyingRounds(), _sessionHistory, SetupFacts());
 
@@ -1101,7 +830,7 @@ public sealed class RaceProgramControl : UserControl
             .ToList();
 
     /// <summary>
-    /// What exists in the app at all, for the banner to tell four different
+    /// What exists in the app at all, for the next step to tell four different
     /// kinds of empty apart - see ProgramNextStep.SetupFacts.
     ///
     /// A driver counts as "in a class" only when the class they name still
@@ -1197,7 +926,7 @@ public sealed class RaceProgramControl : UserControl
     ///
     /// Standings, Seed the Mains and Bump-Ups all used to return in
     /// silence on a blank class. That is reachable from more than one
-    /// place - the banner's "programme complete" state with no class to
+    /// place - the next step's "programme complete" state with no class to
     /// name, a menu item pressed on an empty programme - and every one of
     /// them looked like a button that did nothing at all. One of the
     /// refusals written for this, PlanSeedMains's own "Pick a class", was
@@ -1434,6 +1163,11 @@ public sealed class RaceProgramControl : UserControl
 
         var index = string.IsNullOrEmpty(previous) ? 0 : _cmbFilter.Items.IndexOf(previous);
         _cmbFilter.SelectedIndex = index >= 0 ? index : 0;
+
+        // The longest class may have come or gone: measured again, and the
+        // row with it.
+        _filterWidth = null;
+        _filterRow?.PerformLayout();
     }
 
     private void RefreshGrid()
@@ -1507,7 +1241,7 @@ public sealed class RaceProgramControl : UserControl
             }
         }
 
-        RefreshBanner(day);
+        RefreshNextStep(day);
         UpdateSelectionActions();
         NoteProgrammeChanged(day);
 
@@ -1589,7 +1323,12 @@ public sealed class RaceProgramControl : UserControl
         ProgrammeChanged?.Invoke();
     }
 
-    private void RefreshBanner(List<RoundDefinition> day)
+    /// <summary>
+    /// Works out the next step for the day on show - see _step. Next Steps'
+    /// card asks for it fresh (NextStep); this is the one the page runs
+    /// when it is handed none.
+    /// </summary>
+    private void RefreshNextStep(List<RoundDefinition> day)
     {
         _step = ProgramNextStep.Evaluate(
             _events?.Active,
@@ -1598,28 +1337,6 @@ public sealed class RaceProgramControl : UserControl
             PlannedQualifyingRounds(),
             _sessionHistory,
             SetupFacts());
-
-        _lblKicker.Text = AppTheme.Spaced(_step.Stage switch
-        {
-            ProgramStage.NoEvent or ProgramStage.DayClosed or ProgramStage.NoClassesOnFile
-                or ProgramStage.NoClasses or ProgramStage.NoDrivers
-                or ProgramStage.NobodyCheckedIn => "BEFORE YOU START",
-            ProgramStage.Complete => "ALL DONE",
-            _ => "NEXT STEP",
-        });
-
-        _lblHeadline.Text = _step.Headline;
-        _lblDetail.Text = _step.Detail;
-        _btnPrimary.Text = _step.ActionCaption;
-
-        // Re-styled on every refresh rather than once at construction,
-        // because the caption changes and the theme infers a button's
-        // colour from its caption. Pinned to Primary so the one button
-        // that matters is the one pink thing on the page, whatever it
-        // happens to say at the time.
-        AppTheme.StyleButton(_btnPrimary, AppTheme.ButtonKind.Primary);
-
-        LayoutBanner();
     }
 
     private void UpdateSelectionActions()
@@ -1636,11 +1353,11 @@ public sealed class RaceProgramControl : UserControl
     }
 
     // ------------------------------------------------------------------
-    //  The banner's one button
+    //  The next step's one command
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Runs whatever the banner is currently offering.
+    /// Runs the next step - Next Steps' card's button, by way of RunStep.
     ///
     /// A switch over the stage rather than a stored delegate, so the
     /// command and the sentence that describes it cannot drift apart: both

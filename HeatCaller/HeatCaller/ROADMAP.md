@@ -156,7 +156,8 @@ day: the layout overhaul is finished before the beta rather than after it
    freeze", 8). Decided 28 Sep: a club's first impression is the screens,
    and the overhaul is visual risk only. Page by page in race-night order,
    one per commit, each held to a clean layout report and checked by eye;
-   then the drawn controls, then `PerMonitorV2`. Race Control is done.
+   then the drawn controls, then `PerMonitorV2`. Race Control and Race Day
+   are done.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -552,8 +553,34 @@ from. Ranked by what decides whether a club switches, and stays.
    captions cut in half (they grow with the text now). Left for step 3: the
    clock and the flag buttons are drawn at fixed sizes. At 1280x720 (a
    1080p laptop at 150%) the page scrolls: the clock column and the least
-   the board can do with are taller than the room there. Next: Heats &
-   Mains, Who's Racing and check-in.
+   the board can do with are taller than the room there.
+
+   **Race Day converted (28 Sep)** - all three tabs: Next Steps (the next
+   step and Ready to Race as two cards side by side, the day's tiles, and
+   the program as one card under them), Setup (three cards of fields lined
+   up down the page) and Who's Racing (the roster card beside the scan
+   card). The pieces grew to fit: `FieldRow` takes fields with no caption
+   and a label at the end that moves onto a line of its own when it no
+   longer fits; `Beside` takes a card in its column (`AddSideCard`), a least width
+   that follows the text size, and can be a part of a `PageStack`;
+   `FieldGrid` measures itself (the known gap - and once laid out, takes
+   the height its rows came to, since a drop-down or a number box can be
+   drawn taller than it says it wants to be) and can share one caption
+   column across cards (`LineUp`), with `AddField` for a field under the
+   others with no caption; new are `SplitBar` (two bars against opposite
+   edges), `SteadyLabel` (as tall as the longest thing it can say) and
+   `TextSize` (the faces and sizes a page keeps in step with the text
+   size - Race Day's tabs wear the body face themselves, because the tab
+   row's bold one would otherwise be theirs). Fields sized for what goes
+   in them follow the text size (`UiLayout.AtTextSize`), drop-downs are
+   measured from their choices (`Pieces.PickerWidth`), `TimePicker` sizes
+   itself, and every tab row is as wide as its longest caption needs. The
+   programme's next-step banner, hidden since the fold into Next Steps, is
+   gone. `PageStack`'s column measures itself too: asked, the table kept a
+   narrow page's height after the page was widened. `LayoutAudit` no longer
+   reports a label that ends in "..." by design: the theme pass swaps
+   AutoEllipsis for `QuietEllipsis`, which the audit did not know. Race Day's user docs still describe the tabs from before the fold
+   (Event, Entries, Program) - a separate fix. Next: Connection.
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
@@ -779,11 +806,26 @@ unwraps the height stays. And a table lays a row out before it widens the
 part in it, whose request to be laid out again is then dropped. So `Section`
 works out its own height, part by part, and every table in the layout pieces
 checks after laying out that each part is the height it wants at its width
-(`Pieces.OutOfStep`), and lays out once more if not. `FieldGrid` still asks
-the table for its own height - give it a narrow-then-wide test when a page
-with one is converted. `LayoutAudit` cannot see empty space, so
-`LayoutPiecesTests` checks that a card has nothing under its last part but
-its inset.
+(`Pieces.OutOfStep`), and lays out once more if not. `FieldGrid` and
+`PageStack`'s column work out their own heights the same way (since Race
+Day), with a narrow-then-wide test. A `FieldGrid` that has been laid out
+answers with what its rows came to: a drop-down, a number box or a check
+box can be drawn a few pixels taller than it says it wants to be. `LayoutAudit` cannot see empty space, so `LayoutPiecesTests` checks
+that a card has nothing under its last part but its inset.
+
+**A page in a tab inherits the tab row's bold face.** `StyleTabControl` gives
+every TabControl `BoldFont` for its captions, and a TabPage and everything on
+it inherit it. So a page in a tab wears the body face itself - through
+`TextSize.Wear(this, ...)`, which also hands it the new face when the text
+size changes (it hears of that through `OnParentFontChanged`, since its own
+font is set).
+
+**A text box's AutoSize is not the layouts' AutoSize.** It is its one line's
+height, and TextBoxBase does not pass it on, so the tables size a text box by
+the bounds it was given. Asked for its preferred size, a three-line notes box
+answers with its text's - one line when empty. The pieces measure a text box
+by its height too (`Pieces.SizesItself`), or a card and the table in it
+disagree about how tall it is.
 
 **The version and the release notes move together.** Every change a club
 would notice goes under an "Unreleased" heading at the top of

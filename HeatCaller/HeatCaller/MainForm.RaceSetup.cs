@@ -20,11 +20,11 @@ public partial class MainForm
     /// is not a picker - it is a tooltip you have to hover to read.
     /// </summary>
     private int SessionRoundLeastWidth() =>
-        PickerWidth(cmbActiveRound, ref _roundPickerWidth, "(freeform - no race program round)");
+        Pieces.PickerWidth(cmbActiveRound, ref _roundPickerWidth, "(freeform - no race program round)");
 
     /// <summary>The Session row's track picker: wide enough for the longest layout name, and never under the 180px it always had.</summary>
     private int SessionTrackWidth() =>
-        Math.Max(180, PickerWidth(cmbTrackLayout, ref _trackPickerWidth, "(none)"));
+        Math.Max(180, Pieces.PickerWidth(cmbTrackLayout, ref _trackPickerWidth, "(none)"));
 
     /// <summary>The Session row's Name box: wide enough to show its hint, and never under the 170px it always had.</summary>
     private int SessionNameWidth() =>
@@ -38,38 +38,6 @@ public partial class MainForm
     /// </summary>
     private (Font Font, int Count, int Width)? _roundPickerWidth;
     private (Font Font, int Count, int Width)? _trackPickerWidth;
-
-    /// <summary>
-    /// What a Session row picker needs across for the longest thing it
-    /// shows, measured the way LayoutAudit checks a drop-down - padding and
-    /// all - with room for the arrow and either side of the text.
-    ///
-    /// Kept until the picker's font or the length of its list changes: the
-    /// row is measured many times in one layout, and the round list can run
-    /// to hundreds. Capped at the first few hundred, like the audit's own
-    /// check - they say as much as all of them.
-    /// </summary>
-    private static int PickerWidth(ComboBox picker, ref (Font Font, int Count, int Width)? kept, string shortest)
-    {
-        if (kept is { } known && ReferenceEquals(known.Font, picker.Font) && known.Count == picker.Items.Count)
-        {
-            return known.Width;
-        }
-
-        var widest = TextRenderer.MeasureText(shortest, picker.Font).Width;
-
-        foreach (var item in picker.Items.Cast<object>().Take(400))
-        {
-            var text = picker.GetItemText(item) ?? string.Empty;
-
-            widest = Math.Max(widest, TextRenderer.MeasureText(text, picker.Font).Width);
-        }
-
-        var width = widest + SystemInformation.VerticalScrollBarWidth + 24;
-
-        kept = (picker.Font, picker.Items.Count, width);
-        return width;
-    }
 
     /// <summary>Repopulates the "Race Round" dropdown with not-yet-recorded rounds from the race program, preserving the current selection or falling back to the last one used.</summary>
     /// <remarks>

@@ -2940,10 +2940,22 @@ public static class AppTheme
         tabs.SizeMode = TabSizeMode.Fixed;
         tabs.Font = BoldFont;
 
+        // Every tab as wide as the widest caption in the row needs in the
+        // face it is drawn in, with room either side, and never narrower
+        // than the 150 they all were. At 150 whatever the text size, a
+        // caption such as "Who's Racing" outgrew its tab at 150% and 200%
+        // and was drawn ending in "...".
+        //
         // Tall enough for the caption in the font it is drawn in, plus the
         // marker bar underneath it. 30 was measured against the old body
         // size and clipped the descenders.
-        tabs.ItemSize = new Size(150, Math.Max(32, BoldFont.Height + 16));
+        var widest = tabs.TabPages
+            .Cast<TabPage>()
+            .Select(page => TextRenderer.MeasureText(page.Text, BoldFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPrefix).Width)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        tabs.ItemSize = new Size(Math.Max(150, widest + BoldFont.Height), Math.Max(32, BoldFont.Height + 16));
 
         TabStripSkin.Attach(tabs);
     }

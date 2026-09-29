@@ -19,8 +19,8 @@ namespace HeatCaller;
 /// There is deliberately no state of its own to get out of step with the
 /// rest of the page.
 ///
-/// Everything is measured from the control above it, so the page holds at
-/// any text size - see the layout pass at the bottom.
+/// Built on the layout pieces (LayoutPieces.cs), so the page holds at any
+/// text size and window size - see BuildLayout.
 /// </summary>
 public sealed class TodayControl : UserControl
 {
@@ -57,17 +57,29 @@ public sealed class TodayControl : UserControl
     /// How tall the page's content is, so the host can give this half of
     /// the split enough room to show all of it without scrolling.
     /// </summary>
-    public int ContentHeight { get; private set; }
+    public int ContentHeight => _page.ContentHeight;
 
-    /// <summary>Raised when <see cref="ContentHeight"/> changes.</summary>
+    /// <summary>
+    /// Raised when <see cref="ContentHeight"/> changes - once the layout
+    /// that changed it is over, since the host answers by moving the
+    /// splitter, which resizes this page. See PostContentHeightChanged.
+    /// </summary>
     public event Action? ContentHeightChanged;
+
+    /// <summary>The page the parts go on. Scrolls down, never sideways.</summary>
+    private readonly PageStack _page = new();
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>Set while a ContentHeightChanged is on its way, so a burst of layouts sends one.</summary>
+    private bool _contentHeightPosted;
 
     // --- The parts that get rewritten on every refresh ---
 
     private readonly Label _lblDayName = new();
     private readonly Label _lblDayLine = new();
 
-    private readonly Panel _pnlStep = new();
     private readonly Label _lblKicker = new();
     private readonly Label _lblHeadline = new();
     private readonly Label _lblDetail = new();
@@ -76,13 +88,14 @@ public sealed class TodayControl : UserControl
     private readonly Label _lblGlance = new();
     private readonly List<Tile> _tiles = new();
 
-    private readonly Label _lblReady = new();
-
     // --- Ready to race: a bar, a count, what is left, and one button ---
     private readonly Panel _barReady = new();
     private readonly Label _lblReadyCount = new();
     private readonly Label _lblTodo = new();
     private readonly Button _btnFinish = new();
+
+    /// <summary>The bar the button is in, hidden with it so it leaves no gap under what is left to do.</summary>
+    private ButtonBar? _finishBar;
 
     private int _readyDone;
     private int _readyTotal;
@@ -103,20 +116,15 @@ public sealed class TodayControl : UserControl
     /// <summary>The step the button is currently offering. Held so the caption and the command cannot drift apart.</summary>
     private ProgramStep? _step;
 
-    /// <summary>
-    /// The narrowest this page's content is laid out at. Below it the page
-    /// scrolls sideways rather than squashing five tiles into nothing.
-    ///
-    /// This was MinimumSize.Width, which also constrained the control itself -
-    /// see the note in the constructor for why that had to go.
-    /// </summary>
-    private const int MinContentWidth = 900;
-
     /// <summary>How many tiles are built. Fixed, so the layout never has to grow or shrink the page.</summary>
     private const int TileCount = 5;
 
+    /// <summary>The progress bar's size at the normal text size. It grows with the text beside it.</summary>
     private const int ReadyBarWidth = 240;
     private const int ReadyBarHeight = 8;
+
+    /// <summary>The Ready to Race card's width at the normal text size, before it is measured - see ReadyWidth.</summary>
+    private const int ReadyCardWidth = 360;
 
     public TodayControl(
         RaceProgramControl program,
@@ -136,127 +144,235 @@ public sealed class TodayControl : UserControl
         _timerConnected = timerConnected;
 
         Dock = DockStyle.Fill;
+
         // No MinimumSize, on purpose. This page is the upper half of a split
-        // pane now - the programme grid is underneath it - and WinForms
-        // honours MinimumSize over the size the parent hands out, so a height
-        // floor here would have made the control taller than its pane, put its
-        // own scrollbar below the visible area, and left the bottom of the
-        // checklist unreachable. AutoScroll is what handles a small pane, and
-        // it only works if the control is allowed to be small.
+        // pane - the programme grid is underneath it - and WinForms honours
+        // MinimumSize over the size the parent hands out, so a height floor
+        // here would have made the control taller than its pane and left the
+        // bottom of it unreachable. The page it is built on scrolls instead
+        // (PageStack), and only ever down: nothing on it is wider than the
+        // pane, the tiles included.
         //
-        // The layout still needs a width to measure against - see
-        // MinContentWidth, which is what MinimumSize.Width used to supply.
-        Font = AppTheme.BodyFont;
-        AutoScroll = true;
+        // The body face, worn rather than inherited: this page sits in a tab
+        // whose row is drawn in the bold face, which it would otherwise take.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// A new text size, reaching this page through its tab's bold face -
+    /// the only way it does, since the page wears a face of its own. See
+    /// TextSize.
+    /// </summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     // ------------------------------------------------------------------
     //  Building
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Three bands, top to bottom, on the layout pieces (LayoutPieces.cs):
+    ///
+    ///   the day's name, and the line under it;
+    ///   the next-step card, with the Ready to Race card beside it;
+    ///   the day so far - five tiles across.
+    ///
+    /// It used to be one tall column - card, then tiles, then the
+    /// checklist, then the two buttons - and in the top half of a split
+    /// page most of that was below the fold. Then it was these three bands
+    /// placed by hand on every resize, against a floor of 900px across that
+    /// scrolled the pane sideways below it. Now nothing is placed by hand,
+    /// the page only scrolls down, and the two cards share a height so they
+    /// read as a pair.
+    /// </summary>
     private void BuildLayout()
     {
+        // --- The day ---
         _lblDayName.AutoSize = true;
-        _lblDayName.Font = AppTheme.TitleFont;
         _lblDayName.ForeColor = AppTheme.TextDark;
+        _textSize.Wear(_lblDayName, () => AppTheme.TitleFont);
 
         _lblDayLine.AutoSize = true;
-        _lblDayLine.Font = AppTheme.BodyFont;
         _lblDayLine.ForeColor = AppTheme.TextMuted;
 
         // --- The next-step card ---
-        _pnlStep.BackColor = AppTheme.Surface;
-
-        // Kept through the theme pass, which gives every Panel the page
-        // background - the card and the tiles were drawn, and invisible.
-        _pnlStep.Tag = AppTheme.KeepBackColor;
-
         _lblKicker.AutoSize = true;
-        _lblKicker.Font = AppTheme.MicroFont;
         _lblKicker.ForeColor = AppTheme.Primary;
+        _textSize.Wear(_lblKicker, () => AppTheme.MicroFont);
 
         _lblHeadline.AutoSize = true;
-        _lblHeadline.Font = AppTheme.HeadingFont;
         _lblHeadline.ForeColor = AppTheme.TextDark;
+        _textSize.Wear(_lblHeadline, () => AppTheme.HeadingFont);
 
         _lblDetail.AutoSize = true;
-        _lblDetail.Font = AppTheme.BodyFont;
         _lblDetail.ForeColor = AppTheme.TextMuted;
 
         _btnPrimary.Click += (_, _) => RunStep();
 
-        _pnlStep.Controls.Add(_lblKicker);
-        _pnlStep.Controls.Add(_lblHeadline);
-        _pnlStep.Controls.Add(_lblDetail);
-        _pnlStep.Controls.Add(_btnPrimary);
+        // No caption of its own: the kicker is its caption, and it changes
+        // with the day ("BEFORE YOU START", "NEXT STEP", "ALL DONE").
+        var step = new Section();
 
-        // --- Section captions ---
-        _lblGlance.AutoSize = true;
-        _lblGlance.Font = AppTheme.MicroFont;
-        _lblGlance.ForeColor = AppTheme.TextMuted;
-        _lblGlance.Text = AppTheme.Spaced("THE DAY SO FAR");
+        step.Add(_lblKicker, gapBelow: UiLayout.HintGap);
+        step.Add(_lblHeadline, gapBelow: UiLayout.HintGap);
+        step.Add(_lblDetail);
+        step.Add(new ButtonBar().With(_btnPrimary), gapBelow: 0);
 
-        _lblReady.AutoSize = true;
-        _lblReady.Font = AppTheme.MicroFont;
-        _lblReady.ForeColor = AppTheme.TextMuted;
-        _lblReady.Text = AppTheme.Spaced("READY TO RACE");
-
-        // --- Tiles: built once, filled on refresh ---
+        // --- Ready to race: a bar, a count, what is left, and one button ---
         //
-        // Rebuilding controls on every refresh is what makes a page flicker,
-        // and this one refreshes every time the tab is opened and every time
-        // a round is recorded.
-        for (var i = 0; i < TileCount; i++)
-        {
-            var tile = new Tile();
-            _tiles.Add(tile);
-            Controls.Add(tile.Panel);
-        }
-
-        // --- Ready to race ---
-        _barReady.Size = new Size(ReadyBarWidth, ReadyBarHeight);
+        // The bar sits on the card now, so it draws its track in the page's
+        // colour - a groove in the card - rather than the card's, which it
+        // would vanish into. See PaintReadyBar.
+        _barReady.Tag = AppTheme.KeepBackColor;
         _barReady.Paint += (_, e) => PaintReadyBar(e.Graphics);
         AppTheme.EnableDoubleBuffering(_barReady);
 
+        _textSize.Keep(() =>
+        {
+            var size = new Size(UiLayout.AtTextSize(ReadyBarWidth), UiLayout.AtTextSize(ReadyBarHeight));
+
+            if (_barReady.Size != size)
+            {
+                _barReady.Size = size;
+            }
+        });
+
         _lblReadyCount.AutoSize = true;
-        _lblReadyCount.Font = AppTheme.BoldFont;
         _lblReadyCount.ForeColor = AppTheme.TextDark;
+        _textSize.Wear(_lblReadyCount, () => AppTheme.BoldFont);
 
         _lblTodo.AutoSize = true;
-        _lblTodo.Font = AppTheme.BodyFont;
         _lblTodo.ForeColor = AppTheme.TextMuted;
 
         _btnFinish.Click += (_, _) => _onFinish?.Invoke();
 
-        Controls.Add(_barReady);
-        Controls.Add(_lblReadyCount);
-        Controls.Add(_lblTodo);
-        Controls.Add(_btnFinish);
+        var ready = new Section("Ready to race");
 
-        Controls.Add(_lblDayName);
-        Controls.Add(_lblDayLine);
-        Controls.Add(_pnlStep);
-        Controls.Add(_lblGlance);
-        Controls.Add(_lblReady);
+        ready.Add(FieldGrid.Inline(_barReady, _lblReadyCount));
+        ready.Add(_lblTodo);
 
-        Resize += (_, _) => LayoutPage();
+        _finishBar = ready.Add(new ButtonBar().With(_btnFinish), gapBelow: 0);
+
+        var band = new Beside(ReadyWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        band.AddFill(step, width => step.GetPreferredSize(new Size(width, 0)).Height);
+        band.AddSideCard(ready);
+
+        // --- The day so far ---
+        //
+        // Tiles built once, filled on refresh. Rebuilding controls on every
+        // refresh is what makes a page flicker, and this one refreshes every
+        // time the tab is opened and every time a round is recorded.
+        _lblGlance.AutoSize = true;
+        _lblGlance.ForeColor = AppTheme.TextMuted;
+        _lblGlance.Text = AppTheme.Spaced("THE DAY SO FAR");
+        _textSize.Wear(_lblGlance, () => AppTheme.MicroFont);
+
+        for (var i = 0; i < TileCount; i++)
+        {
+            var tile = new Tile();
+
+            _textSize.Wear(tile.Value, () => AppTheme.TitleFont);
+            _textSize.Wear(tile.Caption, () => AppTheme.MicroFont);
+            _tiles.Add(tile);
+        }
+
+        // --- The page ---
+        _page.Add(_lblDayName, gapBelow: UiLayout.HintGap);
+        _page.Add(_lblDayLine, gapBelow: UiLayout.SectionGap);
+        _page.Add(band);
+        _page.Add(_lblGlance, gapBelow: UiLayout.RowGap);
+        _page.Add(new TileStrip(_tiles), gapBelow: 0);
+
+        _page.ContentHeightChanged += PostContentHeightChanged;
+
+        Controls.Add(_page);
     }
 
-    /// <summary>One number with a caption under it.</summary>
+    /// <summary>
+    /// The Ready to Race card's width: the 360px it was at the normal text
+    /// size, at the size in use, and never too narrow for the bar and the
+    /// longest count beside it ("6 of 6 ready"), or for its button - all
+    /// inside the card, where the column beside the step card cannot see
+    /// them.
+    /// </summary>
+    private int ReadyWidth()
+    {
+        var count = TextRenderer.MeasureText("6 of 6 ready", AppTheme.BoldFont).Width;
+        var bar = _barReady.Width + UiLayout.ButtonGap + count;
+        var button = _finishShown ? _btnFinish.Width : 0;
+
+        return Math.Max(UiLayout.AtTextSize(ReadyCardWidth), Math.Max(bar, button) + Section.Inset.Horizontal);
+    }
+
+    /// <summary>
+    /// Tells the host the content's height has changed - after the layout
+    /// that changed it, not during. The page raises it from inside its own
+    /// layout, and the host answers by moving the splitter, which resizes
+    /// this page; WinForms drops a layout asked for while one is running,
+    /// so the resize would have left the page laid out at its old size.
+    /// Once however many layouts in a row changed it.
+    /// </summary>
+    private void PostContentHeightChanged()
+    {
+        if (_contentHeightPosted || IsDisposed)
+        {
+            return;
+        }
+
+        // Nothing is on screen to fit yet. The host reads ContentHeight when
+        // it first places the splitter, which is after this has a handle.
+        if (!IsHandleCreated)
+        {
+            return;
+        }
+
+        _contentHeightPosted = true;
+
+        BeginInvoke(new Action(() =>
+        {
+            _contentHeightPosted = false;
+
+            if (!IsDisposed)
+            {
+                ContentHeightChanged?.Invoke();
+            }
+        }));
+    }
+
+    /// <summary>
+    /// One number with a caption under it, on a card of its own - the same
+    /// rounded card as the ones above it.
+    ///
+    /// One line each, cut with an ellipsis rather than wrapped. A round
+    /// label in the last tile used to wrap to a second line, the tile's
+    /// contents then overran the tile, and the old layout pass turned
+    /// scrolling on INSIDE the tile - the stray bars that showed across
+    /// "classes racing".
+    /// </summary>
     private sealed class Tile
     {
-        public readonly Panel Panel = new() { BackColor = AppTheme.Surface, Tag = AppTheme.KeepBackColor };
+        public readonly TileCard Panel = new();
 
-        // Fixed-size, one line each, cut with an ellipsis rather than
-        // wrapped. A round label in the last tile used to wrap to a second
-        // line, the tile's contents then overran the tile, and the layout
-        // pass turned scrolling on INSIDE the tile - the stray bars that
-        // showed across "classes racing".
-        public readonly Label Value = new() { AutoSize = false, AutoEllipsis = true, Font = AppTheme.TitleFont, ForeColor = AppTheme.TextDark };
-        public readonly Label Caption = new() { AutoSize = false, AutoEllipsis = true, Font = AppTheme.MicroFont, ForeColor = AppTheme.TextMuted };
+        public readonly Label Value = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextDark };
+        public readonly Label Caption = new() { AutoSize = false, AutoEllipsis = true, ForeColor = AppTheme.TextMuted };
 
         public Tile()
         {
@@ -271,20 +387,107 @@ public sealed class TodayControl : UserControl
         }
     }
 
+    /// <summary>A tile's card: the theme's rounded surface, the page's colour in the corners - as Section paints itself.</summary>
+    private sealed class TileCard : Panel
+    {
+        public TileCard()
+        {
+            BackColor = AppTheme.Surface;
+            Tag = AppTheme.KeepBackColor;
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
+            {
+                e.Graphics.FillRectangle(behind, ClientRectangle);
+            }
+
+            AppTheme.DrawCard(e.Graphics, new RectangleF(0, 0, Width, Height));
+        }
+    }
+
+    /// <summary>
+    /// The tiles, across the page in one row, sharing its width equally and
+    /// as tall as a value and a caption in the fonts in use. They get
+    /// narrower with the page rather than scrolling it sideways, and a value
+    /// too long for its tile ends in "...".
+    /// </summary>
+    private sealed class TileStrip : Panel
+    {
+        private readonly IReadOnlyList<Tile> _tiles;
+
+        public TileStrip(IReadOnlyList<Tile> tiles)
+        {
+            _tiles = tiles;
+
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            Tag = AppTheme.KeepBackColor;
+
+            foreach (var tile in tiles)
+            {
+                Controls.Add(tile.Panel);
+            }
+        }
+
+        /// <summary>Room inside a tile, and between two.</summary>
+        private const int Pad = UiLayout.RowGap;
+
+        private static int ValueHeight => AppTheme.TitleFont.Height + 2;
+
+        private static int CaptionHeight => AppTheme.MicroFont.Height + 2;
+
+        private static int TileHeight => Pad + ValueHeight + UiLayout.HintGap + CaptionHeight + Pad;
+
+        public override Size GetPreferredSize(Size proposedSize) =>
+            new(proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width, TileHeight);
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+
+            if (_tiles.Count == 0)
+            {
+                return;
+            }
+
+            var height = TileHeight;
+            var room = Math.Max(0, ClientSize.Width - Pad * (_tiles.Count - 1));
+
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                // Shared out to the pixel: the last tile ends on the edge.
+                var left = i * (room / _tiles.Count) + i * Pad;
+                var width = i == _tiles.Count - 1 ? ClientSize.Width - left : room / _tiles.Count;
+                var tile = _tiles[i];
+
+                tile.Panel.Bounds = new Rectangle(left, 0, Math.Max(1, width), height);
+                tile.Value.Bounds = new Rectangle(Pad, Pad, Math.Max(1, width - Pad * 2), ValueHeight);
+                tile.Caption.Bounds = new Rectangle(Pad, Pad + ValueHeight + UiLayout.HintGap, Math.Max(1, width - Pad * 2), CaptionHeight);
+            }
+        }
+    }
+
     /// <summary>
     /// The bar: a track, and the done share of it filled - in the accent
     /// while anything is left, in the success colour once it is all done.
+    /// The track is the page's colour, a groove in the card it sits on.
     /// </summary>
     private void PaintReadyBar(Graphics g)
     {
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        g.Clear(BackColor);
+        g.Clear(_barReady.Parent?.BackColor ?? AppTheme.Surface);
 
         var track = new RectangleF(0, 0, _barReady.Width - 1, _barReady.Height - 1);
         var radius = Math.Max(1, _barReady.Height / 2);
 
         using (var path = AppTheme.RoundedRect(track, radius))
-        using (var brush = new SolidBrush(AppTheme.Surface))
+        using (var brush = new SolidBrush(AppTheme.Background))
         {
             g.FillPath(brush, path);
         }
@@ -313,7 +516,7 @@ public sealed class TodayControl : UserControl
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Re-reads everything and lays the page out again.
+    /// Re-reads everything.
     ///
     /// Cheap enough to call on every tab change: the counts are all
     /// in-memory reads the Program tab already makes for its own banner.
@@ -327,12 +530,12 @@ public sealed class TodayControl : UserControl
 
         var day = _events.Active is { IsLegacy: false } open ? open : null;
 
+        // No layout pass: every part is on a piece that measures it again
+        // when its text changes.
         RefreshDayHeader(day);
         RefreshStep();
         RefreshTiles();
         RefreshChecks(day);
-
-        LayoutPage();
     }
 
     private void RefreshDayHeader(RaceEvent? day)
@@ -410,9 +613,9 @@ public sealed class TodayControl : UserControl
         _btnPrimary.Text = step.ActionCaption;
 
         // Re-styled every time, because the theme reads a button's colour
-        // from its caption and this caption changes with the day.
+        // from its caption and this caption changes with the day. The bar it
+        // is in sizes it to the caption.
         AppTheme.StyleButton(_btnPrimary, AppTheme.ButtonKind.Primary);
-        _btnPrimary.Size = new Size(UiLayout.WidthFor(_btnPrimary), UiLayout.ButtonHeight);
     }
 
     /// <summary>
@@ -602,16 +805,21 @@ public sealed class TodayControl : UserControl
     {
         _onFinish = onClick;
         _finishShown = caption is not null && onClick is not null;
-        _btnFinish.Visible = _finishShown;
 
-        if (!_finishShown)
+        if (_finishShown)
         {
-            return;
+            // Captioned before it is shown, so it is never on screen at the
+            // last caption's size. The bar it is in sizes it to the caption.
+            _btnFinish.Text = caption!;
+            AppTheme.StyleButton(_btnFinish, AppTheme.ButtonKind.Secondary);
         }
 
-        _btnFinish.Text = caption!;
-        AppTheme.StyleButton(_btnFinish, AppTheme.ButtonKind.Secondary);
-        _btnFinish.Size = new Size(UiLayout.WidthFor(_btnFinish), UiLayout.ButtonHeight);
+        // The bar, not the button: a bar with nothing showing in it would
+        // still keep its row, and a row's gap, under what is left to do.
+        if (_finishBar is not null)
+        {
+            _finishBar.Visible = _finishShown;
+        }
     }
 
     /// <summary>
@@ -622,156 +830,4 @@ public sealed class TodayControl : UserControl
         rounds == 1
             ? "Everything's ready, and the one round on tonight's program is below."
             : $"Everything's ready. All {rounds} rounds of tonight's program are below.";
-
-    // ------------------------------------------------------------------
-    //  Layout
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Three bands, laid out to fit the top half of the tab without
-    /// scrolling:
-    ///
-    ///   the day's name;
-    ///   the next-step card, with Ready to Race beside it;
-    ///   the tiles, one short row.
-    ///
-    /// It used to be one tall column - card, then tiles, then the
-    /// checklist, then the two buttons - and in the top half of a split
-    /// page most of that was below the fold. Every size is still measured
-    /// from the fonts, so Ctrl +/- grows the bands rather than overlapping
-    /// them.
-    /// </summary>
-    private void LayoutPage()
-    {
-        if (_tiles.Count == 0)
-        {
-            return;
-        }
-
-        // Positions are client coordinates, which move with the scroll -
-        // so everything is offset by it, or a relayout while scrolled
-        // would put the page back at the top under a scrolled view.
-        var origin = AutoScrollPosition;
-
-        var width = Math.Max(MinContentWidth, ClientSize.Width);
-        var content = width - UiLayout.PageLeft - UiLayout.PageRight;
-        var left = UiLayout.PageLeft + origin.X;
-        var top = UiLayout.PageTop + origin.Y;
-        var y = top;
-
-        // --- Band 1: the day ---
-        _lblDayName.MaximumSize = new Size(content, 0);
-        _lblDayName.Location = new Point(left, y);
-        y = UiLayout.Below(_lblDayName, UiLayout.HintGap);
-
-        _lblDayLine.MaximumSize = new Size(content, 0);
-        _lblDayLine.Location = new Point(left, y);
-        y = UiLayout.Below(_lblDayLine, UiLayout.SectionGap);
-
-        // --- Band 2: the card, and Ready to Race beside it ---
-        var countWidth = TextRenderer.MeasureText("6 of 6 ready", AppTheme.BoldFont).Width;
-        var readyWidth = Math.Max(360, ReadyBarWidth + UiLayout.RowGap + countWidth + UiLayout.RowGap);
-        var cardWidth = content - readyWidth - UiLayout.SectionGap;
-        var bandTop = y;
-
-        _pnlStep.Location = new Point(left, bandTop);
-        _pnlStep.Width = cardWidth;
-
-        var inner = UiLayout.PageLeft;
-        var cardY = UiLayout.RowGap;
-
-        _lblKicker.Location = new Point(inner, cardY);
-        cardY = UiLayout.Below(_lblKicker, UiLayout.HintGap);
-
-        _lblHeadline.MaximumSize = new Size(Math.Max(200, cardWidth - inner * 2), 0);
-        _lblHeadline.Location = new Point(inner, cardY);
-        cardY = UiLayout.Below(_lblHeadline, UiLayout.HintGap);
-
-        _lblDetail.MaximumSize = new Size(Math.Max(200, cardWidth - inner * 2), 0);
-        _lblDetail.Location = new Point(inner, cardY);
-        cardY = UiLayout.Below(_lblDetail, UiLayout.RowGap);
-
-        _btnPrimary.Location = new Point(inner, cardY);
-
-        _pnlStep.Height = UiLayout.Below(_btnPrimary, UiLayout.RowGap);
-
-        // Ready to Race, level with the top of the card.
-        var readyLeft = left + cardWidth + UiLayout.SectionGap;
-        var ry = bandTop;
-
-        _lblReady.Location = new Point(readyLeft, ry);
-        ry = UiLayout.Below(_lblReady, UiLayout.RowGap);
-
-        var readyRow = Math.Max(ReadyBarHeight, UiLayout.HeightOf(_lblReadyCount));
-
-        _barReady.Location = new Point(readyLeft, ry + (readyRow - ReadyBarHeight) / 2);
-        _lblReadyCount.Location = new Point(
-            readyLeft + ReadyBarWidth + UiLayout.RowGap,
-            UiLayout.CentreOn(_lblReadyCount, ry, readyRow));
-
-        ry += readyRow + UiLayout.RowGap;
-
-        _lblTodo.MaximumSize = new Size(readyWidth, 0);
-        _lblTodo.Location = new Point(readyLeft, ry);
-        ry = UiLayout.Below(_lblTodo, UiLayout.RowGap);
-
-        if (_finishShown)
-        {
-            _btnFinish.Location = new Point(readyLeft, ry);
-            ry = _btnFinish.Bottom;
-        }
-
-        y = Math.Max(_pnlStep.Bottom, ry) + UiLayout.SectionGap;
-
-        // --- Band 3: the tiles, one short row ---
-        _lblGlance.Location = new Point(left, y);
-        y = UiLayout.Below(_lblGlance, UiLayout.RowGap);
-
-        const int gap = UiLayout.RowGap;
-        const int pad = UiLayout.RowGap;
-
-        var tileWidth = Math.Max(120, (content - gap * (TileCount - 1)) / TileCount);
-        var valueHeight = AppTheme.TitleFont.Height + 2;
-        var captionHeight = AppTheme.MicroFont.Height + 2;
-        var tileHeight = pad + valueHeight + UiLayout.HintGap + captionHeight + pad;
-
-        for (var i = 0; i < _tiles.Count; i++)
-        {
-            var tile = _tiles[i];
-
-            tile.Panel.Location = new Point(left + i * (tileWidth + gap), y);
-            tile.Panel.Size = new Size(tileWidth, tileHeight);
-
-            tile.Value.Bounds = new Rectangle(pad, pad, tileWidth - pad * 2, valueHeight);
-            tile.Caption.Bounds = new Rectangle(pad, pad + valueHeight + UiLayout.HintGap, tileWidth - pad * 2, captionHeight);
-        }
-
-        y += tileHeight;
-
-        // Room under the last line, so the page does not stop hard against
-        // the window's edge.
-        //
-        // The width as well as the height: without it a pane narrower than
-        // the content clips the right-hand tiles instead of offering a
-        // scrollbar. The CONSTANT, not the measured width - using the measured
-        // one would set the scroll range to exactly the client width, and then
-        // the vertical scrollbar appearing would be enough to bring the
-        // horizontal one in after it, which brings the vertical one back.
-        //
-        // Assigned only when it changed, because a scrollbar arriving or
-        // leaving re-fires Resize and lands back here.
-        var needed = y - origin.Y + UiLayout.PageTop;
-        var scrollTo = new Size(MinContentWidth, needed);
-
-        if (AutoScrollMinSize != scrollTo)
-        {
-            AutoScrollMinSize = scrollTo;
-        }
-
-        if (ContentHeight != needed)
-        {
-            ContentHeight = needed;
-            ContentHeightChanged?.Invoke();
-        }
-    }
 }

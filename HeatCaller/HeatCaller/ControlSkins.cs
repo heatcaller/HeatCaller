@@ -2153,10 +2153,11 @@ internal sealed class TabStripSkin : NativeWindow
 
                 // The marker is sized to the WORD, not to the tab.
                 //
-                // The tabs are a fixed 150px whatever is written on them,
-                // so a bar cut to the tab would be the same width under
-                // "Event" as under "Run Sheet" and would read as a block
-                // rather than as an underline. Measured with NoPadding,
+                // The tabs in a row are all one width - the widest caption's,
+                // and never under 150px (AppTheme.StyleTabControl) - so a bar
+                // cut to the tab would be the same width under "Setup" as
+                // under "Who's Racing" and would read as a block rather than
+                // as an underline. Measured with NoPadding,
                 // because the default adds a few pixels of its own on each
                 // side and the bar is supposed to sit under the letters.
                 var ideal = TextRenderer.MeasureText(g, text, _tabs.Font,
