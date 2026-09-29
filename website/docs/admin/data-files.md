@@ -176,7 +176,7 @@ Close HeatCaller first. Then you can delete:
 | `race-in-progress-discarded.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
 | `*.tmp` | Left over from an interrupted save. |
 | `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
-| `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** under **Voice Announcements → Voice Settings → Saved Voice Lines** does the same without closing HeatCaller. |
+| `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** under **Voice Announcements → Voice Settings → Saved voice lines** does the same without closing HeatCaller. |
 
 Don't delete or edit anything else by hand. In particular:
 

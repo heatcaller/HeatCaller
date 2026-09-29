@@ -2,7 +2,7 @@
 
 A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, your own looks, the club logo and all your settings. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
 
-<!-- screenshot: Backup & Restore page, all four sections visible -->
+<!-- screenshot: Backup & Restore page, its five cards -->
 
 ## What's in a backup
 
@@ -25,13 +25,13 @@ The date and time in the name is when the backup was made. HeatCaller uses it, n
 ## Making a backup by hand
 
 1. Open **Backup & Restore**.
-2. Under **Manual Backup & Restore**, click **Back Up Now**.
+2. On the **Manual backup and restore** card, click **Back Up Now**.
 
 The backup is written in the background, so the app keeps responding: the status line says `Backing up...` while it works. If another backup is already being written, it says `A backup is already being written - try again in a moment.` instead.
 
-When it's done, the status line under the list says `Backup created:` and the file name, and the new backup appears at the top of **Existing Backups**. **Last backup:** updates too.
+When it's done, the status line under the list says `Backup created:` and the file name, and the new backup appears at the top of the list on the **Existing backups** card. **Last backup:** updates too.
 
-Backups go to the folder shown under **Automatic Backups** (by default, `HeatCaller Backups` in your Documents folder). **Open Backup Folder** opens it in File Explorer.
+Backups go to the folder shown on the **Automatic backups** card (by default, `HeatCaller Backups` in your Documents folder). **Open Backup Folder** opens it in File Explorer.
 
 A good habit is to click **Back Up Now** at the end of each race night and copy the newest file somewhere off the laptop: a USB stick, or a cloud drive.
 
@@ -74,7 +74,7 @@ It uses each service's own Windows app, which you install and sign in to once:
 | iCloud Drive | iCloud for Windows (from the Microsoft Store) |
 | OneDrive | Built into Windows. Sign in from the OneDrive icon by the clock. |
 
-Then, on **Backup & Restore**, under **Automatic Backups**, tick the services under **Also copy every backup to:**. A service that isn't installed and signed in on this PC is greyed out, and the line below says what to install. Press **Check Again** after installing it.
+Then, on **Backup & Restore**, on the **Automatic backups** card, tick the services under **Also copy every backup to:**. A service that isn't installed and signed in on this PC is greyed out, and the line below says what to install. Press **Check Again** after installing it.
 
 - Every backup gets copied: automatic ones and **Back Up Now**.
 - Copies go in a **HeatCaller Backups** folder at the top of your Drive, iCloud Drive or OneDrive. The service's app uploads them whenever the laptop is online, so an offline race night is fine.
@@ -89,9 +89,9 @@ To restore from a cloud copy, use **Restore from File...** and pick the zip in t
 
 ## The backup password
 
-<!-- screenshot: Backup Password section with the status line -->
+<!-- screenshot: Backup password card with the status line -->
 
-The **Backup Password** section decides whether backups carry your keys, tokens and PINs.
+The **Backup password** card decides whether backups carry your keys, tokens and PINs.
 
 - **With a password set**, the status line says `Keys and tokens travel with backups, locked with this password.` Each backup made from then on includes those secrets, encrypted with the password.
 - **With no password**, it says `No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.`
@@ -132,13 +132,13 @@ Restoring replaces your current data with the backup's. HeatCaller protects you 
 ### Steps
 
 1. Open **Backup & Restore**.
-2. Either select a backup in **Existing Backups** and click **Restore Selected**, or click **Restore from File...** and pick a `.zip` anywhere on the PC.
+2. Either select a backup on the **Existing backups** card and click **Restore Selected**, or click **Restore from File...** and pick a `.zip` anywhere on the PC.
 3. Read the confirmation and click **Yes**. Once your club has online QR check-ins, the confirmation also says what a restore does to them: `QR check-ins: the backup's QR check-in key comes back with it. QR check-ins printed with the key in this backup work; if you have used Reissue All QR Check-ins since it was made, QR check-ins printed after that stop working - print them again, or reissue again on the Club Website page.`
 4. The `Restore complete.` message shows where your previous data was saved. Click **OK**, and HeatCaller restarts.
 
 A restore is refused while a race or practice is running ("A race or practice is running. Restore a backup once it has finished - restoring restarts the app, which would end it.") and while a backup is being written ("A backup is being written - try again in a moment.").
 
-The **Existing Backups** list shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File...** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
+The list on the **Existing backups** card shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File...** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
 
 ## Restoring on a new PC
 
@@ -196,7 +196,7 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 
 ## Save Support Info
 
-When something has gone wrong and you want help with it, **Save Support Info** in the **Getting Help** box saves one `.zip` file to attach to an email. You can also right-click the **Developer Console** on the **Connection** page and choose **Save support info...**.
+When something has gone wrong and you want help with it, **Save Support Info** on the **Getting help** card saves one `.zip` file to attach to an email. You can also right-click the **Developer Console** on the **Connection** page and choose **Save support info...**.
 
 1. Click **Save Support Info**.
 2. Choose where to save it. It suggests your desktop and a name like `HeatCaller support 2026-09-27 21-30.zip`.

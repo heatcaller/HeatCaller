@@ -99,6 +99,28 @@ internal static class LayoutAudit
 
         // The looks, the club logo and the appearance options (LooksControl).
         "Themes",
+
+        // The slides beside their preview, and the rotation's timing (SponsorsControl).
+        "Sponsors",
+
+        // The server, the race-day manager and the addresses to open (WebServerControl).
+        "Local Screens",
+
+        // The relay and the cards for everything published through it (RelaySettingsControl).
+        "Club Website",
+
+        // All four tabs: Voice Settings and Announcements (VoiceSettingsControl,
+        // both files), Commentary (CommentaryControl) and Rivalries
+        // (RivalriesControl).
+        "Voice",
+
+        // All six tabs: Mixer (MixerControl), Soundscapes (ThemesControl),
+        // Effects (SoundEffectsControl), Ambience (AmbienceControl), Music
+        // (MusicControl) and Lap Beeps (LapBeepControl).
+        "Sounds",
+
+        // Making, restoring and keeping backups, the password and getting help (BackupRestoreControl).
+        "Backup & Restore",
     };
 
     /// <summary>Whether a page, or a tab inside one ("Race Day › Setup"), belongs to a converted page.</summary>

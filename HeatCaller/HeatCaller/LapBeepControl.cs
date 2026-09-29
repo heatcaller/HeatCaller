@@ -19,6 +19,12 @@ public sealed class LapBeepControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The fewest drivers the list shows before the page scrolls instead.</summary>
+    private const int GridLeastRows = 3;
+
     public LapBeepControl(LapBeepStore store, ProfileStore profiles, SoundEffectsStore sounds, UndoService undo)
     {
         _store = store;
@@ -27,11 +33,17 @@ public sealed class LapBeepControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 560);
-        MinimumSize = new Size(900, 540);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. Pages in tabs otherwise wear the tab row's
+        // bold face.
+        //
+        // No design size and no MinimumSize: the 900x540 floor was honoured
+        // over the size the page was given, and a small window lost the
+        // buttons off the bottom. A short window scrolls the page instead
+        // (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
@@ -39,6 +51,20 @@ public sealed class LapBeepControl : UserControl
         // Undo changes the cues in the store, never on this page - see
         // OnStoreRestored.
         _store.Restored += OnStoreRestored;
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     private void OnStoreRestored()
@@ -89,22 +115,31 @@ public sealed class LapBeepControl : UserControl
         _profiles.AllRaceable.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase))?.DriverName
         ?? transponder;
 
+    /// <summary>
+    /// The intro, the switch with what it means under it, then one card: the
+    /// drivers and their cues taking the height that is left, the buttons
+    /// under them and the status line. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels: the switch's note at x=230 whatever
+    /// the switch's caption came to, the grid 956x368 whatever the window,
+    /// the buttons placed from its bottom, and a 900x540 floor the page kept
+    /// however small its window - every face set once, so none of it
+    /// followed the text size.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Gives each driver their own short cue when they cross the line, so they can hear their lap without "
                  + "watching the screen. Cues differ in shape as well as pitch - pitch alone is hard to pick out over track noise.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
         };
 
         _chkEnabled.Text = "Per-driver lap cues ON";
-        _chkEnabled.Location = new Point(12, 62);
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.Checked = _store.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
         {
@@ -112,21 +147,18 @@ public sealed class LapBeepControl : UserControl
             UpdateEnabledLook();
         };
 
+        // Under the switch rather than beside it, wrapping to the room it
+        // has - beside it, it sat at a fixed x the switch's caption could
+        // grow past.
         var lblEnabledHint = new Label
         {
             Text = "Off by default - a cue per lap per driver is a lot of noise if you didn't ask for it.",
-            Location = new Point(230, 63),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        _grid.Location = new Point(12, 96);
-        _grid.Size = new Size(956, 368);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _textSize.Wear(lblEnabledHint, () => AppTheme.SmallFont);
+
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.RowHeadersVisible = false;
@@ -141,6 +173,9 @@ public sealed class LapBeepControl : UserControl
             new DataGridViewTextBoxColumn { Name = "state", HeaderText = "", FillWeight = 40 }
         );
         _grid.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { CycleTone(); } };
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
 
         var btnTone = new Button { Text = "Change Cue", };
         btnTone.Click += (_, _) => CycleTone();
@@ -157,27 +192,25 @@ public sealed class LapBeepControl : UserControl
         var btnClear = new Button { Text = "Clear All", };
         btnClear.Click += (_, _) => ClearAll();
 
-        // NOT Bottom-anchored - the grid above is not either.
-        //
-        // The grid is Top|Left|Right at a fixed height, so its bottom edge
-        // never moves. These were anchored to the PAGE's bottom, which
-        // means on a window shorter than the height these literals assume
-        // they ride up and are drawn over the last rows of the grid. Same
-        // fault the Batteries page had.
-        //
-        // Placed from the grid instead, so the clearance is a fact.
-        var buttonsTop = UiLayout.Below(_grid, UiLayout.RowGap);
-        AppTheme.LayoutButtonRow(12, buttonsTop, 8, btnTone, btnTest, btnToggle, btnAuto, btnClear);
-
-        _lblStatus.Location = new Point(12, buttonsTop + UiLayout.ButtonHeight + UiLayout.RowGap);
+        // How many drivers have a cue, and whether any share one - wrapping
+        // rather than cut short.
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, _chkEnabled, lblEnabledHint, _grid,
-            btnTone, btnTest, btnToggle, btnAuto, btnClear, _lblStatus,
-        });
+        var drivers = new Section("Drivers");
+
+        drivers.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2);
+        drivers.Add(new ButtonBar().With(btnTone, btnTest, btnToggle, btnAuto, btnClear));
+        drivers.Add(_lblStatus, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(lblEnabledHint);
+        page.AddFill(drivers, drivers.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
 
         UpdateEnabledLook();
     }

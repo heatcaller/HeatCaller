@@ -23,7 +23,7 @@ public sealed class ThemesControl : UserControl
     private readonly AmbienceStore? _ambienceStore;
     private readonly MusicStore? _musicStore;
 
-    private readonly FlowLayoutPanel _cards = new();
+    private readonly CardWall _cards;
     private readonly Label _lblStatus = new();
     private readonly CheckBox _chkPreviewVoice = new();
 
@@ -37,15 +37,29 @@ public sealed class ThemesControl : UserControl
     /// </summary>
     private bool _recordingLines;
 
-    private const int MinCardWidth = 440;
-    private const int CardHeight = 214;
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
 
     /// <summary>
-    /// How wide every card is, measured from the widest button row at the
-    /// text size in use. It was a fixed 440, and at a larger text size the
-    /// fourth button ran off the card's edge.
+    /// The cards' labels that wear a face of their own, and the face - kept
+    /// at the text size in use by FaceCards. Forgotten, with the cards, each
+    /// time the cards are built again, so a text-size change never reaches
+    /// for a label that has gone.
     /// </summary>
-    private int CardWidth = MinCardWidth;
+    private readonly List<(Control Control, Func<Font> Face)> _cardFaces = new();
+
+    /// <summary>The cards' rows of buttons, which the least a card can do with is measured from - see CardLeastWidth. Forgotten with the cards.</summary>
+    private readonly List<ButtonBar> _cardButtons = new();
+
+    /// <summary>
+    /// The narrowest a card gets at the normal text size, whatever its
+    /// buttons need: room for its description to read as a line of text
+    /// rather than a column of words. See CardLeastWidth.
+    /// </summary>
+    private const int CardReadingWidth = 360;
+
+    /// <summary>The pack's colour down a card's left edge - see PaintCardMarks.</summary>
+    private const int StripWidth = 6;
 
     /// <summary>Speaks the preview lines. Set by MainForm; previews play sounds only without it.</summary>
     public AnnouncementService? Announcer { get; set; }
@@ -76,14 +90,33 @@ public sealed class ThemesControl : UserControl
         _ambienceStore = ambienceStore;
         _musicStore = musicStore;
 
+        _cards = new CardWall(CardLeastWidth);
+
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshCards();
 
         // Undo works on the stores, never on this page - see OnThemeStoreRestored.
         _themeStore.Restored += OnThemeStoreRestored;
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>
@@ -124,31 +157,37 @@ public sealed class ThemesControl : UserControl
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// The intro; Save Current Settings as New with the preview-voice box
+    /// beside it (under it when the line is too narrow); the status line;
+    /// then the cards, as many to a row as fit (CardWall), taking the height
+    /// that is left and scrolling inside it - so the status line, which a
+    /// preview reports on step by step, stays in view whichever card is
+    /// playing. On the layout pieces (LayoutPieces.cs), so nothing is placed
+    /// by hand.
+    ///
+    /// It used to be placed in pixels: a header panel of fixed height, its
+    /// intro and status capped at 900px, docked over a flow panel of cards
+    /// 214px tall whatever their text needed - a description longer than
+    /// that was cut off - and at least 440px wide at every text size.
+    /// </summary>
     private void BuildLayout()
     {
-        var header = new Panel { Dock = DockStyle.Top };
-
         var lblIntro = new Label
         {
             Text = "A soundscape is the whole sound of race day: a sound for every moment, and an announcer's words and delivery to match. " +
                    "Preview one to hear a short pretend race, Apply it to use it, or Customize to mix packs and rewrite lines. " +
                    "Applying never touches your API key, which voice speaks, or this PC's volumes. Colours and the club logo are on the Themes page.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(900, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var rowY = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
         var btnSaveNew = new Button { Text = "Save Current Settings as New..." };
         btnSaveNew.Click += BtnSaveNew_Click;
-        var right = AppTheme.LayoutButtonRow(12, rowY, UiLayout.ButtonGap, btnSaveNew);
 
         _chkPreviewVoice.Text = "Previews include the announcer's voice";
         _chkPreviewVoice.AutoSize = true;
         _chkPreviewVoice.Checked = true;
-        _chkPreviewVoice.Location = new Point(right + UiLayout.ButtonGap * 2, rowY + 8);
         // Disposed with the page - a ToolTip left behind keeps the controls
         // it was given alive after the page itself has gone.
         var previewTip = new ToolTip();
@@ -158,24 +197,37 @@ public sealed class ThemesControl : UserControl
             "Lines are spoken by the voice this PC already uses. On your own ElevenLabs key each preview line costs characters, " +
             "so untick this to hear the sounds only.");
 
-        _lblStatus.Location = new Point(12, rowY + UiLayout.ButtonHeight + 8);
+        // A line kept for it whatever it says - it starts blank - so the
+        // cards under it do not hop the first time a preview reports. Its
+        // own face, so the line is measured in the face it is drawn in (see
+        // TextSize.ReserveLines).
         _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(900, 0);
         _lblStatus.ForeColor = AppTheme.TextMuted;
         _lblStatus.Text = " ";
+        _textSize.Wear(_lblStatus, () => AppTheme.BodyFont);
+        _textSize.ReserveLines(_lblStatus, 1);
 
-        header.Controls.AddRange(new Control[] { lblIntro, btnSaveNew, _chkPreviewVoice, _lblStatus });
-        header.Height = _lblStatus.Top + UiLayout.HeightOf(_lblStatus) + 8;
+        // The cards scroll inside the rest of the page, under everything
+        // above them, as they did in their flow panel. A page of their own,
+        // without the page's margins - the page they are on has those - and
+        // with the theme's room under the last row (AutoScrollMargin).
+        var scroller = new PageStack { Padding = Padding.Empty };
 
-        _cards.Dock = DockStyle.Fill;
-        _cards.AutoScroll = true;
-        _cards.WrapContents = true;
-        _cards.FlowDirection = FlowDirection.LeftToRight;
-        _cards.Padding = new Padding(6, 4, 6, 12);
+        scroller.Add(_cards, gapBelow: 0);
 
-        // Fill first - WinForms docks the last-added control first.
-        Controls.Add(_cards);
-        Controls.Add(header);
+        // The cards' own faces at the text size in use - see FaceCards.
+        _textSize.Keep(FaceCards);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(FieldGrid.Inline(btnSaveNew, _chkPreviewVoice), gapBelow: UiLayout.RowGap);
+        page.Add(_lblStatus, gapBelow: UiLayout.RowGap);
+
+        // At least a row of cards - below that the page scrolls.
+        page.AddFill(scroller, _cards.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
     }
 
     private void RefreshCards()
@@ -196,52 +248,36 @@ public sealed class ThemesControl : UserControl
 
         _cards.Controls.Clear();
 
-        CardWidth = MeasureCardWidth();
+        // The old cards' labels and buttons went with them.
+        _cardFaces.Clear();
+        _cardButtons.Clear();
 
         var activeId = _themeStore.ActiveThemeId;
         foreach (var theme in _themeStore.All)
         {
-            _cards.Controls.Add(BuildCard(theme, theme.Id == activeId));
+            _cards.AddCard(BuildCard(theme, theme.Id == activeId));
         }
 
-        // Room under the last card. A flow panel leaves its own bottom
-        // padding out of what it scrolls, so the last row stopped against
-        // the bottom edge of the window; the last card's own margin does
-        // count.
-        if (_cards.Controls.Count > 0)
-        {
-            var last = _cards.Controls[_cards.Controls.Count - 1];
-            last.Margin = new Padding(last.Margin.Left, last.Margin.Top, last.Margin.Right, last.Margin.Bottom + LayoutDoctor.ScrollBottomRoom);
-        }
-
+        // No room kept under the last card here: the cards' page keeps the
+        // theme's room under its last row itself (AutoScrollMargin), which a
+        // flow panel left out of what it scrolled.
         _cards.ResumeLayout();
         AppTheme.ApplyRecursively(_cards);
     }
 
-    /// <summary>The widest row a card can have (a built-in's), plus room either side.</summary>
-    private static int MeasureCardWidth()
-    {
-        var probe = new[]
-        {
-            new Button { Text = "Preview" }, new Button { Text = "Apply" },
-            new Button { Text = "Customize..." }, new Button { Text = "Voice Lines..." },
-        };
-
-        try
-        {
-            // The right edge of the row, plus slack for the theming pass,
-            // which can widen a button a little after it is measured here.
-            var right = AppTheme.LayoutButtonRow(20, 0, 6, probe);
-            return Math.Max(MinCardWidth, right + 20 + probe.Length * 6);
-        }
-        finally
-        {
-            foreach (var button in probe)
-            {
-                button.Dispose();
-            }
-        }
-    }
+    /// <summary>
+    /// The least a card can do with across: its row of buttons on one line
+    /// - the widest of them, a built-in's - and the card's inset, and never
+    /// narrower than CardReadingWidth at the text size in use.
+    ///
+    /// It was 440px whatever the text size, and wider when the buttons were:
+    /// at 150% two cards to a row that three would have fitted, and at 200%
+    /// a description of two words to a line.
+    /// </summary>
+    private int CardLeastWidth() =>
+        Math.Max(
+            UiLayout.AtTextSize(CardReadingWidth),
+            _cardButtons.Select(bar => bar.OneLineWidth).DefaultIfEmpty(0).Max() + Section.Inset.Horizontal);
 
     /// <summary>The strip colour down a card's left edge - one per pack, so a style is recognisable at a glance.</summary>
     private static Color StripColour(Theme theme)
@@ -262,33 +298,45 @@ public sealed class ThemesControl : UserControl
         };
     }
 
-    private Control BuildCard(Theme theme, bool active)
+    /// <summary>
+    /// One soundscape's card: its name - with LAST APPLIED against the
+    /// right-hand edge on the one applied last - what it is made of, its
+    /// description, and its buttons along the bottom. The card is as tall
+    /// as the tallest in its row (CardWall), and the room that leaves goes
+    /// under the description, so the buttons of a row line up.
+    /// </summary>
+    private Section BuildCard(Theme theme, bool active)
     {
-        var card = new Panel
-        {
-            Size = new Size(CardWidth, CardHeight),
-            Margin = new Padding(6),
-            BackColor = AppTheme.Surface,
-        };
+        var card = new Section();
 
         var strip = StripColour(theme);
-        card.Paint += (_, e) =>
-        {
-            using var border = new Pen(active ? AppTheme.Accent : AppTheme.Border, active ? 2 : 1);
-            e.Graphics.DrawRectangle(border, 0, 0, card.Width - 1, card.Height - 1);
-            using var brush = new SolidBrush(strip);
-            e.Graphics.FillRectangle(brush, 0, 0, 6, card.Height);
-        };
+        card.Paint += (_, e) => PaintCardMarks(e.Graphics, card.ClientSize, strip, active);
 
-        var lblName = new Label
+        var lblName = CardFace(new Label
         {
             Text = theme.Name,
-            Font = AppTheme.HeadingFont,
             ForeColor = AppTheme.TextDark,
             AutoSize = true,
-            Location = new Point(20, 12),
-            BackColor = Color.Transparent,
-        };
+        }, () => AppTheme.HeadingFont);
+
+        if (active)
+        {
+            var lblActive = CardFace(new Label
+            {
+                Text = "LAST APPLIED",
+                ForeColor = AppTheme.Accent,
+                AutoSize = true,
+            }, () => AppTheme.MicroFont);
+
+            // The name on the left and the marker against the right-hand
+            // edge, on one line when they fit - the marker under the name,
+            // still on the right, when they do not (SplitBar).
+            card.Add(new SplitBar(new ButtonBar().With(lblName), new ButtonBar(alignRight: true).With(lblActive)), gapBelow: UiLayout.HintGap);
+        }
+        else
+        {
+            card.Add(lblName, gapBelow: UiLayout.HintGap);
+        }
 
         var packs = theme.SoundEffects.Effects.Values
             .Select(c => string.IsNullOrWhiteSpace(c.CustomFilePath) ? SoundPacks.DisplayName(c.BuiltInSound) : "own files")
@@ -310,46 +358,33 @@ public sealed class ThemesControl : UserControl
             backgroundNote = string.Empty;
         }
 
-        var lblMeta = new Label
+        var lblMeta = CardFace(new Label
         {
             Text = $"{(theme.IsBuiltIn ? "Built-in" : "Custom")}  \u2022  Sounds: {string.Join(", ", packs)}{backgroundNote}{recordedNote}",
-            Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
             AutoSize = true,
-            MaximumSize = new Size(CardWidth - 40, 0),
-            Location = new Point(20, UiLayout.Below(lblName, 2)),
-            BackColor = Color.Transparent,
-        };
+        }, () => AppTheme.SmallFont);
 
+        card.Add(lblMeta);
+
+        // Wrapped to the card's width, however long - it used to be a box
+        // of fixed size, and a longer description was cut off at its foot.
         var lblDescription = new Label
         {
             Text = theme.Description,
             ForeColor = AppTheme.TextDark,
-            AutoSize = false,
-            Location = new Point(20, UiLayout.Below(lblMeta, 6)),
-            BackColor = Color.Transparent,
+            AutoSize = true,
         };
 
-        var buttonsY = CardHeight - UiLayout.ButtonHeight - 12;
-        lblDescription.Size = new Size(CardWidth - 36, Math.Max(20, buttonsY - lblDescription.Top - 6));
+        card.Add(lblDescription);
 
-        card.Controls.Add(lblName);
-        card.Controls.Add(lblMeta);
-        card.Controls.Add(lblDescription);
-
-        if (active)
-        {
-            var lblActive = new Label
-            {
-                Text = "LAST APPLIED",
-                Font = AppTheme.MicroFont,
-                ForeColor = AppTheme.Accent,
-                AutoSize = true,
-                BackColor = Color.Transparent,
-            };
-            lblActive.Location = new Point(CardWidth - TextRenderer.MeasureText(lblActive.Text, lblActive.Font).Width - 14, 14);
-            card.Controls.Add(lblActive);
-        }
+        // The description's row takes whatever height the card has over what
+        // its parts need - the card is as tall as the tallest in its row - so
+        // the buttons sit along the bottom of every card in a row, as they
+        // did when the cards were all one fixed height.
+        var descriptionRow = card.RowStyles[card.GetRow(lblDescription)];
+        descriptionRow.SizeType = SizeType.Percent;
+        descriptionRow.Height = 100f;
 
         var btnPreview = new Button { Text = "Preview" };
         btnPreview.Click += async (_, _) => await TogglePreviewAsync(theme, btnPreview);
@@ -363,12 +398,222 @@ public sealed class ThemesControl : UserControl
         var btnLines = new Button { Text = "Voice Lines..." };
         btnLines.Click += (_, _) => ShowVoiceLinesMenu(theme, btnLines, recordable, recorded);
 
-        var buttons = new List<Button> { btnPreview, btnApply, btnEdit, btnLines };
+        // One row of buttons, each only as wide as its caption and a little
+        // room, so the four stay on one line in a card of readable width.
+        var buttons = new ButtonBar(tight: true).With(btnPreview, btnApply, btnEdit, btnLines);
 
-        AppTheme.LayoutButtonRow(20, buttonsY, 6, buttons.ToArray());
-        card.Controls.AddRange(buttons.ToArray<Control>());
+        _cardButtons.Add(buttons);
+        card.Add(buttons, gapBelow: 0);
 
         return card;
+    }
+
+    /// <summary>
+    /// What a card has on top of the theme's own: the pack's colour down its
+    /// left edge, clipped to the card's rounded corners, and - on the
+    /// soundscape applied last - an outline in the accent. Both inside the
+    /// card's inset, where nothing else is drawn.
+    /// </summary>
+    private static void PaintCardMarks(Graphics g, Size size, Color strip, bool active)
+    {
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        // The card's own outline, as AppTheme.DrawCard draws it.
+        var outline = RectangleF.Inflate(new RectangleF(0, 0, size.Width, size.Height), -0.5f, -0.5f);
+
+        using (var edge = AppTheme.RoundedRect(outline, AppTheme.CornerRadius))
+        {
+            var saved = g.Save();
+            g.SetClip(edge);
+
+            using (var brush = new SolidBrush(strip))
+            {
+                g.FillRectangle(brush, outline.Left, outline.Top, StripWidth, outline.Height);
+            }
+
+            g.Restore(saved);
+        }
+
+        if (active)
+        {
+            // Two pixels wide, inside the card's edge rather than across it.
+            var inside = RectangleF.Inflate(new RectangleF(0, 0, size.Width, size.Height), -1f, -1f);
+
+            using var ring = AppTheme.RoundedRect(inside, AppTheme.CornerRadius);
+            using var pen = new Pen(AppTheme.Accent, 2f);
+
+            g.DrawPath(pen, ring);
+        }
+    }
+
+    /// <summary>Gives a card's label a face of its own, and keeps it at the text size in use - see _cardFaces.</summary>
+    private T CardFace<T>(T control, Func<Font> face) where T : Control
+    {
+        _cardFaces.Add((control, face));
+        control.Font = face();
+
+        return control;
+    }
+
+    /// <summary>The cards' labels in their faces at the text size in use. Run again when it changes (TextSize.Keep).</summary>
+    private void FaceCards()
+    {
+        foreach (var (control, face) in _cardFaces)
+        {
+            var font = face();
+
+            if (!control.IsDisposed && !Equals(control.Font, font))
+            {
+                control.Font = font;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The soundscapes' cards side by side in columns of one width - as
+    /// many to a row as fit at the least a card can do with, wrapping onto
+    /// the next row - every card in a row as tall as the tallest, so the
+    /// buttons along their bottoms line up.
+    ///
+    /// Placed by hand rather than by a table or a flow panel: how many cards
+    /// go on a row comes from the width, and the cards then share it, which
+    /// neither does. Sizes itself - put it in a PageStack, which gives it
+    /// the width.
+    /// </summary>
+    private sealed class CardWall : Panel
+    {
+        /// <summary>Between two cards, across and down.</summary>
+        private const int Gap = UiLayout.RowGap;
+
+        private readonly Func<int> _leastCardWidth;
+
+        /// <param name="leastCardWidth">The least a card can do with across, asked whenever the wall is measured - so it can follow the text size and the buttons.</param>
+        public CardWall(Func<int> leastCardWidth)
+        {
+            _leastCardWidth = leastCardWidth;
+
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            Tag = AppTheme.KeepBackColor;
+        }
+
+        /// <summary>
+        /// Adds a card after the last. Sized here, never by the layout: a
+        /// card that sized itself would be resized by the panel to its width
+        /// on one line (see Beside.Side).
+        ///
+        /// The wall is placed again whenever a card lays itself out - a
+        /// button's caption changing ("Preview" to "Stop") is something only
+        /// the card sees. Told as the card's layout starts, before its rows
+        /// are placed - for the reason Beside.AddSideCard gives.
+        /// </summary>
+        public void AddCard(Section card)
+        {
+            card.AutoSize = false;
+            card.Margin = Padding.Empty;
+            card.Layout += (_, _) => PerformLayout();
+
+            Controls.Add(card);
+        }
+
+        /// <summary>The least the wall can do with at <paramref name="width"/> before it scrolls: its first row.</summary>
+        public int LeastHeight(int width) => Arrange(Math.Max(1, width), place: false, rows: 1);
+
+        /// <summary>How tall the rows come to at the width proposed. With none, the cards on one row at their least.</summary>
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4
+                ? proposedSize.Width
+                : OneRowWidth();
+
+            return new Size(width, Arrange(width, place: false));
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+
+            Arrange(Math.Max(1, ClientSize.Width), place: true);
+        }
+
+        /// <summary>Coming into view: while it was hidden, a card hidden in its own right could not be told from the rest.</summary>
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+
+            if (Visible)
+            {
+                PerformLayout();
+            }
+        }
+
+        /// <summary>The cards that take a place - hidden in its own right leaves one out, askable only while the wall is on screen (see Pieces.TrailingGap).</summary>
+        private List<Control> Cards() =>
+            Controls.Cast<Control>().Where(card => (!Visible || card.Visible) && card is not ThinScrollBar).ToList();
+
+        /// <summary>Every card on one row, at its least.</summary>
+        private int OneRowWidth()
+        {
+            var count = Cards().Count;
+
+            return count == 0 ? 0 : count * Math.Max(1, _leastCardWidth()) + (count - 1) * Gap;
+        }
+
+        /// <summary>
+        /// Works the rows out <paramref name="width"/> wide - the first
+        /// <paramref name="rows"/> of them, placing the cards when
+        /// <paramref name="place"/> is set - and returns how tall they come
+        /// to. The columns share the width to the pixel, the last one ending
+        /// on the edge; a last row that is short keeps the columns' widths.
+        /// </summary>
+        private int Arrange(int width, bool place, int rows = int.MaxValue)
+        {
+            var cards = Cards();
+
+            if (cards.Count == 0)
+            {
+                return 0;
+            }
+
+            var columns = Math.Clamp((width + Gap) / (Math.Max(1, _leastCardWidth()) + Gap), 1, cards.Count);
+            var room = Math.Max(0, width - Gap * (columns - 1));
+            var y = 0;
+
+            for (var first = 0; first < cards.Count && first / columns < rows; first += columns)
+            {
+                var row = cards.Skip(first).Take(columns).ToList();
+                var height = 0;
+
+                for (var i = 0; i < row.Count; i++)
+                {
+                    height = Math.Max(height, row[i].GetPreferredSize(new Size(ColumnWidth(i), 0)).Height);
+                }
+
+                if (place)
+                {
+                    for (var i = 0; i < row.Count; i++)
+                    {
+                        var bounds = new Rectangle(ColumnLeft(i), y, ColumnWidth(i), height);
+
+                        if (row[i].Bounds != bounds)
+                        {
+                            row[i].Bounds = bounds;
+                        }
+                    }
+                }
+
+                y += height + Gap;
+            }
+
+            return y - Gap;
+
+            int ColumnLeft(int column) => column * (room / columns) + column * Gap;
+
+            int ColumnWidth(int column) =>
+                Math.Max(1, column == columns - 1 ? width - ColumnLeft(column) : room / columns);
+        }
     }
 
     // ------------------------------------------------------------ preview

@@ -70,14 +70,46 @@ public sealed class MixerControl : UserControl
     private bool _ambienceLevelUnsaved;
     private bool _musicLevelUnsaved;
 
-    /// <summary>The four strip cards, kept so they can be levelled to one height once all of them exist.</summary>
-    private readonly List<Panel> _cards = new();
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
 
-    /// <summary>Where the fader starts on every card - see SharedSliderTop.</summary>
-    private int _sharedSliderTop;
+    /// <summary>The strips' Test buttons, which the least a strip can do with is measured from - see StripLeastWidth.</summary>
+    private readonly List<Button> _testButtons = new();
 
-    /// <summary>Where the four cards start: under the voice banner's line - see BuildLayout.</summary>
-    private int _cardsTop = 58;
+    /// <summary>The drop-downs' widths as last measured - see Pieces.PickerWidth. Their choices never change, so only a new text size measures them again.</summary>
+    private (Font Font, int Count, int Width)? _startAtWidth;
+    private (Font Font, int Count, int Width)? _musicEndWidth;
+
+    /// <summary>A fader's width and height at the normal text size. FaderControl draws it; it is sized here, at the text size in use.</summary>
+    private const int FaderWidth = 48;
+    private const int FaderHeight = 200;
+
+    /// <summary>
+    /// The narrowest the column beside a fader gets at the normal text size -
+    /// the level, and what the source is doing, which wraps. Test sets it
+    /// wider on the strips that have one. Any wider and the four strips
+    /// would go two by two at 200%.
+    /// </summary>
+    private const int StateLeastWidth = 120;
+
+    /// <summary>The drop-downs' widths at the normal text size - never narrower, and as wide as their longest choice.</summary>
+    private const int StartAtPickerWidth = 150;
+    private const int MusicEndPickerWidth = 170;
+
+    /// <summary>
+    /// The four strips' names and descriptions, in order. Every strip keeps
+    /// room for the longest of them, so the four faders start level - see
+    /// AddChannel.
+    /// </summary>
+    private static readonly string[] StripNames = { "Announcements", "Sound effects", "Ambience", "Music" };
+
+    private static readonly string[] StripDescriptions =
+    {
+        "Spoken lines from the announcer.",
+        "Per-lap chimes and race cues.",
+        "Crowd and track atmosphere.",
+        "Between-race soundtrack.",
+    };
 
     /// <summary>Set while sliders are being written programmatically, so that doesn't count as a user edit.</summary>
     private bool _loading;
@@ -130,20 +162,14 @@ public sealed class MixerControl : UserControl
         _announcer = announcer;
 
         Dock = DockStyle.Fill;
-
-        // Scrolls down only. Everything here fits the width, but the moment
-        // the vertical bar appears it takes its width from the page, and
-        // that brought a horizontal bar with it for a few pixels. Switched
-        // off before AutoScroll goes on, or AutoScroll brings it back.
-        HorizontalScroll.Maximum = 0;
-        HorizontalScroll.Enabled = false;
-        HorizontalScroll.Visible = false;
-        AutoScroll = true;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 664);
-        MinimumSize = new Size(900, 500);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. No design size and no MinimumSize: the 900x500
+        // floor was honoured over the size the page was given. The page
+        // scrolls when it is taller than the window, and down only - nothing
+        // on it is wider than the page (PageStack).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
 
@@ -159,6 +185,20 @@ public sealed class MixerControl : UserControl
         // Repeats the sample line so there's always something to balance
         // against, rather than one announcement then silence.
         _auditionVoice.Tick += (_, _) => SpeakAuditionLine();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>One mixer strip: a fader plus the live state of that source.</summary>
@@ -179,52 +219,73 @@ public sealed class MixerControl : UserControl
         public Action? Test { get; init; }
     }
 
+    /// <summary>
+    /// The intro and the line kept for the voice banner; then the four
+    /// strips side by side - four across, two by two, or one under another,
+    /// as the width allows (StripBank). Under them the settings, in cards:
+    /// whether the beds duck under announcements, what comes up when a
+    /// session starts, and what stops when it ends - and last a card with
+    /// the audition's interval, the buttons and the status line. The four
+    /// cards' captions share one column (FieldGrid.LineUp), so every choice
+    /// starts at the same x down the page. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand; the page scrolls
+    /// when it is taller than the window (PageStack).
+    ///
+    /// It used to be placed in pixels on a 980x664 page with a 900x500
+    /// floor: the strips 224px wide and their faders 48x200 at every text
+    /// size, the intro and the banner capped at the floor's width, the
+    /// faders' shared top worked out by hand from the descriptions' wrapped
+    /// heights, and every row under the strips at an x worked out from the
+    /// widest caption. The two groups of settings were bold headings over
+    /// the rows ("WHEN A SESSION STARTS", "WHEN IT ENDS"); they are the
+    /// cards' captions now.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Balance every sound the app makes, in one place. These are the same levels as on the other tabs - "
                  + "changing one here changes it there. Adjustments apply immediately, so you can set the blend by ear.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(876, 0),  // capped to the page's own minimum width, not a wider guess
-
-            // Measured below before it is parented, so it has to carry the
-            // font it will be drawn in.
-            Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Under the intro, on a line of its own that the cards start below.
-        // It used to sit at a fixed y=38, which is the middle of the intro's
-        // second line - so NO VOICE was printed across the intro whenever it
-        // showed. It shows more often now (the Windows voice standing in has
-        // a notice here too), so it gets the room. One line, cut short
-        // rather than wrapped, so it can never reach down into the cards.
-        _lblVoiceWarning.Location = new Point(16, UiLayout.Below(lblIntro, UiLayout.HintGap));
+        // Under the intro, on a line of its own that the strips start below,
+        // kept whether the banner shows or not - so the faders never move
+        // when it comes and goes. It used to sit at a fixed y=38, which is
+        // the middle of the intro's second line - so NO VOICE was printed
+        // across the intro whenever it showed. It shows more often now (the
+        // Windows voice standing in has a notice here too), so it gets the
+        // room. One line, cut short rather than wrapped, so it can never
+        // reach down into the strips - see RefreshMeters for what it says.
         _lblVoiceWarning.AutoSize = false;
         _lblVoiceWarning.AutoEllipsis = true;
-        _lblVoiceWarning.Font = AppTheme.BoldFont;
-        _lblVoiceWarning.Size = new Size(868, AppTheme.BoldFont.Height + 4);  // capped to the page's own minimum width, not a wider guess
+        _lblVoiceWarning.Dock = DockStyle.Fill;
         _lblVoiceWarning.Visible = false;
+        _textSize.Wear(_lblVoiceWarning, () => AppTheme.BoldFont);
 
-        _cardsTop = UiLayout.Below(_lblVoiceWarning, UiLayout.RowGap);
+        var warningLine = new Panel { Tag = AppTheme.KeepBackColor };
+        warningLine.Controls.Add(_lblVoiceWarning);
 
-        var x = UiLayout.PageLeft;
-        const int stripWidth = 224;
+        // One line of the bold face and a little room, at the text size in
+        // use.
+        _textSize.Keep(() =>
+        {
+            var height = AppTheme.BoldFont.Height + 4;
 
-        // Worked out once, from all four captions, before any card is
-        // built - see SharedSliderTop.
-        _sharedSliderTop = SharedSliderTop(
-            stripWidth,
-            "Spoken lines from the announcer.",
-            "Per-lap chimes and race cues.",
-            "Crowd and track atmosphere.",
-            "Between-race soundtrack.");
+            if (warningLine.Height != height)
+            {
+                warningLine.Height = height;
+            }
+        });
 
-        AddChannel(ref x, stripWidth,
-            "Announcements",
-            "Spoken lines from the announcer.",
+        // --- The strips ---
+
+        var strips = new StripBank(StripLeastWidth);
+
+        strips.AddStrip(AddChannel(
+            StripNames[0],
+            StripDescriptions[0],
             () => (float)_voiceStore.Current.Volume,
             v =>
             {
@@ -260,11 +321,11 @@ public sealed class MixerControl : UserControl
                 _announcer.SpeakReminder("Announcement level check.");
                 _lblStatus.Text = "Speaking a test line...";
                 _lblStatus.ForeColor = AppTheme.TextMuted;
-            });
+            }));
 
-        AddChannel(ref x, stripWidth,
-            "Sound effects",
-            "Per-lap chimes and race cues.",
+        strips.AddStrip(AddChannel(
+            StripNames[1],
+            StripDescriptions[1],
             () => (float)_soundStore.Current.Volume,
             v =>
             {
@@ -273,11 +334,11 @@ public sealed class MixerControl : UserControl
                 QueueLevelSave();
             },
             () => _announcer.Muted ? "Muted" : "Ready",
-            () => _ = SoundPacks.PlayAsync(_soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.GoodLap)), SoundEffectKind.GoodLap, (float)_soundStore.Current.Volume));
+            () => _ = SoundPacks.PlayAsync(_soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.GoodLap)), SoundEffectKind.GoodLap, (float)_soundStore.Current.Volume)));
 
-        AddChannel(ref x, stripWidth,
-            "Ambience",
-            "Crowd and track atmosphere.",
+        strips.AddStrip(AddChannel(
+            StripNames[2],
+            StripDescriptions[2],
             () => _ambienceStore.Current.MasterVolume,
             v =>
             {
@@ -295,11 +356,11 @@ public sealed class MixerControl : UserControl
             },
             () => !_ambienceStore.Current.Enabled ? "Off"
                 : _ambience.IsRunning ? $"Playing - {_ambience.EffectiveIntensity}"
-                : "Idle");
+                : "Idle"));
 
-        AddChannel(ref x, stripWidth,
-            "Music",
-            "Between-race soundtrack.",
+        strips.AddStrip(AddChannel(
+            StripNames[3],
+            StripDescriptions[3],
             () => _musicStore.Current.Volume,
             v =>
             {
@@ -311,87 +372,24 @@ public sealed class MixerControl : UserControl
             },
             () => !_musicStore.Current.Enabled ? "Off"
                 : _music.NowPlaying is { } t ? $"Playing - {t.DisplayName}"
-                : "Stopped");
+                : "Stopped"));
 
-        // Every card the same height, now that all four exist.
-        LevelCards();
-
-        var cardsRight = x - 10;
-
-        // Duck toggles surfaced here as well as on their own tabs: this is
-        // the page you're on when the ducking is bothering you, and hunting
-        // two other tabs to switch it off is friction at exactly the wrong
-        // moment. Same stored setting, so the two stay in step.
-        // Everything from here down is measured off the control above or
-        // beside it.
-        //
-        // It was written as literal coordinates - (280, 394), (352, 397),
-        // (330, 488) - chosen against the old body font, and at the current
-        // one they had stopped agreeing with each other. The worst of it was
-        // the "Music after the recap" row: a hint label placed at x=330 on
-        // the same y as a dropdown at x=384 and a spinner at x=582, so the
-        // paragraph was drawn straight through both controls.
-        //
-        // Hints now go on their own line under the row they explain rather
-        // than beside it. A line of prose next to a row of controls only
-        // ever fits at one font size.
-        var content = cardsRight - UiLayout.PageLeft;
-
-        var y = UiLayout.Below(_cards[0], UiLayout.SectionGap);
-
-        // --- One grid for everything below the cards ---
+        // --- One caption column for everything below the strips ---
         //
         // A caption on the left, its choices to the right of it, one
-        // setting per row. These rows were each laid out on their own,
-        // left to right, so the choices started wherever their caption
-        // happened to end and nothing lined up from one row to the next -
-        // and each tick box was spaced by its default 104-pixel width
-        // rather than by its text, which spread "Races" and "Practice" a
-        // third of the page apart. Now every caption shares one column and
-        // every choice starts at the same x.
-        var captionFont = AppTheme.BodyFont;
-        var captionTexts = new[]
-        {
-            "Duck under announcements:", "Start for:", "Starting at:", "Bring up:",
-            "At the flag, stop:", "Music after the recap:",
-        };
-        var fieldX = UiLayout.PageLeft
-            + captionTexts.Max(t => TextRenderer.MeasureText(t, captionFont).Width)
-            + UiLayout.SectionGap;
-        var fieldWidth = Math.Max(200, content - (fieldX - UiLayout.PageLeft));
-
-        // A tick box's width by its text and box, not its default size.
-        static int WidthOf(Control control) => control switch
-        {
-            CheckBox box => TextRenderer.MeasureText(box.Text, AppTheme.BodyFont).Width + 26,
-            Label { AutoSize: true } label => TextRenderer.MeasureText(label.Text, label.Font).Width,
-            _ => control.Width,
-        };
-
-        void PlaceRow(Label caption, int rowY, int rowHeight, params Control[] fields)
-        {
-            caption.Font = captionFont;
-            caption.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(caption, rowY, rowHeight));
-
-            var x = fieldX;
-            foreach (var field in fields)
-            {
-                if (field is CheckBox)
-                {
-                    field.Font = captionFont;
-                }
-
-                var top = field is CheckBox or Label ? UiLayout.CentreOn(field, rowY, rowHeight) : rowY;
-                field.Location = new Point(x, top);
-
-                x += WidthOf(field) + field switch
-                {
-                    CheckBox => UiLayout.SectionGap,
-                    ComboBox => UiLayout.RowGap + 2,
-                    _ => UiLayout.LabelGap,
-                };
-            }
-        }
+        // setting per row. These rows were each laid out on their own, left
+        // to right, so the choices started wherever their caption happened
+        // to end and nothing lined up from one row to the next - and each
+        // tick box was spaced by its default 104-pixel width rather than by
+        // its text, which spread "Races" and "Practice" a third of the page
+        // apart. Every caption shares one column now, across the four cards
+        // (LineUp, below), and every choice starts at the same x.
+        //
+        // Hints go on their own line under the row they explain rather than
+        // beside it. A line of prose next to a row of controls only ever
+        // fits at one font size: "Music after the recap" once had its hint
+        // at the same y as its drop-down and spinner, drawn straight
+        // through both.
 
         // --- Duck toggles ---
         //
@@ -399,8 +397,6 @@ public sealed class MixerControl : UserControl
         // you're on when the ducking is bothering you, and hunting two
         // other tabs to switch it off is friction at exactly the wrong
         // moment. Same stored setting, so the two stay in step.
-        var lblDuckToggle = new Label { Text = "Duck under announcements:", AutoSize = true };
-
         _chkDuckAmbience.Text = "Ambience";
         _chkDuckAmbience.AutoSize = true;
         _chkDuckAmbience.Checked = _ambienceStore.Current.DuckUnderAnnouncements;
@@ -433,38 +429,20 @@ public sealed class MixerControl : UserControl
             }
         };
 
-        var rowHeight = Math.Max(UiLayout.HeightOf(_chkDuckAmbience), AppTheme.BodyFont.Height);
+        var duckGrid = new FieldGrid();
 
-        PlaceRow(lblDuckToggle, y, rowHeight, _chkDuckAmbience, _chkDuckMusic);
+        duckGrid.AddRow("Duck under announcements:", Choices(_chkDuckAmbience, _chkDuckMusic), stretch: true);
+        duckGrid.AddHint("off means the bed stays at full level while the announcer talks - set how far it drops on each source's own tab");
 
-        var lblDuckNote = new Label
-        {
-            Text = "off means the bed stays at full level while the announcer talks - set how far it drops on each source's own tab",
-            Location = new Point(fieldX, y + rowHeight + UiLayout.HintGap),
-            AutoSize = true,
-            MaximumSize = new Size(fieldWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var duckCard = new Section();
+
+        duckCard.Add(duckGrid, gapBelow: 0);
 
         // --- When a session starts ---
         //
         // Auto-start lives here rather than on any one source's tab: it
         // governs music, ambience AND the announcer together, so putting it
         // under Music (say) would hide two thirds of what it does.
-        y = UiLayout.Below(lblDuckNote, UiLayout.SectionGap);
-
-        var lblAutoStart = new Label
-        {
-            Text = "WHEN A SESSION STARTS",
-            Location = new Point(UiLayout.PageLeft, y),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
-
-        y = UiLayout.Below(lblAutoStart, UiLayout.HeadingGap);
-
         _chkStartRaces.Text = "Races";
         _chkStartRaces.AutoSize = true;
         _chkStartRaces.Checked = _settings.AudioStartWithRaces;
@@ -485,11 +463,6 @@ public sealed class MixerControl : UserControl
             UpdateAutoStartState();
         };
 
-        var lblStartFor = new Label { Text = "Start for:", AutoSize = true };
-        var lblStartAt = new Label { Text = "Starting at:", AutoSize = true };
-
-        _cmbStartAt.Font = AppTheme.BodyFont;
-        _cmbStartAt.Width = 150;
         _cmbStartAt.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbStartAt.Items.AddRange(new object[] { "Staging", "Green flag" });
         _cmbStartAt.SelectedIndex = _settings.AudioStartAtStaging ? 0 : 1;
@@ -498,8 +471,6 @@ public sealed class MixerControl : UserControl
             _settings.AudioStartAtStaging = _cmbStartAt.SelectedIndex == 0;
             _settings.Save();
         };
-
-        var lblStartWhat = new Label { Text = "Bring up:", AutoSize = true };
 
         _chkStartMusic.Text = "Music";
         _chkStartMusic.AutoSize = true;
@@ -516,28 +487,17 @@ public sealed class MixerControl : UserControl
         _chkUnmute.Checked = _settings.AudioUnmuteAnnouncer;
         _chkUnmute.CheckedChanged += (_, _) => { _settings.AudioUnmuteAnnouncer = _chkUnmute.Checked; _settings.Save(); };
 
-        var startRow = _cmbStartAt.Height;
+        var startGrid = new FieldGrid();
 
-        PlaceRow(lblStartFor, y, startRow, _chkStartRaces, _chkStartPractice);
-        y += startRow + UiLayout.RowGap;
-        PlaceRow(lblStartAt, y, startRow, _cmbStartAt);
-        y += startRow + UiLayout.RowGap;
-        PlaceRow(lblStartWhat, y, startRow, _chkStartMusic, _chkStartAmbience, _chkUnmute);
-        y += startRow + UiLayout.SectionGap;
+        startGrid.AddRow("Start for:", Choices(_chkStartRaces, _chkStartPractice), stretch: true);
+        startGrid.AddRow("Starting at:", _cmbStartAt);
+        startGrid.AddRow("Bring up:", Choices(_chkStartMusic, _chkStartAmbience, _chkUnmute), stretch: true);
+
+        var startCard = new Section("When a session starts");
+
+        startCard.Add(startGrid, gapBelow: 0);
 
         // --- When it ends ---
-        var lblAutoEnd = new Label
-        {
-            Text = "WHEN IT ENDS",
-            Location = new Point(UiLayout.PageLeft, y),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
-
-        y = UiLayout.Below(lblAutoEnd, UiLayout.HeadingGap);
-
-        var lblStopAfter = new Label { Text = "At the flag, stop:", AutoSize = true };
 
         // Music straight away at the checkered flag, for a club that wants
         // the track quiet the moment racing stops. Takes the place of the
@@ -564,10 +524,6 @@ public sealed class MixerControl : UserControl
         // Music gets a three-way choice rather than a tick, and it happens
         // after the RECAP rather than at the flag - fading across the
         // summary is the opposite of what a broadcast does.
-        var lblMusicEnd = new Label { Text = "Music after the recap:", AutoSize = true };
-
-        _cmbMusicEnd.Font = AppTheme.BodyFont;
-        _cmbMusicEnd.Width = 170;
         _cmbMusicEnd.DropDownStyle = ComboBoxStyle.DropDownList;
         // Rows carry their value rather than standing for it by position.
         // The chosen behaviour is saved in settings; three literal strings
@@ -585,10 +541,8 @@ public sealed class MixerControl : UserControl
             UpdateAutoStartState();
         };
 
-        var lblFadeOver = new Label { Text = "over", AutoSize = true };
+        var lblFadeOver = new Label { Text = "over" };
 
-        _numMusicFade.Font = AppTheme.BodyFont;
-        _numMusicFade.Width = UiLayout.NumericWidth;
         _numMusicFade.DecimalPlaces = 1;
         _numMusicFade.Increment = 0.5m;
         _numMusicFade.Minimum = 0.5m;
@@ -600,36 +554,22 @@ public sealed class MixerControl : UserControl
             _settings.Save();
         };
 
-        var lblFadeSuffix = new Label { Text = "s", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        var lblFadeSuffix = new Label { Text = "s", ForeColor = AppTheme.TextMuted };
 
-        var endRow = Math.Max(_cmbMusicEnd.Height, _numMusicFade.Height);
+        var endGrid = new FieldGrid();
 
-        lblFadeOver.Font = captionFont;
-        lblFadeSuffix.Font = captionFont;
+        endGrid.AddRow("At the flag, stop:", Choices(_chkStopMusic, _chkStopAmbience), stretch: true);
+        endGrid.AddRow("Music after the recap:", FieldGrid.Inline(_cmbMusicEnd, lblFadeOver, _numMusicFade, lblFadeSuffix));
+        endGrid.AddHint("Only stops what was started automatically - anything you started by hand keeps going. "
+                      + "Ambience waits for the finish celebration to play out first. "
+                      + "With Music ticked above, the music stops at the flag and the choice after the recap doesn't apply.");
 
-        PlaceRow(lblStopAfter, y, endRow, _chkStopMusic, _chkStopAmbience);
-        y += endRow + UiLayout.RowGap;
-        PlaceRow(lblMusicEnd, y, endRow, _cmbMusicEnd, lblFadeOver, _numMusicFade, lblFadeSuffix);
+        var endCard = new Section("When it ends");
 
-        var lblContinueHint = new Label
-        {
-            Text = "Only stops what was started automatically - anything you started by hand keeps going. "
-                 + "Ambience waits for the finish celebration to play out first. "
-                 + "With Music ticked above, the music stops at the flag and the choice after the recap doesn't apply.",
-            Location = new Point(fieldX, y + endRow + UiLayout.HintGap),
-            AutoSize = true,
-            MaximumSize = new Size(fieldWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        endCard.Add(endGrid, gapBelow: 0);
 
         // --- Audition cadence ---
-        y = UiLayout.Below(lblContinueHint, UiLayout.RowGap);
 
-        var lblAnnounceEvery = new Label { Text = "Announce every:", AutoSize = true };
-
-        _numAnnounceEvery.Font = AppTheme.BodyFont;
-        _numAnnounceEvery.Width = UiLayout.NumericWidth;
         _numAnnounceEvery.Minimum = 5;
         _numAnnounceEvery.Maximum = 120;
         _numAnnounceEvery.Increment = 5;
@@ -641,29 +581,18 @@ public sealed class MixerControl : UserControl
             _auditionVoice.Interval = Math.Max(1, (int)_numAnnounceEvery.Value) * 1000;
         };
 
-        var lblSeconds = new Label { Text = "seconds", AutoSize = true };
+        var auditionGrid = new FieldGrid();
 
-        lblAnnounceEvery.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lblAnnounceEvery, y, _numAnnounceEvery.Height));
-        _numAnnounceEvery.Location = new Point(UiLayout.After(lblAnnounceEvery), y);
-        lblSeconds.Location = new Point(UiLayout.After(_numAnnounceEvery), UiLayout.CentreOn(lblSeconds, y, _numAnnounceEvery.Height));
-
-        var lblAuditionHint = new Label
-        {
-            Text = "The bed plays clean first, so you can hear the blend before anything ducks it. "
-                 + "Widen this to listen longer between announcements.",
-            Location = new Point(UiLayout.PageLeft + UiLayout.Indent, UiLayout.Below(_numAnnounceEvery, UiLayout.HintGap)),
-            AutoSize = true,
-            MaximumSize = new Size(content - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        auditionGrid.AddRow("Announce every:", FieldGrid.Inline(_numAnnounceEvery, new Label { Text = "seconds" }));
+        auditionGrid.AddHint("The bed plays clean first, so you can hear the blend before anything ducks it. "
+                           + "Widen this to listen longer between announcements.");
 
         // --- Buttons ---
         //
-        // Sized by the row helper rather than given a height of 28. At the
-        // current font a 28-pixel button clips its own caption, which is
-        // what had happened to "Play Everything".
-        y = UiLayout.Below(lblAuditionHint, UiLayout.SectionGap);
+        // Sized to their captions by the row they are in (ButtonBar) rather
+        // than given a height of 28. At the current font a 28-pixel button
+        // clips its own caption, which is what had happened to "Play
+        // Everything".
 
         // Balancing by ear needs everything audible at once - checking one
         // source at a time tells you nothing about how they sit together,
@@ -726,59 +655,118 @@ public sealed class MixerControl : UserControl
         var btnReset = new Button { Text = "Reset to Defaults" };
         btnReset.Click += (_, _) => ResetLevels();
 
-        y = UiLayout.FlowButtons(
-            UiLayout.PageLeft, y, UiLayout.PageLeft + content,
-            _btnAuditionAll, _btnSpeakNow, btnMuteAll, btnReset);
-
-        _lblStatus.Location = new Point(UiLayout.PageLeft, y + UiLayout.RowGap);
         _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(content, 0);
         _lblStatus.ForeColor = AppTheme.TextMuted;
         _lblStatus.Text = "Drag a fader to set its level - changes save as you go.";
 
-        Controls.Add(lblIntro);
-        Controls.Add(_lblVoiceWarning);
-        Controls.Add(lblDuckToggle);
-        Controls.Add(_chkDuckAmbience);
-        Controls.Add(_chkDuckMusic);
-        Controls.Add(lblDuckNote);
+        var auditionCard = new Section();
 
-        // The auto-start block. These were created and positioned but never
-        // registered, so they existed in code and rendered nowhere - the
-        // section simply appeared to be missing.
-        Controls.Add(lblAutoStart);
-        Controls.Add(_chkStartRaces);
-        Controls.Add(_chkStartPractice);
-        Controls.Add(lblStartFor);
-        Controls.Add(lblStartAt);
-        Controls.Add(_cmbStartAt);
-        Controls.Add(lblStartWhat);
-        Controls.Add(_chkStartMusic);
-        Controls.Add(_chkStartAmbience);
-        Controls.Add(_chkUnmute);
-        Controls.Add(lblAutoEnd);
-        Controls.Add(lblStopAfter);
-        Controls.Add(_chkStopMusic);
-        Controls.Add(_chkStopAmbience);
-        Controls.Add(lblMusicEnd);
-        Controls.Add(_cmbMusicEnd);
-        Controls.Add(lblFadeOver);
-        Controls.Add(_numMusicFade);
-        Controls.Add(lblFadeSuffix);
-        Controls.Add(lblContinueHint);
+        auditionCard.Add(auditionGrid, gapBelow: UiLayout.SectionGap);
+        auditionCard.Add(new ButtonBar().With(_btnAuditionAll, _btnSpeakNow, btnMuteAll, btnReset));
+        auditionCard.Add(_lblStatus, gapBelow: 0);
 
-        Controls.Add(_btnAuditionAll);
-        Controls.Add(_btnSpeakNow);
-        Controls.Add(lblAnnounceEvery);
-        Controls.Add(_numAnnounceEvery);
-        Controls.Add(lblSeconds);
-        Controls.Add(lblAuditionHint);
-        Controls.Add(btnMuteAll);
-        Controls.Add(btnReset);
-        Controls.Add(_lblStatus);
+        // --- The page ---
+
+        var page = new PageStack();
+
+        page.Add(lblIntro, gapBelow: UiLayout.HintGap);
+        page.Add(warningLine, gapBelow: UiLayout.RowGap);
+        page.Add(strips);
+        page.Add(duckCard);
+        page.Add(startCard);
+        page.Add(endCard);
+        page.Add(auditionCard, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Measured in the face the captions and fields inherit from this
+        // page, so only once they are on it - before that they wear the
+        // WinForms default. Then again whenever the text size changes.
+        //
+        // The four cards' captions in one column.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { duckGrid, startGrid, endGrid, auditionGrid }));
+
+        // The drop-downs and the number boxes at the text size in use - see
+        // SizeFields.
+        _textSize.Keep(SizeFields);
 
         RefreshMeters();
         UpdateAutoStartState();
+    }
+
+    /// <summary>
+    /// Tick boxes along a line, a section gap apart - each spaced by its own
+    /// text and box - and onto a second line when the column is too narrow
+    /// for them all (FieldRow).
+    /// </summary>
+    private static FieldRow Choices(params CheckBox[] boxes)
+    {
+        var row = new FieldRow();
+
+        foreach (var box in boxes)
+        {
+            row.Add(null, box);
+        }
+
+        return row;
+    }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use: the drop-downs the width
+    /// they were at the normal text size, at this size, or as wide as their
+    /// longest choice if that is more; the number boxes as wide as their
+    /// largest value and their arrows need. Run again when the text size
+    /// changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
+    {
+        Fit(_cmbStartAt, Math.Max(UiLayout.AtTextSize(StartAtPickerWidth), Pieces.PickerWidth(_cmbStartAt, ref _startAtWidth)));
+        Fit(_cmbMusicEnd, Math.Max(UiLayout.AtTextSize(MusicEndPickerWidth), Pieces.PickerWidth(_cmbMusicEnd, ref _musicEndWidth)));
+        Fit(_numMusicFade, NumberWidth(_numMusicFade));
+        Fit(_numAnnounceEvery, NumberWidth(_numAnnounceEvery));
+
+        // Only when it changed: a new width lays the row out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A number box as wide as its largest value - every digit of its
+    /// Maximum, and its decimals - and its arrows need, in the face it is
+    /// drawn in; never narrower than a number box at the normal text size,
+    /// at this size.
+    /// </summary>
+    private static int NumberWidth(NumericUpDown box)
+    {
+        var whole = new string('0', ((long)Math.Truncate(box.Maximum)).ToString(System.Globalization.CultureInfo.InvariantCulture).Length);
+        var widest = box.DecimalPlaces > 0 ? whole + "." + new string('0', box.DecimalPlaces) : whole;
+        var needed = TextRenderer.MeasureText(widest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12;
+
+        return Math.Max(UiLayout.AtTextSize(UiLayout.NumericWidth), needed);
+    }
+
+    /// <summary>
+    /// The least a strip can do with across: the fader at the text size in
+    /// use, the gap beside it, and a column there as wide as the longest of
+    /// Test, the level at its widest and the least the state line wraps
+    /// in - or its name on one line, if that is more - and the card's inset.
+    /// </summary>
+    private int StripLeastWidth()
+    {
+        var beside = Math.Max(
+            UiLayout.AtTextSize(StateLeastWidth),
+            Math.Max(
+                _testButtons.Select(button => button.Width).DefaultIfEmpty(0).Max(),
+                TextRenderer.MeasureText("100%", AppTheme.BoldFont).Width));
+
+        var name = StripNames.Max(text => TextRenderer.MeasureText(text, AppTheme.BoldFont).Width);
+
+        return Math.Max(name, UiLayout.AtTextSize(FaderWidth) + UiLayout.RowGap + beside) + Section.Inset.Horizontal;
     }
 
     /// <summary>
@@ -804,9 +792,6 @@ public sealed class MixerControl : UserControl
         // The fade length only means anything when fading.
         _numMusicFade.Enabled = afterRecap && SelectedMusicEnd() == MusicEndBehaviour.FadeOut;
     }
-
-
-
 
     /// <summary>
     /// Starts or stops an audition of every source at once.
@@ -932,52 +917,21 @@ public sealed class MixerControl : UserControl
     }
 
     /// <summary>
-    /// The y every fader starts at, measured from the TALLEST of the four
-    /// card descriptions rather than from each card's own.
+    /// One strip, as a card: its name and what it is, then the fader, and
+    /// beside the fader its level, what the source is doing and - for a
+    /// source that can demo itself - Test, level with the fader's foot.
     ///
-    /// One number for the bank is the whole point: it is what makes four
-    /// strips read as a mixer instead of as four separate sliders that
-    /// happen to be side by side.
+    /// Where the fader starts is decided for the whole bank, not by this
+    /// strip's own words: the name and the description each keep room for
+    /// the longest of the four (SteadyLabel). "Spoken lines from the
+    /// announcer." wraps to two lines where the other three fit on one, and
+    /// letting each strip place its fader under its own description put the
+    /// Announcements fader a line lower than its neighbours, pushed its Test
+    /// button down with it, and left that strip taller than the other three
+    /// - four strips that should read as one bank, each starting somewhere
+    /// different.
     /// </summary>
-    private static int SharedSliderTop(int width, params string[] descriptions)
-    {
-        const int pad = 12;
-
-        var inner = Math.Max(40, width - pad * 2);
-
-        var nameHeight = TextRenderer.MeasureText("Xg", AppTheme.BoldFont).Height;
-
-        var tallest = descriptions.Max(text => TextRenderer.MeasureText(
-            text,
-            AppTheme.SmallFont,
-            new Size(inner, int.MaxValue),
-            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height);
-
-        return pad + nameHeight + 6 + tallest + 14;
-    }
-
-    /// <summary>
-    /// Gives every card the height of the tallest, so the bank has one
-    /// straight bottom edge.
-    /// </summary>
-    private void LevelCards()
-    {
-        if (_cards.Count == 0)
-        {
-            return;
-        }
-
-        var tallest = _cards.Max(card => card.Height);
-
-        foreach (var card in _cards)
-        {
-            card.Height = tallest;
-        }
-    }
-
-    private void AddChannel(
-        ref int x,
-        int width,
+    private Section AddChannel(
         string name,
         string description,
         Func<float> read,
@@ -1004,50 +958,23 @@ public sealed class MixerControl : UserControl
         // them written down here as though settled - so treat a confident
         // explanation in this file with suspicion unless it says how it was
         // tested.
-        const int pad = 12;
-
-        var panel = new Panel
-        {
-            Location = new Point(x, _cardsTop),
-            BorderStyle = BorderStyle.FixedSingle,
-            BackColor = AppTheme.Surface,
-        };
-
-        // ApplyRecursively repaints every Panel in the app with the page
-        // background, which would flatten these cards into the page behind
-        // them. Tagged so it leaves this one alone.
-        panel.Tag = AppTheme.KeepBackColor;
-
-        var lblName = new Label
+        var lblName = new SteadyLabel
         {
             Text = name,
-            Location = new Point(pad, pad),
-            AutoSize = true,
-            MaximumSize = new Size(width - pad * 2, 0),
-            Font = AppTheme.BoldFont,
             ForeColor = AppTheme.Primary,
+            Wordings = StripNames,
         };
 
-        var lblDescription = new Label
+        _textSize.Wear(lblName, () => AppTheme.BoldFont);
+
+        var lblDescription = new SteadyLabel
         {
             Text = description,
-            Location = new Point(pad, Below(lblName, 6)),
-            AutoSize = true,
-            MaximumSize = new Size(width - pad * 2, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
+            Wordings = StripDescriptions,
         };
 
-        // Where the fader starts is decided for the whole bank, not by this
-        // card's own caption.
-        //
-        // "Spoken lines from the announcer." wraps to two lines at this
-        // width where the other three fit on one. Letting each card place
-        // its fader under its own description put the Announcements fader a
-        // line lower than its neighbours, pushed its Test button down with
-        // it, and left that card taller than the other three - four strips
-        // that should read as one bank, each starting somewhere different.
-        var sliderTop = _sharedSliderTop;
+        _textSize.Wear(lblDescription, () => AppTheme.SmallFont);
 
         // A FaderControl, not a TrackBar.
         //
@@ -1057,30 +984,41 @@ public sealed class MixerControl : UserControl
         // flips anything any more.
         var slider = new FaderControl
         {
-            Location = new Point(pad - 6, sliderTop),
-            Size = new Size(48, 200),
             Percent = (int)Math.Clamp(read() * 100f, 0, 100),
             SmallChange = 1,
             LargeChange = 10,
         };
 
+        // As tall as it was at the normal text size, at the size in use; the
+        // column it stands in gives it its width (Beside, below). What it
+        // draws inside - the track and the handle - is the size it always
+        // was, for now.
+        _textSize.Keep(() =>
+        {
+            var height = UiLayout.AtTextSize(FaderHeight);
+
+            if (slider.Height != height)
+            {
+                slider.Height = height;
+            }
+        });
+
         var valueLabel = new Label
         {
             Text = $"{slider.Percent}%",
-            Location = new Point(slider.Right + 10, sliderTop),
             AutoSize = true,
-            Font = AppTheme.BoldFont,
         };
+
+        _textSize.Wear(valueLabel, () => AppTheme.BoldFont);
 
         var stateLabel = new Label
         {
             Text = string.Empty,
-            Location = new Point(valueLabel.Left, Below(valueLabel, 8)),
             AutoSize = true,
-            MaximumSize = new Size(width - valueLabel.Left - pad, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
+
+        _textSize.Wear(stateLabel, () => AppTheme.SmallFont);
 
         slider.PercentChanged += (_, _) =>
         {
@@ -1101,40 +1039,33 @@ public sealed class MixerControl : UserControl
             _lblStatus.ForeColor = AppTheme.TextMuted;
         };
 
-        panel.Controls.Add(lblName);
-        panel.Controls.Add(lblDescription);
-        panel.Controls.Add(slider);
-        panel.Controls.Add(valueLabel);
-        panel.Controls.Add(stateLabel);
+        // The fader down the left, its top level with the level beside it,
+        // and the state line under the level, wrapping to the room it has.
+        var band = new Beside(() => UiLayout.AtTextSize(FaderWidth))
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
 
-        // The fader goes to the front, whatever the measurements said.
-        //
-        // In WinForms the control at index 0 is the TOP of the z-order, and
-        // Controls.Add appends - so the two labels added above this are in
-        // front of the fader, and the descriptions are wide enough to cross
-        // it. If a measurement is ever wrong again, the worst case should
-        // be a caption that looks untidy, not a control that cannot be
-        // touched. A label has nothing to do with the mouse; the fader has
-        // nothing but.
-        slider.BringToFront();
+        band.AddSide(slider, gapBelow: 0);
+        band.Add(valueLabel);
+        band.Add(stateLabel, gapBelow: 0);
 
         if (test is not null)
         {
-            var btnTest = new Button
-            {
-                Text = "Test",
-                // Under the fader, not beside it: the state line above can
-                // wrap to two or three lines depending on what it is
-                // reporting, and anything placed at a fixed height beside
-                // the fader is one long message away from being sat on.
-                // Level with the bottom of the fader, on every card. The
-                // state line above it reports live text - "Playing - track
-                // name" - so hanging this off THAT would move the button
-                // around during a race.
-                Location = new Point(valueLabel.Left, slider.Bottom - UiLayout.ButtonHeight),
-                Width = Math.Max(80, width - valueLabel.Left - pad),
-                Height = UiLayout.ButtonHeight,
-            };
+            // Under the state line, not beside the fader at a fixed height:
+            // the state line wraps to two or three lines depending on what it
+            // is reporting, and anything placed at a fixed height beside the
+            // fader is one long message away from being sat on. Level with
+            // the bottom of the fader, on every strip: the room between the
+            // two is taken up here, so the state line - live text, "Playing -
+            // track name" - never moves the button around during a race, and
+            // a message longer than the fader is tall makes the strip taller
+            // rather than running into it.
+            band.AddFill(new Panel { Tag = AppTheme.KeepBackColor }, _ => UiLayout.RowGap, gapBelow: 0);
+
+            var btnTest = new Button { Text = "Test" };
             btnTest.Click += (_, _) =>
             {
                 try
@@ -1146,25 +1077,34 @@ public sealed class MixerControl : UserControl
                     // An audition failing is not worth interrupting a mix for.
                 }
             };
-            panel.Controls.Add(btnTest);
+
+            _testButtons.Add(btnTest);
+
+            band.Add(new ButtonBar().With(btnTest), gapBelow: 0);
         }
 
-        // The card is as tall as what ended up in it. Fixing its height
-        // instead is how the contents came to be clipped at the bottom: the
-        // card was 332 high whatever the font, so the moment the wrapped
-        // text above it needed another line, the test button went under the
-        // border.
-        var contentBottom = pad;
+        // The fader goes to the front, whatever the measurements said.
+        //
+        // In WinForms the control at index 0 is the TOP of the z-order, and
+        // Controls.Add appends - so the column of labels beside the fader,
+        // added first, is in front of it. The two are side by side and should
+        // never meet; if a measurement is ever wrong again, the worst case
+        // should be a caption that looks untidy, not a control that cannot be
+        // touched. A label has nothing to do with the mouse; the fader has
+        // nothing but.
+        slider.BringToFront();
 
-        foreach (Control child in panel.Controls)
-        {
-            contentBottom = Math.Max(contentBottom, child.Bottom);
-        }
+        // The card sizes itself to what is in it, and the bank gives every
+        // strip in a row the height of the tallest (StripBank). Fixing its
+        // height instead is how the contents came to be clipped at the
+        // bottom: the card was 332 high whatever the font, so the moment the
+        // wrapped text above it needed another line, the test button went
+        // under the border.
+        var card = new Section();
 
-        panel.Size = new Size(width, contentBottom + pad);
-
-        _cards.Add(panel);
-        Controls.Add(panel);
+        card.Add(lblName, gapBelow: UiLayout.HintGap);
+        card.Add(lblDescription, gapBelow: UiLayout.RowGap);
+        card.Add(band, gapBelow: 0);
 
         _channels.Add(new Channel
         {
@@ -1179,23 +1119,162 @@ public sealed class MixerControl : UserControl
             Test = test,
         });
 
-        x += width + 10;
+        return card;
     }
 
     /// <summary>
-    /// The top edge for something that goes under a control, with a gap.
+    /// The four strips side by side, one width each, as a mixing desk has
+    /// them - or two by two, or one under another, when the page is too
+    /// narrow for four at the least a strip can do with; never three and one
+    /// left over. Every strip in a row is as tall as the tallest, so the
+    /// bank has one straight bottom edge.
     ///
-    /// Hands off to UiLayout, which measures a WRAPPED label properly. The
-    /// version that lived here used Label.PreferredHeight, which reports
-    /// the height of one line whatever MaximumSize says - so a three-line
-    /// channel description measured as one and everything below it was
-    /// placed two lines too high. That was a real bug and this is the real
-    /// fix for it.
-    ///
-    /// It was not, however, why the faders could not be dragged, which is
-    /// what the comment here used to claim. See FaderControl.
+    /// Placed by hand rather than by a table, for the reason Beside's column
+    /// is: how many strips go on a row comes from the width, and a table's
+    /// columns are fixed. Sizes itself - put it in a PageStack, which gives
+    /// it the width.
     /// </summary>
-    private static int Below(Control control, int gap) => UiLayout.Below(control, gap);
+    private sealed class StripBank : Panel
+    {
+        /// <summary>Between two strips, across and down.</summary>
+        private const int Gap = UiLayout.RowGap;
+
+        private readonly Func<int> _leastStripWidth;
+
+        /// <param name="leastStripWidth">The least a strip can do with across, asked whenever the bank is measured - so it can follow the text size.</param>
+        public StripBank(Func<int> leastStripWidth)
+        {
+            _leastStripWidth = leastStripWidth;
+
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            Tag = AppTheme.KeepBackColor;
+        }
+
+        /// <summary>
+        /// Adds a strip after the last. Sized here, never by the layout: a
+        /// card that sized itself would be resized by the panel to its width
+        /// on one line (see Beside.Side).
+        ///
+        /// The bank is placed again whenever a strip lays itself out: a state
+        /// line wrapping onto a line more than the fader is tall is something
+        /// only the strip sees. Told as the strip's layout starts, before its
+        /// rows are placed - for the reason Beside.AddSideCard gives.
+        /// </summary>
+        public void AddStrip(Section strip)
+        {
+            strip.AutoSize = false;
+            strip.Margin = Padding.Empty;
+            strip.Layout += (_, _) => PerformLayout();
+
+            Controls.Add(strip);
+        }
+
+        /// <summary>How tall the rows come to at the width proposed. With none, the strips on one row at their least.</summary>
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4
+                ? proposedSize.Width
+                : OneRowWidth();
+
+            return new Size(width, Arrange(width, place: false));
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+
+            Arrange(Math.Max(1, ClientSize.Width), place: true);
+        }
+
+        /// <summary>Coming into view: while it was hidden, a strip hidden in its own right could not be told from the rest.</summary>
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+
+            if (Visible)
+            {
+                PerformLayout();
+            }
+        }
+
+        /// <summary>The strips that take a place - hidden in its own right leaves one out, askable only while the bank is on screen (see Pieces.TrailingGap).</summary>
+        private List<Control> Strips() =>
+            Controls.Cast<Control>().Where(strip => (!Visible || strip.Visible) && strip is not ThinScrollBar).ToList();
+
+        /// <summary>Every strip on one row, at its least.</summary>
+        private int OneRowWidth()
+        {
+            var count = Strips().Count;
+
+            return count == 0 ? 0 : count * Math.Max(1, _leastStripWidth()) + (count - 1) * Gap;
+        }
+
+        /// <summary>
+        /// Works the rows out <paramref name="width"/> wide - placing the
+        /// strips when <paramref name="place"/> is set - and returns how tall
+        /// they come to. The columns share the width to the pixel, the last
+        /// one ending on the edge.
+        /// </summary>
+        private int Arrange(int width, bool place)
+        {
+            var strips = Strips();
+
+            if (strips.Count == 0)
+            {
+                return 0;
+            }
+
+            var fit = Math.Max(1, (width + Gap) / (Math.Max(1, _leastStripWidth()) + Gap));
+
+            // As many to a row as fit, but rows of one length: four, two or
+            // one, never three and one on its own underneath.
+            var columns = strips.Count;
+
+            while (columns > 1 && (columns > fit || strips.Count % columns != 0))
+            {
+                columns--;
+            }
+
+            var room = Math.Max(0, width - Gap * (columns - 1));
+            var y = 0;
+
+            for (var first = 0; first < strips.Count; first += columns)
+            {
+                var row = strips.Skip(first).Take(columns).ToList();
+                var height = 0;
+
+                for (var i = 0; i < row.Count; i++)
+                {
+                    height = Math.Max(height, row[i].GetPreferredSize(new Size(ColumnWidth(i), 0)).Height);
+                }
+
+                if (place)
+                {
+                    for (var i = 0; i < row.Count; i++)
+                    {
+                        var bounds = new Rectangle(ColumnLeft(i), y, ColumnWidth(i), height);
+
+                        if (row[i].Bounds != bounds)
+                        {
+                            row[i].Bounds = bounds;
+                        }
+                    }
+                }
+
+                y += height + Gap;
+            }
+
+            return y - Gap;
+
+            int ColumnLeft(int column) => column * (room / columns) + column * Gap;
+
+            int ColumnWidth(int column) =>
+                Math.Max(1, column == columns - 1 ? width - ColumnLeft(column) : room / columns);
+        }
+    }
 
     /// <summary>
     /// Refreshes the live state line under each fader, and re-reads levels

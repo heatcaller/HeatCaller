@@ -33,14 +33,14 @@ public sealed partial class VoiceSettingsControl : UserControl
             : AnnouncementService.PlayAsync(audio, volume);
     private readonly Label _lblSaveStatus = new();
 
-    // --- Speak With (see BuildEngineGroup) ---
+    // --- Speak With (see BuildEngineCard) ---
     private readonly RadioButton _rdoHeatCaller = new();
     private readonly ComboBox _cmbHeatCallerVoice = new();
     private readonly Button _btnHeatCallerRefresh = new();
     private readonly Label _lblHeatCallerStatus = new();
 
     // A relay for the voice alone (advanced) - see the Voice relay row in
-    // BuildEngineGroup. Blank in every ordinary club.
+    // BuildEngineCard. Blank in every ordinary club.
     private readonly TextBox _txtVoiceRelayUrl = new();
     private readonly TextBox _txtVoiceRelayClub = new();
     private readonly TextBox _txtVoiceRelayToken = new();
@@ -155,13 +155,42 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private readonly AppSettings _appSettings;
 
-
     /// <summary>
     /// The app's undo stack, for Restore Default Lines and forgetting saved
     /// lines. Optional so an older host that doesn't pass one still builds;
     /// those actions then simply aren't undoable.
     /// </summary>
     private readonly UndoService? _undo;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize. The Announcements page keeps its own (AnnouncementsHost).</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled (RefitPickers).</summary>
+    private (Font Font, int Count, int Width)? _heatCallerVoiceWidth;
+    private (Font Font, int Count, int Width)? _windowsVoiceWidth;
+    private (Font Font, int Count, int Width)? _voiceWidth;
+    private (Font Font, int Count, int Width)? _modelWidth;
+    private (Font Font, int Count, int Width)? _normalizationWidth;
+    private (Font Font, int Count, int Width)? _savedLinesWidth;
+
+    /// <summary>
+    /// The widest the three voice pickers get, at the normal text size. A
+    /// picker is as wide as its longest voice up to this, so a voice with a
+    /// long description can't push its row past the card at 1280x720 or at
+    /// the largest text size; its open list is as wide as the longest voice
+    /// whatever this is (SizeFields).
+    /// </summary>
+    private const int PickerMostWidth = 640;
+
+    /// <summary>Fields sized for what goes in them, at the normal text size - see SizeFields.</summary>
+    private const int RelayClubWidth = 150;
+    private const int UnitSpinnerWidth = 80;
+    private const int NormalizationPickerWidth = 84;
+    private const int LanguageBoxWidth = 64;
+    private const int OutputFormatBoxWidth = 200;
+
+    /// <summary>The least room Prepare's progress keeps beside its buttons, at the normal text size, before it takes a line of its own.</summary>
+    private const int PrepareProgressLeastWidth = 240;
 
     public VoiceSettingsControl(VoiceSettingsStore store, AppSettings settings, UndoService? undo = null)
     {
@@ -181,64 +210,24 @@ public sealed partial class VoiceSettingsControl : UserControl
         _original = current;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(660, 720);
-        Font = AppTheme.BodyFont;
 
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. The page sits in a tab whose row is drawn in
+        // the bold face, which it would otherwise take.
+        //
+        // No MinimumSize: the 660x720 floor was honoured over the size the
+        // page was given, and a small window lost the bottom of the page. A
+        // short window scrolls it instead (PageStack).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
-        // First, because it decides what everything below it is for.
-        var grpEngine = BuildEngineGroup(current);
-
-        var grpConnection = BuildConnectionGroup(current);
-        grpConnection.Location = new Point(Inset, UiLayout.Below(grpEngine, Inset));
-
-        var grpParams = BuildParametersGroup(current);
-        grpParams.Location = new Point(Inset, UiLayout.Below(grpConnection, Inset));
-
-        // Between the voice and the lines it speaks: it is about both.
-        var grpLibrary = BuildLibraryGroup();
-        grpLibrary.Location = new Point(Inset, UiLayout.Below(grpParams, Inset));
-
-        // The announcement rows used to be a fifth group here, below the
-        // library - a long way below the fold on a page that already
-        // scrolled. They are a page of their own now; the host asks for it
-        // through AnnouncementsPage and gives it a tab.
-        BuildAnnouncementsPage(current);
-
-        scroll.Controls.Add(grpEngine);
-        scroll.Controls.Add(grpConnection);
-        scroll.Controls.Add(grpParams);
-        scroll.Controls.Add(grpLibrary);
-
-        // The save line lives in its own docked strip rather than being
-        // anchored to the bottom of the page. Anchoring resolves against the
-        // whole client area, which on this page is also where the scrolling
-        // panel is - so the two were laid out against the same space and the
-        // status line's y had to be guessed to miss it.
-        _lblSaveStatus.AutoSize = true;
-        _lblSaveStatus.ForeColor = AppTheme.TextMuted;
-        _lblSaveStatus.Location = new Point(UiLayout.PageLeft, UiLayout.RowGap);
-
-        var statusBar = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = AppTheme.BodyFont.Height + UiLayout.RowGap * 2,
-        };
-
-        statusBar.Controls.Add(_lblSaveStatus);
-
-        // Fill first: docking resolves from the last child backwards, so
-        // whatever is added first is left with the space the others did not
-        // take.
-        Controls.Add(scroll);
-        Controls.Add(statusBar);
+        BuildLayout(current);
 
         // No Save button. Every other settings page here saves as you go,
         // and this one didn't - so a model or template change could look
         // applied while races kept using the old saved profile. That is
         // exactly the test-sounds-right-but-races-don't problem.
         //
-        // This call MUST come after the groups are added to this control.
+        // This call MUST come after the cards are added to this control.
         // It walks the tree from here down, and it used to run while
         // Controls was still empty - so it subscribed to nothing, and the
         // page never saved anything at all. The API key, the voice, the
@@ -275,8 +264,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         // one, which is now a different tab. See MirrorTestStatus.
         MirrorTestStatus();
 
-        // Once every group exists: it reaches into the Saved Voice Lines
-        // group as well as its own.
+        // Once every card exists: it reaches into the Saved Voice Lines
+        // card as well as its own.
         UpdateEngineControls();
 
         // The Speak With status line mentions an ElevenLabs set up below
@@ -295,6 +284,237 @@ public sealed partial class VoiceSettingsControl : UserControl
         _store.Restored += OnStoreRestored;
 
         Status($"Voice Settings opened - saved profile: {Describe(current)}. File: {VoiceSettingsStore.SettingsPath}");
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its tab's bold face - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Builds the page on the layout pieces (LayoutPieces.cs), so nothing is
+    /// placed by hand: four cards down a page that scrolls when it is taller
+    /// than the window (PageStack), and under them, outside the scrolling,
+    /// a strip that says what the last change did.
+    ///
+    ///   Speak with - the three voices, each with what belongs to it
+    ///     indented under it: the HeatCaller voice (Announcer voice: and
+    ///     Refresh, its status, the voice relay's three boxes and their
+    ///     hint), ElevenLabs (the Windows voice standing in), the Windows
+    ///     voice (Windows voice: and its Test, its status), then the hint.
+    ///     The fields of all three share one caption column (LineUp).
+    ///   ElevenLabs connection - API Key:, Voice:, Model:, and the hints.
+    ///   Voice parameters - the ElevenLabs tuning in one caption column,
+    ///     playback (volume, the most per lap) in another, then Test Voice
+    ///     and what it said.
+    ///   Saved voice lines - the count, Prepare and Stop with the progress
+    ///     beside them, Recently played: with Forget Line and Forget All.
+    ///
+    /// The announcement rows are built here as well, as a page of their own
+    /// that the host gives a tab (BuildAnnouncementsPage).
+    ///
+    /// It used to be placed in pixels: four group boxes 840px wide whatever
+    /// the window, every row's x worked out from the widths of the captions
+    /// before it, each box's height set once at build, the fields at the
+    /// widths they had at the normal text size, the status lines cut short
+    /// to stay inside their boxes, and a 660x720 floor the page kept however
+    /// small its window.
+    /// </summary>
+    private void BuildLayout(VoiceProfile current)
+    {
+        // First, because it decides what everything below it is for.
+        var (speak, speakGrids) = BuildEngineCard(current);
+
+        var connection = BuildConnectionCard(current);
+        var parameters = BuildParametersCard(current);
+
+        // Between the voice and the lines it speaks: it is about both.
+        var library = BuildLibraryCard();
+
+        // The announcement rows used to be a fifth group here, below the
+        // library - a long way below the fold on a page that already
+        // scrolled. They are a page of their own now; the host asks for it
+        // through AnnouncementsPage and gives it a tab.
+        BuildAnnouncementsPage(current);
+
+        var page = new PageStack();
+
+        page.Add(speak);
+        page.Add(connection);
+        page.Add(parameters);
+        page.Add(library, gapBelow: 0);
+
+        // The save line lives in its own docked strip rather than at the
+        // bottom of the cards, so it is on screen however far down the page
+        // the change was made. One line, cut short with "..." rather than
+        // wrapped: a save that failed says why in the console as well
+        // (Status), in full.
+        _lblSaveStatus.AutoSize = false;
+        _lblSaveStatus.AutoEllipsis = true;
+        _lblSaveStatus.Dock = DockStyle.Fill;
+        _lblSaveStatus.TextAlign = ContentAlignment.MiddleLeft;
+        _lblSaveStatus.ForeColor = AppTheme.TextMuted;
+
+        var statusBar = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Padding = new Padding(UiLayout.PageLeft, 0, UiLayout.PageRight, 0),
+        };
+
+        statusBar.Controls.Add(_lblSaveStatus);
+
+        // Fill first: docking resolves from the last child backwards, so
+        // whatever is added first is left with the space the others did not
+        // take.
+        Controls.Add(page);
+        Controls.Add(statusBar);
+
+        // Once everything is on the page and wears its face - what it is
+        // measured in.
+        //
+        // One caption column for the three voices' fields, so the voice
+        // pickers and the relay's boxes line up down the card.
+        _textSize.Keep(() => FieldGrid.LineUp(speakGrids));
+        _textSize.Keep(SizeFields);
+
+        // Room kept for what the status lines say, so a new message does not
+        // move what is under it: two lines for each voice's status (a reason
+        // it can't speak runs to two), one for the others. Each still grows
+        // past that for more - they wrap now, where they used to be cut off
+        // at the edge of a box of fixed height.
+        _textSize.ReserveLines(_lblHeatCallerStatus, 2);
+        _textSize.ReserveLines(_lblWindowsVoiceStatus, 2);
+        _textSize.ReserveLines(_lblLibraryStatus, 1);
+        _textSize.ReserveLines(_lblTestStatus, 1);
+
+        // The strip: a line of the body face, a row gap above and below it.
+        _textSize.Keep(() =>
+        {
+            var height = _lblSaveStatus.Font.Height + UiLayout.RowGap * 2;
+
+            if (statusBar.Height != height)
+            {
+                statusBar.Height = height;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use. The pickers are as wide as
+    /// their longest choice and never narrower than a field was at the normal
+    /// text size - the three voice pickers no wider than PickerMostWidth, with
+    /// their open lists as wide as the longest voice; the boxes are the widths
+    /// they were at the normal text size, at this size; each number box is as
+    /// wide as its largest value and its arrows need (NumberBoxWidth). The
+    /// saved lines' open list is as wide as the longest line, so one can be
+    /// read in full before it is forgotten.
+    ///
+    /// Run again when the text size changes (TextSize.Keep) and when a list
+    /// is refilled (RefitPickers).
+    /// </summary>
+    private void SizeFields()
+    {
+        var field = UiLayout.AtTextSize(UiLayout.FieldWidth);
+        var most = UiLayout.AtTextSize(PickerMostWidth);
+
+        FitVoicePicker(_cmbHeatCallerVoice, ref _heatCallerVoiceWidth);
+        FitVoicePicker(_cmbWindowsVoice, ref _windowsVoiceWidth);
+        FitVoicePicker(_cmbVoice, ref _voiceWidth);
+
+        Fit(_cmbModel, Math.Max(field, Pieces.PickerWidth(_cmbModel, ref _modelWidth)));
+        Fit(_cmbTextNormalization, Math.Max(UiLayout.AtTextSize(NormalizationPickerWidth), Pieces.PickerWidth(_cmbTextNormalization, ref _normalizationWidth)));
+
+        Fit(_txtVoiceRelayUrl, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
+        Fit(_txtVoiceRelayClub, UiLayout.AtTextSize(RelayClubWidth));
+        Fit(_txtVoiceRelayToken, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
+        Fit(_txtApiKey, field);
+        Fit(_txtLanguageCode, UiLayout.AtTextSize(LanguageBoxWidth));
+        Fit(_txtOutputFormat, UiLayout.AtTextSize(OutputFormatBoxWidth));
+
+        foreach (var spinner in new[] { _numStability, _numSimilarity, _numStyle, _numSpeed })
+        {
+            Fit(spinner, NumberBoxWidth(spinner, UnitSpinnerWidth));
+        }
+
+        Fit(_numVolumePercent, NumberBoxWidth(_numVolumePercent, UiLayout.NumericWidth));
+        Fit(_numMaxPerLap, NumberBoxWidth(_numMaxPerLap, UiLayout.NumericWidth));
+
+        OpenTo(_cmbSavedLines, Pieces.PickerWidth(_cmbSavedLines, ref _savedLinesWidth));
+
+        void FitVoicePicker(ComboBox picker, ref (Font Font, int Count, int Width)? kept)
+        {
+            var wants = Pieces.PickerWidth(picker, ref kept);
+
+            Fit(picker, Math.Min(most, Math.Max(field, wants)));
+            OpenTo(picker, Math.Max(picker.Width, wants));
+        }
+
+        // Only when it changed: a new width lays the row out again.
+        static void Fit(Control control, int width)
+        {
+            if (control.Width != width)
+            {
+                control.Width = width;
+            }
+        }
+
+        static void OpenTo(ComboBox picker, int width)
+        {
+            var open = Math.Max(1, width);
+
+            if (picker.DropDownWidth != open)
+            {
+                picker.DropDownWidth = open;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The pickers measured again after their lists changed - refilled from
+    /// the relay, from ElevenLabs or from the saved lines - which can change
+    /// the longest choice without changing how many there are.
+    /// </summary>
+    private void RefitPickers()
+    {
+        _heatCallerVoiceWidth = _windowsVoiceWidth = _voiceWidth = _savedLinesWidth = null;
+        SizeFields();
+    }
+
+    /// <summary>
+    /// A number box wide enough to show its largest value beside its arrows,
+    /// in the face it is drawn in - or the width it was at the normal text
+    /// size, <paramref name="normalWidth"/>, at the size in use, if that is
+    /// more. Every digit of the largest value is measured as a nought.
+    /// </summary>
+    private static int NumberBoxWidth(NumericUpDown box, int normalWidth)
+    {
+        var largest = box.Maximum.ToString("F" + box.DecimalPlaces);
+        var noughts = new string(largest.Select(ch => char.IsDigit(ch) ? '0' : ch).ToArray());
+
+        return Math.Max(
+            UiLayout.AtTextSize(normalWidth),
+            TextRenderer.MeasureText(noughts, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+    }
+
+    /// <summary>
+    /// Moves a part added to a card in by the indent, under the choice it
+    /// belongs to - the voice picker under the HeatCaller voice, the stand-in
+    /// under ElevenLabs. The card measures its parts inside their margins, so
+    /// the part is narrower by the indent and wraps to that.
+    /// </summary>
+    private static T Indented<T>(T part) where T : Control
+    {
+        part.Margin = new Padding(UiLayout.Indent, part.Margin.Top, part.Margin.Right, part.Margin.Bottom);
+        return part;
     }
 
     /// <summary>
@@ -474,71 +694,24 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
     }
 
-    /// <summary>The gap between a group box's own edge and the controls inside it.</summary>
-    private const int Inset = 12;
-
     /// <summary>
-    /// How wide every group on this page is.
+    /// Speak With: the HeatCaller voice, ElevenLabs or the free Windows
+    /// voice, which voice of each, and whether the Windows voice stands in
+    /// when ElevenLabs can't speak a line - each choice with what belongs to
+    /// it indented under it. Returns the card, and the three caption-and-field
+    /// grids in it, which BuildLayout lines up once they wear the page's face.
     ///
-    /// Fixed rather than anchored to the window. The page scrolls, and a
-    /// group that grows with the window inside a scrolling panel ends up
-    /// fighting the scrollbar it just caused. The number comes from the
-    /// widest row on the page - an announcement's template box plus its
-    /// weight, speed and test columns.
+    /// The three choices go straight in the card, one row each, rather than
+    /// into grids or rows of their own: radio buttons switch each other off
+    /// only among the controls that share their parent.
     /// </summary>
-    private const int GroupWidth = 840;
-
-    private static int InnerWidth => GroupWidth - Inset * 2;
-
-    /// <summary>The width of a caption, in the font it will be drawn in.</summary>
-    /// <remarks>
-    /// WITH the glyph padding, not without it.
-    ///
-    /// This asked for NoPadding, and a Label does not size itself that
-    /// way: it keeps the overhang either side, which is about ten pixels
-    /// at this text size. So every field on this page - the voice box,
-    /// the relay box, club, token, the Windows voice, the API key - was
-    /// placed ten pixels inside the caption naming it, and LayoutDoctor
-    /// pushed each one back out at every startup. Nine adjustments on one
-    /// page, all of them this single flag.
-    ///
-    /// The two call sites that want a BUTTON's width rather than a
-    /// caption's are no worse off: they gain the same ten pixels of
-    /// slack, which a button has room for.
-    /// </remarks>
-    private static int Measure(string text, Font font) =>
-        TextRenderer.MeasureText(
-            text ?? string.Empty,
-            font,
-            new Size(int.MaxValue, int.MaxValue),
-            TextFormatFlags.SingleLine).Width;
-
-    /// <summary>
-    /// Speak With: ElevenLabs or the free Windows voice, which Windows voice,
-    /// and whether it stands in when ElevenLabs can't speak a line.
-    ///
-    /// Built like the other groups - measured, not placed at remembered
-    /// numbers - and every control carries the font it will be drawn in
-    /// before it is measured, since none of them has a parent yet.
-    /// </summary>
-    private GroupBox BuildEngineGroup(VoiceProfile current)
+    private (Section Card, FieldGrid[] Grids) BuildEngineCard(VoiceProfile current)
     {
-        var grp = new GroupBox
-        {
-            Text = "Speak With",
-            Font = AppTheme.BodyFont,
-            Location = new Point(Inset, Inset),
-            Width = GroupWidth,
-        };
-
         // The list as it stands, with a fresh read asked for in the
         // background - so a voice installed since the app started is offered
         // the next time this page is built, and building it never waits on
         // Windows speech.
         var voices = WindowsVoice.InstalledVoices(refresh: true);
-
-        var indentLeft = Inset + UiLayout.Indent;
-        var y = UiLayout.InsideGroup(grp);
 
         // --- The HeatCaller voice: included, and nothing to set up ---
         //
@@ -549,45 +722,25 @@ public sealed partial class VoiceSettingsControl : UserControl
         // not the club's. A club that wants its own words uses its own key
         // or the free Windows voice, where both are theirs to spend.
         _rdoHeatCaller.Text = "HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill";
-        _rdoHeatCaller.Font = AppTheme.BodyFont;
         _rdoHeatCaller.AutoSize = true;
-        _rdoHeatCaller.MaximumSize = new Size(InnerWidth, 0);
-        _rdoHeatCaller.Location = new Point(Inset, y);
 
-        y = UiLayout.Below(_rdoHeatCaller, UiLayout.HintGap);
-
-        var lblHeatCallerVoice = new Label { Text = "Announcer voice:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-
-        _cmbHeatCallerVoice.Font = AppTheme.BodyFont;
         _cmbHeatCallerVoice.DropDownStyle = ComboBoxStyle.DropDownList;
 
         _btnHeatCallerRefresh.Text = "Refresh";
-        _btnHeatCallerRefresh.Size = new Size(UiLayout.WidthFor(_btnHeatCallerRefresh), UiLayout.ButtonHeight);
         _btnHeatCallerRefresh.Click += async (_, _) => await LoadHeatCallerCatalogueAsync(byHand: true);
 
-        var gcRowHeight = Math.Max(UiLayout.ButtonHeight, _cmbHeatCallerVoice.Height);
-        var gcComboLeft = indentLeft + Measure(lblHeatCallerVoice.Text, AppTheme.BodyFont) + UiLayout.LabelGap;
+        // The picker and Refresh side by side, Refresh under it when the row
+        // is too narrow for both.
+        var heatCaller = new FieldGrid();
 
-        _cmbHeatCallerVoice.Width = Math.Max(160, Math.Min(
-            UiLayout.WideFieldWidth,
-            Inset + InnerWidth - gcComboLeft - UiLayout.ButtonGap - _btnHeatCallerRefresh.Width));
+        heatCaller.AddRow("Announcer voice:", FieldGrid.Inline(_cmbHeatCallerVoice, _btnHeatCallerRefresh));
 
-        lblHeatCallerVoice.Location = new Point(indentLeft, UiLayout.CentreOn(lblHeatCallerVoice, y, gcRowHeight));
-        _cmbHeatCallerVoice.Location = new Point(gcComboLeft, UiLayout.CentreOn(_cmbHeatCallerVoice, y, gcRowHeight));
-        _btnHeatCallerRefresh.Location = new Point(_cmbHeatCallerVoice.Right + UiLayout.ButtonGap, UiLayout.CentreOn(_btnHeatCallerRefresh, y, gcRowHeight));
-
-        y += gcRowHeight + UiLayout.RowGap;
-
-        // Two lines: the allowance, and why it can't be used when it can't.
-        _lblHeatCallerStatus.AutoSize = false;
-        _lblHeatCallerStatus.AutoEllipsis = true;
-        _lblHeatCallerStatus.Font = AppTheme.BodyFont;
+        // The allowance, and why it can't be used when it can't - which can
+        // run to a few lines, so the label wraps to the card rather than
+        // being cut short.
+        _lblHeatCallerStatus.AutoSize = true;
         _lblHeatCallerStatus.ForeColor = AppTheme.TextMuted;
-        _lblHeatCallerStatus.Size = new Size(InnerWidth, AppTheme.BodyFont.Height * 2 + 4);
-        _lblHeatCallerStatus.Location = new Point(Inset, y);
         _lblHeatCallerStatus.Text = "Checking with the relay...";
-
-        y = UiLayout.Below(_lblHeatCallerStatus, UiLayout.RowGap);
 
         // --- A relay of your own, for the voice only (advanced) ---
         //
@@ -598,60 +751,24 @@ public sealed partial class VoiceSettingsControl : UserControl
         // on going where they always did. That separation is the point:
         // trying a relay out must not quietly move a club's live pages onto
         // somebody's laptop.
-        var lblVoiceRelay = new Label { Text = "Voice relay:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-
-        _txtVoiceRelayUrl.Font = AppTheme.BodyFont;
         _txtVoiceRelayUrl.PlaceholderText = "blank - use the relay on the Club Website page";
-
-        var voiceRelayLeft = indentLeft + Measure("Voice relay:", AppTheme.BodyFont) + UiLayout.LabelGap;
-        var voiceRelayRow = Math.Max(UiLayout.ButtonHeight, _txtVoiceRelayUrl.Height);
-
-        _txtVoiceRelayUrl.Width = Math.Max(200, Math.Min(UiLayout.WideFieldWidth, Inset + InnerWidth - voiceRelayLeft));
-
-        lblVoiceRelay.Location = new Point(indentLeft, UiLayout.CentreOn(lblVoiceRelay, y, voiceRelayRow));
-        _txtVoiceRelayUrl.Location = new Point(voiceRelayLeft, UiLayout.CentreOn(_txtVoiceRelayUrl, y, voiceRelayRow));
-
-        y += voiceRelayRow + UiLayout.RowGap;
-
-        var lblVoiceRelayClub = new Label { Text = "Club:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-        var lblVoiceRelayToken = new Label { Text = "Token:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-
-        _txtVoiceRelayClub.Font = AppTheme.BodyFont;
-        _txtVoiceRelayClub.Width = 150;
         _txtVoiceRelayClub.PlaceholderText = "same club";
-
-        _txtVoiceRelayToken.Font = AppTheme.BodyFont;
 
         // Masked like every other token on this page: it is a credential,
         // and a settings page is often on a screen a room can see.
         _txtVoiceRelayToken.UseSystemPasswordChar = true;
         _txtVoiceRelayToken.PlaceholderText = "same token";
 
-        var clubLeft = indentLeft + Measure("Club:", AppTheme.BodyFont) + UiLayout.LabelGap;
-        var tokenLabelLeft = clubLeft + _txtVoiceRelayClub.Width + UiLayout.ButtonGap;
-        var tokenLeft = tokenLabelLeft + Measure("Token:", AppTheme.BodyFont) + UiLayout.LabelGap;
+        var relay = new FieldGrid();
 
-        _txtVoiceRelayToken.Width = Math.Max(120, Inset + InnerWidth - tokenLeft);
-
-        lblVoiceRelayClub.Location = new Point(indentLeft, UiLayout.CentreOn(lblVoiceRelayClub, y, voiceRelayRow));
-        _txtVoiceRelayClub.Location = new Point(clubLeft, UiLayout.CentreOn(_txtVoiceRelayClub, y, voiceRelayRow));
-        lblVoiceRelayToken.Location = new Point(tokenLabelLeft, UiLayout.CentreOn(lblVoiceRelayToken, y, voiceRelayRow));
-        _txtVoiceRelayToken.Location = new Point(tokenLeft, UiLayout.CentreOn(_txtVoiceRelayToken, y, voiceRelayRow));
-
-        y += voiceRelayRow + UiLayout.HintGap;
-
-        var lblVoiceRelayHint = new Label
-        {
-            Text = "Advanced - leave all three blank unless you are trying a relay out. Only the voice uses them; "
-                 + "results, check-in and the race-day manager keep going to the relay on the Club Website page. "
-                 + "A blank club means the Club Website page's own. A blank token borrows the Club Website page's only when this "
-                 + "is that same relay or a relay on this PC (localhost); any other address needs its token typed in.",
-            Location = new Point(indentLeft, y),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        relay.AddRow("Voice relay:", _txtVoiceRelayUrl);
+        relay.AddRow("Club:", _txtVoiceRelayClub);
+        relay.AddRow("Token:", _txtVoiceRelayToken);
+        relay.AddHint(
+            "Advanced - leave all three blank unless you are trying a relay out. Only the voice uses them; "
+            + "results, check-in and the race-day manager keep going to the relay on the Club Website page. "
+            + "A blank club means the Club Website page's own. A blank token borrows the Club Website page's only when this "
+            + "is that same relay or a relay on this PC (localhost); any other address needs its token typed in.");
 
         // These three are AppSettings, not the voice profile - so they are
         // filled from, and saved to, a different place than everything else
@@ -681,94 +798,57 @@ public sealed partial class VoiceSettingsControl : UserControl
         _txtVoiceRelayClub.KeyDown += (_, e) => VoiceRelayBoxKeyDown(e, tidyAddress: false);
         _txtVoiceRelayToken.KeyDown += (_, e) => VoiceRelayBoxKeyDown(e, tidyAddress: false);
 
-        y = UiLayout.Below(lblVoiceRelayHint, UiLayout.RowGap);
-
         // --- ElevenLabs, and the stand-in that belongs to it ---
         _rdoElevenLabs.Text = "ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)";
-        _rdoElevenLabs.Font = AppTheme.BodyFont;
         _rdoElevenLabs.AutoSize = true;
-        _rdoElevenLabs.MaximumSize = new Size(InnerWidth, 0);
-        _rdoElevenLabs.Location = new Point(Inset, y);
 
-        y = UiLayout.Below(_rdoElevenLabs, UiLayout.HintGap);
-
+        // One line, like every check box: a check box is as wide as its
+        // caption and never wraps it. The card is wide enough for it on one
+        // line at the largest text size.
         _chkWindowsStandsIn.Text = "If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the Windows voice says it instead";
-        _chkWindowsStandsIn.Font = AppTheme.BodyFont;
         _chkWindowsStandsIn.AutoSize = true;
-        _chkWindowsStandsIn.MaximumSize = new Size(InnerWidth - UiLayout.Indent, 0);
-        _chkWindowsStandsIn.Location = new Point(indentLeft, y);
         _chkWindowsStandsIn.Checked = current.WindowsVoiceStandsIn;
-
-        y = UiLayout.Below(_chkWindowsStandsIn, UiLayout.RowGap);
 
         // --- Windows, and which of its voices ---
         _rdoWindows.Text = "Windows voice - free, built into Windows, no account or internet needed";
-        _rdoWindows.Font = AppTheme.BodyFont;
         _rdoWindows.AutoSize = true;
-        _rdoWindows.MaximumSize = new Size(InnerWidth, 0);
-        _rdoWindows.Location = new Point(Inset, y);
 
-        y = UiLayout.Below(_rdoWindows, UiLayout.HintGap);
-
-        var lblWindowsVoice = new Label { Text = "Windows voice:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-
-        _cmbWindowsVoice.Font = AppTheme.BodyFont;
         _cmbWindowsVoice.DropDownStyle = ComboBoxStyle.DropDownList;
 
         _btnTestWindowsVoice.Text = "Test Windows Voice";
-        _btnTestWindowsVoice.Size = new Size(UiLayout.WidthFor(_btnTestWindowsVoice), UiLayout.ButtonHeight);
         _btnTestWindowsVoice.Click += BtnTestWindowsVoice_Click;
 
-        var rowHeight = Math.Max(UiLayout.ButtonHeight, _cmbWindowsVoice.Height);
-        var comboLeft = indentLeft + Measure(lblWindowsVoice.Text, AppTheme.BodyFont) + UiLayout.LabelGap;
-
         // Wide enough for "Microsoft Zira Desktop (English (United States),
-        // female)" where the row allows it, and never into the button.
-        _cmbWindowsVoice.Width = Math.Max(160, Math.Min(
-            UiLayout.WideFieldWidth,
-            Inset + InnerWidth - comboLeft - UiLayout.ButtonGap - _btnTestWindowsVoice.Width));
-
-        lblWindowsVoice.Location = new Point(indentLeft, UiLayout.CentreOn(lblWindowsVoice, y, rowHeight));
-        _cmbWindowsVoice.Location = new Point(comboLeft, UiLayout.CentreOn(_cmbWindowsVoice, y, rowHeight));
-        _btnTestWindowsVoice.Location = new Point(_cmbWindowsVoice.Right + UiLayout.ButtonGap, UiLayout.CentreOn(_btnTestWindowsVoice, y, rowHeight));
-
+        // female)" - see SizeFields - with the Test button beside it, or
+        // under it when the row is too narrow for both.
         FillWindowsVoices(voices, current.WindowsVoiceName);
 
-        y += rowHeight + UiLayout.RowGap;
+        var windows = new FieldGrid();
 
-        // --- What the Windows voice can do on this PC, and the last test ---
-        //
-        // A fixed box two lines tall, wrapping inside it and cut short past
-        // that: the group's height is set once, here, so the text can't grow
-        // into the hint below. Two lines rather than the library status's
-        // one because a reason or a test failure can run long - and a box
-        // one line tall with more in it than fits is what the layout repair
-        // pass widens, straight out past the edge of the group.
-        _lblWindowsVoiceStatus.AutoSize = false;
-        _lblWindowsVoiceStatus.AutoEllipsis = true;
-        _lblWindowsVoiceStatus.Font = AppTheme.BodyFont;
+        windows.AddRow("Windows voice:", FieldGrid.Inline(_cmbWindowsVoice, _btnTestWindowsVoice));
+
+        // What the Windows voice can do on this PC, and the last test. A
+        // reason or a test failure can run long, so it wraps to the card;
+        // two lines are kept for it (BuildLayout) so a longer one does not
+        // move the hint under it.
+        _lblWindowsVoiceStatus.AutoSize = true;
         _lblWindowsVoiceStatus.ForeColor = AppTheme.TextMuted;
-        _lblWindowsVoiceStatus.Size = new Size(InnerWidth, AppTheme.BodyFont.Height * 2 + 4);
-        _lblWindowsVoiceStatus.Location = new Point(Inset, y);
 
-        y = UiLayout.Below(_lblWindowsVoiceStatus, UiLayout.HintGap);
+        var lblHint = _textSize.Wear(
+            new Label
+            {
+                Text = "The Windows voice uses the Speed and Playback volume below, and each announcement's own speed. "
+                     + "Audio tags like [excited] are left out for it, and what it says is never kept with the saved ElevenLabs lines. "
+                     + "The ElevenLabs settings below are kept whichever voice is chosen. "
+                     + "With the HeatCaller voice the wording and the voice settings are fixed, and the free Windows voice says anything it can't - "
+                     + "a flag call is never silent.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
-        var lblHint = new Label
-        {
-            Text = "The Windows voice uses the Speed and Playback volume below, and each announcement's own speed. "
-                 + "Audio tags like [excited] are left out for it, and what it says is never kept with the saved ElevenLabs lines. "
-                 + "The ElevenLabs settings below are kept whichever voice is chosen. "
-                 + "With the HeatCaller voice the wording and the voice settings are fixed, and the free Windows voice says anything it can't - "
-                 + "a flag call is never silent.",
-            Location = new Point(Inset, y),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        // All three set, not just the one that is on: they have no parent
-        // yet, so none would switch the others off.
+        // All three set, not just the one that is on, and before they are
+        // put in the card: with no parent yet, none switches the others off.
         _rdoHeatCaller.Checked = current.EffectiveEngine == VoiceEngine.HeatCaller;
         _rdoElevenLabs.Checked = current.EffectiveEngine == VoiceEngine.ElevenLabs;
         _rdoWindows.Checked = current.EffectiveEngine == VoiceEngine.Windows;
@@ -792,19 +872,24 @@ public sealed partial class VoiceSettingsControl : UserControl
             }
         };
 
-        grp.Controls.AddRange(new Control[]
-        {
-            _rdoHeatCaller, lblHeatCallerVoice, _cmbHeatCallerVoice, _btnHeatCallerRefresh, _lblHeatCallerStatus,
-            lblVoiceRelay, _txtVoiceRelayUrl,
-            lblVoiceRelayClub, _txtVoiceRelayClub, lblVoiceRelayToken, _txtVoiceRelayToken, lblVoiceRelayHint,
-            _rdoElevenLabs, _chkWindowsStandsIn,
-            _rdoWindows, lblWindowsVoice, _cmbWindowsVoice, _btnTestWindowsVoice,
-            _lblWindowsVoiceStatus, lblHint,
-        });
+        // The three choices a section gap apart, so each reads as one choice
+        // with its own settings under it.
+        var card = new Section("Speak with");
 
-        grp.Height = UiLayout.Below(lblHint, Inset);
+        card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(card.Add(heatCaller));
+        card.Add(_lblHeatCallerStatus);
+        Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
 
-        return grp;
+        card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(card.Add(_chkWindowsStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
+
+        card.Add(_rdoWindows, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(card.Add(windows));
+        card.Add(_lblWindowsVoiceStatus, gapBelow: UiLayout.HintGap);
+        card.Add(lblHint, gapBelow: 0);
+
+        return (card, new[] { heatCaller, relay, windows });
     }
 
     /// <summary>
@@ -840,13 +925,9 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         _cmbWindowsVoice.SelectedIndex = selected;
 
-        // The open list as wide as its longest entry, within the group.
-        var widest = _cmbWindowsVoice.Items.Cast<object>()
-            .Select(item => Measure(item.ToString() ?? string.Empty, AppTheme.BodyFont))
-            .DefaultIfEmpty(0)
-            .Max();
-
-        _cmbWindowsVoice.DropDownWidth = Math.Max(_cmbWindowsVoice.Width, Math.Min(InnerWidth, widest + 30));
+        // The picker and its open list are sized to the voices in it
+        // (SizeFields), measured afresh the next time the fields are sized.
+        _windowsVoiceWidth = null;
     }
 
     // --- The HeatCaller voice -----------------------------------------------
@@ -1245,6 +1326,9 @@ public sealed partial class VoiceSettingsControl : UserControl
             _loadingSettings = reloading;
         }
 
+        // The longest voice may have come or gone - see SizeFields.
+        RefitPickers();
+
         // Outside the guard: this IS a change worth saving - the page picked
         // a voice for a club that had none, or the relay has re-tuned the
         // one it already had. The revision matters as much as the id: it is
@@ -1603,75 +1687,41 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
     }
 
-    private GroupBox BuildConnectionGroup(VoiceProfile current)
+    /// <summary>
+    /// ElevenLabs connection: when it is used, then API Key: with Show,
+    /// Voice: with Load Voices, and Model:, in one caption column, and what
+    /// the models can do under them.
+    /// </summary>
+    private Section BuildConnectionCard(VoiceProfile current)
     {
-        var grp = new GroupBox
-        {
-            Text = "ElevenLabs Connection",
-            Font = AppTheme.BodyFont,
-            Location = new Point(Inset, Inset),
-            Width = GroupWidth,
-        };
-
-        var lblKey = new Label { Text = "API Key:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblVoice = new Label { Text = "Voice:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblModel = new Label { Text = "Model:", AutoSize = true, ForeColor = AppTheme.TextDark };
-
-        // One field column for the whole box, set by its longest caption.
-        var fieldLeft = Inset + UiLayout.LabelGap + Math.Max(
-            Measure(lblKey.Text, AppTheme.BodyFont),
-            Math.Max(Measure(lblVoice.Text, AppTheme.BodyFont), Measure(lblModel.Text, AppTheme.BodyFont)));
-
-        // Fonts before measurements: a text box and a dropdown both take
-        // their height from their font, and a row centred against the height
-        // they had beforehand is centred against the wrong number.
-        _txtApiKey.Font = AppTheme.BodyFont;
-        _cmbVoice.Font = AppTheme.BodyFont;
-        _cmbModel.Font = AppTheme.BodyFont;
-
-        // Every row is as tall as the tallest thing that can sit in one,
-        // which is a button.
-        var rowHeight = Math.Max(UiLayout.ButtonHeight, Math.Max(_txtApiKey.Height, _cmbVoice.Height));
-
-        // Says when this group matters, now that ElevenLabs isn't the only
+        // Says when this card matters, now that ElevenLabs isn't the only
         // voice. Everything in it stays usable whichever voice is chosen, so
         // a club can set ElevenLabs up before switching over to it.
-        var lblUsedWhen = new Label
-        {
-            Text = "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking.",
-            Location = new Point(Inset, UiLayout.InsideGroup(grp)),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var lblUsedWhen = _textSize.Wear(
+            new Label
+            {
+                Text = "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
         // --- API key ---
-        var y = UiLayout.Below(lblUsedWhen, UiLayout.RowGap);
-
-        _txtApiKey.Width = UiLayout.FieldWidth;
-        _txtApiKey.Location = new Point(fieldLeft, UiLayout.CentreOn(_txtApiKey, y, rowHeight));
         _txtApiKey.UseSystemPasswordChar = true;
         _txtApiKey.Text = current.ApiKey;
 
-        // Themed explicitly, same as the template boxes below - consistent
-        // rather than depending on the recursive pass reaching it.
+        // Themed explicitly, same as the template boxes on the Announcements
+        // page - consistent rather than depending on the recursive pass
+        // reaching it.
         _txtApiKey.BackColor = AppTheme.Surface;
         _txtApiKey.ForeColor = AppTheme.TextDark;
         _txtApiKey.BorderStyle = BorderStyle.FixedSingle;
 
-        lblKey.Location = new Point(Inset, UiLayout.CentreOn(lblKey, y, rowHeight));
-
         _chkShowApiKey.Text = "Show";
         _chkShowApiKey.AutoSize = true;
-        _chkShowApiKey.Location = new Point(UiLayout.After(_txtApiKey), UiLayout.CentreOn(_chkShowApiKey, y, rowHeight));
         _chkShowApiKey.CheckedChanged += (_, _) => _txtApiKey.UseSystemPasswordChar = !_chkShowApiKey.Checked;
 
         // --- Voice ---
-        y += rowHeight + UiLayout.RowGap;
-
-        _cmbVoice.Width = UiLayout.FieldWidth;
-        _cmbVoice.Location = new Point(fieldLeft, UiLayout.CentreOn(_cmbVoice, y, rowHeight));
         _cmbVoice.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbVoice.DisplayMember = nameof(ElevenLabsClient.VoiceInfo.Name);
 
@@ -1681,169 +1731,72 @@ public sealed partial class VoiceSettingsControl : UserControl
             _cmbVoice.SelectedIndex = 0;
         }
 
-        lblVoice.Location = new Point(Inset, UiLayout.CentreOn(lblVoice, y, rowHeight));
-
         _btnLoadVoices.Text = "Load Voices";
-        _btnLoadVoices.Size = new Size(UiLayout.WidthFor(_btnLoadVoices), UiLayout.ButtonHeight);
-        _btnLoadVoices.Location = new Point(UiLayout.After(_cmbVoice), UiLayout.CentreOn(_btnLoadVoices, y, rowHeight));
         _btnLoadVoices.Click += BtnLoadVoices_Click;
 
         // --- Model ---
-        y += rowHeight + UiLayout.RowGap;
-
-        _cmbModel.Width = UiLayout.FieldWidth;
-        _cmbModel.Location = new Point(fieldLeft, UiLayout.CentreOn(_cmbModel, y, rowHeight));
         _cmbModel.DropDownStyle = ComboBoxStyle.DropDown;
         _cmbModel.Items.AddRange(new object[] { "eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_monolingual_v1" });
         _cmbModel.Text = string.IsNullOrWhiteSpace(current.ModelId) ? "eleven_multilingual_v2" : current.ModelId;
 
-        lblModel.Location = new Point(Inset, UiLayout.CentreOn(lblModel, y, rowHeight));
+        var fields = new FieldGrid();
 
-        // --- Hint ---
-        y += rowHeight + UiLayout.RowGap;
+        fields.AddRow("API Key:", FieldGrid.Inline(_txtApiKey, _chkShowApiKey));
+        fields.AddRow("Voice:", FieldGrid.Inline(_cmbVoice, _btnLoadVoices));
+        fields.AddRow("Model:", _cmbModel);
 
         var lblModelHint = new Label
         {
             Text = "Pick a preset or type any ElevenLabs model id. Style exaggeration has a real ceiling on v2 - it varies "
                  + "energy but won't give you a radio personality however far you push it, and past about 0.6 it starts "
                  + "distorting rather than exciting. eleven_v3 is the expressive model if you want genuine performance.",
-            Location = new Point(Inset, y),
-            MaximumSize = new Size(InnerWidth, 0),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
-        grp.Controls.AddRange(new Control[]
-        {
-            lblUsedWhen,
-            lblKey, _txtApiKey, _chkShowApiKey,
-            lblVoice, _cmbVoice, _btnLoadVoices,
-            lblModel, _cmbModel, lblModelHint,
-        });
+        var card = new Section("ElevenLabs connection");
 
-        grp.Height = UiLayout.Below(lblModelHint, Inset);
+        card.Add(lblUsedWhen);
+        card.Add(fields);
+        card.Add(lblModelHint, gapBelow: 0);
 
-        return grp;
+        return card;
     }
 
-    private GroupBox BuildParametersGroup(VoiceProfile current)
+    /// <summary>
+    /// Voice parameters: the ElevenLabs tuning in one caption column - the
+    /// four voice settings, then the three root-level ones with the note on
+    /// output formats, then Speaker boost - and playback in another, since
+    /// it applies to every voice: the volume and the most spoken per lap.
+    /// Test Voice, and what it said, under both.
+    /// </summary>
+    private Section BuildParametersCard(VoiceProfile current)
     {
-        var grp = new GroupBox
-        {
-            Text = "Voice Parameters",
-            Font = AppTheme.BodyFont,
-            Location = new Point(Inset, Inset),
-            Width = GroupWidth,
-        };
-
         SetupUnitSlider(_numStability, current.Stability, 0, 1, 0.05m);
         SetupUnitSlider(_numSimilarity, current.SimilarityBoost, 0, 1, 0.05m);
         SetupUnitSlider(_numStyle, current.Style, 0, 1, 0.05m);
         SetupUnitSlider(_numSpeed, current.Speed, 0.7m, 1.2m, 0.05m);
 
-        foreach (var spinner in new[] { _numStability, _numSimilarity, _numStyle, _numSpeed, _numVolumePercent, _numMaxPerLap })
-        {
-            spinner.Font = AppTheme.BodyFont;
-        }
-
-        _cmbTextNormalization.Font = AppTheme.BodyFont;
-        _txtLanguageCode.Font = AppTheme.BodyFont;
-        _txtOutputFormat.Font = AppTheme.BodyFont;
-
-        var rowHeight = Math.Max(_numStability.Height, _cmbTextNormalization.Height);
-
-        // Two columns. The right one starts halfway across the box, so the
-        // pairs line up with each other however long the captions get.
-        var columnTwo = Inset + InnerWidth / 2;
-
-        var lblStability = new Label { Text = "Stability:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblSimilarity = new Label { Text = "Similarity boost:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblStyle = new Label { Text = "Style:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblSpeed = new Label { Text = "Speed:", AutoSize = true, ForeColor = AppTheme.TextDark };
-
-        var leftField = Inset + UiLayout.LabelGap + Math.Max(
-            Measure(lblStability.Text, AppTheme.BodyFont),
-            Measure(lblSimilarity.Text, AppTheme.BodyFont));
-
-        var rightField = columnTwo + UiLayout.LabelGap + Math.Max(
-            Measure(lblStyle.Text, AppTheme.BodyFont),
-            Measure(lblSpeed.Text, AppTheme.BodyFont));
-
-        // --- Row 1: stability | style ---
-        var y = UiLayout.InsideGroup(grp);
-
-        lblStability.Location = new Point(Inset, UiLayout.CentreOn(lblStability, y, rowHeight));
-        _numStability.Location = new Point(leftField, y);
-        lblStyle.Location = new Point(columnTwo, UiLayout.CentreOn(lblStyle, y, rowHeight));
-        _numStyle.Location = new Point(rightField, y);
-
-        // --- Row 2: similarity | speed ---
-        y += rowHeight + UiLayout.RowGap;
-
-        lblSimilarity.Location = new Point(Inset, UiLayout.CentreOn(lblSimilarity, y, rowHeight));
-        _numSimilarity.Location = new Point(leftField, y);
-        lblSpeed.Location = new Point(columnTwo, UiLayout.CentreOn(lblSpeed, y, rowHeight));
-        _numSpeed.Location = new Point(rightField, y);
-
-        // --- Row 3: the three root-level ElevenLabs parameters ---
-        //
         // Root-level parameters, not part of voice_settings - see the
-        // comment in ElevenLabsClient.SynthesizeAsync. Kept together on one
-        // row since all three are short values most clubs never touch, and
-        // chained off each other's measured width so the row survives a
-        // caption or a font growing.
-        y += rowHeight + UiLayout.RowGap;
-
-        var lblTextNorm = new Label { Text = "Text normalize:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblLanguage = new Label { Text = "Language:", AutoSize = true, ForeColor = AppTheme.TextDark };
-        var lblOutputFormat = new Label { Text = "Output format:", AutoSize = true, ForeColor = AppTheme.TextDark };
-
-        lblTextNorm.Location = new Point(Inset, UiLayout.CentreOn(lblTextNorm, y, rowHeight));
-
-        _cmbTextNormalization.Width = 84;
-        _cmbTextNormalization.Location = new Point(UiLayout.After(lblTextNorm), y);
+        // comment in ElevenLabsClient.SynthesizeAsync. Short values most
+        // clubs never touch.
         _cmbTextNormalization.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTextNormalization.Items.AddRange(new object[] { "auto", "on", "off" });
         _cmbTextNormalization.SelectedItem = string.IsNullOrWhiteSpace(current.TextNormalization) ? "auto" : current.TextNormalization;
 
-        lblLanguage.Location = new Point(UiLayout.After(_cmbTextNormalization) + UiLayout.RowGap, UiLayout.CentreOn(lblLanguage, y, rowHeight));
-
-        _txtLanguageCode.Width = 64;
-        _txtLanguageCode.Location = new Point(UiLayout.After(lblLanguage), UiLayout.CentreOn(_txtLanguageCode, y, rowHeight));
         _txtLanguageCode.Text = current.LanguageCode;
         _txtLanguageCode.PlaceholderText = "auto";
 
-        lblOutputFormat.Location = new Point(UiLayout.After(_txtLanguageCode) + UiLayout.RowGap, UiLayout.CentreOn(lblOutputFormat, y, rowHeight));
-
-        _txtOutputFormat.Location = new Point(UiLayout.After(lblOutputFormat), UiLayout.CentreOn(_txtOutputFormat, y, rowHeight));
-        _txtOutputFormat.Width = Math.Max(120, Inset + InnerWidth - _txtOutputFormat.Left);
         _txtOutputFormat.Text = current.OutputFormat;
         _txtOutputFormat.PlaceholderText = "default for your plan";
 
-        // --- Hint ---
-        y += rowHeight + UiLayout.HintGap;
-
-        var lblAdvancedHint = new Label
-        {
-            Text = "Higher-quality output formats need a paid ElevenLabs plan - leave blank unless you know you have one.",
-            Location = new Point(Inset, y),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        // --- Row 4: the two switches ---
-        y = UiLayout.Below(lblAdvancedHint, UiLayout.RowGap);
-
+        // --- The two switches ---
         _chkSpeakerBoost.Text = "Speaker boost";
         _chkSpeakerBoost.AutoSize = true;
-        _chkSpeakerBoost.Location = new Point(Inset, y);
         _chkSpeakerBoost.Checked = current.SpeakerBoost;
 
         _chkWirelessSpeaker.Text = "Wireless speaker (adds wake-up delay)";
         _chkWirelessSpeaker.AutoSize = true;
-        _chkWirelessSpeaker.Location = new Point(columnTwo, y);
         _chkWirelessSpeaker.Checked = current.WirelessSpeaker;
 
         // Kept, so the setting still saves as it was, but hidden: every line
@@ -1859,68 +1812,58 @@ public sealed partial class VoiceSettingsControl : UserControl
             + "Turn this OFF for a wired speaker or audio going into OBS and that comes off the front of every "
             + "announcement - about three quarters of a second quicker, every time.");
 
-        // --- Row 5: volume | max per lap ---
-        y = UiLayout.Below(_chkSpeakerBoost, UiLayout.RowGap);
-
-        var lblVolume = new Label { Text = "Playback volume (%):", AutoSize = true, ForeColor = AppTheme.TextDark };
-        lblVolume.Location = new Point(Inset, UiLayout.CentreOn(lblVolume, y, rowHeight));
-
-        _numVolumePercent.Width = UiLayout.NumericWidth;
-        _numVolumePercent.Location = new Point(UiLayout.After(lblVolume), y);
+        // --- Playback ---
         _numVolumePercent.Minimum = 0;
         _numVolumePercent.Maximum = 100;
         _numVolumePercent.Increment = 5;
         _numVolumePercent.Value = (decimal)Math.Clamp(current.Volume * 100.0, 0, 100);
         _volumeShown = _numVolumePercent.Value;
 
-        var lblMaxPerLap = new Label { Text = "Max spoken announcements per lap:", AutoSize = true, ForeColor = AppTheme.TextDark };
-
-        // Placed after the volume spinner rather than at the second column:
-        // this caption is long enough that the column would put it through
-        // the spinner to its left.
-        lblMaxPerLap.Location = new Point(
-            Math.Max(columnTwo, UiLayout.After(_numVolumePercent) + UiLayout.RowGap),
-            UiLayout.CentreOn(lblMaxPerLap, y, rowHeight));
-
-        _numMaxPerLap.Width = UiLayout.NumericWidth;
-        _numMaxPerLap.Location = new Point(UiLayout.After(lblMaxPerLap), y);
         _numMaxPerLap.Minimum = 1;
         _numMaxPerLap.Maximum = 5;
         _numMaxPerLap.Value = Math.Clamp(current.MaxAnnouncementsPerLap, 1, 5);
 
-        // --- Row 6: test ---
-        y += rowHeight + UiLayout.RowGap;
-
+        // --- Test ---
         _btnTestVoice.Text = "Test Voice";
-        _btnTestVoice.Size = new Size(UiLayout.WidthFor(_btnTestVoice), UiLayout.ButtonHeight);
-        _btnTestVoice.Location = new Point(Inset, y);
         _btnTestVoice.Click += BtnTestVoice_Click;
 
+        // A raw ElevenLabs error can be a long JSON blob. SummariseApiError
+        // keeps the readable part of it, and what is left wraps to the card,
+        // which grows with it - it used to run past the group box it was
+        // reporting from, over the Announcements section below.
         _lblTestStatus.AutoSize = true;
         _lblTestStatus.ForeColor = AppTheme.TextMuted;
-        _lblTestStatus.Location = new Point(
-            UiLayout.After(_btnTestVoice),
-            UiLayout.CentreOn(_lblTestStatus, y, UiLayout.ButtonHeight));
 
-        _lblTestStatus.MaximumSize = new Size(Math.Max(200, Inset + InnerWidth - _lblTestStatus.Left), 0);
+        // Two caption columns, not one: "Max spoken announcements per lap:"
+        // is more than twice the width of "Stability:", and one column for
+        // the whole card left the short captions a long way from their
+        // boxes.
+        var tuning = new FieldGrid();
 
-        // A raw ElevenLabs error can be a long JSON blob. Left untrimmed it
-        // wrapped to several lines, pushed past the group box and overlapped
-        // the Announcements section below - so the failure message itself
-        // broke the layout it was reporting from.
-        _lblTestStatus.AutoEllipsis = true;
+        tuning.AddRow("Stability:", _numStability);
+        tuning.AddRow("Similarity boost:", _numSimilarity);
+        tuning.AddRow("Style:", _numStyle);
+        tuning.AddRow("Speed:", _numSpeed);
+        tuning.AddRow("Text normalize:", _cmbTextNormalization);
+        tuning.AddRow("Language:", _txtLanguageCode);
+        tuning.AddRow("Output format:", _txtOutputFormat);
+        tuning.AddHint("Higher-quality output formats need a paid ElevenLabs plan - leave blank unless you know you have one.");
+        tuning.AddField(_chkSpeakerBoost);
+        tuning.AddField(_chkWirelessSpeaker);
 
-        grp.Controls.AddRange(new Control[]
-        {
-            lblStability, _numStability, lblSimilarity, _numSimilarity,
-            lblStyle, _numStyle, lblSpeed, _numSpeed,
-            lblTextNorm, _cmbTextNormalization, lblLanguage, _txtLanguageCode, lblOutputFormat, _txtOutputFormat, lblAdvancedHint,
-            _chkSpeakerBoost, _chkWirelessSpeaker, lblVolume, _numVolumePercent, lblMaxPerLap, _numMaxPerLap, _btnTestVoice, _lblTestStatus,
-        });
+        var playback = new FieldGrid();
 
-        grp.Height = y + UiLayout.ButtonHeight + Inset;
+        playback.AddRow("Playback volume (%):", _numVolumePercent);
+        playback.AddRow("Max spoken announcements per lap:", _numMaxPerLap);
 
-        return grp;
+        var card = new Section("Voice parameters");
+
+        card.Add(tuning, gapBelow: UiLayout.SectionGap);
+        card.Add(playback);
+        card.Add(new ButtonBar().With(_btnTestVoice), gapBelow: UiLayout.HintGap);
+        card.Add(_lblTestStatus, gapBelow: 0);
+
+        return card;
     }
 
     /// <summary>
@@ -1928,143 +1871,91 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// line that can be known in advance, and a way to forget a line that
     /// came out wrong. See VoiceLibrary for how lines are matched.
     /// </summary>
-    private GroupBox BuildLibraryGroup()
+    private Section BuildLibraryCard()
     {
-        var grp = new GroupBox
-        {
-            Text = "Saved Voice Lines",
-            Font = AppTheme.BodyFont,
-            Location = new Point(Inset, Inset),
-            Width = GroupWidth,
-        };
-
-        var y = UiLayout.InsideGroup(grp);
-
         var lblIntro = new Label
         {
             Text = "Every line ElevenLabs speaks is kept on this PC and played from here the next time the same words are "
                  + "wanted in the same voice and settings - so each line is paid for once, and restarting the app loses "
                  + "nothing. Change the voice, a setting or a line's words and only the lines that changed are rendered again.",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
             ForeColor = AppTheme.TextMuted,
-
-            // Measured below before it is parented, so it has to carry the
-            // font it will be drawn in.
-            Font = AppTheme.BodyFont,
         };
 
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        // One line, cut short rather than wrapped: the group's height is set
-        // once, here, and a wrapped message would run into the row below.
-        // Anything long goes to the console in full as well.
-        _lblLibraryStatus.AutoSize = false;
-        _lblLibraryStatus.AutoEllipsis = true;
-        _lblLibraryStatus.Font = AppTheme.BodyFont;
+        // Wraps to the card, a line kept for it (BuildLayout); anything long
+        // goes to the console in full as well.
+        _lblLibraryStatus.AutoSize = true;
         _lblLibraryStatus.ForeColor = AppTheme.TextDark;
-        _lblLibraryStatus.Size = new Size(InnerWidth, AppTheme.BodyFont.Height + 6);
-        _lblLibraryStatus.Location = new Point(Inset, y);
         _lblLibraryStatus.Text = "Counting saved lines...";
-
-        y = UiLayout.Below(_lblLibraryStatus, UiLayout.RowGap);
 
         // --- Prepare / Stop, with its progress beside them ---
         _btnPrepareLines.Text = "Prepare Lines...";
         _btnStopPreparing.Text = "Stop";
         _btnStopPreparing.Enabled = false;
 
-        var afterButtons = UiLayout.ButtonRow(Inset, y, _btnPrepareLines, _btnStopPreparing);
-
         _btnPrepareLines.Click += BtnPrepareLines_Click;
         _btnStopPreparing.Click += (_, _) => _prepareCancel?.Cancel();
 
-        // The rest of the button row, one line, cut short - same reason as
-        // the status line above.
+        // The rest of the buttons' line, cut short with "..." rather than
+        // wrapped, and on a line of its own when there is not the least room
+        // for it there (FieldRow). The full summary of a run goes to the
+        // console.
         _lblPrepareProgress.AutoSize = false;
         _lblPrepareProgress.AutoEllipsis = true;
-        _lblPrepareProgress.Font = AppTheme.BodyFont;
         _lblPrepareProgress.ForeColor = AppTheme.TextMuted;
         _lblPrepareProgress.TextAlign = ContentAlignment.MiddleLeft;
-        _lblPrepareProgress.Size = new Size(Math.Max(200, Inset + InnerWidth - afterButtons), UiLayout.ButtonHeight);
-        _lblPrepareProgress.Location = new Point(afterButtons, y);
 
-        y += UiLayout.ButtonHeight + UiLayout.HintGap;
+        var prepare = new FieldRow();
 
-        var lblPrepareHint = new Label
-        {
-            Text = "Prepare renders, in one go, every line whose words are already known: each switched-on announcement's "
-                 + "lines that have no {placeholder} - the flags among them - and the release call for every driver checked in "
-                 + "for the current event. Lines built from live values (lap times, positions, streaks) can't be made in advance; "
-                 + "they're saved the first time they're spoken. It uses your ElevenLabs quota, so it asks first and says how much.",
-            Location = new Point(Inset, y),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        prepare.Add(null, new ButtonBar().With(_btnPrepareLines, _btnStopPreparing));
+        prepare.AddLast(null, _lblPrepareProgress, () => UiLayout.AtTextSize(PrepareProgressLeastWidth));
 
-        y = UiLayout.Below(lblPrepareHint, UiLayout.RowGap);
+        var lblPrepareHint = _textSize.Wear(
+            new Label
+            {
+                Text = "Prepare renders, in one go, every line whose words are already known: each switched-on announcement's "
+                     + "lines that have no {placeholder} - the flags among them - and the release call for every driver checked in "
+                     + "for the current event. Lines built from live values (lap times, positions, streaks) can't be made in advance; "
+                     + "they're saved the first time they're spoken. It uses your ElevenLabs quota, so it asks first and says how much.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
         // --- Recently played, and forgetting ---
-        var lblRecent = new Label { Text = "Recently played:", AutoSize = true, ForeColor = AppTheme.TextDark, Font = AppTheme.BodyFont };
-
-        _cmbSavedLines.Font = AppTheme.BodyFont;
         _cmbSavedLines.DropDownStyle = ComboBoxStyle.DropDownList;
 
         _btnForgetLine.Text = "Forget Line";
-        _btnForgetLine.Size = new Size(UiLayout.WidthFor(_btnForgetLine), UiLayout.ButtonHeight);
         _btnForgetLine.Enabled = false;
         _btnForgetLine.Click += BtnForgetLine_Click;
 
         _btnForgetAll.Text = "Forget All...";
-        _btnForgetAll.Size = new Size(UiLayout.WidthFor(_btnForgetAll), UiLayout.ButtonHeight);
         _btnForgetAll.Enabled = false;
         _btnForgetAll.Click += BtnForgetAll_Click;
 
-        // The list takes whatever the caption and the two buttons leave.
-        var comboLeft = Inset + Measure(lblRecent.Text, AppTheme.BodyFont) + UiLayout.LabelGap;
-        var buttonsWidth = _btnForgetLine.Width + UiLayout.ButtonGap + _btnForgetAll.Width;
-        _cmbSavedLines.Width = Math.Max(160, Inset + InnerWidth - buttonsWidth - UiLayout.ButtonGap - comboLeft);
+        // The list across the whole field column - a saved line is a
+        // sentence, and the more of it shows the easier it is to pick the
+        // right one to forget - with its buttons under it.
+        var recent = new FieldGrid();
 
-        // The open list as wide as the group, so a long line can be read in
-        // full before it is forgotten.
-        _cmbSavedLines.DropDownWidth = Math.Max(_cmbSavedLines.Width, InnerWidth);
+        recent.AddRow("Recently played:", _cmbSavedLines, stretch: true);
+        recent.AddField(new ButtonBar().With(_btnForgetLine, _btnForgetAll));
+        recent.AddHint(
+            "A line that came out wrong: forget it and it's rendered afresh the next time it's wanted. For a flag, or any "
+            + "line with no {placeholder}, pressing Test on its announcement below does the same - a test always records a "
+            + "new take, and the race plays the one heard last. "
+            + $"Kept in {VoiceLibrary.Shared.Folder} (not part of backups - it can always be made again), up to "
+            + $"{VoiceLibrary.MaxBytes / (1024 * 1024)} MB; past that, the lines played least recently make way.");
 
-        var rowHeight = Math.Max(UiLayout.ButtonHeight, _cmbSavedLines.Height);
+        var card = new Section("Saved voice lines");
 
-        lblRecent.Location = new Point(Inset, UiLayout.CentreOn(lblRecent, y, rowHeight));
-        _cmbSavedLines.Location = new Point(comboLeft, UiLayout.CentreOn(_cmbSavedLines, y, rowHeight));
-        _btnForgetLine.Location = new Point(_cmbSavedLines.Right + UiLayout.ButtonGap, UiLayout.CentreOn(_btnForgetLine, y, rowHeight));
-        _btnForgetAll.Location = new Point(_btnForgetLine.Right + UiLayout.ButtonGap, UiLayout.CentreOn(_btnForgetAll, y, rowHeight));
+        card.Add(lblIntro);
+        card.Add(_lblLibraryStatus);
+        card.Add(prepare, gapBelow: UiLayout.HintGap);
+        card.Add(lblPrepareHint);
+        card.Add(recent, gapBelow: 0);
 
-        y += rowHeight + UiLayout.HintGap;
-
-        var lblForgetHint = new Label
-        {
-            Text = "A line that came out wrong: forget it and it's rendered afresh the next time it's wanted. For a flag, or any "
-                 + "line with no {placeholder}, pressing Test on its announcement below does the same - a test always records a "
-                 + "new take, and the race plays the one heard last. "
-                 + $"Kept in {VoiceLibrary.Shared.Folder} (not part of backups - it can always be made again), up to "
-                 + $"{VoiceLibrary.MaxBytes / (1024 * 1024)} MB; past that, the lines played least recently make way.",
-            Location = new Point(Inset, y),
-            AutoSize = true,
-            MaximumSize = new Size(InnerWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        grp.Controls.AddRange(new Control[]
-        {
-            lblIntro, _lblLibraryStatus,
-            _btnPrepareLines, _btnStopPreparing, _lblPrepareProgress, lblPrepareHint,
-            lblRecent, _cmbSavedLines, _btnForgetLine, _btnForgetAll, lblForgetHint,
-        });
-
-        grp.Height = UiLayout.Below(lblForgetHint, Inset);
-
-        return grp;
+        return card;
     }
 
     /// <summary>One entry in the Recently played list.</summary>
@@ -2152,6 +2043,9 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 _cmbSavedLines.EndUpdate();
             }
+
+            // The open list as wide as the longest line now in it - see SizeFields.
+            RefitPickers();
 
             _btnForgetLine.Enabled = _cmbSavedLines.Items.Count > 0;
             _btnForgetAll.Enabled = stats.Lines > 0;
@@ -2526,7 +2420,6 @@ public sealed partial class VoiceSettingsControl : UserControl
         control.Maximum = max;
         control.Increment = increment;
         control.DecimalPlaces = 2;
-        control.Width = 80;
         control.Value = Math.Clamp((decimal)value, min, max);
     }
 
@@ -2586,6 +2479,9 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 _cmbVoice.SelectedIndex = 0;
             }
+
+            // The longest voice may have come or gone - see SizeFields.
+            RefitPickers();
 
             _lblTestStatus.Text = $"Loaded {Plural.Of(voices.Count, "voice")}.";
         }
@@ -2670,7 +2566,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             WirelessSpeaker = _chkWirelessSpeaker.Checked,
             MaxAnnouncementsPerLap = (int)_numMaxPerLap.Value,
 
-            // The Speak With group. Built field by field like everything
+            // The Speak With card. Built field by field like everything
             // here, so leaving one out would reset it on the next save.
             Engine = _rdoHeatCaller.Checked ? VoiceEngine.HeatCaller
                 : _rdoWindows.Checked ? VoiceEngine.Windows
@@ -2736,7 +2632,6 @@ public sealed partial class VoiceSettingsControl : UserControl
         return profile;
     }
 
-
     /// <summary>
     /// Pulls the readable part out of an ElevenLabs error.
     ///
@@ -2765,7 +2660,6 @@ public sealed partial class VoiceSettingsControl : UserControl
         // No JSON message - just keep it short enough to fit.
         return raw.Length <= 160 ? raw : raw[..157] + "...";
     }
-
 
     /// <summary>
     /// Speaks one line from an event's template box, as the race would.
@@ -2957,23 +2851,17 @@ public sealed partial class VoiceSettingsControl : UserControl
     }
 
     /// <summary>
-    /// The scrolling panel this page's content sits in, found by walking
-    /// down from here rather than being held in a field - the layout is
-    /// built in pieces, and a field would be one more thing to keep in step
-    /// with it.
+    /// The scrolling panel the buttons this is used for sit in: the
+    /// announcement rows' band, where every per-announcement Test button is.
+    ///
+    /// It used to be found by walking down from this page for the first
+    /// panel that scrolled, which was the right one while the rows were a
+    /// group at the bottom of this page. They have had a tab of their own
+    /// since, and the walk found this page's own scrolling instead - so a
+    /// Test pressed on the Announcements tab kept the wrong list where it
+    /// was.
     /// </summary>
-    private ScrollableControl? ScrollHost()
-    {
-        foreach (Control child in Controls)
-        {
-            if (child is ScrollableControl { AutoScroll: true } scrollable)
-            {
-                return scrollable;
-            }
-        }
-
-        return null;
-    }
+    private ScrollableControl? ScrollHost() => _annRows;
 
     /// <summary>
     /// Saves the whole profile whenever anything on the page changes.

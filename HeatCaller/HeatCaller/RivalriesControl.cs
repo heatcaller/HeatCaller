@@ -20,7 +20,31 @@ public sealed class RivalriesControl : UserControl
     private readonly TextBox _txtTemplates = new();
     private readonly Button _btnRestoreLines = new();
     private readonly Label _lblHeatCallerLock = new();
-    private readonly Label _lblStatus = new();
+
+    /// <summary>What the last change did. As tall as the longest thing it says, so a new status never moves what is above it (SteadyLabel).</summary>
+    private readonly SteadyLabel _lblStatus = new();
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The rivalries' card and its buttons, which the column's width is measured from - see ListColumnWidth.</summary>
+    private Section? _listCard;
+    private ButtonBar? _listButtons;
+
+    /// <summary>The driver pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled.</summary>
+    private (Font Font, int Count, int Width)? _driverAWidth;
+    private (Font Font, int Count, int Width)? _driverBWidth;
+
+    /// <summary>The rivalries' column and the driver pickers at the normal text size.</summary>
+    private const int ListWidth = 260;
+    private const int DriverPickerWidth = 180;
+
+    /// <summary>The fewest rivalries the list shows, and the fewest lines the phrasing box does, before the page scrolls instead.</summary>
+    private const int ListLeastRows = 4;
+    private const int TemplateLeastLines = 5;
+
+    /// <summary>Said when there is nobody to pick - see RefreshDriverCombos. The longest of the statuses, and one of the wordings the status is kept tall enough for.</summary>
+    private const string NoProfilesStatus = "No named driver profiles yet - add some in Driver Profiles first.";
 
     private bool _suppressEvents;
 
@@ -62,99 +86,124 @@ public sealed class RivalriesControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. The page sits in a tab whose row is drawn in
+        // the bold face, which it would otherwise take.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshDriverCombos();
         RefreshList();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then the rivalries down the left in a card of their own -
+    /// the list taking the page's height, Add Rivalry and Delete under it -
+    /// and beside them the selected rivalry: its two drivers and whether it
+    /// is on, what the phrasings are and the button that puts the built-in
+    /// ones back, the phrasing box taking the height the card has left, and
+    /// under it the note for when the HeatCaller voice fixes the lines and
+    /// what the last change did. On the layout pieces (LayoutPieces.cs), so
+    /// nothing is placed by hand; the page scrolls when the window is too
+    /// short for it (FillPage).
+    ///
+    /// It used to be placed in pixels: the list 260x340 and the phrasing box
+    /// 450x188 whatever the window, the editor in a group box 480px wide
+    /// grown once at build to what its rows came to, the pickers 180px wide
+    /// at every text size, and Enabled at x=300 beside Driver A.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Fires a custom line whenever these two named drivers swap position in the standings - in either direction. " +
                    "Both names must currently be assigned to a driver profile (see Driver Profiles) for a rivalry to fire.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(760, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var lblListCaption = new Label { Text = "Configured rivalries:", Location = new Point(12, 60), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+        // --- The rivalries ---
 
-        _list.Location = new Point(12, 82);
-        _list.Size = new Size(260, 340);
-        _list.Font = AppTheme.BodyFont;
+        // Off, or the list rounds its height down to a whole number of rows
+        // and leaves a gap under it that nothing in the layout explains.
+        _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => LoadSelectedIntoUi();
 
-        var btnAdd = new Button { Text = "Add Rivalry", Location = new Point(12, 430), Width = 120 };
+        var btnAdd = new Button { Text = "Add Rivalry" };
         btnAdd.Click += BtnAdd_Click;
 
-        var btnDelete = new Button { Text = "Delete", Location = new Point(140, 430), Width = 90 };
+        var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += BtnDelete_Click;
 
-        var grpEdit = new GroupBox { Text = "Edit Selected Rivalry", Location = new Point(288, 60), Size = new Size(480, 400) };
+        _listButtons = new ButtonBar(tight: true).With(btnAdd, btnDelete);
 
-        var lblA = new Label { Text = "Driver A:", Location = new Point(12, 28), AutoSize = true };
-        _cmbDriverA.Location = new Point(90, 25);
-        _cmbDriverA.Width = 180;
+        _listCard = new Section("Configured rivalries");
+
+        _listCard.AddFill(_list, () => _list.ItemHeight * ListLeastRows + 4);
+        _listCard.Add(_listButtons, gapBelow: 0);
+
+        // --- The selected rivalry ---
+
         _cmbDriverA.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverA.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
-        var lblB = new Label { Text = "Driver B:", Location = new Point(12, 58), AutoSize = true };
-        _cmbDriverB.Location = new Point(90, 55);
-        _cmbDriverB.Width = 180;
         _cmbDriverB.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbDriverB.SelectedIndexChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
         _chkEnabled.Text = "Enabled";
-        _chkEnabled.Location = new Point(300, 28);
         _chkEnabled.AutoSize = true;
         _chkEnabled.Checked = true;
         _chkEnabled.CheckedChanged += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
+        // Under the two pickers, lined up with them, rather than out on its
+        // own beside Driver A.
+        var drivers = new FieldGrid();
+
+        drivers.AddRow("Driver A:", _cmbDriverA);
+        drivers.AddRow("Driver B:", _cmbDriverB);
+        drivers.AddField(_chkEnabled);
+
+        // Wraps to the card's width, and everything under it moves with it -
+        // it once wrapped to a third line at the app's font and ran into a
+        // button placed under it at a fixed y.
         var lblTemplates = new Label
         {
             Text = "Phrasing (one line per variant - a random one is picked each time). Placeholders: {overtaker} {overtaken}",
-            Location = new Point(12, 92),
             AutoSize = true,
-            MaximumSize = new Size(450, 0),
-
-            // Set here so the wrap is measured in the font this is drawn
-            // in. Without it the caption wraps to two lines at the WinForms
-            // default and three at the app's, and the button placed under
-            // it at a fixed 126 ended up inside that third line.
-            Font = AppTheme.BodyFont,
         };
 
         // Existing rivalries keep whatever lines they were created with, so
         // a new default set can never reach them on its own - this is the
         // only way to pick up the built-in phrasings after the fact.
         _btnRestoreLines.Text = "Use Default Lines";
-        _btnRestoreLines.Width = UiLayout.WidthFor(_btnRestoreLines);
-        _btnRestoreLines.Height = UiLayout.ButtonHeight;
-        _btnRestoreLines.Location = new Point(12, UiLayout.Below(lblTemplates, UiLayout.RowGap));
         _btnRestoreLines.Click += (_, _) => RestoreDefaultLines();
 
         var lblRestoreHint = new Label
         {
             Text = "Replaces the lines below with the built-in set.",
-            AutoSize = true,
-            MaximumSize = new Size(292, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        lblRestoreHint.Location = new Point(
-            UiLayout.After(_btnRestoreLines) + UiLayout.RowGap,
-            UiLayout.CentreOn(lblRestoreHint, _btnRestoreLines.Top, _btnRestoreLines.Height));
+        _textSize.Wear(lblRestoreHint, () => AppTheme.SmallFont);
 
         _txtTemplates.Multiline = true;
         _txtTemplates.AcceptsReturn = true;
         _txtTemplates.ScrollBars = ScrollBars.Vertical;
-        _txtTemplates.Location = new Point(12, UiLayout.Below(_btnRestoreLines, UiLayout.RowGap));
-        _txtTemplates.Size = new Size(450, 188);
         _txtTemplates.Leave += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
         // These lines are spoken by the announcer, so the HeatCaller voice
@@ -165,43 +214,80 @@ public sealed class RivalriesControl : UserControl
         // voice - where they are theirs to spend - and the hint says so.
         _lblHeatCallerLock.Text =
             "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the Windows voice to write your own.";
-        // Under the lines box, not beside the Restore button: this layout is
-        // fixed pixels, and that row already holds the button and its hint.
-        _lblHeatCallerLock.Location = new Point(12, UiLayout.Below(_txtTemplates, UiLayout.HintGap));
+        // Under the lines box. Hidden, it takes no room: the box has it.
         _lblHeatCallerLock.AutoSize = true;
-        _lblHeatCallerLock.MaximumSize = new Size(450, 0);
         _lblHeatCallerLock.ForeColor = AppTheme.Warning;
-        _lblHeatCallerLock.Font = AppTheme.SmallFont;
+        _textSize.Wear(_lblHeatCallerLock, () => AppTheme.SmallFont);
         _lblHeatCallerLock.Visible = false;
 
-        // Tall enough for whatever the measured rows above came to, rather
-        // than the flat 400 they now run past.
-        grpEdit.Height = Math.Max(
-            grpEdit.Height,
-            UiLayout.GroupHeightFor(_txtTemplates.Bottom + UiLayout.HintGap + UiLayout.HintHeight * 2));
-
-        grpEdit.Controls.AddRange(new Control[]
-        {
-            lblA, _cmbDriverA, lblB, _cmbDriverB, _chkEnabled, lblTemplates,
-            _btnRestoreLines, lblRestoreHint, _lblHeatCallerLock, _txtTemplates,
-        });
-
-        // Under the edit box, wherever that now ends - the box grew when
-        // its rows were measured, and 468 was inside it.
-        _lblStatus.Location = new Point(grpEdit.Left, UiLayout.Below(grpEdit, UiLayout.RowGap));
-        _lblStatus.AutoSize = true;
+        // At the foot of the editor, where it used to sit under the group box.
         _lblStatus.ForeColor = AppTheme.TextMuted;
+        _lblStatus.Wordings = new[] { NoProfilesStatus, "Restored 99 default lines.", "Saved." };
 
-        Controls.Add(lblIntro);
-        Controls.Add(lblListCaption);
-        Controls.Add(_list);
-        Controls.Add(btnAdd);
-        Controls.Add(btnDelete);
-        Controls.Add(grpEdit);
-        Controls.Add(_lblStatus);
+        var edit = new Section("Edit selected rivalry");
+
+        edit.Add(drivers);
+        edit.Add(lblTemplates);
+
+        // The hint beside the button, and under it when there is no room.
+        edit.Add(FieldGrid.Inline(_btnRestoreLines, lblRestoreHint));
+        edit.AddFill(_txtTemplates, () => Pieces.LineHeight(_txtTemplates.Font) * TemplateLeastLines + UiLayout.HintGap * 2, gapBelow: UiLayout.HintGap);
+        edit.Add(_lblHeatCallerLock);
+        edit.Add(_lblStatus, gapBelow: 0);
+
+        // --- The page ---
+
+        var band = new Beside(ListColumnWidth) { SideOnLeft = true };
+
+        band.AddFill(edit, edit.LeastHeight);
+        band.AddSideFill(_listCard, _listCard.LeastHeight, gapBelow: 0);
+
+        var page = new FillPage();
+
+        page.Add(lblIntro);
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Once the pickers are on the page and wear its face - what they are
+        // measured in.
+        _textSize.Keep(SizeFields);
 
         SetEditEnabled(false);
     }
+
+    /// <summary>
+    /// The driver pickers: as wide as the longest name in them, and never
+    /// narrower than they were at the normal text size. Run again when the
+    /// text size changes (TextSize.Keep) and when the names are refilled
+    /// (RefreshDriverCombos).
+    /// </summary>
+    private void SizeFields()
+    {
+        var least = UiLayout.AtTextSize(DriverPickerWidth);
+
+        Fit(_cmbDriverA, Math.Max(least, Pieces.PickerWidth(_cmbDriverA, ref _driverAWidth)));
+        Fit(_cmbDriverB, Math.Max(least, Pieces.PickerWidth(_cmbDriverB, ref _driverBWidth)));
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The rivalries' column: the width the list was at the normal text
+    /// size, at the size in use - and never narrower than its caption or its
+    /// two buttons on one line need.
+    /// </summary>
+    private int ListColumnWidth() =>
+        Math.Max(
+            UiLayout.AtTextSize(ListWidth),
+            Math.Max(_listCard?.CaptionWidth ?? 0, _listButtons?.OneLineWidth ?? 0) + Section.Inset.Horizontal);
 
     /// <summary>Repopulates the driver dropdowns from current profiles - call whenever this tab becomes visible, since profiles can be added/renamed elsewhere while this tab isn't active.</summary>
     public void RefreshDriverCombos()
@@ -235,8 +321,12 @@ public sealed class RivalriesControl : UserControl
 
         if (names.Count == 0)
         {
-            _lblStatus.Text = "No named driver profiles yet - add some in Driver Profiles first.";
+            _lblStatus.Text = NoProfilesStatus;
         }
+
+        // The longest name may have come or gone: the pickers measured again.
+        _driverAWidth = _driverBWidth = null;
+        SizeFields();
     }
 
     private void RefreshList(string? selectId = null)

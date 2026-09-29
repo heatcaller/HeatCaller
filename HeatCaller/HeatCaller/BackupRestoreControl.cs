@@ -59,16 +59,31 @@ public sealed class BackupRestoreControl : UserControl
     private readonly TextBox _txtFolder = new();
     private readonly ListBox _lstBackups = new();
     private readonly Label _lblStatus = new();
-    private readonly GroupBox _grpList = new();
     private readonly Button _btnRestoreSelected = new();
     private readonly Button _btnDeleteSelected = new();
     private readonly Dictionary<CloudService, CheckBox> _cloudChecks = new();
     private readonly Label _lblCloudStatus = new();
     private readonly Button _btnChangeFolder = new();
-    private int _folderRowMaxRight;
     private readonly TextBox _txtBackupPassword = new();
     private readonly TextBox _txtBackupPasswordConfirm = new();
-    private readonly Label _lblPasswordStatus = new();
+
+    /// <summary>
+    /// What the password as set now means. As tall as the longer of the two
+    /// things it says (SteadyLabel), so the hint under it never has to move
+    /// when the password is set or removed.
+    /// </summary>
+    private readonly SteadyLabel _lblPasswordStatus = new() { Wordings = new[] { PasswordSetText, NoPasswordText } };
+
+    private const string PasswordSetText = "Keys and tokens travel with backups, locked with this password.";
+
+    private const string NoPasswordText =
+        "No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.";
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The backups list's monospaced face, made for the text size in use.</summary>
+    private Font? _listFont;
 
     /// <summary>
     /// The shortest backup password accepted. It is the only thing between
@@ -86,19 +101,45 @@ public sealed class BackupRestoreControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        MinimumSize = new Size(560, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize, and no scrolling of its own: the 560x560 floor was
+        // honoured over the size the page was given. A short window scrolls
+        // the page instead (PageStack).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshBackupList();
         RefreshLastBackupLabel();
     }
 
-    /// <summary>
-    /// The gap between a group box's own edge and the controls inside it.
-    /// </summary>
-    private const int Inset = 12;
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        // After the list that wears it is gone.
+        if (disposing)
+        {
+            _listFont?.Dispose();
+            _listFont = null;
+        }
+    }
 
     /// <summary>
     /// The fewest rows the backups list ever shows, so an empty folder
@@ -114,46 +155,46 @@ public sealed class BackupRestoreControl : UserControl
     /// </summary>
     private const int MaxBackupRows = 12;
 
+    /// <summary>The narrowest and the widest the folder box gets, at the normal text size - see SizeFolderBox.</summary>
+    private const int FolderBoxLeastWidth = 260;
+    private const int FolderBoxMostWidth = 560;
+
     /// <summary>
-    /// Builds the page.
+    /// Five cards down the page: making and restoring a backup by hand; the
+    /// automatic backups - how often, how many are kept, the folder, the
+    /// cloud folders they are copied to and what each of those is doing, and
+    /// when the last was made; the backup password; getting help; and the
+    /// backups there are, the list as tall as the backups in it, with the
+    /// buttons that act on the one selected and what the last of them did.
+    /// On the layout pieces (LayoutPieces.cs), so nothing is placed by hand;
+    /// the page scrolls when it is taller than the window (PageStack).
     ///
-    /// Nothing here carries a hand-picked coordinate. Every position is
-    /// derived from the control above or beside it, measured in the font
-    /// the control will actually be drawn in, so the page lays itself out
-    /// correctly at any font scale instead of being laid out wrong and then
-    /// patched by LayoutDoctor on every launch - which is what this page
-    /// used to do, and what made the doctor stand down and leave it alone.
+    /// It used to be placed in pixels: every group box 528px wide whatever
+    /// the window, the rows in each measured from the one before in the
+    /// font of the day and the box sized to them once, at build, the cloud
+    /// status given six lines of that width, and a 560x560 floor the page
+    /// kept however small its window. Every font was set once, so nothing
+    /// followed the text size.
     /// </summary>
     private void BuildLayout()
     {
-        var width = MinimumSize.Width - UiLayout.PageLeft - UiLayout.PageRight;
+        var page = new PageStack();
 
-        var grpManual = BuildManualGroup(width);
-        grpManual.Location = new Point(UiLayout.PageLeft, UiLayout.PageTop);
+        page.Add(BuildManualCard());
+        page.Add(BuildAutoCard());
+        page.Add(BuildPasswordCard());
+        page.Add(BuildSupportCard());
 
-        var grpAuto = BuildAutoGroup(width);
-        grpAuto.Location = new Point(UiLayout.PageLeft, UiLayout.Below(grpManual, UiLayout.RowGap));
-
-        var grpPassword = BuildPasswordGroup(width);
-        grpPassword.Location = new Point(UiLayout.PageLeft, UiLayout.Below(grpAuto, UiLayout.RowGap));
-
-        var grpSupport = BuildSupportGroup(width);
-        grpSupport.Location = new Point(UiLayout.PageLeft, UiLayout.Below(grpPassword, UiLayout.RowGap));
-
-        // The list stays the last box on the page: it grows and shrinks with
-        // the backups it holds (LayoutListGroup), and nothing sits below it
+        // The list stays the last card on the page: it grows and shrinks
+        // with the backups it holds (SizeList), and nothing sits below it
         // to be pushed about.
-        var listTop = UiLayout.Below(grpSupport, UiLayout.RowGap);
+        page.Add(BuildListCard(), gapBelow: 0);
 
-        var grpList = BuildListGroup(width);
+        Controls.Add(page);
 
-        grpList.Location = new Point(UiLayout.PageLeft, listTop);
-
-        Controls.Add(grpManual);
-        Controls.Add(grpAuto);
-        Controls.Add(grpPassword);
-        Controls.Add(grpSupport);
-        Controls.Add(grpList);
+        // Once the fields are on the page and wear its face - what they are
+        // measured in.
+        _textSize.Keep(SizeFields);
     }
 
     /// <summary>
@@ -162,19 +203,10 @@ public sealed class BackupRestoreControl : UserControl
     /// wrong. On this page because it is where the app's files are looked
     /// after; the crash dialog and the console's menu point here too.
     /// </summary>
-    private GroupBox BuildSupportGroup(int width)
+    private Section BuildSupportCard()
     {
-        var group = new GroupBox
-        {
-            Text = "Getting Help",
-            Font = AppTheme.BodyFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-
         var btnSupport = new Button { Text = "Save Support Info..." };
         btnSupport.Click += (_, _) => SupportInfoRequested?.Invoke();
-
-        UiLayout.ButtonRow(Inset, UiLayout.InsideGroup(group), btnSupport);
 
         var lblHint = new Label
         {
@@ -182,34 +214,25 @@ public sealed class BackupRestoreControl : UserControl
                    + "the version and the settings that matter. Driver names, email addresses and your Windows user name are replaced "
                    + "first, and no keys, tokens, PINs or passwords go in.",
             AutoSize = true,
-            MaximumSize = new Size(width - Inset * 2, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(Inset, UiLayout.Below(btnSupport, UiLayout.RowGap)),
         };
 
-        group.Controls.AddRange(new Control[] { btnSupport, lblHint });
-        group.Size = new Size(width, UiLayout.Below(lblHint, Inset));
+        _textSize.Wear(lblHint, () => AppTheme.SmallFont);
 
-        return group;
+        var card = new Section("Getting help");
+
+        card.Add(new ButtonBar().With(btnSupport));
+        card.Add(lblHint, gapBelow: 0);
+
+        return card;
     }
 
-    private GroupBox BuildManualGroup(int width)
+    /// <summary>Back Up Now, Restore from File and Open Backup Folder, each as wide as its caption, and what a backup holds.</summary>
+    private Section BuildManualCard()
     {
-        // "and" rather than an ampersand: a group box treats "&" as a
-        // mnemonic prefix, and the themed caption drew "&&" as an
-        // underscore.
-        var group = new GroupBox
-        {
-            Text = "Manual Backup and Restore",
-            Font = AppTheme.BodyFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-
         // A field, so it can be switched off while its backup is being made.
-        var btnBackupNow = _btnBackupNow;
-        btnBackupNow.Text = "Back Up Now";
-        btnBackupNow.Click += BtnBackupNow_Click;
+        _btnBackupNow.Text = "Back Up Now";
+        _btnBackupNow.Click += BtnBackupNow_Click;
 
         var btnRestore = new Button { Text = "Restore from File..." };
         btnRestore.Click += BtnRestore_Click;
@@ -217,76 +240,57 @@ public sealed class BackupRestoreControl : UserControl
         var btnOpenFolder = new Button { Text = "Open Backup Folder" };
         btnOpenFolder.Click += (_, _) => OpenFolderInExplorer(CurrentFolder());
 
-        // Each button sized to its own caption in the bold face the theme
-        // will give it, rather than to a width somebody guessed.
-        UiLayout.ButtonRow(Inset, UiLayout.InsideGroup(group), btnBackupNow, btnRestore, btnOpenFolder);
-
         var lblManualHint = new Label
         {
             Text = "Includes driver profiles, race classes, session history, track layouts, and all app settings.",
             AutoSize = true,
-            MaximumSize = new Size(width - Inset * 2, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(Inset, UiLayout.Below(btnBackupNow, UiLayout.RowGap)),
         };
 
-        group.Controls.AddRange(new Control[] { btnBackupNow, btnRestore, btnOpenFolder, lblManualHint });
-        group.Size = new Size(width, UiLayout.Below(lblManualHint, Inset));
+        _textSize.Wear(lblManualHint, () => AppTheme.SmallFont);
 
-        return group;
+        // "and" rather than an ampersand, from when this was a group box: a
+        // group box treats "&" as a mnemonic prefix, and its themed caption
+        // drew "&&" as an underscore.
+        var card = new Section("Manual backup and restore");
+
+        card.Add(new ButtonBar().With(_btnBackupNow, btnRestore, btnOpenFolder));
+        card.Add(lblManualHint, gapBelow: 0);
+
+        return card;
     }
 
-    private GroupBox BuildAutoGroup(int width)
+    /// <summary>
+    /// Whether and how often a backup is made by itself, how many are kept,
+    /// the folder they go to, the cloud folders they are copied to and what
+    /// each of those is doing, and when the last one was made. Each line
+    /// reads as a sentence with its boxes where the words put them, and
+    /// wraps rather than running off the card when the card is too narrow
+    /// for it (FieldGrid.Inline).
+    /// </summary>
+    private Section BuildAutoCard()
     {
-        var group = new GroupBox
-        {
-            Text = "Automatic Backups",
-            Font = AppTheme.BodyFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-
-        // Fonts assigned before anything is measured. A spinner and a text
-        // box both take their height from their font, and a row positioned
-        // against the height they had BEFORE the font arrived is a row laid
-        // out against the wrong numbers.
-        _numIntervalDays.Font = AppTheme.BodyFont;
-        _numKeepCount.Font = AppTheme.BodyFont;
-        _txtFolder.Font = AppTheme.BodyFont;
-
-        // --- Row 1: [x] Automatically back up   every [n] day(s) ---
-        var y = UiLayout.InsideGroup(group);
-
+        // --- [x] Automatically back up   every [n] day(s) ---
         _chkAutoBackupEnabled.Text = "Automatically back up";
         _chkAutoBackupEnabled.AutoSize = true;
         _chkAutoBackupEnabled.Checked = _settings.AutoBackupEnabled;
         _chkAutoBackupEnabled.CheckedChanged += (_, _) => SaveAutoBackupSettings();
 
-        _numIntervalDays.Width = UiLayout.NumericWidth;
         _numIntervalDays.Minimum = 1;
         _numIntervalDays.Maximum = 30;
         _numIntervalDays.Value = Math.Clamp(_settings.AutoBackupIntervalDays, 1, 30);
         _numIntervalDays.ValueChanged += (_, _) => SaveAutoBackupSettings();
 
-        var fieldHeight = _numIntervalDays.Height;
-
         var lblEvery = new Label { Text = "every", AutoSize = true };
+
         // The number lives in the box beside it, so this is the noun on
-        // its own - see Plural.Word. Safe to re-measure because it is the
-        // last control on the row and nothing is positioned from it.
+        // its own - see Plural.Word. The last thing on its line, so "day"
+        // becoming "days" moves nothing else.
         var lblDays = new Label { Text = Plural.Word((long)_numIntervalDays.Value, "day"), AutoSize = true };
         _numIntervalDays.ValueChanged += (_, _) =>
             lblDays.Text = Plural.Word((long)_numIntervalDays.Value, "day");
 
-        _chkAutoBackupEnabled.Location = new Point(Inset, UiLayout.CentreOn(_chkAutoBackupEnabled, y, fieldHeight));
-        lblEvery.Location = new Point(UiLayout.After(_chkAutoBackupEnabled) + UiLayout.RowGap, UiLayout.CentreOn(lblEvery, y, fieldHeight));
-        _numIntervalDays.Location = new Point(UiLayout.After(lblEvery), y);
-        lblDays.Location = new Point(UiLayout.After(_numIntervalDays), UiLayout.CentreOn(lblDays, y, fieldHeight));
-
-        // --- Row 2: Keep the last [n] automatic backups (...) ---
-        y = UiLayout.Below(_numIntervalDays, UiLayout.RowGap);
-
-        _numKeepCount.Width = UiLayout.NumericWidth;
+        // --- Keep the last [n] automatic backups (...) ---
         _numKeepCount.Minimum = 1;
         _numKeepCount.Maximum = 200;
         _numKeepCount.Value = Math.Clamp(_settings.AutoBackupMaxToKeep, 1, 200);
@@ -295,51 +299,30 @@ public sealed class BackupRestoreControl : UserControl
         var lblKeep = new Label { Text = "Keep the last", AutoSize = true };
         var lblKeepSuffix = new Label { Text = "automatic backups (older ones are deleted automatically)", AutoSize = true };
 
-        lblKeep.Location = new Point(Inset, UiLayout.CentreOn(lblKeep, y, fieldHeight));
-        _numKeepCount.Location = new Point(UiLayout.After(lblKeep), y);
-        lblKeepSuffix.Location = new Point(UiLayout.After(_numKeepCount), UiLayout.CentreOn(lblKeepSuffix, y, fieldHeight));
-
-        // Capped so a long tail wraps inside the box instead of running out
-        // past its right edge and leaving the doctor to drag it back.
-        lblKeepSuffix.MaximumSize = new Size(Math.Max(120, width - Inset - lblKeepSuffix.Left), 0);
-
-        // --- Row 3: Folder: [path] [Change...] ---
-        y = UiLayout.Below(lblKeepSuffix, UiLayout.RowGap);
-
+        // --- Folder: [path] [Change...] ---
         var lblFolder = new Label { Text = "Folder:", AutoSize = true };
 
         _txtFolder.ReadOnly = true;
         _txtFolder.Text = CurrentFolder();
 
-        var btnChangeFolder = _btnChangeFolder;
-        btnChangeFolder.Text = "Change...";
-        btnChangeFolder.Click += BtnChangeFolder_Click;
-        btnChangeFolder.Size = new Size(UiLayout.WidthFor(btnChangeFolder), UiLayout.ButtonHeight);
-
-        lblFolder.Location = new Point(Inset, UiLayout.CentreOn(lblFolder, y, UiLayout.ButtonHeight));
-
-        _txtFolder.Left = UiLayout.After(lblFolder);
-        _txtFolder.Top = UiLayout.CentreOn(_txtFolder, y, UiLayout.ButtonHeight);
-        btnChangeFolder.Top = y;
+        _btnChangeFolder.Text = "Change...";
+        _btnChangeFolder.Click += BtnChangeFolder_Click;
 
         // The path box is sized to the path and the button sits right after
-        // it - not stretched to the group's far edge with the button pinned
-        // out there on its own, which on a wide window left it floating.
-        _folderRowMaxRight = width - Inset;
-        LayOutFolderRow();
+        // it - not stretched to the card's far edge with the button pinned
+        // out there on its own, which on a wide window left it floating. On
+        // a line too narrow for both, the button goes under the box
+        // (FieldGrid.Inline). See SizeFolderBox.
+        var folderRow = FieldGrid.Inline(lblFolder, _txtFolder, _btnChangeFolder);
 
-        // --- Row 4: Also copy every backup to:
-        //            [x] Google Drive  [x] iCloud Drive  [x] OneDrive   [Check Again] ---
-        y = UiLayout.Below(btnChangeFolder, UiLayout.RowGap);
-
+        // --- Also copy every backup to:
+        //     [x] Google Drive  [x] iCloud Drive  [x] OneDrive  [Check Again] ---
         var lblCloud = new Label { Text = "Also copy every backup to:", AutoSize = true };
-        lblCloud.Location = new Point(Inset, y + 2);
 
-        // The boxes get a row of their own: beside the caption, with the
-        // button, they would not fit the group's width.
-        y = UiLayout.Below(lblCloud, 6);
-        var x = Inset;
-        var cloudRowBottom = y;
+        // The boxes get a line of their own, under the caption, with the
+        // button that looks for their folders again straight after them
+        // rather than pinned to the far edge of the card.
+        var cloudRow = new List<Control>();
 
         foreach (var service in Enum.GetValues<CloudService>())
         {
@@ -348,7 +331,6 @@ public sealed class BackupRestoreControl : UserControl
                 Text = CloudBackup.NameOf(service),
                 AutoSize = true,
                 Checked = CloudBackup.IsEnabled(_settings, service),
-                Font = AppTheme.BodyFont,
             };
 
             var captured = service;
@@ -359,65 +341,41 @@ public sealed class BackupRestoreControl : UserControl
                 RefreshCloudStatus();
             };
 
-            check.Location = new Point(x, y);
-            x = UiLayout.After(check) + UiLayout.RowGap;
-            cloudRowBottom = Math.Max(cloudRowBottom, UiLayout.Below(check, 0));
-
             _cloudChecks[service] = check;
+            cloudRow.Add(check);
         }
 
         var btnCheckCloud = new Button { Text = "Check Again" };
         btnCheckCloud.Click += (_, _) => RefreshCloudStatus();
-        btnCheckCloud.Size = new Size(UiLayout.WidthFor(btnCheckCloud), UiLayout.ButtonHeight);
-        // Straight after the boxes it re-checks, rather than pinned to the
-        // far edge of the group.
-        var checkHeight = UiLayout.HeightOf(_cloudChecks.Values.Last());
-        btnCheckCloud.Location = new Point(x + UiLayout.RowGap, y - Math.Max(0, (btnCheckCloud.Height - checkHeight) / 2));
-        cloudRowBottom = Math.Max(cloudRowBottom, btnCheckCloud.Bottom);
+        cloudRow.Add(btnCheckCloud);
 
         // What each service's app is doing on this PC - found and where, or
         // what to install - so a copy that can't happen is visible here,
-        // not only in the log after a backup.
-        // A fixed height with room for every line, wrapped - so the text
-        // changing with what is ticked or found never runs into "Last
-        // backup" below it.
-        _lblCloudStatus.AutoSize = false;
-        _lblCloudStatus.Font = AppTheme.SmallFont;
-        _lblCloudStatus.Size = new Size(width - Inset * 2, TextRenderer.MeasureText("Ag", AppTheme.SmallFont).Height * 6 + 4);
+        // not only in the log after a backup. A line kept for each service
+        // and one for the note after them, whatever it says, so the text
+        // changing with what is ticked or found does not move "Last backup"
+        // under it; it still grows for more when a line wraps.
+        _lblCloudStatus.AutoSize = true;
         _lblCloudStatus.ForeColor = AppTheme.TextMuted;
-        _lblCloudStatus.Location = new Point(Inset, Math.Max(cloudRowBottom, btnCheckCloud.Bottom) + 4);
+        _textSize.Wear(_lblCloudStatus, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(_lblCloudStatus, Enum.GetValues<CloudService>().Length + 1);
         RefreshCloudStatus();
 
-        // --- Row 5: Last backup: ... ---
+        // --- Last backup: ... ---
         _lblLastBackup.AutoSize = true;
         _lblLastBackup.ForeColor = AppTheme.TextMuted;
-        _lblLastBackup.Location = new Point(Inset, UiLayout.Below(_lblCloudStatus, UiLayout.RowGap));
 
-        // Width first, height after.
-        //
-        // "Change..." is placed at width - Inset - its own width and
-        // anchored Right, and an anchor keeps the margin a control had
-        // when its parent was laid out. A GroupBox starts 200 wide, so
-        // adding it before the group knew its width risked baking in a
-        // margin measured against 200 rather than against 528. The height
-        // still has to come afterwards, because it depends on where the
-        // last row ended up.
-        group.Width = width;
+        var card = new Section("Automatic backups");
 
-        group.Controls.AddRange(new Control[]
-        {
-            _chkAutoBackupEnabled, lblEvery, _numIntervalDays, lblDays,
-            lblKeep, _numKeepCount, lblKeepSuffix,
-            lblFolder, _txtFolder, btnChangeFolder,
-            lblCloud, btnCheckCloud, _lblCloudStatus,
-            _lblLastBackup,
-        });
+        card.Add(FieldGrid.Inline(_chkAutoBackupEnabled, lblEvery, _numIntervalDays, lblDays));
+        card.Add(FieldGrid.Inline(lblKeep, _numKeepCount, lblKeepSuffix));
+        card.Add(folderRow);
+        card.Add(lblCloud, gapBelow: UiLayout.HintGap);
+        card.Add(FieldGrid.Inline(cloudRow.ToArray()), gapBelow: UiLayout.HintGap);
+        card.Add(_lblCloudStatus);
+        card.Add(_lblLastBackup, gapBelow: 0);
 
-        group.Controls.AddRange(_cloudChecks.Values.ToArray<Control>());
-
-        group.Size = new Size(width, UiLayout.Below(_lblLastBackup, Inset));
-
-        return group;
+        return card;
     }
 
     /// <summary>
@@ -425,97 +383,203 @@ public sealed class BackupRestoreControl : UserControl
     /// disk, so a backup only brings them to another PC if it carries its
     /// own copy - locked with this.
     /// </summary>
-    private GroupBox BuildPasswordGroup(int width)
+    private Section BuildPasswordCard()
     {
-        var group = new GroupBox
-        {
-            Text = "Backup Password",
-            Font = AppTheme.BodyFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
-
-        // Fonts first, for the same reason as the automatic group: the
-        // boxes take their height from their font.
-        _txtBackupPassword.Font = AppTheme.BodyFont;
-        _txtBackupPasswordConfirm.Font = AppTheme.BodyFont;
         _txtBackupPassword.UseSystemPasswordChar = true;
         _txtBackupPasswordConfirm.UseSystemPasswordChar = true;
-        _txtBackupPassword.Width = UiLayout.FieldWidth;
-        _txtBackupPasswordConfirm.Width = UiLayout.FieldWidth;
 
-        var fieldHeight = _txtBackupPassword.Height;
+        // Both boxes in one column, past the wider of the two captions.
+        var grid = new FieldGrid();
 
-        var lblPassword = new Label { Text = "New password:", AutoSize = true, Font = AppTheme.BodyFont, Left = Inset };
-        var lblConfirm = new Label { Text = "Type it again:", AutoSize = true, Font = AppTheme.BodyFont, Left = Inset };
+        grid.AddRow("New password:", _txtBackupPassword);
+        grid.AddRow("Type it again:", _txtBackupPasswordConfirm);
 
-        // Both boxes start at the same x, past the wider of the two captions,
-        // measured in the font they are drawn in.
-        var fieldLeft = Math.Max(
-            UiLayout.After(lblPassword, AppTheme.BodyFont),
-            UiLayout.After(lblConfirm, AppTheme.BodyFont));
-
-        // --- Row 1: New password: [.....] ---
-        var y = UiLayout.InsideGroup(group);
-
-        lblPassword.Location = new Point(Inset, UiLayout.CentreOn(lblPassword, y, fieldHeight));
-        _txtBackupPassword.Location = new Point(fieldLeft, y);
-
-        // --- Row 2: Type it again: [.....] ---
-        y = UiLayout.Below(_txtBackupPassword, UiLayout.RowGap);
-
-        lblConfirm.Location = new Point(Inset, UiLayout.CentreOn(lblConfirm, y, fieldHeight));
-        _txtBackupPasswordConfirm.Location = new Point(fieldLeft, y);
-
-        // --- Row 3: [Set Password] [Remove Password] ---
         var btnSet = new Button { Text = "Set Password" };
         btnSet.Click += BtnSetBackupPassword_Click;
 
         var btnRemove = new Button { Text = "Remove Password" };
         btnRemove.Click += BtnRemoveBackupPassword_Click;
 
-        UiLayout.ButtonRow(Inset, UiLayout.Below(_txtBackupPasswordConfirm, UiLayout.RowGap), btnSet, btnRemove);
-
-        // --- Row 4: what the current state means ---
-        _lblPasswordStatus.AutoSize = true;
-        _lblPasswordStatus.MaximumSize = new Size(width - Inset * 2, 0);
-        _lblPasswordStatus.Font = AppTheme.BodyFont;
-        _lblPasswordStatus.Location = new Point(Inset, UiLayout.Below(btnSet, UiLayout.RowGap));
-
-        // Two lines' worth reserved, whichever message is showing, so the
-        // hint below never has to move when the password is set or removed.
-        _lblPasswordStatus.MinimumSize = new Size(0, AppTheme.BodyFont.Height * 2);
+        // What the current state means - see _lblPasswordStatus.
         RefreshPasswordStatus();
 
         var lblHint = new Label
         {
             Text = $"At least {MinPasswordLength} characters. Keep it somewhere safe away from this PC - it can't be recovered, and a backup restored on another PC needs it to bring the keys and the QR check-in key across.",
             AutoSize = true,
-            MaximumSize = new Size(width - Inset * 2, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(Inset, UiLayout.Below(_lblPasswordStatus, UiLayout.RowGap)),
         };
 
-        group.Controls.AddRange(new Control[]
+        _textSize.Wear(lblHint, () => AppTheme.SmallFont);
+
+        var card = new Section("Backup password");
+
+        card.Add(grid);
+        card.Add(new ButtonBar().With(btnSet, btnRemove));
+        card.Add(_lblPasswordStatus);
+        card.Add(lblHint, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>
+    /// The backups list, the two buttons that act on a selected one, and
+    /// the status line.
+    ///
+    /// The list is as tall as the backups it holds, between four rows and
+    /// twelve (SizeList), rather than taking whatever height the window has
+    /// left - which on a tall window would stand four backups over rows of
+    /// nothing, with Restore and Delete stranded at the bottom of it. The
+    /// page scrolls instead when the window is too short for it.
+    /// </summary>
+    private Section BuildListCard()
+    {
+        _btnRestoreSelected.Text = "Restore Selected";
+        _btnRestoreSelected.Click += BtnRestoreSelected_Click;
+
+        _btnDeleteSelected.Text = "Delete Selected";
+        _btnDeleteSelected.Click += BtnDeleteSelected_Click;
+
+        // Monospaced, so the date / size / name columns line up, a size
+        // under the body face - made again for a new text size, which it
+        // never was when it was set once here, and the old one let go.
+        _textSize.Keep(() =>
         {
-            lblPassword, _txtBackupPassword,
-            lblConfirm, _txtBackupPasswordConfirm,
-            btnSet, btnRemove,
-            _lblPasswordStatus, lblHint,
+            var size = Math.Max(7.5F, AppTheme.BodyFont.SizeInPoints - 2F);
+
+            if (_listFont is not null && Math.Abs(_listFont.SizeInPoints - size) < 0.01F)
+            {
+                return;
+            }
+
+            var old = _listFont;
+
+            _listFont = new Font("Consolas", size);
+            _lstBackups.Font = _listFont;
+            old?.Dispose();
         });
 
-        group.Size = new Size(width, UiLayout.Below(lblHint, Inset));
+        // Off, or the list quietly rounds its own height down to a whole
+        // number of rows and leaves a gap under it that nothing explains.
+        _lstBackups.IntegralHeight = false;
 
-        return group;
+        // Two lines kept for the status line whether or not it is saying
+        // anything: it reports file names and error messages, both of which
+        // wrap, and a card that changed height as it reported would jump
+        // under the pointer. It still grows for more.
+        _lblStatus.AutoSize = true;
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _textSize.ReserveLines(_lblStatus, 2);
+
+        var card = new Section("Existing backups");
+
+        card.Add(_lstBackups);
+        card.Add(new ButtonBar().With(_btnRestoreSelected, _btnDeleteSelected));
+        card.Add(_lblStatus, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>
+    /// The fields' sizes at the text size in use: the number boxes as wide
+    /// as their largest value and their arrows need, and never narrower than
+    /// a number box was at the normal text size; the password boxes the
+    /// width a field was then, at this size; the folder box to its path
+    /// (SizeFolderBox); and the list to its backups, in its face at this
+    /// size (SizeList).
+    ///
+    /// Run again when the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
+    {
+        Fit(_numIntervalDays, NumberWidth(_numIntervalDays));
+        Fit(_numKeepCount, NumberWidth(_numKeepCount));
+
+        var password = UiLayout.AtTextSize(UiLayout.FieldWidth);
+
+        Fit(_txtBackupPassword, password);
+        Fit(_txtBackupPasswordConfirm, password);
+
+        SizeFolderBox();
+        SizeList();
+
+        // Only when it changed: a new width lays the line out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>A number box as wide as its largest value and its arrows need, and never narrower than one was at the normal text size.</summary>
+    private int NumberWidth(NumericUpDown box) =>
+        Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(new string('0', ((int)box.Maximum).ToString().Length), Font).Width
+                + SystemInformation.VerticalScrollBarWidth + 12);
+
+    /// <summary>
+    /// The folder box: as wide as the path in it, between 260px and 560px at
+    /// the normal text size, at the size in use - so the line of caption,
+    /// box and Change... fits the card on the narrowest window at every text
+    /// size, and on a narrower one Change... goes under the box. A longer
+    /// path scrolls inside the box.
+    ///
+    /// From the path and the text size only, never from the line's width.
+    /// It used to be worked out from the line as it was laid out - its width,
+    /// its caption's, its button's - and set from their SizeChanged, which
+    /// fire in the middle of the line's own layout; the line then kept a
+    /// layout made for another width of box, Change... three lines down in a
+    /// line one high (the layout test, 200%, 29 Sep). Run when the text size
+    /// changes (SizeFields) and when the folder does.
+    /// </summary>
+    private void SizeFolderBox()
+    {
+        var width = Math.Clamp(
+            TextRenderer.MeasureText(_txtFolder.Text, _txtFolder.Font).Width + 16,
+            UiLayout.AtTextSize(FolderBoxLeastWidth),
+            UiLayout.AtTextSize(FolderBoxMostWidth));
+
+        // Only when it changed: a new width lays the line out again.
+        if (_txtFolder.Width != width)
+        {
+            _txtFolder.Width = width;
+        }
+    }
+
+    /// <summary>
+    /// Sizes the list to the backups it is actually holding - between four
+    /// rows and twelve, of the face it is drawn in.
+    ///
+    /// Re-run whenever the list changes, and when the text size does. A
+    /// fixed number of rows meant four backups sat above six rows of nothing
+    /// with the buttons stranded at the bottom of it - and this card is the
+    /// last thing on the page, so growing and shrinking it disturbs nothing
+    /// above.
+    /// </summary>
+    private void SizeList()
+    {
+        // ItemHeight is font-derived and answers before the handle exists,
+        // but a list that has not measured itself yet can report nothing -
+        // hence the font as the floor.
+        var rowHeight = Math.Max(_lstBackups.ItemHeight, _lstBackups.Font.Height);
+        var rows = Math.Clamp(_lstBackups.Items.Count, MinBackupRows, MaxBackupRows);
+        var height = rowHeight * rows + 4;
+
+        // Only when it changed: a new height lays the card out again.
+        if (_lstBackups.Height != height)
+        {
+            _lstBackups.Height = height;
+        }
     }
 
     private void RefreshPasswordStatus()
     {
         var isSet = !string.IsNullOrEmpty(_settings.BackupPassword);
 
-        _lblPasswordStatus.Text = isSet
-            ? "Keys and tokens travel with backups, locked with this password."
-            : "No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.";
+        _lblPasswordStatus.Text = isSet ? PasswordSetText : NoPasswordText;
 
         _lblPasswordStatus.ForeColor = isSet ? AppTheme.TextDark : AppTheme.Warning;
     }
@@ -625,93 +689,6 @@ public sealed class BackupRestoreControl : UserControl
     }
 
     /// <summary>
-    /// The backups list, the two buttons that act on a selected one, and
-    /// the status line.
-    ///
-    /// Stretches sideways with the page, like the three boxes above it, but
-    /// is NOT anchored to the bottom.
-    ///
-    /// It used to be: the box and the list inside it were both anchored
-    /// top-to-bottom so they would fill the window. On a page that scrolls
-    /// that does not mean what it looks like it means - a Bottom anchor
-    /// pins a control to the bottom of the SCROLLING area, not to the
-    /// bottom of what can be seen. So the box grew past the window's edge,
-    /// taking the Restore and Delete buttons under the list with it, and no
-    /// margin below could ever show through: there was always more box.
-    /// The page scrolls, so the height comes from the contents instead -
-    /// see LayoutListGroup.
-    /// </summary>
-    private GroupBox BuildListGroup(int width)
-    {
-        _grpList.Text = "Existing Backups";
-        _grpList.Font = AppTheme.BodyFont;
-        _grpList.Width = width;
-        _grpList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-
-        _btnRestoreSelected.Text = "Restore Selected";
-        _btnRestoreSelected.Click += BtnRestoreSelected_Click;
-
-        _btnDeleteSelected.Text = "Delete Selected";
-        _btnDeleteSelected.Click += BtnDeleteSelected_Click;
-
-        // Monospaced, so the date / size / name columns line up - sized off
-        // the body font so it still tracks Ctrl+/Ctrl- like everything else.
-        _lstBackups.Font = new Font("Consolas", Math.Max(7.5F, AppTheme.BodyFont.SizeInPoints - 2F));
-
-        // Off, or the list quietly rounds its own height down to a whole
-        // number of rows and leaves a gap under it that nothing explains.
-        _lstBackups.IntegralHeight = false;
-
-        // Sideways with the box, so a long backup file name has the width
-        // of the page to be read in rather than the width the page happened
-        // to be built at.
-        _lstBackups.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-
-        _lblStatus.AutoSize = true;
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-
-        _grpList.Controls.AddRange(new Control[] { _lstBackups, _btnRestoreSelected, _btnDeleteSelected, _lblStatus });
-
-        LayoutListGroup();
-
-        return _grpList;
-    }
-
-    /// <summary>
-    /// Sizes the list to the backups it is actually holding, puts the
-    /// buttons and the status line under it, and trims the box to fit.
-    ///
-    /// Re-run whenever the list changes. A fixed number of rows meant four
-    /// backups sat above six rows of nothing with the buttons stranded at
-    /// the bottom of it - and this box is the last thing on the page, so
-    /// growing and shrinking it disturbs nothing above.
-    /// </summary>
-    private void LayoutListGroup()
-    {
-        var inner = Math.Max(120, _grpList.Width - Inset * 2);
-
-        // ItemHeight is font-derived and answers before the handle exists,
-        // but a list that has not measured itself yet can report nothing -
-        // hence the font as the floor.
-        var rowHeight = Math.Max(_lstBackups.ItemHeight, _lstBackups.Font.Height);
-        var rows = Math.Clamp(_lstBackups.Items.Count, MinBackupRows, MaxBackupRows);
-
-        _lstBackups.Location = new Point(Inset, UiLayout.InsideGroup(_grpList));
-        _lstBackups.Size = new Size(inner, rowHeight * rows + 4);
-
-        UiLayout.ButtonRow(Inset, UiLayout.Below(_lstBackups, UiLayout.RowGap), _btnRestoreSelected, _btnDeleteSelected);
-
-        _lblStatus.MaximumSize = new Size(inner, 0);
-        _lblStatus.Location = new Point(Inset, UiLayout.Below(_btnRestoreSelected, UiLayout.RowGap));
-
-        // Two lines' worth kept for the status line whether or not it is
-        // saying anything: it reports file names and error messages, both of
-        // which wrap, and a box that changed height as it reported would
-        // jump under the pointer.
-        _grpList.Height = _lblStatus.Top + AppTheme.BodyFont.Height * 2 + Inset;
-    }
-
-    /// <summary>
     /// Looks for each cloud service's folder on this PC again (it can be
     /// installed or signed into while the app is open) and says what was
     /// found. The boxes stay clickable either way - greyed-out text was
@@ -747,16 +724,6 @@ public sealed class BackupRestoreControl : UserControl
         _lblCloudStatus.Text = string.Join(Environment.NewLine, lines);
     }
 
-    /// <summary>Sizes the folder box to its path (within the group) and puts Change... right after it.</summary>
-    private void LayOutFolderRow()
-    {
-        var textWidth = TextRenderer.MeasureText(_txtFolder.Text, _txtFolder.Font).Width + 16;
-        var room = _folderRowMaxRight - _btnChangeFolder.Width - UiLayout.LabelGap - _txtFolder.Left;
-
-        _txtFolder.Width = Math.Clamp(textWidth, Math.Min(260, room), Math.Max(120, room));
-        _btnChangeFolder.Left = _txtFolder.Right + UiLayout.LabelGap;
-    }
-
     private string CurrentFolder() =>
         // The guarded answer, so the page shows where backups will REALLY
         // go rather than echoing a setting that is about to be overruled.
@@ -781,7 +748,7 @@ public sealed class BackupRestoreControl : UserControl
         _settings.AutoBackupFolder = dialog.SelectedPath;
         _settings.Save();
         _txtFolder.Text = CurrentFolder();
-        LayOutFolderRow();
+        SizeFolderBox();
         RefreshBackupList();
     }
 
@@ -1171,7 +1138,7 @@ public sealed class BackupRestoreControl : UserControl
             _lstBackups.Items.Add(new BackupListItem(file));
         }
 
-        LayoutListGroup();
+        SizeList();
     }
 
     private void RefreshLastBackupLabel()

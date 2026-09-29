@@ -19,7 +19,8 @@ namespace HeatCaller.Tests;
 /// still when it is reworded, a filter row whose summary moves onto a line
 /// of its own, two cards side by side in a page that sizes its parts, two
 /// bars of buttons against opposite edges - and the fonts they keep in step
-/// with the text size.
+/// with the text size. And a grid whose columns fill it, which has to share
+/// its width out by their weights however it came to that width.
 /// </summary>
 public sealed class LayoutPiecesTests
 {
@@ -563,6 +564,14 @@ public sealed class LayoutPiecesTests
         Assert.True(problems.Count == 0, "TextSize did not follow the text size:\n" + string.Join("\n", problems));
     }
 
+    [Fact]
+    public void AGridSharesItsWidthByItsWeightsHoweverItGrew()
+    {
+        var problems = StaThread.Run(CheckGridWeights, TimeSpan.FromMinutes(1), () => _now);
+
+        Assert.True(problems.Count == 0, "The grid did not share out its width:\n" + string.Join("\n", problems));
+    }
+
     /// <summary>
     /// A page built the way Race Day's tabs are: field grids in separate
     /// cards sharing one caption column, a hint that says one of two
@@ -877,7 +886,7 @@ public sealed class LayoutPiecesTests
                     problems.Add($"{_now}: \"Working on:\" is not centred on its row of one line ({workingCaption.Top}-{workingCaption.Bottom} beside {row.Top}-{row.Bottom})");
                 }
 
-                var firstLineBottom = notes.Top + 4 + notes.Font.Height;
+                var firstLineBottom = notes.Top + 4 + Pieces.LineHeight(notes.Font);
 
                 if (Middle(notesCaption) < notes.Top || Middle(notesCaption) > firstLineBottom)
                 {
@@ -955,9 +964,9 @@ public sealed class LayoutPiecesTests
                 problems.Add($"{_now}: the hint is still in {hint.Font.Size}pt - the small face is {AppTheme.SmallFont.Size}pt now");
             }
 
-            if (status.MinimumSize.Height != 2 * AppTheme.BoldFont.Height)
+            if (status.MinimumSize.Height != 2 * Pieces.LineHeight(AppTheme.BoldFont))
             {
-                problems.Add($"{_now}: the status keeps {status.MinimumSize.Height}px - two lines of the bold face are {2 * AppTheme.BoldFont.Height}px now");
+                problems.Add($"{_now}: the status keeps {status.MinimumSize.Height}px - two lines of the bold face are {2 * Pieces.LineHeight(AppTheme.BoldFont)}px now");
             }
 
             if (kept != 2)
@@ -968,6 +977,126 @@ public sealed class LayoutPiecesTests
         finally
         {
             AppTheme.SetFontScale(1f);
+        }
+
+        return problems;
+    }
+
+    /// <summary>
+    /// Lap Beeps' grid: five columns filling it, the last with a blank
+    /// heading and so a minimum of next to nothing. Built too narrow for
+    /// its headings, so every column starts at its minimum, then widened,
+    /// narrowed, narrowed until the widest heading is more than its column's
+    /// share, and widened again. At each width the columns have to fill the
+    /// grid without running past its edge, none narrower than its heading,
+    /// and those not held at their heading's width sharing the rest by
+    /// their weights. Growing from its minimums, the blank one took most of
+    /// the width and the rest were left bunched at the left (layout
+    /// pictures, 29 Sep) - see Pieces.KeepFillWeights.
+    /// </summary>
+    private static List<string> CheckGridWeights()
+    {
+        _now = "a grid filling its width";
+
+        var problems = new List<string>();
+
+        void Threw(object? sender, ThreadExceptionEventArgs e) =>
+            problems.Add($"{_now}: {e.Exception.GetType().Name}: {e.Exception.Message}");
+
+        Application.ThreadException += Threw;
+
+        try
+        {
+            AppTheme.SetFontScale(1f);
+
+            using var window = new QuietWindow();
+
+            var grid = new DataGridView
+            {
+                Bounds = new Rectangle(0, 0, 120, 300),
+                RowHeadersVisible = false,
+                AllowUserToAddRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            };
+
+            grid.Columns.AddRange(
+                new DataGridViewTextBoxColumn { HeaderText = "Driver", FillWeight = 90 },
+                new DataGridViewTextBoxColumn { HeaderText = "Transponder", FillWeight = 60 },
+                new DataGridViewTextBoxColumn { HeaderText = "Class", FillWeight = 60 },
+                new DataGridViewTextBoxColumn { HeaderText = "Cue", FillWeight = 70 },
+                new DataGridViewTextBoxColumn { HeaderText = "", FillWeight = 40 });
+
+            // The weights it was built with - the ones set on the grid are
+            // made to allow for the headings where a share is short of one.
+            var columns = grid.Columns.Cast<DataGridViewColumn>().ToList();
+            var built = columns.Select(column => column.FillWeight).ToList();
+
+            window.Size = new Size(1700, 400);
+            window.Controls.Add(grid);
+
+            Pieces.KeepHeadingsWhole(grid);
+
+            window.Show();
+            StaThread.Settle();
+
+            // Narrow enough that Transponder's heading is more than its
+            // share, with room over the headings for the others to share.
+            var narrow = columns.Sum(column => column.MinimumWidth) + 60;
+
+            foreach (var width in new[] { 1600, 700, narrow, 1600 })
+            {
+                _now = $"a grid filling its width, {width}px wide";
+
+                grid.Width = width;
+                StaThread.Settle();
+
+                var widths = string.Join(", ", columns.Select(column => column.Width));
+
+                if (grid.Controls.OfType<HScrollBar>().Any(bar => bar.Visible))
+                {
+                    problems.Add($"{_now}: the columns run past the grid's edge ({widths})");
+                }
+
+                // Held at its heading's width, give or take a pixel of rounding.
+                bool Held(DataGridViewColumn column) => column.Width <= column.MinimumWidth + 1;
+
+                var sharing = columns.Where(column => !Held(column)).ToList();
+                var room = sharing.Sum(column => column.Width);
+                var weights = sharing.Sum(column => built[column.Index]);
+
+                foreach (var column in columns)
+                {
+                    var name = column.HeaderText.Length == 0 ? "the blank-headed column" : column.HeaderText;
+
+                    var share = room * built[column.Index] / weights;
+
+                    if (column.Width < column.MinimumWidth)
+                    {
+                        problems.Add($"{_now}: {name} is {column.Width}px, narrower than its heading's {column.MinimumWidth}px ({widths})");
+                    }
+                    else if (Held(column))
+                    {
+                        // Only a heading wider than the column's share holds it.
+                        if (share > column.MinimumWidth + 2)
+                        {
+                            problems.Add($"{_now}: {name} is held at its heading's {column.MinimumWidth}px - its weight's share "
+                                       + $"would be {share:0}px ({widths})");
+                        }
+                    }
+                    else
+                    {
+                        if (Math.Abs(column.Width - share) > 2)
+                        {
+                            problems.Add($"{_now}: {name} is {column.Width}px - its weight's share of the {room}px the columns "
+                                       + $"not held at their headings have is {share:0}px ({widths})");
+                        }
+                    }
+                }
+            }
+        }
+        finally
+        {
+            Application.ThreadException -= Threw;
         }
 
         return problems;

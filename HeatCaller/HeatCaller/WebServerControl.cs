@@ -31,8 +31,32 @@ public sealed class WebServerControl : UserControl
     // The relay's one line on this page. It is a shortcut to the Online
     // page, never the only door to it - somebody who never opens Phone &
     // Web must still be able to find the relay settings.
-    private readonly Label _lblRelay = new();
+    //
+    // As tall as the longest thing it says (SteadyLabel), so the button
+    // under it does not hop as the line is rewritten every two seconds.
+    private readonly SteadyLabel _lblRelay = new();
     private readonly System.Windows.Forms.Timer _relayTick = new();
+
+    /// <summary>What the relay line says with publishing off, and on but not set up.</summary>
+    private const string RelayOffText = "Online publishing is off. These pages are reachable only from this Wi-Fi, "
+                                      + "and results stop being visible when this laptop closes.";
+
+    private const string RelayNotSetUpText = "Online publishing is on but not set up - it needs an address, a club id and a token.";
+
+    /// <summary>
+    /// The relay line with the counts at their longest, for its height - see
+    /// _lblRelay. An error from the relay can run longer, and the line grows
+    /// for it.
+    /// </summary>
+    private const string LongestRelayStatus =
+        "Relay unreachable.  Last published 99 minutes ago.  999 waiting to go.  999 could not be published.";
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The PIN boxes and the address boxes at the normal text size.</summary>
+    private const int PinBoxWidth = 130;
+    private const int UrlBoxWidth = 420;
 
     public WebServerControl(
         WebServerService server,
@@ -50,10 +74,14 @@ public sealed class WebServerControl : UserControl
         _openOnline = openOnline;
 
         Dock = DockStyle.Fill;
-        // A floor rather than a promise: both groups size themselves from
-        // what is in them, so the page is as tall as its contents.
-        MinimumSize = new Size(820, 700);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize: the 820x700 floor was honoured over the size the
+        // page was given, and a small window lost the bottom of the page. A
+        // short window scrolls the page instead (PageStack).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         UpdateUi();
@@ -74,6 +102,20 @@ public sealed class WebServerControl : UserControl
         // No auto-start here any more - see AutoStartIfConfigured.
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
     /// <summary>
     /// Starts the server if the settings say to. Called by the host once
     /// its window has been shown.
@@ -91,72 +133,45 @@ public sealed class WebServerControl : UserControl
         }
     }
 
-    private const int Inset = 12;
-
     /// <summary>
-    /// Builds the page top to bottom, each block measured from the one
-    /// above it.
+    /// The intro, then three cards down the page. Server: the port and the
+    /// two PINs, with Show PINs under them, what the PINs are for, starting
+    /// with the app, and Start and Stop with what the server is doing beside
+    /// them. Race-day manager: its PIN - in the same caption column as the
+    /// server's, so the three PIN boxes line up down the page - its one
+    /// switch, what it is, and what it last did. Then the five addresses,
+    /// each with its Copy and QR code buttons. Under the cards the column
+    /// pickers and Open Big Screen, the note on the crowd-screen look, and
+    /// the relay's line with the way to the Club Website page. On the layout
+    /// pieces (LayoutPieces.cs), so nothing is placed by hand; the page
+    /// scrolls when it is taller than the window (PageStack).
     ///
-    /// Every position here used to be a literal - the Server group 150
-    /// tall, the status line at 224, the URL group at 254, the column
-    /// buttons at 466 - which is why there was nowhere to put a fourth URL
-    /// row without moving four other numbers, and why the check-in page
-    /// ended up documented in a hint instead of listed with the others.
-    /// The groups now size themselves from their contents and the page
-    /// flows, so adding a row costs one row.
+    /// It used to be placed in pixels down a 780px column, each block
+    /// measured from the one above it: the group boxes sized to what they
+    /// held once, at build, Start and Stop pinned to the Server group's
+    /// right-hand edge, the check-in PIN's caption worked out backwards from
+    /// the remote's box, the address boxes clamped between 200px and 420px
+    /// with their buttons worked out beside them - and an 820x700 floor the
+    /// page kept however small its window. Every font was set once, so
+    /// nothing followed the text size.
     /// </summary>
     private void BuildLayout()
     {
-        const int pageWidth = 780;
-
         var lblIntro = new Label
         {
             Text = "Serves five pages to any device on the same Wi-Fi: live results (also usable as an OBS browser "
                  + "source), a phone remote for throwing flags at the track, a self check-in page for drivers, a "
                  + "race-day manager for running entries, the program and results from a phone, and a "
                  + "transparent overlay for streaming.",
-            Location = new Point(Inset, Inset),
             AutoSize = true,
-            MaximumSize = new Size(pageWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
         };
 
-        var grpSettings = new GroupBox
-        {
-            Text = "Server",
-            Location = new Point(Inset, UiLayout.Below(lblIntro, UiLayout.RowGap)),
-            Width = pageWidth,
-            Font = AppTheme.BodyFont,
-        };
+        var server = BuildServerCard(out var serverGrid);
+        var manager = BuildManagerCard(out var managerGrid);
+        var urls = BuildUrlCard();
 
-        BuildServerGroup(grpSettings);
-
-        _lblStatus.Location = new Point(Inset, UiLayout.Below(grpSettings, UiLayout.RowGap));
-        _lblStatus.AutoSize = true;
-        _lblStatus.Font = AppTheme.BoldFont;
-
-        var grpManager = new GroupBox
-        {
-            Text = "Race-Day Manager (phone)",
-            Location = new Point(Inset, UiLayout.Below(_lblStatus, UiLayout.RowGap)),
-            Width = pageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildManagerGroup(grpManager);
-
-        var grpUrls = new GroupBox
-        {
-            Text = "Open these on your phone, tablet, or in OBS",
-            Location = new Point(Inset, UiLayout.Below(grpManager, UiLayout.RowGap)),
-            Width = pageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildUrlGroup(grpUrls);
-
-        var bottom = UiLayout.Below(grpUrls, UiLayout.RowGap);
+        // --- The screens' columns, and the Big Screen ---
 
         var btnWebColumns = new Button { Text = "Choose Web Columns..." };
         btnWebColumns.Click += (_, _) =>
@@ -206,10 +221,6 @@ public sealed class WebServerControl : UserControl
         var btnOpenBigScreen = new Button { Text = "Open Big Screen" };
         btnOpenBigScreen.Click += (_, _) => _openBigScreen();
 
-        var buttonsBottom = UiLayout.FlowButtons(
-            Inset, bottom, Inset + pageWidth,
-            btnWebColumns, btnBigScreenColumns, btnOpenBigScreen);
-
         // Where the old "Use the Synthwave palette on the Big Screen" box
         // was. The Big Screen's colours are the crowd-screen look now, one
         // choice shared with these pages and the online ones, so a second
@@ -217,125 +228,77 @@ public sealed class WebServerControl : UserControl
         var lblLooksNote = new Label
         {
             Text = "The Big Screen and these pages use the crowd-screen look set on Themes \u2192 Looks.",
-            Location = new Point(Inset, buttonsBottom + UiLayout.RowGap),
             AutoSize = true,
-            MaximumSize = new Size(pageWidth, 0),
-            Font = AppTheme.BodyFont,
         };
 
         var lblColumnsHint = new Label
         {
             Text = "Column changes apply immediately on the web pages, and the next time the Big Screen is opened.",
-            Location = new Point(Inset, UiLayout.Below(lblLooksNote, UiLayout.HintGap)),
             AutoSize = true,
-            MaximumSize = new Size(pageWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        _lblRelay.Location = new Point(Inset, UiLayout.Below(lblColumnsHint, UiLayout.SectionGap));
-        _lblRelay.AutoSize = true;
-        _lblRelay.MaximumSize = new Size(pageWidth, 0);
-        _lblRelay.Font = AppTheme.BodyFont;
+        _textSize.Wear(lblColumnsHint, () => AppTheme.SmallFont);
 
-        var btnOnline = new Button { Text = "Club Website Settings...", Font = AppTheme.BodyFont };
-        btnOnline.Size = new Size(UiLayout.WidthFor(btnOnline), UiLayout.ButtonHeight);
-        btnOnline.Location = new Point(Inset, UiLayout.Below(_lblRelay, UiLayout.HintGap));
+        // --- The relay ---
+
+        _lblRelay.Wordings = new[] { RelayOffText, RelayNotSetUpText, LongestRelayStatus };
+
+        var btnOnline = new Button { Text = "Club Website Settings..." };
         btnOnline.Click += (_, _) => _openOnline();
 
-        Controls.Add(_lblRelay);
-        Controls.Add(btnOnline);
-        Controls.Add(btnOpenBigScreen);
-        Controls.Add(lblLooksNote);
-        Controls.Add(btnWebColumns);
-        Controls.Add(btnBigScreenColumns);
-        Controls.Add(lblColumnsHint);
-        Controls.Add(lblIntro);
-        Controls.Add(grpSettings);
-        Controls.Add(_lblStatus);
-        Controls.Add(grpManager);
-        Controls.Add(grpUrls);
+        // --- The page ---
+
+        var page = new PageStack();
+
+        page.Add(lblIntro);
+        page.Add(server);
+        page.Add(manager);
+        page.Add(urls);
+        page.Add(new ButtonBar().With(btnWebColumns, btnBigScreenColumns, btnOpenBigScreen), gapBelow: UiLayout.RowGap);
+        page.Add(lblLooksNote, gapBelow: UiLayout.HintGap);
+        page.Add(lblColumnsHint);
+        page.Add(_lblRelay, gapBelow: UiLayout.HintGap);
+        page.Add(new ButtonBar().With(btnOnline), gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Once the fields are on the page and wear its face - what they are
+        // measured in.
+        //
+        // One caption column for the server's PINs and the manager's, so
+        // the three PIN boxes line up down the page as they are read.
+        _textSize.Keep(SizeFields);
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { serverGrid, managerGrid }));
     }
 
-    private void BuildServerGroup(GroupBox group)
+    /// <summary>
+    /// The port and the remote and check-in PINs, one caption column, with
+    /// Show PINs under them; what the PINs are for; starting with the app;
+    /// and Start and Stop with the status line at the end of their line - or
+    /// on a line of its own when it no longer fits there (FieldRow).
+    /// </summary>
+    private Section BuildServerCard(out FieldGrid grid)
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        var lblPort = new Label { Text = "Port:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _numPort.Font = AppTheme.BodyFont;
-        _numPort.Width = UiLayout.NumericWidth + 20;
         _numPort.Minimum = 1024;
         _numPort.Maximum = 65535;
         _numPort.Value = Math.Clamp(_settings.WebServerPort, 1024, 65535);
 
-        lblPort.Location = new Point(Inset, UiLayout.CentreOn(lblPort, y, _numPort.Height));
-        _numPort.Location = new Point(UiLayout.After(lblPort, AppTheme.BodyFont), y);
-
-        var lblPin = new Label { Text = "Remote PIN:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _txtPin.Font = AppTheme.BodyFont;
-        _txtPin.Width = 130;
         _txtPin.Text = _settings.WebServerPin;
         _txtPin.PlaceholderText = "4+ digits";
         _txtPin.UseSystemPasswordChar = true;
 
-        lblPin.Location = new Point(
-            _numPort.Right + UiLayout.SectionGap,
-            UiLayout.CentreOn(lblPin, y, _txtPin.Height));
-
-        _txtPin.Location = new Point(UiLayout.After(lblPin, AppTheme.BodyFont), y);
-
-        _btnStart.Text = "Start Server";
-        _btnStart.Font = AppTheme.BodyFont;
-        _btnStart.Click += (_, _) => StartServer(silent: false);
-
-        _btnStop.Text = "Stop Server";
-        _btnStop.Font = AppTheme.BodyFont;
-        _btnStop.Click += (_, _) =>
-        {
-            _server.Stop();
-            UpdateUi();
-        };
-
-        _btnStart.Size = new Size(UiLayout.WidthFor(_btnStart), UiLayout.ButtonHeight);
-        _btnStop.Size = new Size(UiLayout.WidthFor(_btnStop), UiLayout.ButtonHeight);
-
-        // Pinned to the group's right edge, so the row does not depend on
-        // how wide the port and PIN fields ended up being.
-        _btnStop.Location = new Point(group.Width - Inset - _btnStop.Width, y);
-        _btnStart.Location = new Point(_btnStop.Left - UiLayout.ButtonGap - _btnStart.Width, y);
-
-        y = UiLayout.Below(_btnStart, UiLayout.RowGap);
-
-        // Its own row, under the remote's: the Start and Stop buttons own
-        // the right-hand end of the row above, and there is not room for a
-        // second caption and box between them and the remote PIN.
-        var lblCheckInPin = new Label { Text = "Check-in PIN (optional):", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _txtCheckInPin.Font = AppTheme.BodyFont;
-        _txtCheckInPin.Width = _txtPin.Width;
+        // A row of its own, under the remote's. Its caption is the longest,
+        // and sets the caption column, so the boxes line up under each
+        // other however long it turns out to be.
         _txtCheckInPin.Text = _settings.WebServerCheckInPin;
         _txtCheckInPin.PlaceholderText = "blank = open";
         _txtCheckInPin.UseSystemPasswordChar = true;
-
-        // The box lines up under the remote's, and its caption ends where
-        // the box begins - however long the caption turns out to be.
-        _txtCheckInPin.Location = new Point(_txtPin.Left, y);
-
-        lblCheckInPin.Location = new Point(
-            Math.Max(Inset, _txtPin.Left - UiLayout.LabelGap - TextRenderer.MeasureText(lblCheckInPin.Text, AppTheme.BodyFont).Width),
-            UiLayout.CentreOn(lblCheckInPin, y, _txtCheckInPin.Height));
 
         // Hidden by default: this page is the one on the laptop screen at
         // the desk, where drivers queue to check in.
         _chkShowPins.Text = "Show PINs";
         _chkShowPins.AutoSize = true;
-        _chkShowPins.Font = AppTheme.BodyFont;
-        _chkShowPins.Location = new Point(
-            _txtCheckInPin.Right + UiLayout.SectionGap,
-            UiLayout.CentreOn(_chkShowPins, y, _txtCheckInPin.Height));
         _chkShowPins.CheckedChanged += (_, _) =>
         {
             _txtPin.UseSystemPasswordChar = !_chkShowPins.Checked;
@@ -343,7 +306,12 @@ public sealed class WebServerControl : UserControl
             _txtManagerPin.UseSystemPasswordChar = !_chkShowPins.Checked;
         };
 
-        y = UiLayout.Below(_txtCheckInPin, UiLayout.RowGap);
+        grid = new FieldGrid();
+
+        grid.AddRow("Port:", _numPort);
+        grid.AddRow("Remote PIN:", _txtPin);
+        grid.AddRow("Check-in PIN (optional):", _txtCheckInPin);
+        grid.AddField(_chkShowPins);
 
         var lblPinHint = new Label
         {
@@ -353,21 +321,16 @@ public sealed class WebServerControl : UserControl
                  + "results are always open to view. Ten wrong PINs from one phone make it wait five minutes. "
                  + "The port and both PINs can only be changed while the server is stopped - they are read as it "
                  + "starts, so a change made now would not be the one the phones were using.",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        y = UiLayout.Below(lblPinHint, UiLayout.RowGap);
+        _textSize.Wear(lblPinHint, () => AppTheme.SmallFont);
 
         var chkAutoStart = new CheckBox
         {
             Text = "Start the server automatically when the app opens",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            Font = AppTheme.BodyFont,
             Checked = _settings.WebServerAutoStart,
         };
 
@@ -377,44 +340,57 @@ public sealed class WebServerControl : UserControl
             _settings.Save();
         };
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblPort, _numPort, lblPin, _txtPin, _btnStart, _btnStop,
-            lblCheckInPin, _txtCheckInPin, _chkShowPins, lblPinHint, chkAutoStart,
-        });
+        _btnStart.Text = "Start Server";
+        _btnStart.Click += (_, _) => StartServer(silent: false);
 
-        group.Height = UiLayout.Below(chkAutoStart, Inset);
+        _btnStop.Text = "Stop Server";
+        _btnStop.Click += (_, _) =>
+        {
+            _server.Stop();
+            UpdateUi();
+        };
+
+        // At the end of the buttons' line, cut short with "..." rather than
+        // wrapped - or on a line of its own when it no longer fits there
+        // (FieldRow).
+        _lblStatus.AutoSize = false;
+        _lblStatus.AutoEllipsis = true;
+        _textSize.Wear(_lblStatus, () => AppTheme.BoldFont);
+
+        var run = new FieldRow();
+
+        run.Add(null, new ButtonBar().With(_btnStart, _btnStop));
+        run.AddLast(null, _lblStatus, () => _lblStatus.GetPreferredSize(Size.Empty).Width);
+
+        var card = new Section("Server");
+
+        card.Add(grid);
+        card.Add(lblPinHint);
+        card.Add(chkAutoStart, stretch: false);
+        card.Add(run, gapBelow: 0);
+
+        return card;
     }
 
     /// <summary>
     /// The race-day manager's own PIN and its one policy switch. Kept apart
-    /// from the Server group above: it guards a whole phone page - entries,
+    /// from the Server card above: it guards a whole phone page - entries,
     /// programme, race control, results - not just a couple of fields, and
     /// it is new enough that most clubs will never open it, so it earns its
-    /// own explanation rather than a third row wedged into the PIN group.
+    /// own explanation rather than a third row wedged into the server's.
     /// </summary>
-    private void BuildManagerGroup(GroupBox group)
+    private Section BuildManagerCard(out FieldGrid grid)
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        var lblManagerPin = new Label { Text = "Manager PIN:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _txtManagerPin.Font = AppTheme.BodyFont;
-        _txtManagerPin.Width = _txtPin.Width;
         _txtManagerPin.Text = _settings.ManagerPin;
         _txtManagerPin.PlaceholderText = "6+ digits";
         _txtManagerPin.UseSystemPasswordChar = true;
 
-        lblManagerPin.Location = new Point(Inset, UiLayout.CentreOn(lblManagerPin, y, _txtManagerPin.Height));
-        _txtManagerPin.Location = new Point(UiLayout.After(lblManagerPin, AppTheme.BodyFont), y);
+        grid = new FieldGrid();
 
-        y = UiLayout.Below(_txtManagerPin, UiLayout.RowGap);
+        grid.AddRow("Manager PIN:", _txtManagerPin);
 
         _chkAllowResultEditing.Text = "Allow corrections to saved results";
         _chkAllowResultEditing.AutoSize = true;
-        _chkAllowResultEditing.Font = AppTheme.BodyFont;
-        _chkAllowResultEditing.Location = new Point(Inset, y);
         _chkAllowResultEditing.Checked = _settings.AllowResultEditing;
 
         _chkAllowResultEditing.CheckedChanged += (_, _) =>
@@ -422,8 +398,6 @@ public sealed class WebServerControl : UserControl
             _settings.AllowResultEditing = _chkAllowResultEditing.Checked;
             _settings.Save();
         };
-
-        y = UiLayout.Below(_chkAllowResultEditing, UiLayout.RowGap);
 
         var lblManagerHint = new Label
         {
@@ -433,84 +407,60 @@ public sealed class WebServerControl : UserControl
                  + "is six or more digits, so give it out only to people you'd trust with the laptop itself. Ten "
                  + "wrong PINs from one phone make it wait five minutes, same as the other PINs above. Like "
                  + "those, this PIN can only be changed while the server is stopped.",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        y = UiLayout.Below(lblManagerHint, UiLayout.RowGap);
+        _textSize.Wear(lblManagerHint, () => AppTheme.SmallFont);
 
         _lblLastAction.Text = "Race-day manager - no changes yet this session.";
         _lblLastAction.AutoSize = true;
-        _lblLastAction.Location = new Point(Inset, y);
-        _lblLastAction.Font = AppTheme.SmallFont;
         _lblLastAction.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblLastAction, () => AppTheme.SmallFont);
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblManagerPin, _txtManagerPin, _chkAllowResultEditing, lblManagerHint, _lblLastAction,
-        });
+        var card = new Section("Race-day manager (phone)");
 
-        group.Height = UiLayout.Below(_lblLastAction, Inset);
+        card.Add(grid);
+        card.Add(_chkAllowResultEditing, stretch: false);
+        card.Add(lblManagerHint);
+        card.Add(_lblLastAction, gapBelow: 0);
+
+        return card;
     }
 
-    private void BuildUrlGroup(GroupBox group)
+    /// <summary>
+    /// The five addresses, their captions in one column, each box followed
+    /// by its Copy and QR code buttons - which go under the box when the
+    /// line is too narrow for them (FieldGrid.Inline) - and a note under
+    /// them.
+    /// </summary>
+    private Section BuildUrlCard()
     {
-        var inner = group.Width - Inset * 2;
+        var btnCopyResults = new Button { Text = "Copy" };
+        var btnQrResults = new Button { Text = "QR code" };
+        var btnCopyRemote = new Button { Text = "Copy" };
+        var btnQrRemote = new Button { Text = "QR code" };
+        var btnCopyCheckIn = new Button { Text = "Copy" };
+        var btnQrCheckIn = new Button { Text = "QR code" };
+        var btnCopyManage = new Button { Text = "Copy" };
+        var btnQrManage = new Button { Text = "QR code" };
+        var btnCopyOverlay = new Button { Text = "Copy" };
 
-        var lblResults = new Label { Text = "Live results:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblRemote = new Label { Text = "Phone remote:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblCheckIn = new Label { Text = "Driver check-in:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblManage = new Label { Text = "Race manager:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblOverlay = new Label { Text = "OBS overlay:", AutoSize = true, Font = AppTheme.BodyFont };
+        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl })
+        {
+            box.ReadOnly = true;
+        }
 
-        // One column for every caption, taken from the widest - which is
-        // what makes the five fields line up rather than each starting
-        // wherever its own label happened to end.
-        var captionWidth = new[] { lblResults.Text, lblRemote.Text, lblCheckIn.Text, lblManage.Text, lblOverlay.Text }
-            .Max(t => TextRenderer.MeasureText(t, AppTheme.BodyFont).Width);
+        // One column for every caption, as wide as the widest - which is
+        // what makes the five boxes line up rather than each starting
+        // wherever its own caption happened to end.
+        var grid = new FieldGrid();
 
-        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
-
-        var btnCopyResults = new Button { Text = "Copy", Font = AppTheme.BodyFont };
-        var btnQrResults = new Button { Text = "QR code", Font = AppTheme.BodyFont };
-        var btnCopyRemote = new Button { Text = "Copy", Font = AppTheme.BodyFont };
-        var btnQrRemote = new Button { Text = "QR code", Font = AppTheme.BodyFont };
-        var btnCopyCheckIn = new Button { Text = "Copy", Font = AppTheme.BodyFont };
-        var btnQrCheckIn = new Button { Text = "QR code", Font = AppTheme.BodyFont };
-        var btnCopyManage = new Button { Text = "Copy", Font = AppTheme.BodyFont };
-        var btnQrManage = new Button { Text = "QR code", Font = AppTheme.BodyFont };
-        var btnCopyOverlay = new Button { Text = "Copy", Font = AppTheme.BodyFont };
-
-        var copyWidth = Math.Max(90, TextRenderer.MeasureText("Copy", AppTheme.BoldFont).Width + 30);
-        var qrWidth = Math.Max(100, TextRenderer.MeasureText("QR code", AppTheme.BoldFont).Width + 30);
-
-        var fieldWidth = Math.Clamp(
-            inner - (fieldLeft - Inset) - copyWidth - qrWidth - UiLayout.ButtonGap * 2,
-            200,
-            420);
-
-        var copyLeft = fieldLeft + fieldWidth + UiLayout.ButtonGap;
-        var qrLeft = copyLeft + copyWidth + UiLayout.ButtonGap;
-
-        var y = UiLayout.InsideGroup(group);
-
-        y = UrlRow(group, lblResults, _txtResultsUrl, btnCopyResults, btnQrResults,
-            fieldLeft, fieldWidth, copyLeft, copyWidth, qrLeft, qrWidth, y);
-
-        y = UrlRow(group, lblRemote, _txtRemoteUrl, btnCopyRemote, btnQrRemote,
-            fieldLeft, fieldWidth, copyLeft, copyWidth, qrLeft, qrWidth, y);
-
-        y = UrlRow(group, lblCheckIn, _txtCheckInUrl, btnCopyCheckIn, btnQrCheckIn,
-            fieldLeft, fieldWidth, copyLeft, copyWidth, qrLeft, qrWidth, y);
-
-        y = UrlRow(group, lblManage, _txtManageUrl, btnCopyManage, btnQrManage,
-            fieldLeft, fieldWidth, copyLeft, copyWidth, qrLeft, qrWidth, y);
-
-        y = UrlRow(group, lblOverlay, _txtOverlayUrl, btnCopyOverlay, null,
-            fieldLeft, fieldWidth, copyLeft, copyWidth, qrLeft, qrWidth, y);
+        grid.AddRow("Live results:", FieldGrid.Inline(_txtResultsUrl, btnCopyResults, btnQrResults));
+        grid.AddRow("Phone remote:", FieldGrid.Inline(_txtRemoteUrl, btnCopyRemote, btnQrRemote));
+        grid.AddRow("Driver check-in:", FieldGrid.Inline(_txtCheckInUrl, btnCopyCheckIn, btnQrCheckIn));
+        grid.AddRow("Race manager:", FieldGrid.Inline(_txtManageUrl, btnCopyManage, btnQrManage));
+        grid.AddRow("OBS overlay:", FieldGrid.Inline(_txtOverlayUrl, btnCopyOverlay));
 
         btnCopyResults.Click += (_, _) => CopyIfPresent(_txtResultsUrl.Text);
         btnCopyRemote.Click += (_, _) => CopyIfPresent(_txtRemoteUrl.Text);
@@ -535,45 +485,60 @@ public sealed class WebServerControl : UserControl
             Text = "All devices must be on the same Wi-Fi. The overlay URL is the same results page with a "
                  + "transparent background and no sponsor slides, so it composites cleanly over video in an OBS "
                  + "Browser source. The check-in page has its own wall poster on the Entries page.",
-            Location = new Point(Inset, y + UiLayout.HintGap),
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        group.Controls.Add(lblUrlHint);
+        _textSize.Wear(lblUrlHint, () => AppTheme.SmallFont);
 
-        group.Height = UiLayout.Below(lblUrlHint, Inset);
+        var card = new Section("Open these on your phone, tablet, or in OBS");
+
+        card.Add(grid);
+        card.Add(lblUrlHint, gapBelow: 0);
+
+        return card;
     }
 
-    /// <summary>One caption, one read-only address, and its buttons. Returns the y of the row below.</summary>
-    private static int UrlRow(
-        GroupBox group, Label caption, TextBox field, Button copy, Button? qr,
-        int fieldLeft, int fieldWidth, int copyLeft, int copyWidth, int qrLeft, int qrWidth, int y)
+    /// <summary>
+    /// The fields' widths at the text size in use. The port box is as wide
+    /// as its five digits and its arrows need, and never narrower than a
+    /// number box was at the normal text size; the PIN boxes and the address
+    /// boxes are the width they were at the normal text size, at this size -
+    /// an address is a few dozen characters, and a box across the page for
+    /// it would push its buttons out to the far edge.
+    ///
+    /// Run again when the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
     {
-        field.Font = AppTheme.BodyFont;
-        field.Width = fieldWidth;
-        field.ReadOnly = true;
-        field.Location = new Point(fieldLeft, y);
+        var digits = new string('0', ((int)_numPort.Maximum).ToString().Length);
+        var port = Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(digits, Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
 
-        caption.Location = new Point(Inset, UiLayout.CentreOn(caption, y, field.Height));
+        var pin = UiLayout.AtTextSize(PinBoxWidth);
+        var url = UiLayout.AtTextSize(UrlBoxWidth);
 
-        copy.Size = new Size(copyWidth, UiLayout.ButtonHeight);
-        copy.Location = new Point(copyLeft, y - 3);
+        Fit(_numPort, port);
 
-        group.Controls.Add(caption);
-        group.Controls.Add(field);
-        group.Controls.Add(copy);
-
-        if (qr is not null)
+        foreach (var box in new[] { _txtPin, _txtCheckInPin, _txtManagerPin })
         {
-            qr.Size = new Size(qrWidth, UiLayout.ButtonHeight);
-            qr.Location = new Point(qrLeft, y - 3);
-            group.Controls.Add(qr);
+            Fit(box, pin);
         }
 
-        return y + UiLayout.ButtonHeight + UiLayout.ButtonGap;
+        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl })
+        {
+            Fit(box, url);
+        }
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
     }
 
     private void CopyIfPresent(string text)
@@ -724,15 +689,14 @@ public sealed class WebServerControl : UserControl
 
         if (!status.Enabled)
         {
-            _lblRelay.Text = "Online publishing is off. These pages are reachable only from this Wi-Fi, "
-                           + "and results stop being visible when this laptop closes.";
+            _lblRelay.Text = RelayOffText;
             _lblRelay.ForeColor = AppTheme.TextMuted;
             return;
         }
 
         if (!status.Configured)
         {
-            _lblRelay.Text = "Online publishing is on but not set up - it needs an address, a club id and a token.";
+            _lblRelay.Text = RelayNotSetUpText;
             _lblRelay.ForeColor = AppTheme.Primary;
             return;
         }

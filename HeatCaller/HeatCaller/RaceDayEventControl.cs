@@ -565,7 +565,7 @@ public sealed class RaceDayEventControl : UserControl
         Fit(_cmbVenue, Math.Max(wide, Pieces.PickerWidth(_cmbVenue, ref _venueWidth)));
         Fit(_cmbLayout, Math.Max(wide, Pieces.PickerWidth(_cmbLayout, ref _layoutWidth)));
         Fit(_cmbChampionship, Math.Max(wide, Pieces.PickerWidth(_cmbChampionship, ref _championshipWidth)));
-        Fit(_txtNotes, wide, _txtNotes.Font.Height * 3 + UiLayout.HintGap * 2);
+        Fit(_txtNotes, wide, Pieces.LineHeight(_txtNotes.Font) * 3 + UiLayout.HintGap * 2);
         Fit(_numQualRounds, number);
         Fit(_lstClasses, wide, _lstClasses.Font.Height * 5 + 12);
         Fit(_numHeatSize, number);

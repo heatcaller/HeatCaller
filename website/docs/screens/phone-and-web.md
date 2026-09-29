@@ -14,14 +14,14 @@ These pages work only on the venue's own network, with no internet needed. To pu
 
 ## Start the server
 
-1. Open the **Local Screens** page.
+1. Open the **Local Screens** page. The port and the first two PINs are on the **Server** card, and the Manager PIN is on the **Race-day manager (phone)** card under it.
 2. In **Port:**, leave the default (`8080`) unless something else on the laptop already uses it. Any port from 1024 to 65535 works.
 3. In **Remote PIN:**, enter a PIN of four or more digits. The race remote won't work without one.
 4. In **Check-in PIN (optional):**, enter a different PIN if you want to restrict the check-in page, or leave it blank to leave check-in open.
 5. In **Manager PIN:**, enter a PIN of six or more digits if you want the race-day manager reachable from a phone. Leave it blank to leave the manager closed - unlike the check-in PIN, a blank Manager PIN does not open the manager to anyone.
-6. Click **Start Server**.
+6. Click **Start Server**, at the foot of the **Server** card.
 
-The status line changes from "Stopped" to "Running on port *n*", and the five addresses under "Open these on your phone, tablet, or in OBS" fill in.
+The status beside the buttons changes from "Stopped" to "Running on port *n*", and the five addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
 
 While the server is running, you can't change the port or the PINs. Click **Stop Server**, make the change, and start it again.
 
@@ -35,7 +35,7 @@ To start the server every time HeatCaller opens, tick **Start the server automat
 | **Check-in PIN (optional):** | The check-in page, including the list of drivers. | Optional. Blank means anyone on the Wi-Fi can use check-in. |
 | **Manager PIN:** | The race-day manager, on this Wi-Fi and, if turned on, through the relay too. | Required for the manager. Six or more digits, numbers only. With no PIN, or a shorter one, the manager refuses every request - unlike the check-in PIN, it does not open up to anyone. |
 
-All three PINs are hidden. Tick **Show PINs** to see them. They're hidden by default because this page may be on the laptop screen while drivers queue at the desk.
+All three PINs are hidden. Tick **Show PINs**, under the check-in PIN, to see them. They're hidden by default because this page may be on the laptop screen while drivers queue at the desk.
 
 Never make the check-in PIN the same as the remote PIN or the Manager PIN. The check-in PIN is meant to go on the wall for drivers, and anyone who reads it could throw flags (if it matches the remote PIN) or edit entries, the programme and saved results (if it matches the Manager PIN).
 

@@ -47,7 +47,7 @@ Most fixed lines cost nothing in the first place: a line with no driver's name i
 
 No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice Settings** and the **Rivalries** phrasing box are read-only, and an announcer style applied from **Themes** brings its sounds, tuning and look but not its wording.
 
-To write your own, choose your own ElevenLabs key or the free Windows voice under **Speak With** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
+To write your own, choose your own ElevenLabs key or the free Windows voice under **Speak with** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
 
 ### Do I need internet at the track?
 
@@ -106,7 +106,7 @@ No. The next time HeatCaller starts, it asks **Restore the unfinished race?**. T
 Check these in order:
 
 1. The mute icon at the bottom of the sidebar is red, or hovering it shows **Unmute Announcer**. If so, the announcer is muted. Click it.
-2. The Windows voice is chosen under **Speak With** on **Voice Announcements → Voice Settings**, but the PC has no Windows voice it can use.
+2. The Windows voice is chosen under **Speak with** on **Voice Announcements → Voice Settings**, but the PC has no Windows voice it can use.
 3. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Windows voice isn't standing in (its box under the ElevenLabs choice is unticked).
 4. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC with no Windows voice to stand in. On any PC that has one, this shows up as the whole night in the Windows voice rather than silence.
 

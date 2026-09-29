@@ -56,7 +56,7 @@ The icon is your club logo if you've set one on **Themes → Looks**. Otherwise 
 
 ### Looks and sharing links
 
-The pages use the crowd-screen look and the club logo you choose on **Themes → Looks** (see [Looks and the club logo](../screens/looks-and-logo.md)), and the welcome line from the **Look** group on the Club Website page (see [Look](setup.md#look)). The same look is used on the Big Screen and the Wi-Fi pages, and it can be one of the built-in looks or one you made. The colors are applied before the page is drawn, so there's no flash of the wrong colors.
+The pages use the crowd-screen look and the club logo you choose on **Themes → Looks** (see [Looks and the club logo](../screens/looks-and-logo.md)), and the welcome line from the **Look** card on the Club Website page (see [Look](setup.md#look)). The same look is used on the Big Screen and the Wi-Fi pages, and it can be one of the built-in looks or one you made. The colors are applied before the page is drawn, so there's no flash of the wrong colors.
 
 The logo sits in a block of its own beside the club's name, at the top of every page. If it would vanish on the page background, such as a black logo on a dark look, it's put on a plate.
 

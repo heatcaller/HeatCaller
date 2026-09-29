@@ -24,7 +24,7 @@ public sealed class AmbienceControl : UserControl
     private readonly RadioButton _rdoSourceBoth = new();
     private readonly RadioButton _rdoSourceSoundscape = new();
     private readonly RadioButton _rdoSourceMine = new();
-    private readonly Label _lblSource = new();
+    private readonly SteadyLabel _lblSource = new();
 
     /// <summary>Set while the radios are being brought into line with the store, so seeding them isn't read as a click.</summary>
     private bool _syncingSource;
@@ -49,12 +49,80 @@ public sealed class AmbienceControl : UserControl
     private readonly CheckBox _chkLapped = new();
     private readonly NumericUpDown _numFadeUp = new();
     private readonly NumericUpDown _numFadeDown = new();
-    private readonly Label _lblStatus = new();
-    private readonly Label _lblReactionsState = new();
+    private readonly SteadyLabel _lblStatus = new();
+    private readonly SteadyLabel _lblReactionsState = new();
     // Plain Panel plus a manual double-buffer style: Panel.DoubleBuffered
     // is protected, so it can't be set from an object initializer.
     private readonly Panel _monitor = new();
     private readonly System.Windows.Forms.Timer _monitorTimer = new() { Interval = 100 };
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The live monitor's height at the normal text size - what Monitor_Paint draws into.</summary>
+    private const int MonitorHeight = 78;
+
+    /// <summary>The fewest layers the list shows under its headings before the page scrolls instead.</summary>
+    private const int GridLeastRows = 5;
+
+    /// <summary>The most surge triggers along one line: two rows of five, or fewer to a line when the card is too narrow for five.</summary>
+    private const int TriggerColumns = 5;
+
+    /// <summary>
+    /// A check box's box and the gap after it, on top of its caption - the
+    /// room LayoutAudit counts for one that does not size itself. See
+    /// CheckBoxSize.
+    /// </summary>
+    private const int CheckBoxChrome = 26;
+
+    // What the line above the React switch says - see UpdateEnabledState. Both
+    // are measured for the room it keeps (SteadyLabel). A sentence of its own
+    // now it is the card's first line; it began with a dash when it carried
+    // on from the heading beside it.
+    private const string ReactionsNeedReact = "Turn on \"React to what happens in the race\" below to use these.";
+    private const string ReactionsNeedEnable = "Grayed out because \"Enable ambience\" at the top of this page is off.";
+
+    // What the line under the Play choice says - see RefreshSource. All of
+    // them are measured for the room it keeps (SteadyLabel).
+    private const string SoundscapeNothingPlaying =
+        "No soundscape beds are set up, so nothing is playing. Apply a soundscape with a crowd, or switch to "
+        + "My ambience.";
+
+    private const string SoundscapeOnly =
+        "Only the beds a soundscape supplied. Your own layers stay listed and keep their settings - they are "
+        + "just not playing.";
+
+    private const string MineNothingPlaying =
+        "You haven't added a layer of your own yet, so nothing is playing. Add one below, or switch to "
+        + "Soundscape ambience.";
+
+    private const string MineOnly =
+        "Only the layers you added. A soundscape's crowd beds stay listed, and applying another soundscape "
+        + "still replaces them - they are just not playing.";
+
+    private const string NothingSetUp = "Nothing is set up yet. Add a layer below, or apply a soundscape with a crowd.";
+
+    private const string EverythingPlays =
+        "Everything set up plays together - a soundscape's crowd under your own layers, which is what layers "
+        + "are for.";
+
+    /// <summary>What the line under the list says with no layers at all - see RefreshGrid.</summary>
+    private const string NoLayersStatus = "No layers yet - add one and point it at a looping audio file.";
+
+    /// <summary>
+    /// The longest things the line under the list can say, counts of two
+    /// digits standing in for the real ones, so it keeps room for the
+    /// longest and rewording it never moves the list above it or the cards
+    /// below (SteadyLabel). The wordings themselves are RefreshGrid's.
+    /// </summary>
+    private static readonly string[] StatusWordings =
+    {
+        NoLayersStatus,
+        "0 of 99 layers playing - everything set up is on the other side of the Play choice above.",
+        "0 of 99 layers ready - 99 have no file set or the file is missing. Select a layer and press Edit to point it at an audio file.",
+        "0 of 99 layers ready - every layer is switched off. Edit a layer to enable it.",
+        "99 of 99 layers ready to play.",
+    };
 
     public AmbienceControl(AmbienceStore store, AmbienceService ambience, UndoService undo)
     {
@@ -63,14 +131,17 @@ public sealed class AmbienceControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        // Taller by the Play row and the sentence under it, so the page is
-        // not left one row short and scrolling for it.
-        Size = new Size(980, 900);
-        MinimumSize = new Size(900, 560);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize. In its tab, the page would otherwise wear the
+        // tab row's bold face.
+        //
+        // No design size and no MinimumSize: the 900x560 floor was honoured
+        // over the size the page was given. A short window scrolls the page
+        // instead (FillPage), which also does away with the page's own
+        // scrolling.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshGrid();
@@ -83,6 +154,20 @@ public sealed class AmbienceControl : UserControl
         // repainting more often than the eye resolves.
         _monitorTimer.Tick += (_, _) => _monitor.Invalidate();
         _monitorTimer.Start();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>
@@ -119,34 +204,39 @@ public sealed class AmbienceControl : UserControl
         store.NotifyRestored();
     }
 
+    /// <summary>
+    /// Builds the page: what ambience is; the Enable switch with the overall
+    /// level beside it; the live monitor across the page; then three cards.
+    /// Layers: which layers play and what that means, the list of layers
+    /// taking whatever height the page has left, its buttons, and a line
+    /// saying what will be heard. Reactions: why they may be greyed out, the
+    /// React switch, how long a surge, the finish celebration and the fades
+    /// take, the ten triggers in columns, and the once-per-race note.
+    /// Ducking: its two switches, each with its level beside it. On the
+    /// layout pieces (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels against a 980px page: every row at a y
+    /// worked out from the one before, each level box after a caption
+    /// measured once at build, the triggers in four columns a quarter of the
+    /// page wide, the list 170px and the monitor 78px tall at every text
+    /// size, and a 900x560 floor the page kept however small its window.
+    /// </summary>
     private void BuildLayout()
     {
-        // Laid out against Layout's shared constants rather than hand-picked
-        // coordinates. This page had 31 different left edges across 40 rows -
-        // nothing lined up with anything, which is what made it read as a
-        // patchwork however tidy each individual row looked.
-        var y = UiLayout.PageTop;
-        var contentWidth = UiLayout.ContentWidth(Width);
-
-        // --- Intro -------------------------------------------------------
-
         var lblIntro = new Label
         {
             Text = "Continuous crowd and track noise, mixed underneath the announcements rather than queued with them, "
                  + "so the ambience keeps running while the announcer talks over it. You supply the audio files - "
                  + "short looping clips of 10-30 seconds work best.",
-            Location = new Point(UiLayout.PageLeft, y),
             AutoSize = true,
-            MaximumSize = new Size(contentWidth, 0),
             ForeColor = AppTheme.TextMuted,
         };
-        y += 44;
 
         // --- Master ------------------------------------------------------
 
         _chkEnabled.Text = "Enable ambience";
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.Checked = _store.Current.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
         {
@@ -163,8 +253,6 @@ public sealed class AmbienceControl : UserControl
             UpdateEnabledState();
         };
 
-        var lblMaster = new Label { Text = "Overall level:", AutoSize = true };
-        _numMasterVolume.Width = UiLayout.NumericWidth;
         _numMasterVolume.Minimum = 0;
         _numMasterVolume.Maximum = 100;
         _numMasterVolume.Increment = 5;
@@ -182,44 +270,37 @@ public sealed class AmbienceControl : UserControl
             _ambience.RefreshLevels();
         };
 
-        var lblMasterSuffix = new Label { Text = "%  - scales every layer at once", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont };
+        var lblMasterSuffix = new Label { Text = "%  - scales every layer at once", ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblMasterSuffix, () => AppTheme.SmallFont);
 
-        _chkEnabled.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
-        lblMaster.Location = new Point(
-            Math.Max(220, UiLayout.After(_chkEnabled) + UiLayout.SectionGap),
-            UiLayout.LabelY(y));
+        // The level beside the switch, and under it when the line is too
+        // narrow for both (FieldRow).
+        var master = new FieldRow();
 
-        _numMasterVolume.Location = new Point(UiLayout.After(lblMaster), y);
-        lblMasterSuffix.Location = new Point(_numMasterVolume.Right + UiLayout.HintGap, UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
+        master.Add(null, _chkEnabled);
+        master.Add(new Label { Text = "Overall level:" }, FieldGrid.Inline(_numMasterVolume, lblMasterSuffix));
 
         // --- Live monitor -------------------------------------------------
+        //
+        // Across the page, and as tall as it was at the normal text size at
+        // the size in use (SizeFields). What is drawn in it is Monitor_Paint's.
 
-        _monitor.Location = new Point(UiLayout.PageLeft, y);
-        _monitor.Size = new Size(contentWidth, 78);
-        _monitor.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _monitor.Paint += Monitor_Paint;
 
         typeof(Panel).GetProperty("DoubleBuffered",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
             ?.SetValue(_monitor, true);
 
-        y += 78 + UiLayout.RowGap;
-
         // --- Layers -------------------------------------------------------
-
-        var lblLayers = new Label { Text = "LAYERS" };
-        y = UiLayout.SectionHeading(UiLayout.SectionAfter(y - UiLayout.RowGap), lblLayers);
 
         var lblLayersHint = new Label
         {
             Text = "Each plays continuously at a volume that follows what's happening on track.",
-            Location = new Point(UiLayout.PageLeft, y),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
-        y += UiLayout.HintHeight + UiLayout.HintGap;
+
+        _textSize.Wear(lblLayersHint, () => AppTheme.SmallFont);
 
         // --- Which layers play ---
         //
@@ -227,22 +308,13 @@ public sealed class AmbienceControl : UserControl
         // pair because a playlist replaces a playlist; these mix, so Both
         // is a real answer and it is the default - a club that never comes
         // here hears exactly what it heard before.
-        var lblPlay = new Label { Text = "Play:", AutoSize = true, Font = AppTheme.BodyFont };
-
         _rdoSourceBoth.Text = "Both";
         _rdoSourceSoundscape.Text = "Soundscape ambience";
         _rdoSourceMine.Text = "My ambience";
 
-        var sourceLeft = UiLayout.PageLeft;
-        lblPlay.Location = new Point(sourceLeft, UiLayout.CentreOn(lblPlay, y, UiLayout.RowHeight));
-        sourceLeft = UiLayout.After(lblPlay);
-
         foreach (var radio in new[] { _rdoSourceBoth, _rdoSourceSoundscape, _rdoSourceMine })
         {
             radio.AutoSize = true;
-            radio.Font = AppTheme.BodyFont;
-            radio.Location = new Point(sourceLeft, UiLayout.CentreOn(radio, y, UiLayout.RowHeight));
-            sourceLeft = UiLayout.After(radio) + UiLayout.RowGap;
 
             // Only on the one being switched ON: a radio group raises this
             // twice per change, and acting on both would save the losing
@@ -261,19 +333,21 @@ public sealed class AmbienceControl : UserControl
             };
         }
 
-        y += UiLayout.RowHeight + UiLayout.HintGap;
+        // What the choice means for what is set up, under it - as tall as
+        // the longest thing it says, so switching the choice never moves the
+        // list under it (SteadyLabel).
+        _lblSource.Wordings = new[]
+        {
+            SoundscapeNothingPlaying, SoundscapeOnly, MineNothingPlaying, MineOnly, NothingSetUp, EverythingPlays,
+        };
 
-        _lblSource.Location = new Point(UiLayout.PageLeft, y);
-        _lblSource.AutoSize = true;
-        _lblSource.MaximumSize = new Size(contentWidth, 0);
-        _lblSource.ForeColor = AppTheme.TextMuted;
-        _lblSource.Font = AppTheme.SmallFont;
+        // The three radios in one row of their own, which also makes them
+        // one group: a radio clears the others in the same container.
+        var play = new FieldGrid();
 
-        y += UiLayout.HintHeight + UiLayout.RowGap;
+        play.AddRow("Play:", FieldGrid.Inline(_rdoSourceBoth, _rdoSourceSoundscape, _rdoSourceMine));
+        play.AddHint(_lblSource);
 
-        _grid.Location = new Point(UiLayout.PageLeft, y);
-        _grid.Size = new Size(contentWidth, 170);
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.RowHeadersVisible = false;
@@ -304,35 +378,45 @@ public sealed class AmbienceControl : UserControl
             new DataGridViewTextBoxColumn { Name = "peak", HeaderText = "Peak", FillWeight = 34 }
         );
         _grid.CellDoubleClick += (_, args) => { if (args.RowIndex >= 0) { EditLayer(Selected()); } };
-        y += 170 + UiLayout.RowGap;
 
-        var btnAdd = new Button { Text = "Add Layer...", Width = UiLayout.ButtonWidth, Height = UiLayout.ButtonHeight };
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
+        var btnAdd = new Button { Text = "Add Layer..." };
         btnAdd.Click += (_, _) => EditLayer(null);
 
-        var btnEdit = new Button { Text = "Edit...", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnEdit = new Button { Text = "Edit..." };
         btnEdit.Click += (_, _) => EditLayer(Selected());
 
-        var btnDelete = new Button { Text = "Delete", Width = 90, Height = UiLayout.ButtonHeight };
+        var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteLayer();
 
-        var btnPreview = new Button { Text = "Preview", Width = 100, Height = UiLayout.ButtonHeight };
+        var btnPreview = new Button { Text = "Preview" };
         btnPreview.Click += (_, _) => TogglePreview(btnPreview);
 
-        y = UiLayout.Row(y, btnAdd, btnEdit, btnDelete, btnPreview);
+        // What will actually be heard, under the list it counts - wrapping
+        // rather than cut short, and as tall as the longest thing it says.
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _lblStatus.Wordings = StatusWordings;
+
+        var layers = new Section("Layers");
+
+        layers.Add(lblLayersHint);
+        layers.Add(play);
+        layers.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2);
+        layers.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete, btnPreview));
+        layers.Add(_lblStatus, gapBelow: 0);
 
         // --- Reactions ----------------------------------------------------
 
-        var lblReactions = new Label { Text = "REACTIONS" };
-        var reactionsY = UiLayout.SectionAfter(y - UiLayout.RowGap);
-        y = UiLayout.SectionHeading(reactionsY, lblReactions);
-
-        _lblReactionsState.Location = new Point(140, reactionsY + 2);
-        _lblReactionsState.AutoSize = true;
-        _lblReactionsState.MaximumSize = new Size(contentWidth - 140, 0);
-        _lblReactionsState.Font = AppTheme.SmallFont;
+        // Why the card is greyed out, when it is. It sat beside the heading;
+        // it is the card's first line now, and keeps the room for the longer
+        // of its two wordings even when it says nothing - so ticking React,
+        // which empties it, never moves the box being ticked (SteadyLabel).
+        _lblReactionsState.Wordings = new[] { ReactionsNeedReact, ReactionsNeedEnable };
+        _textSize.Wear(_lblReactionsState, () => AppTheme.SmallFont);
 
         _chkReact.Text = "React to what happens in the race";
-        _chkReact.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
         _chkReact.AutoSize = true;
         _chkReact.Checked = _store.Current.ReactToEvents;
         _chkReact.CheckedChanged += (_, _) =>
@@ -342,43 +426,24 @@ public sealed class AmbienceControl : UserControl
             _ambience.Settings = _store.Current;
             UpdateEnabledState();
         };
-        y = UiLayout.NextRow(y);
 
-        // Timing row: surge, fades and the finish celebration together,
-        // since they're all "how long does something take".
-        // These two rows used fixed-width labels (96 / 150 / 110) at fixed x
-        // (136 / 208 / 360 / 432, then 150 / 222 / 294), every number of
-        // them measured against a smaller font. At the current one each
-        // caption runs past its own box and each field lands inside the
-        // caption before it - which is the seventeen adjustments this page
-        // reported, the most of any page in the app. Labels now size
-        // themselves and every control is placed after the one before it.
-        var lblSurge = new Label { Text = "Surge lasts:", AutoSize = true };
-        _numSurgeSeconds.Width = UiLayout.NumericWidth;
+        // The timings: surge, finish celebration and fades together, since
+        // they're all "how long does something take". One caption column, so
+        // the three boxes line up, each with its unit after it.
         _numSurgeSeconds.Minimum = 1;
         _numSurgeSeconds.Maximum = 30;
         _numSurgeSeconds.Value = Math.Clamp(_store.Current.SurgeSeconds, 1, 30);
         _numSurgeSeconds.ValueChanged += (_, _) => { _store.Current.SurgeSeconds = (int)_numSurgeSeconds.Value; _store.Save(); _ambience.Settings = _store.Current; };
 
-        var lblFinish = new Label { Text = "s      Finish celebration:", AutoSize = true };
-        _numFinishSeconds.Width = UiLayout.NumericWidth;
         _numFinishSeconds.Minimum = 0;
         _numFinishSeconds.Maximum = 300;
         _numFinishSeconds.Increment = 5;
         _numFinishSeconds.Value = Math.Clamp(_store.Current.FinishCelebrationSeconds, 0, 300);
         _numFinishSeconds.ValueChanged += (_, _) => { _store.Current.FinishCelebrationSeconds = (int)_numFinishSeconds.Value; _store.Save(); _ambience.Settings = _store.Current; };
 
-        var lblSurgeSuffix = new Label { Text = "s  - then it settles back to idle", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont };
+        var lblSurgeSuffix = new Label { Text = "s  - then it settles back to idle", ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblSurgeSuffix, () => AppTheme.SmallFont);
 
-        lblSurge.Location = new Point(UiLayout.Indent + UiLayout.PageLeft, UiLayout.LabelY(y));
-        _numSurgeSeconds.Location = new Point(UiLayout.After(lblSurge), y);
-        lblFinish.Location = new Point(_numSurgeSeconds.Right + UiLayout.HintGap, UiLayout.LabelY(y));
-        _numFinishSeconds.Location = new Point(UiLayout.After(lblFinish), y);
-        lblSurgeSuffix.Location = new Point(_numFinishSeconds.Right + UiLayout.HintGap, UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
-
-        var lblFadeUp = new Label { Text = "Fade up / down:", AutoSize = true };
-        _numFadeUp.Width = UiLayout.NumericWidth;
         _numFadeUp.DecimalPlaces = 1;
         _numFadeUp.Increment = 0.5m;
         _numFadeUp.Minimum = 0.1m;
@@ -386,7 +451,6 @@ public sealed class AmbienceControl : UserControl
         _numFadeUp.Value = (decimal)Math.Clamp(_store.Current.FadeUpSeconds, 0.1, 30);
         _numFadeUp.ValueChanged += (_, _) => { _store.Current.FadeUpSeconds = (double)_numFadeUp.Value; _store.Save(); _ambience.Settings = _store.Current; };
 
-        _numFadeDown.Width = UiLayout.NumericWidth;
         _numFadeDown.DecimalPlaces = 1;
         _numFadeDown.Increment = 0.5m;
         _numFadeDown.Minimum = 0.1m;
@@ -394,15 +458,18 @@ public sealed class AmbienceControl : UserControl
         _numFadeDown.Value = (decimal)Math.Clamp(_store.Current.FadeDownSeconds, 0.1, 30);
         _numFadeDown.ValueChanged += (_, _) => { _store.Current.FadeDownSeconds = (double)_numFadeDown.Value; _store.Save(); _ambience.Settings = _store.Current; };
 
-        var lblFadeHint = new Label { Text = "seconds - a slower fall than rise sounds most natural", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont };
+        var lblFadeHint = new Label { Text = "seconds - a slower fall than rise sounds most natural", ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblFadeHint, () => AppTheme.SmallFont);
 
-        lblFadeUp.Location = new Point(UiLayout.Indent + UiLayout.PageLeft, UiLayout.LabelY(y));
-        _numFadeUp.Location = new Point(UiLayout.After(lblFadeUp), y);
-        _numFadeDown.Location = new Point(_numFadeUp.Right + UiLayout.HintGap, y);
-        lblFadeHint.Location = new Point(_numFadeDown.Right + UiLayout.LabelGap, UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
+        var timing = new FieldGrid();
 
-        // Triggers on a tidy two-row grid of four columns.
+        timing.AddRow("Surge lasts:", FieldGrid.Inline(_numSurgeSeconds, new Label { Text = "s" }));
+        timing.AddRow("Finish celebration:", FieldGrid.Inline(_numFinishSeconds, lblSurgeSuffix));
+        timing.AddRow("Fade up / down:", FieldGrid.Inline(_numFadeUp, _numFadeDown, lblFadeHint));
+
+        // The triggers in columns: every box as wide as the widest needs
+        // (SizeTriggers), so the row wraps into columns that line up - five
+        // to a line where the card has room, fewer where it has not.
         var triggers = new (CheckBox Box, string Text, Func<bool> Get, Action<bool> Set)[]
         {
             (_chkFastLap,      "Fastest lap",      () => _store.Current.SurgeOnFastLap,      v => _store.Current.SurgeOnFastLap = v),
@@ -417,48 +484,49 @@ public sealed class AmbienceControl : UserControl
             (_chkLapped,       "Car gets lapped",  () => _store.Current.SurgeOnLapped,       v => _store.Current.SurgeOnLapped = v),
         };
 
-        const int triggerColumns = 4;
-        var columnWidth = (contentWidth - UiLayout.Indent) / triggerColumns;
+        var triggerBar = new ButtonBar();
 
         for (var i = 0; i < triggers.Length; i++)
         {
             var (box, text, get, set) = triggers[i];
-            var column = i % triggerColumns;
-            var row = i / triggerColumns;
 
             box.Text = text;
-            box.AutoSize = true;
+
+            // Sized by SizeTriggers, all alike.
+            box.AutoSize = false;
             box.Checked = get();
-            box.Location = new Point(
-                UiLayout.PageLeft + UiLayout.Indent + column * columnWidth,
-                y + row * UiLayout.RowStep);
 
             var setter = set;
             var source = box;
             box.CheckedChanged += (_, _) => { setter(source.Checked); _store.Save(); _ambience.Settings = _store.Current; };
-        }
 
-        y += ((triggers.Length + triggerColumns - 1) / triggerColumns) * UiLayout.RowStep;
+            triggerBar.With(box);
+        }
 
         var lblOnceHint = new Label
         {
             Text = "Close battle and lapping fire once per race - a long scrap would otherwise keep the level pinned high.",
-            Location = new Point(UiLayout.PageLeft + UiLayout.Indent, y),
             AutoSize = true,
-            MaximumSize = new Size(contentWidth - UiLayout.Indent, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
-        y += UiLayout.HintHeight + UiLayout.RowGap;
+
+        _textSize.Wear(lblOnceHint, () => AppTheme.SmallFont);
+
+        var reactions = new Section("Reactions");
+
+        reactions.Add(_lblReactionsState, gapBelow: UiLayout.HintGap);
+        reactions.Add(_chkReact, stretch: false);
+        reactions.Add(timing);
+        reactions.Add(triggerBar, stretch: false, gapBelow: UiLayout.HintGap);
+        reactions.Add(lblOnceHint, gapBelow: 0);
 
         // --- Ducking ------------------------------------------------------
 
-        var lblDucking = new Label { Text = "DUCKING" };
-        y = UiLayout.SectionHeading(UiLayout.SectionAfter(y - UiLayout.RowGap), lblDucking);
-
         _chkDuck.Text = "Duck ambience while the announcer speaks";
-        _chkDuck.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
-        _chkDuck.AutoSize = true;
+
+        // Sized with the switch under it, both as wide as the wider needs
+        // (SizeAlike, at the end of this method).
+        _chkDuck.AutoSize = false;
         _chkDuck.Checked = _store.Current.DuckUnderAnnouncements;
         _chkDuck.CheckedChanged += (_, _) =>
         {
@@ -468,29 +536,17 @@ public sealed class AmbienceControl : UserControl
             UpdateEnabledState();
         };
 
-        var lblDuckTo = new Label { Text = "down to:", AutoSize = true };
-        _numDuckTo.Width = UiLayout.NumericWidth;
         _numDuckTo.Minimum = 5;
         _numDuckTo.Maximum = 100;
         _numDuckTo.Increment = 5;
         _numDuckTo.Value = (decimal)Math.Clamp(_store.Current.DuckToFraction * 100f, 5, 100);
         _numDuckTo.ValueChanged += (_, _) => { _store.Current.DuckToFraction = (float)_numDuckTo.Value / 100f; _store.Save(); _ambience.Settings = _store.Current; };
 
-        var lblDuckHint = new Label { Text = "%  - pulling the bed down reads clearer than pushing the voice up", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont };
-
-        // Beside the check box it belongs to, measured from it - 330 was
-        // clear of that caption at the old font and inside it at this one.
-        lblDuckTo.Location = new Point(
-            Math.Max(330, UiLayout.After(_chkDuck) + UiLayout.SectionGap),
-            UiLayout.LabelY(y));
-
-        _numDuckTo.Location = new Point(UiLayout.After(lblDuckTo), y);
-        lblDuckHint.Location = new Point(_numDuckTo.Right + UiLayout.HintGap, UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
+        var lblDuckHint = new Label { Text = "%  - pulling the bed down reads clearer than pushing the voice up", ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblDuckHint, () => AppTheme.SmallFont);
 
         _chkBoostVoice.Text = "Also lift the voice when the bed is loud";
-        _chkBoostVoice.Location = new Point(UiLayout.PageLeft, UiLayout.LabelY(y));
-        _chkBoostVoice.AutoSize = true;
+        _chkBoostVoice.AutoSize = false;
         _chkBoostVoice.Checked = _store.Current.BoostVoiceOverAmbience;
         _chkBoostVoice.CheckedChanged += (_, _) =>
         {
@@ -500,8 +556,6 @@ public sealed class AmbienceControl : UserControl
             UpdateEnabledState();
         };
 
-        var lblBoost = new Label { Text = "up to x", AutoSize = true };
-        _numVoiceBoost.Width = UiLayout.NumericWidth;
         _numVoiceBoost.DecimalPlaces = 1;
         _numVoiceBoost.Increment = 0.1m;
         _numVoiceBoost.Minimum = 1.0m;
@@ -509,47 +563,162 @@ public sealed class AmbienceControl : UserControl
         _numVoiceBoost.Value = (decimal)Math.Clamp(_store.Current.VoiceBoostMultiplier, 1.0f, 2.0f);
         _numVoiceBoost.ValueChanged += (_, _) => { _store.Current.VoiceBoostMultiplier = (float)_numVoiceBoost.Value; _store.Save(); _ambience.Settings = _store.Current; };
 
-        var lblBoostHint = new Label { Text = "scaled by how loud the bed actually is - no boost over a quiet one", AutoSize = true, ForeColor = AppTheme.TextMuted, Font = AppTheme.SmallFont };
+        var lblBoostHint = new Label { Text = "scaled by how loud the bed actually is - no boost over a quiet one", ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblBoostHint, () => AppTheme.SmallFont);
 
-        lblBoost.Location = new Point(
-            Math.Max(330, UiLayout.After(_chkBoostVoice) + UiLayout.SectionGap),
-            UiLayout.LabelY(y));
+        // Each level beside the switch it belongs to - the two switches one
+        // width, so "down to:" and "up to x" line up - and under it when the
+        // line is too narrow for both (FieldRow).
+        var duck = new FieldRow();
 
-        _numVoiceBoost.Location = new Point(UiLayout.After(lblBoost), y);
-        lblBoostHint.Location = new Point(_numVoiceBoost.Right + UiLayout.HintGap, UiLayout.LabelY(y));
-        y = UiLayout.NextRow(y);
+        duck.Add(null, _chkDuck);
+        duck.Add(new Label { Text = "down to:" }, FieldGrid.Inline(_numDuckTo, lblDuckHint));
 
-        // --- Status -------------------------------------------------------
+        var boost = new FieldRow();
 
-        _lblStatus.Location = new Point(UiLayout.PageLeft, y + UiLayout.RowGap);
-        _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(contentWidth, 0);
-        _lblStatus.ForeColor = AppTheme.TextMuted;
+        boost.Add(null, _chkBoostVoice);
+        boost.Add(new Label { Text = "up to x" }, FieldGrid.Inline(_numVoiceBoost, lblBoostHint));
 
-        Size = new Size(980, y + 60);
+        var ducking = new Section("Ducking");
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro,
-            _chkEnabled, lblMaster, _numMasterVolume, lblMasterSuffix,
-            _monitor,
-            lblLayers, lblLayersHint,
-            lblPlay, _rdoSourceBoth, _rdoSourceSoundscape, _rdoSourceMine, _lblSource,
-            _grid, btnAdd, btnEdit, btnDelete, btnPreview,
-            lblReactions, _lblReactionsState, _chkReact,
-            lblSurge, _numSurgeSeconds, lblFinish, _numFinishSeconds, lblSurgeSuffix,
-            lblFadeUp, _numFadeUp, _numFadeDown, lblFadeHint,
-            _chkFastLap, _chkLeadChange, _chkTrackRecord, _chkFinish,
-            _chkLastLap, _chkCloseBattle, _chkStreak, _chkJumpStart,
-            _chkPersonalBest, _chkLapped, lblOnceHint,
-            lblDucking, _chkDuck, lblDuckTo, _numDuckTo, lblDuckHint,
-            _chkBoostVoice, lblBoost, _numVoiceBoost, lblBoostHint,
-            _lblStatus,
-        });
+        ducking.Add(duck);
+        ducking.Add(boost, gapBelow: 0);
+
+        // --- The page -----------------------------------------------------
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(master, gapBelow: UiLayout.RowGap);
+        page.Add(_monitor);
+        page.AddFill(layers, layers.LeastHeight);
+        page.Add(reactions);
+        page.Add(ducking, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Measured in the fonts they are drawn in, so not until now: until
+        // they were on the page, the boxes and switches had WinForms' own
+        // default font rather than the body face. Again whenever the text
+        // size changes.
+        _textSize.Keep(SizeFields);
+        _textSize.Keep(() => SizeTriggers(triggerBar));
+        _textSize.Keep(() => SizeAlike(new[] { _chkDuck, _chkBoostVoice }, UiLayout.LabelGap));
 
         UpdateEnabledState();
     }
 
+    /// <summary>
+    /// The number boxes as wide as their largest value and arrows need, and
+    /// never narrower than a number box was at the normal text size; and the
+    /// live monitor as tall as it was then, at the size in use. Run again
+    /// when the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
+    {
+        var numbers = new[] { _numMasterVolume, _numSurgeSeconds, _numFinishSeconds, _numFadeUp, _numFadeDown, _numDuckTo, _numVoiceBoost };
+
+        foreach (var number in numbers)
+        {
+            var width = NumberWidth(number);
+
+            // Only when it changed: a new width lays the row out again.
+            if (number.Width != width)
+            {
+                number.Width = width;
+            }
+        }
+
+        var monitor = UiLayout.AtTextSize(MonitorHeight);
+
+        if (_monitor.Height != monitor)
+        {
+            _monitor.Height = monitor;
+        }
+    }
+
+    /// <summary>A number box's width: every character of its largest value as a zero, its arrows and a little room - or a number box's width at the normal text size, at the size in use, if that is more.</summary>
+    private static int NumberWidth(NumericUpDown number)
+    {
+        var largest = number.Maximum.ToString("F" + number.DecimalPlaces, System.Globalization.CultureInfo.CurrentCulture);
+
+        var needed = TextRenderer.MeasureText(new string('0', largest.Length), number.Font).Width
+            + SystemInformation.VerticalScrollBarWidth + 12;
+
+        return Math.Max(UiLayout.AtTextSize(UiLayout.NumericWidth), needed);
+    }
+
+    /// <summary>
+    /// The surge triggers, all one width - the widest caption's, and a
+    /// section gap after it - so their row wraps into columns that line up;
+    /// and the row no wider than five of them, so a wide card holds two rows
+    /// of five rather than eight and two. A card too narrow for five gets
+    /// fewer to a line, wrapping as any row of buttons does.
+    /// </summary>
+    private static void SizeTriggers(ButtonBar bar)
+    {
+        var boxes = bar.Controls.OfType<CheckBox>().ToList();
+
+        if (boxes.Count == 0)
+        {
+            return;
+        }
+
+        var size = SizeAlike(boxes, UiLayout.SectionGap);
+
+        // Each box with its margin, which is the bar's gap: the flow counts
+        // it when it decides whether a box fits on the line (see
+        // ButtonBar.OneLineWidth), so five exactly fit.
+        var most = new Size(TriggerColumns * (size.Width + boxes[0].Margin.Horizontal), 0);
+
+        if (bar.MaximumSize != most)
+        {
+            bar.MaximumSize = most;
+        }
+    }
+
+    /// <summary>
+    /// Gives check boxes one size: as wide as the widest of them needs for
+    /// its caption with <paramref name="room"/> after it, and as tall as the
+    /// tallest - for boxes that line up, the triggers in columns and the two
+    /// ducking switches with their levels beside them. The boxes do not size
+    /// themselves (AutoSize is off), or each would be only as wide as its
+    /// own caption. Returns the size.
+    /// </summary>
+    private static Size SizeAlike(IReadOnlyList<CheckBox> boxes, int room)
+    {
+        var sizes = boxes.Select(CheckBoxSize).ToList();
+        var size = new Size(sizes.Max(s => s.Width) + room, sizes.Max(s => s.Height));
+
+        foreach (var box in boxes)
+        {
+            // Only when it changed: a new size lays the row out again.
+            if (box.Size != size)
+            {
+                box.Size = size;
+            }
+        }
+
+        return size;
+    }
+
+    /// <summary>
+    /// What a check box needs for its caption in the font it has: what it
+    /// measures itself at, and never less than the caption on one line and
+    /// the box's chrome as LayoutAudit counts them for a box that does not
+    /// size itself, nor less tall than a line of its caption.
+    /// </summary>
+    private static Size CheckBoxSize(CheckBox box)
+    {
+        var own = box.GetPreferredSize(Size.Empty);
+
+        var caption = TextRenderer.MeasureText(box.Text, box.Font, new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+
+        var line = TextRenderer.MeasureText(box.Text, box.Font);
+
+        return new Size(Math.Max(own.Width, caption.Width + CheckBoxChrome), Math.Max(own.Height, line.Height));
+    }
 
     /// <summary>
     /// Draws the live state: which intensity stage the ambience is at, a
@@ -764,8 +933,8 @@ public sealed class AmbienceControl : UserControl
         var reacting = on && _chkReact.Checked;
 
         _lblReactionsState.Text = on
-            ? reacting ? string.Empty : "- turn on \"React to what happens in the race\" below to use these"
-            : "- greyed out because \"Enable ambience\" at the top of this page is off";
+            ? reacting ? string.Empty : ReactionsNeedReact
+            : ReactionsNeedEnable;
         _lblReactionsState.ForeColor = AppTheme.Accent;
         _numSurgeSeconds.Enabled = reacting;
         _numFinishSeconds.Enabled = reacting;
@@ -847,7 +1016,7 @@ public sealed class AmbienceControl : UserControl
         // off, or the feature is broken.
         if (total == 0)
         {
-            _lblStatus.Text = "No layers yet - add one and point it at a looping audio file.";
+            _lblStatus.Text = NoLayersStatus;
             _lblStatus.ForeColor = AppTheme.TextMuted;
         }
         else if (usable == 0)
@@ -1015,30 +1184,21 @@ public sealed class AmbienceControl : UserControl
         var soundscapeReady = Ready(l => l.FromSoundscape);
         var mineReady = Ready(l => !l.FromSoundscape);
 
+        // The wordings are named at the top of the class, where the line
+        // keeps room for the longest of them (BuildLayout).
         var (text, warn) = current.Source switch
         {
-            AmbienceSource.Soundscape when !soundscapeReady =>
-                ("No soundscape beds are set up, so nothing is playing. Apply a soundscape with a crowd, or switch to "
-                 + "My ambience.", true),
+            AmbienceSource.Soundscape when !soundscapeReady => (SoundscapeNothingPlaying, true),
 
-            AmbienceSource.Soundscape =>
-                ("Only the beds a soundscape supplied. Your own layers stay listed and keep their settings - they are "
-                 + "just not playing.", false),
+            AmbienceSource.Soundscape => (SoundscapeOnly, false),
 
-            AmbienceSource.Mine when !mineReady =>
-                ("You haven't added a layer of your own yet, so nothing is playing. Add one below, or switch to "
-                 + "Soundscape ambience.", true),
+            AmbienceSource.Mine when !mineReady => (MineNothingPlaying, true),
 
-            AmbienceSource.Mine =>
-                ("Only the layers you added. A soundscape's crowd beds stay listed, and applying another soundscape "
-                 + "still replaces them - they are just not playing.", false),
+            AmbienceSource.Mine => (MineOnly, false),
 
-            _ when !soundscapeReady && !mineReady =>
-                ("Nothing is set up yet. Add a layer below, or apply a soundscape with a crowd.", false),
+            _ when !soundscapeReady && !mineReady => (NothingSetUp, false),
 
-            _ =>
-                ("Everything set up plays together - a soundscape's crowd under your own layers, which is what layers "
-                 + "are for.", false),
+            _ => (EverythingPlays, false),
         };
 
         _lblSource.Text = text;
@@ -1521,7 +1681,6 @@ public sealed class AmbienceLayerForm : Form
             PreviewStage(intensity, slider.Value / 100f);
         }
     }
-
 
     /// <summary>
     /// Plays this layer alone at the dragged volume so the value can be set

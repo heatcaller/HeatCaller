@@ -344,7 +344,7 @@ To use a venue, select it and click **Apply This Venue**, then confirm. HeatCall
 
 - sets **Connect via:** on the **Connection** page (a venue saved for Next Level Timing, which was retired in 0.50.0, gets the EasyLap decoder, and the console says so);
 - selects the preferred track layout, if it still exists;
-- applies the preferred soundscape, if it still exists, the same way **Apply** on **Sounds → Soundscapes** does: this PC's playback volume, wireless-speaker setting, output format and **Speak With** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
+- applies the preferred soundscape, if it still exists, the same way **Apply** on **Sounds → Soundscapes** does: this PC's playback volume, wireless-speaker setting, output format and **Speak with** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
 - writes the race defaults into the **app default** race format.
 
 Because the race defaults go into the app default, a class or round with its own format still uses its own settings.

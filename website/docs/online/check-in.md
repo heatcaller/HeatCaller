@@ -22,7 +22,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 
 ## Turn on online check-in
 
-1. On the **Club Website** page, in the **Online check-in** group, tick **Let drivers check in from their own phones**.
+1. On the **Club Website** page, in the **Online check-in** card, tick **Let drivers check in from their own phones**.
 2. In **Staff PIN (opens the full list):**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits."
 3. Decide on **Include photos (drivers can be children - off unless you're sure)**. It's off by default.
 4. Check the state line under it (see [Check-in states](#check-in-states)).
@@ -33,7 +33,7 @@ The **Check in** tab appears on your club's pages while online check-in is on, a
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.
 
-<!-- screenshot: Club Website page, Online check-in and Personal PINs groups -->
+<!-- screenshot: Club Website page, Online check-in and Personal PINs cards -->
 
 ### Check-in states
 
@@ -42,7 +42,7 @@ The line under the photos checkbox says whether check-in is working:
 | State line | What it means |
 |---|---|
 | "Off. The check-in page says it is closed, and QR check-ins print in the Wi-Fi-only form." | Online check-in is off. |
-| "Switched on, but publishing to the relay is off - nothing reaches the check-in page until it is on." | Tick **Publish to the relay** in the Relay group. |
+| "Switched on, but publishing to the relay is off - nothing reaches the check-in page until it is on." | Tick **Publish to the relay** on the **Relay** card. |
 | "Open for QR check-ins and racers' own PINs. No staff PIN is set, so the full list stays closed." | Working, but there's no staff PIN. |
 | "The staff PIN must be 6 to 8 digits. Until it is, the full list stays closed and only QR check-ins and racers' own PINs work." | Fix the staff PIN. A PIN that's too short is never published. |
 | "Works, but a 4- or 5-digit staff PIN can be guessed - change it to 6 or more digits." | A 4- or 5-digit staff PIN set with an earlier version still works. Change it to 6 or more digits when you can. |
@@ -70,7 +70,7 @@ Anyone holding a QR check-in can check that driver in or out, so treat QR check-
 
 ### Reissue all QR check-ins
 
-**Reissue All QR Check-ins** in the **Online check-in** group makes a new QR check-in key, so every driver's online code changes and every code handed out so far stops working. Use it when QR check-ins have been lost, or when someone who had the staff PIN should no longer have access: the full list shows every driver's code, so a staff PIN holder could have kept them. The button is there once online check-in has a QR check-in key, which it gets the first time online check-in is switched on. It's hidden while keys from a restored backup are still waiting to be unlocked.
+**Reissue All QR Check-ins** in the **Online check-in** card makes a new QR check-in key, so every driver's online code changes and every code handed out so far stops working. Use it when QR check-ins have been lost, or when someone who had the staff PIN should no longer have access: the full list shows every driver's code, so a staff PIN holder could have kept them. The button is there once online check-in has a QR check-in key, which it gets the first time online check-in is switched on. It's hidden while keys from a restored backup are still waiting to be unlocked.
 
 1. Click **Reissue All QR Check-ins**.
 2. Read the question and click **Yes**. **No** is the default, so a stray <kbd>Enter</kbd> changes nothing.
@@ -119,7 +119,7 @@ The event name at the top comes from the current event on **Race Day → Event**
 
 ## Personal PINs
 
-Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. They're set in the **Personal PINs** group on the Club Website page.
+Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. They're set in the **Personal PINs** card on the Club Website page.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -136,7 +136,7 @@ PINs only matter while online check-in is on. New racers get a PIN within a few 
 - **Never mid-meeting.** While a race is staging, counting down or running, no new set is made. A set that has fallen due also waits until there's been no racing for 4 hours, so a meeting that runs past midnight doesn't get new PINs between two heats. A queue of racers whose PINs just stopped working between heats is the one thing it avoids. A laptop started fresh on race morning has had a night of quiet, so the change happens straight away.
 - Changing **Change them:** only changes the schedule. It never makes a new set by itself.
 
-The state line shows where things stand, for example "24 racers have PINs · made 14 Sep · change next 21 Sep · 20 emailed". If the Email group isn't set up, it adds "Set up the Email group below to send racers their PINs."
+The state line shows where things stand, for example "24 racers have PINs · made 14 Sep · change next 21 Sep · 20 emailed". If the **Email (for racer PINs)** card isn't filled in, it adds "Set up the Email group below to send racers their PINs."
 
 ### Show PINs..., New PINs Now and Email PINs...
 
@@ -215,7 +215,7 @@ A PIN that works doesn't count against either limit. There are also generous lim
 ## Troubleshooting
 
 **The QR check-in opens a page that says "Check-in is closed".**
-Online check-in is off, or publishing is off. Check the state line in the **Online check-in** group.
+Online check-in is off, or publishing is off. Check the state line in the **Online check-in** card.
 
 **QR check-ins don't open anything on a phone camera.**
 They were printed while online check-in was off, so they're the Wi-Fi-only kind. Turn online check-in on, make sure publishing works, and print them again.
@@ -224,7 +224,7 @@ They were printed while online check-in was off, so they're the Wi-Fi-only kind.
 The QR check-ins were reissued after it was printed (or it was printed on another laptop's QR check-in key). Print that driver a new QR check-in.
 
 **Taps show on the phone but not on the laptop.**
-Check the state line in the **Online check-in** group for a red message:
+Check the state line in the **Online check-in** card for a red message:
 
 - "The relay answered "not found" for check-ins. Check the club id on the Club Website page matches the relay's; if it does, the relay predates online check-in - redeploy it (fly deploy --ha=false)."
 - "Could not collect check-ins: the relay answered HTTP *code*." or "Could not collect check-ins. ..." The laptop may be offline.

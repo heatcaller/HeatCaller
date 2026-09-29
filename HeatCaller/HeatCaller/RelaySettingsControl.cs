@@ -12,8 +12,37 @@ namespace HeatCaller;
 /// </summary>
 public sealed class RelaySettingsControl : UserControl
 {
-    private const int Inset = 12;
-    private const int PageWidth = 780;
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>
+    /// The grids whose captions share one column down the page - the
+    /// relay's, the welcome line's, the links', the personal PINs' and the
+    /// mail's - so their boxes line up from card to card. Filled as the
+    /// cards are built; lined up in BuildLayout.
+    /// </summary>
+    private readonly List<FieldGrid> _linedUp = new();
+
+    /// <summary>The drop-downs' widths as last measured - see Pieces.PickerWidth. Their choices are put in once, as the page is built.</summary>
+    private (Font Font, int Count, int Width)? _rotationWidth;
+    private (Font Font, int Count, int Width)? _presetWidth;
+
+    /// <summary>
+    /// The fields' widths at the normal text size - the widths they have
+    /// always had - put at the text size in use by SizeFields.
+    /// </summary>
+    private const int AddressWidth = 460;
+    private const int ClubWidth = 260;
+    private const int StaffPinWidth = 120;
+    private const int DropDownWidth = 200;
+    private const int MailWidth = 420;
+    private const int ShortMailWidth = 280;
+
+    /// <summary>The digits in the highest port there is, 65535 - what the port box is as wide as.</summary>
+    private const int PortDigits = 5;
+
+    /// <summary>The lines of its face each status line keeps whatever it says - see KeepLines.</summary>
+    private const int StatusLines = 2;
 
     private readonly RelayPublisher _publisher;
     private readonly AppSettings _settings;
@@ -129,7 +158,7 @@ public sealed class RelaySettingsControl : UserControl
     public event Action? OpenLooksRequested;
 
     /// <summary>
-    /// Raised by the manager group's "Set Manager PIN...": the PIN itself
+    /// Raised by the manager card's "Set Manager PIN...": the PIN itself
     /// lives on Local Screens, shared by the Wi-Fi and relay pages alike
     /// (see AppSettings.ManagerPin), so this page only ever switches the
     /// relay path on or off and sends the host there rather than keeping a
@@ -165,13 +194,15 @@ public sealed class RelaySettingsControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(820, 640);
-        Font = AppTheme.BodyFont;
 
-        // Four groups tall now; a laptop screen at 125% no longer fits
-        // them, and a page whose last buttons are below the window with
-        // no way down to them is a page with fewer buttons.
-        AutoScroll = true;
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize, and no scrolling of its own: nine cards are taller
+        // than a laptop screen, and a page whose last buttons are below the
+        // window with no way down to them is a page with fewer buttons - so
+        // the cards are in a PageStack, which scrolls, down only.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         LoadFromSettings();
@@ -181,10 +212,20 @@ public sealed class RelaySettingsControl : UserControl
         _tick.Interval = 1000;
         _tick.Tick += (_, _) => RefreshStatus();
         _tick.Start();
+    }
 
-        // Everything here is placed from the block above it; the repair
-        // pass would only fight it.
-        LayoutDoctor.LeaveAlone(this);
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>Called when the page is navigated to, so the boxes match what settings actually hold.</summary>
@@ -195,6 +236,44 @@ public sealed class RelaySettingsControl : UserControl
         RefreshLastGood();
     }
 
+    /// <summary>
+    /// Builds the page on the layout pieces (LayoutPieces.cs): the intro,
+    /// then nine cards down the page, each as wide as the page and as tall
+    /// as what is in it -
+    ///
+    ///   Relay                   publishing on or off; the address, the club
+    ///                           id and the token; Save, Test Connection and
+    ///                           Restore Last Working; what the last test said
+    ///                           and what last worked.
+    ///   What gets published     what always goes, and the roster and
+    ///                           short-name switches with what each means.
+    ///   Look                    the welcome line, the club's links, and the
+    ///                           way to Themes → Looks.
+    ///   Online check-in         the switch, the staff PIN, photos, how it is
+    ///                           doing, and its buttons.
+    ///   Personal PINs           the switch, how often they change, how they
+    ///                           are doing, their buttons, and emailing them.
+    ///   Email (for racer PINs)  the club's mailbox and its test.
+    ///   Race-day manager        the switch, how it is doing, its buttons.
+    ///   Share                   the club page's address and what to do with it.
+    ///   Status                  whether anything is getting through, and
+    ///                           Delete Everything Published.
+    ///
+    /// The relay's, the look's, the personal PINs' and the mail's captions
+    /// share one column (FieldGrid.LineUp), so their boxes line up down the
+    /// page. The staff PIN's caption is nearly half as long again as the
+    /// longest of those, and keeps a column of its own in its card rather
+    /// than pushing every other box on the page to the right. Nothing is placed
+    /// by hand, and the page scrolls, down only, when it is taller than the
+    /// window (PageStack).
+    ///
+    /// It used to be placed in pixels: every group box 780px wide whatever
+    /// the window, each one's height added up by hand from the rows in it,
+    /// the boxes the same width at every text size, the rows under each
+    /// switch indented by hand, each status line a fixed box two lines of
+    /// the small face tall - cut short with "...", or on check-in not even
+    /// that - and an 820x640 floor the page kept however small its window.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
@@ -202,124 +281,125 @@ public sealed class RelaySettingsControl : UserControl
             Text = "Publishes results, standings and the live race to a relay, so they are reachable from off the "
                  + "venue's Wi-Fi and outlive this laptop being closed. The laptop stays in charge: it only ever "
                  + "sends, and nothing on a race day waits for the network.",
-            Location = new Point(Inset, Inset),
             AutoSize = true,
-            MaximumSize = new Size(PageWidth, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
         };
 
-        var grpRelay = new GroupBox
-        {
-            Text = "Relay",
-            Location = new Point(Inset, UiLayout.Below(lblIntro, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
+        var page = new PageStack();
 
-        BuildRelayGroup(grpRelay);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(BuildRelayCard());
+        page.Add(BuildPublishCard());
+        page.Add(BuildLookCard());
+        page.Add(BuildCheckInCard());
+        page.Add(BuildPinsCard());
+        page.Add(BuildMailCard());
+        page.Add(BuildManagerCard());
+        page.Add(BuildShareCard());
+        page.Add(BuildStatusCard(), gapBelow: 0);
 
-        var grpPublish = new GroupBox
-        {
-            Text = "What gets published",
-            Location = new Point(Inset, UiLayout.Below(grpRelay, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
+        Controls.Add(page);
 
-        BuildPublishGroup(grpPublish);
-
-        var grpLook = new GroupBox
-        {
-            Text = "Look",
-            Location = new Point(Inset, UiLayout.Below(grpPublish, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildLookGroup(grpLook);
-
-        var grpCheckIn = new GroupBox
-        {
-            Text = "Online check-in",
-            Location = new Point(Inset, UiLayout.Below(grpLook, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildCheckInGroup(grpCheckIn);
-
-        var grpPins = new GroupBox
-        {
-            Text = "Personal PINs",
-            Location = new Point(Inset, UiLayout.Below(grpCheckIn, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildPinsGroup(grpPins);
-
-        var grpMail = new GroupBox
-        {
-            Text = "Email (for racer PINs)",
-            Location = new Point(Inset, UiLayout.Below(grpPins, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildMailGroup(grpMail);
-
-        var grpManager = new GroupBox
-        {
-            Text = "Race-day manager",
-            Location = new Point(Inset, UiLayout.Below(grpMail, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildManagerGroup(grpManager);
-
-        var grpShare = new GroupBox
-        {
-            Text = "Share",
-            Location = new Point(Inset, UiLayout.Below(grpManager, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildShareGroup(grpShare);
-
-        var grpStatus = new GroupBox
-        {
-            Text = "Status",
-            Location = new Point(Inset, UiLayout.Below(grpShare, UiLayout.RowGap)),
-            Width = PageWidth,
-            Font = AppTheme.BodyFont,
-        };
-
-        BuildStatusGroup(grpStatus);
-
-        Controls.Add(lblIntro);
-        Controls.Add(grpRelay);
-        Controls.Add(grpPublish);
-        Controls.Add(grpLook);
-        Controls.Add(grpCheckIn);
-        Controls.Add(grpPins);
-        Controls.Add(grpMail);
-        Controls.Add(grpManager);
-        Controls.Add(grpShare);
-        Controls.Add(grpStatus);
+        // Once the grids are on the page and wear its face - what their
+        // captions and fields are measured in.
+        _textSize.Keep(() => FieldGrid.LineUp(_linedUp));
+        _textSize.Keep(SizeFields);
     }
 
-    private void BuildRelayGroup(GroupBox group)
+    /// <summary>
+    /// The fields' sizes at the text size in use. The boxes are the widths
+    /// they always had at the normal text size, at this size - capped, not
+    /// stretched: an address, a token or a link is a long line, but a box
+    /// across the whole page for one reads as a mistake. The drop-downs are
+    /// that wide or as wide as their longest choice, the port as wide as
+    /// five digits and its arrows need, and the club page's link one line
+    /// of its face tall.
+    ///
+    /// Run again when the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
+        var address = UiLayout.AtTextSize(AddressWidth);
 
+        Fit(_txtBaseUrl, address);
+        Fit(_txtClub, UiLayout.AtTextSize(ClubWidth));
+        Fit(_txtToken, address);
+        Fit(_txtTagline, address);
+
+        foreach (var box in _socialBoxes.Values)
+        {
+            Fit(box, address);
+        }
+
+        Fit(_txtCheckInPin, UiLayout.AtTextSize(StaffPinWidth));
+        Fit(_cmbPinRotation, Math.Max(UiLayout.AtTextSize(DropDownWidth), Pieces.PickerWidth(_cmbPinRotation, ref _rotationWidth)));
+        Fit(_cmbMailPreset, Math.Max(UiLayout.AtTextSize(DropDownWidth), Pieces.PickerWidth(_cmbMailPreset, ref _presetWidth)));
+
+        var mail = UiLayout.AtTextSize(MailWidth);
+        var shortMail = UiLayout.AtTextSize(ShortMailWidth);
+
+        Fit(_txtSmtpHost, shortMail);
+        Fit(_numSmtpPort, Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(new string('0', PortDigits), _numSmtpPort.Font).Width + SystemInformation.VerticalScrollBarWidth + 12));
+        Fit(_txtSmtpUser, mail);
+        Fit(_txtSmtpPassword, shortMail);
+        Fit(_txtSmtpFromName, mail);
+
+        var link = _lnkClubPage.Font.Height + 4;
+
+        if (_lnkClubPage.Height != link)
+        {
+            _lnkClubPage.Height = link;
+        }
+
+        // Only when it changed: a new width lays the grid out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A status line in the small face that keeps two lines of it whatever
+    /// it says, so what is under it does not hop as it is rewritten - and
+    /// that grows past them for a longer message rather than cutting it
+    /// short. These used to be fixed boxes two lines tall: a longer message
+    /// ended in "...", and on check-in's, which had no "...", its third line
+    /// was simply not drawn.
+    /// </summary>
+    private void KeepLines(Label label)
+    {
+        label.AutoSize = true;
+        _textSize.Wear(label, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(label, StatusLines);
+    }
+
+    /// <summary>A line of help in the small muted type the app's hints use, wrapping to the room it has, in that face at every text size.</summary>
+    private Label HintLabel(string text) =>
+        _textSize.Wear(
+            new Label
+            {
+                Text = text,
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
+
+    /// <summary>
+    /// Publishing on or off; the relay's address, the club id and the
+    /// publish token, with Show the token under it; Save, Test Connection
+    /// and Restore Last Working; and under them what the last test said
+    /// and what last worked.
+    /// </summary>
+    private Section BuildRelayCard()
+    {
         _chkEnabled.Text = "Publish to the relay";
-        _chkEnabled.Location = new Point(Inset, y);
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.CheckedChanged += (_, _) =>
         {
             // Saved together with the fields: turning this on while the
@@ -328,51 +408,34 @@ public sealed class RelaySettingsControl : UserControl
             SaveFields();
         };
 
-        y = UiLayout.Below(_chkEnabled, UiLayout.RowGap);
-
-        var lblUrl = new Label { Text = "Address:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblClub = new Label { Text = "Club id:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblToken = new Label { Text = "Publish token:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        // One column from the widest caption, so the three fields line up
-        // instead of each starting wherever its own label ended.
-        var captionWidth = new[] { lblUrl.Text, lblClub.Text, lblToken.Text }
-            .Max(t => TextRenderer.MeasureText(t, AppTheme.BodyFont).Width);
-
-        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
-        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 460);
-
-        _txtBaseUrl.Font = AppTheme.BodyFont;
-        _txtBaseUrl.Width = fieldWidth;
         _txtBaseUrl.PlaceholderText = "http://localhost:8787";
 
-        _txtClub.Font = AppTheme.BodyFont;
-        _txtClub.Width = Math.Min(260, fieldWidth);
         _txtClub.PlaceholderText = "your-club";
 
-        _txtToken.Font = AppTheme.BodyFont;
-        _txtToken.Width = fieldWidth;
         _txtToken.UseSystemPasswordChar = true;
         _txtToken.PlaceholderText = "hg_...";
 
-        y = FieldRow(lblUrl, _txtBaseUrl, fieldLeft, y);
-        y = FieldRow(lblClub, _txtClub, fieldLeft, y);
-        y = FieldRow(lblToken, _txtToken, fieldLeft, y);
-
         _chkShowToken.Text = "Show the token";
-        _chkShowToken.Location = new Point(fieldLeft, y);
         _chkShowToken.AutoSize = true;
-        _chkShowToken.Font = AppTheme.SmallFont;
+        _textSize.Wear(_chkShowToken, () => AppTheme.SmallFont);
         _chkShowToken.CheckedChanged += (_, _) => _txtToken.UseSystemPasswordChar = !_chkShowToken.Checked;
 
-        y = UiLayout.Below(_chkShowToken, UiLayout.RowGap);
+        // One caption column, so the three boxes line up instead of each
+        // starting wherever its own caption ended - and the same column as
+        // the other cards' boxes further down (BuildLayout).
+        var fields = new FieldGrid();
+
+        fields.AddRow("Address:", _txtBaseUrl);
+        fields.AddRow("Club id:", _txtClub);
+        fields.AddRow("Publish token:", _txtToken);
+        fields.AddField(_chkShowToken);
+
+        _linedUp.Add(fields);
 
         _btnTest.Text = "Test Connection";
-        _btnTest.Font = AppTheme.BodyFont;
         _btnTest.Click += async (_, _) => await TestAsync();
 
         _btnSave.Text = "Save";
-        _btnSave.Font = AppTheme.BodyFont;
         _btnSave.Click += (_, _) =>
         {
             if (SaveFields())
@@ -382,14 +445,7 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         _btnRestore.Text = "Restore Last Working";
-        _btnRestore.Font = AppTheme.BodyFont;
         _btnRestore.Click += (_, _) => RestoreLastGood();
-
-        _btnTest.Size = new Size(UiLayout.WidthFor(_btnTest), UiLayout.ButtonHeight);
-        _btnSave.Size = new Size(UiLayout.WidthFor(_btnSave), UiLayout.ButtonHeight);
-        _btnRestore.Size = new Size(UiLayout.WidthFor(_btnRestore), UiLayout.ButtonHeight);
-
-        var buttonsBottom = UiLayout.FlowButtons(Inset, y, group.Width - Inset, _btnSave, _btnTest, _btnRestore);
 
         // Live, so the Restore button knows whether what is in the boxes
         // has drifted from what last worked.
@@ -397,66 +453,40 @@ public sealed class RelaySettingsControl : UserControl
         _txtClub.TextChanged += (_, _) => RefreshLastGood();
         _txtToken.TextChanged += (_, _) => RefreshLastGood();
 
-        // Both of these say different things at different lengths, and
-        // one sits under the other. Auto-sizing them would mean the group
-        // was measured against whichever message happened to be showing
-        // when the page was built - so they get a fixed two-line box each
-        // and the group's height stops depending on what they say.
-        var hintHeight = AppTheme.SmallFont.Height * 2 + 4;
-
-        _lblTestResult.Location = new Point(Inset, buttonsBottom + UiLayout.HintGap);
-        _lblTestResult.AutoSize = false;
-        _lblTestResult.Size = new Size(inner, hintHeight);
-        _lblTestResult.AutoEllipsis = true;
-        _lblTestResult.Font = AppTheme.SmallFont;
+        // Both of these say different things at different lengths, one
+        // under the other - so each keeps two lines whatever it says
+        // (KeepLines), and the card does not change height as they do.
         _lblTestResult.ForeColor = AppTheme.TextMuted;
         _lblTestResult.Text = "Test Connection checks the address, club and token without publishing anything.";
+        KeepLines(_lblTestResult);
 
-        _lblLastGood.Location = new Point(Inset, UiLayout.Below(_lblTestResult, UiLayout.HintGap));
-        _lblLastGood.AutoSize = false;
-        _lblLastGood.Size = new Size(inner, hintHeight);
-        _lblLastGood.AutoEllipsis = true;
-        _lblLastGood.Font = AppTheme.SmallFont;
         _lblLastGood.ForeColor = AppTheme.TextMuted;
+        KeepLines(_lblLastGood);
 
-        group.Controls.AddRange(new Control[]
-        {
-            _chkEnabled, lblUrl, _txtBaseUrl, lblClub, _txtClub, lblToken, _txtToken,
-            _chkShowToken, _btnSave, _btnTest, _btnRestore, _lblTestResult, _lblLastGood,
-        });
+        var card = new Section("Relay");
 
-        group.Height = UiLayout.Below(_lblLastGood, Inset);
+        card.Add(_chkEnabled, stretch: false);
+        card.Add(fields);
+        card.Add(new ButtonBar().With(_btnSave, _btnTest, _btnRestore), gapBelow: UiLayout.HintGap);
+        card.Add(_lblTestResult, gapBelow: UiLayout.HintGap);
+        card.Add(_lblLastGood, gapBelow: 0);
+
+        return card;
     }
 
-    private static int FieldRow(Label caption, TextBox field, int fieldLeft, int y)
+    /// <summary>What always goes to the relay, then the roster and short-name switches, each with what it means under it.</summary>
+    private Section BuildPublishCard()
     {
-        caption.Location = new Point(Inset, UiLayout.CentreOn(caption, y, field.Height));
-        field.Location = new Point(fieldLeft, y);
-        return UiLayout.Below(field, UiLayout.RowGap);
-    }
-
-    private void BuildPublishGroup(GroupBox group)
-    {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
         var lblAlways = new Label
         {
             Text = "The live race while one is running, each session's results as it is saved, championship "
                  + "standings, today's schedule from Race Day's Run Sheet tab, the badges drivers have earned, and "
                  + "every track layout with its lap record and best laps.",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            Font = AppTheme.BodyFont,
         };
 
-        y = UiLayout.Below(lblAlways, UiLayout.RowGap);
-
         _chkRoster.Text = "Also publish the roster and heat line-ups (who is entered, and who is in which heat)";
-        _chkRoster.Location = new Point(Inset, y);
         _chkRoster.AutoSize = true;
-        _chkRoster.Font = AppTheme.BodyFont;
         _chkRoster.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -469,27 +499,14 @@ public sealed class RelaySettingsControl : UserControl
             _publisher.SettingsChanged();
         };
 
-        y = UiLayout.Below(_chkRoster, UiLayout.HintGap);
-
-        var lblRosterHint = new Label
-        {
-            Text = "Off by default on purpose. This puts driver names on an address anyone can open, and some of "
-                 + "those drivers are likely to be children. The relay withholds the roster page as well unless the "
-                 + "club is set up to allow it, so both ends have to agree before that list is public. Heat line-ups "
-                 + "are held back here, on the laptop: with this off, the schedule shows the heats but not who is in them.",
-            Location = new Point(Inset + UiLayout.Indent, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        y = UiLayout.Below(lblRosterHint, UiLayout.RowGap);
+        var lblRosterHint = HintLabel(
+            "Off by default on purpose. This puts driver names on an address anyone can open, and some of "
+            + "those drivers are likely to be children. The relay withholds the roster page as well unless the "
+            + "club is set up to allow it, so both ends have to agree before that list is public. Heat line-ups "
+            + "are held back here, on the laptop: with this off, the schedule shows the heats but not who is in them.");
 
         _chkAbbreviate.Text = "Shorten published names to a first name and an initial";
-        _chkAbbreviate.Location = new Point(Inset, y);
         _chkAbbreviate.AutoSize = true;
-        _chkAbbreviate.Font = AppTheme.BodyFont;
         _chkAbbreviate.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -502,57 +519,35 @@ public sealed class RelaySettingsControl : UserControl
             _publisher.SettingsChanged();
         };
 
-        y = UiLayout.Below(_chkAbbreviate, UiLayout.HintGap);
+        var lblNameHint = HintLabel(
+            "\"Sam K\" rather than the full name, everywhere the relay shows one - the live board, "
+            + "results, standings and the roster. Only the last name is shortened and a single-word name is "
+            + "left alone. Affects what is sent from now on, not what is already on the relay.");
 
-        var lblNameHint = new Label
-        {
-            Text = "\"Sam K\" rather than the full name, everywhere the relay shows one - the live board, "
-                 + "results, standings and the roster. Only the last name is shortened and a single-word name is "
-                 + "left alone. Affects what is sent from now on, not what is already on the relay.",
-            Location = new Point(Inset + UiLayout.Indent, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var card = new Section("What gets published");
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblAlways, _chkRoster, lblRosterHint, _chkAbbreviate, lblNameHint,
-        });
+        card.Add(lblAlways);
+        card.Add(_chkRoster, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblRosterHint);
+        card.Add(_chkAbbreviate, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblNameHint, gapBelow: 0);
 
-        group.Height = UiLayout.Below(lblNameHint, Inset);
+        return card;
     }
 
     /// <summary>
     /// How the club's pages greet people: the welcome line, live - the site
     /// document is rebuilt every two seconds and only sent when it differs -
-    /// so there is no Save.
+    /// so there is no Save. Then the club's links, one box each, and what
+    /// is wrong with one just typed.
     ///
     /// The colours and the logo used to be chosen here too. Since 0.48 they
     /// are one set shared by the app, the Big Screen, the Wi-Fi pages and
-    /// these pages, chosen on Themes → Looks, and this group points there
+    /// these pages, chosen on Themes → Looks, and this card points there
     /// rather than keeping a second copy that could disagree.
     /// </summary>
-    private void BuildLookGroup(GroupBox group)
+    private Section BuildLookCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        var lblTagline = new Label { Text = "Welcome line:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        // One column of boxes for the welcome line and every link below it,
-        // lined up on the widest caption.
-        var widestCaption = RelaySocial.Platforms
-            .Select(p => p.Label + ":")
-            .Append(lblTagline.Text)
-            .Max(text => TextRenderer.MeasureText(text, AppTheme.BodyFont).Width);
-
-        var fieldLeft = Inset + widestCaption + UiLayout.LabelGap;
-        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 460);
-
-        _txtTagline.Font = AppTheme.BodyFont;
-        _txtTagline.Width = fieldWidth;
         _txtTagline.MaxLength = 160;
         _txtTagline.PlaceholderText = "Racing every Tuesday from 6pm - all welcome";
 
@@ -567,42 +562,29 @@ public sealed class RelaySettingsControl : UserControl
         };
         _txtTagline.Leave += (_, _) => _settings.Save();
 
-        y = FieldRow(lblTagline, _txtTagline, fieldLeft, y);
+        // The welcome line and every link below it in one column of boxes -
+        // the page's (BuildLayout).
+        var tagline = new FieldGrid();
+
+        tagline.AddRow("Welcome line:", _txtTagline);
+
+        _linedUp.Add(tagline);
 
         // ------------------------------------------------ the club's links
 
-        var lblSocial = new Label
-        {
-            Text = "Club links",
-            Location = new Point(Inset, y + UiLayout.HintGap),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-        };
+        var lblSocial = _textSize.Wear(new Label { Text = "Club links", AutoSize = true }, () => AppTheme.BoldFont);
 
-        var lblSocialHint = new Label
-        {
-            Text = "Shown on the club's home page and at the foot of every page, so visitors can find you "
-                 + "elsewhere. Paste the full address, or just @yourclub for Instagram, YouTube, TikTok and X. "
-                 + "Leave a box empty to leave that one off.",
-            Location = new Point(Inset, UiLayout.Below(lblSocial, UiLayout.HintGap)),
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var lblSocialHint = HintLabel(
+            "Shown on the club's home page and at the foot of every page, so visitors can find you "
+            + "elsewhere. Paste the full address, or just @yourclub for Instagram, YouTube, TikTok and X. "
+            + "Leave a box empty to leave that one off.");
 
-        group.Controls.Add(lblSocial);
-        group.Controls.Add(lblSocialHint);
-
-        y = UiLayout.Below(lblSocialHint, UiLayout.RowGap);
+        var links = new FieldGrid();
 
         foreach (var platform in RelaySocial.Platforms)
         {
-            var caption = new Label { Text = platform.Label + ":", AutoSize = true, Font = AppTheme.BodyFont };
             var box = new TextBox
             {
-                Font = AppTheme.BodyFont,
-                Width = fieldWidth,
                 MaxLength = RelaySocial.MaxUrlLength,
                 PlaceholderText = platform.Placeholder,
             };
@@ -621,56 +603,43 @@ public sealed class RelaySettingsControl : UserControl
             box.Leave += (_, _) => CommitSocialLink(platform, box);
 
             _socialBoxes[platform.Key] = box;
-            group.Controls.Add(caption);
-            group.Controls.Add(box);
 
-            y = FieldRow(caption, box, fieldLeft, y);
+            links.AddRow(platform.Label + ":", box);
         }
 
-        _lblSocialProblem.Location = new Point(fieldLeft, y - UiLayout.RowGap + UiLayout.HintGap);
-        _lblSocialProblem.AutoSize = true;
-        _lblSocialProblem.MaximumSize = new Size(inner - (fieldLeft - Inset), 0);
+        // Under the last box, in the boxes' column, in the danger colour -
+        // and only while there is a link that can't be used
+        // (RefreshSocialProblem). Hidden, it takes no room; shown, what is
+        // under it moves down to make room rather than being written over.
+        links.AddHint(_lblSocialProblem);
         _lblSocialProblem.ForeColor = AppTheme.Danger;
-        _lblSocialProblem.Font = AppTheme.SmallFont;
         _lblSocialProblem.Text = string.Empty;
         _lblSocialProblem.Visible = false;
-        group.Controls.Add(_lblSocialProblem);
 
-        // Room for a line of complaint under the last box, so showing one
-        // never pushes into the Looks note below.
-        y += TextRenderer.MeasureText("Ag", AppTheme.SmallFont).Height + UiLayout.HintGap;
+        _linedUp.Add(links);
 
         var lblLooksNote = new Label
         {
             Text = "Colours and club logo are set on Themes \u2192 Looks (shared with the app, Big Screen and Wi-Fi pages).",
-            Location = new Point(Inset, y),
             AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            Font = AppTheme.BodyFont,
         };
 
         _btnOpenLooks.Text = "Open Looks";
-        _btnOpenLooks.Font = AppTheme.BodyFont;
-        _btnOpenLooks.Size = new Size(UiLayout.WidthFor(_btnOpenLooks), UiLayout.ButtonHeight);
-        _btnOpenLooks.Location = new Point(Inset, UiLayout.Below(lblLooksNote, UiLayout.HintGap + 2));
         _btnOpenLooks.Click += (_, _) => OpenLooksRequested?.Invoke();
 
-        var lblLookHint = new Label
-        {
-            Text = "Changes reach the club's pages within a few seconds.",
-            Location = new Point(Inset, UiLayout.Below(_btnOpenLooks, UiLayout.HintGap)),
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var lblLookHint = HintLabel("Changes reach the club's pages within a few seconds.");
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblTagline, _txtTagline, lblLooksNote, _btnOpenLooks, lblLookHint,
-        });
+        var card = new Section("Look");
 
-        group.Height = UiLayout.Below(lblLookHint, Inset);
+        card.Add(tagline, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+        card.Add(lblSocial, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblSocialHint);
+        card.Add(links, gapBelow: UiLayout.SectionGap);
+        card.Add(lblLooksNote);
+        card.Add(new ButtonBar().With(_btnOpenLooks), gapBelow: UiLayout.HintGap);
+        card.Add(lblLookHint, gapBelow: 0);
+
+        return card;
     }
 
     /// <summary>
@@ -750,15 +719,11 @@ public sealed class RelaySettingsControl : UserControl
     /// guest Wi-Fi that keeps phones apart, none of which the LAN check-in
     /// page can reach.
     /// </summary>
-    private void BuildCheckInGroup(GroupBox group)
+    private Section BuildCheckInCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
         _chkCheckIn.Text = "Let drivers check in from their own phones";
-        _chkCheckIn.Location = new Point(Inset, y);
         _chkCheckIn.AutoSize = true;
-        _chkCheckIn.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkCheckIn, () => AppTheme.BoldFont);
         _chkCheckIn.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -780,13 +745,6 @@ public sealed class RelaySettingsControl : UserControl
             RefreshCheckInState();
         };
 
-        y = UiLayout.Below(_chkCheckIn, UiLayout.RowGap);
-
-        var lblPin = new Label { Text = "Staff PIN (opens the full list):", AutoSize = true, Font = AppTheme.BodyFont };
-        var fieldLeft = Inset + UiLayout.Indent + TextRenderer.MeasureText(lblPin.Text, AppTheme.BodyFont).Width + UiLayout.LabelGap;
-
-        _txtCheckInPin.Font = AppTheme.BodyFont;
-        _txtCheckInPin.Width = 120;
         _txtCheckInPin.MaxLength = 8;
         _txtCheckInPin.PlaceholderText = "e.g. 246813";
 
@@ -854,31 +812,22 @@ public sealed class RelaySettingsControl : UserControl
             RefreshCheckInState();
         };
 
-        _txtCheckInPin.Location = new Point(fieldLeft, y);
-        lblPin.Location = new Point(Inset + UiLayout.Indent, UiLayout.CentreOn(lblPin, y, _txtCheckInPin.Height));
+        // A caption column of its own. The caption is nearly half as long
+        // again as the longest of the other cards', and lined up with them
+        // it would push every box on the page to the right for this one.
+        var pin = new FieldGrid();
 
-        y = UiLayout.Below(_txtCheckInPin, UiLayout.HintGap);
+        pin.AddRow("Staff PIN (opens the full list):", _txtCheckInPin);
 
-        var lblHint = new Label
-        {
-            Text = "The staff PIN opens everybody's list at the club's check-in page - for a tablet on the desk. A "
-                 + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on the Entries page while this "
-                 + "is on and any phone camera, iPhones included, opens them straight to a Check In button. A racer's "
-                 + "own PIN (Personal PINs, below) does the same without a QR check-in. Nobody is checked in until somebody "
-                 + "taps it. Taps reach this laptop within a few seconds and land exactly like the Wi-Fi check-in page's.",
-            Location = new Point(Inset + UiLayout.Indent, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        y = UiLayout.Below(lblHint, UiLayout.RowGap);
+        var lblHint = HintLabel(
+            "The staff PIN opens everybody's list at the club's check-in page - for a tablet on the desk. A "
+            + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on the Entries page while this "
+            + "is on and any phone camera, iPhones included, opens them straight to a Check In button. A racer's "
+            + "own PIN (Personal PINs, below) does the same without a QR check-in. Nobody is checked in until somebody "
+            + "taps it. Taps reach this laptop within a few seconds and land exactly like the Wi-Fi check-in page's.");
 
         _chkCheckInPhotos.Text = "Include photos (drivers can be children - off unless you're sure)";
-        _chkCheckInPhotos.Location = new Point(Inset + UiLayout.Indent, y);
         _chkCheckInPhotos.AutoSize = true;
-        _chkCheckInPhotos.Font = AppTheme.BodyFont;
         _chkCheckInPhotos.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -893,17 +842,11 @@ public sealed class RelaySettingsControl : UserControl
             _settings.Save();
         };
 
-        y = UiLayout.Below(_chkCheckInPhotos, UiLayout.RowGap);
-
-        _lblCheckInState.Location = new Point(Inset + UiLayout.Indent, y);
-        _lblCheckInState.AutoSize = false;
-        _lblCheckInState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
-        _lblCheckInState.Font = AppTheme.SmallFont;
-
-        y = UiLayout.Below(_lblCheckInState, UiLayout.HintGap);
+        // Refreshed every second, and says things of different lengths -
+        // see KeepLines.
+        KeepLines(_lblCheckInState);
 
         _btnOpenCheckIn.Text = "Open Check-in Page";
-        _btnOpenCheckIn.Font = AppTheme.BodyFont;
         _btnOpenCheckIn.Click += (_, _) =>
         {
             var page = ClubPageUrl();
@@ -915,17 +858,23 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         // Beside Open Check-in Page rather than on a row of its own, so the
-        // group is no taller for the club that never needs it. On show only
-        // once there is a badge key to replace - see RefreshCheckInState.
+        // card is no taller for the club that never needs it - and the row
+        // is never left empty, Open Check-in Page being always there. On
+        // show only once there is a badge key to replace - see
+        // RefreshCheckInState.
         _btnReissueBadges.Text = "Reissue All QR Check-ins...";
-        _btnReissueBadges.Font = AppTheme.BodyFont;
         _btnReissueBadges.Click += (_, _) => ReissueAllBadges();
 
-        var buttonsBottom = UiLayout.FlowButtons(Inset + UiLayout.Indent, y, group.Width - Inset, _btnOpenCheckIn, _btnReissueBadges);
+        var card = new Section("Online check-in");
 
-        group.Controls.AddRange(new Control[] { _chkCheckIn, lblPin, _txtCheckInPin, lblHint, _chkCheckInPhotos, _lblCheckInState, _btnOpenCheckIn, _btnReissueBadges });
+        card.Add(_chkCheckIn, stretch: false);
+        card.Add(pin, gapBelow: UiLayout.HintGap);
+        card.Add(lblHint);
+        card.Add(_chkCheckInPhotos, stretch: false);
+        card.Add(_lblCheckInState, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnOpenCheckIn, _btnReissueBadges), gapBelow: 0);
 
-        group.Height = buttonsBottom + Inset;
+        return card;
     }
 
     /// <summary>One line on whether check-in is working, and if not, the thing to do about it.</summary>
@@ -1125,15 +1074,11 @@ public sealed class RelaySettingsControl : UserControl
     /// that racer and nobody else. For the racer who left their badge at
     /// home, and for the club that would rather not print badges at all.
     /// </summary>
-    private void BuildPinsGroup(GroupBox group)
+    private Section BuildPinsCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
         _chkRacerPins.Text = "Give every racer their own PIN";
-        _chkRacerPins.Location = new Point(Inset, y);
         _chkRacerPins.AutoSize = true;
-        _chkRacerPins.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkRacerPins, () => AppTheme.BoldFont);
         _chkRacerPins.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -1147,29 +1092,12 @@ public sealed class RelaySettingsControl : UserControl
             RacerPinsChanged?.Invoke();
         };
 
-        y = UiLayout.Below(_chkRacerPins, UiLayout.HintGap);
+        var lblPinsHint = HintLabel(
+            "Six digits each, and no two racers share one. A racer types theirs on the club's check-in page and "
+            + "it checks in only them - it cannot open the list or check in anybody else. The relay is only ever "
+            + "sent a scrambled form of each PIN, never the PIN. The staff PIN above still opens everything.");
 
-        var lblPinsHint = new Label
-        {
-            Text = "Six digits each, and no two racers share one. A racer types theirs on the club's check-in page and "
-                 + "it checks in only them - it cannot open the list or check in anybody else. The relay is only ever "
-                 + "sent a scrambled form of each PIN, never the PIN. The staff PIN above still opens everything.",
-            Location = new Point(Inset + UiLayout.Indent, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        y = UiLayout.Below(lblPinsHint, UiLayout.RowGap);
-
-        var lblRotation = new Label { Text = "Change them:", AutoSize = true, Font = AppTheme.BodyFont };
-        var rotationLeft = Inset + UiLayout.Indent + TextRenderer.MeasureText(lblRotation.Text, AppTheme.BodyFont).Width + UiLayout.LabelGap;
-
-        _cmbPinRotation.Font = AppTheme.BodyFont;
         _cmbPinRotation.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbPinRotation.Width = 200;
-        _cmbPinRotation.Location = new Point(rotationLeft, y);
         _cmbPinRotation.Items.AddRange(new object[]
         {
             new RotationChoice(PinRotation.Never, "Never"),
@@ -1177,7 +1105,6 @@ public sealed class RelaySettingsControl : UserControl
             new RotationChoice(PinRotation.Weekly, "Weekly"),
             new RotationChoice(PinRotation.Monthly, "Monthly"),
         });
-        lblRotation.Location = new Point(Inset + UiLayout.Indent, UiLayout.CentreOn(lblRotation, y, _cmbPinRotation.Height));
 
         _cmbPinRotation.SelectedIndexChanged += (_, _) =>
         {
@@ -1194,20 +1121,16 @@ public sealed class RelaySettingsControl : UserControl
             RefreshPinsState();
         };
 
-        y = UiLayout.Below(_cmbPinRotation, UiLayout.RowGap);
+        var rotation = new FieldGrid();
 
-        // Fixed two-line box, like the check-in state above it: what it says
-        // changes length, and the group's height must not.
-        _lblPinsState.Location = new Point(Inset + UiLayout.Indent, y);
-        _lblPinsState.AutoSize = false;
-        _lblPinsState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
-        _lblPinsState.AutoEllipsis = true;
-        _lblPinsState.Font = AppTheme.SmallFont;
+        rotation.AddRow("Change them:", _cmbPinRotation);
 
-        y = UiLayout.Below(_lblPinsState, UiLayout.HintGap);
+        _linedUp.Add(rotation);
+
+        // Two lines kept, like check-in's state line above it - see KeepLines.
+        KeepLines(_lblPinsState);
 
         _btnShowPins.Text = "Show PINs...";
-        _btnShowPins.Font = AppTheme.BodyFont;
         _btnShowPins.Click += (_, _) =>
         {
             using var form = new RacerPinsForm(_settings, _profiles);
@@ -1215,21 +1138,13 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         _btnNewPins.Text = "New PINs Now";
-        _btnNewPins.Font = AppTheme.BodyFont;
         _btnNewPins.Click += (_, _) => MakeNewPins();
 
         _btnEmailPins.Text = "Email PINs...";
-        _btnEmailPins.Font = AppTheme.BodyFont;
         _btnEmailPins.Click += async (_, _) => await EmailPinsAsync();
 
-        var buttonsBottom = UiLayout.FlowButtons(Inset + UiLayout.Indent, y, group.Width - Inset, _btnShowPins, _btnNewPins, _btnEmailPins);
-
-        y = buttonsBottom + UiLayout.RowGap;
-
         _chkEmailPinsAuto.Text = "Email automatically when PINs change";
-        _chkEmailPinsAuto.Location = new Point(Inset + UiLayout.Indent, y);
         _chkEmailPinsAuto.AutoSize = true;
-        _chkEmailPinsAuto.Font = AppTheme.BodyFont;
         _chkEmailPinsAuto.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -1241,27 +1156,22 @@ public sealed class RelaySettingsControl : UserControl
             _settings.Save();
         };
 
-        y = UiLayout.Below(_chkEmailPinsAuto, UiLayout.HintGap);
+        var lblAutoHint = HintLabel(
+            "Each racer is sent their new PIN when a new set is made, and a newcomer theirs within ten minutes "
+            + "of being added - as is anybody who has not been sent their current PIN yet. Racers need an "
+            + "email address on their driver profile, and the Email group below set up.");
 
-        var lblAutoHint = new Label
-        {
-            Text = "Each racer is sent their new PIN when a new set is made, and a newcomer theirs within ten minutes "
-                 + "of being added - as is anybody who has not been sent their current PIN yet. Racers need an "
-                 + "email address on their driver profile, and the Email group below set up.",
-            Location = new Point(Inset + UiLayout.Indent * 2, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent * 2, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var card = new Section("Personal PINs");
 
-        group.Controls.AddRange(new Control[]
-        {
-            _chkRacerPins, lblPinsHint, lblRotation, _cmbPinRotation, _lblPinsState,
-            _btnShowPins, _btnNewPins, _btnEmailPins, _chkEmailPinsAuto, lblAutoHint,
-        });
+        card.Add(_chkRacerPins, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblPinsHint);
+        card.Add(rotation);
+        card.Add(_lblPinsState, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnShowPins, _btnNewPins, _btnEmailPins));
+        card.Add(_chkEmailPinsAuto, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblAutoHint, gapBelow: 0);
 
-        group.Height = UiLayout.Below(lblAutoHint, Inset);
+        return card;
     }
 
     private void SelectRotation(PinRotation rotation)
@@ -1524,28 +1434,9 @@ public sealed class RelaySettingsControl : UserControl
     /// this laptop to the provider - Gmail, iCloud, Outlook - with nothing
     /// in between. Saved as it is typed, like the look settings above.
     /// </summary>
-    private void BuildMailGroup(GroupBox group)
+    private Section BuildMailCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        var lblPreset = new Label { Text = "Provider:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblHost = new Label { Text = "Server:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblPort = new Label { Text = "Port:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblUser = new Label { Text = "Club email address:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblPassword = new Label { Text = "App password:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblFrom = new Label { Text = "From name:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        var captionWidth = new[] { lblPreset.Text, lblHost.Text, lblUser.Text, lblPassword.Text, lblFrom.Text }
-            .Max(t => TextRenderer.MeasureText(t, AppTheme.BodyFont).Width);
-
-        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
-        var fieldWidth = Math.Clamp(inner - (fieldLeft - Inset), 240, 420);
-
-        _cmbMailPreset.Font = AppTheme.BodyFont;
         _cmbMailPreset.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbMailPreset.Width = 200;
-        _cmbMailPreset.Location = new Point(fieldLeft, y);
 
         foreach (var preset in PinMailer.Presets)
         {
@@ -1553,7 +1444,6 @@ public sealed class RelaySettingsControl : UserControl
         }
 
         _cmbMailPreset.Items.Add(new PresetChoice("Other", string.Empty, 587));
-        lblPreset.Location = new Point(Inset, UiLayout.CentreOn(lblPreset, y, _cmbMailPreset.Height));
 
         _cmbMailPreset.SelectedIndexChanged += (_, _) =>
         {
@@ -1587,13 +1477,7 @@ public sealed class RelaySettingsControl : UserControl
             RefreshMailProblem();
         };
 
-        y = UiLayout.Below(_cmbMailPreset, UiLayout.RowGap);
-
-        _txtSmtpHost.Font = AppTheme.BodyFont;
-        _txtSmtpHost.Width = Math.Min(280, fieldWidth);
         _txtSmtpHost.PlaceholderText = "smtp.example.com";
-        _txtSmtpHost.Location = new Point(fieldLeft, y);
-        lblHost.Location = new Point(Inset, UiLayout.CentreOn(lblHost, y, _txtSmtpHost.Height));
 
         _txtSmtpHost.TextChanged += (_, _) =>
         {
@@ -1607,13 +1491,8 @@ public sealed class RelaySettingsControl : UserControl
         };
         _txtSmtpHost.Leave += (_, _) => _settings.Save();
 
-        lblPort.Location = new Point(_txtSmtpHost.Left + _txtSmtpHost.Width + 16, UiLayout.CentreOn(lblPort, y, _txtSmtpHost.Height));
-
-        _numSmtpPort.Font = AppTheme.BodyFont;
         _numSmtpPort.Minimum = 1;
         _numSmtpPort.Maximum = 65535;
-        _numSmtpPort.Width = 90;
-        _numSmtpPort.Location = new Point(UiLayout.After(lblPort, AppTheme.BodyFont), y);
         _numSmtpPort.ValueChanged += (_, _) =>
         {
             if (_loading)
@@ -1626,10 +1505,6 @@ public sealed class RelaySettingsControl : UserControl
             RefreshMailProblem();
         };
 
-        y = UiLayout.Below(_txtSmtpHost, UiLayout.RowGap);
-
-        _txtSmtpUser.Font = AppTheme.BodyFont;
-        _txtSmtpUser.Width = fieldWidth;
         _txtSmtpUser.PlaceholderText = "club@gmail.com";
         _txtSmtpUser.TextChanged += (_, _) =>
         {
@@ -1644,10 +1519,6 @@ public sealed class RelaySettingsControl : UserControl
             RefreshMailProblem();
         };
 
-        y = FieldRow(lblUser, _txtSmtpUser, fieldLeft, y);
-
-        _txtSmtpPassword.Font = AppTheme.BodyFont;
-        _txtSmtpPassword.Width = Math.Min(280, fieldWidth);
         _txtSmtpPassword.UseSystemPasswordChar = true;
         _txtSmtpPassword.PlaceholderText = "abcd efgh ijkl mnop";
         _txtSmtpPassword.TextChanged += (_, _) =>
@@ -1666,18 +1537,11 @@ public sealed class RelaySettingsControl : UserControl
             RefreshMailProblem();
         };
 
-        y = FieldRow(lblPassword, _txtSmtpPassword, fieldLeft, y);
-
         _chkShowSmtpPassword.Text = "Show";
-        _chkShowSmtpPassword.Location = new Point(fieldLeft, y);
         _chkShowSmtpPassword.AutoSize = true;
-        _chkShowSmtpPassword.Font = AppTheme.SmallFont;
+        _textSize.Wear(_chkShowSmtpPassword, () => AppTheme.SmallFont);
         _chkShowSmtpPassword.CheckedChanged += (_, _) => _txtSmtpPassword.UseSystemPasswordChar = !_chkShowSmtpPassword.Checked;
 
-        y = UiLayout.Below(_chkShowSmtpPassword, UiLayout.RowGap);
-
-        _txtSmtpFromName.Font = AppTheme.BodyFont;
-        _txtSmtpFromName.Width = fieldWidth;
         _txtSmtpFromName.MaxLength = 80;
         _txtSmtpFromName.PlaceholderText = "e.g. Acme RC Club - blank uses the club id";
         _txtSmtpFromName.TextChanged += (_, _) =>
@@ -1689,45 +1553,41 @@ public sealed class RelaySettingsControl : UserControl
         };
         _txtSmtpFromName.Leave += (_, _) => _settings.Save();
 
-        y = FieldRow(lblFrom, _txtSmtpFromName, fieldLeft, y);
-
         _btnTestMail.Text = "Send Test Email";
-        _btnTestMail.Font = AppTheme.BodyFont;
-        _btnTestMail.Size = new Size(UiLayout.WidthFor(_btnTestMail), UiLayout.ButtonHeight);
-        _btnTestMail.Location = new Point(fieldLeft, y);
         _btnTestMail.Click += async (_, _) => await SendTestMailAsync();
 
-        y = UiLayout.Below(_btnTestMail, UiLayout.HintGap);
+        // The server and its port on one line, wrapping the port under the
+        // server when the line is too narrow for both (FieldGrid.Inline).
+        // The test's button and what it said under the boxes, in their
+        // column, as they always were.
+        var fields = new FieldGrid();
 
-        _lblMailResult.Location = new Point(fieldLeft, y);
-        _lblMailResult.AutoSize = false;
-        _lblMailResult.Size = new Size(inner - (fieldLeft - Inset), AppTheme.SmallFont.Height * 2 + 4);
-        _lblMailResult.AutoEllipsis = true;
-        _lblMailResult.Font = AppTheme.SmallFont;
-        _lblMailResult.ForeColor = AppTheme.TextMuted;
+        fields.AddRow("Provider:", _cmbMailPreset);
+        fields.AddRow("Server:", FieldGrid.Inline(_txtSmtpHost, new Label { Text = "Port:" }, _numSmtpPort));
+        fields.AddRow("Club email address:", _txtSmtpUser);
+        fields.AddRow("App password:", _txtSmtpPassword);
+        fields.AddField(_chkShowSmtpPassword);
+        fields.AddRow("From name:", _txtSmtpFromName);
+        fields.AddField(FieldGrid.Inline(_btnTestMail));
+        fields.AddHint(_lblMailResult);
+
+        _linedUp.Add(fields);
+
+        // What the test said, or what is wrong with the settings - two
+        // lines kept whatever it says (KeepLines).
         _lblMailResult.Text = MailTestHint;
+        KeepLines(_lblMailResult);
 
-        y = UiLayout.Below(_lblMailResult, UiLayout.HintGap);
+        var lblMailHint = HintLabel(
+            "Gmail/iCloud need an app password (Google Account \u2192 Security \u2192 App passwords). "
+            + "Nothing goes through a cloud service - mail is sent from this laptop.");
 
-        var lblMailHint = new Label
-        {
-            Text = "Gmail/iCloud need an app password (Google Account \u2192 Security \u2192 App passwords). "
-                 + "Nothing goes through a cloud service - mail is sent from this laptop.",
-            Location = new Point(Inset, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var card = new Section("Email (for racer PINs)");
 
-        group.Controls.AddRange(new Control[]
-        {
-            lblPreset, _cmbMailPreset, lblHost, _txtSmtpHost, lblPort, _numSmtpPort, lblUser, _txtSmtpUser,
-            lblPassword, _txtSmtpPassword, _chkShowSmtpPassword, lblFrom, _txtSmtpFromName,
-            _btnTestMail, _lblMailResult, lblMailHint,
-        });
+        card.Add(fields, gapBelow: UiLayout.HintGap);
+        card.Add(lblMailHint, gapBelow: 0);
 
-        group.Height = UiLayout.Below(lblMailHint, Inset);
+        return card;
     }
 
     /// <summary>Picks the provider matching the saved server and port, or Other.</summary>
@@ -1838,20 +1698,16 @@ public sealed class RelaySettingsControl : UserControl
     /// someone setting up entries or posting a result from off the
     /// venue's network. One Manager PIN either way (AppSettings.ManagerPin,
     /// [JsonIgnore]d, so it is not shown or set here): duplicating it on
-    /// this page would risk the two drifting apart, so this group only
+    /// this page would risk the two drifting apart, so this card only
     /// ever flips the relay path on or off and points at Local Screens
-    /// for the PIN itself, the same way the Look group above points at
+    /// for the PIN itself, the same way the Look card above points at
     /// Themes → Looks rather than keeping a second copy of the colours.
     /// </summary>
-    private void BuildManagerGroup(GroupBox group)
+    private Section BuildManagerCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
         _chkManager.Text = "Let the race-day manager be reached through the relay";
-        _chkManager.Location = new Point(Inset, y);
         _chkManager.AutoSize = true;
-        _chkManager.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkManager, () => AppTheme.BoldFont);
         _chkManager.CheckedChanged += (_, _) =>
         {
             if (_loading)
@@ -1865,40 +1721,20 @@ public sealed class RelaySettingsControl : UserControl
             RefreshManagerState();
         };
 
-        y = UiLayout.Below(_chkManager, UiLayout.RowGap);
+        var lblHint = HintLabel(
+            "The same page as Local Screens's race-day manager - setting up the day, entries, check-in, the "
+            + "program and results - reachable from off the venue's Wi-Fi too. It never starts a round or "
+            + "throws a flag, over the relay or the venue's own Wi-Fi either one. Guarded by the Manager PIN "
+            + "set on Local Screens; nothing here works without one.");
 
-        var lblHint = new Label
-        {
-            Text = "The same page as Local Screens's race-day manager - setting up the day, entries, check-in, the "
-                 + "program and results - reachable from off the venue's Wi-Fi too. It never starts a round or "
-                 + "throws a flag, over the relay or the venue's own Wi-Fi either one. Guarded by the Manager PIN "
-                 + "set on Local Screens; nothing here works without one.",
-            Location = new Point(Inset + UiLayout.Indent, y),
-            AutoSize = true,
-            MaximumSize = new Size(inner - UiLayout.Indent, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        y = UiLayout.Below(lblHint, UiLayout.RowGap);
-
-        // Fixed two-line box, like check-in's and personal PINs' own state
-        // lines above: what it says changes length, and the group's
-        // height must not.
-        _lblManagerState.Location = new Point(Inset + UiLayout.Indent, y);
-        _lblManagerState.AutoSize = false;
-        _lblManagerState.Size = new Size(inner - UiLayout.Indent, AppTheme.SmallFont.Height * 2 + 4);
-        _lblManagerState.AutoEllipsis = true;
-        _lblManagerState.Font = AppTheme.SmallFont;
-
-        y = UiLayout.Below(_lblManagerState, UiLayout.HintGap);
+        // Two lines kept, like check-in's and personal PINs' own state lines
+        // above - see KeepLines.
+        KeepLines(_lblManagerState);
 
         _btnManagerPin.Text = "Set Manager PIN...";
-        _btnManagerPin.Font = AppTheme.BodyFont;
         _btnManagerPin.Click += (_, _) => OpenPhoneWebRequested?.Invoke();
 
         _btnOpenManage.Text = "Open Manager Page";
-        _btnOpenManage.Font = AppTheme.BodyFont;
         _btnOpenManage.Click += (_, _) =>
         {
             var page = ClubPageUrl();
@@ -1914,18 +1750,14 @@ public sealed class RelaySettingsControl : UserControl
         // which this laptop checks - see RelayManagerDevices.VerifyPinSigned.
         // Nothing to enrol at the desk.
 
-        _btnManagerPin.Size = new Size(UiLayout.WidthFor(_btnManagerPin), UiLayout.ButtonHeight);
-        _btnOpenManage.Size = new Size(UiLayout.WidthFor(_btnOpenManage), UiLayout.ButtonHeight);
+        var card = new Section("Race-day manager");
 
-        var buttonsBottom = UiLayout.FlowButtons(
-            Inset + UiLayout.Indent, y, group.Width - Inset, _btnManagerPin, _btnOpenManage);
+        card.Add(_chkManager, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblHint);
+        card.Add(_lblManagerState, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnManagerPin, _btnOpenManage), gapBelow: 0);
 
-        group.Controls.AddRange(new Control[]
-        {
-            _chkManager, lblHint, _lblManagerState, _btnManagerPin, _btnOpenManage,
-        });
-
-        group.Height = buttonsBottom + Inset;
+        return card;
     }
 
     /// <summary>One line on whether the manager is reachable through the relay, and if not, why.</summary>
@@ -1986,57 +1818,41 @@ public sealed class RelaySettingsControl : UserControl
     /// says what is on now and links to everything else, so it is the one
     /// worth putting on a poster that stays up all season.
     /// </summary>
-    private void BuildShareGroup(GroupBox group)
+    private Section BuildShareCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        _lnkClubPage.Location = new Point(Inset, y);
+        // One line across the card, cut short with "..." when the address is
+        // longer than that - an address has no spaces to wrap at. One line
+        // of its face tall at the text size in use (SizeFields).
         _lnkClubPage.AutoSize = false;
-        _lnkClubPage.Size = new Size(inner, AppTheme.BodyFont.Height + 4);
         _lnkClubPage.AutoEllipsis = true;
-        _lnkClubPage.Font = AppTheme.BodyFont;
         _lnkClubPage.LinkColor = AppTheme.Accent;
         _lnkClubPage.ActiveLinkColor = AppTheme.Accent;
         _lnkClubPage.VisitedLinkColor = AppTheme.Accent;
         _lnkClubPage.LinkClicked += (_, _) => OpenClubPage();
 
-        y = UiLayout.Below(_lnkClubPage, UiLayout.RowGap);
-
         _btnOpenPage.Text = "Open";
-        _btnOpenPage.Font = AppTheme.BodyFont;
         _btnOpenPage.Click += (_, _) => OpenClubPage();
 
         _btnCopyPage.Text = "Copy Link";
-        _btnCopyPage.Font = AppTheme.BodyFont;
         _btnCopyPage.Click += (_, _) => CopyClubPage();
 
         _btnPoster.Text = "Show Poster";
-        _btnPoster.Font = AppTheme.BodyFont;
         _btnPoster.Click += (_, _) => ShowClubPoster();
 
-        _btnOpenPage.Size = new Size(UiLayout.WidthFor(_btnOpenPage), UiLayout.ButtonHeight);
-        _btnCopyPage.Size = new Size(UiLayout.WidthFor(_btnCopyPage), UiLayout.ButtonHeight);
-        _btnPoster.Size = new Size(UiLayout.WidthFor(_btnPoster), UiLayout.ButtonHeight);
+        var lblShareHint = HintLabel(
+            "The club's home page: what is on now, the schedule, results, standings, badges and tracks. It "
+            + "works from anywhere, on any network - no need to be on the venue's Wi-Fi. The poster puts it in "
+            + "a QR code for the pits wall.");
 
-        var buttonsBottom = UiLayout.FlowButtons(Inset, y, group.Width - Inset, _btnOpenPage, _btnCopyPage, _btnPoster);
+        var card = new Section("Share");
 
-        var lblShareHint = new Label
-        {
-            Text = "The club's home page: what is on now, the schedule, results, standings, badges and tracks. It "
-                 + "works from anywhere, on any network - no need to be on the venue's Wi-Fi. The poster puts it in "
-                 + "a QR code for the pits wall.",
-            Location = new Point(Inset, buttonsBottom + UiLayout.HintGap),
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        card.Add(_lnkClubPage);
+        card.Add(new ButtonBar().With(_btnOpenPage, _btnCopyPage, _btnPoster), gapBelow: UiLayout.HintGap);
+        card.Add(lblShareHint, gapBelow: 0);
 
-        group.Controls.AddRange(new Control[] { _lnkClubPage, _btnOpenPage, _btnCopyPage, _btnPoster, lblShareHint });
-
-        group.Height = UiLayout.Below(lblShareHint, Inset);
         RefreshShare();
+
+        return card;
     }
 
     /// <summary>The club page for what is SAVED, or empty. Never what is merely typed in the boxes - that may not work yet.</summary>
@@ -2129,48 +1945,40 @@ public sealed class RelaySettingsControl : UserControl
         poster.Show(this);
     }
 
-    private void BuildStatusGroup(GroupBox group)
+    /// <summary>
+    /// Whether anything is getting through - a word or two in the bold face,
+    /// then the detail - and the one way to take it all back off the relay.
+    /// </summary>
+    private Section BuildStatusCard()
     {
-        var inner = group.Width - Inset * 2;
-        var y = UiLayout.InsideGroup(group);
-
-        _lblStatus.Location = new Point(Inset, y);
         _lblStatus.AutoSize = true;
-        _lblStatus.Font = AppTheme.BoldFont;
+        _textSize.Wear(_lblStatus, () => AppTheme.BoldFont);
 
-        y = UiLayout.Below(_lblStatus, UiLayout.HintGap);
-
-        _lblDetail.Location = new Point(Inset, y);
-        _lblDetail.AutoSize = true;
-        _lblDetail.MaximumSize = new Size(inner, 0);
+        // Rewritten every second while publishing ("Last published 5 seconds
+        // ago"), and it runs to a second line with a problem in it - so two
+        // lines are kept (KeepLines), and Delete Everything Published under
+        // it stays where it is while somebody reaches for it.
         _lblDetail.ForeColor = AppTheme.TextMuted;
-        _lblDetail.Font = AppTheme.SmallFont;
-
-        y = UiLayout.Below(_lblDetail, UiLayout.RowGap);
+        KeepLines(_lblDetail);
 
         _btnDelete.Text = "Delete Everything Published";
-        _btnDelete.Font = AppTheme.BodyFont;
-        _btnDelete.Size = new Size(UiLayout.WidthFor(_btnDelete), UiLayout.ButtonHeight);
-        _btnDelete.Location = new Point(Inset, y);
         _btnDelete.Click += async (_, _) => await DeleteAsync();
 
-        var lblDeleteHint = new Label
-        {
-            Text = "Removes everything this club has published - results, standings, the live race, the schedule, "
-                 + "badges, tracks, the look and the online check-in list. The laptop keeps its own copy of "
-                 + "everything; this only clears the relay. It also turns \"Publish to the relay\" off, so nothing "
-                 + "goes back up until you tick it again - and ticking it sends everything again, including the "
-                 + "last day and a half of results.",
-            Location = new Point(Inset, UiLayout.Below(_btnDelete, UiLayout.HintGap)),
-            AutoSize = true,
-            MaximumSize = new Size(inner, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
+        var lblDeleteHint = HintLabel(
+            "Removes everything this club has published - results, standings, the live race, the schedule, "
+            + "badges, tracks, the look and the online check-in list. The laptop keeps its own copy of "
+            + "everything; this only clears the relay. It also turns \"Publish to the relay\" off, so nothing "
+            + "goes back up until you tick it again - and ticking it sends everything again, including the "
+            + "last day and a half of results.");
 
-        group.Controls.AddRange(new Control[] { _lblStatus, _lblDetail, _btnDelete, lblDeleteHint });
+        var card = new Section("Status");
 
-        group.Height = UiLayout.Below(lblDeleteHint, Inset);
+        card.Add(_lblStatus, gapBelow: UiLayout.HintGap);
+        card.Add(_lblDetail);
+        card.Add(new ButtonBar().With(_btnDelete), gapBelow: UiLayout.HintGap);
+        card.Add(lblDeleteHint, gapBelow: 0);
+
+        return card;
     }
 
     private void LoadFromSettings()

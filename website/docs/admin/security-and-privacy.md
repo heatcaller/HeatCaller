@@ -54,7 +54,7 @@ This doesn't reach copies made before the upgrade, such as old backups. See [Kno
 
 ### In backups
 
-Because DPAPI-sealed values are useless on another PC, a backup carries a second copy of the secrets only if you've set a **Backup Password** on the **Backup & Restore** page. That copy (a file named `secrets.hgk` inside the backup) is encrypted with AES-GCM, using a key derived from your backup password with PBKDF2-SHA256 and 210,000 iterations. The stretching makes each password guess slow for anyone who gets hold of a backup file.
+Because DPAPI-sealed values are useless on another PC, a backup carries a second copy of the secrets only if you've set a backup password on the **Backup & Restore** page (the **Backup password** card). That copy (a file named `secrets.hgk` inside the backup) is encrypted with AES-GCM, using a key derived from your backup password with PBKDF2-SHA256 and 210,000 iterations. The stretching makes each password guess slow for anyone who gets hold of a backup file.
 
 With no backup password, backups carry no usable secrets at all. See [Backups](backups.md#the-backup-password) for what that means when restoring on a new PC.
 

@@ -86,11 +86,13 @@ A layer is one looping sound, such as a crowd or engine noise. You can run sever
 
 **Always on - ignore race state** makes a layer play at one fixed **Level:** (default 35%) all the time, including between races. Use it for a background theme or your own track. **Layer enabled** switches a single layer off without deleting it.
 
-The **LAYERS** list shows each layer's file and levels. A file that can't be found shows as "MISSING:". Use **Edit...**, **Delete** and **Preview** (plays your layers at the Racing level; press **Stop Preview** to end it). In the layer editor, the preview plays a newly picked file straight away. The panel above the list shows which state the ambience is in right now, and any surge in progress.
+The list on the **Layers** card shows each layer's file and levels. A file that can't be found shows as "MISSING:". Use **Edit...**, **Delete** and **Preview** (plays your layers at the Racing level; press **Stop Preview** to end it). In the layer editor, the preview plays a newly picked file straight away. The panel above the list shows which state the ambience is in right now, and any surge in progress.
 
 <!-- screenshot: Sounds > Ambience tab with two layers and the live state panel -->
 
 ### Reactions and ducking
+
+**Overall level:** is beside **Enable ambience** at the top of the tab. The rest are on the **Reactions** and **Ducking** cards, under the layers.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -135,7 +137,7 @@ A track that won't play, stops part-way with an error, or has no sound in it is 
 1. Press **Add Track...** and choose one or more `.wav` or `.mp3` files.
 2. The files are copied into HeatCaller's music folder, so they keep working if you move or delete the originals.
 
-The **LIBRARY** list shows each **Track**, its **Source** ("Included" or "Yours"), whether it's ticked for **My music** ("Yes" or "No"), and the **File**. The applied soundscape's tracks have "• theme" after their source, whichever choice is playing. The track that's playing is shown in bold with "(now playing)" after its name. Tracks that aren't in what's playing now are greyed. Double-click a track to play it.
+The list on the **Library** card shows each **Track**, its **Source** ("Included" or "Yours"), whether it's ticked for **My music** ("Yes" or "No"), and the **File**. The applied soundscape's tracks have "• theme" after their source, whichever choice is playing. The track that's playing is shown in bold with "(now playing)" after its name. Tracks that aren't in what's playing now are greyed. Double-click a track to play it.
 
 Double-clicking a track that isn't in what's playing now plays it once without adding it, and the page says: "*name*" is excluded from My music - playing it once. With **Theme music** playing, any track that isn't the theme's plays once the same way, and the page says: "*name*" isn't part of the theme music - playing it once, then back to the theme. The music then carries on from the top, reshuffled if **Shuffle** is on. If the track won't play, the page says: Couldn't play "*name*" - the console says why.
 
@@ -151,6 +153,8 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 
 ### Behaviour settings
 
+These are on the **Behaviour** card, under the library.
+
 | Setting | What it does | Default |
 |---|---|---|
 | **Stop while a race is running** | Stops the music at staging, countdown and racing. Ignored if the Mixer is set to start music when a session begins, since that's the more specific instruction. | Off |
@@ -160,7 +164,7 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 
 By default the music keeps playing after a race: the gap between heats is when a soundtrack is most wanted. If you'd rather it ended, set **Music after the recap:** on the **Mixer** (below), or tick **At the flag, stop:** **Music** to stop it the moment the race ends. The music only stops or fades after the race recap has finished speaking, not at the checkered flag, so it doesn't cut across the summary. If commentary is off or the model doesn't answer, it happens after the teaser has been spoken. If the teaser and commentary are both off, it happens once the race is over. It also works after a demo race you didn't save and after a race with no racers.
 
-The recap can still be speaking when the next heat is staged. If that heat has brought the music up itself (**WHEN A SESSION STARTS** with **bring up: Music** ticked), the last race's fade or stop is skipped and the music plays on for the new session, with "[audio] Music kept playing - the next session has already started." in the console.
+The recap can still be speaking when the next heat is staged. If that heat has brought the music up itself (**When a session starts** on the **Mixer** with **Bring up:** **Music** ticked), the last race's fade or stop is skipped and the music plays on for the new session, with "[audio] Music kept playing - the next session has already started." in the console.
 
 ## Soundscape crowd and music
 
@@ -168,7 +172,7 @@ Applying a soundscape on **Sounds → Soundscapes** sets more than the sound eff
 
 ### The crowd
 
-A soundscape puts two layers into **Ambience**, at the top of the **LAYERS** list:
+A soundscape puts two layers into **Ambience**, at the top of the list on the **Layers** card:
 
 | Layer | What it does |
 |---|---|
@@ -177,7 +181,7 @@ A soundscape puts two layers into **Ambience**, at the top of the **LAYERS** lis
 
 Those moments are the surges set under [Reactions and ducking](#reactions-and-ducking).
 
-Applying a soundscape also ticks **Enable ambience**, so the crowd is heard. It doesn't start the ambience there and then, because a soundscape applied at a venue shouldn't start noise in a room that didn't ask for it. The crowd plays when ambience is next brought up, for example by **WHEN A SESSION STARTS** on the Mixer (see [Audio auto-start](#audio-auto-start)).
+Applying a soundscape also ticks **Enable ambience**, so the crowd is heard. It doesn't start the ambience there and then, because a soundscape applied at a venue shouldn't start noise in a room that didn't ask for it. The crowd plays when ambience is next brought up, for example by **When a session starts** on the Mixer (see [Audio auto-start](#audio-auto-start)).
 
 Applying another soundscape swaps its pair in place of the last one. Your own layers are never touched. Both are ordinary layers: you can edit their levels, switch one off with **Layer enabled**, or delete it. A soundscape set to **No soundscape crowd** takes the soundscape's layers out again; one set to **Leave Ambience as it is** doesn't touch Ambience at all.
 
@@ -258,11 +262,11 @@ The **Test** button on the **Announcements** channel speaks a level-check line i
 
 ### Audio auto-start
 
-The **WHEN A SESSION STARTS** section brings audio up automatically, so you don't have to start the music and crowd before every heat. **WHEN IT ENDS**, below it, takes it down again.
+The **When a session starts** card brings audio up automatically, so you don't have to start the music and crowd before every heat. The **When it ends** card, under it, takes it down again.
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Start for:** **Races** / **Practice** | Which sessions trigger auto-start. The rest of the section is greyed out until one is ticked. | Both off |
+| **Start for:** **Races** / **Practice** | Which sessions trigger auto-start. The rest of both cards is grayed out until one is ticked. | Both off |
 | **Starting at:** | **Staging** or **Green flag**. Staging covers the countdown; Green flag keeps the countdown clean. Practice has no staging, so it starts at green either way. | Staging |
 | **Bring up:** **Music** | Starts the music. This works even if **Enable music** is off. | On |
 | **Bring up:** **Ambience** | Starts the ambience. This works even if **Enable ambience** is off. | On |
@@ -285,7 +289,7 @@ If a session that brings the music up starts while the last one's **Fade out** i
 
 There are eight cues: High blip, Low blip, Double high, Double low, Rising, Falling, Triple tick and Warble. With more than eight drivers some will share; that's usually fine if they aren't on track together. The status line warns you when drivers share a cue.
 
-The list shows **Driver**, **Transponder**, **Class** and **Cue**. **Turn On / Off** switches the selected driver's cue, and **Clear All** removes every cue (after asking). All of these can be undone.
+The list on the **Drivers** card shows **Driver**, **Transponder**, **Class** and **Cue**. **Turn On / Off** switches the selected driver's cue, and **Clear All** removes every cue (after asking). All of these can be undone.
 
 Lap beeps play the instant the car crosses, ahead of any spoken line, at the **Sound effects volume (%):** level. The sidebar mute silences them.
 
@@ -319,13 +323,13 @@ Built-in styles don't include any sound files, since HeatCaller can't source the
 
 To make a style with your own sounds: apply a style, choose your files on **Sounds → Effects**, then come back and use **Save Current as New Style** (or **Update Selected from Current** for a custom style).
 
-The **Appearance** options (**Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** and **Use 24-hour (military) time**) have moved to the **Looks** tab. See [Appearance](../screens/looks-and-logo.md#appearance).
+The **Appearance** options (**Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** and **Use 24-hour (military) time**) are on the **Appearance** card of the **Themes** page. See [Appearance](../screens/looks-and-logo.md#appearance).
 
 ### What applying a style changes
 
 - **The ElevenLabs voice.** A built-in style keeps your current ElevenLabs voice, model and API key, so the announcer carries on speaking in the voice you chose. A custom style saved with an ElevenLabs voice switches to that voice and the model it was saved with.
 - **The language.** Kept, unless the style sets one of its own. The built-in styles don't.
-- **This PC's setup is left as it is:** the playback volume, the **Output format:**, and the **Speak With** choice — which of the three voices speaks, which Windows voice, which HeatCaller announcer voice, and the stand-in box. A venue's preferred style is applied the same way.
+- **This PC's setup is left as it is:** the playback volume, the **Output format:**, and the **Speak with** choice — which of the three voices speaks, which Windows voice, which HeatCaller announcer voice, and the stand-in box. A venue's preferred style is applied the same way.
 - **On the HeatCaller voice, a style's lines aren't applied.** Everything else in it is: the sound effects, the tuning, the look. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
 
 The confirmation spells it out. For a built-in style it ends: "Not affected: your ElevenLabs API key, voice and model, the playback volume, the wireless speaker setting, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."

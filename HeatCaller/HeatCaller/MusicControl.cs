@@ -38,17 +38,36 @@ public sealed class MusicControl : UserControl
     // "Play: (o) Theme music  ( ) My music" - see MusicSettings.PlayThemeMusic.
     private readonly RadioButton _rdoThemeMusic = new();
     private readonly RadioButton _rdoMyMusic = new();
-    private readonly Label _lblSource = new();
+
+    /// <summary>
+    /// The sentence under the Theme music / My music choice - see
+    /// RefreshSource. As tall as the longer of the two things it can say for
+    /// the soundscape applied now, so switching between them never moves the
+    /// player under it.
+    /// </summary>
+    private readonly SteadyLabel _lblSource = new();
 
     /// <summary>Set while the page seeds or re-syncs its own controls, so that isn't taken as an edit.</summary>
     private bool _syncing;
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The clock's column width as last measured, and the face it was measured in - see TimeWidth.</summary>
+    private (Font Font, int Width)? _timeWidth;
+
+    /// <summary>The seek bar's height, and the clock's beside it, at the normal text size.</summary>
+    private const int SeekHeight = 30;
+
     /// <summary>
-    /// How far everything from the Player box down sits below where it used
-    /// to, to make room for the Theme music / My music line and the sentence
-    /// under it saying what that choice plays.
+    /// The least room what is playing takes at the end of the transport
+    /// buttons' line, at the normal text size, before it moves onto a line of
+    /// its own - see BuildLayout.
     /// </summary>
-    private const int SourceRowShift = 76;
+    private const int NowPlayingLeastWidth = 240;
+
+    /// <summary>The fewest tracks the library shows under its headings before the page scrolls instead.</summary>
+    private const int GridLeastRows = 4;
 
     public MusicControl(MusicStore store, MusicPlayer player, UndoService undo)
     {
@@ -57,12 +76,17 @@ public sealed class MusicControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 620 + SourceRowShift);
-        MinimumSize = new Size(900, 540 + SourceRowShift);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize: the 900x616 floor was honoured
+        // over the size the page was given, so a smaller window cut the page
+        // off rather than scrolling it. A short window scrolls the page
+        // instead (FillPage), which also does away with the page's own
+        // scrolling.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshGrid();
@@ -76,6 +100,20 @@ public sealed class MusicControl : UserControl
 
         _tick.Tick += (_, _) => TickPosition();
         _tick.Start();
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
     }
 
     /// <summary>
@@ -138,22 +176,36 @@ public sealed class MusicControl : UserControl
         RefreshNowPlaying(_player.NowPlaying);
     }
 
+    /// <summary>
+    /// What the page is for, then the switches along one line - Enable
+    /// music, the volume, and Shuffle with what it does - and under them the
+    /// choice of Theme music or My music, with the sentence saying what that
+    /// choice plays. Then three cards: Player - the transport buttons with
+    /// what is playing at the end of their line, and the seek bar with the
+    /// clock beside it; Library - the tracks, taking the height that is
+    /// left, and their buttons; Behaviour - when the music stops, and how far
+    /// it ducks. Then what the last change did. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels against a 980x696 page: every row from
+    /// the Player box down moved 76px by hand when the Theme music / My music
+    /// line went in above it, the Player box 944px wide with the clock at
+    /// x=844 whatever the text size, the list 198px tall however tall the
+    /// window, and a 900x616 floor the page kept however small its window.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "A soundtrack for between races. Eleven tracks are included - add your own with Add Track, "
                  + "and they're copied into the app's music folder so they keep working if you move the original.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(900, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
         _chkEnabled.Text = "Enable music";
-        _chkEnabled.Location = new Point(12, 58);
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BoldFont;
+        _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.Checked = _store.Current.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
         {
@@ -169,12 +221,6 @@ public sealed class MusicControl : UserControl
             UpdateEnabledState();
         };
 
-        // Measured, not 160 / 222 / 288. Those were spaced for a smaller
-        // font and now put the spinner inside "Volume:" and the "%" inside
-        // the spinner.
-        var lblVolume = new Label { Text = "Volume:", Location = new Point(160, 60), AutoSize = true, Font = AppTheme.BodyFont };
-        _numVolume.Width = 60;
-        _numVolume.Location = new Point(UiLayout.After(lblVolume), 57);
         _numVolume.Minimum = 0;
         _numVolume.Maximum = 100;
         _numVolume.Increment = 5;
@@ -189,17 +235,9 @@ public sealed class MusicControl : UserControl
             _player.RefreshVolume();
         };
 
-        var lblVolumeSuffix = new Label
-        {
-            Text = "%",
-            Location = new Point(_numVolume.Right + UiLayout.HintGap, 60),
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-            ForeColor = AppTheme.TextMuted,
-        };
+        var lblVolumeSuffix = new Label { Text = "%", ForeColor = AppTheme.TextMuted };
 
         _chkShuffle.Text = "Shuffle";
-        _chkShuffle.Location = new Point(UiLayout.After(lblVolumeSuffix) + UiLayout.RowGap, 59);
         _chkShuffle.AutoSize = true;
         _chkShuffle.Checked = _store.Current.Shuffle;
         _chkShuffle.CheckedChanged += (_, _) =>
@@ -212,11 +250,22 @@ public sealed class MusicControl : UserControl
         var lblShuffleHint = new Label
         {
             Text = "plays every track once before repeating any",
-            Location = new Point(UiLayout.After(_chkShuffle) + UiLayout.RowGap, 61),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
+
+        _textSize.Wear(lblShuffleHint, () => AppTheme.SmallFont);
+
+        var volume = FieldGrid.Inline(_numVolume, lblVolumeSuffix);
+
+        // Along one line, and onto the next when there is not room for them
+        // all (FieldRow). Shuffle and what it does are one pair, so a line
+        // that wraps never parts them.
+        var switches = new FieldRow();
+
+        switches.Add(null, _chkEnabled);
+        switches.Add(new Label { Text = "Volume:" }, volume);
+        switches.Add(null, FieldGrid.Inline(_chkShuffle, lblShuffleHint));
 
         // --- What plays ---
         //
@@ -231,24 +280,16 @@ public sealed class MusicControl : UserControl
         {
             Text = "Play:",
             AutoSize = true,
-            Font = AppTheme.BoldFont,
             ForeColor = AppTheme.TextDark,
         };
 
+        _textSize.Wear(lblPlay, () => AppTheme.BoldFont);
+
         _rdoThemeMusic.Text = "Theme music";
         _rdoThemeMusic.AutoSize = true;
-        _rdoThemeMusic.Font = AppTheme.BodyFont;
 
         _rdoMyMusic.Text = "My music";
         _rdoMyMusic.AutoSize = true;
-        _rdoMyMusic.Font = AppTheme.BodyFont;
-
-        // Measured, so the three never run into each other whatever the
-        // text size - all three carry the font they are drawn in already.
-        const int sourceY = 96;
-        lblPlay.Location = new Point(12, UiLayout.CentreOn(lblPlay, sourceY, _rdoThemeMusic.PreferredSize.Height));
-        _rdoThemeMusic.Location = new Point(UiLayout.After(lblPlay) + 4, sourceY);
-        _rdoMyMusic.Location = new Point(UiLayout.After(_rdoThemeMusic) + UiLayout.ButtonGap * 2, sourceY);
 
         _syncing = true;
         _rdoThemeMusic.Checked = _store.Current.PlayThemeMusic == true;
@@ -272,21 +313,17 @@ public sealed class MusicControl : UserControl
             }
         };
 
-        _lblSource.Location = new Point(12, sourceY + Math.Max(_rdoThemeMusic.PreferredSize.Height, 24) + 6);
-        _lblSource.AutoSize = true;
-        _lblSource.MaximumSize = new Size(900, 0);
-        _lblSource.Font = AppTheme.SmallFont;
+        // Both radios in the one row, which makes them one group - picking
+        // one clears the other, as it did when both sat on the page itself.
+        var source = new FieldRow();
+
+        source.Add(lblPlay, _rdoThemeMusic);
+        source.Add(null, _rdoMyMusic);
+
         _lblSource.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblSource, () => AppTheme.SmallFont);
 
         // --- Player ---
-
-        var grpPlayer = new GroupBox
-        {
-            Text = "Player",
-            Location = new Point(12, 90 + SourceRowShift),
-            Size = new Size(944, 118),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-        };
 
         // Words rather than media glyphs. U+23EE/23F9/23ED aren't in
         // Bahnschrift, so Windows either drew a .notdef box or substituted
@@ -294,22 +331,6 @@ public sealed class MusicControl : UserControl
         // what made these look wrong. Words always render, match every
         // other button in the app, and lose nothing: the row already reads
         // left to right in the order every player uses.
-        // One width for all four, because a transport row wants to look
-        // like a transport row - but measured, and measured for the
-        // LONGEST caption any of them ever shows, "Resume" and "Pause"
-        // included: Play/Stop swaps those in mid-song. The flat 84 was
-        // right for a smaller font and left "Previous" a pixel short, so
-        // the doctor widened it on its own at every startup.
-        var transportWidth = Math.Max(
-            84,
-            new[] { "Previous", "Play", "Pause", "Resume", "Stop", "Next" }
-                .Max(text => TextRenderer.MeasureText(
-                    text,
-                    AppTheme.BoldFont,
-                    new Size(int.MaxValue, int.MaxValue),
-                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width)
-            + UiLayout.ButtonPaddingX);
-
         _btnPrevious.Text = "Previous";
         _btnPrevious.Click += (_, _) => { _player.Previous(); RefreshNowPlaying(_player.NowPlaying); };
 
@@ -322,30 +343,31 @@ public sealed class MusicControl : UserControl
         _btnSkip.Text = "Next";
         _btnSkip.Click += (_, _) => { _player.Skip(); RefreshNowPlaying(_player.NowPlaying); };
 
-        var transportLeft = 12;
+        // One width for all four, because a transport row wants to look like
+        // a transport row: each as wide as the widest of them needs
+        // (ButtonBar, sameWidth). The widest caption is "Previous" - wider in
+        // the bold face than "Resume" and "Pause" too, which Play/Stop swaps
+        // in mid-song - so the row keeps its width as they come and go. Were
+        // one of them ever the wider, the bar would fit all four to it.
+        var transport = new ButtonBar(sameWidth: true).With(_btnPrevious, _btnPlayStop, _btnStop, _btnSkip);
 
-        foreach (var button in new[] { _btnPrevious, _btnPlayStop, _btnStop, _btnSkip })
-        {
-            button.Size = new Size(transportWidth, 30);
-            button.Location = new Point(transportLeft, 26);
-            transportLeft = button.Right + UiLayout.ButtonGap;
-        }
+        // What is playing, at the end of the buttons' line, cut short with
+        // "..." when a long title runs out of room there - or on a line of
+        // its own when the line leaves it less than a few words' room
+        // (FieldRow). That least is the same whatever it says, so starting
+        // and stopping the music never moves the seek bar under it.
+        _lblNowPlaying.AutoSize = false;
+        _lblNowPlaying.AutoEllipsis = true;
+        _textSize.Wear(_lblNowPlaying, () => AppTheme.BoldFont);
 
-        _lblNowPlaying.Location = new Point(transportLeft, 33);
-        _lblNowPlaying.AutoSize = true;
-        // Trimmed to fit: the label now starts further right, and 660 would
-        // have run past the group box edge with a long track title.
-        // Whatever room is left beside the transport row, rather than a
-        // flat 540 that assumed where that row ends.
-        _lblNowPlaying.MaximumSize = new Size(Math.Max(240, grpPlayer.Width - transportLeft - 16), 0);
-        _lblNowPlaying.Font = AppTheme.BoldFont;
+        var nowPlaying = new FieldRow();
+
+        nowPlaying.Add(null, transport);
+        nowPlaying.AddLast(null, _lblNowPlaying, () => UiLayout.AtTextSize(NowPlayingLeastWidth));
 
         // Seek bar. Dragging is tracked separately from playback position,
         // or the timer would fight the user's mouse and snap the thumb back
         // every tick while they're still holding it.
-        _seek.Location = new Point(12, 66);
-        _seek.Size = new Size(820, 30);
-        _seek.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _seek.Minimum = 0;
         _seek.Maximum = 1000;
         _seek.MouseDown += (_, _) => _seeking = true;
@@ -360,34 +382,29 @@ public sealed class MusicControl : UserControl
             _seeking = false;
         };
 
-        _lblTime.Location = new Point(844, 72);
-        _lblTime.AutoSize = true;
-        _lblTime.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        // The clock against the card's right-hand edge, in a column as wide
+        // as the longest time it can show (TimeWidth), and the seek bar
+        // across the rest - so the bar never moves as the time counts up.
         _lblTime.ForeColor = AppTheme.TextMuted;
+        _lblTime.TextAlign = ContentAlignment.MiddleRight;
         _lblTime.Text = "0:00 / 0:00";
 
-        grpPlayer.Controls.AddRange(new Control[]
+        var seekRow = new Beside(TimeWidth)
         {
-            _btnPrevious, _btnPlayStop, _btnStop, _btnSkip, _lblNowPlaying, _seek, _lblTime,
-        });
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        seekRow.Add(_seek, gapBelow: 0);
+        seekRow.AddSide(_lblTime, gapBelow: 0);
+
+        var playerCard = new Section("Player");
+
+        playerCard.Add(nowPlaying);
+        playerCard.Add(seekRow, gapBelow: 0);
 
         // --- Library ---
 
-        var lblLibrary = new Label
-        {
-            Text = "LIBRARY",
-            Location = new Point(12, 222 + SourceRowShift),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
-
-        _grid.Location = new Point(12, 246 + SourceRowShift);
-        _grid.Size = new Size(944, 198);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.RowHeadersVisible = false;
@@ -405,6 +422,10 @@ public sealed class MusicControl : UserControl
             new DataGridViewTextBoxColumn { Name = "state", HeaderText = "My music", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "file", HeaderText = "File", FillWeight = 90 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
         // Double-click plays that track. Toggling inclusion moved to its
         // own button - in a music library, double-click means "play this",
         // and anything else is a surprise.
@@ -445,39 +466,32 @@ public sealed class MusicControl : UserControl
             }
         };
 
-        var btnAdd = new Button { Text = "Add Track...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnAdd = new Button { Text = "Add Track..." };
         btnAdd.Click += (_, _) => AddTracks();
 
-        var btnToggle = new Button { Text = "Include / Exclude", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnToggle = new Button { Text = "Include / Exclude" };
         btnToggle.Click += (_, _) => ToggleSelectedEnabled();
 
-        var btnRemove = new Button { Text = "Remove", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
 
-        var btnFolder = new Button { Text = "Open Music Folder", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnFolder = new Button { Text = "Open Music Folder" };
         btnFolder.Click += (_, _) => OpenMusicFolder();
 
-        var btnRestore = new Button { Text = "Restore Included Tracks", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnRestore = new Button { Text = "Restore Included Tracks" };
         btnRestore.Click += (_, _) => RestoreIncluded();
 
-        var btnClear = new Button { Text = "Clear Library", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnClear = new Button { Text = "Clear Library" };
         btnClear.Click += (_, _) => ClearLibrary();
 
-        AppTheme.LayoutButtonRow(12, 456 + SourceRowShift, 8, btnAdd, btnToggle, btnRemove, btnFolder, btnRestore, btnClear);
+        var library = new Section("Library");
+
+        library.AddFill(_grid, () => _grid.ColumnHeadersHeight + _grid.RowTemplate.Height * GridLeastRows + 2);
+        library.Add(new ButtonBar().With(btnAdd, btnToggle, btnRemove, btnFolder, btnRestore, btnClear), gapBelow: 0);
 
         // --- Behaviour ---
 
-        var lblBehaviour = new Label
-        {
-            Text = "BEHAVIOUR",
-            Location = new Point(12, 502 + SourceRowShift),
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         _chkPauseDuringRaces.Text = "Stop while a race is running";
-        _chkPauseDuringRaces.Location = new Point(12, 528 + SourceRowShift);
         _chkPauseDuringRaces.AutoSize = true;
         _chkPauseDuringRaces.Checked = _store.Current.PauseDuringRaces;
         _chkPauseDuringRaces.CheckedChanged += (_, _) =>
@@ -487,18 +501,19 @@ public sealed class MusicControl : UserControl
             _player.Settings = _store.Current;
         };
 
+        // Under the box it is about, wrapping to the card's width, rather
+        // than beside it: a line this long beside the box would be cut short
+        // in a narrow window or at a large text size.
         var lblPauseHint = new Label
         {
             Text = "ignored if the Mixer is set to start music when a session begins - that's the more specific instruction",
-            Location = new Point(238, 530 + SourceRowShift),
             AutoSize = true,
-            MaximumSize = new Size(700, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
+        _textSize.Wear(lblPauseHint, () => AppTheme.SmallFont);
+
         _chkDuck.Text = "Duck under announcements";
-        _chkDuck.Location = new Point(12, 556 + SourceRowShift);
         _chkDuck.AutoSize = true;
         _chkDuck.Checked = _store.Current.DuckUnderAnnouncements;
         _chkDuck.CheckedChanged += (_, _) =>
@@ -509,9 +524,6 @@ public sealed class MusicControl : UserControl
             UpdateEnabledState();
         };
 
-        var lblDuckTo = new Label { Text = "down to:", Location = new Point(238, 558 + SourceRowShift), AutoSize = true, Font = AppTheme.BodyFont };
-        _numDuckTo.Width = 55;
-        _numDuckTo.Location = new Point(UiLayout.After(lblDuckTo), 555 + SourceRowShift);
         _numDuckTo.Minimum = 5;
         _numDuckTo.Maximum = 100;
         _numDuckTo.Increment = 5;
@@ -523,33 +535,139 @@ public sealed class MusicControl : UserControl
             _player.Settings = _store.Current;
         };
 
-        var lblDuckSuffix = new Label
-        {
-            Text = "%",
-            Location = new Point(_numDuckTo.Right + UiLayout.HintGap, 558 + SourceRowShift),
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-            ForeColor = AppTheme.TextMuted,
-        };
+        var lblDuckSuffix = new Label { Text = "%", ForeColor = AppTheme.TextMuted };
 
-        _lblStatus.Location = new Point(12, 590 + SourceRowShift);
+        var duckTo = FieldGrid.Inline(_numDuckTo, lblDuckSuffix);
+
+        // How far it ducks after the box that turns it on, and under it when
+        // the line is too narrow for both (FieldRow).
+        var duck = new FieldRow();
+
+        duck.Add(null, _chkDuck);
+        duck.Add(new Label { Text = "down to:" }, duckTo);
+
+        var behaviour = new Section("Behaviour");
+
+        behaviour.Add(_chkPauseDuringRaces, stretch: false, gapBelow: UiLayout.HintGap);
+        behaviour.Add(lblPauseHint);
+        behaviour.Add(duck, gapBelow: 0);
+
+        // What the library comes to, and what the last change did - wrapping
+        // rather than cut short. It always says something (RefreshGrid), and
+        // it is the last thing on the page, so nothing under it moves when a
+        // long message takes a second line.
         _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(900, 0);
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, _chkEnabled, lblVolume, _numVolume, lblVolumeSuffix,
-            _chkShuffle, lblShuffleHint,
-            lblPlay, _rdoThemeMusic, _rdoMyMusic, _lblSource,
-            grpPlayer,
-            lblLibrary, _grid, btnAdd, btnToggle, btnRemove, btnFolder, btnRestore, btnClear,
-            lblBehaviour, _chkPauseDuringRaces, lblPauseHint,
-            _chkDuck, lblDuckTo, _numDuckTo, lblDuckSuffix, _lblStatus,
-        });
+        // The number boxes, the seek bar and the clock at the text size in
+        // use - see SizeFields.
+        _textSize.Keep(SizeFields);
+
+        // --- The page ---
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(switches, gapBelow: UiLayout.RowGap);
+        page.Add(source, gapBelow: UiLayout.HintGap);
+        page.Add(_lblSource);
+        page.Add(playerCard);
+        page.AddFill(library, library.LeastHeight);
+        page.Add(behaviour, gapBelow: UiLayout.RowGap);
+        page.Add(_lblStatus, gapBelow: 0);
+
+        Controls.Add(page);
 
         UpdateEnabledState();
         RefreshSource();
+    }
+
+    /// <summary>
+    /// The sizes that follow the text size: the number boxes as wide as
+    /// their largest value and their arrows need (NumberWidth), and the seek
+    /// bar and the clock beside it as tall as the bar was at the normal text
+    /// size - never shorter than a line of the clock's face. Run again when
+    /// the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
+    {
+        Fit(_numVolume, NumberWidth(_numVolume));
+        Fit(_numDuckTo, NumberWidth(_numDuckTo));
+
+        // The clock wears the page's face.
+        var seek = Math.Max(UiLayout.AtTextSize(SeekHeight), Font.Height + 4);
+
+        if (_seek.Height != seek)
+        {
+            _seek.Height = seek;
+        }
+
+        if (_lblTime.Height != seek)
+        {
+            _lblTime.Height = seek;
+        }
+
+        // Only when it changed: a new width lays the row out again.
+        static void Fit(Control field, int width)
+        {
+            if (field.Width != width)
+            {
+                field.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A number box as wide as its largest value and its arrows need, in the
+    /// page's face - which the box wears - and never narrower than a number
+    /// box was at the normal text size.
+    /// </summary>
+    private int NumberWidth(NumericUpDown box)
+    {
+        var digits = decimal.Truncate(box.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length
+            + (box.DecimalPlaces > 0 ? box.DecimalPlaces + 1 : 0);
+
+        return Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(new string('0', digits), Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+    }
+
+    /// <summary>
+    /// The clock's column: as wide as the longest time it can show - three
+    /// figures of minutes a side, every figure the widest the face has, since
+    /// a 1 is narrower than a 0 in it - so the seek bar never moves as the
+    /// time counts up. Kept until the clock's face changes (a new text size),
+    /// since the column is asked for its width whenever it is placed.
+    /// </summary>
+    private int TimeWidth()
+    {
+        var font = _lblTime.Font;
+
+        if (_timeWidth is { } kept && ReferenceEquals(kept.Font, font))
+        {
+            return kept.Width;
+        }
+
+        var widest = '0';
+        var widestWidth = 0;
+
+        foreach (var figure in "0123456789")
+        {
+            var width = TextRenderer.MeasureText(figure.ToString(), font, Size.Empty, TextFormatFlags.NoPadding).Width;
+
+            if (width > widestWidth)
+            {
+                widest = figure;
+                widestWidth = width;
+            }
+        }
+
+        var minutes = new string(widest, 3);
+        var seconds = new string(widest, 2);
+        var needed = TextRenderer.MeasureText($"{minutes}:{seconds} / {minutes}:{seconds}", font).Width + _lblTime.Padding.Horizontal;
+
+        _timeWidth = (font, needed);
+        return needed;
     }
 
     /// <summary>
@@ -614,6 +732,10 @@ public sealed class MusicControl : UserControl
     /// the friendlier of the two answers: a room going quiet because the
     /// soundscape happens to have no tracks is the kind of surprise nobody
     /// traces back to this page.
+    ///
+    /// What each choice would say is worked out whichever is chosen, and the
+    /// line is kept as tall as the longer of the two (SteadyLabel), so
+    /// switching between them never moves the player under it.
     /// </summary>
     private void RefreshSource()
     {
@@ -621,47 +743,56 @@ public sealed class MusicControl : UserControl
         var themeTracks = theme?.TracksIn(_store.Current.Tracks) ?? new List<MusicTrack>();
         var fallback = false;
 
-        string text;
+        string themeText;
 
-        if (_store.Current.PlayThemeMusic == true)
+        if (theme is null)
         {
-            if (theme is null)
-            {
-                text = "No soundscape has been applied yet, so there is no theme music - your music plays instead. "
-                       + "Apply one on Sounds \u2192 Soundscapes.";
-                fallback = true;
-            }
-            else if (theme.Titles.Count == 0)
-            {
-                text = $"The {theme.SoundscapeName} soundscape has no music of its own - your music plays instead.";
-                fallback = true;
-            }
-            else if (themeTracks.Count == 0)
-            {
-                text = $"The {theme.SoundscapeName} soundscape's music isn't in your library (or its file is missing) - "
-                       + "your music plays instead. Restore Included Tracks puts the shipped tunes back.";
-                fallback = true;
-            }
-            else
-            {
-                text = (themeTracks.Count == 1
-                           ? $"Theme music: \"{themeTracks[0].DisplayName}\" from the {theme.SoundscapeName} soundscape."
-                           : $"Theme music: {themeTracks.Count} tracks from the {theme.SoundscapeName} soundscape.")
-                       + " Your own ticks under My music are kept for when you switch back.";
-            }
+            themeText = "No soundscape has been applied yet, so there is no theme music - your music plays instead. "
+                        + "Apply one on Sounds \u2192 Soundscapes.";
+            fallback = true;
+        }
+        else if (theme.Titles.Count == 0)
+        {
+            themeText = $"The {theme.SoundscapeName} soundscape has no music of its own - your music plays instead.";
+            fallback = true;
+        }
+        else if (themeTracks.Count == 0)
+        {
+            themeText = $"The {theme.SoundscapeName} soundscape's music isn't in your library (or its file is missing) - "
+                        + "your music plays instead. Restore Included Tracks puts the shipped tunes back.";
+            fallback = true;
         }
         else
         {
-            text = "My music: the tracks ticked Yes under My music below - your own uploads and the included tunes.";
-
-            if (theme is not null && themeTracks.Count > 0)
-            {
-                text += $" The {theme.SoundscapeName} soundscape's music is under Theme music.";
-            }
+            themeText = (themeTracks.Count == 1
+                            ? $"Theme music: \"{themeTracks[0].DisplayName}\" from the {theme.SoundscapeName} soundscape."
+                            : $"Theme music: {themeTracks.Count} tracks from the {theme.SoundscapeName} soundscape.")
+                        + " Your own ticks under My music are kept for when you switch back.";
         }
 
-        _lblSource.Text = text;
-        _lblSource.ForeColor = fallback ? AppTheme.Warning : AppTheme.TextMuted;
+        var myText = "My music: the tracks ticked Yes under My music below - your own uploads and the included tunes.";
+
+        if (theme is not null && themeTracks.Count > 0)
+        {
+            myText += $" The {theme.SoundscapeName} soundscape's music is under Theme music.";
+        }
+
+        var playTheme = _store.Current.PlayThemeMusic == true;
+        var wordings = new[] { themeText, myText };
+        var reworded = !_lblSource.Wordings.SequenceEqual(wordings);
+
+        _lblSource.Wordings = wordings;
+        _lblSource.Text = playTheme ? themeText : myText;
+        _lblSource.ForeColor = playTheme && fallback ? AppTheme.Warning : AppTheme.TextMuted;
+
+        // A new wording for the choice NOT made - another soundscape applied
+        // while My music plays - can change how tall the line is kept without
+        // changing what it says, and only a change to what it says tells the
+        // page. So the page is told.
+        if (reworded)
+        {
+            _lblSource.Parent?.PerformLayout(_lblSource, nameof(PreferredSize));
+        }
     }
 
     /// <summary>Whether a track is in what plays now: the theme's tracks with Theme music in use, the ticked ones otherwise.</summary>
@@ -772,9 +903,9 @@ public sealed class MusicControl : UserControl
         _lblNowPlaying.Text = !playing
             ? "Not playing."
             : _player.ThemeMusicInUse && IsThemeTrack(track!) && _player.Theme is { } theme
-                // Kept short: this line has about 540px before the edge of
-                // the Player box, and the sentence above the box already
-                // names the soundscape in full.
+                // Kept short: this line shares the transport buttons' line
+                // and ends in "..." when it runs out of room there, and the
+                // sentence above the box already names the soundscape in full.
                 ? $"Now playing:  {track!.DisplayName}  (theme music, {theme.SoundscapeName})"
                 : $"Now playing:  {track!.DisplayName}";
         _lblNowPlaying.ForeColor = playing ? AppTheme.Success : AppTheme.TextMuted;
@@ -1057,7 +1188,6 @@ public sealed class MusicControl : UserControl
         RefreshGrid();
     }
 
-
     /// <summary>
     /// Re-runs the bundled-track install. The tracks ship with the app and
     /// are copied in on first run; if that didn't happen - a build that
@@ -1107,7 +1237,6 @@ public sealed class MusicControl : UserControl
                 "Nothing to restore", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
-
 
     /// <summary>
     /// Empties the library listing, optionally deleting the audio files

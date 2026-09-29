@@ -116,4 +116,4 @@ Check the invite under **Invites**. If it says "Expired" or "Cancelled", make th
 Someone typed many wrong codes. The relay closes code sign-in for a while, longer each time it happens. Phones that already signed in keep working. To reopen it at once, cancel every open invite and make new ones.
 
 **A new driver didn't get their PIN email.**
-Check that online check-in and personal PINs are on and the Email group is set up, and that the email address in their profile is right. Then use **Email PINs** on the **Club Website** page. See [Emailing racer PINs](email.md).
+Check that online check-in and personal PINs are on and the **Email (for racer PINs)** card is filled in, and that the email address in their profile is right. Then use **Email PINs** on the **Club Website** page. See [Emailing racer PINs](email.md).

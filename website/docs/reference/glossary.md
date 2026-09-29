@@ -105,7 +105,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 
 | Term | Meaning |
 |---|---|
-| **Announcer** | HeatCaller's spoken race caller. It speaks with the HeatCaller voice, with ElevenLabs text-to-speech on your own account, or with the free Windows voice, chosen under **Speak With** on **Voice Settings**. See [Voice announcements](../announcer/voice.md). |
+| **Announcer** | HeatCaller's spoken race caller. It speaks with the HeatCaller voice, with ElevenLabs text-to-speech on your own account, or with the free Windows voice, chosen under **Speak with** on **Voice Settings**. See [Voice announcements](../announcer/voice.md). |
 | **HeatCaller voice** | A natural announcer voice that comes with HeatCaller, spoken through the club's relay on HeatCaller's own ElevenLabs account. The club needs no account, no key and no bill; it has a monthly allowance of characters, and the wording it speaks is fixed. See [The HeatCaller voice](../announcer/voice.md#the-heatcaller-voice). |
 | **Allowance** | The characters a club may have spoken on the HeatCaller voice in a calendar month. Lines already saved on the laptop, and fixed lines rendered for another club, cost nothing. See [Your club's monthly allowance](../announcer/voice.md#your-clubs-monthly-allowance). |
 | **Windows voice** | The free speech voice built into Windows. It needs no account or internet, and it stands in whenever the HeatCaller voice or ElevenLabs can't speak a line. See [Choose the voice](../announcer/voice.md#choose-the-voice). |

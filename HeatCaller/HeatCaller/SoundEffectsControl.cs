@@ -25,8 +25,14 @@ public sealed class SoundEffectsControl : UserControl
     private readonly Dictionary<SoundEffectKind, EffectRow> _rows = new();
     private readonly Dictionary<SoundEffectKind, CheckBox> _caution = new();
     private readonly Label _lblContextHint = new();
+
+    // The column headings over the list - see BuildColumnHeadings.
     private readonly Label _lblColumnRace = new();
     private readonly Label _lblColumnPractice = new();
+    private readonly Label _lblColumnSound = new();
+    private readonly Label _lblColumnPack = new();
+    private readonly Label _lblColumnFile = new();
+    private readonly Label _lblColumnWeight = new();
 
     /// <summary>
     /// One sound's controls, and the own file it plays.
@@ -36,24 +42,55 @@ public sealed class SoundEffectsControl : UserControl
     /// tooltip, and swaps to the full path while it has the focus so a path
     /// can still be typed or pasted. So the path lives here rather than in
     /// the box's text.
+    ///
+    /// Every control on the row is kept here, not only the ones the page
+    /// reads back, because the row is placed again whenever the text size
+    /// changes - see PlaceRows.
     /// </summary>
     private sealed class EffectRow
     {
-        public EffectRow(CheckBox race, CheckBox practice, ComboBox sound, TextBox fileBox, Button remove, string filePath)
+        public EffectRow(
+            CheckBox race,
+            CheckBox practice,
+            Label nameLabel,
+            Label? detailLabel,
+            ComboBox sound,
+            TextBox fileBox,
+            Button browse,
+            Button remove,
+            Button test,
+            string filePath)
         {
             Race = race;
             Practice = practice;
+            NameLabel = nameLabel;
+            DetailLabel = detailLabel;
             Sound = sound;
             FileBox = fileBox;
+            Browse = browse;
             Remove = remove;
+            Test = test;
             FilePath = filePath;
         }
 
         public CheckBox Race { get; }
         public CheckBox Practice { get; }
+
+        /// <summary>The sound's name, and the explanation under it when it has one ("all-time best on this track").</summary>
+        public Label NameLabel { get; }
+        public Label? DetailLabel { get; }
+
         public ComboBox Sound { get; }
         public TextBox FileBox { get; }
+        public Button Browse { get; }
         public Button Remove { get; }
+        public Button Test { get; }
+
+        /// <summary>The hairline under the row. None under the last row - a rule under the final row is a line under nothing.</summary>
+        public Panel? Rule { get; set; }
+
+        /// <summary>The row's middle, down from the top of the list - what everything on it is centred on. See PlaceRow.</summary>
+        public int Middle { get; set; }
 
         /// <summary>The own file, as a full path; empty for none.</summary>
         public string FilePath { get; set; }
@@ -68,7 +105,7 @@ public sealed class SoundEffectsControl : UserControl
     private readonly NumericUpDown _numThreshold = new();
 
     /// <summary>"Set every sound to:" - shows the pack every row shares, or "Mixed".</summary>
-    private readonly ComboBox _cmbSetAll;
+    private readonly ComboBox _cmbSetAll = NewSoundCombo(null);
 
     private readonly ToolTip _tips = new();
 
@@ -77,13 +114,6 @@ public sealed class SoundEffectsControl : UserControl
 
     private readonly System.Windows.Forms.Timer _saveDebounce = new() { Interval = 400 };
 
-    /// <summary>
-    /// How wide a spin box has to be to show its own value.
-    ///
-    /// 60 was chosen against a smaller font and clipped "100" to "00" -
-    /// a volume that read as zero when it was set to full.
-    /// </summary>
-    private const int NumberWidth = 82;
     private readonly Label _lblPracticeThreshold = new();
     private readonly NumericUpDown _numPracticeThreshold = new();
     private readonly NumericUpDown _numVolumePercent = new();
@@ -106,24 +136,83 @@ public sealed class SoundEffectsControl : UserControl
     /// </summary>
     private SoundEffectsProfile _profileShown;
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>
+    /// The rows, which scroll down - and sideways, when the page is narrower
+    /// than a row - inside the list's frame (StickyHeadings).
+    /// </summary>
+    private readonly Panel _rowsPanel = new()
+    {
+        Dock = DockStyle.Fill,
+        Padding = new Padding(2),
+        AutoScroll = true,
+
+        // Room under the last row, so it is never cut by the panel's edge
+        // or sat under the horizontal scrollbar.
+        AutoScrollMargin = new Size(RowPad, RowPad + 14),
+    };
+
+    /// <summary>The strip the column headings sit on, above the rows - see StickyHeadings.</summary>
+    private readonly Panel _track = new();
+
+    /// <summary>The list's frame - the rows and the headings over them - which the page gives the height left over.</summary>
+    private Panel? _listFrame;
+
+    /// <summary>The pack pickers' widths as last measured - see Pieces.PickerWidth. Their lists never change, only the text size.</summary>
+    private (Font Font, int Count, int Width)? _packWidth;
+    private (Font Font, int Count, int Width)? _setAllWidth;
+
+    /// <summary>Set while PlaceRows is placing the rows, so the sizes it gives the fields are not taken for fields resizing themselves.</summary>
+    private bool _placing;
+
     // --- The list's columns ---------------------------------------------
     //
-    // Measured once, from the fonts the page is drawn in, before any row is
-    // built. The list used to be placed at remembered x values (20, 58, 88,
-    // 258, 384, 540, 614, 678, 732) chosen against a smaller font: names
-    // wrapped onto three lines, "Browse" was cut to "Brows", "Practice" had
-    // to be written "Prac", and the rows came out whatever height their name
-    // happened to need. Every column below is as wide as the widest thing
-    // that goes in it, so each row is the same height and nothing is cut.
+    // Measured in the fonts the page is drawn in, and measured again every
+    // time the text size changes (PlaceRows). The list used to be placed at
+    // remembered x values (20, 58, 88, 258, 384, 540, 614, 678, 732) chosen
+    // against a smaller font: names wrapped onto three lines, "Browse" was
+    // cut to "Brows", "Practice" had to be written "Prac", and the rows came
+    // out whatever height their name happened to need. Every column below
+    // is as wide as the widest thing that goes in it, so each row is the
+    // same height and nothing is cut.
+    //
+    // The rows are the one part of the page not placed by the layout pieces:
+    // their columns have to line up with the headings on a strip outside
+    // the rows (StickyHeadings), which a table of its own could not do. The
+    // list scrolls sideways inside its frame when a row is wider than the
+    // page - at the larger text sizes and on a small screen - and nothing
+    // else on the page does.
 
-    /// <summary>Space between two controls on a row.</summary>
+    /// <summary>Space between two columns on a row.</summary>
     private const int ColumnGap = 12;
 
-    /// <summary>Space above and below a row's controls - the gap between rows is twice this.</summary>
+    /// <summary>Space between the file box and its Browse and Remove, which belong to it and sit close to it and to each other.</summary>
+    private const int CloseGap = 6;
+
+    /// <summary>Space above and below a row's controls - the gap between rows is twice this - and in from the list's edges.</summary>
     private const int RowPad = 8;
 
-    /// <summary>Space either side of a row button's caption.</summary>
-    private const int RowButtonPadX = 14;
+    /// <summary>Between a sound's name and the explanation under it.</summary>
+    private const int NameDetailGap = 2;
+
+    /// <summary>The names' column at its narrowest and widest, at the normal text size - see MeasureColumns.</summary>
+    private const int NameLeastWidth = 140;
+    private const int NameMostWidth = 300;
+
+    /// <summary>The pack pickers' least width, and the file box's, at the normal text size. Room for a file NAME - the path is in the tooltip.</summary>
+    private const int PackPickerWidth = 120;
+    private const int FileBoxWidth = 170;
+
+    /// <summary>What an empty file box says.</summary>
+    private const string FilePrompt = "(optional own file)";
+
+    /// <summary>The widest number any box on this page holds: a weight or the volume, 100.</summary>
+    private const int NumberDigits = 3;
+
+    /// <summary>The fewest rows the list shows before the page scrolls instead.</summary>
+    private const int ListLeastRows = 3;
 
     /// <summary>Where the pack name ends and the long explanation starts: "Track record (all-time best on this track)".</summary>
     private static (string Name, string? Detail) SplitDescription(SoundEffectKind kind)
@@ -136,17 +225,7 @@ public sealed class SoundEffectsControl : UserControl
             : (text, null);
     }
 
-    private static int TextWidth(string text, Font font) =>
-        TextRenderer.MeasureText(
-            text,
-            font,
-            new Size(int.MaxValue, int.MaxValue),
-            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
-
-    /// <summary>A row button just wide enough for its caption in the bold face buttons are drawn in.</summary>
-    private static int RowButtonWidth(string caption) => TextWidth(caption, AppTheme.BoldFont) + RowButtonPadX * 2;
-
-    /// <summary>Every x on a row, worked out once. See the note above ColumnGap.</summary>
+    /// <summary>Every x on a row, and every row's height, at the text size in use. See the note above ColumnGap.</summary>
     private sealed class Columns
     {
         public int Race;
@@ -168,12 +247,16 @@ public sealed class SoundEffectsControl : UserControl
         public int Weight;
         public int WeightWidth;
         public int Caution;
+        public int CautionWidth;
 
-        /// <summary>A button's height - the theme's own minimum, so it never resizes one after layout.</summary>
-        public int ControlHeight;
+        /// <summary>A row button's height - the theme's own rule for it, so it never resizes one after it is placed.</summary>
+        public int ButtonHeight;
 
-        /// <summary>Every row's height, the tallest row's contents plus RowPad above and below.</summary>
+        /// <summary>Every row's height: the tallest thing on any row, plus RowPad above and below. 0 until the rows are first placed.</summary>
         public int RowHeight;
+
+        /// <summary>Where a row ends, for the hairline under it and the headings' strip.</summary>
+        public int Right => Caution + CautionWidth;
     }
 
     private readonly Columns _col = new();
@@ -181,73 +264,6 @@ public sealed class SoundEffectsControl : UserControl
     private const string BrowseCaption = "Browse";
     private const string RemoveCaption = "Remove";
     private const string TestCaption = "Test";
-
-    private void MeasureColumns()
-    {
-        var c = _col;
-
-        // A tick box with no caption is only its glyph.
-        const int tickWidth = 18;
-
-        c.Race = UiLayout.PageLeft;
-        c.RaceWidth = Math.Max(tickWidth, TextWidth("Race", AppTheme.MicroFont));
-        c.Practice = c.Race + c.RaceWidth + ColumnGap;
-        c.PracticeWidth = Math.Max(tickWidth, TextWidth("Practice", AppTheme.MicroFont));
-        c.Name = c.Practice + c.PracticeWidth + ColumnGap + 4;
-
-        // As wide as the widest name or explanation, within reason. A name
-        // wider than the cap wraps rather than pushing everything off the
-        // right-hand side.
-        var nameWidth = TextWidth("Sound", AppTheme.MicroFont);
-        foreach (var kind in Enum.GetValues<SoundEffectKind>())
-        {
-            var (name, detail) = SplitDescription(kind);
-            nameWidth = Math.Max(nameWidth, TextWidth(name, AppTheme.BoldFont) + 4);
-            if (detail is not null)
-            {
-                nameWidth = Math.Max(nameWidth, TextWidth(detail, AppTheme.SmallFont) + 4);
-            }
-        }
-
-        c.NameWidth = Math.Clamp(nameWidth, 140, 300);
-
-        // The pack dropdown: its longest name, plus room for the chevron.
-        var soundWidth = TextWidth(SoundPacks.DisplayName(null), AppTheme.BodyFont);
-        foreach (var pack in SoundPacks.All)
-        {
-            soundWidth = Math.Max(soundWidth, TextWidth(pack.Name, AppTheme.BodyFont));
-        }
-
-        c.Sound = c.Name + c.NameWidth + ColumnGap;
-        c.SoundWidth = Math.Max(120, soundWidth + 48);
-
-        // Room for a file NAME (the path is in the tooltip) and the prompt.
-        c.File = c.Sound + c.SoundWidth + ColumnGap;
-        c.FileWidth = Math.Max(170, TextWidth("(optional own file)", AppTheme.BodyFont) + 20);
-
-        // Browse and Remove belong to the file box, so they sit close to it
-        // and to each other; Test is its own thing and gets the full gap.
-        c.Browse = c.File + c.FileWidth + 6;
-        c.BrowseWidth = RowButtonWidth(BrowseCaption);
-        c.Remove = c.Browse + c.BrowseWidth + 6;
-        c.RemoveWidth = RowButtonWidth(RemoveCaption);
-        c.Test = c.Remove + c.RemoveWidth + ColumnGap;
-        c.TestWidth = Math.Max(64, RowButtonWidth(TestCaption));
-
-        // The weight box has to show "100" beside its own spin buttons.
-        c.Weight = c.Test + c.TestWidth + ColumnGap;
-        c.WeightWidth = Math.Max(Math.Max(64, TextWidth("Weight", AppTheme.MicroFont)), TextWidth("100", AppTheme.BodyFont) + 44);
-        c.Caution = c.Weight + c.WeightWidth + ColumnGap;
-
-        // The theme raises any button shorter than this (StyleButton), so a
-        // row sized for less would have its buttons grow into the next one.
-        c.ControlHeight = Math.Max(30, AppTheme.BoldFont.Height + 12);
-
-        // Every row as tall as the tallest: a name with its explanation
-        // under it, or a button - whichever is taller.
-        var nameBlock = AppTheme.BoldFont.Height + 2 + AppTheme.SmallFont.Height;
-        c.RowHeight = Math.Max(c.ControlHeight, nameBlock) + RowPad * 2;
-    }
 
     public SoundEffectsControl(SoundEffectsStore store, UndoService? undo = null)
     {
@@ -257,50 +273,91 @@ public sealed class SoundEffectsControl : UserControl
         _profileShown = current;
 
         Dock = DockStyle.Fill;
-        AutoScroll = true;
-        MinimumSize = new Size(640, 692);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize and no scrolling of its own: the 640x692 floor was
+        // kept however small the window was, and scrolled as a whole. A short
+        // window scrolls the page instead (FillPage), and a narrow one only
+        // the list, sideways inside its frame.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         AppTheme.StyleToolTip(_tips);
-        MeasureColumns();
 
-        // Every caption on this page carries its font from the start.
-        //
-        // They used to inherit it, which only happens once they are added
-        // to the page - so each one was MEASURED in the WinForms default
-        // font (smaller) and then DRAWN in the page's. Every field placed
-        // "just after" its caption landed under the end of it, and the
-        // caption, painted on top, hid what was in the field: the races
-        // streak threshold showed an empty box while practice's shorter
-        // caption only just missed its number, and "Set every sound to:"
-        // sat over its own dropdown.
+        BuildLayout(current);
+
+        _numThreshold.ValueChanged += (_, _) => QueueSave();
+        _numPracticeThreshold.ValueChanged += (_, _) => QueueSave();
+        _numVolumePercent.ValueChanged += (_, _) => QueueSave();
+        _numMaxPerLap.ValueChanged += (_, _) => QueueSave();
+
+        _saveDebounce.Tick += (_, _) => SaveNow();
+
+        // An undo puts settings back in the store, not on this page - see
+        // OnStoreRestored.
+        _store.Restored += OnStoreRestored;
+
+        UpdateSetAll();
+
+        // Everything above seeded its controls from the stored profile,
+        // which fires the change events. The guard comes off now, so the
+        // first write is a real edit rather than the page loading itself.
+        _loading = false;
+    }
+
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Builds the page, top to bottom: the intro and the note on the two
+    /// ticks; the bulk buttons with "Set every sound to:" beside them (under
+    /// them when the line is too narrow) and their note; the list of sounds,
+    /// taking the height that is left, in a frame with its column headings
+    /// held above the rows (StickyHeadings); then the page-level settings, a
+    /// line each - the two streak thresholds, the volume, and the most sounds
+    /// per lap - and the status line. On the layout pieces (LayoutPieces.cs),
+    /// except the list's rows, whose columns are measured in the fonts in use
+    /// and placed again at every text size (PlaceRows); the list scrolls
+    /// sideways inside its frame when a row is wider than the page.
+    ///
+    /// It used to be placed in pixels: a header strip and a settings strip
+    /// docked round the list, each stacked by hand from measurements taken
+    /// once at build, the hints capped at 600px and the status at 480px, a
+    /// 640x692 floor the page kept however small its window - and the list's
+    /// columns measured once, in the fonts of the day, so at any other text
+    /// size the rows kept the old widths.
+    /// </summary>
+    private void BuildLayout(SoundEffectsProfile current)
+    {
         var lblIntro = new Label
         {
             Text = "Mimics Next Level Timing's audio cues: per-lap feedback plus sounds for race moments.\n" +
                    "Pick a sound for each row - Classic tones or one of the built-in packs - or point it at your own file, which wins over both.\n" +
                    "\"Weight\" decides which per-lap sounds win when several fire on the same lap - see \"Max sounds per lap\" below.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Everything above the list is stacked by measurement from here
-        // down. It was placed at remembered y values - 63, 66, 92, 98, 132 -
-        // chosen when the intro was shorter and the font smaller, so the
-        // lines grew into each other and the page turned into a pile.
-        var headerY = UiLayout.Below(lblIntro, 12);
-
-        _lblContextHint.Location = new Point(12, headerY);
         _lblContextHint.AutoSize = true;
-        _lblContextHint.MaximumSize = new Size(600, 0);
-        _lblContextHint.Font = AppTheme.SmallFont;
         _lblContextHint.ForeColor = AppTheme.TextMuted;
         _lblContextHint.Text =
             "Two ticks per sound: the first is for RACES, the second for PRACTICE. "
             + "A sound with only the practice box ticked stays silent on race night.";
+        _textSize.Wear(_lblContextHint, () => AppTheme.SmallFont);
 
-        headerY += UiLayout.HeightOf(_lblContextHint) + 10;
+        // --- The bulk buttons, and one pack for every row ---
 
         var btnEnableAll = new Button { Text = "Enable All" };
         btnEnableAll.Click += (_, _) => SetAllEnabled(true);
@@ -311,23 +368,14 @@ public sealed class SoundEffectsControl : UserControl
         var btnTestAll = new Button { Text = "Test All Enabled" };
         btnTestAll.Click += async (_, _) => await TestAllAsync(btnTestAll);
 
-        UiLayout.ButtonRow(12, headerY, btnEnableAll, btnEnableNone, btnTestAll);
-
         // One pack for every row at once - the quickest way to hear a whole
         // style, and to put the page back after mixing and matching.
         //
         // It used to show nothing at all: it was deliberately left with no
         // selection, and an empty dropdown reads as a broken one. It now
         // shows the pack every row shares, or "Mixed" when they differ.
-        var lblSetAll = new Label { Text = "Set every sound to:", AutoSize = true, Font = AppTheme.BodyFont, ForeColor = AppTheme.TextMuted };
-        _cmbSetAll = NewSoundCombo(null);
+        var lblSetAll = new Label { Text = "Set every sound to:", ForeColor = AppTheme.TextMuted };
         _cmbSetAll.Items.Insert(0, new SoundChoice(MixedKey, "Mixed - pick one"));
-        _cmbSetAll.Font = AppTheme.BodyFont;
-        _cmbSetAll.Width = _col.SoundWidth + 30;
-        lblSetAll.Location = new Point(btnTestAll.Right + UiLayout.ButtonGap * 3, UiLayout.CentreOn(lblSetAll, headerY, UiLayout.ButtonHeight));
-        _cmbSetAll.Location = new Point(
-            UiLayout.After(lblSetAll),
-            headerY + Math.Max(0, (UiLayout.ButtonHeight - Math.Max(_cmbSetAll.Height, _cmbSetAll.PreferredSize.Height)) / 2));
         _cmbSetAll.SelectionChangeCommitted += (_, _) =>
         {
             if (_cmbSetAll.SelectedItem is not SoundChoice choice || choice.Key == MixedKey)
@@ -362,41 +410,31 @@ public sealed class SoundEffectsControl : UserControl
         };
         _tips.SetToolTip(_cmbSetAll, "Sets the pack on every row at once. Rows with your own file keep playing it.");
 
-        headerY += UiLayout.ButtonHeight + 8;
+        // The buttons, and "Set every sound to:" beside them - or under them
+        // when the line is too narrow for both (FieldRow).
+        var bulk = new FieldRow();
+
+        bulk.Add(null, new ButtonBar().With(btnEnableAll, btnEnableNone, btnTestAll));
+        bulk.Add(lblSetAll, _cmbSetAll, SetAllPickerWidth);
 
         var lblBulkHint = new Label
         {
             Text = "Enable All / None ticks or clears every sound below - files and volumes are left alone.",
-            Location = new Point(12, headerY),
             AutoSize = true,
-            MaximumSize = new Size(600, 0),
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
         };
 
-        headerY += UiLayout.HeightOf(lblBulkHint) + 10;
+        _textSize.Wear(lblBulkHint, () => AppTheme.SmallFont);
 
-        var scroll = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(2),
-            AutoScroll = true,
-
-            // Room under the last row, so it is never cut by the panel's
-            // edge or sat under the horizontal scrollbar.
-            AutoScrollMargin = new Size(UiLayout.PageRight, RowPad + 14),
-        };
+        // --- The list ---
 
         // Column headings in a strip ABOVE the list, so they stay on screen
         // as it scrolls down, and follow it when it scrolls sideways. They
         // used to be the list's first row and went off the top with it. The
         // frame carries the border the list used to. See StickyHeadings.
-        var headings = new Panel();
-        headings.Height = BuildColumnHeadings(headings, 8) + 4;
+        BuildColumnHeadings();
 
-        var list = StickyHeadings.Wrap(scroll, headings);
-
-        var y = 6;
+        var list = StickyHeadings.Wrap(_rowsPanel, _track);
 
         // A hairline between rows, so a row reads as one line across a list
         // this wide.
@@ -425,50 +463,32 @@ public sealed class SoundEffectsControl : UserControl
         for (var i = 0; i < kinds.Length; i++)
         {
             var config = current.Effects.GetValueOrDefault(kinds[i].ToString()) ?? new SoundEffectConfig();
-            BuildRow(scroll, kinds[i], config, ref y);
+            var row = BuildRow(kinds[i], config);
 
             if (i < kinds.Length - 1)
             {
-                scroll.Controls.Add(new Panel
+                var rule = new Panel
                 {
                     BackColor = AppTheme.Border,
-                    Location = new Point(UiLayout.PageLeft, y),
-                    Size = new Size(Math.Max(1, _col.Caution + 120 - UiLayout.PageLeft), 1),
                     Tag = AppTheme.KeepBackColor,
-                });
+                };
+
+                _rowsPanel.Controls.Add(rule);
+                row.Rule = rule;
             }
         }
 
-        // The four page-level settings get a strip of their own, laid out
-        // left to right by measurement.
+        // --- The page-level settings, a line each ---
         //
         // They were at y = 557, 585, 613 while the list above them was
-        // anchored to grow - so the list's bottom edge landed on top of
-        // them and the threshold row was sliced in half by the panel
-        // border. Nothing on this page is placed by remembered pixels any
-        // more: the header is a strip, the list fills what is left, and
-        // these sit between it and the Save bar.
-        var settings = new Panel { Dock = DockStyle.Bottom, Padding = new Padding(12, 10, 12, 6) };
-
-        var settingsY = 10;
-
-        // One step for a caption-and-box line, tall enough that a spin box
-        // and its caption never touch the line above or below.
-        var rowStep = Math.Max(UiLayout.RowHeight, AppTheme.BodyFont.Height + 14) + 10;
-
-        _numThreshold.Font = AppTheme.BodyFont;
-        _numPracticeThreshold.Font = AppTheme.BodyFont;
-        _numVolumePercent.Font = AppTheme.BodyFont;
-        _numMaxPerLap.Font = AppTheme.BodyFont;
+        // anchored to grow - so the list's bottom edge landed on top of them
+        // and the threshold row was sliced in half by the panel border. They
+        // are the page's own parts now, under the list, each caption with its
+        // box beside it (FieldRow).
 
         _lblThreshold.Text = "Streak threshold - races:";
-        _lblThreshold.AutoSize = true;
-        _lblThreshold.Font = AppTheme.BodyFont;
         _lblThreshold.ForeColor = AppTheme.TextDark;
-        _lblThreshold.Location = new Point(12, UiLayout.CentreOn(_lblThreshold, settingsY, _numThreshold.PreferredHeight));
 
-        _numThreshold.Location = new Point(UiLayout.After(_lblThreshold), settingsY);
-        _numThreshold.Width = NumberWidth;
         // Two is the floor, not one - a run of one lap is a lap. See
         // SoundEffectsProfile.StreakThresholdFor.
         _numThreshold.Minimum = 2;
@@ -476,63 +496,50 @@ public sealed class SoundEffectsControl : UserControl
         _numThreshold.Value = Math.Clamp(current.StreakThreshold, 2, 50);
 
         _lblPracticeThreshold.Text = "practice:";
-        _lblPracticeThreshold.AutoSize = true;
-        _lblPracticeThreshold.Font = AppTheme.BodyFont;
         _lblPracticeThreshold.ForeColor = AppTheme.TextMuted;
-        _lblPracticeThreshold.Location = new Point(
-            _numThreshold.Right + UiLayout.ButtonGap * 3,
-            UiLayout.CentreOn(_lblPracticeThreshold, settingsY, _numPracticeThreshold.PreferredHeight));
 
-        _numPracticeThreshold.Location = new Point(UiLayout.After(_lblPracticeThreshold), settingsY);
-        _numPracticeThreshold.Width = NumberWidth;
         _numPracticeThreshold.Minimum = 2;
         _numPracticeThreshold.Maximum = 50;
         _numPracticeThreshold.Value =
             Math.Clamp(current.StreakThresholdInPractice ?? current.StreakThreshold, 2, 50);
 
-        settingsY += rowStep;
+        var thresholds = new FieldRow();
+
+        thresholds.Add(_lblThreshold, _numThreshold, NumberBoxWidth);
+        thresholds.Add(_lblPracticeThreshold, _numPracticeThreshold, NumberBoxWidth);
 
         // Volume gets its own line rather than being crammed on the end of
         // the thresholds - three caption-and-box pairs on one row is how
         // that line came out unreadable.
-        var lblVolume = new Label { Text = "Sound effects volume (%):", AutoSize = true, Font = AppTheme.BodyFont, ForeColor = AppTheme.TextDark };
-        lblVolume.Location = new Point(12, UiLayout.CentreOn(lblVolume, settingsY, _numVolumePercent.PreferredHeight));
+        var lblVolume = new Label { Text = "Sound effects volume (%):", ForeColor = AppTheme.TextDark };
 
-        _numVolumePercent.Location = new Point(UiLayout.After(lblVolume), settingsY);
-        _numVolumePercent.Width = NumberWidth;
         _numVolumePercent.Minimum = 0;
         _numVolumePercent.Maximum = 100;
         _numVolumePercent.Increment = 5;
         _numVolumePercent.Value = (decimal)Math.Clamp(current.Volume * 100.0, 0, 100);
         _volumeShown = _numVolumePercent.Value;
 
-        settingsY += rowStep;
+        var volume = new FieldRow();
+
+        volume.Add(lblVolume, _numVolumePercent, NumberBoxWidth);
 
         var lblMaxPerLap = new Label
         {
             Text = "Max sounds per lap (good / invalid / fast / streak / leader change):",
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextDark,
         };
-        lblMaxPerLap.Location = new Point(12, UiLayout.CentreOn(lblMaxPerLap, settingsY, _numMaxPerLap.PreferredHeight));
 
-        _numMaxPerLap.Location = new Point(UiLayout.After(lblMaxPerLap), settingsY);
-        _numMaxPerLap.Width = NumberWidth;
         _numMaxPerLap.Minimum = 1;
         _numMaxPerLap.Maximum = 5;
         _numMaxPerLap.Value = Math.Clamp(current.MaxEffectsPerLap, 1, 5);
 
-        settings.Controls.AddRange(new Control[]
-        {
-            _lblThreshold, _numThreshold, _lblPracticeThreshold, _numPracticeThreshold,
-            lblVolume, _numVolumePercent, lblMaxPerLap, _numMaxPerLap,
-        });
+        var maxPerLap = new FieldRow();
 
-        settings.Height = settingsY + rowStep + 6;
+        maxPerLap.Add(lblMaxPerLap, _numMaxPerLap, NumberBoxWidth);
 
-        // The status line lives in a strip pinned to the bottom of the page,
-        // always on screen.
+        // --- The status line ---
+        //
+        // At the foot of the page, wrapping rather than cut short.
         //
         // There used to be a "Save now" button beside it. It is gone: this
         // page has saved itself on a short debounce for a long time, it
@@ -541,60 +548,86 @@ public sealed class SoundEffectsControl : UserControl
         // button. A button that is never the thing that saved your work only
         // raises the question of whether the rest of the page did.
         //
-        // The strip itself stays, and so does the line in it. The button it
-        // used to hold sat at y=652 on a page around 560 tall, below the
-        // fold behind a scrolling list that swallows the wheel - so the page
-        // looked as though ticking a box was the whole job. The sentence
-        // that says otherwise has to be somewhere it can be read.
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = UiLayout.ButtonHeight + 20 };
-
-        _lblStatus.Location = new Point(12, 16);
+        // The line itself stays. The button it used to sit beside was below
+        // the fold behind a scrolling list that swallows the wheel - so the
+        // page looked as though ticking a box was the whole job. The
+        // sentence that says otherwise has to be somewhere it can be read.
         _lblStatus.AutoSize = true;
-        _lblStatus.Font = AppTheme.BodyFont;
         _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.MaximumSize = new Size(480, 0);
         _lblStatus.Text = "Changes save themselves as you make them.";
 
-        footer.Controls.Add(_lblStatus);
+        // --- The page ---
 
-        var header = new Panel { Dock = DockStyle.Top, Height = headerY + 4 };
+        var page = new FillPage();
 
-        header.Controls.AddRange(new Control[]
-        {
-            lblIntro, _lblContextHint, btnEnableAll, btnEnableNone, btnTestAll, lblSetAll, _cmbSetAll,
-            lblBulkHint,
-        });
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(_lblContextHint, gapBelow: UiLayout.RowGap);
+        page.Add(bulk, gapBelow: UiLayout.HintGap);
+        page.Add(lblBulkHint, gapBelow: UiLayout.RowGap);
+        _listFrame = page.AddFill(list, _ => ListLeastHeight());
+        page.Add(thresholds, gapBelow: UiLayout.RowGap);
+        page.Add(volume, gapBelow: UiLayout.RowGap);
+        page.Add(maxPerLap, gapBelow: UiLayout.RowGap);
+        page.Add(_lblStatus, gapBelow: 0);
 
-        // Fill first, edges after: WinForms lays docked children out from
-        // the LAST one added to the first, so the Fill has to be earliest
-        // in the list to be given whatever the strips did not take.
-        Controls.Add(list);
-        Controls.Add(header);
-        Controls.Add(settings);
-        Controls.Add(footer);
+        Controls.Add(page);
 
         // Themed like the vertical one the theme pass gives every scrolling
         // panel: the list is wider than a narrow window, and the native
         // horizontal bar is the white system one.
-        ThinScrollBar.AttachHorizontal(scroll);
+        ThinScrollBar.AttachHorizontal(_rowsPanel);
 
-        _numThreshold.ValueChanged += (_, _) => QueueSave();
-        _numPracticeThreshold.ValueChanged += (_, _) => QueueSave();
-        _numVolumePercent.ValueChanged += (_, _) => QueueSave();
-        _numMaxPerLap.ValueChanged += (_, _) => QueueSave();
+        // The list's columns and rows, measured in the faces worn above and
+        // placed - now, and again at every text size. Kept last, so every
+        // face is on before anything is measured in it, and after the page
+        // is in this control, so the pickers and boxes measured wear the
+        // body face they inherit from it.
+        _textSize.Keep(PlaceRows);
+    }
 
-        _saveDebounce.Tick += (_, _) => SaveNow();
+    /// <summary>
+    /// A number box on this page, a threshold, the volume or a weight: wide
+    /// enough for the widest number any of them holds beside its own arrows,
+    /// in the face in use, and never narrower than a number box is at the
+    /// normal text size, at this size. One width for all of them, so they
+    /// line up down the page.
+    ///
+    /// The old fixed 60 was chosen against a smaller font and clipped "100"
+    /// to "00" - a volume that read as zero when it was set to full.
+    /// </summary>
+    private static int NumberBoxWidth() =>
+        Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(new string('0', NumberDigits), AppTheme.BodyFont).Width + SystemInformation.VerticalScrollBarWidth + 12);
 
-        // An undo puts settings back in the store, not on this page - see
-        // OnStoreRestored.
-        _store.Restored += OnStoreRestored;
+    /// <summary>"Set every sound to:" - as wide as its longest choice ("Mixed - pick one"), and never narrower than a pack picker at the normal text size.</summary>
+    private int SetAllPickerWidth() =>
+        Math.Max(UiLayout.AtTextSize(PackPickerWidth), Pieces.PickerWidth(_cmbSetAll, ref _setAllWidth));
 
-        UpdateSetAll();
+    /// <summary>
+    /// A row's pack picker: as wide as its longest pack, and never narrower
+    /// than it was at the normal text size. Every row's picker holds the
+    /// same packs in the same face, so one of them is measured for all.
+    /// </summary>
+    private int PackPickerWidthNow()
+    {
+        var sample = _rows.Values.FirstOrDefault()?.Sound;
+        var measured = sample is null ? 0 : Pieces.PickerWidth(sample, ref _packWidth);
 
-        // Everything above seeded its controls from the stored profile,
-        // which fires the change events. The guard comes off now, so the
-        // first write is a real edit rather than the page loading itself.
-        _loading = false;
+        return Math.Max(UiLayout.AtTextSize(PackPickerWidth), measured);
+    }
+
+    /// <summary>
+    /// The least the list can do with: its frame, the headings and the rule
+    /// under them, a few rows, and the sideways bar it has when the page is
+    /// narrower than a row.
+    /// </summary>
+    private int ListLeastHeight()
+    {
+        var frame = _listFrame is null ? 0 : _listFrame.Height - _listFrame.ClientSize.Height + _listFrame.Padding.Vertical;
+        var headings = _track.Parent?.Height ?? _track.Height;
+
+        return frame + headings + ListLeastRows * _col.RowHeight + SystemInformation.HorizontalScrollBarHeight;
     }
 
     protected override void Dispose(bool disposing)
@@ -641,51 +674,351 @@ public sealed class SoundEffectsControl : UserControl
         }
     }
 
-    /// <summary>The headings over the list's columns. Returns the y the first row starts at.</summary>
-    private int BuildColumnHeadings(Control parent, int y)
+    /// <summary>
+    /// The headings over the list's columns, on the strip above the rows.
+    /// Placed by PlaceHeadings, over the columns they name, once the columns
+    /// have been measured.
+    /// </summary>
+    private void BuildColumnHeadings()
     {
-        var c = _col;
-
-        Label Heading(string text, int x, int width, bool accent = false)
+        void Heading(Label label, string text, Color color)
         {
-            var label = new Label
-            {
-                Text = text,
-                AutoSize = true,
-                Font = AppTheme.MicroFont,
-                ForeColor = accent ? AppTheme.Accent : AppTheme.TextMuted,
-            };
-
-            // Centred over a narrow column (the ticks), left-aligned over a wide one.
-            var textWidth = TextWidth(text, AppTheme.MicroFont);
-            label.Location = new Point(width < 60 ? x + Math.Max(0, (width - textWidth) / 2) - 1 : x, y);
-            parent.Controls.Add(label);
-            return label;
+            label.Text = text;
+            label.AutoSize = true;
+            label.ForeColor = color;
+            _textSize.Wear(label, () => AppTheme.MicroFont);
+            _track.Controls.Add(label);
         }
 
-        _lblColumnRace.Text = "Race";
-        _lblColumnRace.AutoSize = true;
-        _lblColumnRace.Font = AppTheme.MicroFont;
-        _lblColumnRace.ForeColor = AppTheme.Accent;
-        _lblColumnRace.Location = new Point(c.Race + Math.Max(0, (c.RaceWidth - TextWidth("Race", AppTheme.MicroFont)) / 2), y);
-        parent.Controls.Add(_lblColumnRace);
-
-        _lblColumnPractice.Text = "Practice";
-        _lblColumnPractice.AutoSize = true;
-        _lblColumnPractice.Font = AppTheme.MicroFont;
-        _lblColumnPractice.ForeColor = AppTheme.TextMuted;
-        _lblColumnPractice.Location = new Point(c.Practice + Math.Max(0, (c.PracticeWidth - TextWidth("Practice", AppTheme.MicroFont)) / 2), y);
-        parent.Controls.Add(_lblColumnPractice);
+        Heading(_lblColumnRace, "Race", AppTheme.Accent);
+        Heading(_lblColumnPractice, "Practice", AppTheme.TextMuted);
+        Heading(_lblColumnSound, "Sound", AppTheme.TextMuted);
+        Heading(_lblColumnPack, "Pack", AppTheme.TextMuted);
+        Heading(_lblColumnFile, "Your own file (optional)", AppTheme.TextMuted);
+        Heading(_lblColumnWeight, "Weight", AppTheme.TextMuted);
 
         _tips.SetToolTip(_lblColumnRace, "Ticked sounds play during races.");
         _tips.SetToolTip(_lblColumnPractice, "Ticked sounds play during practice.");
+    }
 
-        Heading("Sound", c.Name, c.NameWidth);
-        Heading("Pack", c.Sound, c.SoundWidth);
-        Heading("Your own file (optional)", c.File, c.FileWidth);
-        Heading("Weight", c.Weight, c.WeightWidth);
+    /// <summary>
+    /// How big a label's text comes to wrapped to <paramref name="width"/>,
+    /// measured the way the label draws it - word breaks and TextRenderer's
+    /// padding - which is also how LayoutAudit checks it. A width of
+    /// int.MaxValue measures it on one line.
+    /// </summary>
+    private static Size TextBlock(Label label, int width)
+    {
+        var flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
 
-        return y + UiLayout.HeightOf(_lblColumnRace) + 4;
+        if (!label.UseMnemonic)
+        {
+            flags |= TextFormatFlags.NoPrefix;
+        }
+
+        return TextRenderer.MeasureText(label.Text, label.Font, new Size(Math.Max(1, width), int.MaxValue), flags);
+    }
+
+    /// <summary>A heading's width on one line, as it sizes itself.</summary>
+    private static int HeadingWidth(Label heading) => heading.GetPreferredSize(Size.Empty).Width;
+
+    /// <summary>A row's name and the explanation under it, one block, wrapped to the names' column.</summary>
+    private static int NameBlockHeight(EffectRow row, int width) =>
+        TextBlock(row.NameLabel, width).Height
+        + (row.DetailLabel is { } detail ? NameDetailGap + TextBlock(detail, width).Height : 0);
+
+    /// <summary>
+    /// Every column's x and width, and the rows' height, in the fonts in use
+    /// now: each column as wide as the widest thing in it - its heading, a
+    /// name, a picker's longest pack, a button's caption in the bold face
+    /// buttons are drawn in - and the fields' least widths as they were at
+    /// the normal text size, at this size.
+    /// </summary>
+    private void MeasureColumns()
+    {
+        var c = _col;
+        var rows = _rows.Values.ToList();
+
+        // A tick box with no caption is only its box.
+        var tick = rows
+            .SelectMany(r => new[] { r.Race, r.Practice })
+            .Select(box => box.GetPreferredSize(Size.Empty).Width)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        c.Race = RowPad;
+        c.RaceWidth = Math.Max(tick, HeadingWidth(_lblColumnRace));
+        c.Practice = c.Race + c.RaceWidth + ColumnGap;
+        c.PracticeWidth = Math.Max(tick, HeadingWidth(_lblColumnPractice));
+
+        // A little more room before the names, where the row's words start.
+        c.Name = c.Practice + c.PracticeWidth + ColumnGap + 4;
+
+        // As wide as the widest name or explanation, within reason. A name
+        // wider than the cap wraps inside the column rather than pushing
+        // everything off the right-hand side - and every row is as tall as
+        // that takes (below).
+        var names = rows
+            .SelectMany(r => new[] { r.NameLabel, r.DetailLabel })
+            .OfType<Label>()
+            .Select(label => TextBlock(label, int.MaxValue).Width)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        c.NameWidth = Math.Clamp(
+            Math.Max(names, HeadingWidth(_lblColumnSound)),
+            UiLayout.AtTextSize(NameLeastWidth),
+            UiLayout.AtTextSize(NameMostWidth));
+
+        c.Sound = c.Name + c.NameWidth + ColumnGap;
+        c.SoundWidth = Math.Max(HeadingWidth(_lblColumnPack), PackPickerWidthNow());
+
+        // Room for a file NAME (the path is in the tooltip) and the prompt,
+        // with room round it for the box's own edge.
+        c.File = c.Sound + c.SoundWidth + ColumnGap;
+        c.FileWidth = Math.Max(
+            Math.Max(UiLayout.AtTextSize(FileBoxWidth), HeadingWidth(_lblColumnFile)),
+            TextRenderer.MeasureText(FilePrompt, AppTheme.BodyFont).Width + 20);
+
+        // Browse and Remove belong to the file box, so they sit close to it
+        // and to each other; Test is its own thing and gets the full gap.
+        // Each as wide as its caption in a dense row (UiLayout.TightButtonSizeFor).
+        c.Browse = c.File + c.FileWidth + CloseGap;
+        c.BrowseWidth = rows.Select(r => UiLayout.TightButtonSizeFor(r.Browse).Width).DefaultIfEmpty(0).Max();
+        c.Remove = c.Browse + c.BrowseWidth + CloseGap;
+        c.RemoveWidth = rows.Select(r => UiLayout.TightButtonSizeFor(r.Remove).Width).DefaultIfEmpty(0).Max();
+        c.Test = c.Remove + c.RemoveWidth + ColumnGap;
+        c.TestWidth = rows.Select(r => UiLayout.TightButtonSizeFor(r.Test).Width).DefaultIfEmpty(0).Max();
+
+        // The weight box has to show "100" beside its own spin buttons.
+        c.Weight = c.Test + c.TestWidth + ColumnGap;
+        c.WeightWidth = Math.Max(HeadingWidth(_lblColumnWeight), NumberBoxWidth());
+
+        c.Caution = c.Weight + c.WeightWidth + ColumnGap;
+        c.CautionWidth = _caution.Values.Select(box => box.GetPreferredSize(Size.Empty).Width).DefaultIfEmpty(0).Max();
+
+        // As tall as the theme makes a button for its caption (StyleButton
+        // raises any shorter one, which would then grow into the next row).
+        c.ButtonHeight = rows
+            .SelectMany(r => new[] { r.Browse, r.Remove, r.Test })
+            .Select(button => UiLayout.TightButtonSizeFor(button).Height)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        // Every row as tall as the tallest thing on any of them - a name
+        // with its explanation under it, a button, a field, a tick box -
+        // with RowPad above and below. Rows used to be as tall as their own
+        // name, which wrapped to two or three lines at the old width - so the
+        // list was a stack of uneven rows with the controls stuck at
+        // different heights.
+        var fields = rows
+            .SelectMany(r => new Control[] { r.Sound, r.FileBox })
+            .Concat(_weights.Values)
+            .Select(field => field.Height);
+
+        var boxes = rows
+            .SelectMany(r => new[] { r.Race, r.Practice })
+            .Concat(_caution.Values)
+            .Select(box => box.GetPreferredSize(Size.Empty).Height);
+
+        var blocks = rows.Select(r => NameBlockHeight(r, c.NameWidth));
+
+        c.RowHeight = fields.Concat(boxes).Concat(blocks).Append(c.ButtonHeight).Max() + RowPad * 2;
+    }
+
+    /// <summary>
+    /// Measures the list's columns in the fonts in use, and puts the
+    /// headings, every row and the hairlines between them where they go -
+    /// now, and again whenever the text size changes (TextSize.Keep) or a
+    /// field on a row grows taller than its row (FieldResized).
+    ///
+    /// The rows stay where they were in the list however far it has been
+    /// scrolled: a child of a scrolled panel sits that far up and to the
+    /// left of its place, so each goes to its place plus the scroll position.
+    /// </summary>
+    private void PlaceRows()
+    {
+        if (_placing)
+        {
+            return;
+        }
+
+        _placing = true;
+        _rowsPanel.SuspendLayout();
+
+        try
+        {
+            MeasureColumns();
+            PlaceHeadings();
+
+            var c = _col;
+            var origin = _rowsPanel.AutoScrollPosition;
+
+            // The headings are not in here - they sit in a strip above the
+            // rows so they stay on screen. The first row starts at the top.
+            var y = 0;
+
+            foreach (var kind in Enum.GetValues<SoundEffectKind>())
+            {
+                if (!_rows.TryGetValue(kind, out var row))
+                {
+                    continue;
+                }
+
+                PlaceRow(kind, row, y, origin);
+
+                y += c.RowHeight;
+
+                row.Rule?.SetBounds(c.Race + origin.X, y + origin.Y, Math.Max(1, c.Right - c.Race), 1);
+            }
+        }
+        finally
+        {
+            _rowsPanel.ResumeLayout(true);
+            _placing = false;
+        }
+
+        // The least the list can do with follows its rows' height and its
+        // headings', which the page does not see change.
+        Pieces.FillPageOf(_rowsPanel)?.LeastHeightMayHaveChanged();
+    }
+
+    /// <summary>
+    /// The headings over the columns they name - the ticks' centred over
+    /// them, the rest at their column's left - and the strip they sit on as
+    /// tall as they are with RowPad above and below, and as wide as a row.
+    /// </summary>
+    private void PlaceHeadings()
+    {
+        var c = _col;
+
+        void Over(Label heading, int left, int width, bool centred)
+        {
+            var size = heading.GetPreferredSize(Size.Empty);
+            var x = centred ? left + Math.Max(0, (width - size.Width) / 2) : left;
+
+            heading.SetBounds(x, RowPad, size.Width, size.Height);
+        }
+
+        Over(_lblColumnRace, c.Race, c.RaceWidth, centred: true);
+        Over(_lblColumnPractice, c.Practice, c.PracticeWidth, centred: true);
+        Over(_lblColumnSound, c.Name, c.NameWidth, centred: false);
+        Over(_lblColumnPack, c.Sound, c.SoundWidth, centred: false);
+        Over(_lblColumnFile, c.File, c.FileWidth, centred: false);
+        Over(_lblColumnWeight, c.Weight, c.WeightWidth, centred: false);
+
+        var tallest = new[] { _lblColumnRace, _lblColumnPractice, _lblColumnSound, _lblColumnPack, _lblColumnFile, _lblColumnWeight }
+            .Max(heading => heading.GetPreferredSize(Size.Empty).Height);
+
+        var trackSize = new Size(c.Right + RowPad, RowPad + tallest + RowPad);
+
+        // The strip StickyHeadings put the track in is as tall as the track
+        // and the rule under it, worked out once, when the list was wrapped -
+        // so it is told how much the track has grown or shrunk. The track's
+        // Left is the rows' sideways scroll, which StickyHeadings keeps.
+        var grow = trackSize.Height - _track.Height;
+
+        if (_track.Size != trackSize)
+        {
+            _track.Size = trackSize;
+        }
+
+        if (grow != 0 && _track.Parent is { } strip)
+        {
+            strip.Height += grow;
+        }
+    }
+
+    /// <summary>
+    /// One row, <paramref name="top"/> down the list, every control on it
+    /// centred on the row's middle and in its own column - so nothing on
+    /// one row reaches another row, or the next column.
+    /// </summary>
+    private void PlaceRow(SoundEffectKind kind, EffectRow row, int top, Point origin)
+    {
+        var c = _col;
+
+        row.Middle = top + c.RowHeight / 2;
+
+        // The row's middle where it is now, however far the list is scrolled.
+        var middle = row.Middle + origin.Y;
+
+        int CentreTop(int height) => middle - height / 2;
+
+        // A tick box sizes itself; it is given that size, centred in its column.
+        void PlaceTick(CheckBox box, int left, int width)
+        {
+            var size = box.GetPreferredSize(Size.Empty);
+            box.SetBounds(origin.X + left + Math.Max(0, (width - size.Width) / 2), CentreTop(size.Height), size.Width, size.Height);
+        }
+
+        // A drop-down's or a box's height is its own - see FieldResized.
+        void PlaceField(Control field, int left, int width) =>
+            field.SetBounds(origin.X + left, CentreTop(field.Height), width, 0, BoundsSpecified.Location | BoundsSpecified.Width);
+
+        void PlaceButton(Button button, int left, int width) =>
+            button.SetBounds(origin.X + left, CentreTop(c.ButtonHeight), width, c.ButtonHeight);
+
+        PlaceTick(row.Race, c.Race, c.RaceWidth);
+        PlaceTick(row.Practice, c.Practice, c.PracticeWidth);
+
+        // The name on its line, and the explanation that used to wrap it on
+        // a smaller line underneath - the two centred as one block.
+        var nameHeight = TextBlock(row.NameLabel, c.NameWidth).Height;
+        var nameTop = CentreTop(NameBlockHeight(row, c.NameWidth));
+
+        row.NameLabel.SetBounds(origin.X + c.Name, nameTop, c.NameWidth, nameHeight);
+
+        if (row.DetailLabel is { } detail)
+        {
+            detail.SetBounds(origin.X + c.Name, nameTop + nameHeight + NameDetailGap, c.NameWidth, TextBlock(detail, c.NameWidth).Height);
+        }
+
+        PlaceField(row.Sound, c.Sound, c.SoundWidth);
+        PlaceField(row.FileBox, c.File, c.FileWidth);
+        PlaceButton(row.Browse, c.Browse, c.BrowseWidth);
+        PlaceButton(row.Remove, c.Remove, c.RemoveWidth);
+        PlaceButton(row.Test, c.Test, c.TestWidth);
+
+        if (_weights.TryGetValue(kind, out var numWeight))
+        {
+            PlaceField(numWeight, c.Weight, c.WeightWidth);
+        }
+
+        if (_caution.TryGetValue(kind, out var chkCaution))
+        {
+            var caution = chkCaution.GetPreferredSize(Size.Empty);
+            chkCaution.SetBounds(origin.X + c.Caution, CentreTop(caution.Height), caution.Width, caution.Height);
+        }
+    }
+
+    /// <summary>
+    /// A field on a row has settled on a height of its own after it was
+    /// placed - a drop-down once the theme draws it, a box once its border
+    /// goes (Pieces.KeepHeightTold is the same thing for the layout pieces).
+    /// It is centred on its row again; and should it no longer fit in one,
+    /// every row is placed again, taller. Not before the rows are first
+    /// placed, nor while they are being.
+    /// </summary>
+    private void FieldResized(Control field, EffectRow row)
+    {
+        if (_placing || _col.RowHeight == 0 || field.IsDisposed)
+        {
+            return;
+        }
+
+        if (field.Height > _col.RowHeight - RowPad * 2)
+        {
+            PlaceRows();
+            return;
+        }
+
+        var top = row.Middle + _rowsPanel.AutoScrollPosition.Y - field.Height / 2;
+
+        if (field.Top != top)
+        {
+            field.Top = top;
+        }
     }
 
     /// <summary>
@@ -730,105 +1063,93 @@ public sealed class SoundEffectsControl : UserControl
         _lblStatus.ForeColor = AppTheme.TextMuted;
     }
 
-
     private float CurrentVolume() => (float)(_numVolumePercent.Value / 100m);
 
-    private void BuildRow(Control parent, SoundEffectKind kind, SoundEffectConfig config, ref int y)
+    /// <summary>
+    /// Makes one sound's row - its controls, what they do, and the file it
+    /// plays - and adds it to the list. Nothing is placed here: PlaceRows
+    /// does that, once every row is made, and again at every text size.
+    /// </summary>
+    private EffectRow BuildRow(SoundEffectKind kind, SoundEffectConfig config)
     {
-        var c = _col;
-
-        // Every row the same height, with every control centred on the
-        // row's middle. Rows used to be as tall as their own name, which
-        // wrapped to two or three lines at the old width - so the list was a
-        // stack of uneven rows with the controls stuck at different heights.
-        var middle = y + c.RowHeight / 2;
-
-        int CentreTop(int height) => middle - height / 2;
+        var parent = _rowsPanel;
 
         // The name on one line, and the explanation that used to wrap it -
         // "(all-time best on this track)" - on a smaller line underneath.
+        // Sized by PlaceRows to the names' column: a label that sized itself
+        // would keep to one line however narrow the column.
         var (name, detail) = SplitDescription(kind);
 
         var lbl = new Label
         {
             Text = name,
-            AutoSize = true,
-            MaximumSize = new Size(c.NameWidth, 0),
-            Font = AppTheme.BoldFont,
+            AutoSize = false,
             ForeColor = AppTheme.TextDark,
         };
 
-        Label? lblDetail = detail is null
-            ? null
-            : new Label
+        _textSize.Wear(lbl, () => AppTheme.BoldFont);
+
+        Label? lblDetail = null;
+
+        if (detail is not null)
+        {
+            lblDetail = new Label
             {
                 Text = detail,
-                AutoSize = true,
-                MaximumSize = new Size(c.NameWidth, 0),
-                Font = AppTheme.SmallFont,
+                AutoSize = false,
                 ForeColor = AppTheme.TextMuted,
             };
 
-        var nameBlock = UiLayout.HeightOf(lbl) + (lblDetail is null ? 0 : 2 + UiLayout.HeightOf(lblDetail));
-        lbl.Location = new Point(c.Name, CentreTop(nameBlock));
-        if (lblDetail is not null)
-        {
-            lblDetail.Location = new Point(c.Name, lbl.Top + UiLayout.HeightOf(lbl) + 2);
+            _textSize.Wear(lblDetail, () => AppTheme.SmallFont);
         }
 
         // No pop-up on the name: it only repeated the name and detail
         // already written on the row.
 
         var chkRace = new CheckBox { AutoSize = true, Checked = config.Enabled };
-        chkRace.Location = new Point(c.Race + Math.Max(0, (c.RaceWidth - chkRace.PreferredSize.Width) / 2), CentreTop(chkRace.PreferredSize.Height));
-
         var chkPractice = new CheckBox { AutoSize = true, Checked = config.EnabledInPractice ?? config.Enabled };
-        chkPractice.Location = new Point(c.Practice + Math.Max(0, (c.PracticeWidth - chkPractice.PreferredSize.Width) / 2), CentreTop(chkPractice.PreferredSize.Height));
 
         _tips.SetToolTip(chkRace, $"Play \"{name}\" during races.");
         _tips.SetToolTip(chkPractice, $"Play \"{name}\" during practice.");
 
         var cmbSound = NewSoundCombo(config.BuiltInSound);
-        cmbSound.Font = AppTheme.BodyFont;
-        cmbSound.Width = c.SoundWidth;
-        cmbSound.Location = new Point(c.Sound, CentreTop(Math.Max(cmbSound.Height, cmbSound.PreferredSize.Height)));
         _tips.SetToolTip(cmbSound, "The built-in sound this row plays - Classic tones or one of the packs. Your own file, if set, plays instead.");
 
         var fileBox = new TextBox
         {
-            Font = AppTheme.BodyFont,
-            Width = c.FileWidth,
-            PlaceholderText = "(optional own file)",
+            PlaceholderText = FilePrompt,
             BackColor = AppTheme.Surface,
             ForeColor = AppTheme.TextDark,
         };
-        fileBox.Location = new Point(c.File, CentreTop(fileBox.PreferredHeight));
         fileBox.HandleCreated += (_, _) =>
         {
             fileBox.BackColor = AppTheme.Surface;
             fileBox.ForeColor = AppTheme.TextDark;
         };
 
-        var btnBrowse = new Button
-        {
-            Text = BrowseCaption,
-            Size = new Size(c.BrowseWidth, c.ControlHeight),
-            Location = new Point(c.Browse, CentreTop(c.ControlHeight)),
-        };
+        var btnBrowse = new Button { Text = BrowseCaption };
 
         // Takes the row back to its pack sound. Only the setting is
         // cleared: the file was always the club's own, wherever it lives -
         // this page points at it and never copies it anywhere - so there is
         // no copy of the app's to tidy away, and nothing of theirs is
         // deleted.
-        var btnRemove = new Button
-        {
-            Text = RemoveCaption,
-            Size = new Size(c.RemoveWidth, c.ControlHeight),
-            Location = new Point(c.Remove, CentreTop(c.ControlHeight)),
-        };
+        var btnRemove = new Button { Text = RemoveCaption };
 
-        var row = new EffectRow(chkRace, chkPractice, cmbSound, fileBox, btnRemove, config.CustomFilePath?.Trim() ?? string.Empty);
+        var btnTest = new Button { Text = TestCaption };
+
+        var row = new EffectRow(
+            chkRace,
+            chkPractice,
+            lbl,
+            lblDetail,
+            cmbSound,
+            fileBox,
+            btnBrowse,
+            btnRemove,
+            btnTest,
+            config.CustomFilePath?.Trim() ?? string.Empty);
+
         ShowFile(row, editing: false);
 
         btnBrowse.Click += (_, _) =>
@@ -890,12 +1211,6 @@ public sealed class SoundEffectsControl : UserControl
             QueueSave();
         };
 
-        var btnTest = new Button
-        {
-            Text = TestCaption,
-            Size = new Size(c.TestWidth, c.ControlHeight),
-            Location = new Point(c.Test, CentreTop(c.ControlHeight)),
-        };
         btnTest.Click += async (_, _) =>
         {
             btnTest.Enabled = false;
@@ -930,18 +1245,21 @@ public sealed class SoundEffectsControl : UserControl
         parent.Controls.Add(btnRemove);
         parent.Controls.Add(btnTest);
 
+        // A field that settles on a height of its own after it is placed is
+        // centred on its row again - see FieldResized.
+        cmbSound.SizeChanged += (_, _) => FieldResized(cmbSound, row);
+        fileBox.SizeChanged += (_, _) => FieldResized(fileBox, row);
+
         if (SoundEffectsProfile.PerLapKinds.Contains(kind))
         {
             var numWeight = new NumericUpDown
             {
-                Font = AppTheme.BodyFont,
-                Width = c.WeightWidth,
                 Minimum = 0,
                 Maximum = 100,
                 Value = Math.Clamp(config.Weight, 0, 100),
             };
-            numWeight.Location = new Point(c.Weight, CentreTop(numWeight.PreferredHeight));
             numWeight.ValueChanged += (_, _) => QueueSave();
+            numWeight.SizeChanged += (_, _) => FieldResized(numWeight, row);
             _tips.SetToolTip(numWeight, "When several per-lap sounds fire on the same lap, the higher weights win - see \"Max sounds per lap\" below.");
             parent.Controls.Add(numWeight);
             _weights[kind] = numWeight;
@@ -953,10 +1271,10 @@ public sealed class SoundEffectsControl : UserControl
                 Text = "Caution",
                 AutoSize = true,
                 Checked = config.AllowUnderCaution,
-                Font = AppTheme.SmallFont,
                 ForeColor = AppTheme.TextMuted,
             };
-            chkCaution.Location = new Point(c.Caution, CentreTop(chkCaution.PreferredSize.Height));
+
+            _textSize.Wear(chkCaution, () => AppTheme.SmallFont);
             _tips.SetToolTip(chkCaution, "Keep playing this sound while a yellow or red flag is out. Off, it waits for green.");
 
             chkCaution.CheckedChanged += (_, _) => QueueSave();
@@ -979,7 +1297,7 @@ public sealed class SoundEffectsControl : UserControl
 
         _rows[kind] = row;
 
-        y += c.RowHeight;
+        return row;
     }
 
     /// <summary>
@@ -1040,9 +1358,10 @@ public sealed class SoundEffectsControl : UserControl
         public override string ToString() => Name;
     }
 
+    /// <summary>A pack picker. Its width is given where it is placed: a row's by PlaceRow, "Set every sound to:" by its line (FieldRow).</summary>
     private static ComboBox NewSoundCombo(string? selectedKey)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         combo.Items.Add(new SoundChoice(SoundPacks.ClassicKey, SoundPacks.DisplayName(null)));
         foreach (var pack in SoundPacks.All)
         {

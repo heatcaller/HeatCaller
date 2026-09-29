@@ -119,7 +119,7 @@ Full detail: [Running a race](../race-control/running-a-race.md). If something g
 
 ## Step 9: Let the announcer call it
 
-The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Windows voice. For a more natural one, go to **Voice Announcements → Voice Settings** and choose under **Speak With**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
+The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Windows voice. For a more natural one, go to **Voice Announcements → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
 
 - The **Announcer** button on **Race Control** opens **Voice Announcements → Announcer**, which has talking points for whoever is on the mic. It has a button back to **Race Control**.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.

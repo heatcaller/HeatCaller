@@ -375,7 +375,7 @@ internal sealed class FillPage : Panel
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, Math.Max(0, gapBelow)),
-            Padding = Padding.Empty,
+            Padding = Pieces.RingRoom(part),
             Tag = AppTheme.KeepBackColor,
         };
 
@@ -390,7 +390,11 @@ internal sealed class FillPage : Panel
         // LeastHeightMayHaveChanged.
         part.Layout += (_, _) => LeastHeightMayHaveChanged();
 
-        _leastHeights[holder] = leastHeight;
+        // The least is the part's own; the holder keeps the ring's room
+        // round it as well (Pieces.RingRoom).
+        var ring = holder.Padding;
+
+        _leastHeights[holder] = width => leastHeight(Math.Max(1, width - ring.Horizontal)) + ring.Vertical;
 
         _rows.RowCount++;
         _rows.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -680,7 +684,7 @@ internal sealed class Section : TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, Math.Max(0, gapBelow)),
-            Padding = Padding.Empty,
+            Padding = Pieces.RingRoom(part),
             Tag = AppTheme.KeepBackColor,
         };
 
@@ -689,7 +693,12 @@ internal sealed class Section : TableLayoutPanel
         holder.Controls.Add(part);
 
         _fillHolder = holder;
-        _fillLeast = leastHeight;
+
+        // The least is the part's own; the holder keeps the ring's room
+        // round it as well (Pieces.RingRoom).
+        var ring = holder.Padding;
+
+        _fillLeast = () => leastHeight() + ring.Vertical;
 
         RowCount++;
         RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -1262,9 +1271,10 @@ internal sealed class FieldGrid : TableLayoutPanel
 
             case TextBoxBase { Multiline: true } box:
             {
-                // The edit control starts its text a pixel inside its border.
+                // The edit control starts its text a pixel inside its border,
+                // and spaces its lines by LineHeight, not Font.Height.
                 var top = BorderOf(box.BorderStyle) + 1;
-                return (top, top + box.Font.Height);
+                return (top, top + Pieces.LineHeight(box.Font));
             }
 
             case StatusLine status:
@@ -1432,10 +1442,16 @@ internal sealed class ButtonBar : FlowLayoutPanel
         }
 
         // The gap on the side the next button comes from, and below, for
-        // when the row wraps.
+        // when the row wraps - and round a box the theme outlines, a pixel
+        // for its ring on every side (Pieces.RingRoom): the first box on a
+        // line lost the top and outer side of its ring to the bar's edge,
+        // and every box the bottom of it, which the bar's own height stops
+        // at on its last line (GetPreferredSize).
+        var ring = Pieces.RingRoom(control).Top;
+
         control.Margin = FlowDirection == FlowDirection.RightToLeft
-            ? new Padding(Gap, 0, 0, Gap)
-            : new Padding(0, 0, Gap, Gap);
+            ? new Padding(Gap, ring, ring, Gap + ring)
+            : new Padding(ring, ring, Gap, Gap + ring);
 
         if (control is Button button)
         {
@@ -1728,10 +1744,13 @@ internal sealed class FieldRow : Panel
 
         // One height for every line - the tallest caption or field - so the
         // captions and fields on a line share a centre, and a second line
-        // lines up under the first.
+        // lines up under the first. A box the theme outlines counts with the
+        // pixel round it for its ring (Pieces.RingRoom): as the tallest thing
+        // on its line it filled the line, and its ring's top and bottom were
+        // drawn outside this row and lost.
         var lineHeight = pairs.Max(pair => Math.Max(
             pair.Caption is null ? 0 : CaptionSize(pair.Caption).Height,
-            FieldSize(pair.Field).Height));
+            FieldSize(pair.Field).Height + Pieces.RingRoom(pair.Field).Vertical));
 
         var last = _lastLeast is null ? null : _pairs[^1].Field;
         var x = 0;
@@ -1743,6 +1762,7 @@ internal sealed class FieldRow : Panel
             var captionSize = caption is null ? Size.Empty : CaptionSize(caption);
             var captionGap = caption is null ? 0 : UiLayout.LabelGap;
             var own = FieldSize(field);
+            var ring = Pieces.RingRoom(field);
             var stretches = ReferenceEquals(field, last);
 
             var fieldWidth = stretches
@@ -1750,7 +1770,7 @@ internal sealed class FieldRow : Panel
                 : measure is not null
                     ? Math.Max(1, measure())
                     : own.Width;
-            var needed = captionSize.Width + captionGap + fieldWidth;
+            var needed = captionSize.Width + captionGap + ring.Horizontal + fieldWidth;
             var left = x == 0 ? 0 : x + UiLayout.SectionGap;
 
             if (x > 0 && left + needed > width)
@@ -1760,14 +1780,16 @@ internal sealed class FieldRow : Panel
             }
 
             var top = line * (lineHeight + UiLayout.RowGap);
-            var fieldLeft = left + captionSize.Width + captionGap;
+
+            // A box's ring room either side of it, inside its pair.
+            var fieldLeft = left + captionSize.Width + captionGap + ring.Left;
 
             // To the end of the line - when there is an end to go to. On a
             // line too narrow even for its least, it takes the line and no
             // more: past the edge is worse than a narrow picker.
             if (stretches && width < Unbounded)
             {
-                fieldWidth = Math.Max(1, width - fieldLeft);
+                fieldWidth = Math.Max(1, width - fieldLeft - ring.Right);
             }
 
             if (place)
@@ -1776,7 +1798,7 @@ internal sealed class FieldRow : Panel
                 field.SetBounds(fieldLeft, top + (lineHeight - own.Height) / 2, fieldWidth, own.Height);
             }
 
-            x = fieldLeft + fieldWidth;
+            x = fieldLeft + fieldWidth + ring.Right;
             widest = Math.Max(widest, x);
         }
 
@@ -1843,6 +1865,9 @@ internal sealed class Beside : Panel
 
     private readonly Func<int> _sideLeastWidth;
 
+    /// <summary>The column's parts the theme draws a ring round - kept a pixel in from their place, for it (Pieces.RingRoom).</summary>
+    private readonly HashSet<Control> _ringed = new();
+
     /// <summary>The panel holding the part on the left that takes the height left over, and the least that part can do with.</summary>
     private Control? _fillHolder;
     private Func<int, int>? _fillLeast;
@@ -1902,7 +1927,7 @@ internal sealed class Beside : Panel
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 0, Math.Max(0, gapBelow)),
-            Padding = Padding.Empty,
+            Padding = Pieces.RingRoom(part),
             Tag = AppTheme.KeepBackColor,
         };
 
@@ -1911,7 +1936,12 @@ internal sealed class Beside : Panel
         holder.Controls.Add(part);
 
         _fillHolder = holder;
-        _fillLeast = leastHeight;
+
+        // The least is the part's own; the holder keeps the ring's room
+        // round it as well (Pieces.RingRoom).
+        var ring = holder.Padding;
+
+        _fillLeast = width => leastHeight(Math.Max(1, width - ring.Horizontal)) + ring.Vertical;
 
         // Something in it growing or shrinking - a line of a card wrapping -
         // can change the least this can do with, and only the part sees it.
@@ -2002,6 +2032,13 @@ internal sealed class Beside : Panel
         // resized by the panel to its width on one line.
         part.AutoSize = false;
         part.Margin = Padding.Empty;
+
+        // Asked now, not as it is placed: the theme takes a picture box's
+        // own border off as it rings it, and that is what says it wants one.
+        if (Pieces.RingRoom(part) != Padding.Empty)
+        {
+            _ringed.Add(part);
+        }
 
         _side.Add((part, Math.Max(0, gapBelow), measured));
         Controls.Add(part);
@@ -2126,7 +2163,12 @@ internal sealed class Beside : Panel
             var height = SideHeight(part, measured, side.Width)
                 + (IsSideFill(part) ? spare : 0);
 
-            var bounds = new Rectangle(left, y, side.Width, height);
+            // A pixel in on every side for the ring the theme draws round a
+            // box, on this panel - at the column's edge it would be cut off.
+            // Its height came with that room in it (SideHeight).
+            var bounds = _ringed.Contains(part)
+                ? new Rectangle(left + 1, y + 1, Math.Max(1, side.Width - 2), Math.Max(1, height - 2))
+                : new Rectangle(left, y, side.Width, height);
 
             if (part.Bounds != bounds)
             {
@@ -2184,14 +2226,21 @@ internal sealed class Beside : Panel
     /// <summary>
     /// A part's least height in the column: the filling part at its least, a
     /// card as tall as it needs to be at the column's width, anything else
-    /// its own.
+    /// its own - and a box the theme outlines with the pixel round it for
+    /// its ring, which Place takes back off as it puts the box a pixel in.
+    /// Without that, a box that keeps its own height lost two pixels to
+    /// every layout, placed each time from the height the last one left it.
     /// </summary>
-    private int SideHeight(Control part, bool measured, int width) =>
-        IsSideFill(part) && _sideFill is { } fill
-            ? Math.Max(0, fill.Least(Math.Max(1, width)))
+    private int SideHeight(Control part, bool measured, int width)
+    {
+        var ring = _ringed.Contains(part) ? 2 : 0;
+
+        return IsSideFill(part) && _sideFill is { } fill
+            ? Math.Max(0, fill.Least(Math.Max(1, width - ring))) + ring
             : measured
                 ? part.GetPreferredSize(new Size(Math.Max(1, width), 0)).Height
-                : part.Height;
+                : part.Height + ring;
+    }
 
     private bool IsSideFill(Control part) => _sideFill is { } fill && ReferenceEquals(fill.Part, part);
 
@@ -2526,8 +2575,8 @@ internal sealed class StatusLine : Panel
     /// <summary>The light's side at the text size in use.</summary>
     private static int Side => UiLayout.AtTextSize(LightSide);
 
-    /// <summary>One line of the text, as the label draws it.</summary>
-    private int TextLine => _text.Font.Height + _text.Padding.Vertical;
+    /// <summary>One line of the text, as the label draws it - see Pieces.LineHeight.</summary>
+    private int TextLine => Pieces.LineHeight(_text.Font) + _text.Padding.Vertical;
 
     /// <summary>Where the text's first line is, from the top - what FieldGrid levels a caption with.</summary>
     internal (int Top, int Bottom) FirstLine
@@ -2869,13 +2918,17 @@ internal sealed class TextSize
     /// Keeps <paramref name="lines"/> lines of its font for a label whatever
     /// it says, so what is under it does not hop as it is rewritten - a
     /// status line. A label that sizes itself still grows past them for
-    /// more. Give it its face first: the lines are of the font it has.
+    /// more. Give it its face first: the lines are of the font it has -
+    /// as the label draws them, which for Barlow is taller than
+    /// Font.Height (see Pieces.LineHeight), so two lines kept were a few
+    /// pixels short of two lines drawn and a status that came to its second
+    /// line still hopped.
     /// </summary>
     public T ReserveLines<T>(T label, int lines) where T : Label
     {
         Keep(() =>
         {
-            var least = new Size(0, lines * label.Font.Height + label.Padding.Vertical);
+            var least = new Size(0, lines * Pieces.LineHeight(label.Font) + label.Padding.Vertical);
 
             if (label.MinimumSize != least)
             {
@@ -2936,6 +2989,14 @@ internal static class Pieces
     /// A grid whose columns are built again - Practice's, from the columns
     /// picked for it - is given this again after each rebuild, which keeps
     /// the new columns' weights and headings the same way.
+    ///
+    /// Every column's weight is kept before any minimum goes on. A minimum
+    /// past a column's width widens it, and a grid whose columns fill it
+    /// takes a column widened as a new weight for it and for every column
+    /// after it - so a weight read after that was not the one it was built
+    /// with. Read column by column, "TRANSPONDER" (104px, past the 100px a
+    /// column starts at) left Lap Beeps' class, cue and on/off columns with
+    /// two thirds of their weights for good (the grid test, 29 Sep).
     /// </summary>
     internal static void KeepHeadingsWhole(DataGridView grid)
     {
@@ -2945,15 +3006,18 @@ internal static class Pieces
             grid.SizeChanged += (_, _) => KeepFillWeights(grid);
         }
 
+        // The weight each column was built with, kept the first time it is
+        // seen - see KeepFillWeights.
         foreach (DataGridViewColumn column in grid.Columns)
         {
-            // The weight the column was built with, kept the first time it
-            // is seen - see KeepFillWeights.
             if (!BuiltWeights.TryGetValue(column, out _))
             {
                 BuiltWeights.Add(column, new StrongBox<float>(column.FillWeight));
             }
+        }
 
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
             var least = Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText));
 
             if (column.MinimumWidth != least)
@@ -2976,7 +3040,8 @@ internal static class Pieces
     private static readonly ConditionalWeakTable<DataGridViewColumn, StrongBox<float>> BuiltWeights = new();
 
     /// <summary>
-    /// Puts a grid's fill weights back to the ones it was built with.
+    /// Puts a grid's fill weights back to the ones it was built with, and
+    /// has the grid share its width out afresh from them.
     ///
     /// A grid whose columns fill it takes a column pushed to a new width -
     /// by its minimum, or by being squeezed down to it - as a new weight for
@@ -2986,16 +3051,206 @@ internal static class Pieces
     /// pictures, 29 Sep). So the weights are put back after the minimums
     /// are set and whenever the grid is resized. A column added since the
     /// grid was last given KeepHeadingsWhole is left alone until it is.
+    ///
+    /// Put back even when none of them had changed, since a weight set -
+    /// even to what it was - has the grid work every width out from the
+    /// weights again rather than from the widths it had. Growing, a grid
+    /// shares the new width out by weight - unless some column was at its
+    /// minimum, when it goes by how far below its share each column was, so
+    /// a column whose minimum is small beside its weight takes most of it.
+    /// Lap Beeps' on/off column, whose heading is blank, was at its 2px
+    /// minimum when its list was first laid out and took most of the list
+    /// once it was full width, the driver, transponder, class and cue
+    /// bunched up at the left (layout pictures, 29 Sep).
+    ///
+    /// Working the widths out afresh, a grid gives a column too narrow for
+    /// its minimum that minimum and takes it from the others by weight - once,
+    /// so one of those can be pushed below its own minimum and be widened
+    /// back to it past the grid's edge. So where a share is short of a
+    /// minimum the weights set are not the built ones but ones that already
+    /// allow for the minimums (WeightsWithinMinimums), which leave the grid
+    /// nothing to take.
     /// </summary>
     private static void KeepFillWeights(DataGridView grid)
     {
+        var filling = new List<(DataGridViewColumn Column, float Built)>();
+        var allKept = true;
+
         foreach (DataGridViewColumn column in grid.Columns)
         {
-            if (BuiltWeights.TryGetValue(column, out var weight) && column.FillWeight != weight.Value)
+            var fills = column.Visible && column.InheritedAutoSizeMode == DataGridViewAutoSizeColumnMode.Fill;
+
+            if (!BuiltWeights.TryGetValue(column, out var built))
             {
-                column.FillWeight = weight.Value;
+                allKept &= !fills;
+                continue;
+            }
+
+            if (fills)
+            {
+                filling.Add((column, built.Value));
+            }
+            else if (column.FillWeight != built.Value)
+            {
+                column.FillWeight = built.Value;
             }
         }
+
+        if (filling.Count == 0)
+        {
+            return;
+        }
+
+        // Not before the grid has a window, when it has laid nothing out and
+        // its widths say nothing of its room, nor while a column it has not
+        // been given KeepHeadingsWhole for shares the room: the built weights
+        // then, as they are.
+        var weights = grid.IsHandleCreated && allKept
+            ? WeightsWithinMinimums(filling, FillRoom(grid, filling))
+            : filling.Select(part => part.Built).ToArray();
+
+        var set = false;
+
+        for (var i = 0; i < filling.Count; i++)
+        {
+            if (filling[i].Column.FillWeight != weights[i])
+            {
+                filling[i].Column.FillWeight = weights[i];
+                set = true;
+            }
+        }
+
+        if (!set)
+        {
+            var same = filling[0].Column.FillWeight;
+            filling[0].Column.FillWeight = same;
+        }
+    }
+
+    /// <summary>
+    /// The width a grid's filling columns share: what they fill now - the
+    /// grid lays itself out as it is resized, before SizeChanged - but never
+    /// more than it has for them. Just after the grid has worked its widths
+    /// out from the weights, they can run past its edge, and weights worked
+    /// out for that width would keep them there. What it has is inside its
+    /// border, beside any scrollbar and row headers, less the columns that
+    /// do not fill - and a pixel spare, for the one it keeps down its left
+    /// edge in some cell border styles. A pixel or two short does no harm.
+    /// </summary>
+    private static int FillRoom(DataGridView grid, List<(DataGridViewColumn Column, float Built)> filling)
+    {
+        var border = grid.BorderStyle switch
+        {
+            BorderStyle.FixedSingle => 1,
+            BorderStyle.Fixed3D => Application.RenderWithVisualStyles ? 1 : SystemInformation.Border3DSize.Width,
+            _ => 0,
+        };
+
+        var others = 0;
+
+        foreach (DataGridViewColumn column in grid.Columns)
+        {
+            if (column.Visible && column.InheritedAutoSizeMode != DataGridViewAutoSizeColumnMode.Fill)
+            {
+                others += column.Width;
+            }
+        }
+
+        var inside = grid.DisplayRectangle.Width - 2 * border - (grid.RowHeadersVisible ? grid.RowHeadersWidth : 0) - others - 1;
+
+        return Math.Min(filling.Sum(part => part.Column.Width), inside);
+    }
+
+    /// <summary>
+    /// Fill weights that share <paramref name="room"/> out as the built
+    /// weights do, except that a column whose share would be less than its
+    /// minimum has its minimum and the others share what is left by their
+    /// weights - worked out again until none is short, as taking a minimum's
+    /// width from the others can leave another short. The built weights
+    /// themselves when no share is short; in their scale when one is. And
+    /// the built weights when the room is no more than the minimums - the
+    /// grid then has every column at its minimum whatever the weights.
+    /// </summary>
+    private static float[] WeightsWithinMinimums(List<(DataGridViewColumn Column, float Built)> filling, int room)
+    {
+        if (room <= filling.Sum(part => part.Column.MinimumWidth))
+        {
+            return filling.Select(part => part.Built).ToArray();
+        }
+
+        var count = filling.Count;
+        var least = new bool[count];
+        var anyLeast = false;
+        bool more;
+
+        do
+        {
+            more = false;
+            var left = (float)room;
+            var weight = 0f;
+
+            for (var i = 0; i < count; i++)
+            {
+                if (least[i])
+                {
+                    left -= filling[i].Column.MinimumWidth;
+                }
+                else
+                {
+                    weight += filling[i].Built;
+                }
+            }
+
+            if (weight <= 0f)
+            {
+                break;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                if (!least[i] && filling[i].Built * left / weight < filling[i].Column.MinimumWidth)
+                {
+                    least[i] = true;
+                    anyLeast = true;
+                    more = true;
+                }
+            }
+        }
+        while (more);
+
+        var weights = filling.Select(part => part.Built).ToArray();
+
+        if (!anyLeast)
+        {
+            return weights;
+        }
+
+        var total = weights.Sum();
+        var rest = (float)room;
+        var restWeight = 0f;
+
+        for (var i = 0; i < count; i++)
+        {
+            if (least[i])
+            {
+                rest -= filling[i].Column.MinimumWidth;
+            }
+            else
+            {
+                restWeight += filling[i].Built;
+            }
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var width = least[i] || restWeight <= 0f
+                ? filling[i].Column.MinimumWidth
+                : filling[i].Built * rest / restWeight;
+
+            weights[i] = Math.Max(width, 1f) / room * total;
+        }
+
+        return weights;
     }
 
     /// <summary>
@@ -3175,6 +3430,46 @@ internal static class Pieces
         kept = (picker.Font, picker.Items.Count, width);
         return width;
     }
+
+    /// <summary>
+    /// How far apart the lines of a box of text are in <paramref name="font"/>
+    /// as Windows draws them - for a box sized to show so many lines.
+    ///
+    /// Not Font.Height. That is the spacing GDI+ works out from the font's
+    /// own ascent and descent; a text box, a label and TextRenderer are drawn
+    /// by GDI, which spaces lines by the font's Windows ascent and descent -
+    /// for Barlow 13% more. A box sized in Font.Heights for three lines
+    /// showed two and a half at 200% (Announcements' phrasing boxes, layout
+    /// pictures, 29 Sep).
+    ///
+    /// Measured once for each font, since the pieces ask on every layout.
+    /// </summary>
+    internal static int LineHeight(Font font) =>
+        LineHeights.GetValue(font, measured => new StrongBox<int>(
+            TextRenderer.MeasureText("Ag", measured, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Height)).Value;
+
+    /// <summary>The line height of each font measured, kept while the font is.</summary>
+    private static readonly ConditionalWeakTable<Font, StrongBox<int>> LineHeights = new();
+
+    /// <summary>
+    /// The room a piece keeps round a control for the ring the theme draws
+    /// one pixel outside it, on whatever holds it (InputOutline): a pixel on
+    /// every side for a text box, a number box, a list, or a picture box
+    /// that asks for an edge - nothing for anything else.
+    ///
+    /// A part filling a panel of its own (FillPage.AddFill, Section.AddFill,
+    /// Beside.AddFill) had nowhere for the ring to go, and the box was drawn
+    /// with no edge at all - a list the colour of the card it sat on, which
+    /// nobody could see was there, empty or not (Rivalries, Venues, Demo Mode's
+    /// log, 29 Sep).
+    /// Asked as the part is put in place, before the theme has seen it: the
+    /// theme takes a picture box's own border off as it rings it.
+    /// </summary>
+    internal static Padding RingRoom(Control control) =>
+        control is TextBoxBase or UpDownBase or ListBox or ListView
+            || control is PictureBox { BorderStyle: not BorderStyle.None }
+            ? new Padding(1)
+            : Padding.Empty;
 
     /// <summary>
     /// Keeps the height the layouts go by for a drop-down, a one-line text

@@ -1,10 +1,10 @@
 # Setting up the Club Website page
 
-The **Club Website** page is where you point the laptop at your club's relay, choose what gets published, set the pages' welcome line, and check that everything is getting through. You'll use it once to set up, and then mostly to glance at the **Status** group. For what the relay is and what it publishes, see [The online relay](index.md).
+The **Club Website** page is where you point the laptop at your club's relay, choose what gets published, set the pages' welcome line, and check that everything is getting through. You'll use it once to set up, and then mostly to glance at the **Status** card. For what the relay is and what it publishes, see [The online relay](index.md).
 
 You can also reach this page from **Local Screens**, which shows a one-line relay status and an **Club Website Settings...** button.
 
-<!-- screenshot: Club Website page, Relay group filled in with a test result reading "Connected as ..." -->
+<!-- screenshot: Club Website page, Relay card filled in with a test result reading "Connected as ..." -->
 
 ## Before you start
 
@@ -19,11 +19,11 @@ The token is a password for publishing as your club. Anyone who has it can publi
 ## Turn on publishing
 
 1. Open the **Club Website** page.
-2. In the **Relay** group, fill in **Address:**, **Club id:** and **Publish token:**.
+2. In the **Relay** card, fill in **Address:**, **Club id:** and **Publish token:**.
 3. Click **Test Connection**. It checks the address, club and token without publishing anything.
 4. When the result says `Connected as <your club name>. Saved.`, tick **Publish to the relay**.
-5. Watch the **Status** group. Within a few seconds it should say **Publishing**.
-6. In the **Share** group, click **Open** to see your club's home page.
+5. Watch the **Status** card. Within a few seconds it should say **Publishing**.
+6. In the **Share** card, click **Open** to see your club's home page.
 
 ## Relay
 
@@ -85,7 +85,7 @@ A relay that has been idle may take a second or two to wake up. The test and pub
 
 ## What gets published
 
-The **What gets published** group lists what's always sent: the live race while one is running, each session's results as it is saved, championship standings, today's schedule (from **Race Day → Run Sheet**), the badges drivers have earned, and every track layout with its lap record and best laps. Demo races are never published, in results or in track best laps.
+The **What gets published** card lists what's always sent: the live race while one is running, each session's results as it is saved, championship standings, today's schedule (from **Race Day → Run Sheet**), the badges drivers have earned, and every track layout with its lap record and best laps. Demo races are never published, in results or in track best laps.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -96,25 +96,25 @@ Both are off-by-default decisions about children's names; see [Children and priv
 
 ## Look
 
-The **Look** group holds the welcome line. Changes reach the pages within a few seconds, and there's no Save button.
+The **Look** card holds the welcome line. Changes reach the pages within a few seconds, and there's no Save button.
 
-<!-- screenshot: Club Website page, Look group with the Welcome line box and the Open Looks button -->
+<!-- screenshot: Club Website page, Look card with the Welcome line box and the Open Looks button -->
 
 **Welcome line:** One line of plain text, up to 160 characters, shown under the club's name on the home page, for example "Racing every Tuesday from 6pm - all welcome". It's also the description used when the pages are added to a phone's home screen. Leave it blank for the standard line.
 
-The pages' colors and the club logo used to be set here too. Since 0.48 they're on **Themes → Looks**, shared with the app, the Big Screen and the Wi-Fi pages; the group says "Colours and club logo are set on Themes → Looks (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
+The pages' colors and the club logo used to be set here too. Since 0.48 they're on **Themes → Looks**, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colours and club logo are set on Themes → Looks (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
 
 - **Colors:** the online pages use the crowd-screen look, set in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. Any look works, including the ones you make yourself. The choice you'd made here before 0.48 carries over.
-- **Logo:** choose it with **Choose Logo** in the **Club logo** group. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. It's also the icon when someone adds the pages to their home screen. A new logo shows straight away. Without a logo, the icon is a chequered flag in the look's colors.
+- **Logo:** choose it with **Choose Logo** in the **Club logo** card. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. It's also the icon when someone adds the pages to their home screen. A new logo shows straight away. Without a logo, the icon is a chequered flag in the look's colors.
 
 !!! note
     The larger logo, its plate and the instant logo change need the relay updated for 0.48. See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 ## The relay also speaks
 
-Once the **Relay** group is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account, no key and no bill.
+Once the **Relay** card is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account, no key and no bill.
 
-There's nothing to set up here for it. Choose it under **Speak With** on **Voice Announcements → Voice Settings**, pick an announcer voice, and the page shows your club's allowance for the month. Until the **Relay** group is filled in, that page says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
+There's nothing to set up here for it. Choose it under **Speak with** on **Voice Announcements → Voice Settings**, pick an announcer voice, and the page shows your club's allowance for the month. Until the **Relay** card is filled in, that page says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
 
 A few things follow from sharing the relay:
 
@@ -125,7 +125,7 @@ A few things follow from sharing the relay:
 
 ## Online check-in, Personal PINs and Email
 
-These three groups set up drivers checking themselves in from their own phones:
+These three cards set up drivers checking themselves in from their own phones:
 
 - **Online check-in** turns it on and sets the staff PIN. See [Online check-in](check-in.md).
 - **Personal PINs** gives every racer a six-digit PIN of their own. See [Personal PINs](check-in.md#personal-pins).
@@ -133,7 +133,7 @@ These three groups set up drivers checking themselves in from their own phones:
 
 ## Race-day manager
 
-The race-day manager - entries, the programme and results, run from a phone - lives on the **Local Screens** page; see [Race-day manager](../screens/phone-and-web.md#race-day-manager). This group on the **Club Website** page is only about reaching that same page through the relay, from off the venue's Wi-Fi.
+The race-day manager - entries, the programme and results, run from a phone - lives on the **Local Screens** page; see [Race-day manager](../screens/phone-and-web.md#race-day-manager). This card on the **Club Website** page is only about reaching that same page through the relay, from off the venue's Wi-Fi.
 
 - **Let the race-day manager be reached through the relay** is off by default. It needs **Publish to the relay** on too, and a Manager PIN set on **Local Screens** - without one, the manager refuses every request rather than opening to anyone.
 - **Set Manager PIN...** jumps to the **Local Screens** page, since one PIN guards the manager on both the Wi-Fi page and the relay.
@@ -152,7 +152,7 @@ The laptop keeps its answers to the relay's manager requests through changes on 
 
 ## Share
 
-The **Share** group shows your club's home page address once an address and club id are saved. It's the address to hand out: it works from anywhere, on any network.
+The **Share** card shows your club's home page address once an address and club id are saved. It's the address to hand out: it works from anywhere, on any network.
 
 - **Open** opens it in your browser.
 - **Copy Link** copies it to the clipboard.
@@ -160,7 +160,7 @@ The **Share** group shows your club's home page address once an address and club
 
 ## Status
 
-The **Status** group updates every second.
+The **Status** card updates every second.
 
 | Status | What it means |
 |---|---|
@@ -191,7 +191,7 @@ Older results stay on the laptop. If you move to a new relay, only the last 36 h
 
 ## Deleting everything published
 
-**Delete Everything Published** in the **Status** group removes everything your club has on the relay: results, standings, the live race, the schedule, badges, tracks, the look and the online check-in list. It asks first. Nothing on the laptop is touched.
+**Delete Everything Published** in the **Status** card removes everything your club has on the relay: results, standings, the live race, the schedule, badges, tracks, the look and the online check-in list. It asks first. Nothing on the laptop is touched.
 
 Before it deletes anything, it unticks **Publish to the relay** and stops any upload that was already on its way, so the relay stays empty. Nothing goes back up, not even after a restart, until you tick **Publish to the relay** again. When you do, everything is sent again, including the last 36 hours of results.
 
@@ -199,14 +199,14 @@ If the delete fails (for example the relay can't be reached), **Publish to the r
 
 ## Troubleshooting
 
-**The Share group says "Save a relay address and club id to get the club's page."**
-Nothing is saved yet. Fill in the Relay group and click **Save** or **Test Connection**.
+**The Share card says "Save a relay address and club id to get the club's page."**
+Nothing is saved yet. Fill in the **Relay** card and click **Save** or **Test Connection**.
 
 **Test Connection works, but the status says "Not publishing".**
 Tick **Publish to the relay**.
 
 **The pages show old results, or "Nothing has been published yet".**
-Check the Status group. If it says **Publishing**, results appear as each session is saved; standings and the last 36 hours of results are re-sent when the app starts.
+Check the **Status** card. If it says **Publishing**, results appear as each session is saved; standings and the last 36 hours of results are re-sent when the app starts.
 
 **The pages show "Could not reach the relay. This page will keep trying."**
 That's the visitor's phone failing to reach the relay, not the laptop. If it happens for everyone, tell your relay admin (see [Troubleshooting](../admin/troubleshooting.md)).

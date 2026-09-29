@@ -2,7 +2,7 @@
 
 HeatCaller can email each racer their personal check-in PIN (see [Personal PINs](check-in.md#personal-pins)). The emails are sent straight from the timing laptop through your club's own mailbox, such as a Gmail or iCloud account. Nothing goes through a cloud service: the PINs leave the laptop only inside the emails themselves, and neither the PINs nor the mailbox password are ever written to the log.
 
-You set this up once in the **Email (for racer PINs)** group on the **Club Website** page.
+You set this up once in the **Email (for racer PINs)** card on the **Club Website** page.
 
 ## Before you start
 
@@ -13,7 +13,7 @@ You set this up once in the **Email (for racer PINs)** group on the **Club Websi
 
 ## Set up the club mailbox
 
-1. On the **Club Website** page, find the **Email (for racer PINs)** group.
+1. On the **Club Website** page, find the **Email (for racer PINs)** card.
 2. In **Provider:**, pick **Gmail**, **iCloud** or **Outlook.com**. The server and port are filled in for you. Pick **Other** to type your own.
 3. In **Club email address:**, type the mailbox's full address. It's used both to sign in and as the sender.
 4. In **App password:**, paste the app password. Tick **Show** to check it.
@@ -21,9 +21,9 @@ You set this up once in the **Email (for racer PINs)** group on the **Club Websi
 6. Click **Send Test Email**. It sends one message to the club's own address.
 7. When the line under the button says "Test email sent to *address*. Check that mailbox.", open the mailbox and check it arrived.
 
-Everything in this group is saved as you type (or when you leave a box). There's no Save button.
+Everything on this card is saved as you type (or when you leave a box). There's no Save button.
 
-<!-- screenshot: Club Website page, Email (for racer PINs) group with Gmail selected and a successful test result -->
+<!-- screenshot: Club Website page, Email (for racer PINs) card with Gmail selected and a successful test result -->
 
 ## Settings
 
@@ -127,7 +127,7 @@ Email addresses stay on the laptop. They're never published to the relay.
 
 ### By hand: Email PINs...
 
-1. In the **Personal PINs** group, click **Email PINs...**.
+1. In the **Personal PINs** card, click **Email PINs...**.
 2. HeatCaller asks, for example, "Email 24 racers their PIN?", says how many racers have no email address and won't get one, and estimates the time ("They go one at a time - about 1 minute. Everything else keeps working meanwhile.").
 3. Click **Yes**. The state line shows "Emailing *X* of *Y*...".
 4. When it's done, a summary lists who was emailed, any emails that didn't go and why, and who has no address ("Add one in the Email box on their driver profile.").
@@ -136,7 +136,7 @@ Email addresses stay on the laptop. They're never published to the relay.
 
 ### Automatically
 
-Tick **Email automatically when PINs change** in the **Personal PINs** group. Then:
+Tick **Email automatically when PINs change** in the **Personal PINs** card. Then:
 
 - when a new set of PINs is made (on the rotation schedule, or with **New PINs Now**), every racer with an address is emailed their new PIN
 - a racer added later is sent theirs within ten minutes
@@ -161,7 +161,7 @@ Emails go one at a time, about a second and a half apart, so the provider doesn'
 | "*Name* (*address*): not a valid address" | The address can't be used. | Fix it on the driver profile. |
 | "Stopped: the first three emails all failed (...)." | The same fault three times in a row, before any got through, so it's probably the server, not the racers. | Check the settings and send a test email. |
 | "Port 465 isn't supported - use 587, which every mainstream provider also offers." | See [Port 587 only](#port-587-only). | Use 587. |
-| "Enter the club's email address." / "Enter the mailbox's app password." / "No mail server is set." | Something's missing in the Email group. | Fill it in. |
+| "Enter the club's email address." / "Enter the mailbox's app password." / "No mail server is set." | Something's missing on the **Email (for racer PINs)** card. | Fill it in. |
 | "Personal PINs are switched off." | **Give every racer their own PIN** is unticked. | Tick it. |
 | "Online check-in isn't set up and switched on yet, so there is nowhere to use a PIN." | Publishing or online check-in is off. | See [Online check-in](check-in.md). |
 | "Nobody with a PIN has an email address yet." | No racer has a usable address. | Add addresses to profiles, or import a CSV with an Email column. |

@@ -159,9 +159,11 @@ day: the layout overhaul is finished before the beta rather than after it
    then the drawn controls, then `PerMonitorV2`. Race Control, Race Day,
    Connection, Driver Profiles, Classes, Championship, Rentals, Handicaps,
    Batteries, Track Layouts, Race History, Race Analytics (all six tabs),
-   Achievements, Garage, Practice, Ghost Cars, Demo Mode, Venues and Themes
-   are done. Left: Sponsors, Local Screens, Club Website, Voice (four
-   tabs), Sounds (six tabs) and Backup & Restore.
+   Achievements, Garage, Practice, Ghost Cars, Demo Mode, Venues, Themes,
+   Sponsors, Local Screens, Club Website, Voice (four tabs), Sounds (six
+   tabs) and Backup & Restore are done - every page in the sidebar. Left:
+   the race-night dialogs, the drawn controls, deleting `LayoutDoctor`,
+   then `PerMonitorV2`.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -710,6 +712,53 @@ from. Ranked by what decides whether a club switches, and stays.
    outline's top cut off); Practice pairs each length box with its unit;
    Themes' list is as wide as its widest row with both markers. Next:
    Sponsors, then the rest of the sidebar in its order.
+
+   **The rest of the sidebar converted (29 Sep): Sponsors, Local Screens,
+   Club Website, Voice, Sounds and Backup & Restore** - every page in the
+   sidebar, all 25 and every tab in them, is on `LayoutAudit.ConvertedPages`
+   now, so `LayoutDoctor` tidies only dialogs. Group boxes became cards throughout (sentence-case
+   captions - the docs follow). Sponsors: the slides and their preview side
+   by side in a card that takes the height, Rotation timing under it. Local
+   Screens and Backup & Restore: a `PageStack` of cards, the address rows
+   and Backup's sentences as `Inline` rows that wrap. Club Website: nine
+   cards, the relay's, the look's, the PINs' and the mail's captions in
+   one column (`FieldGrid.LineUp`); every status line keeps two lines and
+   shows a longer message whole. Voice Settings: four cards, the three
+   voices' fields in one column. Announcements keeps its own row band -
+   the rows placed by the band on every layout, the phrasing box taking the
+   width left, sideways scrolling under the sticky headings only at 200% -
+   and a text size of its own, since MainForm parents it in its own tab;
+   Test now keeps that list's scroll position (it was keeping Voice
+   Settings'). Commentary: five cards with one caption column down the
+   page. Rivalries: the list down the left of the editor. Mixer: the four
+   strips side by side, two by two or one under another as the width
+   allows. Soundscapes: as many cards to a row as fit, in a scrolling
+   `PageStack` inside the page. Effects: its columns measured again at every
+   text size, rows re-placed rather than rebuilt. Ambience, Music and Lap
+   Beeps: cards. New piece rule, `Pieces.RingRoom`: a text box, number box,
+   list or bordered picture has its theme ring drawn a pixel outside it on
+   its parent, and every piece that places one now keeps that pixel - the
+   panel a filling part is held in (its least height counts it), a
+   `Beside`'s column, a `ButtonBar`/`Inline` line and a `FieldRow` line.
+   A list that filled its card (Venues, Demo Mode's log, Rivalries) had
+   been drawn with no edge at all. From the pictures after that: a box
+   sized to show so many lines is sized in `Pieces.LineHeight`, the line
+   spacing GDI draws with, not `Font.Height` - 13% less for Barlow, so
+   Announcements' phrasing boxes showed two and a half of three lines at
+   200% - and `TextSize.ReserveLines`, `StatusLine` and FieldGrid's
+   first line of a text box measure lines the same way. And
+   `KeepHeadingsWhole` has a grid share its width out afresh from the
+   weights at every resize: growing from its minimums, a grid gives most
+   of the new width to the column whose minimum is smallest beside its
+   weight, and Lap Beeps' blank-headed on/off column had taken most of
+   the list. Where a share is short of a heading, the weights set already
+   allow for the headings (`WeightsWithinMinimums`): the grid's own
+   allowance is made in one pass, and can push another column past the
+   grid's edge. And every column's built weight is read before any
+   minimum goes on: a minimum past a column's width widens it, which the
+   grid takes as a new weight for it and every column after it, so read
+   column by column Lap Beeps' Class, Cue and on/off columns had kept two
+   thirds of their weights (caught by the new grid test).
 
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.

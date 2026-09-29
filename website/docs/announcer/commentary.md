@@ -17,7 +17,7 @@ The model is given facts HeatCaller has already worked out (positions, gaps, lap
 
 Commentary is never used for live lap-by-lap calls. A lap takes a few seconds and a local model usually takes longer than that to answer, so the line would describe a moment that had already passed.
 
-Intros and summaries are spoken by the announcer, in the voice chosen under **Speak With** on **Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Windows voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
+Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Windows voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
 
 ## Before you start
 
@@ -58,6 +58,8 @@ Changes save as you make them and take effect straight away.
 Ollama loads a model into memory on its first request, which can take a while on a cold start. HeatCaller sends a background warm-up request so a real race isn't the first thing to pay that cost. It does this when you tick **Enable local LLM commentary**, when you click out of **Endpoint:** or **Model:**, and when HeatCaller starts with commentary already on. HeatCaller also asks Ollama to keep the model loaded for 30 minutes after each request, so it stays ready between races during an event.
 
 ## Settings
+
+The settings are on five cards down the tab, in the order below: **Connection**, **What it writes**, **Writing style**, **Race recap** and **Broadcast**.
 
 ### Connection
 

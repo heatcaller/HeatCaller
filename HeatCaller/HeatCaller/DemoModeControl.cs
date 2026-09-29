@@ -286,7 +286,7 @@ public sealed class DemoModeControl : UserControl
 
         var log = new Section("Log");
 
-        log.AddFill(_txtLog, () => _txtLog.Font.Height * LogLeastLines + 8, gapBelow: 0);
+        log.AddFill(_txtLog, () => Pieces.LineHeight(_txtLog.Font) * LogLeastLines + 8, gapBelow: 0);
 
         // --- Racers ---
 

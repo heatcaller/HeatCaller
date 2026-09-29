@@ -20,14 +20,14 @@ This page covers the three voice tabs under **Voice Announcements**: **Voice Set
 
 ## Choose the voice
 
-The **Speak With** group at the top of **Voice Announcements → Voice Settings** decides what speaks every announcement. Like everything on this page, the choice saves as you make it.
+The **Speak with** card at the top of **Voice Announcements → Voice Settings** decides what speaks every announcement. Like everything on this page, the choice saves as you make it.
 
-<!-- screenshot: Voice Settings tab, Speak With group with the HeatCaller voice chosen and its allowance line -->
+<!-- screenshot: Voice Settings tab, Speak with card with the HeatCaller voice chosen and its allowance line -->
 
 | Choice | What it is |
 |---|---|
 | **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **Announcer voice:**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
-| **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up in the **ElevenLabs Connection** box below. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
+| **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up on the **ElevenLabs connection** card below. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
 | **Windows voice - free, built into Windows, no account or internet needed** | A speech voice already installed in Windows, spoken on the laptop itself. There's nothing to sign up for and nothing to pay, and the wording is yours to change. |
 
 Under the ElevenLabs choice, **If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the Windows voice says it instead** is ticked by default. It makes the Windows voice a stand-in, so a flag call is never silent. See [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line). The box only matters with ElevenLabs chosen: it's grayed out, keeping its tick, while the HeatCaller voice or the Windows voice is chosen, or when the PC has no Windows voice. With the HeatCaller voice it isn't a choice at all — the Windows voice always stands in, because there's no key of your own to fall back on.
@@ -67,7 +67,7 @@ The line under the list says where things stand:
 | The line says, for example | When |
 |---|---|
 | "Speaking with the Windows voice - 2 Windows voices on this PC." | The Windows voice is chosen. |
-| "Speaking with the Windows voice - 2 Windows voices on this PC. ElevenLabs is set up below too: choose it above to use it." | The Windows voice is chosen, and an ElevenLabs key and voice are filled in below. Filling them in doesn't switch voices by itself; the choice under **Speak With** does. |
+| "Speaking with the Windows voice - 2 Windows voices on this PC. ElevenLabs is set up below too: choose it above to use it." | The Windows voice is chosen, and an ElevenLabs key and voice are filled in below. Filling them in doesn't switch voices by itself; the choice under **Speak with** does. |
 | "Speaking with ElevenLabs, with the Windows voice standing by - 2 Windows voices on this PC." | ElevenLabs is chosen, with the stand-in box ticked. |
 | "Speaking with ElevenLabs. A line it can't speak is skipped - 2 Windows voices on this PC." | ElevenLabs is chosen, with the box unticked. |
 | "No Windows voice can speak on this PC - *reason*. ElevenLabs works as normal." | ElevenLabs is chosen, and no Windows voice can speak, so nothing stands in. The Windows voice choice is grayed out. |
@@ -85,7 +85,7 @@ More voices come from installing Windows speech or language packs. <!-- TODO: co
 
 ### What the Windows voice uses
 
-From the **Voice Parameters** box, the Windows voice uses **Speed:** (with each announcement's own **Speed**), **Playback volume (%):** and **Max spoken announcements per lap:**. **Stability:**, **Similarity boost:**, **Style:**, **Text normalize:**, **Language:**, **Output format:** and **Speaker boost** are ElevenLabs settings and don't change it.
+From the **Voice parameters** card, the Windows voice uses **Speed:** (with each announcement's own **Speed**), **Playback volume (%):** and **Max spoken announcements per lap:**. **Stability:**, **Similarity boost:**, **Style:**, **Text normalize:**, **Language:**, **Output format:** and **Speaker boost** are ElevenLabs settings and don't change it.
 
 Audio tags such as `[excited]` are always taken out before the Windows voice speaks, whatever the model, and nothing it says is kept with the [saved voice lines](#saved-voice-lines). The hint in the group sums it up: "The ElevenLabs settings below are kept whichever voice is chosen. With the HeatCaller voice the wording and the voice settings are fixed, and the free Windows voice says anything it can't - a flag call is never silent." You can switch back and forth without setting anything up again.
 
@@ -97,7 +97,7 @@ Audio tags such as `[excited]` are always taken out before the Windows voice spe
 
 ### After updating to 0.52
 
-Nothing changes by itself. A laptop keeps whichever voice it was speaking with, and a new install still starts on the free Windows voice. The HeatCaller voice is a choice you make: set the club up on the **Club Website** page, then pick it under **Speak With**.
+Nothing changes by itself. A laptop keeps whichever voice it was speaking with, and a new install still starts on the free Windows voice. The HeatCaller voice is a choice you make: set the club up on the **Club Website** page, then pick it under **Speak with**.
 
 ## The HeatCaller voice
 
@@ -196,20 +196,20 @@ If you run the relay yourself, [Hosting a relay](../admin/relay-hosting.md#tryin
 
 ## Set up your own ElevenLabs account
 
-The **ElevenLabs Connection** box can be filled in whichever voice is speaking, so you can set ElevenLabs up before switching to it. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole box is switched off while that's chosen, because the account behind that voice isn't yours. Choose ElevenLabs under **Speak With** first, then fill the box in.
+The **ElevenLabs connection** card can be filled in whichever voice is speaking, so you can set ElevenLabs up before switching to it. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours. Choose ElevenLabs under **Speak with** first, then fill the box in.
 
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
 2. In HeatCaller, open **Voice Announcements → Voice Settings**.
-3. In the **ElevenLabs Connection** box, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted.
-4. Press **Load Voices**. HeatCaller asks ElevenLabs for the voices on your account and fills the **Voice:** list. The status next to **Test Voice** says, for example, "Loaded 24 voices."
+3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted.
+4. Press **Load Voices**. HeatCaller asks ElevenLabs for the voices on your account and fills the **Voice:** list. The status under **Test Voice**, on the **Voice parameters** card, says, for example, "Loaded 24 voices."
 5. Pick a voice from **Voice:**.
 6. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
-7. Press **Test Voice**. You should hear "This is HeatCaller testing your announcer voice." **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak With**.
-8. Under **Speak With**, choose **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**.
+7. Press **Test Voice**. You should hear "This is HeatCaller testing your announcer voice." **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.
+8. Under **Speak with**, choose **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**.
 
 There's no Save button. Every change on this page saves as you make it, and the line at the bottom of the page shows "Saved automatically at" and the time. Races use the new settings straight away.
 
-<!-- screenshot: Voice Settings tab, ElevenLabs Connection box with API key hidden, voice and model selected -->
+<!-- screenshot: Voice Settings tab, ElevenLabs connection card with API key hidden, voice and model selected -->
 
 ### Where the key is kept
 
@@ -247,7 +247,7 @@ With the HeatCaller voice, the line goes to the relay with its tags still in it.
 
 ## Voice parameters
 
-These sit in the **Voice Parameters** box. Most of them tune ElevenLabs; the Windows voice uses only **Speed:**, **Playback volume (%):** and **Max spoken announcements per lap:** (see [What the Windows voice uses](#what-the-windows-voice-uses)). The HeatCaller voice uses only the last two: everything that shapes how it sounds belongs to the relay (see [What's fixed while it's chosen](#whats-fixed-while-its-chosen)).
+These sit on the **Voice parameters** card. Most of them tune ElevenLabs; the Windows voice uses only **Speed:**, **Playback volume (%):** and **Max spoken announcements per lap:** (see [What the Windows voice uses](#what-the-windows-voice-uses)). The HeatCaller voice uses only the last two: everything that shapes how it sounds belongs to the relay (see [What's fixed while it's chosen](#whats-fixed-while-its-chosen)).
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -277,9 +277,9 @@ What a saved line is matched on depends on the voice:
 
 Either way there's nothing to update by hand. The two sets are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has every line it has already paid for.
 
-<!-- screenshot: Saved Voice Lines box with the count, Prepare Lines, Stop and the Recently played list -->
+<!-- screenshot: Saved voice lines card with the count, Prepare Lines, Stop and the Recently played list -->
 
-The **Saved Voice Lines** box sits between **Voice Parameters** and **Announcements**. It shows how many lines are saved and how much room they take, for example "214 lines saved, 11.8 MB."
+The **Saved voice lines** card is the last on **Voice Settings**, under **Voice parameters**. It shows how many lines are saved and how much room they take, for example "214 lines saved, 11.8 MB."
 
 Saved lines keep playing even when your own ElevenLabs quota has run out. Only lines that have never been spoken need the quota. The HeatCaller voice is the one exception: when its monthly allowance is used up, saved lines are passed over too and the Windows voice speaks the whole night, so it's one voice rather than two. They're all still there when the allowance starts again. See [When the HeatCaller voice can't speak a line](#when-the-heatcaller-voice-cant-speak-a-line).
 
@@ -311,7 +311,7 @@ Prepare only ever asks the chosen voice, never the Windows voice standing in: a 
 
 Now and then a take comes out odd: a strange pause, or a word stressed wrongly. Because the take is saved, it would sound the same way every time. There are two ways to fix it:
 
-- **For a flag call, or any line without a placeholder:** with ElevenLabs chosen under **Speak With**, press **Test** on its row until it sounds right. A test always asks ElevenLabs for a fresh take and saves it in place of the old one, so the race plays the take you heard last.
+- **For a flag call, or any line without a placeholder:** with ElevenLabs chosen under **Speak with**, press **Test** on its row until it sounds right. A test always asks ElevenLabs for a fresh take and saves it in place of the old one, so the race plays the take you heard last.
 - **For any line:** choose it in **Recently played:** (the lines played or saved most recently, newest first) and click **Forget Line**. It's rendered afresh the next time it's spoken.
 
 On the HeatCaller voice only the second one is available — the **Test** buttons are hidden, so there's no way to keep asking for a take until you like it. **Forget Line** still works, but it usually brings back the same take: the relay keeps its own copy of each line and hands that out again, which costs your allowance nothing but also doesn't reroll it. If a line reads badly on your announcer voice, the practical fixes are the driver's **Announcer name:**, a different announcer voice, or your own ElevenLabs key.
@@ -335,7 +335,7 @@ The **Announcements** box has one row for each moment the announcer can call. Ea
 - The lines box: the phrasings the announcer picks from. Type one per line. A random line is picked each time, so the same sentence doesn't repeat back to back.
 - **Weight** (only on the per-lap announcements): 0 to 100. When several announcements fire on the same lap, the higher weights win the slots allowed by **Max spoken announcements per lap:**.
 - **Speed**: 0.50 to 1.50. A multiplier on the main **Speed:** setting, just for this announcement. Lower it for long lines, such as the position report. The result is still kept between 0.70 and 1.20.
-- **Test**: speaks one random line from this box, at this row's speed, using the settings currently on screen and the voice chosen under **Speak With**. With ElevenLabs it always renders a fresh take; see [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong).
+- **Test**: speaks one random line from this box, at this row's speed, using the settings currently on screen and the voice chosen under **Speak with**. With ElevenLabs it always renders a fresh take; see [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong).
 
 With the HeatCaller voice chosen, the lines boxes are read-only, the **Speed** boxes are switched off and the **Test** buttons aren't shown. The tick boxes, **Under caution**, **Weight** and the per-row extras all still work. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen).
 
@@ -445,9 +445,9 @@ There are no **Test** buttons on this page with the HeatCaller voice chosen — 
 
 That leaves the catalog's own description — "Clubhouse - Warm and clear, easy over a PA" — as all you have to go on before you pick a voice. To actually hear one, choose it, then press **Test** on the **Announcements** channel of **Sounds → Mixer**, which speaks a level-check line in whichever voice is chosen. A [demo race](../race-control/practice-and-ghosts.md) gives you a fuller listen. Both spend a little of the allowance.
 
-Each row's **Test** button speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak With**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call. Other placeholders aren't filled in during a test.
+Each row's **Test** button speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call. Other placeholders aren't filled in during a test.
 
-The status next to **Test Voice** shows what was spoken, or the reason a test failed (for example the error message from ElevenLabs, or "No Windows voice can speak on this PC - ..." with the reason).
+The status under **Test Voice** shows what was spoken, or the reason a test failed (for example the error message from ElevenLabs, or "No Windows voice can speak on this PC - ..." with the reason).
 
 With ElevenLabs chosen, a test always asks ElevenLabs for a fresh take rather than playing a saved one, and it's never handed to the Windows voice: if ElevenLabs can't speak it, you see ElevenLabs' own error, and "Enter an API key and select a voice first." when there's no key or voice. For a line without placeholders, the test is word for word what the race says, so the new take replaces the saved one and the race plays it from then on. Lines with placeholders are tested with the sample values, so testing them doesn't change what's saved for your drivers.
 
@@ -557,8 +557,8 @@ By default the announcer is unmuted automatically when a session starts, so a mu
 
 1. Make sure both drivers have profiles with a driver name. You need at least two named driver profiles before you can add a rivalry.
 2. Press **Add Rivalry**.
-3. Under **Edit Selected Rivalry**, pick **Driver A:** and **Driver B:** from the lists.
-4. Leave **Enabled** ticked.
+3. On the **Edit selected rivalry** card, pick **Driver A:** and **Driver B:** from the lists.
+4. Leave **Enabled**, under them, ticked.
 5. Edit the phrasing box if you like: one line per variant, and a random one is picked each time. Use `{overtaker}` for the driver who just got ahead and `{overtaken}` for the one who lost the place. Twelve built-in lines are filled in for you. (With the HeatCaller voice chosen the box is read-only; see below.)
 6. Click out of the phrasing box to save your lines. The status line says "Saved."
 
@@ -566,7 +566,7 @@ The list shows each pair as "Dana vs. Bill", with "[disabled]" after any that ar
 
 Things to know:
 
-- With the HeatCaller voice chosen, the phrasing box is read-only and **Use Default Lines** is switched off, the same as the lines on **Voice Settings**. An amber line says so: "The lines are fixed while the HeatCaller voice is speaking. To write your own, use your own ElevenLabs key or the free Windows voice on Voice Settings." Adding, enabling and deleting rivalries all still work; it's only the wording that's fixed.
+- With the HeatCaller voice chosen, the phrasing box is read-only and **Use Default Lines** is switched off, the same as the lines on **Voice Settings**. An amber line under the phrasing box says so: "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the Windows voice to write your own." Adding, enabling and deleting rivalries all still work; it's only the wording that's fixed.
 - A rivalry only fires when both drivers are on track and have each posted a lap this session.
 - The first time HeatCaller sees the pair, it just notes who's ahead. The line fires on the next swap.
 - Rivalry lines speak the names exactly as picked from the driver names, not the **Announcer name:**.
@@ -583,7 +583,7 @@ Rivalries are also given to the local model for race intros and recaps. See [Com
 | "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token." | No relay address, club id or token on the **Club Website** page. | Fill them in and run **Test Connection**. See [Setting up the Club Website page](../online/setup.md). |
 | "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Windows voice both work as normal." | Your club is on the relay, but hasn't been given the voice. | Ask whoever runs your relay to switch it on for your club. See [Hosting the relay](../admin/relay-hosting.md#the-heatcaller-voice). |
 | "Couldn't ask the relay:" and a reason | The relay couldn't be reached when the page asked. | Check the laptop's internet. The list and your chosen voice are left alone, so the announcer keeps working. Press **Refresh** to try again. |
-| The lines boxes can't be typed in, and the row **Test** buttons are missing | The HeatCaller voice is chosen. Its wording is fixed. | Nothing is broken. To write your own lines, choose your own ElevenLabs key or the Windows voice under **Speak With**. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen). |
+| The lines boxes can't be typed in, and the row **Test** buttons are missing | The HeatCaller voice is chosen. Its wording is fixed. | Nothing is broken. To write your own lines, choose your own ElevenLabs key or the Windows voice under **Speak with**. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen). |
 | An announcer style was applied but the announcer says the same things as before | The HeatCaller voice is chosen, so a style brings its sounds, tuning and look but not its lines. The confirmation says so before you apply it. | Expected. For a style's wording, switch to your own ElevenLabs key or the Windows voice first. See [What applying a style changes](sounds-and-music.md#what-applying-a-style-changes). |
 | The **Rivalries** phrasing box won't take typing and **Use Default Lines** is grayed out | The HeatCaller voice is chosen. The amber line on the tab says so. | Same answer: your own key or the Windows voice. Adding, enabling and deleting rivalries still work. |
 | An announcer voice in the list says "not offered by the relay any more" | The relay has dropped the voice you chose from its catalog. | Pick another one. Lines already saved in the old voice still play until the allowance or the relay says otherwise. |
@@ -596,12 +596,12 @@ Rivalries are also given to the local model for race intros and recaps. See [Com
 | **Windows voice - free, built into Windows, no account or internet needed** is grayed out | No Windows voice can speak on this PC. The line under **Windows voice:** says why. | Add a Windows speech voice (see [Which Windows voices you get](#which-windows-voices-you-get)), or use ElevenLabs. |
 | A voice in the list says "(not on this PC - Windows' default speaks instead)" | The settings came from another laptop that had that voice. | Pick a voice this PC has in **Windows voice:**. |
 | A voice shown in Windows Settings isn't in the **Windows voice:** list | It was added after HeatCaller started, or it's one of Windows' newer natural voices, which HeatCaller can't use, or it's switched off in Windows. | Restart HeatCaller if you've just added it. Otherwise pick one of the listed voices. |
-| The **Mixer** says "NO VOICE:  Windows speech stopped answering on this PC." | Windows speech got stuck on a line and was given up on after 20 seconds. Nothing more is sent to it until that line finishes, so lines for the Windows voice are skipped meanwhile. | It comes back by itself once the stuck line finishes. If it doesn't, restart HeatCaller. If ElevenLabs is set up, choosing it under **Speak With** gets the announcer talking again in the meantime. |
-| **Prepare Lines** is grayed out: "Not needed with the Windows voice - it speaks each line as it's wanted." | The Windows voice is chosen. | Nothing to do. Choose the HeatCaller voice or ElevenLabs under **Speak With** if you want to prepare lines. |
+| The **Mixer** says "NO VOICE:  Windows speech stopped answering on this PC." | Windows speech got stuck on a line and was given up on after 20 seconds. Nothing more is sent to it until that line finishes, so lines for the Windows voice are skipped meanwhile. | It comes back by itself once the stuck line finishes. If it doesn't, restart HeatCaller. If ElevenLabs is set up, choosing it under **Speak with** gets the announcer talking again in the meantime. |
+| **Prepare Lines** is grayed out: "Not needed with the Windows voice - it speaks each line as it's wanted." | The Windows voice is chosen. | Nothing to do. Choose the HeatCaller voice or ElevenLabs under **Speak with** if you want to prepare lines. |
 | The first word of each line is cut off | The speaker is set to sleep after a very short time, or HeatCaller's sound output couldn't open when the app started. | Restart HeatCaller. The announcer and sound effects share one output that stays on while the app is open, so a Bluetooth speaker doesn't fall asleep between lines. |
 | The announcer reads out "bracket excited" | Should not happen: tags are removed on non-v3 models, always for the Windows voice, and on the relay for a HeatCaller voice whose model can't perform them. | If you typed a tag with numbers or symbols in it, it isn't recognized as a tag. Use only letters and spaces inside the brackets. |
 | A flag call wasn't spoken | **Yellow flag** / **Red flag** / **Green flag (resumed)** are off by default. | Tick them in **Announcements**. |
-| A line sounds wrong the same way every time | The race is playing a saved take of it. | Press **Test** on its row, or forget it under **Saved Voice Lines**. On the HeatCaller voice there's no **Test**, and forgetting usually brings back the same take. See [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong). |
+| A line sounds wrong the same way every time | The race is playing a saved take of it. | Press **Test** on its row, or forget it on the **Saved voice lines** card. On the HeatCaller voice there's no **Test**, and forgetting usually brings back the same take. See [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong). |
 | **Prepare Lines** says it stopped because the ElevenLabs quota ran out, or "this month's HeatCaller voice allowance ran out" | The plan's characters, or the club's monthly allowance, are used up. | Everything rendered before that is kept. Run it again after you top up, or once the allowance starts again; it only renders what's missing. |
 | "[voice library] Couldn't save a line to ..." in the console | The saved-lines folder can't be written to. | Lines still play but are paid for each time. Check the laptop has disk space and that `%LocalAppData%\HeatCaller\VoiceLibrary` isn't read-only. |
 | After applying a custom announcer style, the ElevenLabs voice changed | A custom style saved with an ElevenLabs voice switches to that voice and model. | Pick your voice again, or re-save the style with the voice you want. See [Announcer styles](sounds-and-music.md#announcer-styles). |

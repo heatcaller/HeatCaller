@@ -250,5 +250,5 @@ public partial class MainForm
 
     /// <summary>The least the console can do with: six lines of its type. Below that the page scrolls instead - see FillPage.</summary>
     private int ConsoleLeastHeight() =>
-        txtConsole.Font.Height * ConsoleLeastLines + UiLayout.HintGap * 2;
+        Pieces.LineHeight(txtConsole.Font) * ConsoleLeastLines + UiLayout.HintGap * 2;
 }

@@ -147,7 +147,7 @@ public sealed class RaceHistoryControl : UserControl
         // A few lines of its type, at the text size in use.
         _textSize.Keep(() =>
         {
-            var height = _txtNotes.Font.Height * NotesLines + UiLayout.HintGap * 2;
+            var height = Pieces.LineHeight(_txtNotes.Font) * NotesLines + UiLayout.HintGap * 2;
 
             if (_txtNotes.Height != height)
             {

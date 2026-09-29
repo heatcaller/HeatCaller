@@ -13,14 +13,30 @@ public sealed class SponsorsControl : UserControl
     private readonly NumericUpDown _numSlideSeconds = new();
     private readonly CheckBox _chkPauseDuringRace = new();
 
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The slides and the preview side by side - the list's column is worked out from its width. See ListColumnWidth.</summary>
+    private Beside? _slidesBand;
+
+    /// <summary>The list's column, the narrowest it gets, and the preview's least height, at the normal text size.</summary>
+    private const int ListWidth = 320;
+    private const int ListLeastWidth = 160;
+    private const int PreviewLeastHeight = 160;
+
+    /// <summary>The fewest slides the list shows before the page scrolls instead.</summary>
+    private const int ListLeastRows = 4;
+
     public SponsorsControl(SponsorStore store, UndoService undo)
     {
         _store = store;
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(880, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshSlides();
@@ -48,6 +64,20 @@ public sealed class SponsorsControl : UserControl
         RefreshSlides();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -58,20 +88,29 @@ public sealed class SponsorsControl : UserControl
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// The intro and the on/off switch, then the slides in a card that takes
+    /// the page's height - the list down the left, the selected slide's
+    /// preview beside it taking the rest, and the list's buttons under both -
+    /// and the rotation's timing in a card under that. On the layout pieces
+    /// (LayoutPieces.cs), so nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels: the list 320x280 and the preview
+    /// 360x280 whatever the window, the buttons stepped along from the list's
+    /// left edge, and the timing in a group box widened by hand to whatever
+    /// its measured row came to.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "Show sponsor or promo images in rotation on the Big Screen between leaderboard views. Leave this off entirely " +
                    "for a home setup - it's meant for a shop or club venue with sponsors to display.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(840, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
         _chkEnabled.Text = "Show sponsor slides on the Big Screen";
-        _chkEnabled.Location = new Point(12, 56);
         _chkEnabled.AutoSize = true;
         _chkEnabled.Checked = _store.Current.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
@@ -80,60 +119,44 @@ public sealed class SponsorsControl : UserControl
             _store.Save();
         };
 
-        var lblSlides = new Label { Text = "Slides (shown in this order):", Location = new Point(12, 92), AutoSize = true, Font = AppTheme.BoldFont };
+        // --- The slides ---
 
-        _lstSlides.Location = new Point(12, 116);
-        _lstSlides.Size = new Size(320, 280);
+        _lstSlides.IntegralHeight = false;
         _lstSlides.SelectedIndexChanged += (_, _) => RefreshPreview();
 
-        _picPreview.Location = new Point(348, 116);
-        _picPreview.Size = new Size(360, 280);
         _picPreview.BorderStyle = BorderStyle.FixedSingle;
         _picPreview.SizeMode = PictureBoxSizeMode.Zoom;
         _picPreview.BackColor = AppTheme.Surface;
 
-        // Sized to their own captions rather than to 120 / 90 / 90 / 100,
-        // which were measured against a smaller font and left "Move Down"
-        // two pixels short of its own text.
-        var btnAdd = new Button { Text = "Add Image...", Location = new Point(12, 406) };
+        // Sized to their own captions by the bar they sit in.
+        var btnAdd = new Button { Text = "Add Image..." };
         btnAdd.Click += (_, _) => AddSlide();
 
-        var btnRemove = new Button { Text = "Remove", Location = new Point(0, 406) };
+        var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
 
-        var btnMoveUp = new Button { Text = "Move Up", Location = new Point(0, 406) };
+        var btnMoveUp = new Button { Text = "Move Up" };
         btnMoveUp.Click += (_, _) => MoveSelected(-1);
 
-        var btnMoveDown = new Button { Text = "Move Down", Location = new Point(0, 406) };
+        var btnMoveDown = new Button { Text = "Move Down" };
         btnMoveDown.Click += (_, _) => MoveSelected(1);
 
-        foreach (var button in new[] { btnAdd, btnRemove, btnMoveUp, btnMoveDown })
-        {
-            button.Width = UiLayout.WidthFor(button);
-        }
+        // The list down the left, as wide as it was at the normal text size
+        // (see ListColumnWidth), and the preview taking the rest - a slide is
+        // a picture made for a TV, so the room goes to seeing it.
+        var band = new Beside(ListColumnWidth) { SideOnLeft = true };
+        _slidesBand = band;
 
-        btnRemove.Left = btnAdd.Right + UiLayout.ButtonGap;
-        btnMoveUp.Left = btnRemove.Right + UiLayout.ButtonGap;
-        btnMoveDown.Left = btnMoveUp.Right + UiLayout.ButtonGap;
+        band.AddFill(_picPreview, _ => UiLayout.AtTextSize(PreviewLeastHeight));
+        band.AddSideFill(_lstSlides, _ => _lstSlides.ItemHeight * ListLeastRows + 4, gapBelow: 0);
+
+        var slidesCard = new Section("Slides (shown in this order)");
+
+        slidesCard.AddFill(band, () => band.LeastHeight(Math.Max(1, band.Width)));
+        slidesCard.Add(new ButtonBar().With(btnAdd, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
 
         // --- Timing ---
-        var grpTiming = new GroupBox { Text = "Rotation Timing", Location = new Point(12, 448), Size = new Size(700, 132) };
 
-        // Measured across, not stepped 196 / 300 / 476. Those numbers were
-        // spaced for a shorter font: at the current one the first caption
-        // runs past 196, so the spinner sat inside it, the second caption
-        // inside the spinner and the second spinner inside that caption -
-        // four shunts every startup, in a row only four controls long.
-        var lblLeaderboardSecs = new Label
-        {
-            Text = "Leaderboard shows for (sec):",
-            Location = new Point(12, 28),
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-        };
-
-        _numLeaderboardSeconds.Width = 70;
-        _numLeaderboardSeconds.Location = new Point(UiLayout.After(lblLeaderboardSecs), 25);
         _numLeaderboardSeconds.Minimum = 5;
         _numLeaderboardSeconds.Maximum = 600;
         _numLeaderboardSeconds.Value = Math.Clamp(_store.Current.LeaderboardSeconds, 5, 600);
@@ -143,16 +166,6 @@ public sealed class SponsorsControl : UserControl
             _store.Save();
         };
 
-        var lblSlideSecs = new Label
-        {
-            Text = "Each slide shows for (sec):",
-            Location = new Point(_numLeaderboardSeconds.Right + UiLayout.SectionGap, 28),
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-        };
-
-        _numSlideSeconds.Width = 70;
-        _numSlideSeconds.Location = new Point(UiLayout.After(lblSlideSecs), 25);
         _numSlideSeconds.Minimum = 2;
         _numSlideSeconds.Maximum = 120;
         _numSlideSeconds.Value = Math.Clamp(_store.Current.SlideSeconds, 2, 120);
@@ -163,7 +176,6 @@ public sealed class SponsorsControl : UserControl
         };
 
         _chkPauseDuringRace.Text = "Never interrupt the leaderboard while a race is actually running (recommended)";
-        _chkPauseDuringRace.Location = new Point(12, 60);
         _chkPauseDuringRace.AutoSize = true;
         _chkPauseDuringRace.Checked = _store.Current.PauseDuringRace;
         _chkPauseDuringRace.CheckedChanged += (_, _) =>
@@ -172,12 +184,7 @@ public sealed class SponsorsControl : UserControl
             _store.Save();
         };
 
-                // Its own row under the checkbox, left-aligned. It used to share the
-        // checkbox's row at x=566, and that checkbox's caption auto-sizes
-        // well past there at this font, so it sat in front of the button and
-        // clipped it to "Restore De".
-        var btnTimingDefaults = new Button { Text = "Restore Defaults", Location = new Point(12, 92) };
-        btnTimingDefaults.Size = new Size(UiLayout.WidthFor(btnTimingDefaults), UiLayout.ButtonHeight);
+        var btnTimingDefaults = new Button { Text = "Restore Defaults" };
         btnTimingDefaults.Click += (_, _) =>
         {
             // The three values as they were, for undo - put back on the
@@ -206,29 +213,70 @@ public sealed class SponsorsControl : UserControl
             _chkPauseDuringRace.Checked = true;
         };
 
-        // Wide and tall enough for whatever the measured rows inside it
-        // came to, rather than the flat 700 x 132 they now run past.
-        grpTiming.Width = Math.Max(
-            grpTiming.Width,
-            Math.Max(_numSlideSeconds.Right, btnTimingDefaults.Right) + UiLayout.PageLeft);
+        // The two numbers one under the other, their captions in a column of
+        // their own. They used to share one row, each placed just after the
+        // one before - four controls in a line that ran past its box at a
+        // larger text size.
+        var timing = new FieldGrid();
 
-        grpTiming.Height = Math.Max(grpTiming.Height, UiLayout.GroupHeightFor(btnTimingDefaults.Bottom));
+        timing.AddRow("Leaderboard shows for (sec):", _numLeaderboardSeconds);
+        timing.AddRow("Each slide shows for (sec):", _numSlideSeconds);
 
-        grpTiming.Controls.AddRange(new Control[]
+        var timingCard = new Section("Rotation timing");
+
+        timingCard.Add(timing);
+        timingCard.Add(_chkPauseDuringRace, stretch: false);
+        timingCard.Add(new ButtonBar().With(btnTimingDefaults), gapBelow: 0);
+
+        // The number boxes at the text size in use - see SizeFields.
+        _textSize.Keep(SizeFields);
+
+        // --- The page ---
+
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(_chkEnabled, stretch: false);
+        page.AddFill(slidesCard, slidesCard.LeastHeight);
+        page.Add(timingCard, gapBelow: 0);
+
+        Controls.Add(page);
+    }
+
+    /// <summary>
+    /// The number boxes: as wide as three digits and their arrows need in the
+    /// page's face, and never narrower than a number box at this text size.
+    /// Only when it changed - a new width lays the grid out again.
+    /// </summary>
+    private void SizeFields()
+    {
+        var number = Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText("000", Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+
+        foreach (var spinner in new[] { _numLeaderboardSeconds, _numSlideSeconds })
         {
-            lblLeaderboardSecs, _numLeaderboardSeconds, lblSlideSecs, _numSlideSeconds, _chkPauseDuringRace, btnTimingDefaults,
-        });
+            if (spinner.Width != number)
+            {
+                spinner.Width = number;
+            }
+        }
+    }
 
-        Controls.Add(lblIntro);
-        Controls.Add(_chkEnabled);
-        Controls.Add(lblSlides);
-        Controls.Add(_lstSlides);
-        Controls.Add(_picPreview);
-        Controls.Add(btnAdd);
-        Controls.Add(btnRemove);
-        Controls.Add(btnMoveUp);
-        Controls.Add(btnMoveDown);
-        Controls.Add(grpTiming);
+    /// <summary>
+    /// The slides' column: the width the list was at the normal text size, at
+    /// the size in use - and never more than a little under half the card,
+    /// so the preview beside it keeps the larger share when the window is
+    /// narrow or the text large, nor less than a file name's worth.
+    /// </summary>
+    private int ListColumnWidth()
+    {
+        var wanted = UiLayout.AtTextSize(ListWidth);
+        var room = _slidesBand?.Width ?? 0;
+
+        return room > 0
+            ? Math.Min(wanted, Math.Max(UiLayout.AtTextSize(ListLeastWidth), room * 45 / 100))
+            : wanted;
     }
 
     private void RefreshSlides()
