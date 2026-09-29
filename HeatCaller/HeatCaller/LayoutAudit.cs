@@ -129,10 +129,47 @@ internal static class LayoutAudit
             string.Equals(where, page, StringComparison.Ordinal)
             || where.StartsWith(page + Separator, StringComparison.Ordinal));
 
+    /// <summary>
+    /// The windows - dialogs - rebuilt on the layout pieces and sized to
+    /// what is in them (DialogFit), by the name the layout test gives each
+    /// (LayoutTests.EveryConvertedWindowFitsAtEverySize). The test fails if
+    /// any of these has anything to report at any size, or is bigger than
+    /// the screen. A window goes on this list in the same change that
+    /// converts it.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> ConvertedWindows = new[]
+    {
+        // Who marshals which corner for each round (MarshalAssignmentsForm).
+        "Corner Marshals",
+
+        // A main round added by hand, and who is in it (MainRoundForm).
+        "Add Main",
+
+        // A class's qualifying order so far (QualifyingStandingsForm).
+        "Qualifying Standings",
+
+        // Whether every car in the race is being heard (ReadinessCheckForm).
+        "Pre-race Check",
+    };
+
+    /// <summary>
+    /// Whether a window the layout test checked is a converted one: by its
+    /// name, or one of the ways the test fills it in ("Qualifying Standings
+    /// (best 2 of 3)"), or a tab inside it.
+    /// </summary>
+    internal static bool IsConvertedWindow(string where) =>
+        ConvertedWindows.Any(window =>
+            string.Equals(where, window, StringComparison.Ordinal)
+            || where.StartsWith(window + " (", StringComparison.Ordinal)
+            || where.StartsWith(window + Separator, StringComparison.Ordinal));
+
     // What each finding is, for the report's headings.
     internal const string Overlap = "Overlap";
     internal const string CutOff = "Cut off";
     internal const string PastEdge = "Past the edge";
+
+    /// <summary>A window bigger than the screen it opens on - found by the layout test for windows, not by Check.</summary>
+    internal const string TooBig = "Bigger than the screen";
     internal const string Squashed = "Squashed";
     internal const string TooNarrow = "Too narrow";
     internal const string Tabs = "Tabs";

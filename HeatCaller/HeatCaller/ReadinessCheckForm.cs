@@ -13,9 +13,17 @@ namespace HeatCaller;
 /// list somebody has already agreed to. With no round it falls back to the
 /// drivers already on the board, which is the next most likely answer and
 /// is at least a list of real people rather than every profile ever saved.
+///
+/// On the layout pieces (DialogFit): the verdict wrapping across the top,
+/// the list taking the height and the buttons at the foot. It used to be a
+/// strip sized by hand to the first verdict over a list with columns of
+/// fixed widths, which a larger text size cut short.
 /// </summary>
 public sealed class ReadinessCheckForm : Form
 {
+    /// <summary>The list shows its headings and at least this many cars before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private enum Verdict
     {
         Ready,
@@ -39,63 +47,48 @@ public sealed class ReadinessCheckForm : Form
         _lines = Build(roster, watch, profiles);
 
         Text = "Pre-race check";
-        StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(620, 400);
-        ClientSize = new Size(760, 520);
 
         BuildHeadline(rosterSource);
         BuildList();
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = UiLayout.ButtonHeight + 24 };
-
         var btnClose = new Button { Text = "Close" };
-        btnClose.Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight);
         btnClose.Click += (_, _) => Close();
 
+        // A verdict of a different length - one line of "All clear" after
+        // two lines of faults, or the other way round - is a label that
+        // wraps to the page, so the list under it moves with it.
         var btnRecheck = new Button { Text = "Check again" };
-        btnRecheck.Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight);
         btnRecheck.Click += (_, _) =>
         {
             _lines.Clear();
             _lines.AddRange(Build(roster, watch, profiles));
             BuildHeadline(rosterSource);
-
-            // The strip above the list was sized for the first headline. A
-            // new one of a different length - one line of "All clear" after
-            // two lines of faults, or the other way round - was clipped or
-            // left a gap until the window was opened again.
-            if (_lblHeadline.Parent is { } headlineStrip)
-            {
-                headlineStrip.Height = UiLayout.Below(_lblHeadline, 14);
-            }
-
             Fill();
         };
 
-        btnRecheck.Location = new Point(12, 12);
-        btnClose.Location = new Point(btnRecheck.Right + UiLayout.ButtonGap, 12);
-
-        footer.Controls.AddRange(new Control[] { btnRecheck, btnClose });
-
-        var header = new Panel { Dock = DockStyle.Top, Height = 1 };
-        _lblHeadline.Location = new Point(16, 14);
         _lblHeadline.AutoSize = true;
-        _lblHeadline.MaximumSize = new Size(ClientSize.Width - 32, 0);
-        header.Controls.Add(_lblHeadline);
-        header.Height = UiLayout.Below(_lblHeadline, 14);
-
-        _list.Dock = DockStyle.Fill;
 
         Fill();
 
-        Controls.Add(_list);
-        Controls.Add(header);
-        Controls.Add(footer);
+        var page = new FillPage();
+        page.Add(_lblHeadline);
+        page.AddFill(_list, _ => (LeastRows + 1) * (Pieces.LineHeight(_list.Font) + 6));
+
+        // Against the right-hand edge, Close furthest right, as a dialog's buttons go.
+        page.Add(new ButtonBar(alignRight: true).With(btnClose, btnRecheck), gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
+
+        // Each column at least as wide as it was made, or its heading; what
+        // the decoder hears takes the rest - see Pieces.FitListColumns.
+        Pieces.FitListColumns(_list, 3, 34, 170, 110, 420);
+
+        DialogFit.Keep(this, page, width: 760, height: 520);
     }
 
     /// <summary>
@@ -233,10 +226,11 @@ public sealed class ReadinessCheckForm : Form
         _list.MultiSelect = false;
         _list.HideSelection = false;
 
-        _list.Columns.Add(string.Empty, 34);
-        _list.Columns.Add("Driver", 170);
-        _list.Columns.Add("Transponder", 110);
-        _list.Columns.Add("What the decoder hears", 420);
+        // Their widths are the list's to fit - see the constructor.
+        _list.Columns.Add(string.Empty);
+        _list.Columns.Add("Driver");
+        _list.Columns.Add("Transponder");
+        _list.Columns.Add("What the decoder hears");
     }
 
     private void Fill()

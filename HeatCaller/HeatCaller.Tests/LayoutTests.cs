@@ -20,8 +20,10 @@ namespace HeatCaller.Tests;
 /// The report is written beside the test dll, in layout\report.txt. Run
 /// layout.cmd (beside check.cmd) for pictures of every page at every size
 /// as well, in layout\pictures.
+///
+/// The windows - dialogs - are checked the same way, in WindowLayoutTests.cs.
 /// </summary>
-public sealed class LayoutTests
+public sealed partial class LayoutTests
 {
     private readonly ITestOutputHelper _output;
 
@@ -38,6 +40,14 @@ public sealed class LayoutTests
             ? null
             : only.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // layout.cmd naming only windows: nothing here to check. Left
+        // before the sweep, so it neither builds the main window five times
+        // for nothing nor throws away the pages' pictures from the last run.
+        if (onlyPages is not null && onlyPages.All(IsAWindow))
+        {
+            return;
+        }
 
         var folder = Path.Combine(AppContext.BaseDirectory, "layout");
         var pictures = wantPictures ? Path.Combine(folder, "pictures") : null;
@@ -58,8 +68,10 @@ public sealed class LayoutTests
 
         if (onlyPages is not null)
         {
-            Assert.True(sweep.Pages.Count > 0,
-                $"No page is called \"{only}\". The pages are: {string.Join(", ", sweep.AllPages)}.");
+            // A name that is a window's is the window test's to check (EveryConvertedWindowFitsAtEverySize).
+            Assert.True(sweep.Pages.Count > 0 || WindowCatalog.All.Any(window => WindowCatalog.Wanted(window.Name, onlyPages)),
+                $"Nothing is called \"{only}\". The pages are: {string.Join(", ", sweep.AllPages)}. "
+                + $"The windows are: {string.Join(", ", WindowCatalog.All.Select(window => WindowCatalog.BaseName(window.Name)).Distinct())}.");
         }
         else
         {
@@ -120,6 +132,12 @@ public sealed class LayoutTests
         Assert.True(wrong.Count == 0,
             "Next Steps has the program's buttons out of sight:\n" + string.Join("\n", wrong));
     }
+
+    /// <summary>Whether a name layout.cmd was given is a window's (WindowCatalog) rather than a page's.</summary>
+    private static bool IsAWindow(string name) =>
+        WindowCatalog.All.Any(window =>
+            string.Equals(window.Name, name, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(WindowCatalog.BaseName(window.Name), name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>What is wrong with the program's buttons on the Race Day page on screen - nothing, when they all show.</summary>
     private static List<string> ProgramButtonsOutOfView(Control page)

@@ -4,9 +4,17 @@ namespace HeatCaller;
 /// Dialog for adding a Main round: pick a label, optional track, and check
 /// which class members are racing in it. The "select top N" helper uses
 /// qualifying-ranked order if available, falling back to roster order.
+///
+/// On the layout pieces (DialogFit): the label and track lined up in a
+/// field grid, the drivers taking the height, the picking buttons under
+/// them and Save and Cancel at the foot. It used to be placed in pixels,
+/// its captions at a fixed 110px that a larger text size ran past.
 /// </summary>
 public sealed class MainRoundForm : Form
 {
+    /// <summary>The drivers show at least this many before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly TextBox _txtLabel = new();
     private readonly ComboBox _cmbTrack = new();
     private readonly CheckedListBox _clbDrivers = new();
@@ -17,19 +25,10 @@ public sealed class MainRoundForm : Form
     public MainRoundForm(string className, List<DriverProfile> classRoster, List<string> rankedTransponders, TrackLayoutStore trackLayouts, string defaultLabel)
     {
         Text = $"Add Main - {className}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(420, 460);
-        MinimumSize = new Size(380, 380);
         Font = AppTheme.BodyFont;
 
-        var lblLabel = new Label { Text = "Round Label:", Location = new Point(12, 14), AutoSize = true };
-        _txtLabel.Location = new Point(110, 11);
-        _txtLabel.Width = 280;
         _txtLabel.Text = defaultLabel;
 
-        var lblTrack = new Label { Text = "Track Layout:", Location = new Point(12, 46), AutoSize = true };
-        _cmbTrack.Location = new Point(110, 43);
-        _cmbTrack.Width = 280;
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTrack.Items.Add("(none)");
         foreach (var t in trackLayouts.All)
@@ -38,27 +37,24 @@ public sealed class MainRoundForm : Form
         }
         _cmbTrack.SelectedIndex = 0;
 
-        var lblDrivers = new Label { Text = "Drivers in this main:", Location = new Point(12, 78), AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+        var lblDrivers = new Label { Text = "Drivers in this main:", AutoSize = true, Font = AppTheme.BoldFont };
 
-        _clbDrivers.Location = new Point(12, 100);
-        _clbDrivers.Size = new Size(378, 260);
-        _clbDrivers.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _clbDrivers.CheckOnClick = true;
+
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+        _clbDrivers.IntegralHeight = false;
         foreach (var d in classRoster)
         {
             var label = string.IsNullOrWhiteSpace(d.DriverName) ? d.Transponder : $"{d.DriverName} ({d.Transponder})";
             _clbDrivers.Items.Add(new DriverListItem(d.Transponder, label));
         }
 
-        var lblTopN = new Label { Text = "Top:", Location = new Point(12, 370), AutoSize = true, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        _numTopN.Location = new Point(50, 367);
-        _numTopN.Width = 50;
+        var lblTopN = new Label { Text = "Top:", AutoSize = true };
         _numTopN.Minimum = 0;
         _numTopN.Maximum = Math.Max(1, classRoster.Count);
         _numTopN.Value = Math.Min(6, classRoster.Count);
-        _numTopN.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
 
-        var btnSelectTopN = new Button { Text = "from Qualifying", Location = new Point(110, 366), Width = 110, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnSelectTopN = new Button { Text = "from Qualifying" };
         btnSelectTopN.Click += (_, _) =>
         {
             var n = (int)_numTopN.Value;
@@ -71,7 +67,7 @@ public sealed class MainRoundForm : Form
             }
         };
 
-        var btnSelectAll = new Button { Text = "All", Location = new Point(288, 366), Width = 45, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnSelectAll = new Button { Text = "All" };
         btnSelectAll.Click += (_, _) =>
         {
             for (var i = 0; i < _clbDrivers.Items.Count; i++)
@@ -80,7 +76,7 @@ public sealed class MainRoundForm : Form
             }
         };
 
-        var btnSelectNone = new Button { Text = "None", Location = new Point(336, 366), Width = 45, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnSelectNone = new Button { Text = "None" };
         btnSelectNone.Click += (_, _) =>
         {
             for (var i = 0; i < _clbDrivers.Items.Count; i++)
@@ -89,28 +85,49 @@ public sealed class MainRoundForm : Form
             }
         };
 
-        var btnSave = new Button { Text = "Save", Location = new Point(228, 424), Width = 80, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(324, 424), Width = 80, Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(lblLabel);
-        Controls.Add(_txtLabel);
-        Controls.Add(lblTrack);
-        Controls.Add(_cmbTrack);
-        Controls.Add(lblDrivers);
-        Controls.Add(_clbDrivers);
-        Controls.Add(lblTopN);
-        Controls.Add(_numTopN);
-        Controls.Add(btnSelectTopN);
-        Controls.Add(btnSelectAll);
-        Controls.Add(btnSelectNone);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        var fields = new FieldGrid();
+        fields.AddRow("Round Label:", _txtLabel, stretch: true);
+        fields.AddRow("Track Layout:", _cmbTrack);
+
+        // "Top [6] from Qualifying", and All and None beside it - each only
+        // as wide as its caption, so the line fits the dialog's width (see
+        // the width given to DialogFit.Keep below).
+        var picking = new FieldRow();
+        picking.Add(lblTopN, _numTopN);
+        picking.Add(null, new ButtonBar(tight: true).With(btnSelectTopN, btnSelectAll, btnSelectNone));
+
+        var page = new FillPage();
+        page.Add(fields);
+        page.Add(lblDrivers, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_clbDrivers, _ => LeastRows * _clbDrivers.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        page.Add(picking);
+
+        // Against the right-hand edge, Cancel furthest right, as a dialog's buttons go.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+
+        Controls.Add(page);
 
         CancelButton = btnCancel;
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, in the faces it leaves them in: the label box
+        // as wide as the grid gives it, the track as wide as its longest
+        // layout's name, the count for two digits.
+        (Font Font, int Count, int Width)? trackWidth = null;
+        _cmbTrack.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbTrack, ref trackWidth));
+        _numTopN.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
+
+        // Wide enough for "Top", its count and the three buttons on one
+        // line at the normal text size: at 420 they came to 408px in a line
+        // of 388, and the buttons went onto a line of their own (layout
+        // pictures, 29 Sep).
+        DialogFit.Keep(this, page, width: 460, height: 460);
 
         void BtnSave_Click(object? sender, EventArgs e)
         {

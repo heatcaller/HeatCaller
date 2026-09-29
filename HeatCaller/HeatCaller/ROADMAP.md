@@ -163,7 +163,14 @@ day: the layout overhaul is finished before the beta rather than after it
    Sponsors, Local Screens, Club Website, Voice (four tabs), Sounds (six
    tabs) and Backup & Restore are done - every page in the sidebar. Left:
    the race-night dialogs, the drawn controls, deleting `LayoutDoctor`,
-   then `PerMonitorV2`.
+   then `PerMonitorV2`. The dialogs started 29 Sep: `DialogFit` sizes a
+   dialog built on a `FillPage` to its content at the text size in use,
+   never bigger than its screen, and the layout test now checks windows
+   too (`WindowLayoutTests`, `LayoutAudit.ConvertedWindows`, pictures with
+   `layout.cmd`). Done: Corner Marshals, Add Main, Qualifying Standings,
+   Pre-race Check. Next: the message box (`AppDialog`), New Race Day,
+   Round Roster, Race Format, Result Edit, Quick Driver/Class, the Race Day
+   setup wizard, Heat Balance, Sign-ups.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -940,6 +947,7 @@ what didn't fit an area:
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
 | A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `StatTile`/`TileStrip`, `TextSize`; `Pieces.KeepHeadingsWhole` for a grid, `Pieces.FitListColumns` for a details-view list. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
+| A dialog that lays itself out | A `FillPage` filling the form - a list in it by `AddFill`, the buttons last in a `ButtonBar(alignRight: true)` - then `DialogFit.Keep(this, page, width, height)` after the theme pass. Add it to `LayoutAudit.ConvertedWindows` and give it a builder with made-up data in `WindowCatalog` (`HeatCaller.Tests\WindowLayoutTests.cs`) in the same change. `MainRoundForm` is the worked example |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |

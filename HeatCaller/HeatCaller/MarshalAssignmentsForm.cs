@@ -6,55 +6,60 @@ namespace HeatCaller;
 /// Uncovered posts are highlighted rather than left blank: an uncovered
 /// corner is the single thing on this sheet that needs acting on before
 /// racing starts, so it has to be impossible to skim past.
+///
+/// On the layout pieces (DialogFit): the posts taking the height, the
+/// summary under them and the buttons at the foot. It used to be placed in
+/// pixels in a 700x520 window - the buttons at a fixed height the summary
+/// ran into at a larger text size.
 /// </summary>
 public sealed class MarshalAssignmentsForm : Form
 {
+    /// <summary>The list shows its headings and at least this many rows before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     public MarshalAssignmentsForm(string className, IReadOnlyList<MarshalAssigner.Assignment> assignments)
     {
         Text = $"Corner Marshals - {className}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(700, 520);
-        MinimumSize = new Size(560, 400);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        var grid = new DataGridView
-        {
-            Location = new Point(12, 12),
-            Size = new Size(676, 420),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            RowHeadersVisible = false,
-            MultiSelect = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-        };
+        var page = new FillPage();
 
-        grid.Columns.AddRange(
-            new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Round", FillWeight = 60 },
-            new DataGridViewTextBoxColumn { Name = "by", HeaderText = "Marshalled By", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "post", HeaderText = "Post", FillWeight = 60 },
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Marshal", FillWeight = 90 }
-        );
+        // Only when there is something to list; with nothing, a note says
+        // what to set up instead.
+        DataGridView? grid = null;
 
         if (assignments.Count == 0)
         {
-            var lblEmpty = new Label
+            page.Add(new Label
             {
                 Text = "No marshal posts are set for this track layout.\r\n\r\n"
                      + "Open Track Layouts, pick the layout, and set how many corner posts it has.",
-                Location = new Point(16, 16),
                 AutoSize = true,
-                MaximumSize = new Size(660, 0),
                 ForeColor = AppTheme.TextMuted,
-            };
-            Controls.Add(lblEmpty);
+            });
         }
         else
         {
+            grid = new DataGridView
+            {
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                RowHeadersVisible = false,
+                MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            };
+
+            grid.Columns.AddRange(
+                new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Round", FillWeight = 60 },
+                new DataGridViewTextBoxColumn { Name = "by", HeaderText = "Marshalled By", FillWeight = 70 },
+                new DataGridViewTextBoxColumn { Name = "post", HeaderText = "Post", FillWeight = 60 },
+                new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Marshal", FillWeight = 90 }
+            );
+
             foreach (var assignment in assignments)
             {
                 for (var i = 0; i < assignment.Posts.Count; i++)
@@ -82,50 +87,72 @@ public sealed class MarshalAssignmentsForm : Form
                 }
             }
 
-            Controls.Add(grid);
+            var list = grid;
+            page.AddFill(list, _ => list.ColumnHeadersHeight + LeastRows * list.RowTemplate.Height + 2);
         }
 
-        var problems = assignments.Count(a => a.Problem is not null);
-        var lblSummary = new Label
+        var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
+
+        // Not under the note that no posts are set: "Every post is covered"
+        // said the opposite of it.
+        if (assignments.Count > 0)
         {
-            Text = problems == 0
-                ? "Every post is covered."
-                : $"{Plural.Of(problems, "round")} {(problems == 1 ? "needs" : "need")} attention - see the highlighted rows.",
-            Location = new Point(12, 444),
-            AutoSize = true,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            ForeColor = problems == 0 ? AppTheme.TextMuted : AppTheme.Danger,
-        };
+            var problems = assignments.Count(a => a.Problem is not null);
+            var lblSummary = new Label
+            {
+                Text = problems == 0
+                    ? "Every post is covered."
+                    : $"{Plural.Of(problems, "round")} {(problems == 1 ? "needs" : "need")} attention - see the highlighted rows.",
+                AutoSize = true,
+                ForeColor = problems == 0 ? AppTheme.TextMuted : AppTheme.Danger,
+            };
 
-        var btnCopy = new Button { Text = "Copy as Text", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnCopy.Click += (_, _) =>
+            page.Add(lblSummary);
+        }
+
+        // Against the right-hand edge, Close furthest right, as a dialog's
+        // buttons go - and Copy as Text beside it only when there is a
+        // roster to copy: with no posts set it copied a heading and nothing
+        // under it.
+        var buttons = page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
+
+        if (assignments.Count > 0)
         {
-            // Plain text so it can go straight into a group chat or be
-            // printed - far more useful on a race day than a screenshot.
-            // The clipboard can be held open by another program for a
-            // moment; that is a "try again", not an error dialog.
-            try
+            var btnCopy = new Button { Text = "Copy as Text" };
+            btnCopy.Click += (_, _) =>
             {
-                Clipboard.SetText(MarshalAssigner.ToText(className, assignments));
-                btnCopy.Text = "Copied";
-            }
-            catch (System.Runtime.InteropServices.ExternalException)
-            {
-                btnCopy.Text = "Try Again";
-            }
-        };
+                // Plain text so it can go straight into a group chat or be
+                // printed - far more useful on a race day than a screenshot.
+                // The clipboard can be held open by another program for a
+                // moment; that is a "try again", not an error dialog.
+                try
+                {
+                    Clipboard.SetText(MarshalAssigner.ToText(className, assignments));
+                    btnCopy.Text = "Copied";
+                }
+                catch (System.Runtime.InteropServices.ExternalException)
+                {
+                    btnCopy.Text = "Try Again";
+                }
+            };
 
-        var btnClose = new Button { Text = "Close", Anchor = AnchorStyles.Bottom | AnchorStyles.Left, DialogResult = DialogResult.OK };
+            buttons.With(btnCopy);
+        }
 
-        AppTheme.LayoutButtonRow(ClientSize.Width - 240, 470, 8, btnCopy, btnClose);
-
-        Controls.Add(lblSummary);
-        Controls.Add(btnCopy);
-        Controls.Add(btnClose);
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        if (grid is not null)
+        {
+            Pieces.KeepHeadingsWhole(grid);
+        }
+
+        // With nothing to list, as tall as the note that says so.
+        DialogFit.Keep(this, page, width: 700, height: assignments.Count == 0 ? null : 520);
     }
 }

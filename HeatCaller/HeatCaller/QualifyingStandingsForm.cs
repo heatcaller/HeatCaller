@@ -1,12 +1,21 @@
 namespace HeatCaller;
 
-/// <summary>Read-only ranked results view, computed by QualifyingCalculator.</summary>
+/// <summary>
+/// Read-only ranked results view, computed by QualifyingCalculator.
+///
+/// On the layout pieces (DialogFit): the standings taking the height, the
+/// rule they are ranked by under them and Close at the foot. It used to be
+/// placed in pixels, the rule and Close at fixed heights under a list of a
+/// fixed height, so a larger text size ran the rule into Close.
+/// </summary>
 public sealed class QualifyingStandingsForm : Form
 {
+    /// <summary>The standings show their headings and at least this many drivers before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     public QualifyingStandingsForm(string className, List<QualifyingCalculator.Entry> entries, RaceClass? raceClass = null)
     {
         Text = $"Qualifying Standings - {className}";
-        StartPosition = FormStartPosition.CenterParent;
         // Widened when the consecutive-lap columns are present - nine
         // fill-weighted columns in 560px would squeeze them all unreadably.
         var wide = (raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps) == QualifyingMethod.BestConsecutiveLaps;
@@ -19,15 +28,12 @@ public sealed class QualifyingStandingsForm : Form
         var method = raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps;
         var lapCount = Math.Max(1, raceClass?.ConsecutiveLapCount ?? 3);
         var countBest = Math.Max(1, raceClass?.CountBestRounds ?? 1);
-        ClientSize = new Size((wide ? 980 : 660) + (dropping ? 160 : 0), 448);
-        MinimumSize = new Size(480, 320);
         Font = AppTheme.BodyFont;
+
+        var page = new FillPage();
 
         var grid = new DataGridView
         {
-            Location = new Point(12, 12),
-            Size = new Size(ClientSize.Width - 24, 356),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -79,16 +85,16 @@ public sealed class QualifyingStandingsForm : Form
             });
         }
 
+        page.AddFill(grid, _ => grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2);
+
         if (entries.Count == 0)
         {
-            var lblEmpty = new Label
+            page.Add(new Label
             {
                 Text = "No recorded qualifying heats yet for this class.",
-                Location = new Point(12, 380),
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
-            };
-            Controls.Add(lblEmpty);
+            }, gapBelow: UiLayout.RowGap);
         }
 
         for (var i = 0; i < entries.Count; i++)
@@ -144,7 +150,7 @@ public sealed class QualifyingStandingsForm : Form
             }
         }
 
-var lblRule = new Label
+        var lblRule = new Label
         {
             Text = countBest > 1
                 ? (method == QualifyingMethod.BestConsecutiveLaps
@@ -156,13 +162,11 @@ var lblRule = new Label
                 ? $"Ranked on each driver's quickest unbroken run of {Plural.Of(lapCount, "lap")}. A driver's BEST heat counts - "
                   + "double-click a row to see exactly which session to open in Lap Times."
                 : "Ranked on most laps, then lowest time. A driver's BEST heat counts - \"Counted Heat\" shows which one.",
-            Location = new Point(12, 378),
             AutoSize = true,
-            MaximumSize = new Size(ClientSize.Width - 130, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
-        Controls.Add(lblRule);
+        page.Add(lblRule);
 
         grid.CellDoubleClick += (_, args) =>
         {
@@ -212,14 +216,19 @@ var lblRule = new Label
                 "Where these numbers came from", MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
 
-        var btnClose = new Button { Text = "Close", Location = new Point(ClientSize.Width - 102, 406), Width = 90, Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
+        var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        Controls.Add(grid);
-        Controls.Add(btnClose);
+        page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
+        Controls.Add(page);
 
         CancelButton = btnClose;
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(grid);
+
+        DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0), height: 448);
     }
 }
