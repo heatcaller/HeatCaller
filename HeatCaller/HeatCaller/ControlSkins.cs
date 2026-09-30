@@ -306,6 +306,48 @@ internal static class InputOutline
         control.Parent?.Invalidate();
     }
 
+    /// <summary>
+    /// A box of one line kept as tall as its letters. With its border gone
+    /// it sizes itself to Font.Height, and with this app's typeface that is
+    /// short of the line Windows draws it in (Pieces.LineHeight - 13% more
+    /// for Barlow): the bottom of every "g", "p" and "y" typed into it was
+    /// cut off, in every one-line box in the app (layout pictures, 29 Sep:
+    /// Approve's Name, Set Up Tonight's Call it). The page search
+    /// (MainForm.FitNavSearchHeight) and RoundedField measure theirs already.
+    ///
+    /// So AutoSize goes off and the box is given the line's height - again
+    /// whenever its font changes, as it does with the text size. Not a box
+    /// of several lines, which its page gives a height; nor the edit box
+    /// inside a number box or a grid's cell, which those place themselves.
+    /// </summary>
+    private static void KeepLettersWhole(TextBox box)
+    {
+        if (box.Parent is UpDownBase || box is IDataGridViewEditingControl)
+        {
+            return;
+        }
+
+        void Fit()
+        {
+            if (box.IsDisposed || box.Multiline)
+            {
+                return;
+            }
+
+            var height = Math.Max(box.PreferredHeight, Pieces.LineHeight(box.Font));
+
+            box.AutoSize = false;
+
+            if (box.Height != height)
+            {
+                box.Height = height;
+            }
+        }
+
+        Fit();
+        box.FontChanged += (_, _) => Fit();
+    }
+
     public static void Attach(Control control)
     {
         if (Tracked.TryGetValue(control, out _) || Excluded.TryGetValue(control, out _))
@@ -321,6 +363,12 @@ internal static class InputOutline
         {
             case TextBoxBase textBox:
                 textBox.BorderStyle = BorderStyle.None;
+
+                if (textBox is TextBox single)
+                {
+                    KeepLettersWhole(single);
+                }
+
                 break;
             case ListBox listBox:
                 listBox.BorderStyle = BorderStyle.None;

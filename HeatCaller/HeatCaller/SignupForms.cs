@@ -7,10 +7,27 @@ namespace HeatCaller;
 /// Stays open while the desk works through the queue and keeps itself up
 /// to date - a sign-up made while it is open appears in it within about
 /// ten seconds.
+///
+/// On the layout pieces (DialogFit): the switch and the state line under
+/// it, three lines kept for the state whatever it says; then the sign-ups
+/// waiting and the invites, each list under its heading with its buttons
+/// under it, the two lists sharing the height the rest leave; and Close at
+/// the right-hand end of the invites' buttons. It used to be placed in
+/// pixels in a 1080x700 window: the waiting list at a fixed 190px, the
+/// state kept three lines of Font.Height (short of three lines as drawn),
+/// and the window widened by hand when the invites' buttons and Close
+/// would not fit on one line.
 /// </summary>
 internal sealed class SignupsForm : Form
 {
     private const string Mask = "••••••••";
+
+    /// <summary>
+    /// Each list shows its headings and at least this many rows before the
+    /// window scrolls instead - three, so both lists, their buttons and
+    /// Close still fit a 1280x720 screen.
+    /// </summary>
+    private const int LeastRows = 3;
 
     private readonly RelaySignupDesk _desk;
     private readonly AppSettings _settings;
@@ -45,20 +62,12 @@ internal sealed class SignupsForm : Form
         _undo = undo;
 
         Text = "Online Sign-ups";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1080, 700);
-        MinimumSize = new Size(820, 560);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        const int left = 12;
-        var width = ClientSize.Width - left * 2;
-        var y = 12;
-
         _chkEnabled.Text = "Let new drivers sign up online with an invite";
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Location = new Point(left, y);
         _chkEnabled.CheckedChanged += (_, _) =>
         {
             if (!_loading)
@@ -67,31 +76,23 @@ internal sealed class SignupsForm : Form
             }
         };
 
-        y = UiLayout.Below(_chkEnabled, UiLayout.HintGap);
-
         _lblState.AutoSize = true;
-        _lblState.MaximumSize = new Size(width, 0);
         _lblState.Font = AppTheme.SmallFont;
-        _lblState.Location = new Point(left, y);
-        _lblState.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-        // Room for three lines of state whatever it says, so nothing below hops.
-        y += AppTheme.SmallFont.Height * 3 + UiLayout.RowGap;
+        // Room for three lines of state whatever it says - as the label draws
+        // them (Pieces.LineHeight) - so the lists under it do not hop as the
+        // timer or an email batch rewords it. A state longer than that still
+        // grows the label, and the lists give it the room.
+        _lblState.MinimumSize = new Size(0, 3 * Pieces.LineHeight(_lblState.Font) + _lblState.Padding.Vertical);
 
         var lblWaiting = new Label
         {
             Text = "Waiting for you",
             AutoSize = true,
             Font = AppTheme.BoldFont,
-            Location = new Point(left, y),
         };
 
-        y = UiLayout.Below(lblWaiting, UiLayout.HintGap);
-
         SetUpGrid(_gridWaiting);
-        _gridWaiting.Location = new Point(left, y);
-        _gridWaiting.Size = new Size(width, 190);
-        _gridWaiting.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _gridWaiting.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "name", HeaderText = "Name", FillWeight = 90 },
             new DataGridViewTextBoxColumn { Name = "class", HeaderText = "Class", FillWeight = 60 },
@@ -108,30 +109,17 @@ internal sealed class SignupsForm : Form
         };
         _gridWaiting.SelectionChanged += (_, _) => UpdateButtons();
 
-        y = UiLayout.Below(_gridWaiting, UiLayout.RowGap);
-
         _btnApprove.Click += (_, _) => ApproveSelected();
         _btnReject.Click += (_, _) => RejectSelected();
-        UiLayout.ButtonRow(left, y, _btnApprove, _btnReject);
-
-        y += UiLayout.ButtonHeight + UiLayout.SectionGap;
 
         var lblInvites = new Label
         {
             Text = "Invites",
             AutoSize = true,
             Font = AppTheme.BoldFont,
-            Location = new Point(left, y),
         };
 
-        y = UiLayout.Below(lblInvites, UiLayout.HintGap);
-
-        var buttonsTop = ClientSize.Height - 12 - UiLayout.ButtonHeight;
-
         SetUpGrid(_gridInvites);
-        _gridInvites.Location = new Point(left, y);
-        _gridInvites.Size = new Size(width, buttonsTop - UiLayout.RowGap - y);
-        _gridInvites.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _gridInvites.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "for", HeaderText = "For", FillWeight = 130 },
             new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 60 },
@@ -150,57 +138,58 @@ internal sealed class SignupsForm : Form
         _btnResend.Click += (_, _) => ResendSelected();
         _btnCancelInvite.Click += (_, _) => CancelSelected();
 
-        foreach (var button in new[] { _btnInvite, _btnHere, _btnShowCode, _btnResend, _btnCancelInvite })
-        {
-            button.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-        }
+        var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        UiLayout.ButtonRow(left, buttonsTop, _btnInvite, _btnHere, _btnShowCode, _btnResend, _btnCancelInvite);
+        // The window is not a dialog - Main Window shows it beside itself -
+        // and a DialogResult closes only a dialog, so Close (and Esc, the
+        // cancel button) closes it itself.
+        btnClose.Click += (_, _) => Close();
 
-        var btnClose = new Button { Text = "Close", Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
-        btnClose.Size = new Size(UiLayout.WidthFor(btnClose), UiLayout.ButtonHeight);
-        btnClose.Location = new Point(ClientSize.Width - 12 - btnClose.Width, buttonsTop);
+        // The invites' five buttons on the left and Close against the
+        // right-hand edge, as they were; on a line too narrow for both, Close
+        // goes under them, still at the right (SplitBar).
+        var inviteButtons = new ButtonBar().With(_btnInvite, _btnHere, _btnShowCode, _btnResend, _btnCancelInvite);
+        var closeBar = new ButtonBar(alignRight: true).With(btnClose);
 
-        // The invite row is five buttons; on a narrow window Close would sit
-        // on top of the last of them, so the window starts wide enough.
-        var rowRight = _btnCancelInvite.Right + UiLayout.ButtonGap + btnClose.Width + 12;
+        var page = new FillPage();
+        page.Add(_chkEnabled, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(_lblState, gapBelow: UiLayout.RowGap);
 
-        if (rowRight > ClientSize.Width)
-        {
-            var grow = rowRight - ClientSize.Width;
-            ClientSize = new Size(rowRight, ClientSize.Height);
-            MinimumSize = new Size(Width, MinimumSize.Height);
-            btnClose.Left += grow;
-            _gridWaiting.Width += grow;
-            _gridInvites.Width += grow;
-            _lblState.MaximumSize = new Size(_lblState.MaximumSize.Width + grow, 0);
-        }
+        // The two lists share the height the rest leave, each never less than
+        // its headings and LeastRows rows. At the size the window opens at,
+        // that is about five rows each, much as the old 190px waiting list
+        // and the invites under it had; a larger window gives both more. The
+        // waiting list was a fixed height before, and kept at the five rows
+        // it had, with the invites at their least under it, the window came
+        // to more than a 1280x720 screen has room for - the page would have
+        // scrolled, and Close with it.
+        page.Add(lblWaiting, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_gridWaiting, _ => LeastListHeight(_gridWaiting), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(_btnApprove, _btnReject));
 
-        Controls.Add(_chkEnabled);
-        Controls.Add(_lblState);
-        Controls.Add(lblWaiting);
-        Controls.Add(_gridWaiting);
-        Controls.Add(_btnApprove);
-        Controls.Add(_btnReject);
-        Controls.Add(lblInvites);
-        Controls.Add(_gridInvites);
-        Controls.Add(_btnInvite);
-        Controls.Add(_btnHere);
-        Controls.Add(_btnShowCode);
-        Controls.Add(_btnResend);
-        Controls.Add(_btnCancelInvite);
-        Controls.Add(btnClose);
+        page.Add(lblInvites, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_gridInvites, _ => LeastListHeight(_gridInvites), gapBelow: UiLayout.RowGap);
+        page.Add(new SplitBar(inviteButtons, closeBar), gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
 
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_gridWaiting);
+        Pieces.KeepHeadingsWhole(_gridInvites);
+
         _desk.Changed += RefreshAll;
         _refresh.Tick += (_, _) => RefreshState();
         _refresh.Start();
 
-        FormClosed += (_, _) =>
+        // Stopped when it closes - or when it is thrown away without ever
+        // having been shown, which closes nothing (the window test does).
+        // Stopping twice does no harm.
+        void StopWatching()
         {
             _desk.Changed -= RefreshAll;
             _refresh.Stop();
@@ -208,10 +197,32 @@ internal sealed class SignupsForm : Form
 
             // An invite email batch still going carries on: the desk owns
             // it, and records what went (see RelaySignupDesk.EmailInvitesAsync).
-        };
+        }
+
+        FormClosed += (_, _) => StopWatching();
+        Disposed += (_, _) => StopWatching();
 
         RefreshAll();
+
+        // The width it was made at, at the text size in use - or wider when
+        // the invites' buttons and Close need more to share one line. The
+        // buttons are never narrower than a standard button, which does not
+        // shrink with the text, so at a smaller text size the line can
+        // outgrow the width the window was made at. Measured the way the
+        // SplitBar decides: each bar on one line, a section gap between.
+        var oneLine = UiLayout.PageLeft + inviteButtons.OneLineWidth + UiLayout.SectionGap + closeBar.OneLineWidth + UiLayout.PageRight;
+
+        DialogFit.Keep(this, page, width: Math.Max(UiLayout.AtTextSize(1080), oneLine), height: 700, widthMeasured: true);
+
+        // Not a dialog, so not dressed as one: it keeps the Minimize button
+        // and the taskbar button it always had, which Keep takes off.
+        MinimizeBox = true;
+        ShowInTaskbar = true;
     }
+
+    /// <summary>A list's headings and LeastRows rows - the least it can do with before the window scrolls instead.</summary>
+    private static int LeastListHeight(DataGridView grid) =>
+        grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2;
 
     private static void SetUpGrid(DataGridView grid)
     {
@@ -682,6 +693,13 @@ internal sealed class SignupsForm : Form
 /// they typed, editable, and the transponder they will race on - their
 /// own, or one of the club's rentals. The profile is only built here;
 /// RelaySignupDesk.Approve is what adds it.
+///
+/// On the layout pieces (DialogFit): what they signed up with and the
+/// fields lined up in a field grid, in a body that scrolls on a screen too
+/// short for them; under it, room for what is wrong, and Approve and Not
+/// Yet at the foot. It used to be placed in pixels, the captions in a
+/// column of 150px and every field 300px beside it, with three lines of
+/// Font.Height kept for what is wrong - short of three lines as drawn.
 /// </summary>
 internal sealed class ApproveSignupForm : Form
 {
@@ -708,45 +726,20 @@ internal sealed class ApproveSignupForm : Form
         _profiles = profiles;
 
         Text = $"Approve {request.Name}";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
-
-        const int left = 16;
-        const int fieldLeft = left + 150;
-        const int fieldWidth = 300;
-        var y = 16;
 
         var lblIntro = new Label
         {
             Text = IntroFor(request),
             AutoSize = true,
-            MaximumSize = new Size(fieldLeft + fieldWidth - left, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-        Controls.Add(lblIntro);
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        void Row(string caption, Control field)
-        {
-            var label = new Label { Text = caption, AutoSize = true };
-            field.Location = new Point(fieldLeft, y);
-            field.Width = fieldWidth;
-            label.Location = new Point(left, UiLayout.CentreOn(label, y, field.Height));
-            Controls.Add(label);
-            Controls.Add(field);
-            y = UiLayout.Below(field, UiLayout.RowGap);
-        }
 
         _txtName.Text = request.Name;
         _txtName.MaxLength = 80;
-        Row("Name", _txtName);
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbClass.Items.Add(string.Empty);
@@ -762,11 +755,9 @@ internal sealed class ApproveSignupForm : Form
         }
 
         _cmbClass.SelectedItem = request.ClassName.Length > 0 ? request.ClassName : string.Empty;
-        Row("Class", _cmbClass);
 
         _txtTransponder.Text = request.HasOwnTransponder ? request.Transponder : string.Empty;
         _txtTransponder.MaxLength = 40;
-        Row("Transponder", _txtTransponder);
 
         // The club's rentals on the shelf, for somebody who asked for one or
         // doesn't know theirs. Picking one fills the box above with it.
@@ -798,43 +789,87 @@ internal sealed class ApproveSignupForm : Form
                 }
             }
         };
-        Row("Lend a rental", _cmbRental);
 
         _txtCar.Text = request.Car;
         _txtCar.MaxLength = 80;
-        Row("Car", _txtCar);
 
         _txtNumber.MaxLength = 20;
-        Row("Race number", _txtNumber);
 
         _txtEmail.Text = request.Email;
         _txtEmail.MaxLength = 254;
-        Row("Email", _txtEmail);
+
+        // Every field runs to the right-hand edge, where the buttons end, as
+        // the 300px fields did beside their 150px captions.
+        var fields = new FieldGrid();
+        var captions = new[]
+        {
+            fields.AddRow("Name", _txtName, stretch: true),
+            fields.AddRow("Class", _cmbClass, stretch: true),
+            fields.AddRow("Transponder", _txtTransponder, stretch: true),
+            fields.AddRow("Lend a rental", _cmbRental, stretch: true),
+            fields.AddRow("Car", _txtCar, stretch: true),
+            fields.AddRow("Race number", _txtNumber, stretch: true),
+            fields.AddRow("Email", _txtEmail, stretch: true),
+        };
 
         _lblError.AutoSize = true;
-        _lblError.MaximumSize = new Size(fieldLeft + fieldWidth - left, 0);
         _lblError.ForeColor = AppTheme.Danger;
-        _lblError.Location = new Point(left, y);
-        Controls.Add(_lblError);
-        y += AppTheme.BodyFont.Height * 3;
 
         var btnOk = new Button { Text = "Approve" };
         var btnCancel = new Button { Text = "Not Yet", DialogResult = DialogResult.Cancel };
         btnOk.Click += (_, _) => TryApprove();
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(fieldLeft + fieldWidth - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        // Seven fields and up to three lines of what they signed up with: at
+        // the largest text size, more than a small screen has room for, so
+        // they are in a body that scrolls there. What is wrong is under the
+        // body, not in it - so it is in view, beside the buttons, however
+        // far the body is scrolled.
+        var page = new FillPage();
+        var body = DialogFit.Body(page, gapBelow: UiLayout.RowGap);
+        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(fields, gapBelow: 0);
+        page.Add(_lblError, gapBelow: UiLayout.RowGap);
 
-        ClientSize = new Size(fieldLeft + fieldWidth + left, y + UiLayout.ButtonHeight + 16);
+        // Against the right-hand edge, Not Yet furthest right, as it was -
+        // and Tab still reaches Approve first: the bar takes them
+        // right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // Three lines kept for what is wrong, as the label draws them
+        // (Pieces.LineHeight), so a message appearing takes nothing from the
+        // fields above it. The longest the dialog words itself (a
+        // transponder missing) comes to three at the width it opens at; a
+        // longer one - a clash naming a driver with a long name - grows it,
+        // and the body gives way, scrolling if it must.
+        _lblError.MinimumSize = new Size(0, 3 * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the fields' column needs more: never narrower than the
+        // 300px the fields had, and wide enough for each drop-down's longest
+        // choice, which a long class name can make wider than that. The
+        // caption column beside it as the grid works it out: its widest
+        // caption and the gap after it.
+        (Font Font, int Count, int Width)? classWidth = null;
+        (Font Font, int Count, int Width)? rentalWidth = null;
+
+        var fieldColumn = Math.Max(
+            UiLayout.AtTextSize(300),
+            Math.Max(Pieces.PickerWidth(_cmbClass, ref classWidth), Pieces.PickerWidth(_cmbRental, ref rentalWidth)));
+
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(482),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
 
         // Straight to the one thing a rental or "don't know" sign-up still needs.
         Shown += (_, _) =>
@@ -844,6 +879,8 @@ internal sealed class ApproveSignupForm : Form
                 (shelf.Count > 0 ? (Control)_cmbRental : _txtTransponder).Focus();
             }
         };
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
     private static string IntroFor(RelaySignupRequest request)
@@ -927,9 +964,21 @@ internal sealed class ApproveSignupForm : Form
     }
 }
 
-/// <summary>Who to invite: one email address per line, each with an optional note after a comma.</summary>
+/// <summary>
+/// Who to invite: one email address per line, each with an optional note after a comma.
+///
+/// On the layout pieces (DialogFit): the explanation, the box of addresses
+/// taking the height - the window can be made taller for a long list - room
+/// for what is wrong under it and the buttons at the foot. It used to be
+/// placed in pixels in a window of a fixed size, the box a fixed 200px and
+/// two lines of Font.Height kept for what is wrong - short of two lines as
+/// drawn.
+/// </summary>
 internal sealed class InviteDriversForm : Form
 {
+    /// <summary>The box shows at least this many addresses before the window scrolls instead.</summary>
+    private const int LeastLines = 4;
+
     private readonly TextBox _txtPeople = new();
     private readonly Label _lblError = new();
 
@@ -939,61 +988,57 @@ internal sealed class InviteDriversForm : Form
     public InviteDriversForm()
     {
         Text = "Invite Drivers";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
-
-        const int left = 16;
-        const int width = 520;
-        var y = 16;
 
         var lblIntro = new Label
         {
             Text = "One email address per line. Each person is emailed their own sign-up code and a link to the club's "
                 + "sign-up page. Add a note after a comma if it helps you remember who's who - \"sam@example.com, Sam's dad\".",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
 
         _txtPeople.Multiline = true;
         _txtPeople.AcceptsReturn = true;
         _txtPeople.ScrollBars = ScrollBars.Vertical;
-        _txtPeople.Location = new Point(left, y);
-        _txtPeople.Size = new Size(width, 200);
-        y = UiLayout.Below(_txtPeople, UiLayout.RowGap);
 
         _lblError.AutoSize = true;
-        _lblError.MaximumSize = new Size(width, 0);
         _lblError.ForeColor = AppTheme.Danger;
-        _lblError.Location = new Point(left, y);
-        y += AppTheme.BodyFont.Height * 2 + UiLayout.RowGap;
 
         var btnOk = new Button { Text = "Send Invites" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
         btnOk.Click += (_, _) => TryAccept();
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(left + width - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
 
-        Controls.Add(lblIntro);
-        Controls.Add(_txtPeople);
-        Controls.Add(_lblError);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(_txtPeople, _ => LeastLines * Pieces.LineHeight(_txtPeople.Font) + UiLayout.HintGap * 2, gapBelow: UiLayout.RowGap);
+        page.Add(_lblError, gapBelow: UiLayout.RowGap);
 
-        ClientSize = new Size(left * 2 + width, y + UiLayout.ButtonHeight + 16);
+        // Against the right-hand edge, Cancel furthest right, as it was - and
+        // Tab still reaches Send Invites first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
+
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // Two lines kept for what is wrong, as the label draws them
+        // (Pieces.LineHeight), so a message appearing takes nothing from the
+        // box. A longer list of addresses that don't look right grows it,
+        // and the box gives way.
+        _lblError.MinimumSize = new Size(0, 2 * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
+
+        // The size it was at the normal text size - 552x390 inside, the box
+        // about 200px of that height.
+        DialogFit.Keep(this, page, width: 552, height: 390);
     }
 
     private void TryAccept()
@@ -1047,6 +1092,11 @@ internal sealed class InviteDriversForm : Form
 /// <summary>
 /// One short line of text: why a sign-up was turned down (shown on their
 /// phone), or who a code at the desk is for.
+///
+/// On the layout pieces (DialogFit): the question wrapping across the top,
+/// the box under it and the buttons at the foot, the window as tall as
+/// they are. It used to be placed in pixels, the question wrapped at a
+/// fixed 440px.
 /// </summary>
 internal sealed class SignupReasonForm : Form
 {
@@ -1058,17 +1108,9 @@ internal sealed class SignupReasonForm : Form
     public SignupReasonForm(string? rejecting)
     {
         Text = rejecting is null ? "Code for Someone Here" : $"Turn Down {rejecting}";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
-
-        const int left = 16;
-        const int width = 440;
-        var y = 16;
 
         var lbl = new Label
         {
@@ -1077,32 +1119,42 @@ internal sealed class SignupReasonForm : Form
                 : "Tell them why, or what to do instead (optional - shown on their phone). Their phone is told straight away, "
                   + "and that can't be taken back - Undo only opens their invite again here, so they can sign up again:",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
-            Location = new Point(left, y),
         };
-        y = UiLayout.Below(lbl, UiLayout.HintGap);
 
         _txt.MaxLength = rejecting is null ? 60 : 300;
-        _txt.Location = new Point(left, y);
-        _txt.Width = width;
-        y = UiLayout.Below(_txt, UiLayout.SectionGap);
 
         var btnOk = new Button { Text = rejecting is null ? "Make Code" : "Turn Down", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(left + width - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
 
-        Controls.Add(lbl);
-        Controls.Add(_txt);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        var page = new FillPage();
+        page.Add(lbl, gapBelow: UiLayout.HintGap);
+        page.Add(_txt, gapBelow: UiLayout.SectionGap);
 
-        ClientSize = new Size(left * 2 + width, y + UiLayout.ButtonHeight + 16);
+        // A pixel either side of the box for the ring the theme draws round
+        // it, outside it, on what holds it (Pieces.RingRoom): stretched across
+        // the page, the box's sides would be the page's edges, and the ring's
+        // sides would be drawn past them, where nothing shows. The gap under
+        // the box stays as it was.
+        _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+
+        // Its height is the box's own, and changes when the theme takes its
+        // border off - see Pieces.KeepHeightTold.
+        Pieces.KeepHeightTold(_txt);
+
+        // Against the right-hand edge, Cancel furthest right, as it was - and
+        // Tab still reaches Make Code or Turn Down first: the bar takes
+        // them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
+
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        DialogFit.Keep(this, page, width: 472);
     }
 }

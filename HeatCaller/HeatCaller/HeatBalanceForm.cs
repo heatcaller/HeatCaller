@@ -41,6 +41,17 @@ namespace HeatCaller;
 /// marked with the rounds they are missing, until they have one. And a
 /// driver can be in only one heat of any qualifying round: a drop that
 /// would put them in a second is refused rather than half-done.
+///
+/// On the layout pieces (DialogFit): the title and the hint across the top,
+/// the strip of heats taking the height, and the spread line beside Save
+/// and Cancel at the foot. Inside the strip the columns are the form's own
+/// to place (LayoutColumns) - it is a board that drivers are dragged across,
+/// not a stack of parts - each as wide as the longest name, heading and
+/// count it can show at the text size in use, and the strip scrolls sideways
+/// past the four the window opens wide enough for. It used to be placed in
+/// pixels: the strip, the spread line and the buttons at fixed distances
+/// from the foot of a 560px window, and the columns never wider than 380px
+/// at any text size, so at 200% the names were cut short.
 /// </summary>
 public sealed class HeatBalanceForm : Form
 {
@@ -85,12 +96,35 @@ public sealed class HeatBalanceForm : Form
             List.Items.Cast<Entry>().Select(e => e.Transponder).ToList();
     }
 
+    /// <summary>The gap between two columns, at the normal text size.</summary>
     private const int Gap = 10;
+
+    /// <summary>Room either side of the text in a column - its heading, its count and every name - at the normal text size.</summary>
+    private const int Inset = 8;
+
+    /// <summary>Every column shows its heading and at least this many drivers before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
 
     private readonly List<Column> _columns = new();
     private readonly Panel _strip = new();
-    private readonly Label _lblSpread = new();
+
+    /// <summary>The spread, as tall as the longest it can come to - it is rewritten after every move (UpdateHeaders).</summary>
+    private readonly SteadyLabel _lblSpread = new();
+
     private readonly Color _accent;
+
+    // What the columns are sized from, at the text size in use. Worked out
+    // once, as the window is built: it is short-lived, and is built at the
+    // text size it opens at (see DialogFit).
+    private readonly int _columnGap;
+    private readonly int _textInset;
+    private readonly int _headerTop;
+    private readonly int _headerHeight;
+    private readonly int _countHeight;
+    private readonly int _itemHeight;
+
+    /// <summary>Where a column's list starts: under its heading and its count.</summary>
+    private readonly int _listTop;
 
     /// <summary>
     /// Everyone this form is allowed to show. The class roster plus anyone
@@ -101,7 +135,8 @@ public sealed class HeatBalanceForm : Form
     /// </summary>
     private readonly Dictionary<string, string> _universe = new(StringComparer.OrdinalIgnoreCase);
 
-    private int _columnWidth = 220;
+    /// <summary>Every column's width - see MeasureColumnWidth.</summary>
+    private readonly int _columnWidth;
 
     /// <summary>
     /// True when every round handed in belongs to one race day - the
@@ -149,14 +184,23 @@ public sealed class HeatBalanceForm : Form
         _onTrackRoundId = onTrackRoundId;
 
         Text = $"Move drivers between heats - {className}";
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-        MinimumSize = new Size(640, 460);
+
+        // A line of each face with a little room round it - measured as GDI
+        // draws the line (Pieces.LineHeight), which for Barlow is taller than
+        // Font.Height - and the gaps at the text size in use.
+        _columnGap = UiLayout.AtTextSize(Gap);
+        _textInset = UiLayout.AtTextSize(Inset);
+        _headerTop = UiLayout.AtTextSize(4);
+        _headerHeight = Pieces.LineHeight(AppTheme.BoldFont) + UiLayout.AtTextSize(8);
+        _countHeight = Pieces.LineHeight(AppTheme.SmallFont) + UiLayout.AtTextSize(6);
+        _itemHeight = Math.Max(UiLayout.AtTextSize(24), Pieces.LineHeight(AppTheme.BodyFont) + UiLayout.AtTextSize(6));
+        _listTop = _headerTop + _headerHeight + _countHeight + _headerTop;
 
         BuildUniverse(rounds, classRoster, profiles);
 
-        _columnWidth = MeasureColumnWidth();
+        _columnWidth = MeasureColumnWidth(rounds);
 
         var lblTitle = new Label
         {
@@ -164,7 +208,6 @@ public sealed class HeatBalanceForm : Form
             AutoSize = true,
             Font = AppTheme.MicroFont,
             ForeColor = AppTheme.Primary,
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageLeft),
         };
 
         var lblHint = new Label
@@ -172,16 +215,12 @@ public sealed class HeatBalanceForm : Form
             Text = "Drag a driver from one heat to another. Drop onto \"Not in a heat\" - or press Delete - "
                  + "to take somebody out. Nothing is saved until you press Save.",
             AutoSize = true,
-            MaximumSize = new Size(608, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(UiLayout.PageLeft, UiLayout.Below(lblTitle, UiLayout.HintGap)),
         };
 
         _strip.AutoScroll = true;
         _strip.BackColor = AppTheme.Background;
-        _strip.Location = new Point(UiLayout.PageLeft, UiLayout.Below(lblHint, UiLayout.RowGap));
-        _strip.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
         // The gaps between and around the columns are droppable too, so a
         // drag aimed slightly wide still scrolls the strip instead of
@@ -202,66 +241,69 @@ public sealed class HeatBalanceForm : Form
 
         BuildColumns(rounds);
 
-        _lblSpread.AutoSize = true;
         _lblSpread.ForeColor = AppTheme.TextMuted;
         _lblSpread.Font = AppTheme.SmallFont;
-        _lblSpread.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        _lblSpread.Wordings = SpreadWordings(rounds);
 
         var btnSave = new Button { Text = "Save" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         btnSave.Click += (_, _) => Commit();
 
-        btnSave.Size = new Size(UiLayout.WidthFor(btnSave), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        var page = new FillPage();
+        page.Add(lblTitle, gapBelow: UiLayout.HintGap);
+        page.Add(lblHint, gapBelow: UiLayout.RowGap);
 
-        btnSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-        btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        // The heats take the height; the strip keeps a column's heading and
+        // a few drivers, and room under them for the bar it scrolls
+        // sideways with, before the window scrolls instead.
+        page.AddFill(_strip, _ => ColumnLeast + SystemInformation.HorizontalScrollBarHeight, gapBelow: UiLayout.RowGap);
 
-        Controls.Add(lblTitle);
-        Controls.Add(lblHint);
-        Controls.Add(_strip);
-        Controls.Add(_lblSpread);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        // The spread on the left; Save and Cancel against the right-hand
+        // edge, Cancel furthest right, as they always were - and Tab still
+        // reaches Save first: the bar takes them right to left, in the order
+        // they were added.
+        page.Add(
+            new SplitBar(
+                new ButtonBar().With(_lblSpread),
+                new ButtonBar(alignRight: true).With(btnCancel, btnSave)),
+            gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
-
-        // Wide enough for four columns, or for all of them when there are
-        // fewer - a form that opens already scrolled hides the very thing
-        // it exists to show.
-        var wanted = UiLayout.PageLeft * 2 + Math.Min(4, _columns.Count) * (_columnWidth + Gap);
-
-        ClientSize = new Size(Math.Max(MinimumSize.Width, wanted), 560);
-
-        var bottom = ClientSize.Height - UiLayout.PageLeft - UiLayout.ButtonHeight;
-
-        btnCancel.Location = new Point(ClientSize.Width - UiLayout.PageLeft - btnCancel.Width, bottom);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnSave.Width, bottom);
-
-        // Measured against the font rather than the label: an AutoSize
-        // label that has not been given its text yet reports the default
-        // height, and the spread line is filled in once the form is shown.
-        _lblSpread.Location = new Point(
-            UiLayout.PageLeft,
-            bottom + Math.Max(0, (UiLayout.ButtonHeight - AppTheme.SmallFont.Height) / 2));
-
-        _strip.Size = new Size(
-            ClientSize.Width - UiLayout.PageLeft * 2,
-            Math.Max(160, bottom - UiLayout.RowGap - _strip.Top));
 
         RefreshSpares();
         UpdateHeaders();
         LayoutColumns();
 
         // The strip scrolls sideways ON PURPOSE - that is how a class with
-        // nine heats is looked at. The repair pass reports content past the
-        // right edge as a fault on the page, which is the right default
-        // everywhere else and wrong here, so it is told to keep out.
+        // nine heats is looked at. The repair pass and the layout check both
+        // report content past the right edge as a fault, which is the right
+        // default everywhere else and wrong here, so the one keeps out and
+        // the other is told it is meant.
         LayoutDoctor.LeaveAlone(_strip);
+        LayoutAudit.AllowOverflow(_strip);
+
+        // And no room under the columns. The theme pass gives a panel that
+        // scrolls room below its last control (LayoutDoctor.ThemeScrolling),
+        // for a page scrolled to its end; under columns that are exactly as
+        // tall as the strip, it was a strip that also scrolled down, by that
+        // much, for nothing.
+        LayoutDoctor.NoRoomBelow(_strip);
 
         AppTheme.ApplyRecursively(this);
+
+        // Wide enough for four columns, or for all of them when there are
+        // fewer - a form that opens already scrolled hides the very thing
+        // it exists to show - and never narrower than it always was. The
+        // columns are measured at the text size in use, so the width is too.
+        var wanted = UiLayout.PageLeft + UiLayout.PageRight + Math.Min(4, _columns.Count) * (_columnWidth + _columnGap);
+
+        DialogFit.Keep(this, page, width: Math.Max(UiLayout.AtTextSize(640), wanted), height: 560, widthMeasured: true);
     }
 
     // ------------------------------------------------------------------
@@ -299,23 +341,125 @@ public sealed class HeatBalanceForm : Form
         _universe.TryGetValue(transponder, out var name) ? name : transponder;
 
     /// <summary>
-    /// Sized to the longest name that will actually be in it, rather than
-    /// to a number picked at design time - the same fault that had every
-    /// other page in this app clipping its captions once the text size
-    /// went up.
+    /// Every column's width: wide enough for the longest thing any of them
+    /// shows, measured at the text size in use rather than picked at design
+    /// time - the same fault that had every other page in this app clipping
+    /// its captions once the text size went up.
+    ///
+    /// The longest name with the highest position number in front of it,
+    /// as DrawEntry draws it, the room either side, and a scrollbar's width
+    /// beside it - a list that scrolls has the native bar, with the themed
+    /// one parked over it, taking that off its rows. Kept between two widths
+    /// chosen at the normal text size, so a class of short names still reads
+    /// as columns and one very long name does not make every column
+    /// enormous; past the wider one a name ends in "...", as it always has.
+    ///
+    /// And never narrower than a heading or a count needs, which are labels
+    /// and would be cut off: every heat's name, and every count a column can
+    /// come to - any driver on the form can end up in any one heat, while a
+    /// locked heat keeps the drivers it has.
     /// </summary>
-    private int MeasureColumnWidth()
+    private int MeasureColumnWidth(IReadOnlyList<RoundDefinition> rounds)
     {
-        var widest = 0;
+        var most = MostInAColumn(rounds);
 
-        foreach (var name in _universe.Values)
+        var longestName = _universe.Values.MaxBy(Drawn) ?? string.Empty;
+
+        var entries = Math.Clamp(
+            Drawn($"{WidestNumber(most, AppTheme.BodyFont)}    {longestName}") + 2 * _textInset + SystemInformation.VerticalScrollBarWidth,
+            UiLayout.AtTextSize(190),
+            UiLayout.AtTextSize(380));
+
+        var headings = rounds
+            .Select(round => HeadingOf(round))
+            .Append(HeadingOf(null))
+            .Max(heading => OnOneLine(heading, AppTheme.BoldFont));
+
+        var counts = Enumerable.Range(0, most + 1)
+            .SelectMany(n => new[]
+            {
+                CountText(spares: true, locked: false, recorded: false, n),
+                CountText(spares: false, locked: false, recorded: false, n),
+            })
+            .Concat(rounds
+                .Where(IsLocked)
+                .Select(round => CountText(spares: false, locked: true, round.IsRecorded, round.AssignedTransponders.Count)))
+            .Max(text => OnOneLine(text, AppTheme.SmallFont));
+
+        return Math.Max(entries, Math.Max(headings, counts) + 2 * _textInset);
+    }
+
+    /// <summary>The most drivers one column can come to hold: everyone on the form, or a heat that already lists more.</summary>
+    private int MostInAColumn(IReadOnlyList<RoundDefinition> rounds) =>
+        Math.Max(_universe.Count, rounds.Select(r => r.AssignedTransponders.Count).DefaultIfEmpty(0).Max());
+
+    /// <summary>How wide a row's text is drawn, as DrawEntry draws it.</summary>
+    private static int Drawn(string text) =>
+        TextRenderer.MeasureText(
+            text,
+            AppTheme.BodyFont,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width;
+
+    /// <summary>
+    /// How wide a label of fixed size has to be for <paramref name="text"/>
+    /// on one line - measured the way the layout check measures one
+    /// (LayoutAudit.CheckLabel), which is the way the label wraps it.
+    /// </summary>
+    private static int OnOneLine(string text, Font font) =>
+        TextRenderer.MeasureText(
+            text,
+            font,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Width;
+
+    /// <summary>
+    /// The number from 0 to <paramref name="most"/> drawn widest in
+    /// <paramref name="font"/> - not always the largest, since the digits
+    /// of a face need not all be one width.
+    /// </summary>
+    private static int WidestNumber(int most, Font font) =>
+        Enumerable.Range(0, Math.Max(0, most) + 1)
+            .MaxBy(n => TextRenderer.MeasureText(n.ToString(), font).Width);
+
+    /// <summary>A column's heading: the heat's name in capitals, or the column of drivers in no heat.</summary>
+    private static string HeadingOf(RoundDefinition? round) =>
+        round is null ? "NOT IN A HEAT" : round.RoundLabel.ToUpperInvariant();
+
+    /// <summary>
+    /// Locked, as a source and as a target: a heat that has been recorded,
+    /// or the one out on track now.
+    /// </summary>
+    private bool IsLocked(RoundDefinition round) =>
+        round.IsRecorded || string.Equals(round.Id, _onTrackRoundId, StringComparison.Ordinal);
+
+    /// <summary>The count under a column's heading, for a column holding <paramref name="n"/> drivers.</summary>
+    private static string CountText(bool spares, bool locked, bool recorded, int n) =>
+        spares
+            ? n == 1 ? "1 driver sitting out" : $"{n} drivers sitting out"
+            : locked
+                ? recorded
+                    ? $"{Plural.Of(n, "driver")} - recorded, locked"
+                    : $"{Plural.Of(n, "driver")} - on track, locked"
+                : $"{Plural.Of(n, "driver")}";
+
+    /// <summary>
+    /// The longest the spread line can come to (see UpdateHeaders), so the
+    /// label is that wide from the start and a move that rewords it never
+    /// moves Save and Cancel, or puts them on a line of their own. The
+    /// number of heats does not change here; how many drivers are in one
+    /// can go up to everyone on the form.
+    /// </summary>
+    private string[] SpreadWordings(IReadOnlyList<RoundDefinition> rounds)
+    {
+        if (rounds.Count == 0)
         {
-            widest = Math.Max(widest, TextRenderer.MeasureText(name, AppTheme.BodyFont).Width);
+            return Array.Empty<string>();
         }
 
-        // Room for the position number, the padding either side and the
-        // themed scrollbar that gets attached to every list.
-        return Math.Clamp(widest + 80, 190, 380);
+        var wide = WidestNumber(MostInAColumn(rounds), AppTheme.SmallFont);
+
+        return new[] { $"{Plural.Of(rounds.Count, "heat")}, between {wide} and {wide} drivers each." };
     }
 
     private void BuildColumns(IReadOnlyList<RoundDefinition> rounds)
@@ -330,8 +474,7 @@ public sealed class HeatBalanceForm : Form
 
     private Column NewColumn(RoundDefinition? round)
     {
-        var locked = round is not null
-                     && (round.IsRecorded || string.Equals(round.Id, _onTrackRoundId, StringComparison.Ordinal));
+        var locked = round is not null && IsLocked(round);
 
         var host = new Panel
         {
@@ -341,7 +484,7 @@ public sealed class HeatBalanceForm : Form
 
         var header = new Label
         {
-            Text = round is null ? "NOT IN A HEAT" : round.RoundLabel.ToUpperInvariant(),
+            Text = HeadingOf(round),
             AutoSize = false,
             Font = AppTheme.BoldFont,
             ForeColor = round is null ? AppTheme.TextMuted : AppTheme.TextDark,
@@ -360,7 +503,7 @@ public sealed class HeatBalanceForm : Form
         {
             Dock = DockStyle.Fill,
             DrawMode = DrawMode.OwnerDrawFixed,
-            ItemHeight = Math.Max(24, AppTheme.BodyFont.Height + 8),
+            ItemHeight = _itemHeight,
             IntegralHeight = false,
             BorderStyle = BorderStyle.None,
             BackColor = AppTheme.Surface,
@@ -392,25 +535,26 @@ public sealed class HeatBalanceForm : Form
             WireDrag(column);
         }
 
-        var headerHeight = AppTheme.BoldFont.Height + 10;
-        var countHeight = AppTheme.SmallFont.Height + 8;
-
         // The heading strip is reserved with Padding rather than by docking
         // two more controls, so there is no z-order question about which of
-        // the three gets laid out first.
-        host.Padding = new Padding(0, headerHeight + countHeight + 8, 0, 0);
+        // the three gets laid out first. The heading and the count go in it
+        // one under the other, as wide as the column less the room either
+        // side - which MeasureColumnWidth made wide enough for both.
+        host.Padding = new Padding(0, _listTop, 0, 0);
 
-        header.Bounds = new Rectangle(8, 4, _columnWidth - 16, headerHeight);
-        count.Bounds = new Rectangle(8, 4 + headerHeight, _columnWidth - 16, countHeight);
+        header.Bounds = new Rectangle(_textInset, _headerTop, _columnWidth - 2 * _textInset, _headerHeight);
+        count.Bounds = new Rectangle(_textInset, _headerTop + _headerHeight, _columnWidth - 2 * _textInset, _countHeight);
 
         host.Controls.Add(list);
         host.Controls.Add(header);
         host.Controls.Add(count);
 
         // The class's colour across the top of each heat, the same band the
-        // printed heat sheet carries.
+        // printed heat sheet carries - above the heading, at any text size.
         if (round is not null)
         {
+            var band = UiLayout.AtTextSize(3);
+
             host.Paint += (s, e) =>
             {
                 if (s is not Panel panel)
@@ -420,7 +564,7 @@ public sealed class HeatBalanceForm : Form
 
                 using var brush = new SolidBrush(locked ? AppTheme.Border : _accent);
 
-                e.Graphics.FillRectangle(brush, 0, 0, panel.Width, 3);
+                e.Graphics.FillRectangle(brush, 0, 0, panel.Width, band);
             };
         }
 
@@ -429,17 +573,55 @@ public sealed class HeatBalanceForm : Form
         return column;
     }
 
+    /// <summary>The least a column can do with: its heading, its count and a few drivers.</summary>
+    private int ColumnLeast => _listTop + LeastRows * _itemHeight;
+
+    /// <summary>
+    /// The columns side by side along the strip, a gap apart, each as tall
+    /// as the strip - less the bar along its bottom when they are too many
+    /// to fit across, so they stop above it and the strip never needs a bar
+    /// down its side as well. Worked out before placing them rather than
+    /// read back from the strip, whose inside only shrinks once the bar has
+    /// arrived. Never shorter than their least: the window scrolls first
+    /// (FillPage), so the strip is not.
+    ///
+    /// From where the strip is scrolled to: a column put at its place in
+    /// the strip's window while the strip was scrolled sideways landed that
+    /// far from where the scrolling expects it.
+    /// </summary>
     private void LayoutColumns()
     {
-        var height = Math.Max(140, _strip.ClientSize.Height - 2);
+        var across = _columns.Count * _columnWidth + Math.Max(0, _columns.Count - 1) * _columnGap;
+        var bar = across > _strip.Width ? SystemInformation.HorizontalScrollBarHeight : 0;
+        var height = Math.Max(ColumnLeast, _strip.Height - bar);
+        var origin = _strip.AutoScrollPosition;
         var x = 0;
+        var moved = false;
 
         foreach (var column in _columns)
         {
-            column.Host.Location = new Point(x, 0);
-            column.Host.Size = new Size(_columnWidth, height);
+            var bounds = new Rectangle(origin.X + x, origin.Y, _columnWidth, height);
 
-            x += _columnWidth + Gap;
+            if (column.Host.Bounds != bounds)
+            {
+                column.Host.Bounds = bounds;
+                moved = true;
+            }
+
+            x += _columnWidth + _columnGap;
+        }
+
+        // And the strip's bars worked out again for the columns as they are
+        // now. It works them out when it lays itself out, which a resize
+        // does before it raises Resize - so with the columns still at the
+        // old height. The window opens at the screen's height and then
+        // shrinks to its own (DialogFit), and the strip was left with bars
+        // for columns twice its height: one down its side scrolling into
+        // nothing, and the width that took putting one along the bottom
+        // too, over the last heat's edge (layout pictures, 29 Sep).
+        if (moved)
+        {
+            _strip.PerformLayout();
         }
     }
 
@@ -475,7 +657,7 @@ public sealed class HeatBalanceForm : Form
             e.Graphics,
             text,
             AppTheme.BodyFont,
-            new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 16, e.Bounds.Height),
+            new Rectangle(e.Bounds.X + _textInset, e.Bounds.Y, e.Bounds.Width - 2 * _textInset, e.Bounds.Height),
             column.Locked ? AppTheme.TextMuted : AppTheme.TextDark,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
@@ -1085,19 +1267,14 @@ public sealed class HeatBalanceForm : Form
         {
             var n = column.List.Items.Count;
 
+            column.Count.Text = CountText(column.IsSpares, column.Locked, column.Round?.IsRecorded == true, n);
+
             if (column.IsSpares)
             {
-                column.Count.Text = n == 1 ? "1 driver sitting out" : $"{n} drivers sitting out";
                 continue;
             }
 
             sizes.Add(n);
-
-            column.Count.Text = column.Locked
-                ? column.Round?.IsRecorded == true
-                    ? $"{Plural.Of(n, "driver")} - recorded, locked"
-                    : $"{Plural.Of(n, "driver")} - on track, locked"
-                : $"{Plural.Of(n, "driver")}";
 
             column.Count.ForeColor = column.Locked ? AppTheme.TextMuted
                 : n == 0 ? AppTheme.Primary

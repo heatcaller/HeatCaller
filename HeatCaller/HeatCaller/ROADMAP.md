@@ -161,16 +161,21 @@ day: the layout overhaul is finished before the beta rather than after it
    Batteries, Track Layouts, Race History, Race Analytics (all six tabs),
    Achievements, Garage, Practice, Ghost Cars, Demo Mode, Venues, Themes,
    Sponsors, Local Screens, Club Website, Voice (four tabs), Sounds (six
-   tabs) and Backup & Restore are done - every page in the sidebar. Left:
-   the race-night dialogs, the drawn controls, deleting `LayoutDoctor`,
-   then `PerMonitorV2`. The dialogs started 29 Sep: `DialogFit` sizes a
-   dialog built on a `FillPage` to its content at the text size in use,
-   never bigger than its screen, and the layout test now checks windows
-   too (`WindowLayoutTests`, `LayoutAudit.ConvertedWindows`, pictures with
-   `layout.cmd`). Done: Corner Marshals, Add Main, Qualifying Standings,
-   Pre-race Check. Next: the message box (`AppDialog`), New Race Day,
-   Round Roster, Race Format, Result Edit, Quick Driver/Class, the Race Day
-   setup wizard, Heat Balance, Sign-ups.
+   tabs) and Backup & Restore are done - every page in the sidebar. The
+   race-night windows are done too (29 Sep): `DialogFit` sizes a dialog
+   built on a `FillPage` to its content at the text size in use, never
+   bigger than its screen, and the layout test checks windows as well as
+   pages (`WindowLayoutTests`, `LayoutAudit.ConvertedWindows`, pictures
+   with `layout.cmd`) - Corner Marshals, Add Main, Qualifying Standings,
+   Pre-race Check, the message box (`AppDialog`), New Race Day, Round
+   Roster and its driver picker, Race Format, Result Edit, the Race Day
+   setup wizard with Quick Class and Quick Driver, Heat Balance, and
+   Sign-ups with its three dialogs: 18 windows. Left: the app's other
+   windows, about 45 dialogs (`LayoutDoctor` still tidies those), the
+   ones a new club meets first ahead of the rest - the first-run wizard,
+   the driver profile, the class editor, rental check-out and the tech
+   inspection; then the drawn controls, deleting `LayoutDoctor`, and
+   `PerMonitorV2` last.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4).
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
@@ -767,6 +772,23 @@ from. Ranked by what decides whether a club switches, and stays.
    column by column Lap Beeps' Class, Cue and on/off columns had kept two
    thirds of their weights (caught by the new grid test).
 
+   **From the race-night windows' pictures (29 Sep):** every one-line
+   text box the theme outlines had the bottom of its "g", "p" and "y" cut
+   off - with its border gone a box sizes itself to `Font.Height`, short of
+   the line GDI draws in (`Pieces.LineHeight`). `InputOutline` now turns
+   AutoSize off on one and gives it the line's height, again on every font
+   change (`KeepLettersWhole`; not a number box's or a grid cell's edit
+   box), and `LayoutAudit` reports a borderless one-line box shorter than
+   that. The test's pictures show Windows' own scrollbars, not the themed
+   ones over them: `DrawToBitmap` draws a container's children in reverse
+   z-order, so a `ThinScrollBar` parked over its target is drawn under
+   it. A panel that places its children by hand in its `Resize`
+   handler has to `PerformLayout` itself afterwards: a resize lays the
+   panel out - and works out its scrollbars - before it raises `Resize`,
+   and `DialogFit` opens a window at the screen's height before shrinking
+   it, so Move drivers between heats kept bars for columns twice its
+   height (`HeatBalanceForm.LayoutColumns`).
+
    **Separately, and small:** a high-contrast theme for a bright room -
    one new theme in the existing theme system.
 9. **Choosing and trusting the HeatCaller voice.** The feature clubs will
@@ -947,7 +969,7 @@ what didn't fit an area:
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
 | A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `StatTile`/`TileStrip`, `TextSize`; `Pieces.KeepHeadingsWhole` for a grid, `Pieces.FitListColumns` for a details-view list. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
-| A dialog that lays itself out | A `FillPage` filling the form - a list in it by `AddFill`, the buttons last in a `ButtonBar(alignRight: true)` - then `DialogFit.Keep(this, page, width, height)` after the theme pass. Add it to `LayoutAudit.ConvertedWindows` and give it a builder with made-up data in `WindowCatalog` (`HeatCaller.Tests\WindowLayoutTests.cs`) in the same change. `MainRoundForm` is the worked example |
+| A dialog that lays itself out | A `FillPage` filling the form - a list in it by `AddFill`, the buttons last in a `ButtonBar(alignRight: true)` - then `DialogFit.Keep(this, page, width, height)` after the theme pass; no height for a dialog as tall as its content, and `DialogFit.Body(page)` for a middle that scrolls on a short screen while the buttons stay. Set the buttons' `TabIndex` - a right-aligned bar reverses them. Work the window's width out from the widths you set, never from a control's `Width` read back once it is in the page: the page's table cuts it to the column it has then, before the window is sized (Quick Driver, 29 Sep). Add it to `LayoutAudit.ConvertedWindows` and give it a builder with made-up data in `WindowCatalog` (`HeatCaller.Tests\WindowCatalog.*.cs`, collected in `WindowLayoutTests.cs`) in the same change. `MainRoundForm` is the worked example; `ApproveSignupForm` for `Body` |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |
 | A data path | `AppPaths` - the one root, redirected to a temp folder under test |

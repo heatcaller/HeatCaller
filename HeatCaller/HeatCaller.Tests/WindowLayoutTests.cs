@@ -86,10 +86,36 @@ public sealed partial class LayoutTests
 /// changes what it shows (a second column set, nothing to list). The name
 /// is the one on LayoutAudit.ConvertedWindows, with how it is filled in
 /// after it in brackets.
+///
+/// Partial: a window's builders can live in a file of their own beside
+/// this one (WindowCatalog.*.cs), each file a method listing its windows,
+/// called from <see cref="Collect"/>. Methods only - no static fields, whose
+/// order across files is not defined.
 /// </summary>
-internal static class WindowCatalog
+internal static partial class WindowCatalog
 {
-    public static IReadOnlyList<(string Name, Func<Form> Build)> All { get; } = new (string, Func<Form>)[]
+    public static IReadOnlyList<(string Name, Func<Form> Build)> All { get; } = Collect();
+
+    /// <summary>Every window, in the order the report lists them.</summary>
+    private static List<(string Name, Func<Form> Build)> Collect()
+    {
+        var all = new List<(string Name, Func<Form> Build)>(FirstWindows);
+
+        all.AddRange(MessageWindows());
+        all.AddRange(NewDayAndRosterWindows());
+        all.AddRange(FormatAndResultWindows());
+        all.AddRange(HeatBalanceWindows());
+        all.AddRange(SignupWindows());
+
+        // Last: some of its windows close the day that is open, which the
+        // windows above do not expect to find closed.
+        all.AddRange(SetupWizardWindows());
+
+        return all;
+    }
+
+    /// <summary>The first windows converted (29 Sep).</summary>
+    private static (string Name, Func<Form> Build)[] FirstWindows => new (string, Func<Form>)[]
     {
         ("Corner Marshals", () => new MarshalAssignmentsForm("Stock Buggy", Marshals(rounds: 4))),
         ("Corner Marshals (none set)", () => new MarshalAssignmentsForm("Stock Buggy", new List<MarshalAssigner.Assignment>())),

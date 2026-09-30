@@ -11,9 +11,19 @@ namespace HeatCaller;
 /// Drivers not in the class are shown too, greyed, because someone turning
 /// up to run a class they're not registered in is common enough that
 /// hiding them entirely just raises the question of where they went.
+///
+/// On the layout pieces (DialogFit): the hint across the top, the drivers
+/// taking the height with their buttons in a column beside them (Beside),
+/// and the count, Save and Cancel at the foot. It used to be placed in
+/// pixels in a 520x540 window whatever the text size: the buttons stepped
+/// down a standard button's height apart, which the theme draws taller at a
+/// larger text size, and the footer at a fixed height from the bottom.
 /// </summary>
 public sealed class RoundRosterForm : Form
 {
+    /// <summary>The drivers show at least this many before the window scrolls instead - or as many as the button column beside them is tall, when that is more.</summary>
+    private const int LeastRows = 4;
+
     private readonly ProfileStore _profiles;
     private readonly CheckedListBox _list = new();
     private readonly Label _lblCount = new();
@@ -27,9 +37,6 @@ public sealed class RoundRosterForm : Form
         Result = round.AssignedTransponders.ToList();
 
         Text = $"Drivers in {round.RoundLabel}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 540);
-        MinimumSize = new Size(420, 420);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
@@ -42,9 +49,12 @@ public sealed class RoundRosterForm : Form
             Font = AppTheme.SmallFont,
         };
 
-        _list.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _list.CheckOnClick = true;
         _list.BackColor = AppTheme.Surface;
+
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+        _list.IntegralHeight = false;
+
         _list.ItemCheck += (_, _) =>
         {
             // ItemCheck fires before the state flips, so the count has to be
@@ -93,10 +103,10 @@ public sealed class RoundRosterForm : Form
         btnAddOther.Click += (_, _) => AddDriverFromOutsideClass();
 
         _lblCount.AutoSize = true;
-        _lblCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        _lblCount.Font = AppTheme.BodyFont;
         _lblCount.ForeColor = AppTheme.TextMuted;
 
-        var btnSave = new Button { Text = "Save", Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var btnSave = new Button { Text = "Save" };
         btnSave.Click += (_, _) =>
         {
             Result = _list.CheckedItems.Cast<RosterItem>().Select(i => i.Transponder).ToList();
@@ -104,64 +114,40 @@ public sealed class RoundRosterForm : Form
             Close();
         };
 
-        var btnCancel = new Button { Text = "Cancel", Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.AddRange(new Control[]
-        {
-            lblHint, _list, btnUp, btnDown, btnAll, btnNone, btnAddOther, _lblCount, btnSave, btnCancel,
-        });
-
-        // --- Layout, measured ---
+        // --- Layout ---
         //
-        // Every button here used to sit at a remembered y - 58, 96, 146, 184,
-        // 234 - which was cut for a shorter button than the theme draws, so
-        // the pairs touched and the gaps between the groups came out
-        // uneven. Now one column, one width, the list's top edge as its
-        // top edge: two buttons to a group, a fixed gap inside a group and a
-        // wider one between them.
-        var width = ClientSize.Width - UiLayout.PageLeft - UiLayout.PageRight;
+        // The buttons in one column down the right of the list, all as wide
+        // as the widest caption needs, two to a group: a button's gap inside
+        // a group and a section's between groups. The list takes the width
+        // the column leaves and the height down to the footer.
+        var roster = new Beside();
+        roster.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+        roster.AddSide(btnUp, gapBelow: UiLayout.ButtonGap);
+        roster.AddSide(btnDown, gapBelow: UiLayout.SectionGap);
+        roster.AddSide(btnAll, gapBelow: UiLayout.ButtonGap);
+        roster.AddSide(btnNone, gapBelow: UiLayout.SectionGap);
+        roster.AddSide(btnAddOther, gapBelow: 0);
 
-        lblHint.MaximumSize = new Size(width, 0);
-        lblHint.Location = new Point(UiLayout.PageLeft, UiLayout.PageTop);
+        // The footer: the count on the left, Save and Cancel against the
+        // right-hand edge, Cancel furthest right - on one line (SplitBar;
+        // see the width given to DialogFit.Keep below). Tab still reaches
+        // Save before Cancel, as it did: the bar takes them right to left,
+        // in the order they were added.
+        var footer = new SplitBar(
+            new ButtonBar().With(_lblCount),
+            new ButtonBar(alignRight: true).With(btnCancel, btnSave));
 
-        var column = new[] { btnUp, btnDown, btnAll, btnNone, btnAddOther };
-        var columnWidth = column.Max(UiLayout.WidthFor);
-        var columnLeft = ClientSize.Width - UiLayout.PageRight - columnWidth;
-        var top = UiLayout.Below(lblHint, UiLayout.RowGap);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        var y = top;
+        var page = new FillPage();
+        page.Add(lblHint, gapBelow: UiLayout.RowGap);
+        page.AddFill(roster, roster.LeastHeight);
+        page.Add(footer, gapBelow: 0);
 
-        foreach (var group in new[] { new[] { btnUp, btnDown }, new[] { btnAll, btnNone }, new[] { btnAddOther } })
-        {
-            foreach (var button in group)
-            {
-                button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-                button.Bounds = new Rectangle(columnLeft, y, columnWidth, UiLayout.ButtonHeight);
-                y += UiLayout.ButtonHeight + UiLayout.ButtonGap;
-            }
-
-            y += UiLayout.SectionGap - UiLayout.ButtonGap;
-        }
-
-        // The footer: the count on the left, Save and Cancel on the right.
-        var footerY = ClientSize.Height - UiLayout.PageTop - UiLayout.ButtonHeight;
-
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(ClientSize.Width - UiLayout.PageRight - btnCancel.Width, footerY);
-
-        btnSave.Size = new Size(UiLayout.WidthFor(btnSave), UiLayout.ButtonHeight);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnSave.Width, footerY);
-
-        _lblCount.Font = AppTheme.BodyFont;
-        _lblCount.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(_lblCount, footerY, UiLayout.ButtonHeight));
-
-        // The list fills what is left: from the hint to the footer, and up
-        // to the button column.
-        _list.Bounds = new Rectangle(
-            UiLayout.PageLeft,
-            top,
-            columnLeft - UiLayout.SectionGap - UiLayout.PageLeft,
-            footerY - UiLayout.SectionGap - top);
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
@@ -172,6 +158,12 @@ public sealed class RoundRosterForm : Form
         // Unticks, nothing more - Cancel still undoes it. The theme reads
         // "Clear" as destructive and painted it red, which it is not.
         AppTheme.StyleButton(btnNone, AppTheme.ButtonKind.Secondary);
+
+        // Wider than the 520 it was made at: at 520 the count, Save and
+        // Cancel came to about 502px in a line of 488 at the normal text
+        // size, and Save and Cancel went onto a line of their own. The
+        // height it had.
+        DialogFit.Keep(this, page, width: 560, height: 540);
     }
 
     private string LookupName(string transponder, IReadOnlyList<DriverProfile> roster)
@@ -243,43 +235,21 @@ public sealed class RoundRosterForm : Form
             return;
         }
 
-        using var picker = new Form
+        using var picker = new DriverPicker(candidates);
+
+        if (picker.ShowDialog(this) == DialogResult.OK && picker.Chosen is { } chosen)
         {
-            Text = "Add a driver to this round",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(360, 380),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-        };
-
-        var pickList = new ListBox { Location = new Point(12, 12), Size = new Size(336, 300), BackColor = AppTheme.Surface };
-        foreach (var driver in candidates)
-        {
-            pickList.Items.Add(new RosterItem(driver.Transponder,
-                string.IsNullOrWhiteSpace(driver.DriverName) ? "(unnamed)" : driver.DriverName,
-                InClass: false));
-        }
-        pickList.SelectedIndex = 0;
-
-        var ok = new Button { Text = "Add", Location = new Point(166, 326), Width = 84, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(258, 326), Width = 90, DialogResult = DialogResult.Cancel };
-
-        picker.Controls.AddRange(new Control[] { pickList, ok, cancel });
-        picker.AcceptButton = ok;
-        picker.CancelButton = cancel;
-
-        AppTheme.ApplyRecursively(picker);
-
-        if (picker.ShowDialog(this) == DialogResult.OK && pickList.SelectedItem is RosterItem chosen)
-        {
-            _list.Items.Add(chosen, isChecked: true);
+            _list.Items.Add(OutsideClass(chosen), isChecked: true);
             _list.SelectedIndex = _list.Items.Count - 1;
             UpdateCount();
         }
     }
+
+    /// <summary>A driver from outside the class, as the lists here show them - "(unnamed)" for one with no name.</summary>
+    private static RosterItem OutsideClass(DriverProfile driver) =>
+        new(driver.Transponder,
+            string.IsNullOrWhiteSpace(driver.DriverName) ? "(unnamed)" : driver.DriverName,
+            InClass: false);
 
     private sealed record RosterItem(string Transponder, string Name, bool InClass)
     {
@@ -294,5 +264,96 @@ public sealed class RoundRosterForm : Form
 
             return InClass ? $"{Name}   [{Transponder}]" : $"{Name}   [{Transponder}]  (not in this class)";
         }
+    }
+
+    /// <summary>
+    /// The window Add Driver... opens: the saved drivers who are not listed
+    /// yet, to pick one to add - see AddDriverFromOutsideClass. A class of
+    /// its own rather than built inside that method, and internal, so the
+    /// layout test can build it (WindowCatalog) without a click.
+    ///
+    /// On the layout pieces (DialogFit): the drivers taking the height, and
+    /// Add and Cancel at the foot, as wide as the longest name needs. It
+    /// used to be built in pixels in a 360x380 window - a list of a fixed
+    /// height, and the two buttons at fixed places and widths under it,
+    /// Cancel narrower than its caption at a larger text size.
+    /// </summary>
+    internal sealed class DriverPicker : Form
+    {
+        /// <summary>The drivers show at least this many before the window scrolls instead.</summary>
+        private const int LeastRows = 4;
+
+        private readonly IReadOnlyList<DriverProfile> _candidates;
+        private readonly ListBox _list = new();
+
+        /// <param name="candidates">The drivers to offer, in the order to list them. The first is selected.</param>
+        public DriverPicker(IReadOnlyList<DriverProfile> candidates)
+        {
+            _candidates = candidates;
+
+            Text = "Add a driver to this round";
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
+
+            _list.BackColor = AppTheme.Surface;
+
+            // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+            _list.IntegralHeight = false;
+
+            // In the order given, so a row's index is the candidate's - see Chosen.
+            foreach (var driver in candidates)
+            {
+                _list.Items.Add(OutsideClass(driver));
+            }
+
+            if (_list.Items.Count > 0)
+            {
+                _list.SelectedIndex = 0;
+            }
+
+            var ok = new Button { Text = "Add", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            var page = new FillPage();
+            page.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+
+            // Against the right-hand edge, Cancel furthest right, as a
+            // dialog's buttons go - and Tab still reaches Add first, as it
+            // did: the bar takes them right to left, in the order added.
+            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            // The width it was made at, at the text size in use - or wider,
+            // up to the screen, for the longest name on the list: at 360px a
+            // long name ran off the list's edge, its transponder number and
+            // "(not in this class)" with it (layout pictures, 29 Sep).
+            // Measured in the face the theme pass left, with room for the
+            // list's scrollbar, its edge and a little either side of the text.
+            var widest = _list.Items.Cast<object>()
+                .Take(400)
+                .Select(item => TextRenderer.MeasureText(_list.GetItemText(item) ?? string.Empty, _list.Font).Width)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var width = Math.Max(
+                UiLayout.AtTextSize(360),
+                UiLayout.PageLeft + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
+
+            DialogFit.Keep(this, page, width: width, height: 380, widthMeasured: true);
+        }
+
+        /// <summary>The driver picked, or null for none. Only meaningful after DialogResult.OK.</summary>
+        public DriverProfile? Chosen =>
+            _list.SelectedIndex >= 0 && _list.SelectedIndex < _candidates.Count
+                ? _candidates[_list.SelectedIndex]
+                : null;
     }
 }

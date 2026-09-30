@@ -14,12 +14,16 @@ namespace HeatCaller;
 /// Built this way instead: the dialog's content is a FillPage - each part as
 /// tall as it needs, the list (when there is one) taking the height left -
 /// with the dialog's buttons as its last part, so they stay in view and a
-/// window too short for the rest scrolls it instead. <see cref="Keep"/> then
-/// sizes the window as it opens: a width chosen at the normal text size and
-/// followed at the size in use, and either the height the content needs at
-/// that width or, for a dialog with a list, the height asked for - never
-/// less than the least the content can do with, and neither ever more than
-/// the screen the dialog opens on. And it opens centred over its owner.
+/// window too short for the rest scrolls it instead. A dialog with no list
+/// but a lot to say puts what it says in a <see cref="Body"/>, which takes
+/// the list's place: the window opens as tall as all of it, and on a screen
+/// too short for that, the body scrolls and the buttons stay in view.
+/// <see cref="Keep"/> then sizes the window as it opens: a width chosen at
+/// the normal text size and followed at the size in use (or one the dialog
+/// measured itself), and the height the content needs at that width - or,
+/// for a dialog with a list, the height asked for - never less than the
+/// least the content can do with, and neither ever more than the screen the
+/// dialog opens on. And it opens centred over its owner.
 ///
 /// The dialog is built at the text size in use when it opens - it is
 /// short-lived, so it is not kept in step with a change made while it is up.
@@ -38,8 +42,11 @@ internal static class DialogFit
     /// <summary>Room kept between a dialog and the edges of its screen.</summary>
     private const int ScreenMargin = 24;
 
-    /// <summary>What a dialog given Keep is sized to: its page, and the width and height asked for.</summary>
-    private sealed record Fitting(FillPage Page, int Width, int? Height);
+    /// <summary>A body's least height at the normal text size - a few lines - below which the window scrolls instead.</summary>
+    private const int BodyLeast = 120;
+
+    /// <summary>What a dialog given Keep is sized to: its page, the width and height asked for, its body if it has one, and whether the width is already at the text size in use.</summary>
+    private sealed record Fitting(FillPage Page, int Width, int? Height, PageStack? Body, bool WidthMeasured);
 
     private static readonly ConditionalWeakTable<Form, Fitting> Fittings = new();
 
@@ -56,17 +63,39 @@ internal static class DialogFit
     /// its content can do with. It can be resized, down to that least. Null
     /// for a dialog as tall as its content, which cannot be.
     /// </param>
-    public static void Keep(Form dialog, FillPage page, int width, int? height = null)
+    /// <param name="body">
+    /// For a dialog as tall as its content, the <see cref="Body"/> the
+    /// content is in: the window is sized to show all of it.
+    /// </param>
+    /// <param name="widthMeasured">
+    /// True when <paramref name="width"/> is already at the text size in
+    /// use - measured by the dialog from what it holds - rather than a width
+    /// at the normal text size to be followed.
+    /// </param>
+    /// <param name="frameless">
+    /// No frame at all - a dialog that draws its own edge and title, as the
+    /// message box does. It cannot be resized.
+    /// </param>
+    public static void Keep(
+        Form dialog,
+        FillPage page,
+        int width,
+        int? height = null,
+        PageStack? body = null,
+        bool widthMeasured = false,
+        bool frameless = false)
     {
         dialog.AutoScaleMode = AutoScaleMode.None;
         dialog.StartPosition = FormStartPosition.Manual;
         dialog.MinimizeBox = false;
         dialog.ShowInTaskbar = false;
-        dialog.FormBorderStyle = height is null ? FormBorderStyle.FixedDialog : FormBorderStyle.Sizable;
+        dialog.FormBorderStyle = frameless
+            ? FormBorderStyle.None
+            : height is null ? FormBorderStyle.FixedDialog : FormBorderStyle.Sizable;
 
         // One that can be resized can be made as big as the screen - a list
         // of eleven columns wants all the width there is.
-        dialog.MaximizeBox = height is not null;
+        dialog.MaximizeBox = height is not null && !frameless;
 
         // Its own layout, nothing for the doctor to straighten - see
         // LayoutDoctor.Watch, which every dialog is given by the theme pass.
@@ -78,8 +107,33 @@ internal static class DialogFit
         // buttons it was a blank band, the page's own margin and 32px more.
         LayoutDoctor.NoRoomBelow(page);
 
-        Fittings.AddOrUpdate(dialog, new Fitting(page, width, height));
+        Fittings.AddOrUpdate(dialog, new Fitting(page, width, height, body, widthMeasured));
         dialog.Load += (_, _) => Fit(dialog);
+    }
+
+    /// <summary>
+    /// A column for what a dialog says, taking the page's height above its
+    /// buttons: give it to <see cref="Keep"/> as the body, and the window
+    /// opens as tall as all of it. On a screen too short for that, it
+    /// scrolls on its own - down to a few lines - and the buttons under it
+    /// stay in view. Add the dialog's parts to it as to any PageStack, and
+    /// the buttons to the page after it.
+    /// </summary>
+    public static PageStack Body(FillPage page, int gapBelow = UiLayout.SectionGap)
+    {
+        // The page gives the margins; nothing under the last part, for the
+        // reason Keep gives the page none.
+        var body = new PageStack { Padding = Padding.Empty };
+        LayoutDoctor.NoRoomBelow(body);
+
+        page.AddFill(
+            body,
+            _ => body.ContentHeight > 0
+                ? Math.Min(body.ContentHeight, UiLayout.AtTextSize(BodyLeast))
+                : UiLayout.AtTextSize(BodyLeast),
+            gapBelow);
+
+        return body;
     }
 
     /// <summary>
@@ -100,13 +154,17 @@ internal static class DialogFit
         var most = Most(area, frame);
         var (clientWidth, least) = SizeClient(dialog, fitting, most);
 
-        if (fitting.Height is not null)
+        if (fitting.Height is not null && dialog.FormBorderStyle != FormBorderStyle.None)
         {
-            // Resizable, down to the least the content can do with - or to
-            // the screen, when the screen is shorter; a page shorter than
-            // its least scrolls rather than squash the list (FillPage).
+            // Resizable: wider, and taller or shorter - down to the least
+            // the content can do with, or to the screen when the screen is
+            // shorter (a page shorter than its least scrolls rather than
+            // squash the list; FillPage). Never narrower than it opened:
+            // what is in it was measured for that width, and a field grid
+            // or a rail of steps made narrower runs past the edge - the
+            // page scrolls down, never sideways.
             dialog.MinimumSize = new Size(
-                frame.Width + Math.Min(clientWidth, UiLayout.AtTextSize(Math.Min(fitting.Width, 360))),
+                frame.Width + clientWidth,
                 frame.Height + Math.Min(least, most.Height));
         }
 
@@ -128,36 +186,48 @@ internal static class DialogFit
     /// </summary>
     private static (int Width, int Least) SizeClient(Control client, Fitting fitting, Size most)
     {
-        var clientWidth = Math.Min(UiLayout.AtTextSize(fitting.Width), most.Width);
+        var clientWidth = Math.Min(
+            fitting.WidthMeasured ? fitting.Width : UiLayout.AtTextSize(fitting.Width),
+            most.Width);
+
+        // Room the dialog keeps round the page - the message box's, for the
+        // rim it paints round its edge. The page is that much smaller than
+        // the inside of the window.
+        var inset = client.Padding;
 
         // The width first, at the most height there is, and laid out: a
         // field grid learns the height its rows really come to only by
         // laying them out (FieldGrid.GetPreferredSize), and the least the
-        // page can do with is worked out from them. Then the height, and
-        // again until it stays put - three times at most, so a page that
-        // could not settle cannot hang the dialog opening.
+        // page can do with - and a body, how tall its content is - is worked
+        // out from them. Then the height, and again until it stays put -
+        // three times at most, so a page that could not settle cannot hang
+        // the dialog opening.
         client.ClientSize = new Size(clientWidth, most.Height);
         client.PerformLayout();
 
-        var least = fitting.Page.LeastHeight(clientWidth);
+        var least = fitting.Page.LeastHeight(clientWidth - inset.Horizontal) + inset.Vertical;
 
         for (var again = 0; again < 3; again++)
         {
-            var clientHeight = Math.Min(
-                fitting.Height is int asked ? Math.Max(UiLayout.AtTextSize(asked), least) : least,
-                most.Height);
+            var wanted = fitting.Height is int asked
+                ? Math.Max(UiLayout.AtTextSize(asked), least)
+                : fitting.Body is { } body
+                    // All of the body: the room the rest of the page leaves
+                    // it now, less what it has, plus what it needs.
+                    ? Math.Max(least, client.ClientSize.Height - body.Height + body.ContentHeight)
+                    : least;
 
-            client.ClientSize = new Size(clientWidth, clientHeight);
-            client.PerformLayout();
+            var clientHeight = Math.Min(wanted, most.Height);
 
-            var now = fitting.Page.LeastHeight(clientWidth);
-
-            if (now == least)
+            if (clientHeight == client.ClientSize.Height && again > 0)
             {
                 break;
             }
 
-            least = now;
+            client.ClientSize = new Size(clientWidth, clientHeight);
+            client.PerformLayout();
+
+            least = fitting.Page.LeastHeight(clientWidth - inset.Horizontal) + inset.Vertical;
         }
 
         return (clientWidth, least);
@@ -186,6 +256,7 @@ internal static class DialogFit
         client.Font = dialog.Font;
         client.BackColor = dialog.BackColor;
         client.ForeColor = dialog.ForeColor;
+        client.Padding = dialog.Padding;
         client.Controls.Add(fitting.Page);
 
         // The frame for its border, worked out the way Windows works it out

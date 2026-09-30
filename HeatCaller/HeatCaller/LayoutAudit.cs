@@ -150,6 +150,51 @@ internal static class LayoutAudit
 
         // Whether every car in the race is being heard (ReadinessCheckForm).
         "Pre-race Check",
+
+        // The app's own message box (AppDialog), for every message it shows.
+        "Message",
+
+        // What kind of night it is and which classes are racing (NewRaceDayForm).
+        "Start a Race Day",
+
+        // Who is in a round and in what order (RoundRosterForm).
+        "Drivers in Round",
+
+        // The saved drivers to add to a round from outside its class (RoundRosterForm.DriverPicker).
+        "Add a Driver to This Round",
+
+        // A race format - the app default, a class's or a round's - or the default it follows (RaceFormatForm).
+        "Race Format",
+
+        // A saved race's result corrected, and the new order it makes (ResultEditForm).
+        "Edit Result",
+
+        // A class's heats side by side, drivers dragged between them (HeatBalanceForm).
+        "Move drivers between heats",
+
+        // Online sign-up: the switch, the sign-ups waiting and the invites (SignupsForm).
+        "Online Sign-ups",
+
+        // One sign-up checked before it becomes a driver (ApproveSignupForm, titled "Approve <name>").
+        "Approve",
+
+        // Who to email a sign-up code to (InviteDriversForm).
+        "Invite Drivers",
+
+        // Why a sign-up is turned down (SignupReasonForm, titled "Turn Down <name>").
+        "Turn Down",
+
+        // Who a code made at the desk is for (SignupReasonForm).
+        "Code for Someone Here",
+
+        // Set Up Tonight at each of its steps: the rail beside the step and its footer (RaceDaySetupWizard).
+        "Set Up Tonight",
+
+        // A new class's name, from Set Up Tonight's Add Class... (QuickClassForm).
+        "Add a class",
+
+        // A new driver's name, transponder and class, from Set Up Tonight's and Who's Racing's Add Driver... (QuickDriverForm).
+        "Add a driver",
     };
 
     /// <summary>
@@ -328,6 +373,9 @@ internal static class LayoutAudit
                 break;
             case NumericUpDown number:
                 CheckNumber(number, where, findings);
+                break;
+            case TextBox { Multiline: false, BorderStyle: BorderStyle.None } box:
+                CheckTextBox(box, where, findings);
                 break;
             case TabControl tabs:
                 CheckTabs(tabs, where, findings);
@@ -524,6 +572,30 @@ internal static class LayoutAudit
         {
             findings.Add(new Finding(where, TooNarrow,
                 $"{Describe(combo)} is {combo.Width}px wide and \"{Short(widestText)}\" needs {widest + combo.Width - room}px{In(combo.Parent)}"));
+        }
+    }
+
+    /// <summary>
+    /// A box of one line with no border - every one the theme outlines -
+    /// shorter than the line Windows draws its text in cuts the bottom off
+    /// its letters: a "g", "p" or "y" loses its tail. It sizes itself to
+    /// Font.Height, which for this app's typeface is short of that line, so
+    /// the theme gives it its height (InputOutline.KeepLettersWhole). Empty
+    /// or not: what is typed into it later is cut just the same. What it
+    /// holds is left out of the report when the box hides it.
+    /// </summary>
+    private static void CheckTextBox(TextBox box, string where, List<Finding> findings)
+    {
+        var needed = Pieces.LineHeight(box.Font);
+
+        if (box.ClientSize.Height < needed)
+        {
+            var what = box.UseSystemPasswordChar || box.PasswordChar != '\0'
+                ? $"{box.GetType().Name} (hidden text)"
+                : Describe(box);
+
+            findings.Add(new Finding(where, CutOff,
+                $"{what} is {box.ClientSize.Height}px tall and its letters need {needed}px{In(box.Parent)}"));
         }
     }
 

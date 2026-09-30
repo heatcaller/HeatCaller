@@ -14,9 +14,35 @@ namespace HeatCaller;
 /// is the caller's job (see RaceHistoryControl.EditSelectedResult), exactly
 /// as every other editor dialog in this app hands its result back rather
 /// than writing it itself.
+///
+/// On the layout pieces (DialogFit): the note on how corrections work
+/// across the top, the corrections and the new order under it sharing the
+/// height, then the reason beside its caption, what the correction comes to
+/// under that, and Save Correction and Cancel at the foot. It used to be
+/// placed in pixels in a 920x660 window: the note, the two grids, the
+/// reason with the buttons beside it and the summary each at a fixed
+/// place, so at a larger text size the note ran into the grid under it and
+/// the reason's caption into its box.
 /// </summary>
 public sealed class ResultEditForm : Form
 {
+    /// <summary>
+    /// Each grid shows its headings and at least this many drivers before
+    /// the window scrolls instead. Two grids share the height, so two each:
+    /// at three, the least works out at about all the height a 1280x720
+    /// screen leaves the window, which would open it scrolling. Opened, each
+    /// still shows three or more.
+    /// </summary>
+    private const int LeastRows = 2;
+
+    /// <summary>
+    /// Lines kept for the summary under the reason, so the "no changes yet",
+    /// an error and a line of changes can take each other's place without
+    /// moving anything. A longer list of changes still grows it, and the
+    /// grids give it the room.
+    /// </summary>
+    private const int SummaryLines = 2;
+
     private readonly SessionRecord _session;
     private readonly DataGridView _editGrid = new();
     private readonly DataGridView _previewGrid = new();
@@ -41,21 +67,23 @@ public sealed class ResultEditForm : Form
         _session = session;
 
         Text = $"Edit Result - {(string.IsNullOrWhiteSpace(session.Label) ? "Untitled session" : session.Label)}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(920, 660);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        BuildLayout();
+        var page = BuildLayout();
         RefreshPreview();
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_editGrid);
+        Pieces.KeepHeadingsWhole(_previewGrid);
+
+        DialogFit.Keep(this, page, width: 920, height: 660);
     }
 
-    private void BuildLayout()
+    /// <summary>The page, top to bottom, with the two grids sharing the height the rest leave. Returns it, for DialogFit.</summary>
+    private FillPage BuildLayout()
     {
         var lblIntro = new Label
         {
@@ -63,17 +91,13 @@ public sealed class ResultEditForm : Form
                  + "setting everything back to zero and Finished gives the original result back. Qualifying, the "
                  + "mains, the championship and the results pages all read the corrected figures from here on. "
                  + "Badges already earned for this race are not re-evaluated.",
-            Location = new Point(16, 16),
             AutoSize = true,
-            MaximumSize = new Size(888, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        var lblEdit = new Label { Text = "Corrections", Location = new Point(16, 76), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblEdit = new Label { Text = "Corrections", AutoSize = true, Font = AppTheme.BoldFont };
 
-        _editGrid.Location = new Point(16, 102);
-        _editGrid.Size = new Size(888, 210);
         _editGrid.AllowUserToAddRows = false;
         _editGrid.AllowUserToDeleteRows = false;
         _editGrid.RowHeadersVisible = false;
@@ -137,10 +161,8 @@ public sealed class ResultEditForm : Form
             }
         };
 
-        var lblPreview = new Label { Text = "New order", Location = new Point(16, 328), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblPreview = new Label { Text = "New order", AutoSize = true, Font = AppTheme.BoldFont };
 
-        _previewGrid.Location = new Point(16, 354);
-        _previewGrid.Size = new Size(888, 180);
         _previewGrid.ReadOnly = true;
         _previewGrid.AllowUserToAddRows = false;
         _previewGrid.AllowUserToDeleteRows = false;
@@ -156,32 +178,49 @@ public sealed class ResultEditForm : Form
             new DataGridViewTextBoxColumn { Name = "outcome", HeaderText = "Outcome", FillWeight = 50 },
             new DataGridViewTextBoxColumn { Name = "moved", HeaderText = "", FillWeight = 45 });
 
-        var lblReason = new Label { Text = "Reason (required, kept with the result):", Location = new Point(16, 546), AutoSize = true };
-        _txtReason.Location = new Point(16, 570);
-        _txtReason.Size = new Size(660, 26);
+        // The reason beside its caption, the box running to the right-hand
+        // edge.
         _txtReason.MaxLength = 200;
         _txtReason.TextChanged += (_, _) => UpdateSaveEnabled();
 
-        _lblSummary.Location = new Point(16, 602);
+        var reason = new FieldGrid();
+        reason.AddRow("Reason (required, kept with the result):", _txtReason, stretch: true);
+
         _lblSummary.AutoSize = true;
-        _lblSummary.MaximumSize = new Size(888, 0);
         _lblSummary.ForeColor = AppTheme.TextMuted;
         _lblSummary.Font = AppTheme.SmallFont;
+
+        // In the face it wears - see SummaryLines.
+        _lblSummary.MinimumSize = new Size(0, SummaryLines * Pieces.LineHeight(_lblSummary.Font) + _lblSummary.Padding.Vertical);
 
         _btnSave.Enabled = false;
         _btnSave.Click += (_, _) => Save();
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        AppTheme.LayoutButtonRow(700, 568, 8, _btnSave, btnCancel);
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, lblEdit, _editGrid, lblPreview, _previewGrid,
-            lblReason, _txtReason, _lblSummary, _btnSave, btnCancel,
-        });
+        var page = new FillPage();
+
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(lblEdit, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_editGrid, _ => _editGrid.ColumnHeadersHeight + LeastRows * _editGrid.RowTemplate.Height + 2);
+        page.Add(lblPreview, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_previewGrid, _ => _previewGrid.ColumnHeadersHeight + LeastRows * _previewGrid.RowTemplate.Height + 2);
+        page.Add(reason, gapBelow: UiLayout.RowGap);
+        page.Add(_lblSummary);
+
+        // Against the right-hand edge, Cancel furthest right, as a dialog's
+        // buttons go - and Tab still reaches Save Correction first, as it
+        // did: the bar takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnSave), gapBelow: 0);
+        _btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = _btnSave;
         CancelButton = btnCancel;
+
+        return page;
     }
 
     /// <summary>"Finished", "DNF" or "DQ" - matching the Outcome column's own items exactly, so a cell's text can be read straight back as one of them.</summary>

@@ -151,9 +151,32 @@ public sealed class RaceFormat
 /// One form rather than three, because the moment there are two copies of
 /// a twelve-field editor they disagree about a clamp or a caption and the
 /// same format means different things depending on where it was typed.
+///
+/// On the layout pieces (DialogFit): the "custom format" tick at the top,
+/// the fields under it in one field grid - the captions in a column as wide
+/// as the longest of them, the note on the start types and the two ticks
+/// across both columns - or, in their place while the default is followed,
+/// the sentence about the default; then OK and Cancel at the foot. All but
+/// the buttons is the window's body, which scrolls on a screen too short
+/// for it. It used to be placed in pixels: the fields at a fixed x that gave
+/// way to a longer caption, the window as wide as its widest row and as
+/// tall as its last, and nothing to stop that running off a small screen
+/// with OK and Cancel under it.
 /// </summary>
 public sealed class RaceFormatForm : Form
 {
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size.
+    ///
+    /// The old one worked 538 out for itself - its widest row, the stagger
+    /// gap and its clock, ended at 522, and a page margin past that - with
+    /// the start types in a 200px box, too narrow for the longest of them.
+    /// Measured, that box needs about 305px, and this leaves it that beside
+    /// the captions with the body's scrollbar showing, on a screen too short
+    /// for all the fields.
+    /// </summary>
+    private const int DialogWidth = 560;
+
     /// <summary>
     /// The edited format, or null for "use the default" - only ever null
     /// when the form was opened with a default to fall back to.
@@ -181,7 +204,7 @@ public sealed class RaceFormatForm : Form
     private readonly Label _lblFollowing = new();
 
     /// <summary>Everything that only exists for a custom format - hidden outright when following the default, because a page of disabled ghost text reads as broken, not as off.</summary>
-    private readonly List<Control> _customControls = new();
+    private readonly FieldGrid _fields = new();
 
     private readonly RaceFormat? _fallback;
 
@@ -204,16 +227,16 @@ public sealed class RaceFormatForm : Form
         _fallback = fallback;
 
         Text = title;
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
 
         var seed = current?.Clone() ?? new RaceFormat();
 
-        BuildLayout(seed, current is not null);
+        var (page, body) = BuildLayout(seed, current is not null);
         AppTheme.ApplyRecursively(this);
+
+        // The fields' widths, measured in the faces the theme pass leaves
+        // them in.
+        SizeFields();
 
         // One full repaint after everything has settled. The theme pass
         // recreates the combos' handles (owner-draw changes do that) and
@@ -223,110 +246,71 @@ public sealed class RaceFormatForm : Form
         // the two dropdowns here. Invalidate(true) at Shown redraws the
         // form and every child once, after the last of that has happened.
         Shown += (_, _) => Invalidate(true);
+
+        DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
 
-    private void BuildLayout(RaceFormat seed, bool startsCustom)
+    /// <summary>
+    /// The page: the fields, or the sentence about the default, in the body,
+    /// and the buttons under it. Returns both, for DialogFit.
+    /// </summary>
+    private (FillPage Page, PageStack Body) BuildLayout(RaceFormat seed, bool startsCustom)
     {
-        var y = UiLayout.PageTop;
+        var page = new FillPage();
+
+        // Everything but the buttons: on a screen too short for all the
+        // fields, they scroll and OK and Cancel stay in view.
+        var body = DialogFit.Body(page);
 
         if (_allowUseDefault)
         {
             _chkCustom.Text = "Use a custom format (untick to follow the app default)";
             _chkCustom.AutoSize = true;
-            _chkCustom.Font = AppTheme.BodyFont;
             _chkCustom.Checked = startsCustom;
-            _chkCustom.Location = new Point(UiLayout.PageLeft, y);
             _chkCustom.CheckedChanged += (_, _) => SetCustomVisible(_chkCustom.Checked);
-            Controls.Add(_chkCustom);
+            body.Add(_chkCustom, stretch: false, gapBelow: UiLayout.RowGap);
 
-            y = UiLayout.Below(_chkCustom, UiLayout.RowGap);
-
-            // Sits where the field rows sit; the two are never visible at
-            // once, so they can share the space.
+            // Sits where the fields sit; the two are never visible at once,
+            // so they take turns in the same place. Nothing is under it while
+            // it shows, so no gap either.
             _lblFollowing.AutoSize = true;
-            _lblFollowing.Font = AppTheme.BodyFont;
             _lblFollowing.ForeColor = AppTheme.TextMuted;
-            _lblFollowing.MaximumSize = new Size(430, 0);
-            _lblFollowing.Location = new Point(UiLayout.PageLeft, y);
             _lblFollowing.Text = _fallback is null
                 ? "Following the app default. Tick the box above to give this a format of its own."
                 : "Following the app default:\n\n" + _fallback.Describe()
                   + "\n\nTick the box above to give this a format of its own.";
 
-            Controls.Add(_lblFollowing);
+            body.Add(_lblFollowing, gapBelow: 0);
         }
 
-        // A caption and its field on one row, flowing downward. Every
-        // control is measured in the font it will be drawn in - see the
-        // Check-In rewrite for what happens otherwise.
-        //
-        // The field column starts at a shared x but gives way to a caption
-        // that needs more - a fixed column against these captions is how
-        // the old panel ended up with "Lap limit" and the rest cut off.
-        // The dialog's own width is settled at the end from the widest row.
-        var widest = 0;
-
-        int Row(string caption, Control field, Control? trailing = null)
-        {
-            var lbl = new Label { Text = caption, AutoSize = true, Font = AppTheme.BodyFont };
-
-            lbl.Location = new Point(UiLayout.PageLeft, y);
-
-            field.Font = AppTheme.BodyFont;
-            field.Location = new Point(Math.Max(250, UiLayout.After(lbl)), y);
-            lbl.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lbl, y, field.Height));
-
-            Controls.Add(lbl);
-            Controls.Add(field);
-            _customControls.Add(lbl);
-            _customControls.Add(field);
-
-            widest = Math.Max(widest, field.Right);
-
-            if (trailing is not null)
-            {
-                trailing.Font = AppTheme.BodyFont;
-                trailing.Location = trailing is CheckBox or Label
-                    ? new Point(UiLayout.After(field) + 4, UiLayout.CentreOn(trailing, y, field.Height))
-                    : new Point(UiLayout.After(field) + 4, y);
-                Controls.Add(trailing);
-                _customControls.Add(trailing);
-
-                widest = Math.Max(widest, trailing.Right);
-            }
-
-            y = UiLayout.Below(field, UiLayout.RowGap);
-
-            return y;
-        }
-
-        _numLapLimit.Width = 70;
+        // A caption and its field on each row. The captions share one
+        // column, as wide as the longest of them at the text size in use -
+        // a fixed column against these captions is how the old panel ended
+        // up with "Lap limit" and the rest cut off - and the fields line up
+        // beside them. Their widths are set after the theme pass
+        // (SizeFields).
         _numLapLimit.Maximum = 9999;
         _numLapLimit.Value = Math.Clamp(seed.LapLimit, 0, 9999);
-        Row("Lap limit (0 = none):", _numLapLimit);
+        _fields.AddRow("Lap limit (0 = none):", _numLapLimit);
 
-        _numTimeLimit.Width = 70;
         _numTimeLimit.Maximum = 180;
         _numTimeLimit.Value = Math.Clamp(seed.TimeLimitMinutes, 0, 180);
-        Row("Time limit, min (0 = none):", _numTimeLimit);
+        _fields.AddRow("Time limit, min (0 = none):", _numTimeLimit);
 
-        _numMinLap.Width = 80;
         _numMinLap.Minimum = 100;
         _numMinLap.Maximum = 60000;
         _numMinLap.Increment = 100;
         _numMinLap.Value = Math.Clamp(seed.MinLapTimeMs, 100, 60000);
-        Row("Min valid lap (ms):", _numMinLap);
+        _fields.AddRow("Min valid lap (ms):", _numMinLap);
 
-        _numStreakWindow.Width = 70;
         _numStreakWindow.Minimum = 1;
         _numStreakWindow.Maximum = 200;
         _numStreakWindow.Value = (decimal)Math.Clamp(seed.StreakWindowPercent, 1, 200);
         _chkStreakFaster.Text = "faster too";
         _chkStreakFaster.AutoSize = true;
         _chkStreakFaster.Checked = seed.StreakFasterBreaks;
-        Row("Streak window ±%:", _numStreakWindow, _chkStreakFaster);
+        _fields.AddRow("Streak window ±%:", FieldGrid.Inline(_numStreakWindow, _chkStreakFaster));
 
-        _cboStartType.Width = 200;
         _cboStartType.DropDownStyle = ComboBoxStyle.DropDownList;
         // The two qualifying philosophies are named rather than left for
         // somebody to work out from "Standard". They are both simultaneous
@@ -362,31 +346,24 @@ public sealed class RaceFormatForm : Form
         SelectStartType(seed.StartType);
 
         _cboStartType.SelectedIndexChanged += (_, _) => UpdateStaggerEnabled();
-        Row("Start:", _cboStartType);
+        _fields.AddRow("Start:", _cboStartType);
 
-        var lblStartHint = new Label
+        // Across both columns, under the start types it explains, wrapping
+        // to the grid's width.
+        _fields.AddWide(new Label
         {
             Text = "For qualifying, the two that matter are the first and the last. \"All away together\" is a "
                  + "simultaneous grid start on one shared clock - PN Racing's PNWC qualifiers work this way, and "
                  + "the run to the loop is on your time. \"Own clock from 1st crossing\" is the IFMAR convention, "
                  + "where each driver is measured over their own laps alone.",
             AutoSize = true,
-            MaximumSize = new Size(440, 0),
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
-            Location = new Point(UiLayout.PageLeft, y),
-        };
+        });
 
-        Controls.Add(lblStartHint);
-        _customControls.Add(lblStartHint);
-
-        y = UiLayout.Below(lblStartHint, UiLayout.RowGap);
-
-        _numStaggerGap.Width = 70;
         _numStaggerGap.Minimum = 1;
         _numStaggerGap.Maximum = 120;
         _numStaggerGap.Value = Math.Clamp(seed.StaggerGapSeconds, 1, 120);
-        _cboStaggerClock.Width = 190;
         _cboStaggerClock.DropDownStyle = ComboBoxStyle.DropDownList;
         // Items carry their value, the same as the start-type list above.
         //
@@ -399,11 +376,10 @@ public sealed class RaceFormatForm : Form
         _cboStaggerClock.Items.Add(new ClockItem(StaggerClock.OwnRelease, "Clock: own release"));
         _cboStaggerClock.Items.Add(new ClockItem(StaggerClock.SharedGreen, "Clock: shared green"));
         SelectStaggerClock(seed.StaggerClockMode);
-        Row("Stagger gap (s):", _numStaggerGap, _cboStaggerClock);
+        _fields.AddRow("Stagger gap (s):", FieldGrid.Inline(_numStaggerGap, _cboStaggerClock));
 
         // Before the start-sequence rows because it happens before them:
         // warm-up, then Stage -> Countdown -> Green.
-        _numWarmUp.Width = 80;
         _numWarmUp.Minimum = 0;
         _numWarmUp.Maximum = RaceFormat.MaxWarmUpSeconds;
         _numWarmUp.Increment = 30;
@@ -421,62 +397,125 @@ public sealed class RaceFormatForm : Form
 
         UpdateWarmUpHint();
         _numWarmUp.ValueChanged += (_, _) => UpdateWarmUpHint();
-        Row("Warm-up (s, 0 = none):", _numWarmUp, lblWarmUpHint);
+        _fields.AddRow("Warm-up (s, 0 = none):", FieldGrid.Inline(_numWarmUp, lblWarmUpHint));
 
+        // The two ticks run from the left-hand edge, across both columns, as
+        // they always have: they say what they are themselves, and the
+        // longer of them is wider than the field column.
         _chkAutoAdvance.Text = "Run the start sequence automatically (Stage \u2192 Countdown \u2192 Green)";
         _chkAutoAdvance.AutoSize = true;
-        _chkAutoAdvance.Font = AppTheme.BodyFont;
         _chkAutoAdvance.Checked = seed.AutoAdvance;
-        _chkAutoAdvance.Location = new Point(UiLayout.PageLeft, y);
-        Controls.Add(_chkAutoAdvance);
-        _customControls.Add(_chkAutoAdvance);
-        y = UiLayout.Below(_chkAutoAdvance, UiLayout.RowGap);
+        _fields.AddWide(_chkAutoAdvance, stretch: false);
 
-        _numStaging.Width = 70;
         _numStaging.Minimum = 1;
         _numStaging.Maximum = 300;
         _numStaging.Value = Math.Clamp(seed.StagingSeconds, 1, 300);
-        _numCountdown.Width = 70;
         _numCountdown.Minimum = 1;
         _numCountdown.Maximum = 60;
         _numCountdown.Value = Math.Clamp(seed.CountdownSeconds, 1, 60);
-        Row("Stage (s):", _numStaging);
-        Row("Countdown (s):", _numCountdown);
+        _fields.AddRow("Stage (s):", _numStaging);
+        _fields.AddRow("Countdown (s):", _numCountdown);
 
         _chkFinishOnCrossing.Text = "Leader takes the flag, others finish their lap";
         _chkFinishOnCrossing.AutoSize = true;
-        _chkFinishOnCrossing.Font = AppTheme.BodyFont;
         _chkFinishOnCrossing.Checked = seed.FinishOnNextCrossing;
-        _chkFinishOnCrossing.Location = new Point(UiLayout.PageLeft, y);
-        Controls.Add(_chkFinishOnCrossing);
-        _customControls.Add(_chkFinishOnCrossing);
-        y = UiLayout.Below(_chkFinishOnCrossing, UiLayout.SectionGap);
+        _fields.AddWide(_chkFinishOnCrossing, stretch: false);
 
-        var btnOk = new Button { Text = "OK", Font = AppTheme.BodyFont };
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnOk.Location = new Point(UiLayout.PageLeft, y);
+        // Last in the body whenever it shows - the sentence above it is
+        // hidden then.
+        body.Add(_fields, gapBelow: 0);
+
+        var btnOk = new Button { Text = "OK" };
         btnOk.Click += (_, _) =>
         {
             Result = _allowUseDefault && !_chkCustom.Checked ? null : Collect();
             DialogResult = DialogResult.OK;
         };
 
-        var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(UiLayout.After(btnOk) + UiLayout.RowGap, y);
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        // Against the right-hand edge, Cancel furthest right, as a dialog's
+        // buttons go - and Tab still reaches OK first, as it did: the bar
+        // takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
-        ClientSize = new Size(
-            Math.Max(470, widest + UiLayout.PageRight),
-            UiLayout.Below(btnOk, UiLayout.PageTop));
-
         UpdateStaggerEnabled();
         SetCustomVisible(!_allowUseDefault || _chkCustom.Checked);
+
+        return (page, body);
+    }
+
+    /// <summary>
+    /// The fields' widths, in the faces the theme pass left them in: the
+    /// number boxes all as wide as the one with the largest value needs and
+    /// never narrower than a number box at the text size in use, each
+    /// drop-down as wide as its
+    /// longest choice and never narrower than it was at the normal text
+    /// size. Once: the dialog is built at the text size in use and is not
+    /// kept in step with a change made while it is up (see DialogFit).
+    /// </summary>
+    private void SizeFields()
+    {
+        var numbers = new[]
+        {
+            _numLapLimit, _numTimeLimit, _numMinLap, _numStreakWindow,
+            _numStaggerGap, _numWarmUp, _numStaging, _numCountdown,
+        };
+
+        // One width for all of them, the widest's: they sit in one column,
+        // and boxes of three widths put their arrows in three places down it
+        // (layout pictures, 29 Sep).
+        var width = numbers.Max(number =>
+        {
+            var digits = ((int)number.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+
+            return Math.Max(
+                UiLayout.AtTextSize(UiLayout.NumericWidth),
+                TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+        });
+
+        foreach (var number in numbers)
+        {
+            number.Width = width;
+        }
+
+        (Font Font, int Count, int Width)? startWidth = null;
+        (Font Font, int Count, int Width)? clockWidth = null;
+
+        _cboStartType.Width = Math.Max(UiLayout.AtTextSize(200), Pieces.PickerWidth(_cboStartType, ref startWidth));
+        _cboStaggerClock.Width = Math.Max(UiLayout.AtTextSize(190), Pieces.PickerWidth(_cboStaggerClock, ref clockWidth));
+    }
+
+    /// <summary>
+    /// The window is sized as it loads, to what is showing then (DialogFit).
+    /// While the default is being followed, it is sized with the fields
+    /// showing all the same, and the sentence put in their place after - so
+    /// it is as tall as the fields whichever is up, as it always was, and
+    /// ticking the box shows them in a window made for them rather than
+    /// scrolling them through one made for three lines.
+    /// </summary>
+    protected override void OnLoad(EventArgs e)
+    {
+        var following = _allowUseDefault && !_chkCustom.Checked;
+
+        if (following)
+        {
+            SetCustomVisible(true);
+        }
+
+        base.OnLoad(e);
+
+        if (following)
+        {
+            SetCustomVisible(false);
+        }
     }
 
     /// <summary>One row of the stagger-clock list, and the value it stands for.</summary>
@@ -553,15 +592,12 @@ public sealed class RaceFormatForm : Form
     /// Custom on: the fields. Custom off: one readable sentence about the
     /// default. HIDDEN, not disabled - a dialog of grayed-out ghost text
     /// is unreadable in a dark theme and looks broken rather than off,
-    /// which is exactly how it looked before this.
+    /// which is exactly how it looked before this. The whole grid goes, so
+    /// no empty row of it is left behind.
     /// </summary>
     private void SetCustomVisible(bool custom)
     {
-        foreach (var control in _customControls)
-        {
-            control.Visible = custom;
-        }
-
+        _fields.Visible = custom;
         _lblFollowing.Visible = _allowUseDefault && !custom;
 
         if (custom)

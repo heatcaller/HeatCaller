@@ -25,12 +25,68 @@ namespace HeatCaller;
 /// Skip Setup, and each one saves as you leave it rather than at the end -
 /// so a wizard closed halfway still did the half it got through. The same
 /// arrangement FirstRunWizard makes, for the same reason.
+///
+/// On the layout pieces (DialogFit): the rail down the left, flush with
+/// the window's edges (a Beside, the rail its column), and beside it the
+/// step's title and what it is about, the step itself taking the height
+/// between those and the footer - Skip setup and the progress on the left,
+/// Back and Next on the right. Each step is a page of its own, its fields
+/// lined up in a field grid, shown while it is the step and hidden
+/// otherwise; a step taller than the room it has scrolls, rather than the
+/// window growing. The window opens at the size it always had and can be
+/// resized. It used to be placed in pixels: a fixed 850x640 window, the
+/// rail 190px wide at every text size and each step's fields at
+/// coordinates in a 600x400 box, which a larger text size ran off the
+/// bottom and the right of.
 /// </summary>
 internal sealed class RaceDaySetupWizard : Form
 {
+    /// <summary>The rail's width at the normal text size - wider only when its step names and the marks beside them need it.</summary>
     private const int RailWidth = 190;
-    private const int ContentLeft = RailWidth + 32;
-    private const int ContentWidth = 600;
+
+    /// <summary>How wide and tall the window opens inside its frame, at the normal text size - the size it always was.</summary>
+    private const int WindowWidth = 850;
+
+    private const int WindowHeight = 640;
+
+    /// <summary>A step has at least this much height at the normal text size - a few lines - before the window scrolls instead of the step.</summary>
+    private const int StepLeastHeight = 120;
+
+    /// <summary>The width the day's fields and the classes list were made at, at the normal text size.</summary>
+    private const int FieldWidth = 300;
+
+    /// <summary>The class filter's width at the normal text size - wider when a class's name needs it.</summary>
+    private const int ClassFilterWidth = 200;
+
+    /// <summary>The classes list is this many of its rows tall.</summary>
+    private const int ClassRows = 4;
+
+    /// <summary>Who's here shows at least this many drivers before the step scrolls instead.</summary>
+    private const int WhosHereLeastRows = 4;
+
+    /// <summary>A step on the rail: its least height, and the room before its name, at the normal text size.</summary>
+    private const int RailStepHeight = 34;
+
+    private const int RailStepInset = 12;
+
+    /// <summary>The done/needed mark beside a step on the rail, and the room to its right, at the normal text size.</summary>
+    private const int MarkSize = 18;
+
+    private const int MarkInset = 12;
+
+    private const string BrandText = "HEATCALLER";
+
+    private const string RaceDayShapeHint =
+        "A race day qualifies in heats and then runs finals built from how qualifying went.";
+
+    private const string ClubNightShapeHint =
+        "A club night is just races - everyone races, several times, and that is the night. No finals.";
+
+    // The rounds caption says races on a club night and heats on a race day
+    // - see LoadRacingStep. The caption column is as wide as the longer, so
+    // changing it never moves the fields (FieldGrid.LineUp).
+    private const string HeatsCaption = "Heats each driver gets:";
+    private const string RacesCaption = "Races each driver gets:";
 
     // Drivers and Who's here were two steps, and not even next to each
     // other: adding a new driver came before the day existed, ticking who
@@ -71,14 +127,21 @@ internal sealed class RaceDaySetupWizard : Form
     private readonly CheckInStore _checkIns;
     private readonly RaceDaySetupHost _host;
 
-    private readonly Panel _rail = new();
+    /// <summary>The steps down the left - a page with no part that fills, as tall as the window (see BuildLayout).</summary>
+    private readonly FillPage _rail = new();
     private readonly Label _lblBrand = new();
     private readonly Label _lblRailCaption = new();
     private readonly Label[] _railLabels = new Label[StepNames.Length];
 
+    /// <summary>Beside the rail: the step's title and what it is about, the step, and the footer.</summary>
+    private readonly FillPage _stepPage = new();
     private readonly Label _lblStepTitle = new();
     private readonly Label _lblStepBody = new();
-    private readonly Panel _content = new();
+
+    /// <summary>Where the steps are, one on show at a time - see ShowStep.</summary>
+    private readonly Panel _stepHolder = new();
+
+    private readonly ButtonBar _footerLeft = new();
     private readonly Label _lblProgress = new();
 
     private readonly Button _btnSkipAll = new();
@@ -91,34 +154,44 @@ internal sealed class RaceDaySetupWizard : Form
     private readonly Button _btnAddDriver = new();
 
     // --- the day ---
+    private readonly PageStack _dayStep = new();
     private readonly ComboBox _cmbShape = new();
-    private readonly Label _lblShapeHint = new();
+
+    /// <summary>What the kind of night means - as tall as the longer wording, so the fields under it never move as the box is used.</summary>
+    private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
+
     private readonly TextBox _txtDayName = new();
     private readonly ComboBox _cmbVenue = new();
     private readonly ComboBox _cmbTrack = new();
     private readonly Label _lblDayState = new();
 
     // --- racing ---
+    private readonly PageStack _racingStep = new();
+    private readonly FieldGrid _racingGrid = new();
     private readonly CheckedListBox _lstClasses = new();
     private readonly NumericUpDown _numRounds = new();
     private readonly NumericUpDown _numHeatSize = new();
     private readonly CheckBox _chkFirstRace = new();
     private readonly TimePicker _dtpFirstRace = new();
-    private readonly Label _lblRoundsCaption = new();
+
+    /// <summary>The rounds caption, reworded for the kind of night - see LoadRacingStep. Made by the grid it is in.</summary>
+    private Label? _lblRoundsCaption;
 
     /// <summary>
     /// The race format each ticked class runs - laps or minutes, the start,
-    /// the warm-up - one row per class with a button to change it.
+    /// the warm-up - one line per class with a button to change it.
     ///
     /// It was the one thing about a night the wizard never asked: the
     /// format lives on the class, and the first place anyone met it was
     /// Race Control, with the field already on the grid.
     /// </summary>
     private readonly Label _lblFormatsCaption = new();
-    private readonly Panel _pnlFormats = new();
+    private readonly Label _lblNoFormats = new();
+    private readonly List<FormatRow> _formatRows = new();
     private readonly Button _btnAddClass = new();
 
     // --- the drivers step: who's here ---
+    private readonly FillPage _driversStep = new();
     private readonly ComboBox _cmbWhoClass = new();
     private readonly CheckBox _chkOnlyMissing = new();
     private readonly CheckedListBox _lstWhosHere = new();
@@ -145,6 +218,7 @@ internal sealed class RaceDaySetupWizard : Form
     private readonly Button _btnGoToCheckIn = new();
 
     // --- the programme ---
+    private readonly PageStack _programStep = new();
     private readonly Label _lblProgrammeState = new();
 
     /// <summary>
@@ -162,9 +236,11 @@ internal sealed class RaceDaySetupWizard : Form
     // three steps a program is made from each get a card - DONE or NEEDED -
     // with a button to the step on every one that isn't done, and the rail
     // on the left says the same thing: a tick, or a red "!".
-    private readonly Panel _pnlCantBuild = new();
     private readonly Label _lblNeedsTitle = new();
     private readonly Label _lblNeedsNote = new();
+    private readonly ReadinessCard _cardDay = new("The day", "Go to The Day");
+    private readonly ReadinessCard _cardClasses = new("Classes", "Go to Classes");
+    private readonly ReadinessCard _cardDrivers = new("Drivers", "Go to Drivers");
     private readonly List<(Button Button, AppTheme.ButtonKind Kind)> _fixButtons = new();
 
     /// <summary>What the rail shows beside a step.</summary>
@@ -184,6 +260,7 @@ internal sealed class RaceDaySetupWizard : Form
     private ProgramAnswer _plan = new(false, string.Empty, string.Empty);
 
     // --- step 7: all set ---
+    private readonly PageStack _summaryStep = new();
     private readonly Label _lblSummary = new();
 
     /// <summary>A page to go to once this closes, or null. Set by "Take me to check-in".</summary>
@@ -210,44 +287,170 @@ internal sealed class RaceDaySetupWizard : Form
         _host = host;
 
         Text = "Set Up Tonight";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(ContentLeft + ContentWidth + 28, 640);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        BuildLayout();
+        var page = BuildLayout();
         AppTheme.ApplyRecursively(this);
+        SizeFields();
 
         // Straight to the step that needs doing when opened for one, rather
         // than the welcome page and a walk through what is already done.
         ShowStep(startStep);
+
+        // The size it always opened at; it can be made bigger, or smaller
+        // down to what the steps' titles, the footer and a few lines of a
+        // step need - the step scrolls below that.
+        DialogFit.Keep(this, page, width: WindowWidth, height: WindowHeight);
     }
 
     private RaceEvent? OpenDay => _events.Active is { IsLegacy: false, IsOpen: true } day ? day : null;
 
+    /// <summary>The steps' own pages, in order - the welcome step has none. See ShowStep.</summary>
+    private Control[] StepPages => new Control[] { _dayStep, _racingStep, _driversStep, _programStep, _summaryStep };
+
+    /// <summary>The three cards on the program step, in the order of the steps they stand for.</summary>
+    private ReadinessCard[] Cards => new[] { _cardDay, _cardClasses, _cardDrivers };
+
     // --- Layout ---------------------------------------------------------
 
-    private void BuildLayout()
+    /// <summary>
+    /// The window, returned as the page that fills it: the rail down the
+    /// left, flush with the window's top, bottom and left edges, and beside
+    /// it the step - its title, what it is about, the step's own page (all
+    /// of them are built here, and one is shown at a time) and the footer.
+    /// </summary>
+    private FillPage BuildLayout()
     {
-        _rail.Location = new Point(0, 0);
-        _rail.Size = new Size(RailWidth, ClientSize.Height);
+        BuildRail();
 
-        _lblBrand.Text = "HEATCALLER";
+        _lblStepTitle.AutoSize = true;
+        _lblStepTitle.Font = AppTheme.TitleFont;
+
+        _lblStepBody.AutoSize = true;
+
+        _lblProgress.AutoSize = true;
+        _lblProgress.Font = AppTheme.SmallFont;
+
+        // Level with the middle of Skip setup beside it, not its top - as a
+        // label among buttons is in a row of them (FieldGrid.Inline).
+        _lblProgress.Anchor = AnchorStyles.Left;
+
+        _btnSkipAll.Text = "Skip setup";
+        _btnSkipAll.Click += (_, _) => Finish();
+
+        _btnBack.Text = "Back";
+        _btnBack.Click += (_, _) =>
+        {
+            SaveCurrentStep();
+            ShowStep(_step - 1);
+        };
+
+        _btnNext.Text = "Next";
+        _btnNext.Click += (_, _) => NextClicked();
+
+        BuildDayStep();
+        BuildRacingStep();
+        BuildCheckInStep();
+        BuildProgrammeStep();
+        BuildSummaryStep();
+
+        // Every step's page fills the holder; only the one on show is
+        // visible, so only it takes the room. None has margins of its own -
+        // the page they are in gives them - nor any room under its last part
+        // when it scrolls, for the reason DialogFit.Body gives.
+        _stepHolder.Tag = AppTheme.KeepBackColor;
+
+        foreach (var stepPage in StepPages)
+        {
+            stepPage.Padding = Padding.Empty;
+            stepPage.Visible = false;
+
+            if (stepPage is ScrollableControl scrolls)
+            {
+                LayoutDoctor.NoRoomBelow(scrolls);
+            }
+
+            _stepHolder.Controls.Add(stepPage);
+        }
+
+        // Skip setup and the progress on the left, Back and Next against the
+        // right-hand edge, Next furthest right - on one line, or Back and
+        // Next under the other two when a narrow window has no room for both
+        // (SplitBar). The bar is handed Next first, as its first button goes
+        // furthest right; Tab still goes Back before Next, as it did, from
+        // the tab order set here.
+        var footer = new SplitBar(
+            _footerLeft.With(_btnSkipAll, _lblProgress),
+            new ButtonBar(alignRight: true).With(_btnNext, _btnBack));
+
+        _btnBack.TabIndex = 0;
+        _btnNext.TabIndex = 1;
+
+        // More room above and to the right than a dialog's usual margin, as
+        // the step always had, and the rail's own gap on the left (Beside).
+        _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
+        LayoutDoctor.NoRoomBelow(_stepPage);
+
+        _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
+        _stepPage.Add(_lblStepBody);
+
+        // The step takes the height the rest leave, and scrolls inside it
+        // when it needs more - down to a few lines of it, below which the
+        // window scrolls instead.
+        _stepPage.AddFill(_stepHolder, _ => UiLayout.AtTextSize(StepLeastHeight));
+        _stepPage.Add(footer, gapBelow: 0);
+
+        var band = new Beside(MeasureRailWidth()) { SideOnLeft = true };
+
+        band.AddSideFill(_rail, _rail.LeastHeight, gapBelow: 0);
+        band.AddFill(_stepPage, _stepPage.LeastHeight, gapBelow: 0);
+
+        // No margin round the window: the rail runs to its edges.
+        var page = new FillPage { Padding = Padding.Empty };
+
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+        Controls.Add(page);
+
+        return page;
+    }
+
+    /// <summary>
+    /// The rail: the brand, what the window is for, and the steps, each
+    /// clickable, with a mark beside it once it is done or still needed.
+    /// A page of its own in the sidebar's colour, the column of a Beside
+    /// that takes the window's whole height (AddSideFill) - so it runs from
+    /// the top of the window to the bottom however tall that is.
+    /// </summary>
+    private void BuildRail()
+    {
+        // Every name on the rail starts at the same place.
+        var inset = UiLayout.AtTextSize(RailStepInset);
+
+        _lblBrand.Text = BrandText;
         _lblBrand.AutoSize = true;
         _lblBrand.Font = AppTheme.NavFont;
-        _lblBrand.Location = new Point(22, 26);
+        _lblBrand.Padding = new Padding(inset, 0, 0, 0);
 
         _lblRailCaption.Text = "Setting up a race day";
         _lblRailCaption.AutoSize = true;
-        _lblRailCaption.MaximumSize = new Size(RailWidth - 44, 0);
         _lblRailCaption.Font = AppTheme.SmallFont;
-        _lblRailCaption.Location = new Point(22, 54);
+        _lblRailCaption.Padding = new Padding(inset, 0, 0, 0);
 
-        _rail.Controls.Add(_lblBrand);
-        _rail.Controls.Add(_lblRailCaption);
+        // Placed by the Beside it is the column of, not docked; and as tall
+        // as it needs to be with nothing under its last step (LeastHeight).
+        _rail.Dock = DockStyle.None;
+        _rail.Padding = new Padding(inset, UiLayout.SectionGap, inset, UiLayout.PageTop);
+        LayoutDoctor.NoRoomBelow(_rail);
+
+        _rail.Add(_lblBrand, gapBelow: UiLayout.HintGap);
+        _rail.Add(_lblRailCaption);
+
+        // Tall enough for the current step's name in the bold face, whose
+        // mark is beside it (PaintRailMark).
+        var stepHeight = Math.Max(
+            UiLayout.AtTextSize(RailStepHeight),
+            Pieces.LineHeight(AppTheme.BoldFont) + UiLayout.AtTextSize(UiLayout.RowGap + 2));
 
         for (var i = 0; i < StepNames.Length; i++)
         {
@@ -257,9 +460,8 @@ internal sealed class RaceDaySetupWizard : Form
             {
                 Text = StepNames[i],
                 AutoSize = false,
-                Size = new Size(RailWidth - 24, 34),
-                Location = new Point(12, 100 + i * 38),
-                Padding = new Padding(12, 0, 0, 0),
+                Height = stepHeight,
+                Padding = new Padding(inset, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand,
             };
@@ -275,114 +477,77 @@ internal sealed class RaceDaySetupWizard : Form
             label.Paint += (_, e) => PaintRailMark(e.Graphics, label, _railMarks[index]);
 
             _railLabels[i] = label;
-            _rail.Controls.Add(label);
+            _rail.Add(label, gapBelow: i == StepNames.Length - 1 ? 0 : UiLayout.HintGap);
         }
-
-        _lblStepTitle.Location = new Point(ContentLeft, 30);
-        _lblStepTitle.AutoSize = true;
-        _lblStepTitle.MaximumSize = new Size(ContentWidth, 0);
-        _lblStepTitle.Font = AppTheme.TitleFont;
-
-        _lblStepBody.Location = new Point(ContentLeft, 78);
-        _lblStepBody.AutoSize = true;
-        _lblStepBody.MaximumSize = new Size(ContentWidth, 0);
-
-        _content.Location = new Point(ContentLeft, 160);
-        _content.Size = new Size(ContentWidth, 400);
-
-        _lblProgress.AutoSize = true;
-        _lblProgress.Font = AppTheme.SmallFont;
-
-        _btnSkipAll.Text = "Skip setup";
-        _btnSkipAll.Width = 120;
-        _btnSkipAll.Click += (_, _) => Finish();
-
-        _btnBack.Text = "Back";
-        _btnBack.Width = 100;
-        _btnBack.Click += (_, _) =>
-        {
-            SaveCurrentStep();
-            ShowStep(_step - 1);
-        };
-
-        _btnNext.Text = "Next";
-        _btnNext.Width = 150;
-        _btnNext.Click += (_, _) => NextClicked();
-
-        var buttonTop = ClientSize.Height - 58;
-
-        _btnNext.Location = new Point(ClientSize.Width - 28 - _btnNext.Width, buttonTop);
-        _btnBack.Location = new Point(_btnNext.Left - 12 - _btnBack.Width, buttonTop);
-        _btnSkipAll.Location = new Point(ContentLeft, buttonTop);
-        _lblProgress.Location = new Point(_btnSkipAll.Right + 16, buttonTop + 10);
-
-        BuildDayStep();
-        BuildRacingStep();
-        BuildCheckInStep();
-        BuildProgrammeStep();
-        BuildSummaryStep();
-
-        Controls.Add(_rail);
-        Controls.Add(_lblStepTitle);
-        Controls.Add(_lblStepBody);
-        Controls.Add(_content);
-        Controls.Add(_lblProgress);
-        Controls.Add(_btnSkipAll);
-        Controls.Add(_btnBack);
-        Controls.Add(_btnNext);
     }
 
+    /// <summary>
+    /// How wide the rail is: the width it always had at the normal text
+    /// size, at the size in use - or, if they need more, the widest step's
+    /// name in the bold face with its mark beside it, or the brand, with the
+    /// rail's margins either side.
+    /// </summary>
+    private static int MeasureRailWidth()
+    {
+        var inset = UiLayout.AtTextSize(RailStepInset);
+
+        var names = StepNames.Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
+        var steps = inset + names + UiLayout.LabelGap + UiLayout.AtTextSize(MarkSize) + UiLayout.AtTextSize(MarkInset);
+        var brand = inset + TextRenderer.MeasureText(BrandText, AppTheme.NavFont).Width;
+
+        return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(steps, brand) + 2 * inset);
+    }
+
+    /// <summary>
+    /// The day: what kind of night, what it is called, where and on which
+    /// layout - lined up in a grid - and whether a day is open.
+    /// </summary>
     private void BuildDayStep()
     {
         _cmbShape.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbShape.Location = new Point(0, 0);
-        _cmbShape.Width = 300;
         _cmbShape.Items.Add("Race day - heats, then finals");
         _cmbShape.Items.Add("Club night - just races");
         _cmbShape.SelectedIndex = 0;
         _cmbShape.SelectedIndexChanged += (_, _) => ApplyShapeHint();
 
-        // Two lines reserved, so the rest of the step does not jump when
-        // the wording changes.
-        _lblShapeHint.Location = new Point(0, 40);
-        _lblShapeHint.AutoSize = false;
-        _lblShapeHint.Size = new Size(ContentWidth, AppTheme.SmallFont.Height * 2 + 4);
-        _lblShapeHint.Font = AppTheme.SmallFont;
-
-        var y = 40 + _lblShapeHint.Height + 16;
-
-        _txtDayName.Location = new Point(0, y + 22);
-        _txtDayName.Width = 300;
-
         _cmbVenue.DropDownStyle = ComboBoxStyle.DropDown;
-        _cmbVenue.Location = new Point(0, y + 92);
-        _cmbVenue.Width = 300;
-
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDown;
-        _cmbTrack.Location = new Point(0, y + 162);
-        _cmbTrack.Width = 300;
 
-        _lblDayState.Location = new Point(0, y + 208);
         _lblDayState.AutoSize = true;
-        _lblDayState.MaximumSize = new Size(ContentWidth, 0);
         _lblDayState.Font = AppTheme.SmallFont;
+
+        var grid = new FieldGrid();
+
+        // The kind of night first, and what it means under it. Captioned as
+        // on Race Day's Setup: with the other fields' captions beside them,
+        // a drop-down in their column with none of its own read as a field
+        // whose caption had gone missing (layout pictures, 29 Sep).
+        grid.AddRow("What kind of night:", _cmbShape);
+        grid.AddHint(_lblShapeHint);
+
+        grid.AddRow("Call it:", _txtDayName);
+        grid.AddRow("Venue:", _cmbVenue);
+        grid.AddRow("Track layout:", _cmbTrack);
+
+        _dayStep.Add(grid, gapBelow: UiLayout.RowGap);
+        _dayStep.Add(_lblDayState, gapBelow: 0);
     }
 
+    /// <summary>
+    /// Tonight's classes and how they race: the classes ticked from a list
+    /// with Add Class under it, the numbers, then a line per ticked class
+    /// with its race format.
+    /// </summary>
     private void BuildRacingStep()
     {
-        // Two columns up top - the classes on the left, the numbers on the
-        // right - so the formats underneath get the lower half of the step.
-        const int right = 330;
-
-        _lstClasses.Location = new Point(0, 22);
-        _lstClasses.Size = new Size(300, 96);
         _lstClasses.CheckOnClick = true;
+
+        // Its own height, in whole rows or not - see SizeFields.
+        _lstClasses.IntegralHeight = false;
 
         // A class the club has not raced before - the old Classes step's
         // whole job, now a button under the list it adds to.
         _btnAddClass.Text = "Add Class...";
-        _btnAddClass.Size = new Size(UiLayout.WidthFor(_btnAddClass), UiLayout.ButtonHeight);
-        _btnAddClass.Location = new Point(0, _lstClasses.Bottom + 8);
         _btnAddClass.Click += (_, _) => AddClass();
 
         // The format rows follow the ticks: tick a class and its row
@@ -395,43 +560,82 @@ internal sealed class RaceDaySetupWizard : Form
             }
         };
 
-        _lblRoundsCaption.Location = new Point(right, 2);
-        _lblRoundsCaption.AutoSize = true;
-        _lblRoundsCaption.Font = AppTheme.SmallFont;
-
-        _numRounds.Location = new Point(right, 22);
-        _numRounds.Width = 70;
         _numRounds.Minimum = 1;
         _numRounds.Maximum = 10;
         _numRounds.Value = 3;
 
-        _numHeatSize.Location = new Point(right, 78);
-        _numHeatSize.Width = 70;
         _numHeatSize.Minimum = 2;
         _numHeatSize.Maximum = 20;
         _numHeatSize.Value = 8;
 
         _chkFirstRace.Text = "First race at";
-        _chkFirstRace.Location = new Point(right, 122);
         _chkFirstRace.AutoSize = true;
 
-        _dtpFirstRace.Location = new Point(right + 140, 118);
-        _dtpFirstRace.Size = new Size(120, 26);
+        // As big as its time needs in its font (TimePicker.GetPreferredSize) -
+        // at 120x26 it held the time at the normal text size and clipped it
+        // at any larger one.
+        _dtpFirstRace.AutoSize = true;
         _dtpFirstRace.Value = TimeSpan.FromHours(10);
 
+        // To the right-hand edge: a class's name can be long, and in the
+        // column's width it was cut off ("Kyosho Mini-Z MR-03 Stock 70T
+        // Tourin", layout pictures, 29 Sep).
+        _racingGrid.AddRow("Classes racing:", _lstClasses, stretch: true);
+        _racingGrid.AddField(new ButtonBar().With(_btnAddClass));
+        _lblRoundsCaption = _racingGrid.AddRow(HeatsCaption, _numRounds);
+        _racingGrid.AddRow("Drivers per heat:", _numHeatSize);
+        _racingGrid.AddField(FieldGrid.Inline(_chkFirstRace, _dtpFirstRace));
+
         _lblFormatsCaption.Text = "Race format - what each class runs tonight";
-        _lblFormatsCaption.Location = new Point(0, _btnAddClass.Bottom + 14);
         _lblFormatsCaption.AutoSize = true;
         _lblFormatsCaption.Font = AppTheme.SmallFont;
 
-        _pnlFormats.Location = new Point(0, _lblFormatsCaption.Top + 22);
-        _pnlFormats.Size = new Size(ContentWidth, 400 - _pnlFormats.Top);
-        _pnlFormats.AutoScroll = true;
+        _lblNoFormats.Text = "Tick a class above to see the format it runs.";
+        _lblNoFormats.AutoSize = true;
+        _lblNoFormats.Font = AppTheme.SmallFont;
+
+        _racingStep.Add(_racingGrid);
+        _racingStep.Add(_lblFormatsCaption, gapBelow: UiLayout.RowGap);
+
+        // Then a line per ticked class, added as they are needed - see
+        // FillFormatRows - or this, when none is ticked.
+        _racingStep.Add(_lblNoFormats, gapBelow: 0);
     }
 
     /// <summary>
-    /// One row per ticked class: its name, its format in a line, and a
-    /// button that opens the same editor the Classes page does.
+    /// One class's line in the formats: its name over its format, and the
+    /// button that changes it against the right-hand edge (a Beside, the
+    /// button its column). Kept, and given another class to show when the
+    /// ticks change - see FillFormatRows.
+    /// </summary>
+    private sealed class FormatRow
+    {
+        public FormatRow(Beside line, Label name, Label format)
+        {
+            Line = line;
+            Name = name;
+            Format = format;
+        }
+
+        public Beside Line { get; }
+
+        public Label Name { get; }
+
+        public Label Format { get; }
+
+        /// <summary>The class the line is showing now - what its button edits.</summary>
+        public string ClassName { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// A line per ticked class, in the list's order: its name, its format,
+    /// and a button that opens the same editor the Classes page does.
+    ///
+    /// The lines are kept rather than made afresh each time, and handed the
+    /// classes in order - the first ticked class to the first line - with any
+    /// left over hidden. A page built from the layout pieces is added to,
+    /// not taken apart; a new line is made only when there are more ticked
+    /// classes than there have been before.
     /// </summary>
     private void FillFormatRows()
     {
@@ -445,28 +649,8 @@ internal sealed class RaceDaySetupWizard : Form
             .Where(name => !string.IsNullOrEmpty(name))
             .ToList();
 
-        _pnlFormats.SuspendLayout();
-
-        foreach (var old in _pnlFormats.Controls.Cast<Control>().ToList())
-        {
-            _pnlFormats.Controls.Remove(old);
-            old.Dispose();
-        }
-
         var fallback = RaceFormat.FromSettings(_settings);
-        var y = 0;
-
-        if (ticked.Count == 0)
-        {
-            _pnlFormats.Controls.Add(new Label
-            {
-                Text = "Tick a class above to see the format it runs.",
-                Location = new Point(0, 4),
-                AutoSize = true,
-                Font = AppTheme.SmallFont,
-                ForeColor = AppTheme.TextMuted,
-            });
-        }
+        var shown = 0;
 
         foreach (var name in ticked)
         {
@@ -475,22 +659,8 @@ internal sealed class RaceDaySetupWizard : Form
                 continue;
             }
 
-            var button = new Button { Text = "Race Format..." };
-            button.Size = new Size(UiLayout.WidthFor(button), UiLayout.ButtonHeight);
-            button.Location = new Point(ContentWidth - button.Width - 14, y);
-            button.Click += (_, _) => EditClassFormat(raceClass);
-
-            var lblName = new Label
-            {
-                Text = raceClass.Name,
-                AutoSize = false,
-                AutoEllipsis = true,
-                Size = new Size(120, UiLayout.ButtonHeight),
-                Location = new Point(0, y),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = AppTheme.BoldFont,
-                ForeColor = AppTheme.TextDark,
-            };
+            var row = shown < _formatRows.Count ? _formatRows[shown] : AddFormatRow();
+            shown++;
 
             // The class's own format, or the default it follows - said
             // either way, so "nothing set" still reads as a real answer.
@@ -503,41 +673,77 @@ internal sealed class RaceDaySetupWizard : Form
                 describe += "  (own qualifier format)";
             }
 
-            var lblFormat = new Label
-            {
-                Text = describe,
-                AutoSize = false,
-                AutoEllipsis = true,
-                Location = new Point(lblName.Right + UiLayout.RowGap, y),
-                Size = new Size(button.Left - UiLayout.RowGap - (lblName.Right + UiLayout.RowGap), UiLayout.ButtonHeight),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = AppTheme.SmallFont,
-                ForeColor = raceClass.Format is null ? AppTheme.TextMuted : AppTheme.TextDark,
-            };
-
-            _pnlFormats.Controls.Add(lblName);
-            _pnlFormats.Controls.Add(lblFormat);
-            _pnlFormats.Controls.Add(button);
-
-            y += UiLayout.ButtonHeight + 6;
+            row.ClassName = raceClass.Name;
+            row.Name.Text = raceClass.Name;
+            row.Format.Text = describe;
+            row.Format.ForeColor = raceClass.Format is null ? AppTheme.TextMuted : AppTheme.TextDark;
+            row.Line.Visible = true;
         }
 
-        _pnlFormats.ResumeLayout();
-
-        AppTheme.ApplyRecursively(_pnlFormats);
-
-        foreach (var button in _pnlFormats.Controls.OfType<Button>())
+        for (var i = shown; i < _formatRows.Count; i++)
         {
-            AppTheme.StyleButton(button, AppTheme.ButtonKind.Secondary);
+            _formatRows[i].Line.Visible = false;
         }
+
+        _lblNoFormats.Visible = ticked.Count == 0;
+    }
+
+    /// <summary>A new line for the formats, at the end of the step, themed as the rest of the window was.</summary>
+    private FormatRow AddFormatRow()
+    {
+        var name = new Label
+        {
+            AutoSize = true,
+            Font = AppTheme.BoldFont,
+            ForeColor = AppTheme.TextDark,
+        };
+
+        var format = new Label
+        {
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+        };
+
+        var button = new Button { Text = "Race Format..." };
+
+        // The name over the format, wrapping to the room left of the button
+        // rather than cut short - two lines of text about as tall as the
+        // button beside them.
+        var line = new Beside
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        line.Add(name, gapBelow: 0);
+        line.Add(format, gapBelow: 0);
+        line.AddSide(button, gapBelow: 0);
+
+        _racingStep.Add(line, gapBelow: UiLayout.RowGap);
+
+        var row = new FormatRow(line, name, format);
+
+        button.Click += (_, _) => EditClassFormat(row.ClassName);
+
+        AppTheme.ApplyRecursively(line);
+        AppTheme.StyleButton(button, AppTheme.ButtonKind.Secondary);
+
+        _formatRows.Add(row);
+
+        return row;
     }
 
     /// <summary>
     /// The class's format, in the one editor every format is edited in, and
     /// saved on the class - the same thing Classes and Race Control do.
     /// </summary>
-    private void EditClassFormat(RaceClass raceClass)
+    private void EditClassFormat(string className)
     {
+        if (_raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase)) is not { } raceClass)
+        {
+            return;
+        }
+
         using var form = new RaceFormatForm(
             raceClass.Format,
             $"Race Format - {raceClass.Name}",
@@ -555,6 +761,11 @@ internal sealed class RaceDaySetupWizard : Form
         FillFormatRows();
     }
 
+    /// <summary>
+    /// Who is here: the class filter over the list, which takes the height
+    /// the step has, and the buttons - Add Driver among them - what the
+    /// count is and the check-in rule under it.
+    /// </summary>
     private void BuildCheckInStep()
     {
         // Ticking people in happens HERE rather than only on the Race Day
@@ -562,46 +773,35 @@ internal sealed class RaceDaySetupWizard : Form
         // somebody to another page to answer it - then back - is the kind of
         // errand the wizard exists to remove.
         _cmbWhoClass.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbWhoClass.Location = new Point(0, 3);
-        _cmbWhoClass.Width = 200;
         _cmbWhoClass.SelectedIndexChanged += (_, _) => FillWhosHere();
 
         _chkOnlyMissing.Text = "Only those not in yet";
-        _chkOnlyMissing.Location = new Point(_cmbWhoClass.Right + UiLayout.SectionGap / 2, 7);
         _chkOnlyMissing.AutoSize = true;
         _chkOnlyMissing.CheckedChanged += (_, _) => FillWhosHere();
 
-        // Someone new: a button over the list they will land in, opening a
+        // Level with each other's middles on their line, not their tops.
+        _cmbWhoClass.Anchor = AnchorStyles.Left;
+        _chkOnlyMissing.Anchor = AnchorStyles.Left;
+
+        // Someone new: a button under the list they will land in, opening a
         // small window for their details. It was a row of three boxes and
         // an Add button along the bottom of the step, which crowded it.
         _btnAddDriver.Text = "Add Driver...";
-        _btnAddDriver.Size = new Size(UiLayout.WidthFor(_btnAddDriver), UiLayout.ButtonHeight);
-        _btnAddDriver.Location = new Point(ContentWidth - _btnAddDriver.Width, 0);
         _btnAddDriver.Click += (_, _) => AddNewDriver();
 
-        // The list takes the room the new-driver row used to - taller, so
-        // more of the club is on screen at once.
-        const int buttonsTop = 250;
-        var listTop = UiLayout.ButtonHeight + 8;
-
-        _lstWhosHere.Location = new Point(0, listTop);
-        _lstWhosHere.Size = new Size(ContentWidth, buttonsTop - 8 - listTop);
         _lstWhosHere.CheckOnClick = true;
+
+        // Given the height the step has, not snapped to whole rows - see FillPage.AddFill.
+        _lstWhosHere.IntegralHeight = false;
         _lstWhosHere.ItemCheck += WhosHereTicked;
 
         _btnCheckAllShown.Text = "Check In All Shown";
-        _btnCheckAllShown.Size = new Size(UiLayout.WidthFor(_btnCheckAllShown), UiLayout.ButtonHeight);
-        _btnCheckAllShown.Location = new Point(0, buttonsTop);
         _btnCheckAllShown.Click += (_, _) => SetAllShown(true);
 
         _btnClearAll.Text = "Clear All";
-        _btnClearAll.Size = new Size(UiLayout.WidthFor(_btnClearAll), UiLayout.ButtonHeight);
-        _btnClearAll.Location = new Point(_btnCheckAllShown.Right + UiLayout.ButtonGap, buttonsTop);
         _btnClearAll.Click += (_, _) => SetAllShown(false);
 
         _btnGoToCheckIn.Text = "Open the full check-in page";
-        _btnGoToCheckIn.Size = new Size(UiLayout.WidthFor(_btnGoToCheckIn), UiLayout.ButtonHeight);
-        _btnGoToCheckIn.Location = new Point(ContentWidth - _btnGoToCheckIn.Width, buttonsTop);
         _btnGoToCheckIn.Click += (_, _) =>
         {
             SaveCurrentStep();
@@ -609,13 +809,33 @@ internal sealed class RaceDaySetupWizard : Form
             Finish();
         };
 
-        _lblCheckInState.Location = new Point(0, buttonsTop + UiLayout.ButtonHeight + 8);
+        // Rewritten as people are ticked in and added; two lines kept for it
+        // (SizeFields), so the list above does not hop when it grows a line.
         _lblCheckInState.AutoSize = true;
-        _lblCheckInState.MaximumSize = new Size(ContentWidth, 0);
 
         _chkCheckedInOnly.Text = "Only build races from drivers who have checked in";
-        _chkCheckedInOnly.Location = new Point(0, buttonsTop + UiLayout.ButtonHeight + 34);
         _chkCheckedInOnly.AutoSize = true;
+
+        // The filter along the top, and every button under the list: Add
+        // Driver with the ones that tick people in, the full check-in page
+        // against the right-hand edge - under them, still on the right, when
+        // there is no room beside them (SplitBar). Add Driver was up beside
+        // the filter, and next to a filter as wide as a long class's name it
+        // went onto a line of its own, taking a row from the list (layout
+        // pictures, 29 Sep).
+        var filter = new ButtonBar().With(_cmbWhoClass, _chkOnlyMissing);
+
+        var actions = new SplitBar(
+            new ButtonBar().With(_btnCheckAllShown, _btnClearAll, _btnAddDriver),
+            new ButtonBar(alignRight: true).With(_btnGoToCheckIn));
+
+        // The list takes the room the new-driver row used to - taller, so
+        // more of the club is on screen at once.
+        _driversStep.Add(filter, gapBelow: UiLayout.RowGap);
+        _driversStep.AddFill(_lstWhosHere, _ => WhosHereLeastRows * _lstWhosHere.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        _driversStep.Add(actions, gapBelow: UiLayout.RowGap);
+        _driversStep.Add(_lblCheckInState, gapBelow: UiLayout.RowGap);
+        _driversStep.Add(_chkCheckedInOnly, stretch: false, gapBelow: 0);
     }
 
     /// <summary>
@@ -704,26 +924,31 @@ internal sealed class RaceDaySetupWizard : Form
             : $"{here} of {Plural.Of(onFile, "driver")} checked in.";
     }
 
+    /// <summary>
+    /// The program: what building would make, or - when nothing can be built
+    /// - how many steps still need you and a card for each of the three the
+    /// program is made from. Which of the two shows is LoadProgrammeStep's.
+    /// </summary>
     private void BuildProgrammeStep()
     {
-        _lblProgrammeState.Location = new Point(0, 0);
         _lblProgrammeState.AutoSize = true;
-        _lblProgrammeState.MaximumSize = new Size(ContentWidth, 0);
-
-        _pnlCantBuild.Location = new Point(0, 0);
-        _pnlCantBuild.Size = new Size(ContentWidth, 0);
 
         _lblNeedsTitle.AutoSize = true;
-        _lblNeedsTitle.MaximumSize = new Size(ContentWidth, 0);
         _lblNeedsTitle.Font = AppTheme.HeadingFont;
-        _lblNeedsTitle.Location = new Point(0, 0);
 
         _lblNeedsNote.AutoSize = true;
-        _lblNeedsNote.MaximumSize = new Size(ContentWidth, 0);
         _lblNeedsNote.Font = AppTheme.BodyFont;
 
-        _pnlCantBuild.Controls.Add(_lblNeedsTitle);
-        _pnlCantBuild.Controls.Add(_lblNeedsNote);
+        _cardDay.Fix.Click += (_, _) => GoToStep(StepDay);
+        _cardClasses.Fix.Click += (_, _) => GoToStep(StepClasses);
+        _cardDrivers.Fix.Click += (_, _) => GoToStep(StepDrivers);
+
+        _programStep.Add(_lblProgrammeState, gapBelow: 0);
+        _programStep.Add(_lblNeedsTitle, gapBelow: UiLayout.HintGap);
+        _programStep.Add(_lblNeedsNote);
+        _programStep.Add(_cardDay, gapBelow: UiLayout.ButtonGap);
+        _programStep.Add(_cardClasses, gapBelow: UiLayout.ButtonGap);
+        _programStep.Add(_cardDrivers, gapBelow: 0);
     }
 
     private void GoToStep(int step)
@@ -735,6 +960,53 @@ internal sealed class RaceDaySetupWizard : Form
 
         SaveCurrentStep();
         ShowStep(step);
+    }
+
+    /// <summary>
+    /// The fields' sizes, in the faces the theme pass left them in: the boxes
+    /// the width they were made at, at the text size in use; the drop-downs
+    /// as wide as their longest choice when that is wider (and again when
+    /// their lists are refilled - see FitPicker); the classes list four of
+    /// its rows tall (and across to the step's edge - BuildRacingStep); the
+    /// counts for two digits; two lines kept for the
+    /// check-in count. And one caption column for both wordings of the
+    /// rounds caption.
+    /// </summary>
+    private void SizeFields()
+    {
+        var wide = UiLayout.AtTextSize(FieldWidth);
+
+        FitPicker(_cmbShape, FieldWidth);
+        FitPicker(_cmbVenue, FieldWidth);
+        FitPicker(_cmbTrack, FieldWidth);
+        FitPicker(_cmbWhoClass, ClassFilterWidth);
+
+        _txtDayName.Width = wide;
+        _lstClasses.Size = new Size(wide, ClassRows * _lstClasses.ItemHeight + 4);
+        _numRounds.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
+        _numHeatSize.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
+
+        _lblCheckInState.MinimumSize = new Size(0, 2 * Pieces.LineHeight(_lblCheckInState.Font) + _lblCheckInState.Padding.Vertical);
+
+        FieldGrid.LineUp(new[] { _racingGrid }, HeatsCaption, RacesCaption);
+    }
+
+    /// <summary>
+    /// A drop-down as wide as it was made at the normal text size
+    /// (<paramref name="least"/>), at the size in use, or as its longest
+    /// choice if that is wider - measured afresh, for a list just refilled.
+    /// </summary>
+    private static void FitPicker(ComboBox picker, int least)
+    {
+        (Font Font, int Count, int Width)? measured = null;
+
+        var width = Math.Max(UiLayout.AtTextSize(least), Pieces.PickerWidth(picker, ref measured));
+
+        // Only when it changed: a new width lays the row out again.
+        if (picker.Width != width)
+        {
+            picker.Width = width;
+        }
     }
 
     // --- What still needs you --------------------------------------------
@@ -811,12 +1083,8 @@ internal sealed class RaceDaySetupWizard : Form
     /// </summary>
     private void ShowNeedsYou()
     {
-        // Last visit's cards - rebuilt every time, since what they say changes.
-        foreach (var old in _pnlCantBuild.Controls.OfType<ReadinessCard>().ToList())
-        {
-            old.Dispose();
-        }
-
+        // What the cards say changes from one visit to the next, and which
+        // of their buttons is the loud one with it.
         _fixButtons.Clear();
 
         _lblNeedsTitle.ForeColor = AppTheme.Warning;
@@ -828,31 +1096,35 @@ internal sealed class RaceDaySetupWizard : Form
             _lblNeedsTitle.Text = "The program can't be built right now";
             _lblNeedsNote.Text = _plan.Message;
             _lblNeedsNote.ForeColor = AppTheme.TextDark;
-            _lblNeedsNote.Location = new Point(0, UiLayout.Below(_lblNeedsTitle, UiLayout.RowGap));
-            _pnlCantBuild.Height = _lblNeedsNote.Bottom + 8;
+
+            foreach (var card in Cards)
+            {
+                card.Visible = false;
+            }
+
             return;
         }
 
         var day = OpenDay;
         var (dayDone, classesDone, driversDone) = StepsDone();
 
-        var cards = new List<(int Step, string Name, string Button, bool Done, string Detail)>
+        var cards = new List<(ReadinessCard Card, bool Done, string Detail)>
         {
-            (StepDay, "The day", "Go to The Day", dayDone,
+            (_cardDay, dayDone,
                 dayDone
                     ? $"{day!.DisplayName} is open."
                     : _plan.Title == RaceProgramControl.ClosedDayTitle
                         ? "Tonight's day has been closed. Open a new one to build a program for it."
                         : "No race day is open yet - the program is built for one."),
 
-            (StepClasses, "Classes", "Go to Classes", classesDone,
+            (_cardClasses, classesDone,
                 classesDone
                     ? "Racing tonight: " + ClassList(day!.ClassNames)
                     : dayDone
                         ? "No classes are ticked for tonight."
                         : "Tick tonight's classes once the day is open."),
 
-            (StepDrivers, "Drivers", "Go to Drivers", driversDone,
+            (_cardDrivers, driversDone,
                 driversDone
                     ? "Drivers are ready to race."
                     : !dayDone
@@ -873,42 +1145,22 @@ internal sealed class RaceDaySetupWizard : Form
             ? "It's marked with a red ! on the left. Or Skip for Now, and build the program later."
             : "They're marked with a red ! on the left. Or Skip for Now, and build the program later.";
         _lblNeedsNote.ForeColor = AppTheme.TextMuted;
-        _lblNeedsNote.Location = new Point(0, UiLayout.Below(_lblNeedsTitle, 6));
 
-        var y = UiLayout.Below(_lblNeedsNote, UiLayout.SectionGap - 6);
         var first = true;
 
-        foreach (var (step, name, caption, done, detail) in cards)
+        foreach (var (card, done, detail) in cards)
         {
-            Button? fix = null;
+            card.SetState(detail, done);
+            card.Visible = true;
 
             if (!done)
             {
-                var target = step;
-
-                fix = new Button { Text = caption };
-                fix.Size = new Size(UiLayout.WidthFor(fix), UiLayout.ButtonHeight);
-                fix.Click += (_, _) => GoToStep(target);
-
                 // The first step to fix is the loud button; the rest wait
                 // their turn.
-                _fixButtons.Add((fix, first ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary));
+                _fixButtons.Add((card.Fix, first ? AppTheme.ButtonKind.Primary : AppTheme.ButtonKind.Secondary));
                 first = false;
             }
-
-            var card = new ReadinessCard(name, detail, done, fix)
-            {
-                Location = new Point(0, y),
-                Width = ContentWidth,
-            };
-
-            card.FitHeight();
-            _pnlCantBuild.Controls.Add(card);
-
-            y = card.Bottom + UiLayout.ButtonGap;
         }
-
-        _pnlCantBuild.Height = y;
     }
 
     /// <summary>Tonight's classes for a card - the first few by name, then how many more.</summary>
@@ -921,7 +1173,11 @@ internal sealed class RaceDaySetupWizard : Form
         return names.Count > shown ? $"{list} and {names.Count - shown} more." : list + ".";
     }
 
-    /// <summary>A tick in the success colour, or a red disc with a "!" - drawn at the right of a rail step.</summary>
+    /// <summary>
+    /// A tick in the success colour, or a red disc with a "!" - drawn at the
+    /// right of a rail step, at the text size in use: the shape was worked
+    /// out on an 18px square, and is drawn at that in proportion.
+    /// </summary>
     private static void PaintRailMark(Graphics g, Label label, RailMark mark)
     {
         if (mark == RailMark.None)
@@ -929,14 +1185,15 @@ internal sealed class RaceDaySetupWizard : Form
             return;
         }
 
-        const int size = 18;
-        var box = new Rectangle(label.Width - size - 12, (label.Height - size) / 2, size, size);
+        var size = UiLayout.AtTextSize(MarkSize);
+        var scale = size / (float)MarkSize;
+        var box = new Rectangle(label.Width - size - UiLayout.AtTextSize(MarkInset), (label.Height - size) / 2, size, size);
 
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         if (mark == RailMark.Done)
         {
-            using var pen = new Pen(AppTheme.Success, 2.2f)
+            using var pen = new Pen(AppTheme.Success, 2.2f * scale)
             {
                 StartCap = LineCap.Round,
                 EndCap = LineCap.Round,
@@ -945,9 +1202,9 @@ internal sealed class RaceDaySetupWizard : Form
 
             g.DrawLines(pen, new[]
             {
-                new PointF(box.Left + 3f, box.Top + 9.5f),
-                new PointF(box.Left + 7.5f, box.Top + 14f),
-                new PointF(box.Right - 3f, box.Top + 4.5f),
+                new PointF(box.Left + 3f * scale, box.Top + 9.5f * scale),
+                new PointF(box.Left + 7.5f * scale, box.Top + 14f * scale),
+                new PointF(box.Right - 3f * scale, box.Top + 4.5f * scale),
             });
 
             return;
@@ -971,13 +1228,25 @@ internal sealed class RaceDaySetupWizard : Form
     /// Painted rather than put together from labels, so the pill, the text
     /// and the border line up exactly, and the theme pass has nothing on it
     /// to recolour.
+    ///
+    /// It sizes itself (AutoSize), as the layout pieces do: as tall as what
+    /// it says needs at the width it is given, measured in the faces in use,
+    /// the pill as big as its word needs at the text size in use - so the
+    /// program step it is part of places it. One card is kept for each step
+    /// and told what to say each time the step is shown (SetState). Its
+    /// button is the one thing on it that is not painted, and it places
+    /// that itself: against the right-hand edge, level with the middle.
     /// </summary>
     private sealed class ReadinessCard : Panel
     {
+        /// <summary>Room inside the card's edge, as a Section keeps.</summary>
         private const int Pad = 16;
+
+        /// <summary>The pill, the gap after it and the card's least height, at the normal text size.</summary>
         private const int PillWidth = 78;
+
         private const int PillHeight = 22;
-        private const int TextLeft = Pad + PillWidth + 14;
+        private const int PillGap = 14;
         private const int MinimumHeight = 66;
 
         private const TextFormatFlags TitleFlags = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
@@ -986,17 +1255,16 @@ internal sealed class RaceDaySetupWizard : Form
             TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPadding;
 
         private readonly string _title;
-        private readonly string _detail;
-        private readonly bool _done;
-        private readonly Button? _fix;
+        private string _detail = string.Empty;
+        private bool _done;
 
-        public ReadinessCard(string title, string detail, bool done, Button? fix)
+        public ReadinessCard(string title, string fixCaption)
         {
             _title = title;
-            _detail = detail;
-            _done = done;
-            _fix = fix;
+            Fix = new Button { Text = fixCaption };
 
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
             DoubleBuffered = true;
             ResizeRedraw = true;
 
@@ -1007,33 +1275,89 @@ internal sealed class RaceDaySetupWizard : Form
             BackColor = AppTheme.Surface;
             Tag = AppTheme.KeepBackColor;
 
-            if (fix is not null)
-            {
-                Controls.Add(fix);
-            }
+            Controls.Add(Fix);
         }
 
-        /// <summary>Where the detail text has to stop - short of the button, if there is one.</summary>
-        private int TextWidth => Math.Max(60, (_fix is null ? Width : _fix.Left) - Pad - TextLeft);
+        /// <summary>The button that goes to the step - on the card while the step is not done.</summary>
+        public Button Fix { get; }
+
+        /// <summary>
+        /// What the card says, and whether the step is done. The program
+        /// step is told to place it again: how tall it is follows what it
+        /// says, and nothing else tells the step.
+        /// </summary>
+        public void SetState(string detail, bool done)
+        {
+            _detail = detail;
+            _done = done;
+            Fix.Visible = !done;
+
+            Invalidate();
+            Parent?.PerformLayout(this, nameof(PreferredSize));
+        }
+
+        /// <summary>The pill's size at the text size in use: as it was at the normal size, or its longer word with room either side if that is more.</summary>
+        private static Size Pill()
+        {
+            var word = Math.Max(Measure("DONE"), Measure("NEEDED"));
+
+            return new Size(
+                Math.Max(UiLayout.AtTextSize(PillWidth), word + UiLayout.AtTextSize(Pad)),
+                Math.Max(UiLayout.AtTextSize(PillHeight), Pieces.LineHeight(AppTheme.MicroFont) + 6));
+
+            static int Measure(string text) =>
+                TextRenderer.MeasureText(text, AppTheme.MicroFont, Size.Empty, TitleFlags).Width;
+        }
+
+        /// <summary>Where the step's name and what it says start - after the pill.</summary>
+        private static int TextLeft => Pad + Pill().Width + UiLayout.AtTextSize(PillGap);
 
         private int TitleHeight => TextRenderer.MeasureText(_title, AppTheme.BoldFont, Size.Empty, TitleFlags).Height;
 
-        /// <summary>Puts the button on the right and sizes the card to its text.</summary>
-        public void FitHeight()
+        /// <summary>The line the pill and the step's name share - as tall as the taller.</summary>
+        private int TitleLine => Math.Max(TitleHeight, Pill().Height);
+
+        /// <summary>The button's size: its caption's, in the face buttons are drawn in (UiLayout.ButtonSizeFor).</summary>
+        private Size FixSize => UiLayout.ButtonSizeFor(Fix.Text);
+
+        /// <summary>Where the detail text has to stop in a card <paramref name="width"/> wide - short of the button, while there is one.</summary>
+        private int TextWidth(int width) => Math.Max(60, width - Pad - TextLeft - (_done ? 0 : FixSize.Width + Pad));
+
+        /// <summary>How tall the card is at <paramref name="width"/>: its text, or its button, with the room round them.</summary>
+        private int HeightAt(int width)
         {
-            if (_fix is not null)
+            var detail = TextRenderer.MeasureText(_detail, AppTheme.SmallFont,
+                new Size(TextWidth(width), int.MaxValue), DetailFlags).Height;
+
+            var text = Pad + TitleLine + 4 + detail + Pad;
+            var button = _done ? 0 : FixSize.Height + 2 * Pad;
+
+            return Math.Max(UiLayout.AtTextSize(MinimumHeight), Math.Max(text, button));
+        }
+
+        /// <summary>As wide as it is given, and as tall as it needs to be at that width.</summary>
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
+
+            return new Size(width, HeightAt(width));
+        }
+
+        /// <summary>The button against the right-hand edge, level with the middle.</summary>
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+
+            var size = FixSize;
+            var bounds = new Rectangle(
+                Math.Max(0, Width - Pad - size.Width),
+                Math.Max(0, (Height - size.Height) / 2),
+                size.Width,
+                size.Height);
+
+            if (Fix.Bounds != bounds)
             {
-                _fix.Left = Width - Pad - _fix.Width;
-            }
-
-            var detailHeight = TextRenderer.MeasureText(_detail, AppTheme.SmallFont,
-                new Size(TextWidth, int.MaxValue), DetailFlags).Height;
-
-            Height = Math.Max(MinimumHeight, Pad + TitleHeight + 4 + detailHeight + Pad);
-
-            if (_fix is not null)
-            {
-                _fix.Top = (Height - _fix.Height) / 2;
+                Fix.Bounds = bounds;
             }
         }
 
@@ -1073,11 +1397,12 @@ internal sealed class RaceDaySetupWizard : Form
                 g.DrawPath(pen, path);
             }
 
-            // The pill, level with the step's name.
-            var titleTop = Pad;
-            var pill = new Rectangle(Pad, titleTop + (TitleHeight - PillHeight) / 2, PillWidth, PillHeight);
+            // The pill and the step's name, level on one line.
+            var line = TitleLine;
+            var pillSize = Pill();
+            var pill = new Rectangle(Pad, Pad + (line - pillSize.Height) / 2, pillSize.Width, pillSize.Height);
 
-            using (var path = Rounded(pill, PillHeight / 2))
+            using (var path = Rounded(pill, pillSize.Height / 2))
             using (var fill = new SolidBrush(_done ? Looks.Mix(AppTheme.Surface, AppTheme.Success, 0.2) : AppTheme.Danger))
             {
                 g.FillPath(fill, path);
@@ -1090,10 +1415,10 @@ internal sealed class RaceDaySetupWizard : Form
 
             // The step's name, and where it stands. A step that's done reads
             // quieter, so the one that isn't is what the eye lands on.
-            TextRenderer.DrawText(g, _title, AppTheme.BoldFont, new Point(TextLeft, titleTop),
+            TextRenderer.DrawText(g, _title, AppTheme.BoldFont, new Point(TextLeft, Pad + (line - TitleHeight) / 2),
                 _done ? AppTheme.TextMuted : AppTheme.TextDark, TitleFlags);
 
-            var detailBox = new Rectangle(TextLeft, titleTop + TitleHeight + 4, TextWidth, Height);
+            var detailBox = new Rectangle(TextLeft, Pad + line + 4, TextWidth(Width), Height);
 
             TextRenderer.DrawText(g, _detail, AppTheme.SmallFont, detailBox, AppTheme.TextMuted, DetailFlags);
         }
@@ -1115,9 +1440,9 @@ internal sealed class RaceDaySetupWizard : Form
 
     private void BuildSummaryStep()
     {
-        _lblSummary.Location = new Point(0, 0);
         _lblSummary.AutoSize = true;
-        _lblSummary.MaximumSize = new Size(ContentWidth, 0);
+
+        _summaryStep.Add(_lblSummary, gapBelow: 0);
     }
 
     // --- Moving between steps -------------------------------------------
@@ -1129,7 +1454,8 @@ internal sealed class RaceDaySetupWizard : Form
         // Before anything is shown: the program step and the rail both read it.
         RefreshReadiness();
 
-        _content.Controls.Clear();
+        // The step's own page - none on the welcome step.
+        Control? content = null;
 
         switch (_step)
         {
@@ -1144,12 +1470,7 @@ internal sealed class RaceDaySetupWizard : Form
                 _lblStepTitle.Text = "Tonight's day";
                 _lblStepBody.Text = "What kind of night it is, and where. Moving on from here opens the day.";
                 LoadDayStep();
-                _content.Controls.Add(_cmbShape);
-                _content.Controls.Add(_lblShapeHint);
-                AddCaptioned("Call it", _txtDayName);
-                AddCaptioned("Venue", _cmbVenue);
-                AddCaptioned("Track layout", _cmbTrack);
-                _content.Controls.Add(_lblDayState);
+                content = _dayStep;
                 break;
 
             case StepClasses:
@@ -1157,15 +1478,7 @@ internal sealed class RaceDaySetupWizard : Form
                 _lblStepBody.Text = "Tick the classes out tonight - Add Class for a new one. Then how many times each driver "
                                   + "races, how many cars go out at once, and the race each class runs.";
                 LoadRacingStep();
-                AddCaptioned("Classes racing", _lstClasses);
-                _content.Controls.Add(_lblRoundsCaption);
-                _content.Controls.Add(_numRounds);
-                AddCaptioned("Drivers per heat", _numHeatSize);
-                _content.Controls.Add(_chkFirstRace);
-                _content.Controls.Add(_dtpFirstRace);
-                _content.Controls.Add(_btnAddClass);
-                _content.Controls.Add(_lblFormatsCaption);
-                _content.Controls.Add(_pnlFormats);
+                content = _racingStep;
                 break;
 
             case StepDrivers:
@@ -1173,15 +1486,7 @@ internal sealed class RaceDaySetupWizard : Form
                 _lblStepBody.Text = "Tick everyone who has turned up - filter by class to work through them a class at a "
                                   + "time. Someone new? Add Driver puts them on file and checks them in.";
                 LoadCheckInStep();
-                _content.Controls.Add(_cmbWhoClass);
-                _content.Controls.Add(_chkOnlyMissing);
-                _content.Controls.Add(_lstWhosHere);
-                _content.Controls.Add(_btnCheckAllShown);
-                _content.Controls.Add(_btnClearAll);
-                _content.Controls.Add(_btnGoToCheckIn);
-                _content.Controls.Add(_lblCheckInState);
-                _content.Controls.Add(_chkCheckedInOnly);
-                _content.Controls.Add(_btnAddDriver);
+                content = _driversStep;
                 break;
 
             case StepProgramme:
@@ -1191,16 +1496,22 @@ internal sealed class RaceDaySetupWizard : Form
                       + "Build It makes them; Back changes anything first."
                     : "The races themselves, built from tonight's classes and the drivers in them.";
                 LoadProgrammeStep();
-                _content.Controls.Add(_lblProgrammeState);
-                _content.Controls.Add(_pnlCantBuild);
+                content = _programStep;
                 break;
 
             default:
                 _lblStepTitle.Text = "That's tonight ready";
                 _lblStepBody.Text = "Anything left is on the Next Steps tab, which keeps track of what is next.";
                 LoadSummaryStep();
-                _content.Controls.Add(_lblSummary);
+                content = _summaryStep;
                 break;
+        }
+
+        // This step's page on show, and every other one hidden - which takes
+        // it out of the layout as well as out of sight.
+        foreach (var stepPage in StepPages)
+        {
+            stepPage.Visible = ReferenceEquals(stepPage, content);
         }
 
         var last = _step == StepNames.Length - 1;
@@ -1215,34 +1526,16 @@ internal sealed class RaceDaySetupWizard : Form
 
         _lblProgress.Text = _step is 0 || last ? string.Empty : $"Step {_step} of {StepNames.Length - 2}";
 
-        AppTheme.ApplyRecursively(_content);
+        // Nothing to say on the welcome page or the last one - and on the
+        // last, nothing on the left at all, so no empty row is left there.
+        _lblProgress.Visible = _lblProgress.Text.Length > 0;
+        _footerLeft.Visible = !last;
+
         ApplyFrameColours();
 
         // Enter moves on.
         AcceptButton = _btnNext;
         _btnNext.Focus();
-    }
-
-    /// <summary>
-    /// Puts a small caption above a field and adds both.
-    ///
-    /// The steps are laid out at fixed coordinates the way FirstRunWizard's
-    /// are, so the caption is positioned from the field rather than the
-    /// other way round - one number per row instead of two.
-    /// </summary>
-    private void AddCaptioned(string caption, Control field)
-    {
-        var label = new Label
-        {
-            Text = caption,
-            AutoSize = true,
-            Font = AppTheme.SmallFont,
-            ForeColor = AppTheme.TextMuted,
-            Location = new Point(field.Left, Math.Max(0, field.Top - 20)),
-        };
-
-        _content.Controls.Add(label);
-        _content.Controls.Add(field);
     }
 
     private void ApplyFrameColours()
@@ -1268,7 +1561,7 @@ internal sealed class RaceDaySetupWizard : Form
 
         foreach (var hint in new[]
                  {
-                     _lblShapeHint, _lblDayState, _lblRoundsCaption, _lblFormatsCaption,
+                     _lblShapeHint, _lblDayState, _lblFormatsCaption, _lblNoFormats,
                  })
         {
             hint.ForeColor = AppTheme.TextMuted;
@@ -1470,6 +1763,12 @@ internal sealed class RaceDaySetupWizard : Form
             _cmbTrack.Items.Add(layout.Name);
         }
 
+        // As wide as their longest choice now - measured before the text goes
+        // in, for the same reason as above: resizing an editable combo can
+        // select what is typed in it.
+        FitPicker(_cmbVenue, FieldWidth);
+        FitPicker(_cmbTrack, FieldWidth);
+
         if (day is not null)
         {
             _cmbShape.SelectedIndex = day.IsClubNight ? 1 : 0;
@@ -1492,9 +1791,7 @@ internal sealed class RaceDaySetupWizard : Form
     }
 
     private void ApplyShapeHint() =>
-        _lblShapeHint.Text = _cmbShape.SelectedIndex == 1
-            ? "A club night is just races - everyone races, several times, and that is the night. No finals."
-            : "A race day qualifies in heats and then runs finals built from how qualifying went.";
+        _lblShapeHint.Text = _cmbShape.SelectedIndex == 1 ? ClubNightShapeHint : RaceDayShapeHint;
 
     private void SaveDay()
     {
@@ -1541,9 +1838,10 @@ internal sealed class RaceDaySetupWizard : Form
 
         // A club night races rather than qualifies, and the caption is the
         // only thing that says so on this step.
-        _lblRoundsCaption.Text = day is { IsClubNight: true }
-            ? "Races each driver gets"
-            : "Heats each driver gets";
+        if (_lblRoundsCaption is not null)
+        {
+            _lblRoundsCaption.Text = day is { IsClubNight: true } ? RacesCaption : HeatsCaption;
+        }
 
         if (day is not null)
         {
@@ -1605,7 +1903,7 @@ internal sealed class RaceDaySetupWizard : Form
             // The check-in sheet is per race day - CheckInStore.CurrentEventId
             // follows the open one - so there is nowhere to record this yet.
             _lblCheckInState.Text = "No race day is open, so nobody can be checked in yet. Go back to The day to open "
-                                  + "one - new drivers can still be added below.";
+                                  + "one - new drivers can still be added with Add Driver.";
 
             _lstWhosHere.Items.Clear();
             return;
@@ -1622,6 +1920,9 @@ internal sealed class RaceDaySetupWizard : Form
         {
             _cmbWhoClass.Items.Add(raceClass.Name);
         }
+
+        // As wide as the longest class's name, now the list holds them.
+        FitPicker(_cmbWhoClass, ClassFilterWidth);
 
         _cmbWhoClass.SelectedItem = previous is not null && _cmbWhoClass.Items.Contains(previous)
             ? previous
@@ -1651,9 +1952,16 @@ internal sealed class RaceDaySetupWizard : Form
 
         // Something to build: the plan, and Build It on the button. Nothing
         // to build: the steps that still need you instead, each with the way
-        // to it.
+        // to it - the cards only when one of the steps is what stands in the
+        // way (ShowNeedsYou).
         _lblProgrammeState.Visible = plan.Ok;
-        _pnlCantBuild.Visible = !plan.Ok;
+        _lblNeedsTitle.Visible = !plan.Ok;
+        _lblNeedsNote.Visible = !plan.Ok;
+
+        foreach (var card in Cards)
+        {
+            card.Visible = false;
+        }
 
         _lblProgrammeState.Text = plan.Message;
         _lblProgrammeState.ForeColor = AppTheme.TextDark;
@@ -1693,9 +2001,18 @@ internal sealed class RaceDaySetupWizard : Form
 /// <summary>
 /// The small window behind the wizard's Add Class button: one name,
 /// checked before it closes - not empty, and not a class already on file.
+///
+/// On the layout pieces (DialogFit): what it is for, the name under its
+/// caption, two lines kept for what is wrong with it, and Add Class and
+/// Cancel at the foot; as tall as that. It used to be placed in pixels in a
+/// column 360px wide at every text size, the problem's two lines of the
+/// small type kept by hand.
 /// </summary>
 internal sealed class QuickClassForm : Form
 {
+    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
+    private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
+
     private readonly TextBox _txtName = new();
     private readonly Label _lblProblem = new();
     private readonly Func<string, bool> _exists;
@@ -1707,21 +2024,13 @@ internal sealed class QuickClassForm : Form
         _exists = exists;
 
         Text = "Add a class";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-
-        const int width = 360;
 
         var lblIntro = new Label
         {
             Text = "Saved with the club's classes, and ticked for tonight. Its race format can be set right after.",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
@@ -1736,48 +2045,46 @@ internal sealed class QuickClassForm : Form
 
         var nameField = RoundedField.Wrap(_txtName);
 
-        _lblProblem.AutoSize = false;
-        _lblProblem.Size = new Size(width, AppTheme.SmallFont.Height * 2 + 4);
+        // Room for two lines, always - so the window does not jump when it
+        // has something to say.
+        _lblProblem.AutoSize = true;
         _lblProblem.Font = AppTheme.SmallFont;
         _lblProblem.ForeColor = AppTheme.Accent;
+        _lblProblem.MinimumSize = new Size(0, 2 * Pieces.LineHeight(AppTheme.SmallFont));
 
         var ok = new Button { Text = "Add Class" };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         ok.Click += (_, _) => TryAccept();
 
-        Controls.AddRange(new Control[] { lblIntro, lblName, nameField, _lblProblem, ok, cancel });
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
+        page.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(nameField, gapBelow: UiLayout.RowGap);
+        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // the bar is handed Cancel first, as its first button goes furthest
+        // right - and Tab still reaches Add Class first, from the tab order
+        // set here.
+        page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+        ok.TabIndex = 0;
+        cancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = ok;
         CancelButton = cancel;
 
-        // Themed BEFORE it is laid out - see QuickDriverForm.
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(cancel, AppTheme.ButtonKind.Secondary);
 
-        const int pad = UiLayout.PageLeft;
-        var y = UiLayout.PageTop;
+        // As tall as a line of its text and room round it, at the text size
+        // in use; the page gives it its width.
+        nameField.Height = AppTheme.BodyFont.Height + 16;
 
-        lblIntro.Location = new Point(pad, y);
-        y = UiLayout.Below(lblIntro, UiLayout.SectionGap - UiLayout.HintGap);
-
-        lblName.Location = new Point(pad, y);
-        y = UiLayout.Below(lblName, UiLayout.HintGap);
-
-        nameField.Bounds = new Rectangle(pad, y, width, AppTheme.BodyFont.Height + 16);
-        y = nameField.Bottom + UiLayout.RowGap;
-
-        _lblProblem.Location = new Point(pad, y);
-        y = _lblProblem.Bottom + UiLayout.RowGap;
-
-        cancel.Size = new Size(UiLayout.WidthFor(cancel), UiLayout.ButtonHeight);
-        cancel.Location = new Point(pad + width - cancel.Width, y);
-
-        ok.Size = new Size(UiLayout.WidthFor(ok), UiLayout.ButtonHeight);
-        ok.Location = new Point(cancel.Left - UiLayout.ButtonGap - ok.Width, y);
-
-        ClientSize = new Size(width + pad * 2, y + UiLayout.ButtonHeight + UiLayout.PageTop);
+        DialogFit.Keep(this, page, width: DialogWidth);
     }
 
     private void TryAccept()
@@ -1806,10 +2113,23 @@ internal sealed class QuickClassForm : Form
 ///
 /// It hands the answers back rather than saving them itself - the wizard
 /// owns the save and the check-in, so this has nothing to get out of step.
+///
+/// On the layout pieces (DialogFit): what it is for, each field under its
+/// caption, two lines kept for what is wrong, and Add Driver and Cancel at
+/// the foot; as tall as that, and wider than it was made when a class's
+/// name needs the drop-down wider. It used to be placed in pixels in a
+/// column 360px wide at every text size, the class drop-down 240px wide
+/// however long a class's name.
 /// </summary>
 internal sealed class QuickDriverForm : Form
 {
     private const string NoClass = "(no class)";
+
+    /// <summary>How wide it is inside its frame at the normal text size: the 360px column it was made with, and the page's margins.</summary>
+    private const int DialogWidth = 360 + UiLayout.PageLeft + UiLayout.PageRight;
+
+    /// <summary>The class drop-down's width at the normal text size - wider when a class's name needs it - and the transponder's with it.</summary>
+    private const int ClassPickerWidth = 240;
 
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtTransponder = new();
@@ -1828,21 +2148,13 @@ internal sealed class QuickDriverForm : Form
         _ownerOf = ownerOf;
 
         Text = "Add a driver";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-
-        const int width = 360;
 
         var lblIntro = new Label
         {
             Text = "Saved with the drivers on file, and checked in for tonight.",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
@@ -1865,7 +2177,6 @@ internal sealed class QuickDriverForm : Form
         var transponderField = RoundedField.Wrap(_txtTransponder);
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbClass.Width = 240;
         _cmbClass.Items.Add(NoClass);
 
         foreach (var name in classes)
@@ -1877,62 +2188,76 @@ internal sealed class QuickDriverForm : Form
 
         // Room for two lines, always - so the window does not jump when it
         // has something to say.
-        _lblProblem.AutoSize = false;
-        _lblProblem.Size = new Size(width, AppTheme.SmallFont.Height * 2 + 4);
+        _lblProblem.AutoSize = true;
         _lblProblem.Font = AppTheme.SmallFont;
         _lblProblem.ForeColor = AppTheme.Accent;
+        _lblProblem.MinimumSize = new Size(0, 2 * Pieces.LineHeight(AppTheme.SmallFont));
 
         var ok = new Button { Text = "Add Driver" };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         ok.Click += (_, _) => TryAccept();
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, lblName, nameField, lblTransponder, transponderField, lblClass, _cmbClass, _lblProblem, ok, cancel,
-        });
+        // Each field under its caption: the name across the page, the
+        // transponder and the class at the class drop-down's width.
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.SectionGap - UiLayout.HintGap);
+
+        page.Add(lblName, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(nameField, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+
+        page.Add(lblTransponder, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(transponderField, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+
+        page.Add(lblClass, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(_cmbClass, stretch: false, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+        Pieces.KeepHeightTold(_cmbClass);
+
+        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // the bar is handed Cancel first, as its first button goes furthest
+        // right - and Tab still reaches Add Driver first, from the tab order
+        // set here.
+        page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+        ok.TabIndex = 0;
+        cancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = ok;
         CancelButton = cancel;
 
-        // Themed BEFORE it is laid out: the theme takes the text boxes'
-        // native borders off, which changes their height.
+        // Themed before the fields are sized: the drop-down's height is its
+        // themed one, which the text fields match.
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(cancel, AppTheme.ButtonKind.Secondary);
 
-        const int pad = UiLayout.PageLeft;
-        var y = UiLayout.PageTop;
-
-        lblIntro.Location = new Point(pad, y);
-        y = UiLayout.Below(lblIntro, UiLayout.SectionGap - UiLayout.HintGap);
+        // Kept here, and never read back from the drop-down: it is in the
+        // page already, whose table cuts a part down to the column it has
+        // now - the width of a window not sized yet. Read back, a long
+        // class's name left the window at its usual width and the drop-down
+        // too narrow for the name (the window test, "Add a driver"), and the
+        // transponder box narrower than the drop-down at a larger text size.
+        (Font Font, int Count, int Width)? classWidth = null;
+        var pickerWidth = Math.Max(UiLayout.AtTextSize(ClassPickerWidth), Pieces.PickerWidth(_cmbClass, ref classWidth));
+        _cmbClass.Width = pickerWidth;
 
         // One height for all three fields: the drop-down's, which is set by
         // its font, so the two text fields match it exactly.
         var fieldHeight = Math.Max(_cmbClass.Height, AppTheme.BodyFont.Height + 12);
 
-        nameField.Size = new Size(width, fieldHeight);
-        transponderField.Size = new Size(_cmbClass.Width, fieldHeight);
+        nameField.Height = fieldHeight;
+        transponderField.Size = new Size(pickerWidth, fieldHeight);
 
-        foreach (var (caption, field) in new (Label, Control)[] { (lblName, nameField), (lblTransponder, transponderField), (lblClass, _cmbClass) })
-        {
-            caption.Location = new Point(pad, y);
-            y = UiLayout.Below(caption, UiLayout.HintGap);
+        // The column it was made with, at the text size in use - or wider,
+        // when a class's name makes the drop-down wider than that column.
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            pickerWidth + UiLayout.PageLeft + UiLayout.PageRight);
 
-            field.Location = new Point(pad, y);
-            y = field.Bottom + UiLayout.RowGap + UiLayout.HintGap;
-        }
-
-        _lblProblem.Location = new Point(pad, y);
-        y = _lblProblem.Bottom + UiLayout.RowGap;
-
-        cancel.Size = new Size(UiLayout.WidthFor(cancel), UiLayout.ButtonHeight);
-        cancel.Location = new Point(pad + width - cancel.Width, y);
-
-        ok.Size = new Size(UiLayout.WidthFor(ok), UiLayout.ButtonHeight);
-        ok.Location = new Point(cancel.Left - UiLayout.ButtonGap - ok.Width, y);
-
-        ClientSize = new Size(width + pad * 2, y + UiLayout.ButtonHeight + UiLayout.PageTop);
+        DialogFit.Keep(this, page, width: width, widthMeasured: true);
     }
 
     private void TryAccept()

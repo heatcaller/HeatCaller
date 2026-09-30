@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace HeatCaller;
 
@@ -108,42 +109,65 @@ public static class AppDialog
         }
     }
 
+    /// <summary>
+    /// For the layout test (LayoutTests.EveryConvertedWindowFitsAtEverySize):
+    /// the message box as it would open, not opened.
+    /// </summary>
+    internal static Form BuildForLayoutCheck(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon) =>
+        new DialogForm(text, caption, buttons, icon, MessageBoxDefaultButton.Button1);
+
+    /// <summary>
+    /// The message box itself: its title in the message's colour, the icon
+    /// beside the message, and the buttons under both against the right-hand
+    /// edge.
+    ///
+    /// On the layout pieces (DialogFit): the title, then a Body holding the
+    /// message - beside the icon, in a Beside - over a bar of buttons. As
+    /// wide as the message needs, up to a measure of about 460px at the
+    /// normal text size, and never narrower than the title or the buttons;
+    /// as tall as all of it, and on a screen too short for a long message,
+    /// the message scrolls and the title and the buttons stay.
+    ///
+    /// It used to be placed in pixels, measured twice - once before the
+    /// theme pass and once after, because the pass changed the faces - with
+    /// a fixed 460px measure, 20px margins and a 40px icon at every text
+    /// size, and no limit on how tall a long message made it.
+    /// </summary>
     private sealed class DialogForm : Form
     {
-        private const int Pad = 20;
+        /// <summary>The icon's side, and the longest line a message runs to before it wraps, at the normal text size.</summary>
         private const int IconSize = 40;
+        private const int Measure = 460;
 
-        private readonly MessageBoxIcon _icon;
+        /// <summary>The corners' radius, and the room kept inside the window's edge for the rim painted round it.</summary>
+        private const int Corner = 10;
+        private const int RimRoom = 4;
+
         private readonly Color _accent;
-        private readonly Rectangle _iconBounds;
 
         /// <summary>The button Enter presses and the focus starts on. See OnShown.</summary>
         private readonly Button _defaultButton;
 
         public DialogForm(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton)
         {
-            _icon = icon;
             _accent = AccentFor(icon);
 
             Text = string.IsNullOrWhiteSpace(caption) ? "HeatCaller" : caption;
 
-            // No system frame at all. The caption bar is the one part of a
-            // dialog Windows will not let you colour, so the window does
-            // without it and draws its own title instead - which is the
-            // whole reason this class exists.
-            FormBorderStyle = FormBorderStyle.None;
-            StartPosition = FormStartPosition.CenterParent;
-
-            // Off. Every position in here is worked out by hand against the
-            // theme's own font, so there is nothing for WinForms to rescale
-            // - and when it tried, it moved the buttons down without moving
-            // the bottom edge with them.
-            AutoScaleMode = AutoScaleMode.None;
-            ShowInTaskbar = false;
+            // No system frame at all (DialogFit.Keep, frameless). The caption
+            // bar is the one part of a dialog Windows will not let you
+            // colour, so the window does without it and draws its own title
+            // instead - which is the whole reason this class exists.
             KeyPreview = true;
             BackColor = AppTheme.Surface;
             ForeColor = AppTheme.TextDark;
             Font = AppTheme.BodyFont;
+
+            // The page a few pixels in from the edge, so the rim painted on
+            // the window (OnPaint) is not covered by it - round the corners
+            // too, where the rim curves in: at four pixels nothing of the
+            // curve is under the page.
+            Padding = new Padding(RimRoom);
 
             var lblCaption = new Label
             {
@@ -151,57 +175,61 @@ public static class AppDialog
                 AutoSize = true,
                 Font = AppTheme.BoldFont,
                 ForeColor = _accent,
-                Location = new Point(Pad, Pad),
             };
-
-            var hasIcon = icon != MessageBoxIcon.None;
-            var messageLeft = Pad + (hasIcon ? IconSize + 16 : 0);
-            var messageTop = UiLayout.Below(lblCaption, 14);
-
-            _iconBounds = hasIcon
-                ? new Rectangle(Pad, messageTop, IconSize, IconSize)
-                : Rectangle.Empty;
 
             var lblText = new Label
             {
                 Text = text,
                 AutoSize = true,
-                MaximumSize = new Size(460, 0),
                 ForeColor = AppTheme.TextDark,
-                Location = new Point(messageLeft, messageTop),
             };
 
-            // PreferredSize, not Width: an AutoSize label has not measured
-            // itself before it is shown, so Width is whatever it was
-            // constructed with and the dialog comes out the wrong size.
-            var captionWidth = lblCaption.PreferredSize.Width;
-            var textWidth = lblText.PreferredSize.Width;
+            var hasIcon = icon != MessageBoxIcon.None;
+
+            // The title over the part that scrolls, not in it: a message too
+            // long for the screen scrolls under its title, which stays in
+            // sight with the buttons - the title says what the message is.
+            var page = new FillPage();
+            page.Add(lblCaption, gapBelow: UiLayout.RowGap);
+
+            var body = DialogFit.Body(page);
+
+            if (hasIcon)
+            {
+                // The icon down the left of the message, the message wrapping
+                // to what it leaves. As tall as the taller of the two - a
+                // one-line message beside the icon is shorter than it.
+                var row = new Beside(() => UiLayout.AtTextSize(IconSize))
+                {
+                    SideOnLeft = true,
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                };
+
+                row.Add(lblText, gapBelow: 0);
+                row.AddSide(new Glyph(icon, _accent) { Height = UiLayout.AtTextSize(IconSize) }, gapBelow: 0);
+                body.Add(row, gapBelow: 0);
+            }
+            else
+            {
+                body.Add(lblText, gapBelow: 0);
+            }
 
             var made = MakeButtons(buttons);
 
-            var rowWidth = made.Sum(b => UiLayout.WidthFor(b) + UiLayout.ButtonGap) - UiLayout.ButtonGap;
+            // Against the right-hand edge, the way every dialog in Windows
+            // puts them, in the order Windows' own message box has them: the
+            // bar puts its first button furthest right, so they go in last
+            // first. Tab goes through them left to right all the same.
+            var bar = new ButtonBar(alignRight: true).With(Enumerable.Reverse(made).ToArray<Control>());
 
-            var contentRight = Math.Max(
-                Math.Max(Pad + captionWidth, messageLeft + textWidth),
-                Pad + rowWidth);
-
-            // Clear of BOTH the message and the icon - a one-line message
-            // beside a 40px glyph is shorter than the glyph.
-            var rowTop = Math.Max(
-                UiLayout.Below(lblText, 22),
-                (hasIcon ? _iconBounds.Bottom : 0) + 22);
-
-            // Buttons sit against the right edge, the way every dialog in
-            // Windows puts them.
-            UiLayout.ButtonRow(contentRight - rowWidth, rowTop, made);
-
-            foreach (var button in made)
+            for (var i = 0; i < made.Length; i++)
             {
-                Controls.Add(button);
+                made[i].TabIndex = i;
             }
 
-            Controls.Add(lblCaption);
-            Controls.Add(lblText);
+            page.Add(bar, gapBelow: 0);
+            Controls.Add(page);
 
             // The first button unless the caller chose another - the one
             // Windows' own message box would pick for the same choice.
@@ -222,64 +250,77 @@ public static class AppDialog
             // colour that says what KIND of message this is.
             lblCaption.ForeColor = _accent;
 
-            // The message measured again, now, in the font the theming pass
-            // left it with and at the width it will really wrap to - and the
-            // buttons put below THAT.
-            //
-            // The first measurement above was taken before theming, from
-            // PreferredSize, which for a wrapping label asks "how big with
-            // no width limit" and then clips the width to MaximumSize - so it
-            // came back one line tall however many lines the text really
-            // wraps to. A long message (the unfinished-race question) then
-            // had its buttons laid over its last paragraph.
-            var wrapWidth = lblText.MaximumSize.Width;
-            var asked = lblText.GetPreferredSize(new Size(wrapWidth, 0));
-            var drawn = TextRenderer.MeasureText(lblText.Text, lblText.Font, new Size(wrapWidth, int.MaxValue),
-                TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+            // As wide as the message needs, measured now in the faces the
+            // theme pass left - its longest line, up to the measure - and
+            // never narrower than the title (up to the same measure) or the
+            // buttons on one line. The page's margins round it.
+            var measure = UiLayout.AtTextSize(Measure);
+            var beside = hasIcon ? UiLayout.AtTextSize(IconSize) + UiLayout.RowGap : 0;
 
-            lblText.AutoSize = false;
-            lblText.Size = new Size(
-                Math.Min(wrapWidth, Math.Max(asked.Width, drawn.Width)) + 2,
-                Math.Max(asked.Height, drawn.Height) + 4);
+            var message = Math.Min(measure, TextRenderer.MeasureText(lblText.Text, lblText.Font).Width);
+            var title = Math.Min(beside + measure, TextRenderer.MeasureText(lblCaption.Text, lblCaption.Font).Width);
 
-            var themedRowWidth = made.Sum(b => UiLayout.WidthFor(b) + UiLayout.ButtonGap) - UiLayout.ButtonGap;
+            var content = Math.Max(Math.Max(beside + message, title), bar.OneLineWidth);
 
-            contentRight = Math.Max(
-                Math.Max(Pad + lblCaption.PreferredSize.Width, lblText.Right),
-                Pad + themedRowWidth);
+            DialogFit.Keep(
+                this,
+                page,
+                width: RimRoom * 2 + UiLayout.PageLeft + content + UiLayout.PageRight,
+                body: body,
+                widthMeasured: true,
+                frameless: true);
 
-            rowTop = Math.Max(lblText.Bottom + 22, (hasIcon ? _iconBounds.Bottom : 0) + 22);
-            UiLayout.ButtonRow(contentRight - themedRowWidth, rowTop, made);
+            // Dragged by anywhere on its face but a button - it has no
+            // caption bar to grab. The page and what is in it cover the
+            // window, so each of them hands a press on to it (see DragWindow).
+            DragFrom(page);
+        }
 
-            // Sized from where the controls ACTUALLY ended up rather than
-            // from where this expected to put them.
-            //
-            // The theming pass runs between the two and it changes sizes -
-            // it sets the bold face on every button and gives each one
-            // padding for its caption. A dialog sized from the prediction
-            // instead of the result is a dialog that cuts its own buttons
-            // in half with its bottom edge, which is exactly what it did.
-            //
-            // PreferredSize for anything that sizes itself: an AutoSize
-            // label has not measured its text until it is laid out, so
-            // Bottom is whatever it was constructed with.
-            static int BottomOf(Control c) =>
-                c.Top + (c.AutoSize ? Math.Max(c.Height, c.PreferredSize.Height) : c.Height);
+        /// <summary>A press on <paramref name="part"/> or anything in it but a button or a scrollbar drags the window.</summary>
+        private void DragFrom(Control part)
+        {
+            if (part is ButtonBase or ScrollBar or ThinScrollBar)
+            {
+                return;
+            }
 
-            static int RightOf(Control c) =>
-                c.Left + (c.AutoSize ? Math.Max(c.Width, c.PreferredSize.Width) : c.Width);
+            part.MouseDown += DragWindow;
 
-            var widest = Controls.Cast<Control>().Max(RightOf);
+            foreach (Control inside in part.Controls)
+            {
+                DragFrom(inside);
+            }
+        }
 
-            // The glyph is painted, not a control, so it is not in Controls
-            // and has to be accounted for by hand.
-            var lowest = Math.Max(Controls.Cast<Control>().Max(BottomOf), _iconBounds.Bottom);
+        private void DragWindow(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || !IsHandleCreated)
+            {
+                return;
+            }
 
-            ClientSize = new Size(
-                Math.Max(contentRight, widest) + Pad,
-                Math.Max(rowTop + UiLayout.ButtonHeight, lowest) + Pad);
+            // What pressing on a title bar does: the window moves with the
+            // pointer until the button is let go.
+            ReleaseCapture();
+            SendMessage(Handle, WmNcLeftButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+        }
 
-            using var path = Rounded(new Rectangle(0, 0, Width, Height), 10);
+        private const int WmNcLeftButtonDown = 0x00A1;
+        private const int HtCaption = 2;
+
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        /// <summary>The rounded corners, whatever size DialogFit makes the window.</summary>
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+
+            // The region set before is let go by the setter itself.
+            using var path = Rounded(new Rectangle(0, 0, Width, Height), Corner);
             Region = new Region(path);
         }
 
@@ -367,60 +408,85 @@ public static class AppDialog
 
             // A rim, so the dialog reads as a raised surface against the
             // page rather than a hole cut in it.
-            using (var edge = new Pen(AppTheme.Border))
-            using (var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), 10))
-            {
-                g.DrawPath(edge, path);
-            }
+            using var edge = new Pen(AppTheme.Border);
+            using var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Corner);
 
-            if (_icon == MessageBoxIcon.None)
-            {
-                return;
-            }
-
-            DrawIcon(g, _iconBounds);
+            g.DrawPath(edge, path);
         }
 
         /// <summary>
-        /// The glyph, drawn rather than shipped: a filled disc in the
-        /// message's own colour with the mark cut into it.
+        /// The icon, drawn rather than shipped: a filled disc in the
+        /// message's own colour with the mark cut into it, as big as it is
+        /// made - its side follows the text size.
         /// </summary>
-        private void DrawIcon(Graphics g, Rectangle bounds)
+        private sealed class Glyph : Control
         {
-            using (var disc = new SolidBrush(Color.FromArgb(48, _accent)))
+            private readonly MessageBoxIcon _icon;
+            private readonly Color _accent;
+
+            public Glyph(MessageBoxIcon icon, Color accent)
             {
-                g.FillEllipse(disc, bounds);
+                _icon = icon;
+                _accent = accent;
+
+                SetStyle(
+                    ControlStyles.UserPaint
+                    | ControlStyles.AllPaintingInWmPaint
+                    | ControlStyles.OptimizedDoubleBuffer
+                    | ControlStyles.ResizeRedraw,
+                    true);
+
+                TabStop = false;
+                Tag = AppTheme.KeepBackColor;
             }
 
-            using (var ring = new Pen(_accent, 2f))
+            protected override void OnPaint(PaintEventArgs e)
             {
-                g.DrawEllipse(ring, bounds.X + 1, bounds.Y + 1, bounds.Width - 2, bounds.Height - 2);
+                base.OnPaint(e);
+
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                // A circle, whatever shape the column gives the control.
+                var side = Math.Max(1, Math.Min(Width, Height));
+                var bounds = new Rectangle(0, 0, side, side);
+
+                using (var disc = new SolidBrush(Color.FromArgb(48, _accent)))
+                {
+                    g.FillEllipse(disc, bounds);
+                }
+
+                using (var ring = new Pen(_accent, 2f))
+                {
+                    g.DrawEllipse(ring, bounds.X + 1, bounds.Y + 1, bounds.Width - 2, bounds.Height - 2);
+                }
+
+                var mark = _icon switch
+                {
+                    MessageBoxIcon.Error => "!",
+                    MessageBoxIcon.Warning => "!",
+                    MessageBoxIcon.Question => "?",
+                    _ => "i",
+                };
+
+                using var font = new Font(AppTheme.BoldFont.FontFamily, bounds.Height * 0.52f, FontStyle.Bold);
+                using var brush = new SolidBrush(_accent);
+
+                var size = g.MeasureString(mark, font);
+
+                g.DrawString(
+                    mark,
+                    font,
+                    brush,
+                    bounds.X + (bounds.Width - size.Width) / 2f,
+                    bounds.Y + (bounds.Height - size.Height) / 2f);
             }
-
-            var mark = _icon switch
-            {
-                MessageBoxIcon.Error => "!",
-                MessageBoxIcon.Warning => "!",
-                MessageBoxIcon.Question => "?",
-                _ => "i",
-            };
-
-            using var font = new Font(AppTheme.BoldFont.FontFamily, bounds.Height * 0.52f, FontStyle.Bold);
-            using var brush = new SolidBrush(_accent);
-
-            var size = g.MeasureString(mark, font);
-
-            g.DrawString(
-                mark,
-                font,
-                brush,
-                bounds.X + (bounds.Width - size.Width) / 2f,
-                bounds.Y + (bounds.Height - size.Height) / 2f);
         }
 
         /// <summary>
-        /// Lets the dialog be dragged by anywhere on its face, since it has
-        /// no caption bar of its own to grab.
+        /// Lets the dialog be dragged by the band round its edge, outside the
+        /// page, since it has no caption bar of its own to grab - the page
+        /// and what is in it hand a press on themselves (DragFrom).
         /// </summary>
         protected override void WndProc(ref Message m)
         {

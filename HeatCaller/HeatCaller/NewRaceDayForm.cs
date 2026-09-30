@@ -23,11 +23,31 @@ namespace HeatCaller;
 /// Carrying the last day's settings forward is the whole point of the
 /// defaults: a club runs the same shape of night most weeks, and typing the
 /// same venue in every Tuesday is not a decision, it is a toll.
+///
+/// On the layout pieces (DialogFit): the two questions one under the other,
+/// the classes taking the height, and Start the Day and Cancel at the foot.
+/// The hint under the kind of night is as tall as the longer of its two
+/// wordings (SteadyLabel), so the classes never move as the box is used. It
+/// used to be placed in pixels in a column 520px wide at every text size,
+/// the two hints in boxes kept two lines tall by hand - at a larger text
+/// size they needed more - and the classes six rows tall.
 /// </summary>
 public sealed class NewRaceDayForm : Form
 {
+    /// <summary>The classes show at least this many before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
+    private const string RaceDayShapeHint =
+        "Qualifying heats, then finals built from them. Heats are built from drivers who have checked in.";
+
+    private const string ClubNightShapeHint =
+        "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them.";
+
     private readonly ComboBox _cmbShape = new();
-    private readonly Label _lblShapeHint = new();
+
+    /// <summary>The hint under the shape picker, worded from it - as tall as the longer wording, so the class list never moves as the box is used.</summary>
+    private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
+
     private readonly CheckedListBox _lstClasses = new();
     private readonly Label _lblNoClasses = new();
 
@@ -61,27 +81,16 @@ public sealed class NewRaceDayForm : Form
         RaceDayShape shape)
     {
         Text = "Start a race day";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MinimizeBox = false;
-        MaximizeBox = false;
-
-        var y = UiLayout.PageTop;
+        Font = AppTheme.BodyFont;
 
         var lblIntro = new Label
         {
             Text = "Two questions, and the day is ready to build. Everything else - the name, the venue, "
                  + "the track and the numbers - starts from your last race day and can be changed on Race Day > Setup.",
             AutoSize = true,
-            MaximumSize = new Size(520, 0),
             Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
-            Location = new Point(UiLayout.PageLeft, y),
         };
-
-        Controls.Add(lblIntro);
-
-        y = UiLayout.Below(lblIntro, UiLayout.SectionGap);
 
         // --- What kind of night ---
 
@@ -90,38 +99,20 @@ public sealed class NewRaceDayForm : Form
             Text = "What kind of night is it?",
             AutoSize = true,
             Font = AppTheme.BoldFont,
-            Location = new Point(UiLayout.PageLeft, y),
         };
-
-        Controls.Add(lblShape);
-
-        y = UiLayout.Below(lblShape, UiLayout.LabelGap);
 
         _cmbShape.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbShape.Font = AppTheme.BodyFont;
-        _cmbShape.Width = 320;
-        _cmbShape.Location = new Point(UiLayout.PageLeft, y);
         _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.RaceDay, "Race day - heats, then finals"));
         _cmbShape.Items.Add(new ShapeChoice(RaceDayShape.ClubNight, "Club night - just races"));
         _cmbShape.SelectedIndex = shape == RaceDayShape.ClubNight ? 1 : 0;
         _cmbShape.SelectedIndexChanged += (_, _) => ApplyShapeHint();
 
-        Controls.Add(_cmbShape);
-
-        y = UiLayout.Below(_cmbShape, UiLayout.HintGap);
-
-        // Fixed at two lines: the text is swapped as the box is used, and an
-        // AutoSize label would grow by a line and push the class list down
-        // the dialog mid-use.
-        _lblShapeHint.AutoSize = false;
+        // The text is swapped as the box is used; the label is as tall as the
+        // longer wording at the width it has (see the field), so it never
+        // grows by a line and pushes the class list down the dialog mid-use.
         _lblShapeHint.Font = AppTheme.SmallFont;
         _lblShapeHint.ForeColor = AppTheme.TextMuted;
-        _lblShapeHint.Location = new Point(UiLayout.PageLeft, y);
-        _lblShapeHint.Size = new Size(520, AppTheme.SmallFont.Height * 2 + 4);
-
-        Controls.Add(_lblShapeHint);
-
-        y = UiLayout.Below(_lblShapeHint, UiLayout.SectionGap);
 
         // --- Who is racing ---
 
@@ -130,20 +121,14 @@ public sealed class NewRaceDayForm : Form
             Text = "Which classes are racing?",
             AutoSize = true,
             Font = AppTheme.BoldFont,
-            Location = new Point(UiLayout.PageLeft, y),
         };
-
-        Controls.Add(lblClasses);
-
-        y = UiLayout.Below(lblClasses, UiLayout.LabelGap);
 
         _lstClasses.CheckOnClick = true;
         _lstClasses.BorderStyle = BorderStyle.FixedSingle;
+
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
         _lstClasses.IntegralHeight = false;
         _lstClasses.Font = AppTheme.BodyFont;
-        _lstClasses.Width = 320;
-        _lstClasses.Height = AppTheme.BodyFont.Height * 6 + 12;
-        _lstClasses.Location = new Point(UiLayout.PageLeft, y);
 
         foreach (var name in classNames)
         {
@@ -165,16 +150,12 @@ public sealed class NewRaceDayForm : Form
             }
         }
 
-        Controls.Add(_lstClasses);
-
         // The empty state. A club with no classes yet can still start the
         // day - the Today checklist's next step is setting them up, and
         // refusing here would be a dead end with the same words on it.
-        _lblNoClasses.AutoSize = false;
+        _lblNoClasses.AutoSize = true;
         _lblNoClasses.Font = AppTheme.SmallFont;
         _lblNoClasses.ForeColor = AppTheme.TextMuted;
-        _lblNoClasses.Location = new Point(UiLayout.PageLeft, UiLayout.Below(_lstClasses, UiLayout.HintGap));
-        _lblNoClasses.Size = new Size(520, AppTheme.SmallFont.Height * 2 + 4);
 
         // "programme", not "heats": this label is written once, while the
         // shape picker above it can still be changed, and a club night has
@@ -184,25 +165,32 @@ public sealed class NewRaceDayForm : Form
             ? "There are no classes on file yet. Start the day anyway - Next Steps will walk you through setting them up."
             : "A class is the rulebook a group of drivers races under. Tonight's program is built for the ones ticked here.";
 
-        Controls.Add(_lblNoClasses);
-
-        y = UiLayout.Below(_lblNoClasses, UiLayout.SectionGap);
-
         // --- The actions ---
 
         var btnOk = new Button { Text = "Start the Day", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        var page = new FillPage();
+        page.Add(lblIntro);
+        page.Add(lblShape, gapBelow: UiLayout.LabelGap);
 
-        var right = UiLayout.PageLeft + 520;
+        // Its own width (see below), not the page's.
+        page.Add(_cmbShape, stretch: false, gapBelow: UiLayout.HintGap);
+        Pieces.KeepHeightTold(_cmbShape);
 
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
+        page.Add(_lblShapeHint);
+        page.Add(lblClasses, gapBelow: UiLayout.LabelGap);
+        page.AddFill(_lstClasses, _ => LeastRows * _lstClasses.ItemHeight + 4, gapBelow: UiLayout.HintGap);
+        page.Add(_lblNoClasses);
 
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        // Against the right-hand edge, Cancel furthest right, as a dialog's
+        // buttons go - and Tab still reaches Start the Day first, as it did:
+        // the bar takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
@@ -211,16 +199,18 @@ public sealed class NewRaceDayForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        // Measured from what ended up on the form rather than set in
-        // numbers, so a larger text size grows the dialog with it instead of
-        // cutting the buttons off.
-        ClientSize = new Size(
-            right + UiLayout.PageLeft,
-            UiLayout.Below(btnOk, UiLayout.PageTop));
+        // After the theme pass, in the face it leaves it in: as wide as it
+        // was made at the normal text size, at the size in use, or as its
+        // longer choice if that is wider.
+        (Font Font, int Count, int Width)? shapeWidth = null;
+        _cmbShape.Width = Math.Max(UiLayout.AtTextSize(320), Pieces.PickerWidth(_cmbShape, ref shapeWidth));
+
+        // The width it had at the normal text size, and about the height -
+        // the classes about six rows tall. It can be made taller, for a club
+        // with more classes than that.
+        DialogFit.Keep(this, page, width: 552, height: 500);
     }
 
     private void ApplyShapeHint() =>
-        _lblShapeHint.Text = Shape == RaceDayShape.ClubNight
-            ? "A flat list of races - no finals, no seeding, no bump-ups. Everyone in a racing class is in them."
-            : "Qualifying heats, then finals built from them. Heats are built from drivers who have checked in.";
+        _lblShapeHint.Text = Shape == RaceDayShape.ClubNight ? ClubNightShapeHint : RaceDayShapeHint;
 }
