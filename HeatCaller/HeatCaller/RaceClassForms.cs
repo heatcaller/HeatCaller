@@ -1,20 +1,63 @@
 namespace HeatCaller;
 
-/// <summary>Small add/edit dialog for a single RaceClass.</summary>
+/// <summary>
+/// Small add/edit dialog for a single RaceClass.
+///
+/// On the layout pieces (DialogFit): the settings in three field grids, one
+/// under the other, their captions in one column as wide as the longest of
+/// them (FieldGrid.LineUp) - the name with the colour swatch beside it, the
+/// notes, how qualifying is scored and the note on it; the mains under
+/// their heading, and the note on them; then jump starts and the tech
+/// warning. All of that is the window's body, which scrolls on a screen too
+/// short for it. Under it, always in view, the class's sub-editors in a row
+/// that wraps, and Save and Cancel at the foot. It used to be placed in
+/// pixels: every caption and field at a fixed place in a window 652px wide
+/// whatever the text size, the fields beside a caption at an x chosen for
+/// it and the sub-editors flowed at a fixed width - about 674px tall at the
+/// normal text size, more than a 1280x720 screen leaves a window, with Save
+/// and Cancel under its edge, and at a larger text size the captions ran
+/// into their fields.
+/// </summary>
 public sealed class RaceClassEditForm : Form
 {
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size - the
+    /// width the old one worked out from its row of sub-editors, which it
+    /// wrapped at 620px rather than run them along one line eight hundred
+    /// pixels long.
+    /// </summary>
+    private const int DialogWidth = 652;
+
+    /// <summary>
+    /// The name box's width at the normal text size: about forty-five
+    /// characters, with the swatch beside it inside the field column.
+    /// </summary>
+    private const int NameWidth = 320;
+
+    /// <summary>The colour swatch's width at the normal text size.</summary>
+    private const int SwatchWidth = 38;
+
+    /// <summary>How many lines of the notes show before the box scrolls.</summary>
+    private const int NotesLines = 3;
+
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtNotes = new();
     private readonly ComboBox _cmbQualifying = new();
     private readonly NumericUpDown _numConsecutive = new();
-    private readonly Label _lblConsecutive = new();
+
+    /// <summary>The caption of the consecutive-laps row, greyed with it - see UpdateConsecutiveEnabled. The field grid makes it.</summary>
+    private readonly Label _lblConsecutive;
+
     private readonly NumericUpDown _numMainSize = new();
     private readonly NumericUpDown _numBumpUp = new();
     private readonly NumericUpDown _numCountBest = new();
     private readonly CheckBox _chkJumpStart = new();
     private readonly NumericUpDown _numJumpPenalty = new();
     private readonly CheckBox _chkJumpCostsLap = new();
-    private readonly Label _lblJumpPenalty = new();
+
+    /// <summary>The caption of the penalty row, greyed with it - see UpdateJumpStartEnabled. The field grid makes it.</summary>
+    private readonly Label _lblJumpPenalty;
+
     private readonly CheckBox _chkWarnUninspected = new();
 
     /// <summary>
@@ -47,20 +90,8 @@ public sealed class RaceClassEditForm : Form
         _store = store;
 
         Text = existing is null ? "Add Class" : "Edit Class";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        // Tall enough for the Race Format row added under Tech Checklist;
-        // 522 was measured before it existed.
-        ClientSize = new Size(420, 566);
         Font = AppTheme.BodyFont;
 
-        // Placed further down, once the dialog's final width is known -
-        // see the name row after ClientSize is settled.
-        var lblName = new Label { Text = "Name:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _txtName.Font = AppTheme.BodyFont;
         _txtName.Text = Result.Name;
 
         _colourArgb = Result.ColorArgb;
@@ -81,18 +112,12 @@ public sealed class RaceClassEditForm : Form
             }
         };
 
-        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, 50), AutoSize = true };
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
-        _txtNotes.Location = new Point(16, 72);
-        _txtNotes.Size = new Size(344, 80);
         _txtNotes.Text = Result.Notes;
 
         // --- Qualifying rules ---
-        var lblQualifying = new Label { Text = "Qualifying:", Location = new Point(16, 165), AutoSize = true };
-        _cmbQualifying.Location = new Point(96, 162);
-        _cmbQualifying.Width = 304;
         _cmbQualifying.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbQualifying.Items.AddRange(new object[]
         {
@@ -100,21 +125,11 @@ public sealed class RaceClassEditForm : Form
             new MethodItem(QualifyingMethod.BestConsecutiveLaps, "Best consecutive laps (fastest clean run)"),
         });
         SelectMethod(Result.QualifyingMethod);
-        _cmbQualifying.SelectedIndexChanged += (_, _) => UpdateConsecutiveEnabled();
 
-        _lblConsecutive.Text = "Consecutive laps to count:";
-        _lblConsecutive.Location = new Point(16, 199);
-        _lblConsecutive.AutoSize = true;
-
-        _numConsecutive.Location = new Point(200, 196);
-        _numConsecutive.Width = 60;
         _numConsecutive.Minimum = 2;
         _numConsecutive.Maximum = 20;
         _numConsecutive.Value = Math.Clamp(Result.ConsecutiveLapCount, 2, 20);
 
-        var lblCountBest = new Label { Text = "Heats that count:", Location = new Point(16, 233), AutoSize = true };
-        _numCountBest.Location = new Point(148, 230);
-        _numCountBest.Width = 60;
         _numCountBest.Minimum = 1;
         _numCountBest.Maximum = 20;
         _numCountBest.Value = Math.Clamp(Result.CountBestRounds, 1, 20);
@@ -123,50 +138,42 @@ public sealed class RaceClassEditForm : Form
         {
             Text = "Best-consecutive scores the quickest unbroken run of N laps. \"Heats that count\" totals that many of "
                  + "each driver's best heats and drops the rest - set 2 for \"best 2 of 3\". Leave at 1 to count only their single best heat.",
-            Location = new Point(16, 262),
             AutoSize = true,
-            MaximumSize = new Size(384, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
         // --- Mains ---
-        var lblMains = new Label { Text = "Mains", Location = new Point(16, 316), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblMains = new Label { Text = "Mains", AutoSize = true, Font = AppTheme.BoldFont };
 
-        var lblMainSize = new Label { Text = "Drivers per main:", Location = new Point(16, 343), AutoSize = true };
-        _numMainSize.Location = new Point(148, 340);
-        _numMainSize.Width = 60;
         _numMainSize.Minimum = 2;
         _numMainSize.Maximum = 40;
         _numMainSize.Value = Math.Clamp(Result.MainSize, 2, 40);
 
-        var lblBumpUp = new Label { Text = "Bump up:", Location = new Point(226, 343), AutoSize = true };
-        _numBumpUp.Location = new Point(300, 340);
-        _numBumpUp.Width = 60;
         _numBumpUp.Minimum = 0;
         _numBumpUp.Maximum = 10;
         _numBumpUp.Value = Math.Clamp(Result.BumpUpCount, 0, 10);
 
-_chkJumpStart.Text = "Detect jump starts (crossing before the green)";
-        _chkJumpStart.Location = new Point(16, 410);
+        var lblMainsHint = new Label
+        {
+            Text = "Qualifying is split into A/B/C mains of this size. Bump up is how many finishers move up a tier - set 0 to disable.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        // --- Jump starts ---
+        _chkJumpStart.Text = "Detect jump starts (crossing before the green)";
         _chkJumpStart.AutoSize = true;
         _chkJumpStart.Checked = Result.DetectJumpStarts;
-        _chkJumpStart.CheckedChanged += (_, _) => UpdateJumpStartEnabled();
 
-        _lblJumpPenalty.Text = "Automatic penalty:";
-        _lblJumpPenalty.Location = new Point(36, 439);
-        _lblJumpPenalty.AutoSize = true;
-
-        _numJumpPenalty.Location = new Point(176, 436);
-        _numJumpPenalty.Width = 60;
         _numJumpPenalty.Minimum = 0;
         _numJumpPenalty.Maximum = 120;
         _numJumpPenalty.Value = Math.Clamp(Result.JumpStartPenaltySeconds, 0, 120);
 
-        var lblJumpUnit = new Label { Text = "seconds (0 = flag only)", Location = new Point(244, 439), AutoSize = true };
+        var lblJumpUnit = new Label { Text = "seconds (0 = flag only)", AutoSize = true };
 
         _chkJumpCostsLap.Text = "A jump start also costs the lap";
-        _chkJumpCostsLap.Location = new Point(36, 468);
         _chkJumpCostsLap.AutoSize = true;
         _chkJumpCostsLap.Checked = Result.JumpStartCostsTheLap;
 
@@ -174,7 +181,6 @@ _chkJumpStart.Text = "Detect jump starts (crossing before the green)";
         // stored on every class (on by default) but with no way to turn it
         // off. Race Control reads it when a heat of this class is staged.
         _chkWarnUninspected.Text = "Warn when a driver in a heat hasn't passed tech today";
-        _chkWarnUninspected.Location = new Point(16, 498);
         _chkWarnUninspected.AutoSize = true;
         _chkWarnUninspected.Checked = Result.WarnOnUninspected;
 
@@ -185,17 +191,7 @@ _chkJumpStart.Text = "Detect jump starts (crossing before the green)";
             + "inspection in the Tech Log, and the Next Up bar counts them. A warning only - the heat still runs. "
             + "Only applies once tech is being run for the class: it has a checklist, or someone has been inspected in it today.");
 
-        var lblMainsHint = new Label
-        {
-            Text = "Qualifying is split into A/B/C mains of this size. Bump up is how many finishers move up a tier - set 0 to disable.",
-            Location = new Point(16, 376),
-            AutoSize = true,
-            MaximumSize = new Size(384, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-var btnTechList = new Button { Text = "Tech Checklist..." };
+        var btnTechList = new Button { Text = "Tech Checklist..." };
         btnTechList.Click += (_, _) => EditTechChecklist();
 
         // The class's race format - limits, start procedure, streak rules.
@@ -262,87 +258,72 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
         btnSave.Click += BtnSave_Click;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // --- Layout ---
+        //
+        // A caption and its field on each row, the captions in one column
+        // down all three grids (LineUp, below) so the fields line up the
+        // length of the dialog. The name box keeps a width of its own with
+        // the swatch beside it; the notes run to the right-hand edge.
+        var about = new FieldGrid();
+        about.AddRow("Name:", FieldGrid.Inline(_txtName, _swatch));
+        about.AddRow("Notes:", _txtNotes, stretch: true);
+        about.AddRow("Qualifying:", _cmbQualifying);
+        _lblConsecutive = about.AddRow("Consecutive laps to count:", _numConsecutive);
+        about.AddRow("Heats that count:", _numCountBest);
+
+        // Across both columns, under the rows it explains - it is about the
+        // two of them together - wrapping to the grid's width.
+        about.AddWide(lblQualHint);
+
+        var mains = new FieldGrid();
+        mains.AddRow("Drivers per main:", _numMainSize);
+        mains.AddRow("Bump up:", _numBumpUp);
+        mains.AddWide(lblMainsHint);
+
+        // The two ticks run from the left-hand edge, across both columns:
+        // they say what they are themselves. What only means anything with
+        // jump starts detected is under that tick - the penalty on a row of
+        // its own, and the tick about the lap in the field column, in from
+        // the tick it depends on as it always was.
+        var raceDay = new FieldGrid();
+        raceDay.AddWide(_chkJumpStart, stretch: false);
+        _lblJumpPenalty = raceDay.AddRow("Automatic penalty:", FieldGrid.Inline(_numJumpPenalty, lblJumpUnit));
+        raceDay.AddField(_chkJumpCostsLap);
+        raceDay.AddWide(_chkWarnUninspected, stretch: false);
+
+        // Hooked once the captions they grey out exist - the field grids
+        // make them, above.
+        _cmbQualifying.SelectedIndexChanged += (_, _) => UpdateConsecutiveEnabled();
+        _chkJumpStart.CheckedChanged += (_, _) => UpdateJumpStartEnabled();
+
+        var page = new FillPage();
+
+        // Every setting: on a screen too short for all of them - 1280x720,
+        // or any at a larger text size - they scroll, and the sub-editors,
+        // Save and Cancel under them stay in view.
+        var body = DialogFit.Body(page);
+        body.Add(about);
+        body.Add(lblMains, stretch: false, gapBelow: UiLayout.LabelGap);
+        body.Add(mains);
+        body.Add(raceDay, gapBelow: 0);
+
         // Two rows with two jobs: the class's sub-editors on one, the exit
         // buttons on the other, bottom-right where a dialog keeps them.
-        // These used to share rows at hand-picked x's, which is why they
-        // never lined up with each other.
-        // WRAPPED, not one long row. Five sub-editors at their measured
-        // widths come to something like eight hundred pixels, and a dialog
+        // WRAPPED, not one long row. Six sub-editors at their measured
+        // widths come to something like a thousand pixels, and a dialog
         // that wide to hold one column of fields reads as a mistake. The
         // row takes a second line instead and the dialog grows downwards,
         // which is the direction nobody minds.
-        const int featureWidth = 620;
+        page.Add(new ButtonBar().With(btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings), gapBelow: UiLayout.RowGap);
 
-        var featureBottom = UiLayout.FlowButtons(
-            16, 530, 16 + featureWidth,
-            btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings);
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        ClientSize = new Size(
-            Math.Max(420, featureWidth + 32),
-            featureBottom + UiLayout.RowGap + UiLayout.ButtonHeight + 16);
-
-        // Everything that should reach the dialog's right edge is placed
-        // from that edge rather than from a width typed in when the dialog
-        // was narrower. The row of sub-editors above decides how wide this
-        // dialog is, and it grows whenever a caption does - which used to
-        // leave the name box, the notes box and both hints stranded two
-        // thirds of the way across.
-        var contentRight = ClientSize.Width - 16;
-
-        lblName.Location = new Point(16, UiLayout.CentreOn(lblName, 15, _txtName.Height));
-
-        _swatch.Size = new Size(38, _txtName.Height);
-        _swatch.Location = new Point(contentRight - _swatch.Width, 15);
-
-        _txtName.Location = new Point(UiLayout.After(lblName, AppTheme.BodyFont), 15);
-        _txtName.Width = Math.Max(120, _swatch.Left - UiLayout.LabelGap - _txtName.Left);
-
-        _txtNotes.Width = Math.Max(200, contentRight - _txtNotes.Left);
-        _cmbQualifying.Width = Math.Max(200, contentRight - _cmbQualifying.Left);
-
-        lblQualHint.MaximumSize = new Size(Math.Max(200, contentRight - lblQualHint.Left), 0);
-        lblMainsHint.MaximumSize = new Size(Math.Max(200, contentRight - lblMainsHint.Left), 0);
-
-        btnSave.Size = new Size(UiLayout.WidthFor(btnSave), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-
-        var exitTop = featureBottom + UiLayout.RowGap;
-
-        btnCancel.Location = new Point(ClientSize.Width - 16 - btnCancel.Width, exitTop);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnSave.Width, exitTop);
-
-        Controls.Add(lblName);
-        Controls.Add(_txtName);
-        Controls.Add(lblNotes);
-        Controls.Add(_txtNotes);
-        Controls.Add(lblCountBest);
-        Controls.Add(_numCountBest);
-        Controls.Add(_chkJumpStart);
-        Controls.Add(_lblJumpPenalty);
-        Controls.Add(_numJumpPenalty);
-        Controls.Add(_chkJumpCostsLap);
-        Controls.Add(_chkWarnUninspected);
-        Controls.Add(lblJumpUnit);
-        Controls.Add(lblMains);
-        Controls.Add(lblMainSize);
-        Controls.Add(_numMainSize);
-        Controls.Add(lblBumpUp);
-        Controls.Add(_numBumpUp);
-        Controls.Add(lblMainsHint);
-        Controls.Add(lblQualifying);
-        Controls.Add(_cmbQualifying);
-        Controls.Add(_lblConsecutive);
-        Controls.Add(_numConsecutive);
-        Controls.Add(lblQualHint);
-        Controls.Add(btnTechList);
-        Controls.Add(btnFormat);
-        Controls.Add(btnQualFormat);
-        Controls.Add(btnColour);
-        Controls.Add(btnPreset);
-        Controls.Add(btnWarnings);
-        Controls.Add(_swatch);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         CancelButton = btnCancel;
 
@@ -352,8 +333,55 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
         UpdateJumpStartEnabled();
         UpdateSwatch();
         AppTheme.ApplyRecursively(this);
+
+        // Once the captions are on the dialog and wear its face - what they
+        // are measured in.
+        FieldGrid.LineUp(new[] { about, mains, raceDay });
+        SizeFields();
+
+        DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
 
+    /// <summary>
+    /// The fields' sizes, in the faces the theme pass left them in: the name
+    /// box and the swatch the widths they had at the normal text size, at
+    /// the size in use, the swatch as tall as the box beside it; the notes
+    /// so many lines of their font; the method as wide as its longer
+    /// choice, never narrower than a standard field; and the number boxes
+    /// all one width, the one with the largest value's - they sit in one
+    /// column, and boxes of three widths put their arrows in three places
+    /// down it. Once: the dialog is built at the text size in use and is not
+    /// kept in step with a change made while it is up (see DialogFit).
+    /// </summary>
+    private void SizeFields()
+    {
+        _txtName.Width = UiLayout.AtTextSize(NameWidth);
+
+        // The box's height is the theme's, from its font (InputOutline), and
+        // settled by now.
+        _swatch.Size = new Size(UiLayout.AtTextSize(SwatchWidth), _txtName.Height);
+
+        _txtNotes.Height = Pieces.LineHeight(_txtNotes.Font) * NotesLines + UiLayout.HintGap * 2;
+
+        (Font Font, int Count, int Width)? qualifyingWidth = null;
+        _cmbQualifying.Width = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbQualifying, ref qualifyingWidth));
+
+        var numbers = new[] { _numConsecutive, _numCountBest, _numMainSize, _numBumpUp, _numJumpPenalty };
+
+        var width = numbers.Max(number =>
+        {
+            var digits = ((int)number.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+
+            return Math.Max(
+                UiLayout.AtTextSize(UiLayout.NumericWidth),
+                TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+        });
+
+        foreach (var number in numbers)
+        {
+            number.Width = width;
+        }
+    }
 
     private QualifyingMethod CurrentMethod() =>
         (_cmbQualifying.SelectedItem as MethodItem)?.Method ?? QualifyingMethod.TotalLaps;
@@ -384,163 +412,19 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
         public override string ToString() => Label;
     }
 
-
-    /// <summary>The penalty only means anything when detection is on, so it's disabled rather than hidden.</summary>
-
     /// <summary>
     /// Edits this class's scrutineering checklist. Held on the class because
     /// the rules differ between them - a stock class cares about motor and
     /// tyres where a modified one might only check the body.
     /// </summary>
-
     private void EditTechChecklist()
     {
-        using var dialog = new Form
-        {
-            Text = $"Tech Checklist - {(_txtName.Text.Trim() is { Length: > 0 } n ? n : "class")}",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(420, 420),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-            ForeColor = AppTheme.TextDark,
-        };
-
-        var lblHint = new Label
-        {
-            Text = "What a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row on the inspection form.",
-            Location = new Point(12, 12),
-            AutoSize = true,
-            MaximumSize = new Size(396, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        var list = new ListBox { Location = new Point(12, 60), Size = new Size(270, 300), BackColor = AppTheme.Surface };
-        foreach (var item in Result.TechCheckItems)
-        {
-            list.Items.Add(item);
-        }
-
-        var btnAdd = new Button { Text = "Add...", Location = new Point(292, 60), Width = 116 };
-        btnAdd.Click += (_, _) =>
-        {
-            var text = PromptForText("Add check", "What should be checked?", string.Empty);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                list.Items.Add(text.Trim());
-            }
-        };
-
-        var btnEditItem = new Button { Text = "Rename...", Location = new Point(292, 98), Width = 116 };
-        btnEditItem.Click += (_, _) =>
-        {
-            if (list.SelectedIndex < 0) { return; }
-            var index = list.SelectedIndex;
-            var text = PromptForText("Rename check", "What should be checked?", list.Items[index]?.ToString() ?? string.Empty);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                list.Items[index] = text.Trim();
-                list.SelectedIndex = index;
-            }
-        };
-
-        var btnRemove = new Button { Text = "Remove", Location = new Point(292, 136), Width = 116 };
-        btnRemove.Click += (_, _) =>
-        {
-            if (list.SelectedIndex >= 0) { list.Items.RemoveAt(list.SelectedIndex); }
-        };
-
-        var btnUp = new Button { Text = "Move Up", Location = new Point(292, 186), Width = 116 };
-        btnUp.Click += (_, _) => MoveItem(list, -1);
-
-        var btnDown = new Button { Text = "Move Down", Location = new Point(292, 224), Width = 116 };
-        btnDown.Click += (_, _) => MoveItem(list, 1);
-
-        var btnPreset = new Button { Text = "Add Common", Location = new Point(292, 274), Width = 116 };
-        btnPreset.Click += (_, _) =>
-        {
-            // A starting point rather than a rulebook - every club differs,
-            // so these are only suggestions and all of them are editable.
-            foreach (var preset in new[]
-                     {
-                         "Body secure and undamaged",
-                         "Motor legal for class",
-                         "Tyres legal for class",
-                         "Ride height",
-                         "Transponder fitted and working",
-                         "No loose parts",
-                     })
-            {
-                if (!list.Items.Cast<object>().Any(i => string.Equals(i?.ToString(), preset, StringComparison.OrdinalIgnoreCase)))
-                {
-                    list.Items.Add(preset);
-                }
-            }
-        };
-
-        var ok = new Button { Text = "OK", Location = new Point(228, 376), Width = 84, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(320, 376), Width = 88, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[]
-        {
-            lblHint, list, btnAdd, btnEditItem, btnRemove, btnUp, btnDown, btnPreset, ok, cancel,
-        });
-        dialog.AcceptButton = ok;
-        dialog.CancelButton = cancel;
-
-        AppTheme.ApplyRecursively(dialog);
+        using var dialog = new TechChecklistForm(_txtName.Text, Result.TechCheckItems);
 
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            Result.TechCheckItems = list.Items.Cast<object>().Select(i => i.ToString() ?? string.Empty).ToList();
+            Result.TechCheckItems = dialog.Items;
         }
-    }
-
-    private static void MoveItem(ListBox list, int direction)
-    {
-        var index = list.SelectedIndex;
-        var target = index + direction;
-        if (index < 0 || target < 0 || target >= list.Items.Count)
-        {
-            return;
-        }
-
-        var item = list.Items[index];
-        list.Items.RemoveAt(index);
-        list.Items.Insert(target, item);
-        list.SelectedIndex = target;
-    }
-
-    /// <summary>Small single-line prompt.</summary>
-    private string? PromptForText(string title, string prompt, string defaultValue)
-    {
-        using var dialog = new Form
-        {
-            Text = title,
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(400, 130),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-            ForeColor = AppTheme.TextDark,
-        };
-
-        var lbl = new Label { Text = prompt, Location = new Point(12, 16), AutoSize = true };
-        var txt = new TextBox { Location = new Point(12, 40), Width = 372, Text = defaultValue };
-        var ok = new Button { Text = "OK", Location = new Point(206, 82), Width = 84, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(298, 82), Width = 86, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[] { lbl, txt, ok, cancel });
-        dialog.AcceptButton = ok;
-        dialog.CancelButton = cancel;
-
-        AppTheme.ApplyRecursively(dialog);
-        return dialog.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
     }
 
     /// <summary>
@@ -675,6 +559,7 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
         UpdateSwatch();
     }
 
+    /// <summary>The penalty only means anything when detection is on, so it's disabled rather than hidden.</summary>
     private void UpdateJumpStartEnabled()
     {
         _numJumpPenalty.Enabled = _chkJumpStart.Checked;
@@ -721,6 +606,244 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
         DialogResult = DialogResult.OK;
         Close();
     }
+
+    /// <summary>
+    /// The window Tech Checklist... opens: what a scrutineer checks for the
+    /// class, in order - see EditTechChecklist. A class of its own rather
+    /// than built inside that method, and internal, so the layout test can
+    /// build it (WindowCatalog) without a click.
+    ///
+    /// On the layout pieces (DialogFit): the hint across the top, the checks
+    /// taking the height with their buttons in a column beside them
+    /// (Beside) - three that change the list, two that reorder it and the
+    /// common checks, a section's gap between the groups - and OK and Cancel
+    /// at the foot. It used to be built in pixels in a 420x420 window: a
+    /// list of a fixed size, the buttons stepped down beside it at fixed
+    /// places and a fixed 116px wide, and OK and Cancel at a fixed height
+    /// from the top.
+    /// </summary>
+    internal sealed class TechChecklistForm : Form
+    {
+        /// <summary>The checks show at least this many before the window scrolls instead - or as many as the button column beside them is tall, when that is more.</summary>
+        private const int LeastRows = 4;
+
+        private readonly ListBox _list = new();
+
+        /// <param name="className">The class's name as typed, for the title - "class" when there is none yet.</param>
+        /// <param name="items">The checks to start from, in order.</param>
+        public TechChecklistForm(string className, IEnumerable<string> items)
+        {
+            Text = $"Tech Checklist - {(className.Trim() is { Length: > 0 } n ? n : "class")}";
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
+            ForeColor = AppTheme.TextDark;
+
+            var lblHint = new Label
+            {
+                Text = "What a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row on the inspection form.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            };
+
+            _list.BackColor = AppTheme.Surface;
+
+            // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+            _list.IntegralHeight = false;
+
+            foreach (var item in items)
+            {
+                _list.Items.Add(item);
+            }
+
+            var btnAdd = new Button { Text = "Add..." };
+            btnAdd.Click += (_, _) =>
+            {
+                var text = PromptForText("Add check", "What should be checked?", string.Empty);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _list.Items.Add(text.Trim());
+                }
+            };
+
+            var btnEditItem = new Button { Text = "Rename..." };
+            btnEditItem.Click += (_, _) =>
+            {
+                if (_list.SelectedIndex < 0) { return; }
+                var index = _list.SelectedIndex;
+                var text = PromptForText("Rename check", "What should be checked?", _list.Items[index]?.ToString() ?? string.Empty);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _list.Items[index] = text.Trim();
+                    _list.SelectedIndex = index;
+                }
+            };
+
+            var btnRemove = new Button { Text = "Remove" };
+            btnRemove.Click += (_, _) =>
+            {
+                if (_list.SelectedIndex >= 0) { _list.Items.RemoveAt(_list.SelectedIndex); }
+            };
+
+            var btnUp = new Button { Text = "Move Up" };
+            btnUp.Click += (_, _) => MoveItem(_list, -1);
+
+            var btnDown = new Button { Text = "Move Down" };
+            btnDown.Click += (_, _) => MoveItem(_list, 1);
+
+            var btnPreset = new Button { Text = "Add Common" };
+            btnPreset.Click += (_, _) =>
+            {
+                // A starting point rather than a rulebook - every club differs,
+                // so these are only suggestions and all of them are editable.
+                foreach (var preset in new[]
+                         {
+                             "Body secure and undamaged",
+                             "Motor legal for class",
+                             "Tyres legal for class",
+                             "Ride height",
+                             "Transponder fitted and working",
+                             "No loose parts",
+                         })
+                {
+                    if (!_list.Items.Cast<object>().Any(i => string.Equals(i?.ToString(), preset, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _list.Items.Add(preset);
+                    }
+                }
+            };
+
+            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            // The buttons in one column down the right of the list, all as
+            // wide as the widest caption needs, in their three groups as
+            // before: a button's gap inside a group, a section's between
+            // them. The list takes the width the column leaves and the
+            // height down to OK and Cancel.
+            var checks = new Beside();
+            checks.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+            checks.AddSide(btnAdd, gapBelow: UiLayout.ButtonGap);
+            checks.AddSide(btnEditItem, gapBelow: UiLayout.ButtonGap);
+            checks.AddSide(btnRemove, gapBelow: UiLayout.SectionGap);
+            checks.AddSide(btnUp, gapBelow: UiLayout.ButtonGap);
+            checks.AddSide(btnDown, gapBelow: UiLayout.SectionGap);
+            checks.AddSide(btnPreset, gapBelow: 0);
+
+            var page = new FillPage();
+            page.Add(lblHint, gapBelow: UiLayout.RowGap);
+            page.AddFill(checks, checks.LeastHeight);
+
+            // Against the right-hand edge, Cancel furthest right, as they
+            // were - and Tab still reaches OK first: the bar takes them right
+            // to left, in the order they were added.
+            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            // Wider than the 420 it was made at: the buttons are as wide as
+            // a standard button now, 148px rather than 116, and at 420 that
+            // came out of the list - this keeps it the 270px it had. The
+            // height it had. It can be made bigger, for a long list.
+            DialogFit.Keep(this, page, width: 460, height: 420);
+        }
+
+        /// <summary>The checks, in the order the list has them. Only meaningful after DialogResult.OK.</summary>
+        public List<string> Items => _list.Items.Cast<object>().Select(i => i.ToString() ?? string.Empty).ToList();
+
+        private static void MoveItem(ListBox list, int direction)
+        {
+            var index = list.SelectedIndex;
+            var target = index + direction;
+            if (index < 0 || target < 0 || target >= list.Items.Count)
+            {
+                return;
+            }
+
+            var item = list.Items[index];
+            list.Items.RemoveAt(index);
+            list.Items.Insert(target, item);
+            list.SelectedIndex = target;
+        }
+
+        /// <summary>Asks for one line of text over this window. Null when cancelled.</summary>
+        private string? PromptForText(string title, string prompt, string defaultValue)
+        {
+            using var dialog = new TextPrompt(title, prompt, defaultValue);
+
+            return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
+        }
+    }
+
+    /// <summary>
+    /// Small single-line prompt - the check the Tech Checklist's Add... and
+    /// Rename... ask for. A class of its own, and internal, so the layout
+    /// test can build it (WindowCatalog).
+    ///
+    /// On the layout pieces (DialogFit): the question, the box under it
+    /// across the window, and OK and Cancel at the foot; as tall as that.
+    /// It used to be built in pixels in a 400x130 window, the box a fixed
+    /// 372px and the buttons at fixed places and widths under it.
+    /// </summary>
+    internal sealed class TextPrompt : Form
+    {
+        private readonly TextBox _txt = new();
+
+        public TextPrompt(string title, string prompt, string defaultValue)
+        {
+            Text = title;
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
+            ForeColor = AppTheme.TextDark;
+
+            var lbl = new Label { Text = prompt, AutoSize = true };
+            _txt.Text = defaultValue;
+
+            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            var page = new FillPage();
+            page.Add(lbl, gapBelow: UiLayout.HintGap);
+            page.Add(_txt, gapBelow: UiLayout.SectionGap);
+
+            // A pixel either side of the box for the ring the theme draws round
+            // it, outside it, on what holds it (Pieces.RingRoom): stretched
+            // across the page, the box's sides would be the page's edges, and
+            // the ring's sides would be drawn past them, where nothing shows.
+            // The gap under the box stays as it was.
+            _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+
+            // Its height is the box's own, and changes when the theme takes its
+            // border off - see Pieces.KeepHeightTold.
+            Pieces.KeepHeightTold(_txt);
+
+            // Against the right-hand edge, Cancel furthest right, as they
+            // were - and Tab still reaches OK first: the bar takes them right
+            // to left, in the order they were added.
+            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            DialogFit.Keep(this, page, width: 400);
+        }
+
+        /// <summary>What was typed, as typed. Only meaningful after DialogResult.OK.</summary>
+        public string Answer => _txt.Text;
+    }
 }
 
 /// <summary>
@@ -733,49 +856,49 @@ var btnTechList = new Button { Text = "Tech Checklist..." };
 /// the page grew a Sanctioning Preset button the dialog did not have one -
 /// which is precisely the kind of drift that makes two doors into two
 /// different rooms.
+///
+/// On the layout pieces (DialogFit): the Classes page taking the height,
+/// never less than the least it can do with, and Close under it against the
+/// right-hand edge. It used to be two rectangles placed by hand on every
+/// resize - the page, and the Close button a fixed band under it - over a
+/// 760x480 floor whatever the text size.
 /// </summary>
 public sealed class RaceClassManagerForm : Form
 {
     public RaceClassManagerForm(RaceClassStore store, UndoService? undo = null)
     {
         Text = "Race Classes";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(940, 560);
-        MinimumSize = new Size(760, 480);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        // PLACED, not docked. A Fill child and a Bottom child in the same
-        // form resolve by z-order, and which way round that goes is the
-        // one WinForms rule this app has been bitten by often enough to
-        // stop relying on. Two rectangles, set from one size, in one
-        // place.
-        var page = new RaceClassesControl(store, undo) { Dock = DockStyle.None };
+        var classes = new RaceClassesControl(store, undo);
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK, Font = AppTheme.BodyFont };
 
-        btnClose.Size = new Size(UiLayout.WidthFor(btnClose), UiLayout.ButtonHeight);
+        // No margins round the Classes page: it keeps its own, as it does in
+        // the main window, and this page's on top of them would put the list
+        // twice as far from the window's edges as from Close. Only under
+        // Close, the page's usual bottom margin.
+        var page = new FillPage { Padding = new Padding(0, 0, 0, UiLayout.PageTop) };
 
-        void Place()
-        {
-            var barHeight = UiLayout.ButtonHeight + UiLayout.RowGap * 2;
+        // The least the Classes page can do with, at the width it is given:
+        // its intro, the count, the grid's headings and three classes, and
+        // its buttons (RaceClassesControl.LeastHeight).
+        page.AddFill(classes, classes.LeastHeight, gapBelow: 0);
 
-            page.Bounds = new Rectangle(0, 0, ClientSize.Width, Math.Max(200, ClientSize.Height - barHeight));
-
-            btnClose.Location = new Point(
-                Math.Max(UiLayout.PageLeft, ClientSize.Width - UiLayout.PageRight - btnClose.Width),
-                page.Bottom + UiLayout.RowGap);
-        }
+        // Against the right-hand edge, in from it by the page's margin - the
+        // Classes page's margin, so Close lines up with the list above it.
+        var closeBar = page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
+        closeBar.Margin = new Padding(UiLayout.PageLeft, 0, UiLayout.PageRight, 0);
 
         Controls.Add(page);
-        Controls.Add(btnClose);
-
-        Resize += (_, _) => Place();
-        Place();
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
+
+        // The size it had at the normal text size. It can be made bigger.
+        DialogFit.Keep(this, page, width: 940, height: 560);
     }
 }

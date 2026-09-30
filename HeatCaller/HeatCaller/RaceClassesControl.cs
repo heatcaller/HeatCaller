@@ -36,6 +36,9 @@ public sealed class RaceClassesControl : UserControl
     private readonly Button _btnPreset = new() { Text = "Sanctioning Preset..." };
     private readonly Button _btnDelete = new() { Text = "Delete" };
 
+    /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
+    private readonly FillPage _page = new();
+
     public RaceClassesControl(RaceClassStore store, UndoService? undo = null)
     {
         _store = store;
@@ -133,12 +136,10 @@ public sealed class RaceClassesControl : UserControl
         list.AddFill(_grid, LeastGridHeight);
         list.Add(new ButtonBar().With(_btnAdd, _btnEdit, _btnPreset, _btnDelete), gapBelow: 0);
 
-        var page = new FillPage();
+        _page.Add(lblIntro);
+        _page.AddFill(list, list.LeastHeight, gapBelow: 0);
 
-        page.Add(lblIntro);
-        page.AddFill(list, list.LeastHeight, gapBelow: 0);
-
-        Controls.Add(page);
+        Controls.Add(_page);
 
         // The repair pass is kept out. The Classes page is left alone by
         // name (LayoutAudit.ConvertedPages), but this page is also the
@@ -147,6 +148,14 @@ public sealed class RaceClassesControl : UserControl
         // a second authority moving controls the pieces place.
         LayoutDoctor.LeaveAlone(this);
     }
+
+    /// <summary>
+    /// The least the page can do with at <paramref name="width"/> - its
+    /// intro, the count, the grid's headings and three classes, and its
+    /// buttons - for the Race Classes window, which gives the page the
+    /// height it has (RaceClassManagerForm).
+    /// </summary>
+    internal int LeastHeight(int width) => _page.LeastHeight(width);
 
     /// <summary>The least the grid can do with: its headings and three classes. Below that the page scrolls instead - see FillPage.</summary>
     private int LeastGridHeight() =>

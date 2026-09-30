@@ -26,7 +26,16 @@ internal static class StaThread
     private static (Thread Thread, string Where)? _leftRunning;
 
     /// <param name="whereItWas">What the work was doing, for the message if it never finishes.</param>
-    public static T Run<T>(Func<T> work, TimeSpan limit, Func<string> whereItWas)
+    /// <param name="stuckAfter">
+    /// For long work that says what it is on as it goes (a sweep of many
+    /// windows): how long it may stay on one thing before it counts as
+    /// stuck. A window waiting for an answer is caught that long after it
+    /// opened, rather than when the whole limit runs out - which a sweep of
+    /// many windows needs to be generous, and which it outgrew as windows
+    /// were added (the window sweep, 30 Sep: 90 windows at five sizes took
+    /// longer than its five minutes).
+    /// </param>
+    public static T Run<T>(Func<T> work, TimeSpan limit, Func<string> whereItWas, TimeSpan? stuckAfter = null)
     {
         // An earlier test's windows still going would share this one's text
         // size and data folder - both are the whole process's - and whatever
@@ -83,13 +92,40 @@ internal static class StaThread
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
 
-        if (!thread.Join(limit))
-        {
-            _leftRunning = (thread, whereItWas());
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var onSince = System.Diagnostics.Stopwatch.StartNew();
+        var on = whereItWas();
 
-            throw new TimeoutException(
-                $"Did not finish in {limit.TotalMinutes:0.#} minutes. It was on: {whereItWas()}. "
-                + "A window waiting for an answer that cannot come would do this.");
+        // Once a second: what the work is on now, and for how long.
+        while (!thread.Join(TimeSpan.FromSeconds(1)))
+        {
+            var now = whereItWas();
+
+            if (!string.Equals(now, on, StringComparison.Ordinal))
+            {
+                on = now;
+                onSince.Restart();
+            }
+
+            // Not "stuck": the check of an earlier test's thread, above,
+            // declared that name for the whole method.
+            if (stuckAfter is { } stillFor && onSince.Elapsed > stillFor)
+            {
+                _leftRunning = (thread, now);
+
+                throw new TimeoutException(
+                    $"Stuck for {stillFor.TotalSeconds:0} seconds on: {now}. "
+                    + "A window waiting for an answer that cannot come would do this.");
+            }
+
+            if (clock.Elapsed > limit)
+            {
+                _leftRunning = (thread, now);
+
+                throw new TimeoutException(
+                    $"Did not finish in {limit.TotalMinutes:0.#} minutes. It was on: {now}. "
+                    + "A window waiting for an answer that cannot come would do this.");
+            }
         }
 
         if (failure is not null)

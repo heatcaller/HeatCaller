@@ -1157,7 +1157,12 @@ public static class AppTheme
     {
         var t = (text ?? string.Empty).ToLowerInvariant();
 
-        if (t.Contains("delete") || t.Contains("disconnect") || t.Contains("stop") || t.Contains("reset") || t.Contains("clear"))
+        // A preset is not a reset, though it has one inside it: the class
+        // editor's Sanctioning Preset button came out red, the colour of a
+        // button that throws something away (layout pictures, 30 Sep).
+        var resets = t.Replace("preset", string.Empty, StringComparison.Ordinal).Contains("reset");
+
+        if (t.Contains("delete") || t.Contains("disconnect") || t.Contains("stop") || resets || t.Contains("clear"))
         {
             return ButtonKind.Danger;
         }

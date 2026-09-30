@@ -4,9 +4,50 @@ namespace HeatCaller;
 /// Add/edit dialog for a single DriverProfile. Controls are built directly
 /// in code rather than a separate .Designer.cs partial - functionally
 /// identical, just fewer files for a form this small.
+///
+/// On the layout pieces (DialogFit): the organiser's fields down the left in
+/// a field grid - the captions in a column as wide as the longest, the
+/// garage and the class each a drop-down with its buttons beside it (under
+/// it, when a long name leaves them no room) - and down the right the strip
+/// for the crowd: the photo, square and as wide as the strip, its two
+/// buttons, then team and sponsors. The badges line, when the driver has
+/// earned any, is under the fields. All of that is the window's body, which
+/// scrolls on a screen too short for it, and Save and Cancel are under it
+/// at the foot. It opens at least as wide as it was made at the normal text
+/// size, at the size in use, and wider when its columns need more: the
+/// garage's drop-down and its two buttons on one line, a drop-down's longest
+/// name, the body's scrollbar on a short screen. It used to be placed in
+/// pixels in a 640x792 window - taller than a 1280x720 screen has room for,
+/// so Save and Cancel were off the bottom of it - with the captions in a
+/// 124px column, both drop-downs 200px wide whatever they held, and the
+/// badges line laid over the bottom of the notes box.
 /// </summary>
 public sealed class ProfileForm : Form
 {
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size, at
+    /// the least: the left column is the admin (everything the organiser
+    /// needs), and the strip down the right is the show - photo, team,
+    /// sponsors. Made wide rather than tall, because this dialog has more
+    /// fields than a small laptop has height for.
+    /// </summary>
+    private const int DialogWidth = 640;
+
+    /// <summary>The fields' column at the normal text size, at the least: the 320px the text boxes had.</summary>
+    private const int FieldColumnWidth = 320;
+
+    /// <summary>A drop-down's width at the normal text size - wider when its longest name needs it.</summary>
+    private const int PickerLeastWidth = 200;
+
+    /// <summary>The photo's side at the normal text size. The strip is this wide, or as wide as its buttons need.</summary>
+    private const int PhotoSide = 136;
+
+    /// <summary>Lines of text the setup and notes boxes show - about the 90px they had.</summary>
+    private const int NotesLines = 4;
+
+    /// <summary>Lines of text the sponsors box shows - about the 76px it had.</summary>
+    private const int SponsorsLines = 3;
+
     private readonly RaceClassStore _classStore;
     private readonly UndoService? _undo;
 
@@ -43,6 +84,17 @@ public sealed class ProfileForm : Form
     /// <summary>Files imported while this dialog was open. All but the one that gets saved are deleted on close.</summary>
     private readonly List<string> _importedThisSession = new();
 
+    /// <summary>
+    /// How wide the photo strip is: the photo's side at the text size in
+    /// use, or as wide as its wider button's caption needs. Worked out once
+    /// the theme pass has been (SizeStrip); the strip asks for it whenever
+    /// it is placed.
+    /// </summary>
+    private int _stripWidth;
+
+    /// <summary>The field column's width with the body's scrollbar showing - see FitPicker.</summary>
+    private int _fieldColumn;
+
     public DriverProfile Result { get; private set; }
 
     /// <param name="existing">Pass an existing profile to edit it, or null to create a new one.</param>
@@ -66,42 +118,32 @@ public sealed class ProfileForm : Form
         Result = existing ?? new DriverProfile { Transponder = fixedTransponder ?? string.Empty };
 
         Text = existing is null ? "Add Driver Profile" : "Edit Driver Profile";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        // 640 wide: the left column is the admin (everything the organiser
-        // needs), and the new right strip is the show - photo, team,
-        // sponsors. Widened rather than made taller, because at 760 this
-        // dialog already fills a small laptop top to bottom - the one row
-        // added since (Email) cost it 32px, which could not be found
-        // anywhere else without squeezing the notes.
-        ClientSize = new Size(640, 792);
         Font = AppTheme.BodyFont;
 
         _photoFileName = Result.PhotoFileName;
         _originalPhotoFileName = Result.PhotoFileName;
 
-        var y = 16;
-        AddLabeledTextBox("Transponder:", _txtTransponder, ref y, Result.Transponder);
+        // The organiser's column: a caption and its field on each row, the
+        // captions in one column as wide as the longest of them, and every
+        // text box running to the column's right-hand edge.
+        var fields = new FieldGrid();
+        var captions = new List<Label>();
+
+        captions.Add(AddLabeledTextBox(fields, "Transponder:", _txtTransponder, Result.Transponder));
         _txtTransponder.ReadOnly = fixedTransponder is not null;
 
-        AddLabeledTextBox("Driver name:", _txtDriverName, ref y, Result.DriverName);
+        captions.Add(AddLabeledTextBox(fields, "Driver name:", _txtDriverName, Result.DriverName));
 
         // What the announcer says, when it differs. A nickname the crowd
         // knows, or a spelling the voice actually pronounces correctly -
         // this is wired into the announcer, so it takes effect immediately.
-        AddLabeledTextBox("Announcer name:", _txtAnnouncerName, ref y, Result.AnnouncerName);
+        captions.Add(AddLabeledTextBox(fields, "Announcer name:", _txtAnnouncerName, Result.AnnouncerName));
         _txtAnnouncerName.PlaceholderText = "optional - blank uses the driver name";
 
         // Garage rather than a single box. The combo shows the active car
         // and lists the rest; Add and Remove manage the garage. A driver
         // with a stock and a modified car shouldn't need two profiles -
         // that splits their lap history and personal bests in two.
-        var lblCars = new Label { Text = "Cars:", Location = new Point(16, y + 3), AutoSize = true };
-
-        _cmbCars.Location = new Point(140, y);
-        _cmbCars.Width = 200;
         _cmbCars.DropDownStyle = ComboBoxStyle.DropDown;
 
         foreach (var car in Result.AllCars)
@@ -111,7 +153,7 @@ public sealed class ProfileForm : Form
 
         _cmbCars.Text = Result.CarModel;
 
-        var btnAddCar = new Button { Text = "Add", Location = new Point(348, y - 1), Width = 52, Height = 24 };
+        var btnAddCar = new Button { Text = "Add" };
         btnAddCar.Click += (_, _) =>
         {
             var car = _cmbCars.Text.Trim();
@@ -127,9 +169,13 @@ public sealed class ProfileForm : Form
             }
 
             _cmbCars.Text = car;
+
+            // A longer name than the box was made for widens it, as far as
+            // its row goes.
+            FitPicker(_cmbCars, keepToRow: true);
         };
 
-        var btnRemoveCar = new Button { Text = "Remove", Location = new Point(404, y - 1), Width = 62, Height = 24 };
+        var btnRemoveCar = new Button { Text = "Remove" };
         btnRemoveCar.Click += (_, _) =>
         {
             if (_cmbCars.SelectedItem is not string car)
@@ -142,57 +188,34 @@ public sealed class ProfileForm : Form
             // Fall back to whatever is left, so the active car is never a
             // name that's no longer in the garage.
             _cmbCars.Text = _cmbCars.Items.Count > 0 ? (string)_cmbCars.Items[0]! : string.Empty;
+
+            // The longest name may just have gone.
+            FitPicker(_cmbCars, keepToRow: true);
         };
 
-        Controls.Add(lblCars);
-        Controls.Add(_cmbCars);
-        Controls.Add(btnAddCar);
-        Controls.Add(btnRemoveCar);
-        y += 28;
+        captions.Add(fields.AddRow("Cars:", ButtonsBeside(_cmbCars, btnAddCar, btnRemoveCar)));
+        fields.AddHint("Type a car and press Add. The one shown is the active car - what gets announced and recorded.");
 
-        var lblCarsHint = new Label
-        {
-            Text = "Type a car and press Add. The one shown is the active car - what gets announced and recorded.",
-            Location = new Point(140, y),
-            AutoSize = true,
-            MaximumSize = new Size(326, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-        Controls.Add(lblCarsHint);
-        y += 34;
-        AddLabeledTextBox("Race number:", _txtRaceNumber, ref y, Result.RaceNumber);
-        AddLabeledTextBox("Home track:", _txtHomeTrack, ref y, Result.HomeTrack);
-        AddLabeledTextBox("Skill level:", _txtSkillLevel, ref y, Result.SkillLevel);
+        captions.Add(AddLabeledTextBox(fields, "Race number:", _txtRaceNumber, Result.RaceNumber));
+        captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
+        captions.Add(AddLabeledTextBox(fields, "Skill level:", _txtSkillLevel, Result.SkillLevel));
         _txtSkillLevel.PlaceholderText = "e.g. Novice / Intermediate / Expert";
 
-        AddLabeledTextBox("Contact:", _txtContact, ref y, Result.Contact);
+        captions.Add(AddLabeledTextBox(fields, "Contact:", _txtContact, Result.Contact));
         _txtContact.PlaceholderText = "organiser use only - never announced";
 
         // Its own box rather than read out of Contact, which is free text
         // ("Dad, 07700 900123"). Only ever used to send this racer their
         // check-in PIN.
-        AddLabeledTextBox("Email:", _txtEmail, ref y, Result.Email);
+        captions.Add(AddLabeledTextBox(fields, "Email:", _txtEmail, Result.Email));
         _txtEmail.PlaceholderText = "for check-in PINs - never shown publicly";
 
-        AddLabeledTextBox("Alt transponder:", _txtAltTransponder, ref y, Result.AlternateTransponder);
+        captions.Add(AddLabeledTextBox(fields, "Alt transponder:", _txtAltTransponder, Result.AlternateTransponder));
         _txtAltTransponder.PlaceholderText = "a second car they also run";
 
-        var lblClass = new Label { Text = "Class:", Location = new Point(16, y + 3), AutoSize = true };
-        _cmbClass.Location = new Point(140, y);
-        _cmbClass.Width = 200;
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
-        // Positioned after the combo (140-340), not on top of it - at x=324
-        // the button overlapped by 16px, which is what clipped it. Also
-        // widened: "Manage Classes..." never fit in 80px, hence the 7pt
-        // font that was papering over it.
-        var btnManageClasses = new Button
-        {
-            Text = "Manage...",
-            Location = new Point(348, y - 1),
-            Width = 118,
-            Height = 24,
-        };
+
+        var btnManageClasses = new Button { Text = "Manage..." };
         btnManageClasses.Click += (_, _) =>
         {
             // The class this box shows now - a change not yet saved
@@ -231,98 +254,91 @@ public sealed class ProfileForm : Form
             }
 
             RefreshClassCombo(selected);
+
+            // A class added or renamed may be longer than any before it.
+            FitPicker(_cmbClass, keepToRow: true);
         };
-        Controls.Add(lblClass);
-        Controls.Add(_cmbClass);
-        Controls.Add(btnManageClasses);
-        y += 32;
 
         RefreshClassCombo(Result.ClassName);
+        captions.Add(fields.AddRow("Class:", ButtonsBeside(_cmbClass, btnManageClasses)));
 
-        y += 4;
-        var lblSetup = new Label { Text = "Setup configuration:", Location = new Point(16, y), AutoSize = true };
-        Controls.Add(lblSetup);
-        y += 20;
         _txtSetupConfiguration.Multiline = true;
         _txtSetupConfiguration.AcceptsReturn = true;
         _txtSetupConfiguration.ScrollBars = ScrollBars.Vertical;
-        _txtSetupConfiguration.Location = new Point(16, y);
-        _txtSetupConfiguration.Size = new Size(388, 90);
         _txtSetupConfiguration.Text = Result.SetupConfiguration;
-        Controls.Add(_txtSetupConfiguration);
-        y += 98;
+        captions.Add(fields.AddRow("Setup configuration:", _txtSetupConfiguration, stretch: true));
 
+        // In the fields' column, under the fields, as they were.
         _chkRental.Text = "Rental / loaner transponder";
-        _chkRental.Location = new Point(140, y);
         _chkRental.AutoSize = true;
         _chkRental.Checked = Result.IsRental;
-        Controls.Add(_chkRental);
-        y += 26;
+        fields.AddField(_chkRental);
 
         _chkExcludeRecords.Text = "Exclude from track records and points";
-        _chkExcludeRecords.Location = new Point(140, y);
         _chkExcludeRecords.AutoSize = true;
         _chkExcludeRecords.Checked = Result.ExcludeFromRecords;
-        Controls.Add(_chkExcludeRecords);
-        y += 26;
+        fields.AddField(_chkExcludeRecords);
+        fields.AddHint("Both keep a driver out of all-time records - for guests, staff cars and loaners.");
 
-        var lblExcludeHint = new Label
-        {
-            Text = "Both keep a driver out of all-time records - for guests, staff cars and loaners.",
-            Location = new Point(140, y),
-            AutoSize = true,
-            MaximumSize = new Size(264, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-        Controls.Add(lblExcludeHint);
-        y += 32;
-
-        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, y), AutoSize = true };
-        Controls.Add(lblNotes);
-        y += 20;
         _txtNotes.Multiline = true;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
-        _txtNotes.Location = new Point(16, y);
-        _txtNotes.Size = new Size(388, 90);
         _txtNotes.Text = Result.Notes;
-        Controls.Add(_txtNotes);
-        y += 98;
+        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
 
-        // Bottom-right of the DIALOG, now that it is wider than its left
-        // column - dialog buttons that stop two thirds of the way across
-        // read as a mistake.
-        var btnSave = new Button { Text = "Save", Location = new Point(448, y), Width = 84 };
-        btnSave.Click += BtnSave_Click;
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(540, y), Width = 84, DialogResult = DialogResult.Cancel };
-        // Badges, read-only, under the rest. Read here rather than passed in
-        // so the form's callers don't all need a store they otherwise have
-        // no use for. Left column, full width - at its old x it was
-        // half off the dialog's right edge.
-        var badgeSummary = DescribeBadges(fixedTransponder ?? _txtTransponder.Text);
+        // The fields on the left and the strip down the right, as tall as
+        // the taller of the two. The strip is as wide as SizeStrip works
+        // out; until the theme pass, the photo's side.
+        _stripWidth = UiLayout.AtTextSize(PhotoSide);
 
-        if (!string.IsNullOrWhiteSpace(badgeSummary))
+        var band = new Beside(() => _stripWidth)
         {
-            var lblBadges = new Label
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        // Badges, read-only, under the rest of the left column. Read here
+        // rather than passed in so the form's callers don't all need a store
+        // they otherwise have no use for.
+        var badgeSummary = DescribeBadges(fixedTransponder ?? _txtTransponder.Text);
+        var hasBadges = !string.IsNullOrWhiteSpace(badgeSummary);
+
+        band.Add(fields, gapBelow: hasBadges ? UiLayout.RowGap : 0);
+
+        if (hasBadges)
+        {
+            band.Add(new Label
             {
                 Text = badgeSummary,
-                Location = new Point(16, btnSave.Top - 46),
-                AutoSize = false,
-                Size = new Size(424, 40),
+                AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
-            };
-
-            Controls.Add(lblBadges);
+            }, gapBelow: 0);
         }
 
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        var strip = BuildPhotoStrip(band);
+
+        var btnSave = new Button { Text = "Save" };
+        btnSave.Click += BtnSave_Click;
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+        // Everything but the buttons is the body: this dialog has more
+        // fields than a small screen has height for, and on one they scroll
+        // while Save and Cancel stay in view.
+        var page = new FillPage();
+        var body = DialogFit.Body(page);
+        body.Add(band, gapBelow: 0);
+
+        // Bottom-right of the dialog, Cancel furthest right, as a dialog's
+        // buttons go - and Tab still reaches Save first, as it did: the bar
+        // takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
-
-        BuildPhotoStrip();
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
@@ -357,31 +373,82 @@ public sealed class ProfileForm : Form
                 }
             }
         };
+
+        // After the theme pass, in the faces it leaves them in: the strip
+        // and what is in it, the two note boxes their lines, and each
+        // drop-down as wide as its longest name.
+        SizeStrip(strip);
+        _txtSetupConfiguration.Height = LinesHigh(_txtSetupConfiguration, NotesLines);
+        _txtNotes.Height = LinesHigh(_txtNotes, NotesLines);
+
+        var carsWidth = FitPicker(_cmbCars, keepToRow: false);
+        var classWidth = FitPicker(_cmbClass, keepToRow: false);
+
+        // The fields' column: never narrower than the text boxes were, wide
+        // enough for the garage's drop-down and its two buttons on one line
+        // when its names are short, as they were, and for each drop-down's
+        // longest name and each tick. The buttons beside a longer name go
+        // under it rather than widening the window for them. Kept in locals,
+        // never read back from the controls - see QuickDriverForm.
+        var carsOnOneLine = UiLayout.AtTextSize(PickerLeastWidth)
+            + UiLayout.TightButtonSizeFor(btnAddCar).Width
+            + UiLayout.TightButtonSizeFor(btnRemoveCar).Width
+            + 3 * UiLayout.TightButtonGap;
+
+        var fieldColumn = new[]
+        {
+            UiLayout.AtTextSize(FieldColumnWidth),
+            carsOnOneLine,
+            carsWidth + UiLayout.TightButtonGap,
+            classWidth + UiLayout.TightButtonGap,
+            _chkRental.GetPreferredSize(Size.Empty).Width,
+            _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
+        }.Max();
+
+        // The caption column as the grid works it out: its widest caption
+        // and the gap after it.
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        // The width it was made at, at the text size in use, or wider when
+        // the two columns need it - with room for the body's scrollbar, which
+        // takes its width from the fields on a screen too short for them.
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.RowGap + _stripWidth
+                + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+
+        // The field column as it is when the body's scrollbar is showing -
+        // the narrowest it gets - for a drop-down widened once the window
+        // is up (FitPicker).
+        _fieldColumn = width - UiLayout.PageLeft - captionColumn - UiLayout.RowGap - _stripWidth
+                       - SystemInformation.VerticalScrollBarWidth - UiLayout.PageRight;
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
     /// <summary>
     /// The right-hand strip: photo on top, then team and sponsors - the
     /// three fields that exist for the crowd rather than the organiser,
-    /// grouped away from the paperwork on the left.
+    /// grouped away from the paperwork on the left. Down the side of
+    /// <paramref name="band"/>, one under another and each as wide as the
+    /// strip, the captions above their boxes as they always were. The strip
+    /// gives its parts its width but not their heights: the photo, the
+    /// captions, the note and the sponsors box are given theirs once the
+    /// theme pass is done (SizeStrip), and this returns what that needs.
     /// </summary>
-    private void BuildPhotoStrip()
+    private PhotoStrip BuildPhotoStrip(Beside band)
     {
-        const int left = 488;
-        const int width = 136;
-
-        _photoPanel.Location = new Point(left, 16);
-        _photoPanel.Size = new Size(width, width);
         _photoPanel.Paint += (_, e) =>
         {
             var who = _txtDriverName.Text.Trim().Length > 0 ? _txtDriverName.Text.Trim() : Result.Transponder;
             DriverPhotos.DrawAvatar(e.Graphics, _photoPanel.ClientRectangle, who, _photoFileName);
         };
-        Controls.Add(_photoPanel);
+        band.AddSide(_photoPanel);
 
         // The initials avatar follows the name as it is typed.
         _txtDriverName.TextChanged += (_, _) => _photoPanel.Invalidate();
 
-        var btnChoose = new Button { Text = "Choose Photo...", Location = new Point(left, 158), Width = width, Height = 26 };
+        var btnChoose = new Button { Text = "Choose Photo..." };
         btnChoose.Click += (_, _) =>
         {
             using var dialog = new OpenFileDialog
@@ -408,43 +475,116 @@ public sealed class ProfileForm : Form
             _photoFileName = imported;
             _photoPanel.Invalidate();
         };
-        Controls.Add(btnChoose);
+        band.AddSide(btnChoose, gapBelow: UiLayout.ButtonGap);
 
-        var btnRemove = new Button { Text = "Remove Photo", Location = new Point(left, 188), Width = width, Height = 26 };
+        var btnRemove = new Button { Text = "Remove Photo" };
         btnRemove.Click += (_, _) =>
         {
             _photoFileName = string.Empty;
             _photoPanel.Invalidate();
         };
-        Controls.Add(btnRemove);
+        band.AddSide(btnRemove, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
 
-        var lblTeam = new Label { Text = "Team / club:", Location = new Point(left, 228), AutoSize = true };
-        _txtTeam.Location = new Point(left, 248);
-        _txtTeam.Width = width;
+        var lblTeam = band.AddSide(new Label { Text = "Team / club:" }, gapBelow: UiLayout.HintGap);
         _txtTeam.Text = Result.Team;
-        Controls.Add(lblTeam);
-        Controls.Add(_txtTeam);
+        band.AddSide(_txtTeam);
 
-        var lblSponsors = new Label { Text = "Sponsors:", Location = new Point(left, 282), AutoSize = true };
+        var lblSponsors = band.AddSide(new Label { Text = "Sponsors:" }, gapBelow: UiLayout.HintGap);
         _txtSponsors.Multiline = true;
         _txtSponsors.ScrollBars = ScrollBars.Vertical;
-        _txtSponsors.Location = new Point(left, 302);
-        _txtSponsors.Size = new Size(width, 76);
         _txtSponsors.Text = Result.Sponsors;
-        Controls.Add(lblSponsors);
-        Controls.Add(_txtSponsors);
+        band.AddSide(_txtSponsors, gapBelow: UiLayout.HintGap);
 
-        var lblSponsorsHint = new Label
+        var lblSponsorsHint = band.AddSide(new Label
         {
             Text = "Shown on the driver card - the works-driver treatment.",
-            Location = new Point(left, 382),
-            AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-        };
-        Controls.Add(lblSponsorsHint);
+        }, gapBelow: 0);
+
+        return new PhotoStrip(btnChoose, btnRemove, new[] { lblTeam, lblSponsors, lblSponsorsHint });
     }
+
+    /// <summary>
+    /// The strip's width and the heights of what is in it, in the faces the
+    /// theme pass left them in. The width: the photo's side at the text size
+    /// in use, or what the wider button's caption needs if that is more -
+    /// measured as the strip measures its buttons (UiLayout.ButtonSizeFor),
+    /// so the strip comes out exactly this wide. The photo square in it; the
+    /// captions and the note each as tall as their text wrapped to it; the
+    /// sponsors box its lines. Once: the dialog is built at the text size in
+    /// use and is not kept in step with a change made while it is up (see
+    /// DialogFit).
+    /// </summary>
+    private void SizeStrip(PhotoStrip strip)
+    {
+        _stripWidth = Math.Max(
+            UiLayout.AtTextSize(PhotoSide),
+            Math.Max(UiLayout.ButtonSizeFor(strip.Choose).Width, UiLayout.ButtonSizeFor(strip.Remove).Width));
+
+        _photoPanel.Height = _stripWidth;
+
+        foreach (var label in strip.Labels)
+        {
+            label.Height = label.GetPreferredSize(new Size(_stripWidth, 0)).Height;
+        }
+
+        _txtSponsors.Height = LinesHigh(_txtSponsors, SponsorsLines);
+    }
+
+    /// <summary>What the strip hands back to be sized after the theme pass: its two buttons, whose captions can widen it, and its captions and note.</summary>
+    private sealed record PhotoStrip(Button Choose, Button Remove, IReadOnlyList<Label> Labels);
+
+    /// <summary>
+    /// A drop-down with its buttons after it, in one field, wrapping under it
+    /// when a long name leaves them no room. The buttons only as wide as
+    /// their captions: at a standard button's width the garage's two would
+    /// not fit beside its drop-down, where the small buttons they replace
+    /// did. The drop-down is centred up and down on the taller buttons, as
+    /// FieldGrid.Inline does it.
+    /// </summary>
+    private static ButtonBar ButtonsBeside(ComboBox picker, params Button[] buttons)
+    {
+        picker.Anchor = AnchorStyles.Left;
+
+        return new ButtonBar(tight: true).With(picker).With(buttons);
+    }
+
+    /// <summary>
+    /// Sizes a drop-down to the longest name it holds, and the one it shows,
+    /// never narrower than it was made at the normal text size, at the size
+    /// in use - measured afresh, as its list may have changed without
+    /// changing its length. Once the window is up
+    /// (<paramref name="keepToRow"/>: a car added, the classes managed) never
+    /// wider than the field column either - the window has its width by
+    /// then, and a name longer than that is better cut short than run past
+    /// the edge. The column as it is with the body's scrollbar showing, not
+    /// as the row reads now: a drop-down made as wide as the row wraps its
+    /// buttons under it, the body grows a scrollbar, and the row shrinks by
+    /// its width under the drop-down. Returns the width.
+    /// </summary>
+    private int FitPicker(ComboBox picker, bool keepToRow)
+    {
+        (Font Font, int Count, int Width)? measured = null;
+
+        var width = Math.Max(UiLayout.AtTextSize(PickerLeastWidth), Pieces.PickerWidth(picker, ref measured, picker.Text));
+
+        if (keepToRow && _fieldColumn > 0)
+        {
+            width = Math.Min(width, Math.Max(1, _fieldColumn - picker.Margin.Horizontal));
+        }
+
+        if (picker.Width != width)
+        {
+            picker.Width = width;
+        }
+
+        return width;
+    }
+
+    /// <summary>A box of several lines' height for <paramref name="lines"/> lines, as the box draws them (Pieces.LineHeight).</summary>
+    private static int LinesHigh(TextBox box, int lines) =>
+        lines * Pieces.LineHeight(box.Font) + UiLayout.HintGap * 2;
 
     private void RefreshClassCombo(string? preferredSelection)
     {
@@ -459,15 +599,11 @@ public sealed class ProfileForm : Form
         _cmbClass.SelectedIndex = idx >= 0 ? idx : 0;
     }
 
-    private void AddLabeledTextBox(string label, TextBox box, ref int y, string initialValue)
+    /// <summary>A caption and its text box, filled in, the box running to the grid's right-hand edge. Returns the caption.</summary>
+    private static Label AddLabeledTextBox(FieldGrid fields, string label, TextBox box, string initialValue)
     {
-        var lbl = new Label { Text = label, Location = new Point(16, y + 3), AutoSize = true };
-        box.Location = new Point(140, y);
-        box.Width = 320;
         box.Text = initialValue;
-        Controls.Add(lbl);
-        Controls.Add(box);
-        y += 32;
+        return fields.AddRow(label, box, stretch: true);
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

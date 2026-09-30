@@ -107,6 +107,14 @@ internal static partial class WindowCatalog
         all.AddRange(HeatBalanceWindows());
         all.AddRange(SignupWindows());
 
+        // The windows a new club meets first (30 Sep).
+        all.AddRange(FirstRunWindows());
+        all.AddRange(DriverProfileWindows());
+        all.AddRange(ClassWindows());
+        all.AddRange(ClassRuleWindows());
+        all.AddRange(RentalWindows());
+        all.AddRange(TechInspectionWindows());
+
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.
         all.AddRange(SetupWizardWindows());
@@ -223,6 +231,9 @@ internal sealed class WindowSweepResult
     public List<string> Pages => Sweep.Pages;
 
     public List<(string What, string FirstAt)> Problems => Sweep.Problems;
+
+    /// <summary>How long each window took at each size - its building, sizing, checking and putting away - for the report's slowest.</summary>
+    public List<(string Where, TimeSpan Took)> Timed { get; } = new();
 }
 
 /// <summary>Builds each window at each size, inside a screen-sized panel of an off-screen window, and measures it.</summary>
@@ -230,8 +241,25 @@ internal static class WindowSweep
 {
     private static volatile string _now = "starting";
 
+    /// <summary>Which part of a window's turn the sweep is in, for the message if it sticks: a hang in building points somewhere else than one in sizing or checking.</summary>
+    private static volatile string _doing = string.Empty;
+
+    /// <summary>
+    /// Every window at every size. Caught as stuck when one part of one
+    /// window's turn - building it, sizing it, checking one of its tabs,
+    /// putting it away - takes more than a minute and a half, and named with
+    /// that part; the whole sweep, which grows with every window added, may
+    /// take up to twenty minutes. (The last full sweep before this, 29 Sep:
+    /// 50 windows at five sizes in about two minutes. The next, with 40 more,
+    /// was still going at five - the report's Slowest line says which take
+    /// the time.)
+    /// </summary>
     public static WindowSweepResult Run(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? only, string? pictures) =>
-        StaThread.Run(() => Sweep(views, only, pictures), TimeSpan.FromMinutes(5), () => _now);
+        StaThread.Run(
+            () => Sweep(views, only, pictures),
+            TimeSpan.FromMinutes(20),
+            () => _doing.Length == 0 ? _now : $"{_now}, {_doing}",
+            stuckAfter: TimeSpan.FromSeconds(90));
 
     private static WindowSweepResult Sweep(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? only, string? pictures)
     {
@@ -301,13 +329,16 @@ internal static class WindowSweep
             }
 
             _now = $"{view.Name}: {name}";
+            _doing = "building";
 
+            var took = Stopwatch.StartNew();
             Form? window = null;
             Panel? inside = null;
 
             try
             {
                 window = build();
+                _doing = "sizing";
 
                 // On screen when it is sized, as the window counts as shown
                 // when DialogFit sizes it on Load (see DialogFit's notes):
@@ -330,6 +361,8 @@ internal static class WindowSweep
 
                 var shown = inside;
 
+                _doing = "checking";
+
                 var found = LayoutAudit.Check(shown, name, Settle, where =>
                 {
                     _now = $"{view.Name}: {where}";
@@ -349,10 +382,15 @@ internal static class WindowSweep
             }
             finally
             {
+                _doing = "putting away";
+
                 // The panel first: the window's page is in it now.
                 inside?.Dispose();
                 window?.Dispose();
                 Settle();
+
+                result.Timed.Add(($"{view.Name}: {name}", took.Elapsed));
+                _doing = string.Empty;
             }
         }
 
@@ -428,6 +466,14 @@ internal static class WindowReport
         text.AppendLine();
         text.AppendLine("Windows that must be clean (LayoutAudit.ConvertedWindows): " + string.Join(", ", LayoutAudit.ConvertedWindows) + ".");
         text.AppendLine("Took: " + string.Join(", ", sweep.Sweep.Timings.Select(t => $"{t.Key.Heading} {t.Value.TotalSeconds:0.0}s")) + ".");
+
+        if (sweep.Timed.Count > 0)
+        {
+            text.AppendLine("Slowest: " + string.Join(", ", sweep.Timed
+                .OrderByDescending(timed => timed.Took)
+                .Take(8)
+                .Select(timed => $"{timed.Where} {timed.Took.TotalSeconds:0.0}s")) + ".");
+        }
 
         if (pictures is not null)
         {

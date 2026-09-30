@@ -81,6 +81,12 @@ internal sealed class ThinScrollBar : Control
     private readonly Control _target;
 
     /// <summary>
+    /// The tables and flow panels between the target and where the bar is
+    /// parked (HostFor passes over them), heard moving - see WatchBetween.
+    /// </summary>
+    private readonly List<Control> _between = new();
+
+    /// <summary>
     /// The target when it is a DataGridView, which needs its own path.
     ///
     /// A grid does NOT have native scrollbars. WinForms gives it two
@@ -313,7 +319,56 @@ internal sealed class ThinScrollBar : Control
             parent.Controls.Add(this);
         }
 
+        WatchBetween();
         Reposition();
+    }
+
+    /// <summary>
+    /// Hears each table between the target and the bar's host move, and
+    /// moves the bar with it there and then.
+    ///
+    /// A table moving carries the target with it without the target itself
+    /// moving, which raises nothing on the target; the timer caught it up to
+    /// 150ms later (Refresh). But a bar parked in a panel that scrolls - a
+    /// notes box's, in a field grid on a dialog's page - counts towards that
+    /// panel's scrolling range while it is where the box used to be. A page
+    /// made shorter moved the grid up and left the bar below the new bottom:
+    /// the page took a scrollbar it did not need, which took the width of
+    /// everything on it, and kept both once the bar caught up - the layout
+    /// that would have put them back was asked for while one was running.
+    /// Tech Inspection's class drop-down came out 17px too narrow at
+    /// 1920x1080 (layout test, 30 Sep), where the window is sized at the
+    /// screen's full height first and then at its own. Moved as the table
+    /// moves, the bar is in its place before the page works out its range.
+    /// </summary>
+    private void WatchBetween()
+    {
+        UnwatchBetween();
+
+        for (var between = _target.Parent; between is TableLayoutPanel or FlowLayoutPanel; between = between.Parent)
+        {
+            between.LocationChanged += BetweenMoved;
+            _between.Add(between);
+        }
+    }
+
+    private void UnwatchBetween()
+    {
+        foreach (var between in _between)
+        {
+            between.LocationChanged -= BetweenMoved;
+        }
+
+        _between.Clear();
+    }
+
+    /// <summary>ApplyBounds, never Reposition: this runs inside the host's layout, and Refresh reads the target's scroll range, which is not wanted there. A hidden bar counts towards nothing, and is placed as it is shown.</summary>
+    private void BetweenMoved(object? sender, EventArgs e)
+    {
+        if (_shown)
+        {
+            ApplyBounds();
+        }
     }
 
     /// <summary>
@@ -754,6 +809,7 @@ internal sealed class ThinScrollBar : Control
             _target.VisibleChanged -= TargetMoved;
             _target.ParentChanged -= TargetReparented;
             _target.Disposed -= TargetDisposed;
+            UnwatchBetween();
 
             Parent?.Controls.Remove(this);
         }

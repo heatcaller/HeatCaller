@@ -16,12 +16,78 @@ namespace HeatCaller;
 /// It does not start the app tour itself: <see cref="TakeTour"/> tells the
 /// caller the box was ticked, and MainForm starts it once the wizard has
 /// gone (after the restart, when a new look needs one).
+///
+/// On the layout pieces (DialogFit), laid out as Set Up Tonight is: the
+/// rail down the left, flush with the window's edges (a Beside, the rail
+/// its column), and beside it the step's title and what it is about, the
+/// step itself taking the height between those and the footer - Skip setup
+/// and the progress on the left, Back and Next on the right. Each step is a
+/// page of its own, built once and shown while it is the step; a step
+/// taller than the room it has scrolls, rather than the window growing, and
+/// the footer stays in view. The window opens as wide as Set Up Tonight and
+/// as tall as it always was, and can be resized. It used to be placed in
+/// pixels: a fixed 770x580 window, the rail 190px wide at every text size,
+/// the step's title and what it is about at fixed heights over a 520x310
+/// box that each step's controls were placed in by coordinates, and the
+/// footer 58px from the bottom - which a larger text size ran off the
+/// bottom and the right of, and which a long step's text ran into.
 /// </summary>
 public sealed class FirstRunWizard : Form
 {
+    /// <summary>The rail's width at the normal text size - wider only when its step names or the brand need it.</summary>
     private const int RailWidth = 190;
-    private const int ContentLeft = RailWidth + 32;
-    private const int ContentWidth = 520;
+
+    /// <summary>
+    /// How wide and tall the window opens inside its frame, at the normal
+    /// text size. As wide as Set Up Tonight, whose rail and footer are this
+    /// one's: at the 770 it always was, Skip setup and the progress took a
+    /// line of their own over Back and Next at the normal text size - the
+    /// footer's buttons are the app's standard width now, not the 100 to
+    /// 130px they were placed at (layout pictures, 30 Sep). The height it
+    /// always was.
+    /// </summary>
+    private const int WindowWidth = 850;
+
+    private const int WindowHeight = 580;
+
+    /// <summary>A step has at least this much height at the normal text size - a few lines - before the window scrolls instead of the step.</summary>
+    private const int StepLeastHeight = 120;
+
+    /// <summary>A step on the rail: its least height, and the room before its name, at the normal text size.</summary>
+    private const int RailStepHeight = 34;
+
+    private const int RailStepInset = 12;
+
+    private const string BrandText = "HEATCALLER";
+
+    /// <summary>The decoder drop-down's width at the normal text size - wider when a choice needs it - and the track name's.</summary>
+    private const int ConnectionWidth = 340;
+
+    private const int TrackNameWidth = 340;
+
+    /// <summary>The COM port and baud drop-downs' width at the normal text size - wider when a choice needs it.</summary>
+    private const int PortWidth = 130;
+
+    /// <summary>The classes box: its width at the normal text size, and how many lines of it show.</summary>
+    private const int ClassesBoxWidth = 260;
+
+    private const int ClassesBoxLines = 6;
+
+    /// <summary>The driver rows' boxes, and the class drop-down under them, at the normal text size - the drop-down wider when a class's name needs it.</summary>
+    private const int DriverNameWidth = 256;
+
+    private const int TransponderWidth = 180;
+
+    private const int DriverClassWidth = 200;
+
+    /// <summary>The looks list's least width at the normal text size - wider when a look's name needs it - and the least of its rows it shows before the step scrolls instead.</summary>
+    private const int LookListWidth = 200;
+
+    private const int LookListLeastRows = 5;
+
+    /// <summary>How tall the picture of a look is at the normal text size. It is as wide as the room beside the list.</summary>
+    private const int PreviewHeight = 130;
+
     private const int DriverRows = 6;
 
     private static readonly string[] StepNames =
@@ -37,58 +103,90 @@ public sealed class FirstRunWizard : Form
     private readonly ProfileStore _profiles;
 
     // The frame
-    private readonly Panel _rail = new();
+
+    /// <summary>The steps down the left - a page with no part that fills, as tall as the window (see BuildLayout).</summary>
+    private readonly FillPage _rail = new();
     private readonly Label _lblBrand = new();
     private readonly Label _lblRailCaption = new();
     private readonly Label[] _railLabels = new Label[StepNames.Length];
+
+    /// <summary>Beside the rail: the step's title and what it is about, the step, and the footer.</summary>
+    private readonly FillPage _stepPage = new();
     private readonly Label _lblStepTitle = new();
     private readonly Label _lblStepBody = new();
-    private readonly Panel _content = new();
+
+    /// <summary>Where the steps are, one on show at a time - see ShowStep.</summary>
+    private readonly Panel _stepHolder = new();
+
+    private readonly ButtonBar _footerLeft = new();
     private readonly Label _lblProgress = new();
     private readonly Button _btnSkipAll = new();
     private readonly Button _btnBack = new();
     private readonly Button _btnNext = new();
 
     // Welcome
+    private readonly PageStack _welcomeStep = new();
     private readonly Label _lblWelcomeRestore = new();
     private readonly Button _btnRestore = new();
 
     // Look
+    private readonly FillPage _lookStep = new();
     private readonly ListBox _lstLooks = new();
     private readonly Panel _lookPreview = new();
     private readonly Label _lblLookDescription = new();
     private readonly CheckBox _chk24Hour = new();
 
+    /// <summary>The looks list's width at the text size in use - see SizeFields.</summary>
+    private int _lookListWidth = UiLayout.AtTextSize(LookListWidth);
+
     // Timing
+    private readonly PageStack _timingStep = new();
     private readonly ComboBox _cmbConnection = new();
-    private readonly Label _lblSerialPort = new();
+
+    /// <summary>The COM port and baud rows, shown only while I-Lap is the chosen connection - see ShowILapFields.</summary>
+    private readonly FieldGrid _iLapFields = new();
     private readonly ComboBox _cmbSerialPort = new();
     private readonly Button _btnRescan = new();
-    private readonly Label _lblBaud = new();
     private readonly ComboBox _cmbBaud = new();
     private readonly Label _lblTimingHint = new();
 
     // Track
+    private readonly PageStack _trackStep = new();
     private readonly TextBox _txtTrackName = new();
     private readonly Label _lblTrackHint = new();
 
     // Classes
+    private readonly PageStack _classesStep = new();
     private readonly TextBox _txtClasses = new();
     private readonly Label _lblChipsCaption = new();
-    private readonly FlowLayoutPanel _classChips = new();
+
+    /// <summary>The suggested classes, each only as wide as the widest of their captions needs, on one line where there is room.</summary>
+    private readonly ButtonBar _classChips = new(tight: true, sameWidth: true);
     private readonly Label _lblClassesHint = new();
 
     // Drivers
+    private readonly PageStack _driversStep = new();
     private readonly Label _lblNameHeader = new();
     private readonly Label _lblTransponderHeader = new();
     private readonly TextBox[] _txtDriverNames = new TextBox[DriverRows];
     private readonly TextBox[] _txtTransponders = new TextBox[DriverRows];
-    private readonly Label _lblDriverClass = new();
     private readonly ComboBox _cmbDriverClass = new();
     private readonly Label _lblDriversHint = new();
 
     // All set
-    private readonly Label _lblSummary = new();
+    private readonly PageStack _doneStep = new();
+
+    // What each step came to, an answer to each caption - see FillSummary.
+    private readonly Label _lblDoneLook = new();
+    private readonly Label _lblDoneDecoder = new();
+    private readonly Label _lblDoneTrack = new();
+    private readonly Label _lblDoneClasses = new();
+    private readonly Label _lblDoneDrivers = new();
+
+    /// <summary>Under the drivers' answer when rows on the drivers step were not saved - see FillSummary.</summary>
+    private readonly Label _lblDoneSkipped = new();
+
+    private readonly Label _lblRaceNight = new();
     private readonly CheckBox _chkTour = new();
 
     // What each step actually did, for the summary on the last page.
@@ -103,6 +201,18 @@ public sealed class FirstRunWizard : Form
     private int _step;
 
     public FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles)
+        : this(settings, trackLayouts, raceClasses, profiles, startStep: 0)
+    {
+    }
+
+    /// <summary>
+    /// The wizard opened at <paramref name="startStep"/> - an index into
+    /// StepNames - rather than at the welcome page. For the layout test,
+    /// which measures the window as its constructor leaves it and so can
+    /// only see the step shown then (WindowCatalog.FirstRunWindows). The
+    /// app always opens it at the welcome page.
+    /// </summary>
+    internal FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles, int startStep)
     {
         _settings = settings;
         _trackLayouts = trackLayouts;
@@ -111,17 +221,18 @@ public sealed class FirstRunWizard : Form
         _startingLookKey = Looks.ForApp(settings).Key;
 
         Text = "Welcome to HeatCaller";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(ContentLeft + ContentWidth + 28, 580);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        BuildLayout();
+        var page = BuildLayout();
         AppTheme.ApplyRecursively(this);
-        ShowStep(0);
+        SizeFields();
+        ShowStep(startStep);
+
+        // The size it always opened at; it can be made bigger, or smaller
+        // down to what the rail, the step's title, the footer and a few
+        // lines of a step need - the step scrolls below that.
+        DialogFit.Keep(this, page, width: WindowWidth, height: WindowHeight);
     }
 
     /// <summary>True when the "show me around" box was ticked on the last page.</summary>
@@ -133,27 +244,148 @@ public sealed class FirstRunWizard : Form
     /// <summary>True when "Restore a backup instead" was chosen - the caller opens Backup &amp; Restore.</summary>
     public bool OpenBackups { get; private set; }
 
+    /// <summary>Each step's own page, in the order of StepNames - see ShowStep.</summary>
+    private ScrollableControl[] StepPages => new ScrollableControl[]
+    {
+        _welcomeStep, _lookStep, _timingStep, _trackStep, _classesStep, _driversStep, _doneStep,
+    };
+
     // --- Layout ----------------------------------------------------------
 
-    private void BuildLayout()
+    /// <summary>
+    /// The window, returned as the page that fills it: the rail down the
+    /// left, flush with the window's top, bottom and left edges, and beside
+    /// it the step - its title, what it is about, the step's own page (all
+    /// of them are built here, and one is shown at a time) and the footer.
+    /// </summary>
+    private FillPage BuildLayout()
     {
-        // The rail: every step by name, the current one highlighted, so it
-        // is always clear how much is left.
-        _rail.Location = new Point(0, 0);
-        _rail.Size = new Size(RailWidth, ClientSize.Height);
+        BuildRail();
 
-        _lblBrand.Text = "HEATCALLER";
+        _lblStepTitle.AutoSize = true;
+        _lblStepTitle.Font = AppTheme.TitleFont;
+
+        _lblStepBody.AutoSize = true;
+
+        _lblProgress.AutoSize = true;
+        _lblProgress.Font = AppTheme.SmallFont;
+
+        // Level with the middle of Skip setup beside it, not its top - as a
+        // label among buttons is in a row of them (FieldGrid.Inline).
+        _lblProgress.Anchor = AnchorStyles.Left;
+
+        _btnSkipAll.Text = "Skip setup";
+        _btnSkipAll.Click += (_, _) => SkipEverything();
+
+        _btnBack.Text = "Back";
+        _btnBack.Click += (_, _) =>
+        {
+            SaveCurrentStep();
+            ShowStep(_step - 1);
+        };
+
+        _btnNext.Text = "Next";
+        _btnNext.Click += (_, _) => NextClicked();
+
+        BuildWelcome();
+        BuildLook();
+        BuildTiming();
+        BuildTrack();
+        BuildClasses();
+        BuildDrivers();
+        BuildDone();
+
+        // Every step's page fills the holder; only the one on show is
+        // visible, so only it takes the room. None has margins of its own -
+        // the page they are in gives them - nor any room under its last part
+        // when it scrolls, for the reason DialogFit.Body gives.
+        _stepHolder.Tag = AppTheme.KeepBackColor;
+
+        foreach (var stepPage in StepPages)
+        {
+            stepPage.Padding = Padding.Empty;
+            stepPage.Visible = false;
+            LayoutDoctor.NoRoomBelow(stepPage);
+
+            _stepHolder.Controls.Add(stepPage);
+        }
+
+        // Skip setup and the progress on the left, Back and Next against the
+        // right-hand edge, Next furthest right - on one line, or Back and
+        // Next under the other two when a narrow window has no room for both
+        // (SplitBar). The bar is handed Next first, as its first button goes
+        // furthest right; Tab still goes Back before Next, as it did, from
+        // the tab order set here.
+        var footer = new SplitBar(
+            _footerLeft.With(_btnSkipAll, _lblProgress),
+            new ButtonBar(alignRight: true).With(_btnNext, _btnBack));
+
+        _btnBack.TabIndex = 0;
+        _btnNext.TabIndex = 1;
+
+        // More room above and to the right than a dialog's usual margin, as
+        // the step always had, and the rail's own gap on the left (Beside).
+        _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
+        LayoutDoctor.NoRoomBelow(_stepPage);
+
+        _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
+        _stepPage.Add(_lblStepBody);
+
+        // The step takes the height the rest leave, and scrolls inside it
+        // when it needs more - down to a few lines of it, below which the
+        // window scrolls instead.
+        _stepPage.AddFill(_stepHolder, _ => UiLayout.AtTextSize(StepLeastHeight));
+        _stepPage.Add(footer, gapBelow: 0);
+
+        var band = new Beside(MeasureRailWidth()) { SideOnLeft = true };
+
+        band.AddSideFill(_rail, _rail.LeastHeight, gapBelow: 0);
+        band.AddFill(_stepPage, _stepPage.LeastHeight, gapBelow: 0);
+
+        // No margin round the window: the rail runs to its edges.
+        var page = new FillPage { Padding = Padding.Empty };
+
+        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+        Controls.Add(page);
+
+        return page;
+    }
+
+    /// <summary>
+    /// The rail: the brand, what the window is for, and every step by name,
+    /// the current one highlighted, so it is always clear how much is left.
+    /// A page of its own in the sidebar's colour, the column of a Beside
+    /// that takes the window's whole height (AddSideFill) - so it runs from
+    /// the top of the window to the bottom however tall that is.
+    /// </summary>
+    private void BuildRail()
+    {
+        // Every name on the rail starts at the same place.
+        var inset = UiLayout.AtTextSize(RailStepInset);
+
+        _lblBrand.Text = BrandText;
         _lblBrand.AutoSize = true;
         _lblBrand.Font = AppTheme.NavFont;
-        _lblBrand.Location = new Point(22, 26);
+        _lblBrand.Padding = new Padding(inset, 0, 0, 0);
 
         _lblRailCaption.Text = "First-time setup";
         _lblRailCaption.AutoSize = true;
         _lblRailCaption.Font = AppTheme.SmallFont;
-        _lblRailCaption.Location = new Point(22, 54);
+        _lblRailCaption.Padding = new Padding(inset, 0, 0, 0);
 
-        _rail.Controls.Add(_lblBrand);
-        _rail.Controls.Add(_lblRailCaption);
+        // Placed by the Beside it is the column of, not docked; and as tall
+        // as it needs to be with nothing under its last step (LeastHeight).
+        _rail.Dock = DockStyle.None;
+        _rail.Padding = new Padding(inset, UiLayout.SectionGap, inset, UiLayout.PageTop);
+        LayoutDoctor.NoRoomBelow(_rail);
+
+        _rail.Add(_lblBrand, gapBelow: UiLayout.HintGap);
+        _rail.Add(_lblRailCaption);
+
+        // Tall enough for the current step's name in the bold face.
+        var stepHeight = Math.Max(
+            UiLayout.AtTextSize(RailStepHeight),
+            Pieces.LineHeight(AppTheme.BoldFont) + UiLayout.AtTextSize(UiLayout.RowGap + 2));
 
         for (var i = 0; i < StepNames.Length; i++)
         {
@@ -162,9 +394,8 @@ public sealed class FirstRunWizard : Form
             {
                 Text = StepNames[i],
                 AutoSize = false,
-                Size = new Size(RailWidth - 24, 34),
-                Location = new Point(12, 100 + i * 40),
-                Padding = new Padding(12, 0, 0, 0),
+                Height = stepHeight,
+                Padding = new Padding(inset, 0, 0, 0),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Cursor = Cursors.Hand,
             };
@@ -177,87 +408,53 @@ public sealed class FirstRunWizard : Form
             };
 
             _railLabels[i] = label;
-            _rail.Controls.Add(label);
+            _rail.Add(label, gapBelow: i == StepNames.Length - 1 ? 0 : UiLayout.HintGap);
         }
-
-        _lblStepTitle.Location = new Point(ContentLeft, 30);
-        _lblStepTitle.AutoSize = true;
-        _lblStepTitle.MaximumSize = new Size(ContentWidth, 0);
-        _lblStepTitle.Font = AppTheme.TitleFont;
-
-        _lblStepBody.Location = new Point(ContentLeft, 78);
-        _lblStepBody.AutoSize = true;
-        _lblStepBody.MaximumSize = new Size(ContentWidth, 0);
-
-        _content.Location = new Point(ContentLeft, 180);
-        _content.Size = new Size(ContentWidth, 310);
-
-        _lblProgress.AutoSize = true;
-        _lblProgress.Font = AppTheme.SmallFont;
-
-        _btnSkipAll.Text = "Skip setup";
-        _btnSkipAll.Width = 120;
-        _btnSkipAll.Click += (_, _) => SkipEverything();
-
-        _btnBack.Text = "Back";
-        _btnBack.Width = 100;
-        _btnBack.Click += (_, _) =>
-        {
-            SaveCurrentStep();
-            ShowStep(_step - 1);
-        };
-
-        _btnNext.Text = "Next";
-        _btnNext.Width = 130;
-        _btnNext.Click += (_, _) => NextClicked();
-
-        var buttonTop = ClientSize.Height - 58;
-        _btnNext.Location = new Point(ClientSize.Width - 28 - _btnNext.Width, buttonTop);
-        _btnBack.Location = new Point(_btnNext.Left - 12 - _btnBack.Width, buttonTop);
-        _btnSkipAll.Location = new Point(ContentLeft, buttonTop);
-        _lblProgress.Location = new Point(_btnSkipAll.Right + 16, buttonTop + 10);
-
-        BuildWelcome();
-        BuildLook();
-        BuildTiming();
-        BuildTrack();
-        BuildClasses();
-        BuildDrivers();
-        BuildDone();
-
-        Controls.Add(_rail);
-        Controls.Add(_lblStepTitle);
-        Controls.Add(_lblStepBody);
-        Controls.Add(_content);
-        Controls.Add(_lblProgress);
-        Controls.Add(_btnSkipAll);
-        Controls.Add(_btnBack);
-        Controls.Add(_btnNext);
     }
 
+    /// <summary>
+    /// How wide the rail is: the width it always had at the normal text
+    /// size, at the size in use - or, if they need more, the widest step's
+    /// name in the bold face, or the brand, with the rail's margins either
+    /// side and the room before the name.
+    /// </summary>
+    private static int MeasureRailWidth()
+    {
+        var inset = UiLayout.AtTextSize(RailStepInset);
+
+        var names = StepNames.Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
+        var brand = TextRenderer.MeasureText(BrandText, AppTheme.NavFont).Width;
+
+        return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(names, brand) + 3 * inset);
+    }
+
+    /// <summary>The welcome step: the way to a backup instead, under what the app is.</summary>
     private void BuildWelcome()
     {
         _lblWelcomeRestore.Text = "Moving from another laptop? Restore your backup instead - it brings your drivers, "
                                   + "classes, results and settings with it.";
         _lblWelcomeRestore.AutoSize = true;
-        _lblWelcomeRestore.MaximumSize = new Size(ContentWidth, 0);
         _lblWelcomeRestore.Font = AppTheme.SmallFont;
-        _lblWelcomeRestore.Location = new Point(0, 120);
 
         _btnRestore.Text = "Restore a backup instead";
-        _btnRestore.Width = 240;
-        _btnRestore.Location = new Point(0, 160);
         _btnRestore.Click += (_, _) =>
         {
             OpenBackups = true;
             Finish(takeTour: false);
         };
+
+        _welcomeStep.Add(_lblWelcomeRestore, gapBelow: UiLayout.RowGap);
+        _welcomeStep.Add(new ButtonBar().With(_btnRestore), gapBelow: 0);
     }
 
+    /// <summary>
+    /// The look step: the looks down the left, taking the height the step
+    /// has, and beside them a picture of the one selected and what it is
+    /// (a Beside, the list its column) - then the 24-hour clock under both.
+    /// </summary>
     private void BuildLook()
     {
-        _lstLooks.Location = new Point(0, 0);
-        _lstLooks.Size = new Size(200, 200);
+        // Given the height the step has, not snapped to whole rows - see FillPage.AddFill.
         _lstLooks.IntegralHeight = false;
 
         foreach (var look in Looks.BuiltIn)
@@ -285,26 +482,39 @@ public sealed class FirstRunWizard : Form
             _lookPreview.Invalidate();
         };
 
-        _lookPreview.Location = new Point(220, 0);
-        _lookPreview.Size = new Size(ContentWidth - 220, 130);
         _lookPreview.Paint += (_, e) => PaintLookPreview(e.Graphics, _lookPreview.ClientRectangle, SelectedLook);
 
-        _lblLookDescription.Location = new Point(220, 142);
+        // The picture is drawn to the preview's size, which now follows the
+        // window's - so all of it again when that changes, not only the part
+        // that was uncovered.
+        _lookPreview.Resize += (_, _) => _lookPreview.Invalidate();
+
         _lblLookDescription.AutoSize = true;
-        _lblLookDescription.MaximumSize = new Size(ContentWidth - 220, 0);
         _lblLookDescription.Font = AppTheme.SmallFont;
         _lblLookDescription.Text = SelectedLook?.Description ?? string.Empty;
 
         _chk24Hour.Text = "Show times on a 24-hour clock (14:30 rather than 2:30 PM)";
         _chk24Hour.AutoSize = true;
-        _chk24Hour.Location = new Point(0, 222);
         _chk24Hour.Checked = _settings.Use24HourTime;
+
+        // The list as wide as the longest look's name needs, or the width it
+        // always had if that is more (SizeFields).
+        var band = new Beside(() => _lookListWidth) { SideOnLeft = true };
+
+        band.Add(_lookPreview, gapBelow: UiLayout.RowGap);
+        band.Add(_lblLookDescription, gapBelow: 0);
+        band.AddSideFill(_lstLooks, _ => LookListLeastRows * _lstLooks.ItemHeight + 4, gapBelow: 0);
+
+        _lookStep.AddFill(band, band.LeastHeight, gapBelow: UiLayout.SectionGap);
+        _lookStep.Add(_chk24Hour, stretch: false, gapBelow: 0);
     }
 
+    /// <summary>
+    /// The timing step: the decoder, then - for I-Lap - its COM port and
+    /// baud rate lined up in a grid, then what to do next.
+    /// </summary>
     private void BuildTiming()
     {
-        _cmbConnection.Location = new Point(0, 4);
-        _cmbConnection.Width = 340;
         _cmbConnection.DropDownStyle = ComboBoxStyle.DropDownList;
 
         // The Connection page's own list, so the two never offer different
@@ -316,25 +526,11 @@ public sealed class FirstRunWizard : Form
         // I-Lap: its COM port and baud rate, saved to the same settings the
         // Connection page reads. Nothing connects from here - the port is
         // only remembered, so Connect finds it chosen.
-        _lblSerialPort.Text = "COM port:";
-        _lblSerialPort.Location = new Point(0, 52);
-        _lblSerialPort.AutoSize = true;
-
-        _cmbSerialPort.Location = new Point(96, 49);
-        _cmbSerialPort.Width = 130;
         _cmbSerialPort.DropDownStyle = ComboBoxStyle.DropDownList;
 
         _btnRescan.Text = "Rescan";
-        _btnRescan.Location = new Point(238, 47);
-        _btnRescan.Width = 100;
         _btnRescan.Click += (_, _) => FillSerialPorts();
 
-        _lblBaud.Text = "Baud:";
-        _lblBaud.Location = new Point(0, 92);
-        _lblBaud.AutoSize = true;
-
-        _cmbBaud.Location = new Point(96, 89);
-        _cmbBaud.Width = 130;
         _cmbBaud.DropDownStyle = ComboBoxStyle.DropDownList;
 
         foreach (var rate in ILapClient.CommonBaudRates)
@@ -352,27 +548,41 @@ public sealed class FirstRunWizard : Form
         _cmbBaud.SelectedItem = _settings.ILapBaud > 0 ? _settings.ILapBaud : ILapClient.CommonBaudRates[0];
 
         _lblTimingHint.AutoSize = true;
-        _lblTimingHint.MaximumSize = new Size(ContentWidth, 0);
         _lblTimingHint.Font = AppTheme.SmallFont;
+
+        _iLapFields.AddRow("COM port:", FieldGrid.Inline(_cmbSerialPort, _btnRescan));
+        _iLapFields.AddRow("Baud:", _cmbBaud);
+
+        _timingStep.Add(_cmbConnection, stretch: false, gapBelow: UiLayout.RowGap);
+        Pieces.KeepHeightTold(_cmbConnection);
+
+        _timingStep.Add(_iLapFields, gapBelow: UiLayout.RowGap);
+        _timingStep.Add(_lblTimingHint, gapBelow: 0);
     }
 
+    /// <summary>The track step: the layout's name, and where the rest of a track is set up.</summary>
     private void BuildTrack()
     {
-        _txtTrackName.Location = new Point(0, 4);
-        _txtTrackName.Width = 340;
         _txtTrackName.PlaceholderText = "e.g. Garage Oval, Shop Layout A";
         _txtTrackName.Text = _settings.LastTrackLayoutName;
 
-        _lblTrackHint.Location = new Point(0, 52);
         _lblTrackHint.AutoSize = true;
-        _lblTrackHint.MaximumSize = new Size(ContentWidth, 0);
         _lblTrackHint.Font = AppTheme.SmallFont;
+
+        // In a row of its own (FieldGrid.Inline), which keeps the pixel round
+        // the box that the theme draws its outline in - against the step's
+        // edge, that side of the outline would be cut off.
+        _trackStep.Add(FieldGrid.Inline(_txtTrackName), gapBelow: UiLayout.RowGap);
+        _trackStep.Add(_lblTrackHint, gapBelow: 0);
     }
 
+    /// <summary>
+    /// The classes step: a box of class names, one to a line, the suggested
+    /// classes under it with their caption above them, and where the rest of
+    /// a class is set up.
+    /// </summary>
     private void BuildClasses()
     {
-        _txtClasses.Location = new Point(0, 0);
-        _txtClasses.Size = new Size(260, 150);
         _txtClasses.Multiline = true;
         _txtClasses.AcceptsReturn = true;
         _txtClasses.ScrollBars = ScrollBars.Vertical;
@@ -380,82 +590,202 @@ public sealed class FirstRunWizard : Form
 
         _lblChipsCaption.Text = "Quick add:";
         _lblChipsCaption.AutoSize = true;
-        _lblChipsCaption.Location = new Point(280, 0);
-
-        _classChips.Location = new Point(280, 28);
-        _classChips.Size = new Size(ContentWidth - 280, 130);
-        _classChips.FlowDirection = FlowDirection.LeftToRight;
-        _classChips.WrapContents = true;
 
         foreach (var name in SuggestedClasses)
         {
-            var chip = new Button { Text = name, Width = 104, Margin = new Padding(0, 0, 8, 8) };
+            var chip = new Button { Text = name };
             chip.Click += (_, _) => AddClassLine(name);
             _classChips.Controls.Add(chip);
         }
 
-        _lblClassesHint.Location = new Point(0, 168);
         _lblClassesHint.AutoSize = true;
-        _lblClassesHint.MaximumSize = new Size(ContentWidth, 0);
         _lblClassesHint.Font = AppTheme.SmallFont;
+
+        // The box in a row of its own for its outline, as the track's name is.
+        _classesStep.Add(FieldGrid.Inline(_txtClasses), gapBelow: UiLayout.RowGap);
+        _classesStep.Add(_lblChipsCaption, stretch: false, gapBelow: UiLayout.HintGap);
+        _classesStep.Add(_classChips, gapBelow: UiLayout.RowGap);
+        _classesStep.Add(_lblClassesHint, gapBelow: 0);
     }
 
+    /// <summary>
+    /// The drivers step: a heading over each column, a row per driver - the
+    /// name box and the transponder box side by side - and the class they
+    /// are all saved in, with what happens to a blank row beside it.
+    /// </summary>
     private void BuildDrivers()
     {
         _lblNameHeader.Text = "Driver name";
         _lblNameHeader.AutoSize = true;
-        _lblNameHeader.Location = new Point(0, 0);
         _lblNameHeader.Font = AppTheme.SmallFont;
 
         _lblTransponderHeader.Text = "Transponder number";
         _lblTransponderHeader.AutoSize = true;
-        _lblTransponderHeader.Location = new Point(270, 0);
         _lblTransponderHeader.Font = AppTheme.SmallFont;
+
+        // The headings in a row laid out as the driver rows are, the name
+        // heading as wide as a name box and its outline (SizeFields) - so
+        // the transponder heading starts where the transponder boxes do.
+        _driversStep.Add(FieldGrid.Inline(_lblNameHeader, _lblTransponderHeader), gapBelow: UiLayout.HintGap);
 
         for (var i = 0; i < DriverRows; i++)
         {
             _txtDriverNames[i] = new TextBox
             {
-                Location = new Point(0, 24 + i * 36),
-                Width = 256,
                 PlaceholderText = i == 0 ? "e.g. Sam Carter" : string.Empty,
             };
 
             _txtTransponders[i] = new TextBox
             {
-                Location = new Point(270, 24 + i * 36),
-                Width = 180,
                 PlaceholderText = i == 0 ? "e.g. 8467BE" : string.Empty,
             };
+
+            _driversStep.Add(FieldGrid.Inline(_txtDriverNames[i], _txtTransponders[i]), gapBelow: UiLayout.RowGap);
         }
 
-        var bottom = 24 + DriverRows * 36;
-
-        _lblDriverClass.Text = "Class:";
-        _lblDriverClass.AutoSize = true;
-        _lblDriverClass.Location = new Point(0, bottom + 8);
-
-        _cmbDriverClass.Location = new Point(56, bottom + 4);
-        _cmbDriverClass.Width = 200;
         _cmbDriverClass.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        _lblDriversHint.Location = new Point(270, bottom + 8);
         _lblDriversHint.AutoSize = true;
-        _lblDriversHint.MaximumSize = new Size(ContentWidth - 270, 0);
         _lblDriversHint.Font = AppTheme.SmallFont;
         _lblDriversHint.Text = "Rows left blank are skipped.";
+
+        // The note beside the class, or under it when a long class's name
+        // leaves no room beside it.
+        var classRow = new FieldGrid();
+        classRow.AddRow("Class:", FieldGrid.Inline(_cmbDriverClass, _lblDriversHint));
+
+        _driversStep.Add(classRow, gapBelow: 0);
     }
 
+    /// <summary>
+    /// The last step: what is ready - a caption and its answer on each line,
+    /// the answers lined up and wrapping in a column of their own - then
+    /// what to do on race night, and the tour's box under it. It was one
+    /// label, each answer a few spaces after its caption, so no two answers
+    /// started in the same place, and a long one wrapped back under the
+    /// captions (layout pictures, 30 Sep).
+    /// </summary>
     private void BuildDone()
     {
-        _lblSummary.Location = new Point(0, 0);
-        _lblSummary.AutoSize = true;
-        _lblSummary.MaximumSize = new Size(ContentWidth, 0);
+        var ready = new FieldGrid();
+
+        foreach (var (caption, answer) in new[]
+        {
+            ("Look:", _lblDoneLook),
+            ("Decoder:", _lblDoneDecoder),
+            ("Track:", _lblDoneTrack),
+            ("Classes:", _lblDoneClasses),
+            ("Drivers:", _lblDoneDrivers),
+        })
+        {
+            answer.AutoSize = true;
+
+            // A track or a class is named by the club - an "&" in it is
+            // meant, not a shortcut key.
+            answer.UseMnemonic = false;
+
+            var captionLabel = ready.AddRow(caption, answer, stretch: true);
+
+            // A list of what is ready, not fields to fill in: its lines as
+            // close as a hint's to what it is under.
+            captionLabel.Margin = new Padding(captionLabel.Margin.Left, captionLabel.Margin.Top, captionLabel.Margin.Right, UiLayout.HintGap);
+            answer.Margin = new Padding(answer.Margin.Left, answer.Margin.Top, answer.Margin.Right, UiLayout.HintGap);
+        }
+
+        // In the answers' column, under the drivers' answer it is about.
+        _lblDoneSkipped.AutoSize = true;
+        _lblDoneSkipped.Visible = false;
+        ready.AddField(_lblDoneSkipped, stretch: true);
+
+        // The route a club actually takes on the night, and the reason this
+        // is not the old one-liner.
+        //
+        // It used to say "open Connection and press Connect, then run it
+        // from Race Control" - which works, and teaches a club to run the
+        // whole evening without ever opening Race Day. The heats never get
+        // built, nothing is filed against a day, and qualifying has no
+        // boundary. The page that plans a night was reachable only by
+        // clicking the sidebar out of curiosity.
+        _lblRaceNight.AutoSize = true;
+        _lblRaceNight.Text = string.Join(Environment.NewLine,
+            "On race night: open Connection and press Connect, then go to Race Day.",
+            "Its Next Steps tab says the one next thing to do and has the button that does it.",
+            "No decoder here yet? Open Demo Mode and start a simulated race.");
 
         _chkTour.Text = "Show me around the app now (about two minutes)";
         _chkTour.AutoSize = true;
         _chkTour.Checked = true;
         _chkTour.Font = AppTheme.BoldFont;
+
+        _doneStep.Add(ready, gapBelow: UiLayout.SectionGap);
+        _doneStep.Add(_lblRaceNight, gapBelow: UiLayout.SectionGap);
+        _doneStep.Add(_chkTour, stretch: false, gapBelow: 0);
+    }
+
+    /// <summary>
+    /// The fields' sizes, in the faces the theme pass left them in: the
+    /// boxes the width they were made at, at the text size in use; the
+    /// drop-downs as wide as their longest choice when that is wider (and
+    /// again when their lists are refilled - see FitPicker); the classes box
+    /// six of its lines tall; the preview its height; the looks list as
+    /// wide as its longest name.
+    /// </summary>
+    private void SizeFields()
+    {
+        FitPicker(_cmbConnection, ConnectionWidth);
+        FitPicker(_cmbSerialPort, PortWidth);
+        FitPicker(_cmbBaud, PortWidth);
+        FitPicker(_cmbDriverClass, DriverClassWidth);
+
+        _txtTrackName.Width = UiLayout.AtTextSize(TrackNameWidth);
+
+        _txtClasses.Size = new Size(
+            UiLayout.AtTextSize(ClassesBoxWidth),
+            ClassesBoxLines * Pieces.LineHeight(_txtClasses.Font) + UiLayout.HintGap * 2);
+
+        var nameWidth = UiLayout.AtTextSize(DriverNameWidth);
+        var transponderWidth = UiLayout.AtTextSize(TransponderWidth);
+
+        for (var i = 0; i < DriverRows; i++)
+        {
+            _txtDriverNames[i].Width = nameWidth;
+            _txtTransponders[i].Width = transponderWidth;
+        }
+
+        // A name box's row keeps a pixel either side of it for its outline
+        // (Pieces.RingRoom); the heading row keeps none round a label, so
+        // the heading is that much wider than the box.
+        _lblNameHeader.MinimumSize = new Size(nameWidth + Pieces.RingRoom(_txtDriverNames[0]).Horizontal, 0);
+
+        _lookPreview.Height = UiLayout.AtTextSize(PreviewHeight);
+
+        // The longest name, and room for the list's scrollbar and either
+        // side of the text.
+        var longestLook = _lstLooks.Items
+            .Cast<object>()
+            .Select(item => TextRenderer.MeasureText(_lstLooks.GetItemText(item), _lstLooks.Font).Width)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        _lookListWidth = Math.Max(UiLayout.AtTextSize(LookListWidth), longestLook + SystemInformation.VerticalScrollBarWidth + 8);
+    }
+
+    /// <summary>
+    /// A drop-down as wide as it was made at the normal text size
+    /// (<paramref name="least"/>), at the size in use, or as its longest
+    /// choice if that is wider - measured afresh, for a list just refilled.
+    /// </summary>
+    private static void FitPicker(ComboBox picker, int least)
+    {
+        (Font Font, int Count, int Width)? measured = null;
+
+        var width = Math.Max(UiLayout.AtTextSize(least), Pieces.PickerWidth(picker, ref measured));
+
+        // Only when it changed: a new width lays the row out again.
+        if (picker.Width != width)
+        {
+            picker.Width = width;
+        }
     }
 
     // --- Steps -----------------------------------------------------------
@@ -463,7 +793,6 @@ public sealed class FirstRunWizard : Form
     private void ShowStep(int step)
     {
         _step = Math.Clamp(step, 0, StepNames.Length - 1);
-        _content.Controls.Clear();
 
         switch (_step)
         {
@@ -474,8 +803,6 @@ public sealed class FirstRunWizard : Form
                     + "calls it out loud, and keeps every result.\r\n\r\n"
                     + "This setup takes about three minutes. Every step can be skipped, and everything here can be "
                     + "changed later from the sidebar.";
-                _content.Controls.Add(_lblWelcomeRestore);
-                _content.Controls.Add(_btnRestore);
                 break;
 
             case 1:
@@ -483,7 +810,6 @@ public sealed class FirstRunWizard : Form
                 _lblStepBody.Text =
                     "How the app looks on this laptop. The screens and web pages your racers see can have a look of "
                     + "their own - set that, and your club logo, on the Themes page later.";
-                _content.Controls.AddRange(new Control[] { _lstLooks, _lookPreview, _lblLookDescription, _chk24Hour });
                 break;
 
             case 2:
@@ -491,10 +817,6 @@ public sealed class FirstRunWizard : Form
                 _lblStepBody.Text =
                     "HeatCaller reads the decoder directly and runs race control itself. Pick the one you have - "
                     + "you connect to it on the Connection page when you're ready to race.";
-                _content.Controls.AddRange(new Control[]
-                {
-                    _cmbConnection, _lblSerialPort, _cmbSerialPort, _btnRescan, _lblBaud, _cmbBaud, _lblTimingHint,
-                });
                 ShowILapFields();
                 break;
 
@@ -507,8 +829,6 @@ public sealed class FirstRunWizard : Form
                     ? $"Already set up: {string.Join(", ", _trackLayouts.All.Select(t => t.Name).Take(6))}. "
                       + "Add photos, marshal posts and more on the Track Layouts page."
                     : "Add a photo of the layout, marshal posts and more on the Track Layouts page later.";
-                _content.Controls.Add(_txtTrackName);
-                _content.Controls.Add(_lblTrackHint);
                 break;
 
             case 4:
@@ -520,7 +840,6 @@ public sealed class FirstRunWizard : Form
                     ? $"Already set up: {string.Join(", ", _raceClasses.All.Select(c => c.Name).Take(8))}. "
                       + "Race formats, lap limits and rules are on the Classes page."
                     : "Race formats, lap limits and rules for each class are on the Classes page.";
-                _content.Controls.AddRange(new Control[] { _txtClasses, _lblChipsCaption, _classChips, _lblClassesHint });
                 break;
 
             case 5:
@@ -529,25 +848,22 @@ public sealed class FirstRunWizard : Form
                     "Enter anyone you know now, or skip this: when a transponder the app doesn't know crosses the "
                     + "line, it asks you who it is. The number is printed on the transponder.";
                 FillDriverClassChoices();
-                _content.Controls.Add(_lblNameHeader);
-                _content.Controls.Add(_lblTransponderHeader);
-
-                for (var i = 0; i < DriverRows; i++)
-                {
-                    _content.Controls.Add(_txtDriverNames[i]);
-                    _content.Controls.Add(_txtTransponders[i]);
-                }
-
-                _content.Controls.AddRange(new Control[] { _lblDriverClass, _cmbDriverClass, _lblDriversHint });
                 break;
 
             case 6:
                 _lblStepTitle.Text = "You're all set";
                 _lblStepBody.Text = "Here's what's ready. Everything can be changed later from the sidebar.";
-                _lblSummary.Text = BuildSummary();
-                _content.Controls.Add(_lblSummary);
-                _content.Controls.Add(_chkTour);
+                FillSummary();
                 break;
+        }
+
+        // This step's page on show, and every other one hidden - which takes
+        // it out of the layout as well as out of sight.
+        var pages = StepPages;
+
+        for (var i = 0; i < pages.Length; i++)
+        {
+            pages[i].Visible = i == _step;
         }
 
         var last = _step == StepNames.Length - 1;
@@ -557,15 +873,12 @@ public sealed class FirstRunWizard : Form
         _btnNext.Text = last ? "Finish" : (_step == 0 ? "Get started" : "Next");
         _lblProgress.Text = _step == 0 || last ? string.Empty : $"Step {_step} of {StepNames.Length - 2}";
 
-        AppTheme.ApplyRecursively(_content);
-        ApplyFrameColours();
+        // Nothing to say on the welcome page or the last one - and on the
+        // last, nothing on the left at all, so no empty row is left there.
+        _lblProgress.Visible = _lblProgress.Text.Length > 0;
+        _footerLeft.Visible = !last;
 
-        if (last)
-        {
-            // Placed after the theme pass, which can change the summary's
-            // font and so its height.
-            _chkTour.Location = new Point(0, _lblSummary.Bottom + 24);
-        }
+        ApplyFrameColours();
 
         // Enter moves on - except in the classes box, where it starts a
         // new line.
@@ -833,6 +1146,9 @@ public sealed class FirstRunWizard : Form
             _cmbDriverClass.Items.Add(name);
         }
 
+        // As wide as the longest class's name, now the list holds them.
+        FitPicker(_cmbDriverClass, DriverClassWidth);
+
         var wanted = !string.IsNullOrEmpty(previous) ? previous : _doneClasses.FirstOrDefault() ?? names.FirstOrDefault() ?? string.Empty;
         _cmbDriverClass.SelectedItem = _cmbDriverClass.Items.Contains(wanted) ? wanted : string.Empty;
         _cmbDriverClass.Enabled = names.Count > 0;
@@ -843,17 +1159,15 @@ public sealed class FirstRunWizard : Form
     {
         var isILap = DecoderConnection.ValueAt(_cmbConnection.SelectedIndex) == DecoderConnection.ILap;
 
-        foreach (var control in new Control[] { _lblSerialPort, _cmbSerialPort, _btnRescan, _lblBaud, _cmbBaud })
-        {
-            control.Visible = isILap;
-        }
+        // The grid the two rows are in, so the hint under them closes up
+        // when they go.
+        _iLapFields.Visible = isILap;
 
         if (isILap && _cmbSerialPort.Items.Count == 0)
         {
             FillSerialPorts();
         }
 
-        _lblTimingHint.Location = new Point(0, isILap ? 136 : 52);
         _lblTimingHint.Text = isILap
             ? "Leave the baud rate at 9600 unless the decoder has been set differently. No port listed? Plug the "
               + "decoder in and press Rescan - or pick it later on the Connection page.\r\n\r\n"
@@ -870,6 +1184,9 @@ public sealed class FirstRunWizard : Form
         _cmbSerialPort.Items.Clear();
         _cmbSerialPort.Items.AddRange(ports);
 
+        // As wide as the longest port's name, now the list holds them.
+        FitPicker(_cmbSerialPort, PortWidth);
+
         if (ports.Length == 0)
         {
             return;
@@ -879,7 +1196,8 @@ public sealed class FirstRunWizard : Form
         _cmbSerialPort.SelectedIndex = remembered >= 0 ? remembered : ports.Length - 1;
     }
 
-    private string BuildSummary()
+    /// <summary>What each step came to, as the last step shows it - see BuildDone.</summary>
+    private void FillSummary()
     {
         var decoder = _doneTiming ?? DecoderConnection.Items()[DecoderConnection.IndexOf(_settings.LastConnectionType)].ToString();
         var track = _doneTrack
@@ -891,37 +1209,18 @@ public sealed class FirstRunWizard : Form
             ? $"{_doneDrivers} added"
             : "none yet - they can be added as they cross the line";
 
-        var lines = new List<string>
-        {
-            $"Look:   {_doneLook ?? Looks.ForApp(_settings).Name}",
-            $"Decoder:   {decoder}",
-            $"Track:   {track}",
-            $"Classes:   {classes}",
-            $"Drivers:   {drivers}",
-        };
+        _lblDoneLook.Text = _doneLook ?? Looks.ForApp(_settings).Name;
+        _lblDoneDecoder.Text = decoder;
+        _lblDoneTrack.Text = track;
+        _lblDoneClasses.Text = classes;
+        _lblDoneDrivers.Text = drivers;
 
-        if (_skippedDrivers > 0)
-        {
-            lines.Add($"      {_skippedDrivers} driver row(s) weren't saved - each needs a name and a transponder number "
-                      + "that isn't already on file. Go Back to fix them.");
-        }
+        _lblDoneSkipped.Text = _skippedDrivers > 0
+            ? $"{_skippedDrivers} driver row(s) weren't saved - each needs a name and a transponder number "
+              + "that isn't already on file. Go Back to fix them."
+            : string.Empty;
 
-        lines.Add(string.Empty);
-
-        // The route a club actually takes on the night, and the reason this
-        // is not the old one-liner.
-        //
-        // It used to say "open Connection and press Connect, then run it
-        // from Race Control" - which works, and teaches a club to run the
-        // whole evening without ever opening Race Day. The heats never get
-        // built, nothing is filed against a day, and qualifying has no
-        // boundary. The page that plans a night was reachable only by
-        // clicking the sidebar out of curiosity.
-        lines.Add("On race night: open Connection and press Connect, then go to Race Day.");
-        lines.Add("Its Next Steps tab says the one next thing to do and has the button that does it.");
-        lines.Add("No decoder here yet? Open Demo Mode and start a simulated race.");
-
-        return string.Join(Environment.NewLine, lines);
+        _lblDoneSkipped.Visible = _skippedDrivers > 0;
     }
 
     private static void PaintLookPreview(Graphics g, Rectangle bounds, Look? look)

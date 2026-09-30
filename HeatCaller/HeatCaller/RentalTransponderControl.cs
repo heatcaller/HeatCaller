@@ -537,31 +537,13 @@ public sealed class RentalTransponderControl : UserControl
             "Loan history", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
+    /// <summary>
+    /// Asks a question with a line of text for the answer - see
+    /// RentalPromptForm. The answer trimmed, or null when cancelled.
+    /// </summary>
     private string? Prompt(string title, string prompt, string defaultValue)
     {
-        using var dialog = new Form
-        {
-            Text = title,
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(440, 220),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-            ForeColor = AppTheme.TextDark,
-        };
-
-        var lbl = new Label { Text = prompt, Location = new Point(12, 12), AutoSize = true, MaximumSize = new Size(416, 0) };
-        var txt = new TextBox { Location = new Point(12, 140), Width = 412, Text = defaultValue };
-        var ok = new Button { Text = "OK", Location = new Point(246, 176), Width = 84, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(338, 176), Width = 86, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[] { lbl, txt, ok, cancel });
-        dialog.AcceptButton = ok;
-        dialog.CancelButton = cancel;
-
-        AppTheme.ApplyRecursively(dialog);
-        return dialog.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
+        using var dialog = new RentalPromptForm(title, prompt, defaultValue);
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
     }
 }

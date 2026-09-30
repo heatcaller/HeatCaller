@@ -41,7 +41,7 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA (`AppVersion.cs`), cut on 28 Sep 2026 from everything since 0.52.0 - 0.53 to 0.58 were working builds with no notes of their own. Its notes are in `website\docs\release-notes.md` |
 | App | C# / .NET 8 WinForms, about 305 source files, ~177k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 35 test classes, about 250 tests, including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`) and every page's layout measured at five sizes (`LayoutTests`) |
+| Tests | `HeatCaller.Tests`: 354 tests (30 Sep), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 26 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
@@ -137,10 +137,9 @@ this order puts the beta path back in front - with one change the same
 day: the layout overhaul is finished before the beta rather than after it
 (item 4).
 
-1. **Build what is waiting.** Race Control on the layout pieces (28 Sep):
-   run `check.cmd`, then `layout.cmd "Race Control"` and look at the
-   pictures at 100% and 150%; commit when it is ALL GREEN and they look
-   right. Nothing new starts until the working copy is a green commit.
+1. **Finish the layout overhaul - before anything else** (Asher, 30 Sep;
+   item 4 below has where it stands). Nothing new starts until the working
+   copy is a green commit.
 2. **Rehearsal 4** - owed under the rule above, since the timing path
    changed after rehearsal 3. On a commit that went green on GitHub:
    - the timing-warning drills: unplug the decoder, pull the loop cable,
@@ -170,18 +169,30 @@ day: the layout overhaul is finished before the beta rather than after it
    Pre-race Check, the message box (`AppDialog`), New Race Day, Round
    Roster and its driver picker, Race Format, Result Edit, the Race Day
    setup wizard with Quick Class and Quick Driver, Heat Balance, and
-   Sign-ups with its three dialogs: 18 windows. Left: the app's other
-   windows, about 45 dialogs (`LayoutDoctor` still tidies those), the
-   ones a new club meets first ahead of the rest - the first-run wizard,
-   the driver profile, the class editor, rental check-out and the tech
-   inspection; then the drawn controls, deleting `LayoutDoctor`, and
-   `PerMonitorV2` last.
+   Sign-ups with its three dialogs: 18 windows. The windows a new club
+   meets first followed (30 Sep, b53): the first-run wizard, the driver
+   profile, the class editor with its tech checklist, warnings, sanctioning
+   preset and two prompts, Race Classes, rental check-out, unit and
+   check-in, and the tech inspection: 12 more. Left, counted on 30 Sep:
+   about 50 windows - 39 dialog classes and 11 small windows built inside
+   other code (`new Form { ... }`), which `LayoutDoctor` still tidies - in
+   four batches: the rest of race night and the day's paperwork; the
+   garage, setups and batteries; the club tools (handicaps, seasons,
+   ghosts, achievements, pickers, CSV import, poster); and the big editors
+   (looks, soundscapes, ambience, track designer, replay, charts). Then the
+   drawn controls, deleting `LayoutDoctor` (the non-dialog windows - Big
+   Screen, Announcer, splash, tour, tips - checked for what they rely on
+   from it), and `PerMonitorV2` last.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
-   first-night guide** (Beta readiness 4).
+   first-night guide** (Beta readiness 4). The installer before the relay
+   work (Beta readiness 6): every beta club needs it, and only a club
+   using online check-in, the phone manager or the website needs the
+   relay - but re-mint the `horizon-test` token whenever it's convenient.
 6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
-   was written before a unit was on the bench. With one connected: read
-   the raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and
-   turn the capture into tests.
+   was written before a unit was on the bench. A unit is set up now, and
+   the bench work starts the weekend of 3 Oct (Asher, 30 Sep): read the
+   raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn
+   the capture into tests.
 7. **A capture from every rehearsal that shows something new.** The
    EasyLap path is tested from rehearsal 3's (`EasyLapCaptureTests`): every
    HID report in `HeatCaller.Tests\Captures\easylap-rehearsal3.log` is
@@ -254,9 +265,11 @@ read at all.
       Profiles (a turned-down sign-up) can't be recognised - the README
       inside says so. The crash dialog points at it. Not yet tried on the
       laptop: save one after a rehearsal and read it through.
-- [ ] **A support channel** the club knows before the night (an email
-      address at heatcaller.com), and a plain answer to "what if it breaks
-      on Saturday": they switch to the fallback plan (section 5).
+- [ ] **A support channel** the club knows before the night, and a plain
+      answer to "what if it breaks on Saturday": they switch to the
+      fallback plan (section 5). The address is up: support@heatcaller.com
+      (30 Sep). Left: saying so in the app (Getting Help, the crash
+      dialog) and in the first-night guide.
 
 ### 3. Install, update, and undo
 

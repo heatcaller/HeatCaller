@@ -195,6 +195,50 @@ internal static class LayoutAudit
 
         // A new driver's name, transponder and class, from Set Up Tonight's and Who's Racing's Add Driver... (QuickDriverForm).
         "Add a driver",
+
+        // The windows a new club meets first (30 Sep).
+
+        // The first-run setup at each of its steps: the rail beside the step and its footer (FirstRunWizard).
+        "Welcome to HeatCaller",
+
+        // A driver's profile, added or edited: the fields beside the photo strip (ProfileForm, titled "Add Driver Profile" / "Edit Driver Profile").
+        "Driver Profile",
+
+        // A class's settings, added or edited (RaceClassEditForm - titled "Add Class" for a new one).
+        "Edit Class",
+
+        // What a scrutineer checks for a class (RaceClassEditForm.TechChecklistForm, titled "Tech Checklist - <class>").
+        "Tech Checklist",
+
+        // One check typed in, from the Tech Checklist's Add... (RaceClassEditForm.TextPrompt).
+        "Add check",
+
+        // The same, from its Rename... (RaceClassEditForm.TextPrompt).
+        "Rename check",
+
+        // The Classes page as a window, from a driver profile's Manage... (RaceClassManagerForm).
+        "Race Classes",
+
+        // What each warning in a race costs a class's drivers (WarningLadderForm, titled "Warnings - <class>").
+        "Warnings",
+
+        // A sanctioning body's rules for a class, and what they leave out (SanctioningPresetForm, titled "Sanctioning preset - <class>").
+        "Sanctioning preset",
+
+        // A club transponder lent at the counter, to a saved driver or a walk-in (RentalCheckOutForm, titled "Check Out - <unit>").
+        "Check Out",
+
+        // A new rental unit's transponder, asset tag and notes (RentalUnitEditForm).
+        "Add Rental Unit",
+
+        // A rental unit's details changed, or retired (RentalUnitEditForm, titled "Edit <unit>").
+        "Edit Rental Unit",
+
+        // A rental unit coming back, and any notes on its condition (RentalPromptForm, from Rentals' Check In...).
+        "Check in",
+
+        // A car's inspection against its class's checklist, new or edited (TechInspectionEditForm, titled "New Tech Inspection" / "Edit Inspection - <driver>").
+        "Tech Inspection",
     };
 
     /// <summary>

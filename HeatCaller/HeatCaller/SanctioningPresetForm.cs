@@ -14,15 +14,39 @@ namespace HeatCaller;
 /// So the three blocks on the right are fixed furniture: source, what it
 /// sets, what it does not. They are not a tooltip and they are not
 /// collapsible.
+///
+/// On the layout pieces (DialogFit): the introduction across the top, and
+/// under it the presets down the left (a Beside, the list its column) with
+/// the three blocks beside them, each paragraph as tall as the longest any
+/// preset has for it - all of that the window's body, which scrolls on a
+/// screen too short for it. Under the body, the note about the app default
+/// when the class follows it, and Apply and Cancel at the foot. It used to
+/// be placed in pixels: the list a fixed 250px, too narrow for the presets'
+/// names, and each paragraph five lines of Font.Height, which cut the
+/// longest - what PN Racing's preset does not set - short.
 /// </summary>
 public sealed class SanctioningPresetForm : Form
 {
+    /// <summary>The list's width at the normal text size, as it was made - or wider, when a preset's name needs more.</summary>
+    private const int ListWidth = 250;
+
+    /// <summary>The column of prose beside the list, at the normal text size - the measure it was made with.</summary>
+    private const int ProseWidth = 430;
+
+    /// <summary>The list shows at least this many presets, whatever the prose beside it comes to.</summary>
+    private const int LeastRows = 3;
+
+    /// <summary>What is said under the list when applying the preset picked would end the class's following the app default - see ShowDetail.</summary>
+    private const string FollowsDefaultNote =
+        "Note: this class currently follows the app's default race format. Applying a preset that sets a "
+        + "duration gives it a format of its own, so later changes to the app default will stop reaching it.";
+
     private readonly RaceClass _raceClass;
     private readonly ListBox _list = new();
-    private readonly Label _lblSource = new();
-    private readonly Label _lblEncodes = new();
-    private readonly Label _lblCaveats = new();
-    private readonly Label _lblBase = new();
+    private readonly SteadyLabel _lblSource = new();
+    private readonly SteadyLabel _lblEncodes = new();
+    private readonly SteadyLabel _lblCaveats = new();
+    private readonly SteadyLabel _lblBase = new();
     private readonly Button _btnApply = new() { Text = "Apply to This Class" };
 
     /// <summary>What the applied preset actually changed. Empty until OK.</summary>
@@ -45,34 +69,19 @@ public sealed class SanctioningPresetForm : Form
         _appDefault = appDefault ?? new RaceFormat();
 
         Text = $"Sanctioning preset - {(string.IsNullOrWhiteSpace(raceClass.Name) ? "class" : raceClass.Name)}";
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-
-        const int left = 16;
-        const int listWidth = 250;
-        const int proseWidth = 430;
-
-        var proseLeft = left + listWidth + UiLayout.SectionGap;
 
         var lblIntro = new Label
         {
             Text = "Applies only the settings the rulebook actually states. Everything else on this class is left "
                  + "exactly as it is - a preset never fills a gap in with a plausible number.",
-            Location = new Point(left, 14),
             AutoSize = true,
-            MaximumSize = new Size(listWidth + UiLayout.SectionGap + proseWidth, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.BodyFont,
         };
 
-        var top = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        _list.Location = new Point(left, top);
-        _list.Size = new Size(listWidth, AppTheme.BodyFont.Height * 12);
+        // Given the height the column has, not snapped to whole rows - see Beside.AddSideFill.
         _list.IntegralHeight = false;
         _list.Font = AppTheme.BodyFont;
         _list.BackColor = AppTheme.Surface;
@@ -83,42 +92,77 @@ public sealed class SanctioningPresetForm : Form
             _list.Items.Add(preset);
         }
 
-        var y = top;
+        // As wide as it was made, at the text size in use - or as wide as the
+        // longest preset's name needs, with room for the bar a list keeps down
+        // its right-hand side when it scrolls and a little either side of the
+        // text. At 250px the names were cut short - BRCA's losing the
+        // "(duration NOT set)" it exists to say. Measured in the list's own
+        // face, which the theme pass leaves as it is. The column is a pixel
+        // wider on each side, for the ring the theme draws round the list
+        // (Pieces.RingRoom).
+        var listWidth = UiLayout.AtTextSize(ListWidth);
 
-        y = AddBlock("WHERE IT CAME FROM", _lblSource, proseLeft, y, proseWidth);
-        y = AddBlock("WHAT IT SETS", _lblEncodes, proseLeft, y, proseWidth);
-        y = AddBlock("WHAT IT DOES NOT SET", _lblCaveats, proseLeft, y, proseWidth);
+        foreach (var item in _list.Items)
+        {
+            listWidth = Math.Max(
+                listWidth,
+                TextRenderer.MeasureText(_list.GetItemText(item) ?? string.Empty, _list.Font).Width + SystemInformation.VerticalScrollBarWidth + 8);
+        }
+
+        var listColumn = listWidth + Pieces.RingRoom(_list).Horizontal;
+
+        // The presets down the left, taking the height the three blocks
+        // beside them come to; the blocks in the rest of the width.
+        var band = new Beside(listColumn)
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        band.AddSideFill(_list, _ => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+
+        AddBlock(band, "WHERE IT CAME FROM", _lblSource, SanctioningPresets.All.Select(p => p.Source), UiLayout.RowGap);
+        AddBlock(band, "WHAT IT SETS", _lblEncodes, SanctioningPresets.All.Select(p => p.Encodes), UiLayout.RowGap);
+        AddBlock(band, "WHAT IT DOES NOT SET", _lblCaveats, SanctioningPresets.All.Select(p => p.Caveats), gapBelow: 0);
 
         _lblCaveats.ForeColor = AppTheme.Accent;
 
-        _lblBase.Location = new Point(left, Math.Max(y, UiLayout.Below(_list, UiLayout.RowGap)));
-        _lblBase.AutoSize = true;
-        _lblBase.MaximumSize = new Size(listWidth + UiLayout.SectionGap + proseWidth, 0);
         _lblBase.Font = AppTheme.SmallFont;
         _lblBase.ForeColor = AppTheme.TextMuted;
 
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        // As tall as the note whether or not the preset picked says it, so
+        // moving down the list never moves the buttons. Only a class that
+        // follows the app default is ever given the note (ShowDetail), and
+        // that cannot change while this is open - so for a class with a
+        // format of its own there is no room kept for it at all.
+        _lblBase.Wordings = new[] { FollowsDefaultNote };
+        _lblBase.Visible = _raceClass.Format is null;
 
-        _btnApply.Size = new Size(UiLayout.WidthFor(_btnApply), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         _btnApply.Click += (_, _) => Apply();
 
-        var exitTop = UiLayout.Below(_lblBase, UiLayout.SectionGap);
-        var right = proseLeft + proseWidth;
+        // The introduction and the presets are the body: on a screen too
+        // short for them they scroll, and the note and the buttons under
+        // them stay in view.
+        var page = new FillPage();
+        var body = DialogFit.Body(page);
+        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(band, gapBelow: 0);
 
-        btnCancel.Location = new Point(right - btnCancel.Width, exitTop);
-        _btnApply.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - _btnApply.Width, exitTop);
+        page.Add(_lblBase, gapBelow: UiLayout.RowGap);
 
-        Controls.Add(lblIntro);
-        Controls.Add(_list);
-        Controls.Add(_lblBase);
-        Controls.Add(_btnApply);
-        Controls.Add(btnCancel);
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Apply first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnApply), gapBelow: 0);
+        _btnApply.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         CancelButton = btnCancel;
-
-        ClientSize = new Size(right + left, exitTop + UiLayout.ButtonHeight + left);
 
         if (_list.Items.Count > 0)
         {
@@ -128,34 +172,41 @@ public sealed class SanctioningPresetForm : Form
         ShowDetail();
 
         AppTheme.ApplyRecursively(this);
+
+        // The list's column, the gap the Beside keeps after it, and the prose
+        // at its measure at the text size in use, inside the page's margins.
+        DialogFit.Keep(
+            this,
+            page,
+            UiLayout.PageLeft + listColumn + UiLayout.RowGap + UiLayout.AtTextSize(ProseWidth) + UiLayout.PageRight,
+            body: body,
+            widthMeasured: true);
     }
 
     /// <summary>
-    /// One heading and one wrapped paragraph, returning the y under it.
-    /// Fixed heights rather than measured, because the paragraph changes
-    /// with the selection and a dialog that resized itself every time
-    /// somebody moved down the list would be unusable.
+    /// One heading and one wrapped paragraph, in the column beside the list.
+    /// The paragraph is as tall as the longest of <paramref name="wordings"/>
+    /// - what every preset says there - rather than what it says now,
+    /// because it changes with the selection, and a paragraph that grew and
+    /// shrank as somebody moved down the list would move everything under it
+    /// every time.
     /// </summary>
-    private int AddBlock(string heading, Label body, int x, int y, int width)
+    private static void AddBlock(Beside band, string heading, SteadyLabel body, IEnumerable<string> wordings, int gapBelow)
     {
         var label = new Label
         {
             Text = AppTheme.Spaced(heading),
-            Location = new Point(x, y),
             AutoSize = true,
             Font = AppTheme.MicroFont,
             ForeColor = AppTheme.Primary,
         };
 
-        body.Location = new Point(x, UiLayout.Below(label, UiLayout.HintGap));
-        body.Size = new Size(width, AppTheme.SmallFont.Height * 5);
         body.Font = AppTheme.SmallFont;
         body.ForeColor = AppTheme.TextDark;
+        body.Wordings = wordings.ToList();
 
-        Controls.Add(label);
-        Controls.Add(body);
-
-        return UiLayout.Below(body, UiLayout.RowGap);
+        band.Add(label, gapBelow: UiLayout.HintGap);
+        band.Add(body, gapBelow: gapBelow);
     }
 
     private void ShowDetail()
@@ -182,8 +233,7 @@ public sealed class SanctioningPresetForm : Form
         var followsDefault = _raceClass.Format is null;
 
         _lblBase.Text = writesFormat && followsDefault
-            ? "Note: this class currently follows the app's default race format. Applying a preset that sets a "
-              + "duration gives it a format of its own, so later changes to the app default will stop reaching it."
+            ? FollowsDefaultNote
             : string.Empty;
     }
 

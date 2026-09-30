@@ -8,12 +8,52 @@ namespace HeatCaller;
 /// Each check has three states rather than a tickbox, because "not looked
 /// at" and "looked at and failed" are different things and collapsing them
 /// would make an incomplete inspection read as a clean one.
+///
+/// On the layout pieces (DialogFit): the driver, class and car lined up in a
+/// field grid; the checklist under its heading taking the height the rest
+/// leave - a line per check, what is checked wrapping to the room left of
+/// its drop-down - and scrolling on its own when the class has more checks
+/// than the window shows; under it the verdict (or the result picked by
+/// hand), the inspector and the notes, their captions in one column with
+/// the fields' above; and Save and Cancel at the foot. It used to be placed
+/// in pixels in a 520x600 window: every field at a fixed 110px, which the
+/// captions ran into at a larger text size; the checks 32px apart, what is
+/// checked wrapped at 300px beside a drop-down at 320px; and the verdict,
+/// the inspector, the notes and the buttons anchored at fixed distances
+/// from the foot.
 /// </summary>
 public sealed class TechInspectionEditForm : Form
 {
     private const string StateUnchecked = "not checked";
     private const string StatePassed = "OK";
     private const string StateFailed = "FAIL";
+
+    /// <summary>
+    /// The window's inside at the normal text size. It opens this big at
+    /// the text size in use - wider when its fields need more across, never
+    /// taller than the screen - and can be made bigger, the checklist taking
+    /// the height.
+    ///
+    /// 40px taller than the 600 it was, so the six checks Add Common gives a
+    /// class all show without scrolling, at 1920x1080 and at 1366x768. The
+    /// old window put its checks 32px apart; each is a field row's distance
+    /// from the next now, as the fields above and below are, and at 600 the
+    /// sixth was under the window's edge (layout pictures, 30 Sep).
+    /// </summary>
+    private const int DialogWidth = 520;
+    private const int DialogHeight = 640;
+
+    /// <summary>The field column at the normal text size: the driver, the car, the inspector and the notes all ran this wide.</summary>
+    private const int FieldColumnWidth = 380;
+
+    /// <summary>A check's drop-down at the normal text size.</summary>
+    private const int StateWidth = 120;
+
+    /// <summary>The checklist shows at least this many checks before the window scrolls instead.</summary>
+    private const int LeastChecks = 3;
+
+    /// <summary>Lines of notes the box shows before it scrolls.</summary>
+    private const int NotesLines = 3;
 
     private readonly ProfileStore _profiles;
     private readonly RaceClassStore _classes;
@@ -23,7 +63,19 @@ public sealed class TechInspectionEditForm : Form
     private readonly TextBox _txtCar = new();
     private readonly TextBox _txtInspector = new();
     private readonly TextBox _txtNotes = new();
-    private readonly Panel _checksPanel = new();
+
+    /// <summary>The checklist, a line per check, scrolling on its own - see BuildChecklist.</summary>
+    private readonly PageStack _checksPanel = new();
+
+    /// <summary>What the checklist says when there is nothing on it to check.</summary>
+    private readonly Label _lblNoChecklist = new();
+
+    /// <summary>Every line the checklist has made, in order, the ones past the selected class's checks hidden - see BuildChecklist.</summary>
+    private readonly List<CheckRow> _checkRows = new();
+
+    /// <summary>What the checks' drop-downs were last measured at - see StateColumnWidth.</summary>
+    private (Font Font, int Count, int Width)? _stateMeasured;
+
     private readonly Label _lblVerdict = new();
 
     private readonly Dictionary<string, ComboBox> _checkControls = new();
@@ -41,8 +93,10 @@ public sealed class TechInspectionEditForm : Form
     /// be saved as Passed - a car could not be failed at all, and editing a
     /// failed one turned it into a pass.
     /// </summary>
-    private readonly Label _lblManualVerdict = new();
     private readonly ComboBox _cmbManualVerdict = new();
+
+    /// <summary>Its caption, the field grid's own (FieldGrid.AddRow), hidden and shown with it.</summary>
+    private readonly Label _lblManualVerdict;
 
     /// <summary>The stored inspection as it was before this dialog, or null for a new one. Never written to.</summary>
     private readonly TechInspection? _original;
@@ -72,22 +126,132 @@ public sealed class TechInspectionEditForm : Form
             : JsonSerializer.Deserialize<TechInspection>(JsonSerializer.Serialize(existing)) ?? existing;
 
         Text = existing is null ? "New Tech Inspection" : $"Edit Inspection - {Result.DriverName}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 600);
-        MinimumSize = new Size(480, 520);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        BuildLayout(existing);
+        FillFields();
+
+        var lblChecks = new Label { Text = "Checklist", AutoSize = true, Font = AppTheme.BoldFont };
+
+        // The checklist scrolls down on its own, its lines as wide as the
+        // fields above and below it: no margins of its own - the page's are
+        // round it - and no room under its last line, which the theme pass
+        // gives a panel that scrolls (see LayoutDoctor.NoRoomBelow).
+        _checksPanel.Padding = Padding.Empty;
+        LayoutDoctor.NoRoomBelow(_checksPanel);
+
+        // First in it, over the lines, for a class with nothing to check -
+        // see BuildChecklist.
+        _lblNoChecklist.AutoSize = true;
+        _lblNoChecklist.ForeColor = AppTheme.TextMuted;
+        _checksPanel.Add(_lblNoChecklist, gapBelow: UiLayout.RowGap);
+
+        _lblVerdict.AutoSize = true;
+        _lblVerdict.Font = AppTheme.BoldFont;
+
+        var btnSave = new Button { Text = "Save" };
+        btnSave.Click += BtnSave_Click;
+
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+        // Who, in what, and the car across the top - the driver and the car
+        // running to the right-hand edge, as they always did.
+        var fields = new FieldGrid();
+        var captions = new List<Label>
+        {
+            fields.AddRow("Driver:", _cmbDriver, stretch: true),
+            fields.AddRow("Class:", _cmbClass),
+            fields.AddRow("Car:", _txtCar, stretch: true),
+        };
+
+        // Under the checklist, what it comes to: the verdict it gives across
+        // the grid, or - when there is no checklist to give one - the result
+        // picked by hand, in the same place (ShowManualVerdict). Then who
+        // inspected the car, and the notes.
+        var outcome = new FieldGrid();
+        outcome.AddWide(_lblVerdict);
+
+        _lblManualVerdict = outcome.AddRow("Result:", _cmbManualVerdict);
+        captions.Add(_lblManualVerdict);
+        captions.Add(outcome.AddRow("Inspector:", _txtInspector, stretch: true));
+        captions.Add(outcome.AddRow("Notes:", _txtNotes, stretch: true));
+
+        var page = new FillPage();
+        page.Add(fields);
+        page.Add(lblChecks, stretch: false, gapBelow: UiLayout.HintGap);
+
+        // The checklist takes the height; it keeps a few checks' worth - a
+        // drop-down and the gap under it for each - before the window
+        // scrolls instead.
+        page.AddFill(_checksPanel, _ => LeastChecks * (_cmbManualVerdict.Height + UiLayout.RowGap), gapBelow: UiLayout.RowGap);
+        page.Add(outcome);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
+
+        AcceptButton = btnSave;
+        CancelButton = btnCancel;
+
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass: the lines are themed as they are made, and
+        // measured in the face it leaves them in (AddCheckRow).
+        BuildChecklist();
+
+        // The captions in one column down both grids, as they were.
+        FieldGrid.LineUp(new[] { fields, outcome });
+
+        // A few lines of notes, as the box draws them (Pieces.LineHeight),
+        // in the face the theme pass leaves it in.
+        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
+
+        // The class and the result as wide as they were at the normal text
+        // size, at the size in use - or as their longest choice, which a
+        // long class name, or one since deleted, can make wider.
+        (Font Font, int Count, int Width)? classMeasured = null;
+        (Font Font, int Count, int Width)? verdictMeasured = null;
+        (Font Font, int Count, int Width)? driverMeasured = null;
+
+        var classWidth = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbClass, ref classMeasured));
+        var verdictWidth = Math.Max(UiLayout.AtTextSize(UiLayout.FieldWidth), Pieces.PickerWidth(_cmbManualVerdict, ref verdictMeasured));
+
+        _cmbClass.Width = classWidth;
+        _cmbManualVerdict.Width = verdictWidth;
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the field column needs more: never narrower than the
+        // 380px the driver and the car ran to, and wide enough for the
+        // longest driver's name and transponder, the class and the result.
+        // The caption column beside it as the grids work it out: the widest
+        // caption and the gap after it. The checks wrap to whatever width
+        // that comes to.
+        var fieldColumn = Math.Max(
+            Math.Max(UiLayout.AtTextSize(FieldColumnWidth), Pieces.PickerWidth(_cmbDriver, ref driverMeasured)),
+            Math.Max(classWidth, verdictWidth));
+
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
 
-    private void BuildLayout(TechInspection? existing)
+    /// <summary>
+    /// The fields filled in from the inspection, and the handlers that keep
+    /// the class and the checklist following the driver - hooked after the
+    /// first choices are made, so making them changes nothing else.
+    /// </summary>
+    private void FillFields()
     {
-        var lblDriver = new Label { Text = "Driver:", Location = new Point(16, 20), AutoSize = true };
-        _cmbDriver.Location = new Point(110, 17);
-        _cmbDriver.Width = 380;
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
         foreach (var profile in _profiles.All.OrderBy(p => p.DriverName))
         {
@@ -96,9 +260,6 @@ public sealed class TechInspectionEditForm : Form
         SelectDriver(Result.Transponder);
         _cmbDriver.SelectedIndexChanged += (_, _) => OnDriverChanged();
 
-        var lblClass = new Label { Text = "Class:", Location = new Point(16, 56), AutoSize = true };
-        _cmbClass.Location = new Point(110, 53);
-        _cmbClass.Width = 240;
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
         foreach (var raceClass in _classes.All)
         {
@@ -123,31 +284,8 @@ public sealed class TechInspectionEditForm : Form
         }
         _cmbClass.SelectedIndexChanged += (_, _) => BuildChecklist();
 
-        var lblCar = new Label { Text = "Car:", Location = new Point(16, 92), AutoSize = true };
-        _txtCar.Location = new Point(110, 89);
-        _txtCar.Width = 380;
         _txtCar.Text = Result.CarModel;
 
-        var lblChecks = new Label { Text = "Checklist", Location = new Point(16, 128), AutoSize = true, Font = AppTheme.BoldFont };
-
-        _checksPanel.Location = new Point(16, 152);
-        _checksPanel.Size = new Size(474, 230);
-        _checksPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _checksPanel.AutoScroll = true;
-
-        _lblVerdict.Location = new Point(16, 392);
-        _lblVerdict.AutoSize = true;
-        _lblVerdict.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-        _lblVerdict.Font = AppTheme.BoldFont;
-
-        _lblManualVerdict.Text = "Result:";
-        _lblManualVerdict.Location = new Point(16, 392);
-        _lblManualVerdict.AutoSize = true;
-        _lblManualVerdict.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-
-        _cmbManualVerdict.Location = new Point(110, 388);
-        _cmbManualVerdict.Width = 240;
-        _cmbManualVerdict.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _cmbManualVerdict.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbManualVerdict.Items.AddRange(new object[] { VerdictPassed, VerdictPassedWithNote, VerdictFailed });
 
@@ -161,38 +299,11 @@ public sealed class TechInspectionEditForm : Form
             _ => VerdictPassed,
         };
 
-        var lblInspector = new Label { Text = "Inspector:", Location = new Point(16, 424), AutoSize = true, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        _txtInspector.Location = new Point(110, 421);
-        _txtInspector.Width = 380;
-        _txtInspector.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _txtInspector.Text = Result.Inspector;
 
-        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, 456), AutoSize = true, Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        _txtNotes.Location = new Point(110, 453);
-        _txtNotes.Size = new Size(380, 80);
-        _txtNotes.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _txtNotes.Multiline = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
-
-        var btnSave = new Button { Text = "Save", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
-        btnSave.Click += BtnSave_Click;
-
-        var btnCancel = new Button { Text = "Cancel", Anchor = AnchorStyles.Bottom | AnchorStyles.Left, DialogResult = DialogResult.Cancel };
-
-        AppTheme.LayoutButtonRow(300, 550, 8, btnSave, btnCancel);
-
-        Controls.AddRange(new Control[]
-        {
-            lblDriver, _cmbDriver, lblClass, _cmbClass, lblCar, _txtCar,
-            lblChecks, _checksPanel, _lblVerdict, _lblManualVerdict, _cmbManualVerdict,
-            lblInspector, _txtInspector, lblNotes, _txtNotes, btnSave, btnCancel,
-        });
-
-        AcceptButton = btnSave;
-        CancelButton = btnCancel;
-
-        BuildChecklist();
     }
 
     private void SelectDriver(string transponder)
@@ -232,23 +343,19 @@ public sealed class TechInspectionEditForm : Form
         }
     }
 
-    /// <summary>Rebuilds the checklist from the selected class's configured items.</summary>
+    /// <summary>
+    /// Shows the selected class's configured items, a line each.
+    ///
+    /// The lines are kept, and handed the new class's checks in order, the
+    /// ones left over hidden; a line is made only when a class has more
+    /// checks than any before it (AddCheckRow). They used to be made afresh
+    /// on every change of class, the last set taken out and disposed - taken
+    /// out alone, every set was leaked, each control holding a window
+    /// handle - and a scrutineer working down a queue, switching class per
+    /// car, does this a hundred times in an evening.
+    /// </summary>
     private void BuildChecklist()
     {
-        // Taken out AND disposed. Controls.Clear only unparents them, so
-        // every rebuild - and this rebuilds on every change of class -
-        // leaked the last set of checkboxes and their labels, each holding
-        // a window handle. A scrutineer working down a queue, switching
-        // class per car, does this a hundred times in an evening.
-        var previous = _checksPanel.Controls.Cast<Control>().ToList();
-
-        _checksPanel.Controls.Clear();
-
-        foreach (var child in previous)
-        {
-            child.Dispose();
-        }
-
         _checkControls.Clear();
         _staleItems.Clear();
 
@@ -275,56 +382,120 @@ public sealed class TechInspectionEditForm : Form
 
         ShowManualVerdict(items.Count == 0);
 
+        // A new class's checks from its first, wherever the last class's
+        // were scrolled to.
+        _checksPanel.AutoScrollPosition = Point.Empty;
+
         if (items.Count == 0)
         {
-            _checksPanel.Controls.Add(new Label
-            {
-                Text = className is null
-                    ? "Pick a class to see its checklist."
-                    : $"{className} has no checklist set. Add one on the Classes page, or just record a pass/fail below.",
-                Location = new Point(4, 4),
-                AutoSize = true,
-                MaximumSize = new Size(450, 0),
-                ForeColor = AppTheme.TextMuted,
-            });
-
-            UpdateVerdict();
-            return;
+            _lblNoChecklist.Text = className is null
+                ? "Pick a class to see its checklist."
+                : $"{className} has no checklist set. Add one on the Classes page, or just record a pass/fail below.";
         }
 
-        var y = 4;
-        foreach (var item in items)
+        _lblNoChecklist.Visible = items.Count == 0;
+
+        for (var i = 0; i < items.Count; i++)
         {
-            _checksPanel.Controls.Add(new Label
-            {
-                Text = _staleItems.Contains(item) ? $"{item}  (no longer on the checklist)" : item,
-                Location = new Point(4, y + 4),
-                AutoSize = true,
-                MaximumSize = new Size(300, 0),
-            });
+            var item = items[i];
+            var row = i < _checkRows.Count ? _checkRows[i] : AddCheckRow();
 
-            var combo = new ComboBox
-            {
-                Location = new Point(320, y),
-                Width = 120,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-            };
-            combo.Items.AddRange(new object[] { StateUnchecked, StatePassed, StateFailed });
+            row.Item.Text = _staleItems.Contains(item) ? $"{item}  (no longer on the checklist)" : item;
 
-            combo.SelectedItem = Result.ItemsFailed.Contains(item) ? StateFailed
+            row.State.SelectedItem = Result.ItemsFailed.Contains(item) ? StateFailed
                 : Result.ItemsPassed.Contains(item) ? StatePassed
                 : StateUnchecked;
 
-            combo.SelectedIndexChanged += (_, _) => UpdateVerdict();
+            row.Line.Visible = true;
 
-            _checksPanel.Controls.Add(combo);
-            _checkControls[item] = combo;
+            // A field row's gap between one check and the next, and none
+            // under the last: the list scrolled by it. At 1366x768, where the
+            // window is a few pixels shorter, six checks that fitted showed a
+            // scrollbar for a sliver of nothing (layout pictures, 30 Sep).
+            var gapBelow = i == items.Count - 1 ? 0 : UiLayout.RowGap;
 
-            y += 32;
+            if (row.Line.Margin.Bottom != gapBelow)
+            {
+                row.Line.Margin = new Padding(0, 0, 0, gapBelow);
+            }
+
+            _checkControls[item] = row.State;
+        }
+
+        for (var i = items.Count; i < _checkRows.Count; i++)
+        {
+            _checkRows[i].Line.Visible = false;
         }
 
         UpdateVerdict();
     }
+
+    /// <summary>
+    /// A new line at the end of the checklist: what is checked, wrapping to
+    /// the room left of its drop-down, and the drop-down against the
+    /// right-hand edge - a Beside, the drop-down its column. Themed here as
+    /// the rest of the window was: a line can be made after the window's own
+    /// theme pass, when a class has more checks than any before it.
+    /// </summary>
+    private CheckRow AddCheckRow()
+    {
+        var item = new Label { AutoSize = true };
+
+        var state = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        state.Items.AddRange(new object[] { StateUnchecked, StatePassed, StateFailed });
+        state.SelectedIndexChanged += (_, _) => UpdateVerdict();
+
+        var line = new Beside(() => StateColumnWidth(state))
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        line.Add(item, gapBelow: 0);
+        line.AddSide(state, gapBelow: 0);
+
+        // The line is as tall as the drop-down's own height when it is
+        // placed, and a drop-down settles its height by itself once it has
+        // a window - which lays nothing out. Told, it lays the line out
+        // again at the height it has (see Pieces.KeepHeightTold).
+        Pieces.KeepHeightTold(state);
+
+        _checksPanel.Add(line, gapBelow: UiLayout.RowGap);
+
+        AppTheme.ApplyRecursively(line);
+
+        // What is checked level with the drop-down's text while it is one
+        // line: down by half what the drop-down is taller than a line of it,
+        // as the label draws one (Pieces.LineHeight). Again whenever the
+        // drop-down's height changes - it settles on its own once it is on
+        // screen.
+        void Level()
+        {
+            var top = Math.Max(0, (state.Height - Pieces.LineHeight(item.Font)) / 2);
+
+            if (item.Margin.Top != top)
+            {
+                item.Margin = new Padding(0, top, 0, 0);
+            }
+        }
+
+        Level();
+        state.SizeChanged += (_, _) => Level();
+
+        var row = new CheckRow(line, item, state);
+        _checkRows.Add(row);
+
+        return row;
+    }
+
+    /// <summary>
+    /// How wide a check's drop-down is: as wide as it was at the normal text
+    /// size, at the size in use, or as its longest state needs if that is
+    /// more. Every one holds the same three states in the same face, so they
+    /// share one measurement.
+    /// </summary>
+    private int StateColumnWidth(ComboBox state) =>
+        Math.Max(UiLayout.AtTextSize(StateWidth), Pieces.PickerWidth(state, ref _stateMeasured));
 
     /// <summary>
     /// The verdict follows the checks: any failure fails the car, and an
@@ -494,6 +665,9 @@ public sealed class TechInspectionEditForm : Form
         _cmbManualVerdict.Visible = show;
         _lblVerdict.Visible = !show;
     }
+
+    /// <summary>One check's line in the checklist, kept to be handed another check when the class changes - see BuildChecklist.</summary>
+    private sealed record CheckRow(Control Line, Label Item, ComboBox State);
 
     private sealed record DriverItem(DriverProfile Profile)
     {
