@@ -1118,7 +1118,7 @@ internal sealed class FieldGrid : TableLayoutPanel
             rows[row] = Math.Max(rows.GetValueOrDefault(row), height + part.Margin.Vertical);
         }
 
-        return new Size(width, Math.Max(0, rows.Values.Sum() - Pieces.TrailingGap(this)));
+        return new Size(width, Math.Max(0, rows.Values.Sum() - Pieces.TrailingGap(this, keepRings: true)));
     }
 
     /// <summary>The caption column: as wide as the widest thing in it that is not across both columns.</summary>
@@ -1167,7 +1167,7 @@ internal sealed class FieldGrid : TableLayoutPanel
             base.OnLayout(levent);
         }
 
-        var rows = GetRowHeights().Sum() - Pieces.TrailingGap(this);
+        var rows = GetRowHeights().Sum() - Pieces.TrailingGap(this, keepRings: true);
         var lowest = Parts().Select(part => part.Bottom).DefaultIfEmpty(0).Max();
 
         _laidOut = (Width, Math.Max(0, Math.Max(rows, lowest)));
@@ -3004,8 +3004,16 @@ internal static class Pieces
     /// with. Read column by column, "TRANSPONDER" (104px, past the 100px a
     /// column starts at) left Lap Beeps' class, cue and on/off columns with
     /// two thirds of their weights for good (the grid test, 29 Sep).
+    ///
+    /// <paramref name="widest"/>: for a column whose values matter more than
+    /// its heading - a position, a gap, a lap time - the widest value it
+    /// shows, by column Name ("99", "+99.99"). The column is kept wide
+    /// enough for that too (ColumnLeast), and a name column beside it gives
+    /// way instead: the Announcer's running order showed "1..." for tenth
+    /// place and "+1..." for every gap while the driver column had room to
+    /// spare (layout pictures, 30 Sep).
     /// </summary>
-    internal static void KeepHeadingsWhole(DataGridView grid)
+    internal static void KeepHeadingsWhole(DataGridView grid, params (string Column, string Widest)[] widest)
     {
         if (!Kept.TryGetValue(grid, out _))
         {
@@ -3025,7 +3033,7 @@ internal static class Pieces
 
         foreach (DataGridViewColumn column in grid.Columns)
         {
-            var least = Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText));
+            var least = ColumnLeast(grid, column, widest);
 
             if (column.MinimumWidth != least)
             {
@@ -3034,6 +3042,36 @@ internal static class Pieces
         }
 
         KeepFillWeights(grid);
+    }
+
+    /// <summary>
+    /// The least a column is kept to by KeepHeadingsWhole: its whole
+    /// heading, and its widest value when one is given for it - measured
+    /// in the face its cells are drawn in, with the room a cell keeps round
+    /// its text and a couple of pixels for the grid's lines.
+    /// </summary>
+    internal static int ColumnLeast(DataGridView grid, DataGridViewColumn column, params (string Column, string Widest)[] widest)
+    {
+        var least = Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText));
+
+        foreach (var (name, value) in widest)
+        {
+            if (!string.Equals(name, column.Name, StringComparison.Ordinal) || string.IsNullOrEmpty(value))
+            {
+                continue;
+            }
+
+            var style = column.DefaultCellStyle;
+            var font = style.Font ?? grid.DefaultCellStyle.Font ?? grid.Font;
+            var padding = style.Padding != Padding.Empty ? style.Padding : grid.DefaultCellStyle.Padding;
+
+            // TextRenderer's own room either side of the text, as the cell
+            // draws it, the cell's padding, and the few pixels a text cell
+            // keeps either side of its text and for its line.
+            least = Math.Max(least, TextRenderer.MeasureText(value, font).Width + padding.Horizontal + 8);
+        }
+
+        return least;
     }
 
     /// <summary>The grids given KeepHeadingsWhole, each watched for a new size once.</summary>
@@ -3618,11 +3656,20 @@ internal static class Pieces
     /// A control hidden in its own right leaves its row out, as the table
     /// does. While the table itself is hidden every control reports itself
     /// hidden, so then all of them count.
+    ///
+    /// <paramref name="keepRings"/>: a pixel of the gap is kept under a box
+    /// in the lowest row that the theme outlines (RingRoom) - its ring is
+    /// drawn a pixel outside it, on the table, and at the table's very edge
+    /// its bottom line was cut off: the notes box at the foot of Handicap,
+    /// Add a Car, Edit Race Day and others had no bottom edge (layout
+    /// pictures, 30 Sep). FieldGrid asks for it; a card (Section) has its
+    /// own inset under its parts, where the ring already shows.
     /// </summary>
-    internal static int TrailingGap(TableLayoutPanel table)
+    internal static int TrailingGap(TableLayoutPanel table, bool keepRings = false)
     {
         var lowest = -1;
         var gap = 0;
+        var ring = 0;
 
         foreach (Control control in table.Controls)
         {
@@ -3637,14 +3684,16 @@ internal static class Pieces
             {
                 lowest = row;
                 gap = control.Margin.Bottom;
+                ring = RingRoom(control).Bottom;
             }
             else if (row == lowest)
             {
                 gap = Math.Max(gap, control.Margin.Bottom);
+                ring = Math.Max(ring, RingRoom(control).Bottom);
             }
         }
 
-        return gap;
+        return keepRings ? Math.Max(0, gap - ring) : gap;
     }
 
     /// <summary>A table's preferred size with <see cref="TrailingGap"/> taken off the height.</summary>

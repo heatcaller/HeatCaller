@@ -86,6 +86,13 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
   - In **Replay**, a race with many drivers at a large text size gets thinner lanes, so every driver still fits.
 - **Tick boxes and radio buttons are drawn in the app's colors and grow with the text.** Every tick box - on its own, in a list such as **Classes racing:**, or in a table column such as **Checked In**, **Done** or **Apply** - is a rounded box in the look's colors with a drawn tick, and every radio button, such as the three choices on the **Speak with** card in **Voice → Voice Settings**, is a circle in the look's colors with a dot. Before, they were Windows' small white boxes and circles, which stayed the same size at every text size and stood out on the dark looks. They never get less room than before.
   - In **Suggest Handicaps**, a click anywhere in an **Apply** cell, or <kbd>Space</kbd> on the selected row, ticks it. Before, only a click on the small box itself did.
+- **Smaller fixes from a look at every window:**
+  - **Announcer screen**: the running order keeps each place, lap count, gap and last lap whole, and the driver's name gives way instead. Before, tenth place showed as "1..." and gaps as "+1...". **Qualifying projection** keeps tenth place and on whole too.
+  - **Replay**: each driver's place, name, dot and car sit in the middle of their lane at every text size, a long name ends in "..." before the bar, a car level with the leader says "level" instead of "-0.00 lap", and the speed picker grows with the text.
+  - **Track Designer**: every piece's description shows two whole lines. The second line used to be cut in half.
+  - **Delete race day**: the **Delete** button's words are white on red, and at larger text sizes the notes and the three tick boxes under the first stay under its words.
+  - A notes box at the foot of a window, such as **Handicap**, **Add a Car** and **Edit Race Day**, has its bottom edge again.
+  - A tick box whose words wrap onto a second line sits beside the first line, not between the two.
 - **The tour fits at every text size.** At 150% and 200% its title no longer overlaps the step line above it or the text below, and its buttons are as wide as their captions.
 - **Preview: sharp text on a scaled screen.** Start HeatCaller with `--dpi-aware` (for example `HeatCaller.exe --dpi-aware`) and, on a laptop set to 150% in Windows, the app draws itself at the screen's scale instead of Windows stretching it, so text is sharp rather than slightly soft. It's a preview for testing: a few parts still count in fixed pixels. Without the switch nothing changes.
 - **Close on Online Sign-ups closes the window.** It did nothing before, and neither did <kbd>Esc</kbd>: only the window's own close button shut it.

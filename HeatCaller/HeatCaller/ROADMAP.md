@@ -225,6 +225,13 @@ day: the layout overhaul is finished before the beta rather than after it
    share one layout, `ToggleCaption`, so they line up; what belongs under a
    choice or a tick - Voice's settings, the notes in Scoring rules and
    Handicap - sits under its caption, `TickBox.CaptionIndent`, 24 at 100%).
+   b58-b67 built ALL GREEN on 30 Sep (368 + relay 410); from the first full
+   set of window pictures: the Announcer and Qualifying projection keep
+   short columns wide enough for their values (`Pieces.KeepHeadingsWhole`
+   takes a widest value per column), Replay's lanes centre what is in them,
+   Track Designer's entries show two whole hint lines, FieldGrid keeps the
+   ring under a box in its last row, a wrapped tick box caption has its box
+   by the first line, and Delete race day's indents follow the tick box.
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and

@@ -249,6 +249,10 @@ public sealed class RaceReplayForm : Form
             UpdateClock();
         };
 
+        // In the body face: the window's own is Windows' default, which does
+        // not grow with the text, and at 200% the speed was the one small
+        // thing on the line (layout pictures, 30 Sep).
+        _cmbSpeed.Font = AppTheme.BodyFont;
         _cmbSpeed.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSpeed.Items.AddRange(new object[] { "1x", "2x", "4x", "8x", "16x" });
         _cmbSpeed.SelectedIndex = 2;
@@ -471,29 +475,42 @@ public sealed class RaceReplayForm : Form
             var top = UiLayout.AtTextSize(56);
             var headingTop = UiLayout.AtTextSize(18);
             var room = (Height - top - margin) / Math.Max(1, order.Count);
-            var leastLane = Math.Min(UiLayout.AtTextSize(26), Math.Max(room, UiLayout.AtDpi(26)));
+
+            // Never shorter than a line of the names' face and a pixel: at
+            // 200% the lanes gave way to the room down to 40px, the line
+            // alone is about 34, and each name ran into the lane under it.
+            var textLine = Pieces.LineHeight(AppTheme.BodyFont);
+            var leastLane = Math.Max(
+                Math.Min(UiLayout.AtTextSize(26), Math.Max(room, UiLayout.AtDpi(26))),
+                textLine + UiLayout.AtDpi(1));
             var laneHeight = Math.Max(leastLane, Math.Min(UiLayout.AtTextSize(46), room));
 
             // Across a lane: the position, the colour dot, the name, the bar
-            // and the gap after it, each where it was at the normal text size.
-            var laneGap = UiLayout.AtTextSize(4);
+            // and the gap after it, where they were at the normal text size.
+            // The gap between two lanes gives way before the line of text
+            // does, so a lane squeezed for room still holds its name whole.
+            var laneGap = Math.Max(UiLayout.AtDpi(1), Math.Min(UiLayout.AtTextSize(4), laneHeight - textLine));
             var stripeRadius = UiLayout.AtTextSize(6);
             var placeLeft = UiLayout.AtTextSize(10);
-            var textDrop = UiLayout.AtTextSize(6);
             var dotLeft = UiLayout.AtTextSize(52);
-            var dotDrop = UiLayout.AtTextSize(8);
             var dotSize = UiLayout.AtTextSize(12);
             var nameLeft = UiLayout.AtTextSize(72);
+            var nameRoom = UiLayout.AtTextSize(8);
             var barStart = UiLayout.AtTextSize(260);
             var barEndRoom = UiLayout.AtTextSize(90);
             var barLeast = UiLayout.AtTextSize(40);
-            var trackHalf = UiLayout.AtTextSize(3);
             var trackHeight = UiLayout.AtTextSize(5);
-            var markerHalf = UiLayout.AtTextSize(5);
-            var markerLift = UiLayout.AtTextSize(8);
             var markerSize = UiLayout.AtTextSize(11);
             var gapFromRight = UiLayout.AtTextSize(82);
-            var gapDrop = UiLayout.AtTextSize(8);
+
+            // Everything in a lane is centred up and down on its stripe - the
+            // words, the dot, the track and the car on it. They were each a
+            // fixed drop from the lane's top, made for the 26-30px lanes of
+            // the normal text size: in a taller lane the dots and the track
+            // sat above the words, and at 200% the words hung below their
+            // stripe (layout pictures, 30 Sep).
+            const TextFormatFlags InLane = TextFormatFlags.VerticalCenter | TextFormatFlags.Left
+                | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
 
             var leader = order[0].progress;
 
@@ -512,6 +529,7 @@ public sealed class RaceReplayForm : Form
                 var y = top + place * laneHeight;
 
                 var row = new Rectangle(margin, y, Math.Max(UiLayout.AtTextSize(80), Width - margin * 2), laneHeight - laneGap);
+                var middle = row.Top + row.Height / 2f;
 
                 if (place % 2 == 1)
                 {
@@ -524,19 +542,24 @@ public sealed class RaceReplayForm : Form
                 // leader they are - which is the part that makes a gap
                 // opening or closing visible while it happens.
                 TextRenderer.DrawText(g, $"P{place + 1}", AppTheme.BoldFont,
-                    new Point(row.Left + placeLeft, y + textDrop), AppTheme.TextMuted);
+                    new Rectangle(row.Left + placeLeft, row.Top, Math.Max(0, dotLeft - placeLeft), row.Height),
+                    AppTheme.TextMuted, InLane);
 
                 using (var dot = new SolidBrush(runner.Colour))
                 {
-                    g.FillEllipse(dot, row.Left + dotLeft, y + dotDrop, dotSize, dotSize);
+                    g.FillEllipse(dot, row.Left + dotLeft, middle - dotSize / 2f, dotSize, dotSize);
                 }
 
+                var barLeft = row.Left + barStart;
+
+                // The name up to the bar, and "..." where a long one would
+                // have run on under the bar and its car.
                 TextRenderer.DrawText(g, runner.Name, AppTheme.BodyFont,
-                    new Point(row.Left + nameLeft, y + textDrop), AppTheme.TextDark);
+                    new Rectangle(row.Left + nameLeft, row.Top, Math.Max(0, barLeft - nameRoom - (row.Left + nameLeft)), row.Height),
+                    AppTheme.TextDark, InLane);
 
                 var behind = leader - progress;
 
-                var barLeft = row.Left + barStart;
                 var barWidth = Math.Max(barLeast, row.Right - barLeft - barEndRoom);
 
                 // A lap down is the full width of the bar. Beyond that
@@ -546,23 +569,28 @@ public sealed class RaceReplayForm : Form
 
                 using (var trackBrush = new SolidBrush(AppTheme.Border))
                 {
-                    g.FillRectangle(trackBrush, barLeft, y + laneHeight / 2 - trackHalf, barWidth, trackHeight);
+                    g.FillRectangle(trackBrush, barLeft, middle - trackHeight / 2f, barWidth, trackHeight);
                 }
 
                 using (var fill = new SolidBrush(runner.Colour))
                 {
                     var marker = barLeft + (int)(barWidth * fraction);
-                    g.FillEllipse(fill, marker - markerHalf, y + laneHeight / 2 - markerLift, markerSize, markerSize);
+                    g.FillEllipse(fill, marker - markerSize / 2f, middle - markerSize / 2f, markerSize, markerSize);
                 }
 
+                // "level" rather than "-0.00 lap" for a car no distance
+                // behind the leader - everyone on the grid at the start.
                 var gapText = place == 0
                     ? "leader"
                     : behind >= 1
                         ? $"{(int)behind} lap{((int)behind == 1 ? string.Empty : "s")}"
-                        : $"-{behind:0.00} lap";
+                        : behind < 0.005
+                            ? "level"
+                            : $"-{behind:0.00} lap";
 
                 TextRenderer.DrawText(g, gapText, AppTheme.SmallFont,
-                    new Point(row.Right - gapFromRight, y + gapDrop), AppTheme.TextMuted);
+                    new Rectangle(row.Right - gapFromRight, row.Top, gapFromRight, row.Height),
+                    AppTheme.TextMuted, InLane);
             }
         }
     }

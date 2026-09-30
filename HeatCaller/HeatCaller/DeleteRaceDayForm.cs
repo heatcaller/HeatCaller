@@ -34,13 +34,19 @@ public sealed class DeleteRaceDayForm : Form
     /// <summary>How wide the window is inside its frame at the normal text size - wider when a tick's words need more.</summary>
     private const int DialogWidth = 552;
 
-    /// <summary>How far the three ticks that depend on the first are in from it.</summary>
+    /// <summary>
+    /// How far the three ticks that depend on the first are in from it, at
+    /// the normal text size - under its words. Further in once the app's
+    /// tick box has grown past it with the text (TickBox.UnderCaption).
+    /// </summary>
     private const int TickIndent = 22;
 
     /// <summary>
-    /// How far a tick's hint is in from the tick, so it starts under the
-    /// tick's words rather than its box. The box is the one Windows draws,
-    /// which does not grow with the text size, so neither does this.
+    /// How far a tick's hint is in from the tick, at the normal text size,
+    /// so it starts under the tick's words rather than its box - and as far
+    /// as the words start once the box grows past it with the text: at 200%
+    /// the hints and the three ticks under the first started left of the
+    /// words above them (layout pictures, 30 Sep).
     /// </summary>
     private const int HintIndent = 20;
 
@@ -144,7 +150,7 @@ public sealed class DeleteRaceDayForm : Form
             body.Add(lbl, gapBelow: gapBelow);
 
             box.Margin = new Padding(indent, box.Margin.Top, box.Margin.Right, box.Margin.Bottom);
-            lbl.Margin = new Padding(indent + HintIndent, lbl.Margin.Top, lbl.Margin.Right, lbl.Margin.Bottom);
+            lbl.Margin = new Padding(indent + TickBox.UnderCaption(HintIndent), lbl.Margin.Top, lbl.Margin.Right, lbl.Margin.Bottom);
         }
 
         var anyRaces = counts.Sessions > 0;
@@ -169,7 +175,7 @@ public sealed class DeleteRaceDayForm : Form
                 : $"Also clear {counts.Records} track records set in them",
             "A lap record lives on the track layout, not in history, so it survives unless it is cleared "
             + "here. Cleared means back to no record - it is not recalculated from the races that are left.",
-            TickIndent,
+            TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Records > 0);
 
         Tick(_chkSeasons,
@@ -178,7 +184,7 @@ public sealed class DeleteRaceDayForm : Form
                 : $"Also take them out of {counts.Seasons} championships that picked them by hand",
             "Deleting the day already stops these races counting towards a championship that scores by race "
             + "day. This is for a season someone named the races in individually.",
-            TickIndent,
+            TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Seasons > 0);
 
         // A section's gap under the last, before the note on Undo, which is
@@ -190,7 +196,7 @@ public sealed class DeleteRaceDayForm : Form
             "A badge names the race that produced it. Race totals on a driver's profile are left as they "
             + "are - winding those back cannot be done reliably from here - so a milestone badge (10 races, "
             + "first win) is earned again next time they race.",
-            TickIndent,
+            TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Badges > 0,
             gapBelow: UiLayout.SectionGap);
 
@@ -248,11 +254,11 @@ public sealed class DeleteRaceDayForm : Form
         AcceptButton = btnCancel;
         CancelButton = btnCancel;
 
+        // The theme pass colours Delete as a button that destroys something
+        // (red, its words in white), from its caption. It used to have its
+        // words turned amber after it, from before the theme coloured such
+        // buttons red - amber on red, hard to read (layout pictures, 30 Sep).
         AppTheme.ApplyRecursively(this);
-
-        // Danger colour applied after the theme pass, or it would be painted
-        // back over.
-        btnDelete.ForeColor = AppTheme.Warning;
 
         // As wide as it was at the normal text size, at the size in use - or
         // wider when a tick's words need more on one line: a tick does not

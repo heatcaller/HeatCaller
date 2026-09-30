@@ -102,8 +102,11 @@ public sealed class QualifyingProjectionForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
-        Pieces.KeepHeadingsWhole(_grid);
+        // Every heading whole, the rest shared by weight - and the place, its
+        // change and the heats wide enough for their values: tenth place and
+        // on showed as "1..." (layout pictures, 30 Sep). See
+        // Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_grid, ("pos", "99"), ("change", "\u25B299"), ("heats", "9 of 9"));
 
         DialogFit.Keep(this, page, width: 620, height: 620);
 

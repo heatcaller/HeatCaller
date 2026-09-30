@@ -35,7 +35,16 @@ internal static class TickBox
     /// in as the caption starts, so the part never sits under the box itself.
     /// 24 at the normal text size, as it always was.
     /// </summary>
-    public static int CaptionIndent => Math.Max(UiLayout.Indent, Side + Gap);
+    public static int CaptionIndent => UnderCaption(UiLayout.Indent);
+
+    /// <summary>
+    /// <paramref name="least"/> - a step in, in pixels, that was worked out
+    /// for Windows' own 13px box, which never grew - or, once the app's box
+    /// and the gap after it take more (at the larger text sizes), as far in
+    /// as the caption starts. So what belongs to a tick box's words stays
+    /// under them at every text size, and nothing moves at the normal one.
+    /// </summary>
+    public static int UnderCaption(int least) => Math.Max(least, Side + Gap);
 
     /// <summary>
     /// Draws the box in <paramref name="box"/> (a square, or it is drawn in
@@ -381,13 +390,19 @@ internal static class ToggleCaption
 
         // The box beside the caption's first line when it sits at the top, at
         // the foot when at the bottom, and in the middle otherwise - as
-        // Windows places its own.
-        var firstLine = hasCaption ? Math.Min(textHeight, Pieces.LineHeight(control.Font)) : side;
+        // Windows places its own. Except a caption that has wrapped: its box
+        // goes beside the first line, where the sentence starts, not in the
+        // gap between two lines (Manage Navigation's "While a race day is
+        // open..." at every text size - layout pictures, 30 Sep).
+        var lineHeight = Pieces.LineHeight(control.Font);
+        var firstLine = hasCaption ? Math.Min(textHeight, lineHeight) : side;
+        var wrapped = hasCaption && textHeight > lineHeight * 3 / 2;
 
         var boxTop = boxAlign switch
         {
             ContentAlignment.TopLeft => (hasCaption ? textTop : inner.Y) + Math.Max(0, (firstLine - side) / 2),
             ContentAlignment.BottomLeft => inner.Bottom - side,
+            _ when wrapped => textTop + Math.Max(0, (firstLine - side) / 2),
             _ => inner.Y + (inner.Height - side) / 2,
         };
 

@@ -457,8 +457,10 @@ public sealed class AnnouncerControl : UserControl
         // measured in.
         //
         // Every heading of the running order whole, at the text size in
-        // use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridOrder));
+        // use, and the position, laps, gap and last lap wide enough for
+        // their values - the driver's name gives way first. See
+        // Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridOrder, OrderWidest));
         _textSize.Keep(SizeFields);
     }
 
@@ -543,11 +545,25 @@ public sealed class AnnouncerControl : UserControl
         return Math.Max(0, side);
     }
 
-    /// <summary>The running order's headings, each whole, side by side - see Pieces.KeepHeadingsWhole.</summary>
+    /// <summary>
+    /// The widest value each of the running order's short columns shows:
+    /// a place to the nineties, laps to the hundreds, a gap as RaceGaps
+    /// writes one ("+12.34", or "+3L"), and a lap time as RefreshOrder
+    /// writes it. See Pieces.KeepHeadingsWhole.
+    /// </summary>
+    private static readonly (string Column, string Widest)[] OrderWidest =
+    {
+        ("pos", "99"),
+        ("laps", "999"),
+        ("gap", "+99.99"),
+        ("last", "99.999"),
+    };
+
+    /// <summary>The running order's columns at their least, side by side - each heading whole and each short column's widest value (Pieces.KeepHeadingsWhole).</summary>
     private int GridHeadingsWidth() =>
         _gridOrder.Columns
             .Cast<DataGridViewColumn>()
-            .Sum(column => Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText)));
+            .Sum(column => Pieces.ColumnLeast(_gridOrder, column, OrderWidest));
 
     /// <summary>The spotlight picker: as wide as its longest name, and never narrower than it was at the normal text size.</summary>
     private int SpotlightPickerWidth() =>

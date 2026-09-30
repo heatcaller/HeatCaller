@@ -56,9 +56,11 @@ public sealed class RcpTrackEditorForm : Form
     private const int ColumnLeastHeight = 160;
 
     /// <summary>
-    /// A palette entry at the normal text size, as it always was. The
-    /// palette is as wide as one in its card, beside its scrollbar - or as
-    /// its row of turn radii needs, when that is more (PaletteWidth).
+    /// A palette entry at the normal text size, as it always was - its
+    /// sample's size, and its least height, taller when its hint needs its
+    /// two lines (PaletteButton.EntryHeight). The palette is as wide as one
+    /// in its card, beside its scrollbar - or as its row of turn radii
+    /// needs, when that is more (PaletteWidth).
     /// </summary>
     private const int PaletteEntryWidth = 192;
     private const int PaletteEntryHeight = 54;
@@ -337,9 +339,10 @@ public sealed class RcpTrackEditorForm : Form
     {
         PaletteButton Entry(RcpPaletteItem item)
         {
-            // As wide as its card, and as tall as it always was, at the text
-            // size in use - it draws itself to the size it is given.
-            var button = new PaletteButton(item) { Height = UiLayout.AtTextSize(PaletteEntryHeight) };
+            // As wide as its card, and as tall as its name and two lines of
+            // its hint need (PaletteButton.EntryHeight) - it draws itself to
+            // the size it is given.
+            var button = new PaletteButton(item) { Height = PaletteButton.EntryHeight() };
 
             button.Chosen += chosen =>
             {
@@ -1102,11 +1105,13 @@ public sealed class RcpTrackEditorForm : Form
             }
 
             // The room round the sample, and either side of the words, at the
-            // text size in use - see the class notes.
+            // text size in use - see the class notes. The sample is the size
+            // it always was, at the top: the entry is taller than that now,
+            // for the words (EntryHeight).
             var inset = UiLayout.AtTextSize(7);
             var edge = UiLayout.AtTextSize(10);
 
-            var size = Height - 2 * inset;
+            var size = Math.Min(Height, UiLayout.AtTextSize(PaletteEntryHeight)) - 2 * inset;
             var origin = new PointF(edge, inset);
 
             var state = g.Save();
@@ -1133,11 +1138,42 @@ public sealed class RcpTrackEditorForm : Form
 
             // Disposed like the one above: made fresh on every repaint (each
             // hover in and out), it was left for the finaliser every time.
-            using var hintFormat = new StringFormat { Trimming = StringTrimming.EllipsisWord };
+            //
+            // Whole lines only, ending in "..." when the hint runs past its
+            // two: a box 24px tall at the normal text size cut its second
+            // line in half, at every size (layout pictures, 30 Sep).
+            using var hintFormat = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisWord,
+                FormatFlags = StringFormatFlags.LineLimit,
+            };
 
             g.DrawString(RcpTiles.HintOf(Item), AppTheme.SmallFont, hintBrush,
-                new RectangleF(textLeft, UiLayout.AtTextSize(25), textWidth, UiLayout.AtTextSize(24)),
+                new RectangleF(textLeft, HintTop(), textWidth, HintLines * HintLineHeight(g)),
                 hintFormat);
+        }
+
+        /// <summary>How many lines of its hint an entry shows.</summary>
+        private const int HintLines = 2;
+
+        /// <summary>Where the hint starts, under the name - where it always did, at the text size in use.</summary>
+        private static int HintTop() => UiLayout.AtTextSize(25);
+
+        /// <summary>A line of the hint as DrawString sets it, a pixel over for rounding.</summary>
+        private static int HintLineHeight(Graphics g) => (int)Math.Ceiling(AppTheme.SmallFont.GetHeight(g)) + 1;
+
+        /// <summary>
+        /// An entry's height: its name, two whole lines of its hint and the
+        /// room under them - never less than the 54px it had at the normal
+        /// text size, at the size in use.
+        /// </summary>
+        public static int EntryHeight()
+        {
+            using var screen = Graphics.FromHwnd(IntPtr.Zero);
+
+            var wanted = HintTop() + HintLines * HintLineHeight(screen) + UiLayout.AtTextSize(7);
+
+            return Math.Max(UiLayout.AtTextSize(PaletteEntryHeight), wanted);
         }
     }
 }
