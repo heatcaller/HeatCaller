@@ -1,6 +1,28 @@
 namespace HeatCaller;
 
-/// <summary>Small add/edit dialog for a single TrackLayout.</summary>
+/// <summary>
+/// Small add/edit dialog for a single TrackLayout.
+///
+/// On the layout pieces (DialogFit): the name and the three figures lined up
+/// in a field grid, the length's note beside its box and the other two notes
+/// under theirs; the notes box under its heading; the photo or drawing - the
+/// preview's place down the left, kept whether or not there is a picture in
+/// it, and beside it the file's name over the three buttons that change it;
+/// then which picture is the main one, its two choices side by side (under
+/// each other on a line too short for both) and the note under them. All of
+/// that is the window's body, which scrolls on a screen too short for it,
+/// and Save and Cancel are under it at the foot. It opens as wide as it was
+/// made at the normal text size, at the size in use - or wider, so the
+/// photo's three buttons stay on one line beside the preview, and the
+/// section does not grow a line as a file comes and goes. It used to be
+/// placed in pixels, each row measured from the bottom of the one above into
+/// a 440px column: the notes under the figures ran from the dialog's left
+/// edge rather than under their boxes, the notes box was four lines of the
+/// font's height rather than of the lines the box draws, the preview a fixed
+/// 120x90 at every text size, Remove on a row of its own under Attach File
+/// and Open, and a dialog that grew with the text size had nothing to stop
+/// it running off the bottom of the screen.
+/// </summary>
 public sealed class TrackLayoutEditForm : Form
 {
     private readonly TextBox _txtName = new();
@@ -12,8 +34,8 @@ public sealed class TrackLayoutEditForm : Form
     private readonly Label _lblAttachmentName = new();
     private readonly Button _btnRemoveAttachment = new();
     private readonly Button _btnOpenAttachment = new();
-    private readonly RadioButton _rdoPhotoMain = new();
-    private readonly RadioButton _rdoPlanMain = new();
+    private readonly RadioButton _rdoPhotoMain = new ThemedRadioButton();
+    private readonly RadioButton _rdoPlanMain = new ThemedRadioButton();
 
     public TrackLayout Result { get; private set; }
 
@@ -31,42 +53,39 @@ public sealed class TrackLayoutEditForm : Form
     private string? _pendingAttachPath;
     private bool _pendingRemove;
 
-    /// <summary>The page margin, and the gap kept round everything on this dialog.</summary>
-    private const int Pad = UiLayout.PageLeft;
-
     /// <summary>
-    /// How wide the dialog's content column is.
-    ///
-    /// Wider than the 348 it used to be. The radio buttons under "Main
-    /// picture" carry a whole sentence between them once a track plan is
-    /// named ("Track plan (none drawn yet)"), and at the current text size
-    /// the second one ran off the right-hand edge.
+    /// How wide the window is inside its frame at the normal text size, at
+    /// the least: the 440px column it had and its margins. That column was
+    /// widened from 348 once, for the two choices under "Main picture",
+    /// which carry a whole sentence between them once a track plan is named
+    /// ("Track plan (none drawn yet)"). Wider still when the photo's buttons
+    /// need it - see the constructor.
     /// </summary>
-    private const int Content = 440;
+    private const int DialogWidth = 472;
+
+    /// <summary>The number boxes' width at the normal text size - wider when a box's largest value needs it.</summary>
+    private const int NumberWidth = 110;
+
+    /// <summary>Lines of text the notes box shows before it scrolls.</summary>
+    private const int NotesLines = 4;
+
+    /// <summary>The preview's size at the normal text size.</summary>
+    private const int PreviewWidth = 120;
+    private const int PreviewHeight = 90;
+
+    /// <summary>Lines kept for the file's name beside the preview - see the constructor.</summary>
+    private const int NameLines = 2;
 
     public TrackLayoutEditForm(TrackLayout? existing)
     {
         Result = existing ?? new TrackLayout();
 
         Text = existing is null ? "Add Track Layout" : "Edit Track Layout";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
 
         // --- What is on the dialog ---
-        //
-        // Built without positions. Nothing here can measure itself yet: an
-        // unparented control still carries the WinForms default font, so
-        // every width and height it reports is for a size it will never be
-        // drawn at. The layout happens further down, once these have a
-        // parent, the app's font and their final text.
-        var lblName = new Label { Text = "Name:", AutoSize = true };
         _txtName.Text = Result.Name;
 
-        var lblLength = new Label { Text = "Track length (ft):", AutoSize = true };
-        _numTrackLength.Width = 110;
         _numTrackLength.DecimalPlaces = 1;
         _numTrackLength.Maximum = 100000;
         // Clamped: a value outside the box's range (a hand-edited or
@@ -75,22 +94,14 @@ public sealed class TrackLayoutEditForm : Form
 
         var lblLengthHint = Hint("optional, informational only");
 
-        var lblAvgLap = new Label { Text = "Average lap time (sec):", AutoSize = true };
-        _numAvgLapSeconds.Width = 110;
         _numAvgLapSeconds.DecimalPlaces = 2;
         _numAvgLapSeconds.Increment = 0.25m;
         _numAvgLapSeconds.Maximum = 600;
         _numAvgLapSeconds.Value = (decimal)Math.Clamp(Result.AverageLapSeconds ?? 0, 0, 600);
 
-        var lblAvgLapHint = Hint("optional - used to pace Demo Mode races on this track");
-
-        var lblMarshals = new Label { Text = "Corner marshal posts:", AutoSize = true };
-        _numMarshalPosts.Width = 110;
         _numMarshalPosts.Minimum = 0;
         _numMarshalPosts.Maximum = 20;
         _numMarshalPosts.Value = Math.Clamp(Result.MarshalPostCount, 0, 20);
-
-        var lblMarshalsHint = Hint("0 = don't track marshals. Each heat is marshalled by the drivers from the previous heat.");
 
         var lblNotes = new Label { Text = "Notes:", AutoSize = true, Font = AppTheme.BoldFont };
         _txtNotes.Multiline = true;
@@ -105,14 +116,15 @@ public sealed class TrackLayoutEditForm : Form
         _picPreview.BackColor = AppTheme.Surface;
 
         // A fixed two lines rather than growing to fit. The text here is a
-        // file name, and it is not known at layout time - "No file
-        // attached." measures as one line, and the name that replaces it
-        // wraps to two. An AutoSize label would have grown downward onto
-        // the Attach File button and, being in front of it, taken its
-        // clicks. Anything longer than the two lines ends in "..." instead
-        // (QuietEllipsis, so no pale Windows pop-up with it).
+        // file name, and it changes while the dialog is up - "No file
+        // attached." is one line, and the name that replaces it can wrap to
+        // two - so a label that grew with it would move the buttons under it
+        // as a file came and went. Anything longer than the two lines ends
+        // in "..." instead (QuietEllipsis, so no pale Windows pop-up with
+        // it). Given its height once the theme pass is done.
         _lblAttachmentName.AutoSize = false;
         _lblAttachmentName.ForeColor = AppTheme.TextMuted;
+        QuietEllipsis.Attach(_lblAttachmentName);
 
         var btnAttach = new Button { Text = "Attach File..." };
         btnAttach.Click += BtnAttach_Click;
@@ -173,167 +185,138 @@ public sealed class TrackLayoutEditForm : Form
         btnSave.Click += BtnSave_Click;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(lblName);
-        Controls.Add(_txtName);
-        Controls.Add(lblLength);
-        Controls.Add(_numTrackLength);
-        Controls.Add(lblLengthHint);
-        Controls.Add(lblAvgLap);
-        Controls.Add(_numAvgLapSeconds);
-        Controls.Add(lblAvgLapHint);
-        Controls.Add(lblMarshals);
-        Controls.Add(_numMarshalPosts);
-        Controls.Add(lblMarshalsHint);
-        Controls.Add(lblNotes);
-        Controls.Add(_txtNotes);
-        Controls.Add(lblAttachment);
-        Controls.Add(_picPreview);
-        Controls.Add(_lblAttachmentName);
-        Controls.Add(btnAttach);
-        Controls.Add(_btnOpenAttachment);
-        Controls.Add(_btnRemoveAttachment);
-        Controls.Add(lblMain);
-        Controls.Add(_rdoPhotoMain);
-        Controls.Add(_rdoPlanMain);
-        Controls.Add(lblMainHint);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        // --- Where it all goes ---
+
+        // The four figures in one field grid, the captions in a column as
+        // wide as the longest of them: four captions each pushing their own
+        // box to a different x is what makes a dialog look thrown together
+        // even when nothing actually overlaps. The length's note beside its
+        // box, as it was - under it when the line is too short - and the
+        // other two notes under their boxes, in the fields' column.
+        var fields = new FieldGrid();
+        fields.AddRow("Name:", _txtName, stretch: true);
+        fields.AddRow("Track length (ft):", FieldGrid.Inline(_numTrackLength, lblLengthHint));
+        fields.AddRow("Average lap time (sec):", _numAvgLapSeconds);
+        fields.AddHint("optional - used to pace Demo Mode races on this track");
+        fields.AddRow("Corner marshal posts:", _numMarshalPosts);
+        fields.AddHint("0 = don't track marshals. Each heat is marshalled by the drivers from the previous heat.");
+
+        // The preview's place: as big as the preview, whether or not there is
+        // a picture to show in it, as it always was - the name and the
+        // buttons beside it stay where they are as a file comes and goes. A
+        // pixel all round the picture for the ring the theme draws outside
+        // its edge (Pieces.RingRoom), which the edge of the place would
+        // otherwise cut off.
+        var previewSide = UiLayout.AtTextSize(PreviewWidth) + 2;
+
+        var previewPlace = new Panel
+        {
+            Padding = new Padding(1),
+            Height = UiLayout.AtTextSize(PreviewHeight) + 2,
+            Tag = AppTheme.KeepBackColor,
+        };
+
+        _picPreview.Dock = DockStyle.Fill;
+        previewPlace.Controls.Add(_picPreview);
+
+        // Open and Remove hide themselves when there is nothing attached (see
+        // RefreshAttachmentPreview). The window is made wide enough for all
+        // three on one line (see below), so the line is one line either way.
+        var attachButtons = new ButtonBar().With(btnAttach, _btnOpenAttachment, _btnRemoveAttachment);
+
+        // The preview down the left, and the file's name over its buttons
+        // beside it - as tall as the taller of the two, which at every text
+        // size is the preview's place.
+        var attachment = new Beside(previewSide)
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        attachment.AddSide(previewPlace, gapBelow: 0);
+        attachment.Add(_lblAttachmentName, gapBelow: UiLayout.HintGap);
+        attachment.Add(attachButtons, gapBelow: 0);
+
+        // Side by side when they fit, under each other when they do not:
+        // "Track plan (none drawn yet)" beside "Uploaded photo" is wider
+        // than a narrow window at a large text size (FieldRow). One row, so
+        // they are still one group of choices.
+        var choices = new FieldRow();
+        choices.Add(null, _rdoPhotoMain);
+        choices.Add(null, _rdoPlanMain);
+
+        // Everything but Save and Cancel is the body: on a screen too short
+        // for all of it - 1280x720, or a larger text size - it scrolls, and
+        // the two buttons under it stay in view.
+        var page = new FillPage();
+        var body = DialogFit.Body(page);
+
+        body.Add(fields);
+        body.Add(lblNotes, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_txtNotes, gapBelow: UiLayout.SectionGap);
+
+        // A pixel either side of the notes box for the ring the theme draws
+        // round it, outside it, on what holds it (Pieces.RingRoom): stretched
+        // across the body, the box's sides would be the body's edges, and the
+        // ring's sides would be drawn past them, where nothing shows. The gap
+        // under the box stays as it was.
+        _txtNotes.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+
+        body.Add(lblAttachment, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(attachment);
+        body.Add(lblMain, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(choices, gapBelow: UiLayout.HintGap);
+        body.Add(lblMainHint, gapBelow: 0);
+
+        // Bottom right, where this dialog has always put them, Cancel
+        // furthest right - and Tab still reaches Save first, as it did: the
+        // bar takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         CancelButton = btnCancel;
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
 
-        // Before the layout, not after: this is what fills in the file name
-        // beside the preview and the wording on the Track plan radio
-        // button, and a control measured while its text is still empty is
-        // measured at the wrong size.
+        // Before the window is sized, not after: this is what fills in the
+        // file name beside the preview and the wording on the Track plan
+        // choice, which the layout measures.
         RefreshAttachmentPreview();
 
-        // --- Where it all goes ---
-        //
-        // Measured top to bottom. Every coordinate on this dialog used to
-        // be a number typed in by hand, chosen against a smaller font: at
-        // the size the app runs now the Notes box reached down over "Photo
-        // or drawing:" and over the file name beside the preview, so the
-        // name of the attached file read through the bottom of the notes,
-        // and the radio buttons ran off the right-hand edge. Each row is
-        // placed from the measured bottom of the one above it now, so it
-        // holds at any text size - Ctrl +/- included.
-        const int right = Pad + Content;
+        // After the theme pass, in the faces it leaves them in: each number
+        // box as wide as it was at the normal text size, at the size in use,
+        // or as its largest value needs; the notes box its lines, and the
+        // file's name its two, as the box and the label draw them
+        // (Pieces.LineHeight).
+        _numTrackLength.Width = NumberBoxWidth(_numTrackLength);
+        _numAvgLapSeconds.Width = NumberBoxWidth(_numAvgLapSeconds);
+        _numMarshalPosts.Width = NumberBoxWidth(_numMarshalPosts);
+        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
+        _lblAttachmentName.Height = NameLines * Pieces.LineHeight(_lblAttachmentName.Font) + _lblAttachmentName.Padding.Vertical;
 
-        // One field column for the four label-and-box rows, set by the
-        // longest caption. Four captions each pushing their own box to a
-        // different x is what makes a dialog look thrown together even when
-        // nothing actually overlaps.
-        var fieldLeft = Pad + Math.Max(
-            Math.Max(lblName.PreferredWidth, lblLength.PreferredWidth),
-            Math.Max(lblAvgLap.PreferredWidth, lblMarshals.PreferredWidth)) + UiLayout.LabelGap;
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the photo's three buttons need more to stay on one line
+        // beside the preview, as they do up to about one and a half times the
+        // text size. On two lines, the line Open and Remove are on would come
+        // and go with the file, and the body would scroll, or open a gap
+        // above Save, every time a photo was attached or removed. Measured as
+        // the bar measures itself on one line, in the faces the theme pass
+        // left the buttons in, with room for the body's scrollbar, which
+        // takes its width from everything in it on a screen too short.
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + previewSide + UiLayout.RowGap + attachButtons.OneLineWidth
+                + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
-        var y = UiLayout.PageTop;
-
-        _txtName.Width = right - fieldLeft;
-        _txtName.Location = new Point(fieldLeft, y);
-        lblName.Location = new Point(Pad, UiLayout.CentreOn(lblName, y, _txtName.Height));
-        y = UiLayout.Below(_txtName, UiLayout.RowGap);
-
-        _numTrackLength.Location = new Point(fieldLeft, y);
-        lblLength.Location = new Point(Pad, UiLayout.CentreOn(lblLength, y, _numTrackLength.Height));
-
-        var hintLeft = fieldLeft + _numTrackLength.Width + UiLayout.LabelGap;
-        lblLengthHint.MaximumSize = new Size(Math.Max(80, right - hintLeft), 0);
-        lblLengthHint.Location = new Point(hintLeft, UiLayout.CentreOn(lblLengthHint, y, _numTrackLength.Height));
-        y = UiLayout.Below(_numTrackLength, UiLayout.RowGap);
-
-        _numAvgLapSeconds.Location = new Point(fieldLeft, y);
-        lblAvgLap.Location = new Point(Pad, UiLayout.CentreOn(lblAvgLap, y, _numAvgLapSeconds.Height));
-        y = UiLayout.Below(_numAvgLapSeconds, UiLayout.HintGap);
-
-        lblAvgLapHint.MaximumSize = new Size(Content, 0);
-        lblAvgLapHint.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblAvgLapHint, UiLayout.RowGap);
-
-        _numMarshalPosts.Location = new Point(fieldLeft, y);
-        lblMarshals.Location = new Point(Pad, UiLayout.CentreOn(lblMarshals, y, _numMarshalPosts.Height));
-        y = UiLayout.Below(_numMarshalPosts, UiLayout.HintGap);
-
-        lblMarshalsHint.MaximumSize = new Size(Content, 0);
-        lblMarshalsHint.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblMarshalsHint, UiLayout.SectionGap);
-
-        lblNotes.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblNotes, UiLayout.HintGap);
-
-        // Four lines of the font it is actually drawn in, rather than a
-        // flat eighty pixels that was four lines once and is two now.
-        _txtNotes.Location = new Point(Pad, y);
-        _txtNotes.Size = new Size(Content, Font.Height * 4 + UiLayout.HintGap * 2);
-        y = UiLayout.Below(_txtNotes, UiLayout.SectionGap);
-
-        lblAttachment.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblAttachment, UiLayout.HintGap);
-
-        _picPreview.Size = new Size(120, 90);
-        _picPreview.Location = new Point(Pad, y);
-
-        var attachLeft = Pad + _picPreview.Width + UiLayout.LabelGap;
-        _lblAttachmentName.Location = new Point(attachLeft, y);
-        _lblAttachmentName.Size = new Size(Math.Max(120, right - attachLeft), Font.Height * 2);
-        QuietEllipsis.Attach(_lblAttachmentName);
-
-        // Wrapped rather than run off the edge if the captions grow - see
-        // UiLayout.FlowButtons. Open and Remove hide themselves when there
-        // is nothing attached, but they keep their place in the row either
-        // way, so it does not jump about as a file comes and goes.
-        var attachBottom = UiLayout.FlowButtons(
-            attachLeft,
-            _lblAttachmentName.Bottom + UiLayout.HintGap,
-            right,
-            btnAttach, _btnOpenAttachment, _btnRemoveAttachment);
-
-        y = Math.Max(_picPreview.Bottom, attachBottom) + UiLayout.SectionGap;
-
-        lblMain.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblMain, UiLayout.HintGap);
-
-        _rdoPhotoMain.Location = new Point(Pad, y);
-
-        // Side by side when they fit, stacked when they do not. "Track plan
-        // (none drawn yet)" beside "Uploaded photo" is wider than this
-        // dialog at a large text size, and the second one simply left the
-        // screen.
-        var planLeft = UiLayout.After(_rdoPhotoMain);
-
-        if (planLeft + _rdoPlanMain.PreferredSize.Width <= right)
-        {
-            _rdoPlanMain.Location = new Point(planLeft, y);
-            y = UiLayout.Below(_rdoPhotoMain, UiLayout.HintGap);
-        }
-        else
-        {
-            y = UiLayout.Below(_rdoPhotoMain, UiLayout.HintGap);
-            _rdoPlanMain.Location = new Point(Pad, y);
-            y = UiLayout.Below(_rdoPlanMain, UiLayout.HintGap);
-        }
-
-        lblMainHint.MaximumSize = new Size(Content, 0);
-        lblMainHint.Location = new Point(Pad, y);
-        y = UiLayout.Below(lblMainHint, UiLayout.SectionGap);
-
-        // Bottom right, where this dialog has always put them.
-        var saveWidth = UiLayout.WidthFor(btnSave);
-        var cancelWidth = UiLayout.WidthFor(btnCancel);
-
-        btnCancel.Size = new Size(cancelWidth, UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(right - cancelWidth, y);
-
-        btnSave.Size = new Size(saveWidth, UiLayout.ButtonHeight);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - saveWidth, y);
-
-        ClientSize = new Size(right + Pad, y + UiLayout.ButtonHeight + Pad);
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
-    /// <summary>A muted note under a field, in the small font, wrapped to the width it is given at layout time.</summary>
+    /// <summary>A muted note in the small font - beside the length's box, or under the two choices, where it wraps to the window's width.</summary>
     private static Label Hint(string text) => new()
     {
         Text = text,
@@ -341,6 +324,21 @@ public sealed class TrackLayoutEditForm : Form
         ForeColor = AppTheme.TextMuted,
         Font = AppTheme.SmallFont,
     };
+
+    /// <summary>
+    /// A number box's width: what the boxes had at the normal text size, at
+    /// the size in use - or wider when the box's largest value needs more,
+    /// written as the box writes it, in its own face, with room for its
+    /// arrows.
+    /// </summary>
+    private static int NumberBoxWidth(NumericUpDown box)
+    {
+        var largest = box.Maximum.ToString("F" + box.DecimalPlaces, System.Globalization.CultureInfo.CurrentCulture);
+
+        return Math.Max(
+            UiLayout.AtTextSize(NumberWidth),
+            TextRenderer.MeasureText(largest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+    }
 
     private void BtnAttach_Click(object? sender, EventArgs e)
     {

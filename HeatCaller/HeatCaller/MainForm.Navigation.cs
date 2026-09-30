@@ -4,8 +4,8 @@ namespace HeatCaller;
 
 /// <summary>
 /// MainForm's navigation: the sidebar's pages and their order, race-night
-/// grouping, search, showing a page, tidying page layouts, and Manage
-/// Navigation.
+/// grouping, search, showing a page, building every page ahead of time, and
+/// Manage Navigation.
 ///
 /// Moved here unchanged from MainForm.cs on 26 Sep 2026, when the file was
 /// split into parts. Fields with initializers stayed in MainForm.cs.
@@ -449,8 +449,7 @@ public partial class MainForm
         // to reach the one they did. That is the wrong screen for a moment
         // before the right one.
         //
-        // The refresh hook below repopulates grids, and the first visit to
-        // a page also straightens it, and both of those paint as well.
+        // The refresh hook below repopulates grids, and that paints as well.
         // Nothing here is worth watching in progress. Only the result is.
         NoRedraw.Begin(pnlContent);
         pnlContent.SuspendLayout();
@@ -460,7 +459,7 @@ public partial class MainForm
             // The wanted page first, and in front: with it already covering
             // the area, nothing behind it is ever exposed to begin with.
             // This alone fixes the swap; the redraw suppression above is
-            // what covers the refresh and the straightening that follow.
+            // what covers the refresh that follows.
             item.Page.Visible = true;
             item.Page.BringToFront();
             _shownPage = name;
@@ -481,7 +480,22 @@ public partial class MainForm
                 refresh();
             }
 
-            TidyPage(name, item.Page);
+            // The "one yellow button per page" pass used to run here, on a
+            // page's first showing. It is gone, and this is the note
+            // explaining why so it does not get reinvented.
+            //
+            // It picked the first button whose CAPTION read as a main action
+            // and painted it yellow. But that reading is a substring match -
+            // "export", "apply", "add" - over the order the controls happened
+            // to be added in, and neither of those has anything to do with
+            // which button matters. On Race History it landed on "Export
+            // Session", which sat yellow next to a pink "Export Results" doing
+            // the same kind of job; on Venues it turned the page's only main
+            // action yellow and left nothing pink at all.
+            //
+            // The theme already says "this is the main one" in pink. A second
+            // colour, chosen by keyword, was not a stronger signal - it was a
+            // competing one.
         }
         finally
         {
@@ -650,92 +664,35 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Pages already checked at the current text size. Cleared whenever the
-    /// text size changes, since every page's spacing has to be re-judged
-    /// against the new font - see ApplyFontScale.
-    /// </summary>
-    private readonly HashSet<string> _tidiedPages = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Sends the layout check's findings to the console log - including
-    /// from dialogs, which report through <see cref="LayoutDoctor.Log"/>
-    /// since they have no other sink of their own.
-    /// </summary>
-    private void WireLayoutReporting() => LayoutDoctor.Log = OnClientRawMessage;
-
-    /// <summary>
-    /// Runs the layout check over a page the first time it is shown at this
-    /// text size.
+    /// Builds every page, and every tab inside each one, once, off screen -
+    /// as soon as the window is up, and again after every text size change
+    /// (ApplyFontScale).
     ///
-    /// On SHOW rather than on build, deliberately: a control on a hidden
-    /// page reports itself hidden, and a hidden control has to be left out
-    /// of the check - otherwise it acts as an invisible wall that everything
-    /// visible gets pushed around.
+    /// Making a page visible creates its handle and its controls' handles,
+    /// and selecting a tab raises the SelectedIndexChanged refreshes a first
+    /// click on it would. Done here, a page nobody has opened yet has been
+    /// built and refreshed the same as one they have: code that checks
+    /// IsHandleCreated before posting work to itself, or counts on a tab's
+    /// first refresh having run, finds the same on both.
+    ///
+    /// This walk used to be the startup sweep of the layout repair pass,
+    /// which put each page and tab on screen to measure it. The measuring
+    /// went with the repair pass (30 Sep); the walk was kept, because pages
+    /// may rely on having been built by it.
+    ///
+    /// Each page is made visible only for its own turn. Nothing is painted
+    /// in between - no message is pumped inside this loop - so the pages
+    /// flashing past is not something anybody sees.
     /// </summary>
-    private int TidyPage(string name, Control page)
+    private void WarmPages()
     {
-        // The layout test measures each page's own layout, not the doctor's
-        // repairs of it. And a page rebuilt to lay itself out is left to do
-        // so: two authorities moving the same controls is worse than
-        // neither. Race Control, the first page rebuilt, was kept out by
-        // name for that reason even before it was - its hand-placed column
-        // fought the doctor's nudges at every resize.
-        if (LayoutCheckMode || LayoutAudit.IsConverted(name))
-        {
-            return 0;
-        }
-
-        if (!_tidiedPages.Add(name))
-        {
-            return 0;
-        }
-
-        // The "one yellow button per page" pass used to run here. It is
-        // gone, and this is the note explaining why so it does not get
-        // reinvented.
-        //
-        // It picked the first button whose CAPTION read as a main action
-        // and painted it yellow. But that reading is a substring match -
-        // "export", "apply", "add" - over the order the controls happened
-        // to be added in, and neither of those has anything to do with
-        // which button matters. On Race History it landed on "Export
-        // Session", which sat yellow next to a pink "Export Results" doing
-        // the same kind of job; on Venues it turned the page's only main
-        // action yellow and left nothing pink at all.
-        //
-        // The theme already says "this is the main one" in pink. A second
-        // colour, chosen by keyword, was not a stronger signal - it was a
-        // competing one.
-
-        return LayoutDoctor.Tidy(page, name, OnClientRawMessage);
-    }
-
-    /// <summary>
-    /// Checks EVERY page once, as soon as the window is up, rather than
-    /// waiting for each to be opened.
-    ///
-    /// The point is to get the whole report in one go: after a change to the
-    /// text size, the console lists every page that needed straightening and
-    /// exactly what moved, instead of the problems turning up one at a time
-    /// over the following week.
-    ///
-    /// Each page is made visible for the duration of its own check, because
-    /// a control on a hidden page reports itself hidden and would be left
-    /// out. Nothing is painted in between - no message is pumped inside this
-    /// loop - so the pages flashing past is not something anybody sees.
-    /// </summary>
-    private void TidyAllPages()
-    {
-        // Only once the window is actually on screen. Before that every
-        // control reports itself hidden, so a sweep would check nothing and
-        // then mark every page as done.
+        // Only once the window is actually on screen. ApplyFontScale first
+        // runs while the window is still being built, and then there is
+        // nothing yet for the pages' handles to be made in.
         if (!Visible || _navItems.Count == 0)
         {
             return;
         }
-
-        var adjusted = 0;
-        var pages = 0;
 
         // Pass two resumes layout itself (it has to - see there), so the
         // finally must not do it again.
@@ -743,7 +700,7 @@ public partial class MainForm
 
         // Same reasoning as ShowPage. At startup the window has not been
         // revealed yet so there is nothing to see either way - but this
-        // sweep runs again every time the text size changes, and then it is
+        // walk runs again every time the text size changes, and then it is
         // thirty pages flashing past on a visible window.
         NoRedraw.Begin(pnlContent);
         pnlContent.SuspendLayout();
@@ -751,60 +708,42 @@ public partial class MainForm
         try
         {
             // Pass one: the pages themselves, with layout suspended. Each
-            // covers whichever of its tabs happens to be showing.
+            // brings along whichever of its tabs happens to be showing.
             foreach (var nav in _navItems)
             {
                 var wasVisible = nav.Page.Visible;
 
+                // Shown and put straight back: becoming visible is what
+                // makes its handle and its controls'.
                 nav.Page.Visible = true;
-
-                if (TidyPage(nav.Name, nav.Page) > 0)
-                {
-                    adjusted++;
-                }
-
                 nav.Page.Visible = wasVisible;
-                pages++;
             }
 
             // Layout back on before pass two, and this is not optional.
             //
             // A TabPage is sized by its TabControl when it is selected, and
             // a TabControl inside a suspended parent has no real size to
-            // give it. Checked that way, a never-opened tab measures itself
-            // at about 192px wide and every label on it "runs past the right
-            // edge" - which is what the first version of this reported for
-            // Pace and Soundscapes. Nothing is painted either way; NoRedraw
-            // is still on.
+            // give it - a never-opened tab selected that way is laid out at
+            // about 192px wide, a size it is never shown at. Nothing is
+            // painted either way; NoRedraw is still on.
             pnlContent.ResumeLayout(true);
             resumed = true;
 
-            // Pass two: every OTHER tab, which pass one could not see.
-            //
-            // LayoutDoctor works on what is VISIBLE - a hidden control
-            // reports no useful bounds, so it skips one - and inside a
-            // TabControl exactly one tab is visible at a time. Race Day's
-            // Today was checked and its Entries tab never was; the Calendar
-            // under Championship never was. Because a page is marked done
-            // after one pass, they never would be either.
-            //
-            // That is how a label grown past the coordinate below it
-            // survived on the Calendar. Not a check that failed - a check
-            // that never ran.
+            // Pass two: every OTHER tab, which pass one could not reach.
+            // Inside a TabControl only the selected tab is visible, so only
+            // that one came along with its page; a tab nobody has selected
+            // yet has not been built at all.
             foreach (var nav in _navItems)
             {
                 var wasVisible = nav.Page.Visible;
 
                 nav.Page.Visible = true;
 
-                foreach (var (tabName, tabPage) in SubTabsOf(nav.Page))
+                foreach (var _ in SubTabsOf(nav.Page))
                 {
-                    if (TidyPage($"{nav.Name} › {tabName}", tabPage) > 0)
-                    {
-                        adjusted++;
-                    }
-
-                    pages++;
+                    // Nothing to do with the tab here: SubTabsOf selects each
+                    // one in turn as this loop steps through them, and that
+                    // is the whole point.
                 }
 
                 nav.Page.Visible = wasVisible;
@@ -812,7 +751,7 @@ public partial class MainForm
         }
         catch (Exception ex)
         {
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [layout] Sweep stopped early - {ex.Message}");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [layout] Building the pages ahead of time stopped early - {ex.Message}");
         }
         finally
         {
@@ -823,20 +762,17 @@ public partial class MainForm
 
             NoRedraw.End(pnlContent);
         }
-
-        OnClientRawMessage($"{AppTime.LogStampNow()}  [layout] Checked {Plural.Of(pages, "page")} at {AppTheme.FontScale * 100:0}% text size - "
-            + (adjusted == 0 ? "nothing needed moving." : $"{adjusted} needed adjusting (listed above)."));
     }
 
     /// <summary>
-    /// Every tab page inside a page, each one made visible long enough to
-    /// be measured.
+    /// Every tab page inside a page, each one selected - and so made visible
+    /// - while the caller's loop is on it.
     ///
-    /// Selecting a tab is the only honest way to do this: a TabPage that has
-    /// never been shown has no laid-out children to measure, so there is
-    /// nothing to be gained by asking it while it is hidden. The original
-    /// selection is put back before this returns, and the whole sweep runs
-    /// inside NoRedraw with layout suspended, so none of it is painted.
+    /// Selecting a tab is the only way to do this: a TabPage that has never
+    /// been shown has never had its handles made or its children laid out,
+    /// and asking it while it is hidden changes neither. The original
+    /// selection is put back before this returns, and the whole walk runs
+    /// inside NoRedraw, so none of it is painted.
     ///
     /// Selecting a tab can raise SelectedIndexChanged, and a few tabs
     /// refresh themselves on that - which is harmless here (they re-read
@@ -859,12 +795,9 @@ public partial class MainForm
             {
                 foreach (TabPage tab in tabs.TabPages)
                 {
-                    // The tab that was already showing has just been checked
-                    // as part of the page itself - it WAS the visible one.
-                    // Without this, "Voice Announcements" and "Voice
-                    // Announcements > Voice Settings" both reported the same
-                    // sixteen adjustments over the same controls, which
-                    // double-counts the page and reads as two problems.
+                    // The tab that was already showing came along with the
+                    // page itself - it WAS the visible one - so it is not
+                    // selected again.
                     if (ReferenceEquals(tab, previous))
                     {
                         continue;
@@ -874,11 +807,10 @@ public partial class MainForm
 
                     // YIELDED while the tab is still selected. Returning a
                     // finished list instead would hand back tab pages that
-                    // are hidden again by the time the caller measures them,
-                    // which is the exact blindness this exists to fix.
+                    // are hidden again by the time the caller gets to them.
                     //
-                    // Named by its caption, because that is what whoever
-                    // reads the log sees on screen: "Race Day > Entries".
+                    // Named by its caption, as it is on screen: "Race Day >
+                    // Setup".
                     yield return (tab.Text, tab);
                 }
             }

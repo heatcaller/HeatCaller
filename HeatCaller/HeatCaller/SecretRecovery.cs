@@ -346,11 +346,25 @@ internal static class SecretRecovery
     /// wrong password can be said so right there and typed again, up to
     /// <see cref="MaxAttempts"/> times. OK when it opened, Abort when the
     /// tries ran out, Cancel when skipped.
+    ///
+    /// Internal rather than private so the layout test can build it
+    /// (WindowCatalog); only RunIfNeeded shows it.
+    ///
+    /// On the layout pieces (DialogFit): the heading, what the password is
+    /// for, the box to type it in and two lines kept under the box for what
+    /// went wrong, one under another across the window, and Unlock and Skip
+    /// at the foot against the right-hand edge; as tall as that. It used to
+    /// be placed in pixels: each line a fixed distance under the one above,
+    /// the text wrapped at a fixed 440px, and the window sized to where the
+    /// last of them ended up.
     /// </summary>
-    private sealed class PasswordPromptForm : Form
+    internal sealed class PasswordPromptForm : Form
     {
-        private const int Pad = 20;
-        private const int ContentWidth = 440;
+        /// <summary>How wide the window is inside its frame at the normal text size - the 440px the text had, and 20px either side.</summary>
+        private const int DialogWidth = 480;
+
+        /// <summary>Lines kept for what went wrong, so a message appearing here never moves the buttons under the pointer.</summary>
+        private const int ErrorLines = 2;
 
         private readonly Func<string, bool> _tryUnlock;
         private readonly TextBox _txtPassword = new();
@@ -362,15 +376,6 @@ internal static class SecretRecovery
             _tryUnlock = tryUnlock;
 
             Text = "Backup password";
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.CenterParent;
-
-            // Off, as in AppDialog: every position here is worked out
-            // against the theme's own font, so there is nothing to rescale.
-            AutoScaleMode = AutoScaleMode.None;
             Font = AppTheme.BodyFont;
             BackColor = AppTheme.Background;
 
@@ -379,7 +384,6 @@ internal static class SecretRecovery
                 Text = "Unlock the keys from this backup",
                 AutoSize = true,
                 Font = AppTheme.BoldFont,
-                Location = new Point(Pad, Pad),
             };
 
             var lblMessage = new Label
@@ -387,25 +391,16 @@ internal static class SecretRecovery
                 Text = "This backup came from another PC. Its API keys, tokens, PINs and QR check-in key are locked with the club's backup password.\n\n"
                     + "Enter it to bring them across. Skip to carry on without them - they would then need entering again, and QR check-ins reprinting.",
                 AutoSize = true,
-                MaximumSize = new Size(ContentWidth, 0),
-
-                // Set before it is measured below: unparented, it would
-                // otherwise measure in the WinForms default font.
                 Font = AppTheme.BodyFont,
-                Location = new Point(Pad, UiLayout.Below(lblCaption, 12)),
             };
 
             _txtPassword.Font = AppTheme.BodyFont;
             _txtPassword.UseSystemPasswordChar = true;
-            _txtPassword.Width = ContentWidth;
-            _txtPassword.Location = new Point(Pad, UiLayout.Below(lblMessage, 14));
 
-            // Fixed height with room for two lines, so a message appearing
-            // here never moves the buttons under the pointer.
-            _lblError.AutoSize = false;
+            // Wraps to the width the page gives it; two lines kept for it
+            // once the theme pass has left it in its face (see below).
+            _lblError.AutoSize = true;
             _lblError.Font = AppTheme.BodyFont;
-            _lblError.Size = new Size(ContentWidth, AppTheme.BodyFont.Height * 2);
-            _lblError.Location = new Point(Pad, UiLayout.Below(_txtPassword, 8));
 
             var btnUnlock = new Button { Text = "Unlock" };
             btnUnlock.Click += (_, _) => TryUnlock();
@@ -413,11 +408,34 @@ internal static class SecretRecovery
             // DialogResult on the button closes the dialog on its own.
             var btnSkip = new Button { Text = "Skip", DialogResult = DialogResult.Cancel };
 
-            var rowWidth = UiLayout.WidthFor(btnUnlock) + UiLayout.ButtonGap + UiLayout.WidthFor(btnSkip);
-            var rowTop = UiLayout.Below(_lblError, 8);
-            UiLayout.ButtonRow(Pad + ContentWidth - rowWidth, rowTop, btnUnlock, btnSkip);
+            var page = new FillPage();
+            page.Add(lblCaption, gapBelow: UiLayout.RowGap);
+            page.Add(lblMessage, gapBelow: UiLayout.RowGap);
 
-            Controls.AddRange(new Control[] { lblCaption, lblMessage, _txtPassword, _lblError, btnUnlock, btnSkip });
+            // Across the page, as the box was across the text above it; what
+            // went wrong a hint's gap under it.
+            page.Add(_txtPassword, gapBelow: UiLayout.HintGap);
+
+            // A pixel either side of the box for the ring the theme draws round
+            // it, outside it, on what holds it (Pieces.RingRoom): stretched
+            // across the page, the box's sides would be the page's edges, and
+            // the ring's sides would be drawn past them, where nothing shows.
+            _txtPassword.Margin = new Padding(1, 0, 1, UiLayout.HintGap);
+
+            // Its height is the box's own, and changes when the theme takes its
+            // border off - see Pieces.KeepHeightTold.
+            Pieces.KeepHeightTold(_txtPassword);
+
+            page.Add(_lblError, gapBelow: UiLayout.RowGap);
+
+            // Against the right-hand edge, Skip furthest right, as they were -
+            // and Tab still reaches Unlock first: the bar takes them right to
+            // left, in the order they were added.
+            page.Add(new ButtonBar(alignRight: true).With(btnSkip, btnUnlock), gapBelow: 0);
+            btnUnlock.TabIndex = 0;
+            btnSkip.TabIndex = 1;
+
+            Controls.Add(page);
 
             AcceptButton = btnUnlock;
             CancelButton = btnSkip;
@@ -429,17 +447,17 @@ internal static class SecretRecovery
             lblCaption.ForeColor = AppTheme.Primary;
             _lblError.ForeColor = AppTheme.Danger;
 
-            // Sized from where the controls actually ended up, after the
-            // theming pass has had its say on button sizes - see AppDialog.
-            static int BottomOf(Control c) =>
-                c.Top + (c.AutoSize ? Math.Max(c.Height, c.PreferredSize.Height) : c.Height);
+            // The window's own button in the app's colour, as Save and OK are
+            // in every other window - the theme goes by the caption, and
+            // "Unlock" is not one it knows, so it came out grey beside a grey
+            // Skip.
+            AppTheme.StyleButton(btnUnlock, AppTheme.ButtonKind.Primary);
 
-            static int RightOf(Control c) =>
-                c.Left + (c.AutoSize ? Math.Max(c.Width, c.PreferredSize.Width) : c.Width);
+            // In the face it wears, as the label draws its lines
+            // (Pieces.LineHeight) - see ErrorLines.
+            _lblError.MinimumSize = new Size(0, ErrorLines * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
 
-            ClientSize = new Size(
-                Math.Max(Pad + ContentWidth, Controls.Cast<Control>().Max(RightOf)) + Pad,
-                Controls.Cast<Control>().Max(BottomOf) + Pad);
+            DialogFit.Keep(this, page, width: DialogWidth);
         }
 
         protected override void OnShown(EventArgs e)

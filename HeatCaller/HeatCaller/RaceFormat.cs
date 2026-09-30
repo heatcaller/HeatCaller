@@ -183,20 +183,20 @@ public sealed class RaceFormatForm : Form
     /// </summary>
     public RaceFormat? Result { get; private set; }
 
-    private readonly CheckBox _chkCustom = new();
+    private readonly CheckBox _chkCustom = new ThemedCheckBox();
     private readonly NumericUpDown _numLapLimit = new();
     private readonly NumericUpDown _numTimeLimit = new();
     private readonly NumericUpDown _numMinLap = new();
     private readonly NumericUpDown _numStreakWindow = new();
-    private readonly CheckBox _chkStreakFaster = new();
+    private readonly CheckBox _chkStreakFaster = new ThemedCheckBox();
     private readonly ComboBox _cboStartType = new();
     private readonly NumericUpDown _numStaggerGap = new();
     private readonly ComboBox _cboStaggerClock = new();
-    private readonly CheckBox _chkAutoAdvance = new();
+    private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
     private readonly NumericUpDown _numStaging = new();
     private readonly NumericUpDown _numCountdown = new();
     private readonly NumericUpDown _numWarmUp = new();
-    private readonly CheckBox _chkFinishOnCrossing = new();
+    private readonly CheckBox _chkFinishOnCrossing = new ThemedCheckBox();
 
     private readonly bool _allowUseDefault;
 

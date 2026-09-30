@@ -27,6 +27,16 @@ internal static class Program
     private static readonly Dictionary<string, DateTime> CrashLastShown = new();
     private static int _crashDialogOpen;
 
+    /// <summary>The switch that starts the app DPI-aware - see Main.</summary>
+    internal const string DpiAwareSwitch = "--dpi-aware";
+
+    /// <summary>Whether this run was started with <see cref="DpiAwareSwitch"/>, and so draws itself at the screen's scale (UiLayout.DpiScale).</summary>
+    internal static bool StartedDpiAware { get; private set; }
+
+    /// <summary>Whether the command line asks for <see cref="DpiAwareSwitch"/>; the first entry is the program itself.</summary>
+    internal static bool DpiAwareWanted(IReadOnlyList<string> commandLine) =>
+        commandLine.Skip(1).Any(a => string.Equals(a.Trim(), DpiAwareSwitch, StringComparison.OrdinalIgnoreCase));
+
     // Held for the life of the process. A static field rather than a local
     // so it can't be collected - and a collected mutex is a released one.
     private static Mutex? _singleInstance;
@@ -83,7 +93,27 @@ internal static class Program
 
         try
         {
-            ApplicationConfiguration.Initialize();
+            // HeatCaller.exe --dpi-aware: a preview of the app drawing itself
+            // at the screen's own scale - sharp text on a laptop set to 150% -
+            // rather than Windows stretching a 96 DPI picture of it, which is
+            // what it does by default (ApplicationHighDpiMode in the project
+            // file: DpiUnaware). Opt-in while the drawn parts that still count
+            // in fixed pixels are brought over (UiLayout.DpiScale, AtDpi).
+            //
+            // The same three calls ApplicationConfiguration.Initialize makes,
+            // with SystemAware in place of the project's DpiUnaware: a
+            // process's DPI awareness can be set only once, by the first
+            // call, so the switch cannot be made after Initialize.
+            if (DpiAwareWanted(Environment.GetCommandLineArgs()))
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                StartedDpiAware = Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            }
+            else
+            {
+                ApplicationConfiguration.Initialize();
+            }
 
             // HeatCaller.exe --rehearsal: the rehearsal copy - the club's data
             // copied once into a folder of its own, for practising a race night
@@ -118,6 +148,11 @@ internal static class Program
             // to it. After the rehearsal switch (it decides the folder) and
             // the migration (it moves the folders this writes into).
             SessionLog.Start();
+
+            if (StartedDpiAware)
+            {
+                SessionLog.Write($"[ui] Started DPI-aware (--dpi-aware): the screen is at {UiLayout.DpiScale * 100:0}%.");
+            }
 
             // The startup screen goes up FIRST, before anything else is
             // built.

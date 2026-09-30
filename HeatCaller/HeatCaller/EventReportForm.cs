@@ -8,9 +8,26 @@ namespace HeatCaller;
 /// The day is picked from days that actually have sessions, rather than a
 /// free date picker - choosing a day with nothing on it is the only way to
 /// get an empty report, so the dialog simply doesn't offer it.
+///
+/// On the layout pieces (DialogFit): what the report is across the top, the
+/// day and the event's name lined up in a field grid, what to include under
+/// its heading, then what the chosen day comes to and Generate and Close at
+/// the foot. All but those last two is the window's body, which scrolls on a
+/// screen too short for it. The line about the day is as tall as the longest
+/// thing it can say for any day on the list (SteadyLabel), so picking
+/// another day never moves the buttons. It used to be placed in pixels in a
+/// 480x380 window: the captions in a column 94px wide, the fields 354px
+/// beside them however long the longest day on the list, and the line about
+/// the day in a box kept two lines tall by hand.
 /// </summary>
 public sealed class EventReportForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 480;
+
+    /// <summary>The fields' width at the normal text size - wider when the longest day on the list needs the drop-down wider.</summary>
+    private const int FieldWidth = 354;
+
     private readonly SessionHistoryStore _history;
     private readonly RoundDefinitionStore _rounds;
     private readonly RaceClassStore _classes;
@@ -23,11 +40,13 @@ public sealed class EventReportForm : Form
 
     private readonly ComboBox _cmbDay = new();
     private readonly TextBox _txtName = new();
-    private readonly CheckBox _chkQualifying = new();
-    private readonly CheckBox _chkLapDetail = new();
-    private readonly CheckBox _chkTech = new();
-    private readonly CheckBox _chkRentals = new();
-    private readonly Label _lblPreview = new();
+    private readonly CheckBox _chkQualifying = new ThemedCheckBox();
+    private readonly CheckBox _chkLapDetail = new ThemedCheckBox();
+    private readonly CheckBox _chkTech = new ThemedCheckBox();
+    private readonly CheckBox _chkRentals = new ThemedCheckBox();
+
+    /// <summary>What the chosen day comes to - as tall as the longest thing it can say for any day on the list, so picking another never moves the buttons under it.</summary>
+    private readonly SteadyLabel _lblPreview = new();
 
     public EventReportForm(
         SessionHistoryStore history,
@@ -51,34 +70,48 @@ public sealed class EventReportForm : Form
         _rentals = rentals;
 
         Text = "Event Report";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(480, 380);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        BuildLayout();
+        var (page, body, captions) = BuildLayout();
         AppTheme.ApplyRecursively(this);
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the drop-down needs more for the longest day on the
+        // list: a long weekday and month with a three-figure count of
+        // sessions came to about the 354px it had, and a date written out in
+        // another language can come to more. Measured in the face the theme
+        // pass left it in; the drop-down itself takes the whole of the
+        // fields' column (stretch). The caption column beside it as the grid
+        // works it out: its widest caption and the gap after it.
+        (Font Font, int Count, int Width)? dayWidth = null;
+
+        var fieldColumn = Math.Max(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbDay, ref dayWidth));
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
-    private void BuildLayout()
+    /// <summary>
+    /// The page: what the report is, the fields and what to include in the
+    /// body, and the line about the day and the buttons under it. Returns
+    /// them, and the fields' captions, for the window's width.
+    /// </summary>
+    private (FillPage Page, PageStack Body, Label[] Captions) BuildLayout()
     {
         var lblIntro = new Label
         {
             Text = "A single page covering the whole day - results by class, fastest laps, and anything still outstanding. "
                  + "Saves as HTML so it can be printed, emailed, or opened on a phone.",
-            Location = new Point(16, 16),
             AutoSize = true,
-            MaximumSize = new Size(448, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        var lblDay = new Label { Text = "Day:", Location = new Point(16, 74), AutoSize = true };
-        _cmbDay.Location = new Point(110, 71);
-        _cmbDay.Width = 354;
         _cmbDay.DropDownStyle = ComboBoxStyle.DropDownList;
 
         // Only days that have sessions - an empty report helps nobody.
@@ -102,69 +135,98 @@ public sealed class EventReportForm : Form
 
         _cmbDay.SelectedIndexChanged += (_, _) => UpdatePreview();
 
-        var lblName = new Label { Text = "Event name:", Location = new Point(16, 110), AutoSize = true };
-        _txtName.Location = new Point(110, 107);
-        _txtName.Width = 354;
         _txtName.Text = "Club Race Day";
 
-        var lblInclude = new Label { Text = "Include", Location = new Point(16, 152), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblInclude = new Label { Text = "Include", AutoSize = true, Font = AppTheme.BoldFont };
 
         _chkQualifying.Text = "Qualifying standings";
-        _chkQualifying.Location = new Point(28, 178);
         _chkQualifying.AutoSize = true;
         _chkQualifying.Checked = true;
 
         _chkTech.Text = "Tech inspection summary";
-        _chkTech.Location = new Point(28, 204);
         _chkTech.AutoSize = true;
         _chkTech.Checked = true;
 
         _chkRentals.Text = "Rental transponders not returned";
-        _chkRentals.Location = new Point(28, 230);
         _chkRentals.AutoSize = true;
         _chkRentals.Checked = true;
 
         _chkLapDetail.Text = "Every lap time (makes the report much longer)";
-        _chkLapDetail.Location = new Point(28, 256);
         _chkLapDetail.AutoSize = true;
         _chkLapDetail.Checked = false;
 
-        _lblPreview.Location = new Point(16, 292);
-        _lblPreview.Size = new Size(448, 36);
         _lblPreview.ForeColor = AppTheme.TextMuted;
         _lblPreview.Font = AppTheme.SmallFont;
+
+        // Everything it can say, for each day on the list - which is fixed
+        // for as long as the window is open - and for none.
+        _lblPreview.Wordings = _cmbDay.Items
+            .OfType<DayItem>()
+            .Select(PreviewFor)
+            .Append(PreviewFor(null))
+            .Distinct()
+            .ToArray();
 
         var btnGenerate = new Button { Text = "Generate..." };
         btnGenerate.Click += (_, _) => Generate();
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.Cancel };
 
-        AppTheme.LayoutButtonRow(250, 336, 8, btnGenerate, btnClose);
-
-        Controls.AddRange(new Control[]
+        // Both fields run to the right-hand edge, as they did.
+        var fields = new FieldGrid();
+        var captions = new[]
         {
-            lblIntro, lblDay, _cmbDay, lblName, _txtName, lblInclude,
-            _chkQualifying, _chkTech, _chkRentals, _chkLapDetail, _lblPreview,
-            btnGenerate, btnClose,
-        });
+            fields.AddRow("Day:", _cmbDay, stretch: true),
+            fields.AddRow("Event name:", _txtName, stretch: true),
+        };
+
+        var page = new FillPage();
+
+        // Everything but the line about the day and the buttons: on a screen
+        // too short for all of it, it scrolls and they stay in view.
+        var body = DialogFit.Body(page);
+        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(fields);
+        body.Add(lblInclude, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_chkQualifying, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_chkTech, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_chkRentals, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_chkLapDetail, stretch: false, gapBelow: 0);
+
+        // Beside the buttons, so what Generate will cover is in view however
+        // far the body is scrolled.
+        page.Add(_lblPreview, gapBelow: UiLayout.RowGap);
+
+        // Against the right-hand edge, Close furthest right, as they were -
+        // and Tab still reaches Generate first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnClose, btnGenerate), gapBelow: 0);
+        btnGenerate.TabIndex = 0;
+        btnClose.TabIndex = 1;
+
+        Controls.Add(page);
 
         CancelButton = btnClose;
         UpdatePreview();
+
+        return (page, body, captions);
     }
 
-    private void UpdatePreview()
+    private void UpdatePreview() => _lblPreview.Text = PreviewFor(_cmbDay.SelectedItem as DayItem);
+
+    /// <summary>What the line about the day says for <paramref name="day"/> - or, with none chosen, that there is nothing to report on.</summary>
+    private string PreviewFor(DayItem? day)
     {
-        if (_cmbDay.SelectedItem is not DayItem day)
+        if (day is null)
         {
-            _lblPreview.Text = "No recorded sessions to report on yet.";
-            return;
+            return "No recorded sessions to report on yet.";
         }
 
         var outstanding = _rentals.OutNow.Count;
-        _lblPreview.Text = $"{Plural.Of(day.SessionCount, "session")} on this day."
-                           + (outstanding > 0
-                               ? $"  {Plural.Of(outstanding, "rental")} still out - {(outstanding == 1 ? "it" : "these")} will be flagged at the top."
-                               : string.Empty);
+        return $"{Plural.Of(day.SessionCount, "session")} on this day."
+               + (outstanding > 0
+                   ? $"  {Plural.Of(outstanding, "rental")} still out - {(outstanding == 1 ? "it" : "these")} will be flagged at the top."
+                   : string.Empty);
     }
 
     private void Generate()

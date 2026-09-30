@@ -130,7 +130,7 @@ public sealed class LapDetailPopup : ToolStripDropDown
 
         // Every dimension is scaled with the app's font scale, so the panel
         // grows with the text instead of clipping it at larger sizes.
-        private static int Px(float value) => (int)Math.Round(value * AppTheme.FontScale);
+        private static int Px(float value) => UiLayout.AtTextSize(value);
 
         private static int Pad => Px(14);
         private static int HeaderHeight => Px(46);

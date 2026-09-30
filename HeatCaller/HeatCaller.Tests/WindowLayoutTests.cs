@@ -115,6 +115,35 @@ internal static partial class WindowCatalog
         all.AddRange(RentalWindows());
         all.AddRange(TechInspectionWindows());
 
+        // The rest of race night, and its paperwork (30 Sep).
+        all.AddRange(RaceNightToolWindows());
+        all.AddRange(EventWindows());
+        all.AddRange(PointsAndPinsWindows());
+        all.AddRange(ReportWindows());
+        all.AddRange(RaceControlPopupWindows());
+
+        // The garage, setup sheets and batteries (30 Sep).
+        all.AddRange(GarageWindows());
+        all.AddRange(ChassisSheetWindows());
+        all.AddRange(SetupWindows());
+        all.AddRange(BatteryWindows());
+
+        // The club tools (30 Sep).
+        all.AddRange(SeasonWindows());
+        all.AddRange(GhostWindows());
+        all.AddRange(PickerWindows());
+        all.AddRange(ClubToolWindows());
+        all.AddRange(CsvImportWindows());
+
+        // The big editors, and the pages shown in windows of their own (30 Sep).
+        all.AddRange(LookWindows());
+        all.AddRange(SoundWindows());
+        all.AddRange(ChartWindows());
+        all.AddRange(TrackDesignerWindows());
+        all.AddRange(TrackWindows());
+        all.AddRange(PageHostWindows());
+        all.AddRange(AnnouncerWindows());
+
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.
         all.AddRange(SetupWizardWindows());
@@ -249,7 +278,7 @@ internal static class WindowSweep
     /// window's turn - building it, sizing it, checking one of its tabs,
     /// putting it away - takes more than a minute and a half, and named with
     /// that part; the whole sweep, which grows with every window added, may
-    /// take up to twenty minutes. (The last full sweep before this, 29 Sep:
+    /// take up to three quarters of an hour. (The last full sweep before this, 29 Sep:
     /// 50 windows at five sizes in about two minutes. The next, with 40 more,
     /// was still going at five - the report's Slowest line says which take
     /// the time.)
@@ -257,7 +286,7 @@ internal static class WindowSweep
     public static WindowSweepResult Run(IReadOnlyList<LayoutView> views, IReadOnlySet<string>? only, string? pictures) =>
         StaThread.Run(
             () => Sweep(views, only, pictures),
-            TimeSpan.FromMinutes(20),
+            TimeSpan.FromMinutes(45),
             () => _doing.Length == 0 ? _now : $"{_now}, {_doing}",
             stuckAfter: TimeSpan.FromSeconds(90));
 

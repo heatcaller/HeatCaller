@@ -17,9 +17,36 @@ namespace HeatCaller;
 /// a circuit would be invention. A driver's lane holds their position, and
 /// the lanes cross when the order changes - which is exactly the thing worth
 /// watching, and is honest about what was measured.
+///
+/// On the layout pieces (DialogFit): the lanes taking the room, and under
+/// them one line of playback controls - Play, the speed and the clock side by
+/// side, and the scrub bar across the rest of the line, or on a line of its
+/// own when the window leaves it too little. It opens at the size it had at
+/// the normal text size, at the size in use - never bigger than the screen -
+/// and can be made bigger, or narrower down to the width it always could be,
+/// the lanes taking or giving up the room. It used to be placed in pixels:
+/// the lanes docked over a bar of a fixed height, the speed, the clock and
+/// the scrub bar at x's worked out from a Play button of a fixed size, and
+/// the clock given 160px whatever the text size.
 /// </summary>
 public sealed class RaceReplayForm : Form
 {
+    /// <summary>How big the window opens inside its frame at the normal text size - the size it had. The lanes take any height past what the controls under them need.</summary>
+    private const int DialogWidth = 980;
+    private const int DialogHeight = 640;
+
+    /// <summary>How narrow the window can be made, frame and all, at the normal text size - as narrow as it always could be.</summary>
+    private const int LeastWindowWidth = 760;
+
+    /// <summary>The least the lanes get at the normal text size before the window scrolls instead - about what they had in the smallest window the replay could be made.</summary>
+    private const int CanvasLeastHeight = 360;
+
+    /// <summary>The speed drop-down's width at the normal text size - wider when its longest choice needs it.</summary>
+    private const int SpeedWidth = 88;
+
+    /// <summary>The least the scrub bar can do with beside the other controls, at the normal text size - with less, it takes a line of its own.</summary>
+    private const int ScrubLeastWidth = 160;
+
     private readonly SessionRecord _session;
     private readonly List<Runner> _runners;
     private readonly long _raceLengthMs;
@@ -102,17 +129,21 @@ public sealed class RaceReplayForm : Form
             : _runners.Max(r => r.CrossingsMs.Count == 0 ? 0 : r.CrossingsMs[^1]);
 
         Text = $"Replay - {(string.IsNullOrWhiteSpace(session.Label) ? "Race" : session.Label)}";
-        StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(760, 480);
-        ClientSize = new Size(980, 640);
 
-        _canvas = new ReplayCanvas(this) { Dock = DockStyle.Fill };
+        _canvas = new ReplayCanvas(this);
 
         BuildTransport();
 
-        Controls.Add(_canvas);
-        Controls.Add(BuildTransportBar());
+        // The lanes take the room; the playback controls are the last line
+        // of the page, where their bar was.
+        var page = new FillPage();
+        page.AddFill(_canvas, UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: UiLayout.RowGap);
+        page.Add(BuildTransportBar(), gapBelow: 0);
 
+        Controls.Add(page);
+
+        // Nothing here starts it: only Play does (Toggle), so a window that
+        // is built and never shown leaves no clock running.
         _timer.Tick += (_, _) => Advance();
 
         AppTheme.ApplyRecursively(this);
@@ -120,6 +151,25 @@ public sealed class RaceReplayForm : Form
         // Styled after the theme pass, which would otherwise repaint it as
         // an ordinary secondary button.
         AppTheme.StyleButton(_btnPlay, AppTheme.ButtonKind.Primary);
+
+        // After the theme pass, in the faces it leaves them in: the speed as
+        // wide as it was at the normal text size, at the size in use, or as
+        // its longest choice needs; the clock as big as its longest reading.
+        (Font Font, int Count, int Width)? speedWidth = null;
+        _cmbSpeed.Width = Math.Max(UiLayout.AtTextSize(SpeedWidth), Pieces.PickerWidth(_cmbSpeed, ref speedWidth));
+        _lblClock.Size = ClockSize();
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
+
+        // And it can be made narrower than it opened, down to the width it
+        // always could be, at the text size in use: nothing in it is measured
+        // for its width - the lanes are drawn across whatever they have, and
+        // the scrub bar goes under the other controls when the line is short.
+        // After DialogFit's own Load handler, added above, which sets the
+        // least to the width it opened at.
+        Load += (_, _) => MinimumSize = new Size(
+            Math.Min(MinimumSize.Width, UiLayout.AtTextSize(LeastWindowWidth)),
+            MinimumSize.Height);
     }
 
     /// <summary>
@@ -176,7 +226,6 @@ public sealed class RaceReplayForm : Form
     private void BuildTransport()
     {
         _btnPlay.Text = "Play";
-        _btnPlay.Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight);
         _btnPlay.Click += (_, _) => Toggle();
 
         _scrub.Minimum = 0;
@@ -203,44 +252,73 @@ public sealed class RaceReplayForm : Form
         _cmbSpeed.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSpeed.Items.AddRange(new object[] { "1x", "2x", "4x", "8x", "16x" });
         _cmbSpeed.SelectedIndex = 2;
-        _cmbSpeed.Width = 88;
         _cmbSpeed.SelectedIndexChanged += (_, _) =>
             _speed = double.Parse(((string)_cmbSpeed.SelectedItem!).TrimEnd('x'));
 
-        _lblClock.AutoSize = true;
+        // A size of its own rather than one that follows what it says: it is
+        // rewritten on every tick while the race plays, and a clock that
+        // grew and shrank with its digits would nudge the scrub bar beside it
+        // along, and lay the line out again, thirty times a second. Sized to
+        // its longest reading once the theme pass is done (ClockSize).
+        _lblClock.AutoSize = false;
         _lblClock.Font = AppTheme.BoldFont;
 
         UpdateClock();
     }
 
-    private Control BuildTransportBar()
+    /// <summary>
+    /// The playback controls, on one line under the lanes: Play, the speed
+    /// and the clock side by side, a button's gap apart, and the scrub bar
+    /// taking the rest of the line - or, when that would leave it less than
+    /// it can do with, a line of its own under them (FieldRow).
+    /// </summary>
+    private FieldRow BuildTransportBar()
     {
-        var bar = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = UiLayout.ButtonHeight + 24,
+        // Centred up and down on the Play button beside them, as
+        // FieldGrid.Inline centres what is not a button.
+        _cmbSpeed.Anchor = AnchorStyles.Left;
+        _lblClock.Anchor = AnchorStyles.Left;
 
-            // Sized to the form before anything is placed on it. A docked
-            // panel is still its default 200 wide until the form lays it
-            // out, and the scrub bar's right margin is worked out from this
-            // width - anchoring it against 200 would leave it a stub for
-            // the life of the window.
-            Width = ClientSize.Width,
-        };
-
-        _btnPlay.Location = new Point(12, 12);
-        _cmbSpeed.Location = new Point(_btnPlay.Right + UiLayout.ButtonGap, 14);
-        _lblClock.Location = new Point(_cmbSpeed.Right + UiLayout.ButtonGap, 20);
-
-        // The scrub bar takes whatever is left, and keeps taking it as the
-        // window changes size.
-        _scrub.Location = new Point(_lblClock.Left + Math.Max(160, _lblClock.PreferredWidth + 24), 12);
-        _scrub.Width = Math.Max(120, bar.Width - _scrub.Left - 12);
-        _scrub.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-
-        bar.Controls.AddRange(new Control[] { _btnPlay, _cmbSpeed, _lblClock, _scrub });
+        var bar = new FieldRow();
+        bar.Add(null, new ButtonBar().With(_btnPlay, _cmbSpeed, _lblClock));
+        bar.AddLast(null, _scrub, () => UiLayout.AtTextSize(ScrubLeastWidth));
 
         return bar;
+    }
+
+    /// <summary>
+    /// How big the clock is: its longest reading in this race, in its own
+    /// face. The race's length is on both sides of the slash at the end, and
+    /// the running side is measured with each digit in turn in every place,
+    /// since the digits are not all as wide as each other - so the clock is
+    /// never too narrow for the time it is showing, and never changes size
+    /// as the race plays. A couple of pixels over, for digits that sit a
+    /// little differently beside the colon and the point than beside each
+    /// other.
+    /// </summary>
+    private Size ClockSize()
+    {
+        var longest = ClockText(_raceLengthMs, _raceLengthMs);
+        var slash = longest.IndexOf("  /", StringComparison.Ordinal);
+        var running = slash < 0 ? longest : longest[..slash];
+        var rest = slash < 0 ? string.Empty : longest[slash..];
+
+        // The flags a label measures its text with.
+        const TextFormatFlags flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
+        var unbounded = new Size(int.MaxValue, int.MaxValue);
+        var widest = Size.Empty;
+
+        foreach (var digit in "0123456789")
+        {
+            var reading = new string(running.Select(c => char.IsDigit(c) ? digit : c).ToArray()) + rest;
+            var measured = TextRenderer.MeasureText(reading, _lblClock.Font, unbounded, flags);
+
+            widest = new Size(Math.Max(widest.Width, measured.Width), Math.Max(widest.Height, measured.Height));
+        }
+
+        return new Size(
+            widest.Width + 2 + _lblClock.Padding.Horizontal,
+            widest.Height + _lblClock.Padding.Vertical);
     }
 
     private void Toggle()
@@ -288,13 +366,16 @@ public sealed class RaceReplayForm : Form
         _canvas.Invalidate();
     }
 
-    private void UpdateClock()
-    {
-        var span = TimeSpan.FromMilliseconds(_positionMs);
-        var total = TimeSpan.FromMilliseconds(_raceLengthMs);
+    private void UpdateClock() => _lblClock.Text = ClockText(_positionMs, _raceLengthMs);
 
-        _lblClock.Text = $"{(int)span.TotalMinutes}:{span.Seconds:00}.{span.Milliseconds / 100}"
-                         + $"  /  {(int)total.TotalMinutes}:{total.Seconds:00}";
+    /// <summary>What the clock reads <paramref name="positionMs"/> into a race <paramref name="lengthMs"/> long - see ClockSize, which measures it at its longest.</summary>
+    private static string ClockText(long positionMs, long lengthMs)
+    {
+        var span = TimeSpan.FromMilliseconds(positionMs);
+        var total = TimeSpan.FromMilliseconds(lengthMs);
+
+        return $"{(int)span.TotalMinutes}:{span.Seconds:00}.{span.Milliseconds / 100}"
+               + $"  /  {(int)total.TotalMinutes}:{total.Seconds:00}";
     }
 
     protected override void Dispose(bool disposing)
@@ -345,12 +426,21 @@ public sealed class RaceReplayForm : Form
 
             var runners = _owner._runners;
 
+            // Every measure in the lanes is at the text size in use: the
+            // positions, names and gaps are drawn in the app's faces, which
+            // grow with it, and at fixed pixels a longer name ran into the
+            // bar and the lanes were too short for their own text at 200%.
+            // Worked out on every paint - each tick while it plays, and on
+            // every resize - so the drawing follows the room the window gives
+            // it.
+            var margin = UiLayout.AtTextSize(24);
+
             if (runners.Count == 0)
             {
                 TextRenderer.DrawText(g,
                     "This race was recorded before lap-by-lap times were kept, so there is nothing to play back.",
                     AppTheme.BodyFont,
-                    new Rectangle(24, 24, Math.Max(100, Width - 48), 60),
+                    new Rectangle(margin, margin, Math.Max(UiLayout.AtTextSize(100), Width - margin * 2), UiLayout.AtTextSize(60)),
                     AppTheme.TextMuted,
                     TextFormatFlags.WordBreak);
 
@@ -369,29 +459,64 @@ public sealed class RaceReplayForm : Form
                 .ThenBy(x => x.index)
                 .ToList();
 
-            const int top = 56;
-            var laneHeight = Math.Max(26, Math.Min(46, (Height - top - 24) / Math.Max(1, order.Count)));
+            // The heading's line, and the lanes' least and most height,
+            // shared out of whatever height the window gives, as before.
+            //
+            // The least gives way to the room there is, down to the 26px it
+            // is at the normal text size: the window keeps its size, and at
+            // 200% sixteen drivers at the full least would lose their last
+            // lanes off the foot of a window that held them all at 100%.
+            // Below that the lanes run off the foot as they always did. At
+            // the normal text size this is exactly the 26 it was.
+            var top = UiLayout.AtTextSize(56);
+            var headingTop = UiLayout.AtTextSize(18);
+            var room = (Height - top - margin) / Math.Max(1, order.Count);
+            var leastLane = Math.Min(UiLayout.AtTextSize(26), Math.Max(room, UiLayout.AtDpi(26)));
+            var laneHeight = Math.Max(leastLane, Math.Min(UiLayout.AtTextSize(46), room));
+
+            // Across a lane: the position, the colour dot, the name, the bar
+            // and the gap after it, each where it was at the normal text size.
+            var laneGap = UiLayout.AtTextSize(4);
+            var stripeRadius = UiLayout.AtTextSize(6);
+            var placeLeft = UiLayout.AtTextSize(10);
+            var textDrop = UiLayout.AtTextSize(6);
+            var dotLeft = UiLayout.AtTextSize(52);
+            var dotDrop = UiLayout.AtTextSize(8);
+            var dotSize = UiLayout.AtTextSize(12);
+            var nameLeft = UiLayout.AtTextSize(72);
+            var barStart = UiLayout.AtTextSize(260);
+            var barEndRoom = UiLayout.AtTextSize(90);
+            var barLeast = UiLayout.AtTextSize(40);
+            var trackHalf = UiLayout.AtTextSize(3);
+            var trackHeight = UiLayout.AtTextSize(5);
+            var markerHalf = UiLayout.AtTextSize(5);
+            var markerLift = UiLayout.AtTextSize(8);
+            var markerSize = UiLayout.AtTextSize(11);
+            var gapFromRight = UiLayout.AtTextSize(82);
+            var gapDrop = UiLayout.AtTextSize(8);
 
             var leader = order[0].progress;
 
             TextRenderer.DrawText(g, "Running order", AppTheme.BoldFont,
-                new Point(24, 18), AppTheme.TextDark);
+                new Point(margin, headingTop), AppTheme.TextDark);
 
             TextRenderer.DrawText(g,
                 $"Lap {Math.Max(1, (int)Math.Floor(leader))}",
-                AppTheme.BoldFont, new Point(Math.Max(120, Width - 140), 18), AppTheme.Primary);
+                AppTheme.BoldFont,
+                new Point(Math.Max(UiLayout.AtTextSize(120), Width - UiLayout.AtTextSize(140)), headingTop),
+                AppTheme.Primary);
 
             for (var place = 0; place < order.Count; place++)
             {
                 var (runner, _, progress) = order[place];
                 var y = top + place * laneHeight;
 
-                var row = new Rectangle(24, y, Math.Max(80, Width - 48), laneHeight - 4);
+                var row = new Rectangle(margin, y, Math.Max(UiLayout.AtTextSize(80), Width - margin * 2), laneHeight - laneGap);
 
                 if (place % 2 == 1)
                 {
                     using var stripe = new SolidBrush(AppTheme.RowAlt);
-                    using var path = AppTheme.RoundedRect(row, 6);
+                    using var path = AppTheme.RoundedRect(row, stripeRadius);
                     g.FillPath(stripe, path);
                 }
 
@@ -399,20 +524,20 @@ public sealed class RaceReplayForm : Form
                 // leader they are - which is the part that makes a gap
                 // opening or closing visible while it happens.
                 TextRenderer.DrawText(g, $"P{place + 1}", AppTheme.BoldFont,
-                    new Point(row.Left + 10, y + 6), AppTheme.TextMuted);
+                    new Point(row.Left + placeLeft, y + textDrop), AppTheme.TextMuted);
 
                 using (var dot = new SolidBrush(runner.Colour))
                 {
-                    g.FillEllipse(dot, row.Left + 52, y + 8, 12, 12);
+                    g.FillEllipse(dot, row.Left + dotLeft, y + dotDrop, dotSize, dotSize);
                 }
 
                 TextRenderer.DrawText(g, runner.Name, AppTheme.BodyFont,
-                    new Point(row.Left + 72, y + 6), AppTheme.TextDark);
+                    new Point(row.Left + nameLeft, y + textDrop), AppTheme.TextDark);
 
                 var behind = leader - progress;
 
-                var barLeft = row.Left + 260;
-                var barWidth = Math.Max(40, row.Right - barLeft - 90);
+                var barLeft = row.Left + barStart;
+                var barWidth = Math.Max(barLeast, row.Right - barLeft - barEndRoom);
 
                 // A lap down is the full width of the bar. Beyond that
                 // everyone is simply pinned at the end - the difference
@@ -421,13 +546,13 @@ public sealed class RaceReplayForm : Form
 
                 using (var trackBrush = new SolidBrush(AppTheme.Border))
                 {
-                    g.FillRectangle(trackBrush, barLeft, y + laneHeight / 2 - 3, barWidth, 5);
+                    g.FillRectangle(trackBrush, barLeft, y + laneHeight / 2 - trackHalf, barWidth, trackHeight);
                 }
 
                 using (var fill = new SolidBrush(runner.Colour))
                 {
                     var marker = barLeft + (int)(barWidth * fraction);
-                    g.FillEllipse(fill, marker - 5, y + laneHeight / 2 - 8, 11, 11);
+                    g.FillEllipse(fill, marker - markerHalf, y + laneHeight / 2 - markerLift, markerSize, markerSize);
                 }
 
                 var gapText = place == 0
@@ -437,7 +562,7 @@ public sealed class RaceReplayForm : Form
                         : $"-{behind:0.00} lap";
 
                 TextRenderer.DrawText(g, gapText, AppTheme.SmallFont,
-                    new Point(row.Right - 82, y + 8), AppTheme.TextMuted);
+                    new Point(row.Right - gapFromRight, y + gapDrop), AppTheme.TextMuted);
             }
         }
     }

@@ -27,7 +27,7 @@ Yes. **Demo Mode** runs a fake race through the same race logic, announcer and s
 
 ### Do I need an ElevenLabs account?
 
-No, and most clubs won't want one. **Voice Settings** offers three voices:
+No, and most clubs won't want one. **Voice → Voice Settings** offers three voices:
 
 - **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. No account, no key, no bill. It needs the club set up on the **Club Website** page and internet at the track, it has a monthly allowance of characters, and the wording it speaks is the standard set of lines.
 - **Your own ElevenLabs account** — your key and your credits, and complete control of the voice, the tuning and every word.
@@ -45,7 +45,7 @@ Most fixed lines cost nothing in the first place: a line with no driver's name i
 
 ### Can I write my own announcer lines on the HeatCaller voice?
 
-No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice Settings** and the **Rivalries** phrasing box are read-only, and an announcer style applied from **Themes** brings its sounds, tuning and look but not its wording.
+No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice → Announcements** and the **Rivalries** phrasing box are read-only, and a soundscape applied on **Sounds → Soundscapes** brings its sounds but not its wording.
 
 To write your own, choose your own ElevenLabs key or the free Windows voice under **Speak with** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
 
@@ -73,11 +73,11 @@ Races follow a *race format*: lap limit, time limit, minimum lap time, start typ
 
 ### Can I run more than one class on the same night?
 
-Yes. On **Race Day → Event**, tick every class that's running under **Classes racing:**. **Build the Qualifying Programme** on the **Program** tab then builds the heats for all of them in one go. See [Program and mains](../race-day/program-and-mains.md).
+Yes. On **Race Day → Setup**, tick every class that's running under **Classes racing:**. **Build tonight's heats** on **Race Day → Next Steps** (**Build tonight's races** on a club night) then builds the heats for all of them in one go. See [Program and mains](../race-day/program-and-mains.md).
 
 ### How are qualifying and the mains worked out?
 
-Each class chooses how qualifying is scored: **total laps**, or the quickest run of **N consecutive laps**. It also sets how many heats count ("best 2 of 3" drops the worst). When qualifying is done, **Seed the Mains** fills the A-main with the fastest qualifiers, then the B-main, and so on. Lower mains run first so their top finishers can bump up. See [Program and mains](../race-day/program-and-mains.md) and the [Glossary](glossary.md).
+Each class chooses how qualifying is scored: **total laps**, or the quickest run of **N consecutive laps**. It also sets how many heats count ("best 2 of 3" drops the worst). When qualifying is done, **Build the finals from qualifying** (seeding the mains) fills the A-main with the fastest qualifiers, then the B-main, and so on. Lower mains run first so their top finishers can bump up. See [Program and mains](../race-day/program-and-mains.md) and the [Glossary](glossary.md).
 
 ### Can I start and flag races from the keyboard, or from my phone?
 
@@ -106,7 +106,7 @@ No. The next time HeatCaller starts, it asks **Restore the unfinished race?**. T
 Check these in order:
 
 1. The mute icon at the bottom of the sidebar is red, or hovering it shows **Unmute Announcer**. If so, the announcer is muted. Click it.
-2. The Windows voice is chosen under **Speak with** on **Voice Announcements → Voice Settings**, but the PC has no Windows voice it can use.
+2. The Windows voice is chosen under **Speak with** on **Voice → Voice Settings**, but the PC has no Windows voice it can use.
 3. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Windows voice isn't standing in (its box under the ElevenLabs choice is unticked).
 4. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC with no Windows voice to stand in. On any PC that has one, this shows up as the whole night in the Windows voice rather than silence.
 
@@ -132,13 +132,13 @@ Click **Open Big Screen** on **Race Control** (or on **Local Screens**), drag th
 
 ### Can the screens use our club colors and logo?
 
-Yes. On **Themes → Looks**, pick one of the 18 built-in looks or make your own from your club's colors, and choose it for the crowd screens (the Big Screen, the Wi-Fi pages and the online pages), the app, or both. **Choose Logo** in the **Club logo** group puts your logo on all of them. See [Looks and the club logo](../screens/looks-and-logo.md).
+Yes. On the **Themes** page, pick one of the 18 built-in looks or make your own from your club's colors, and choose it for the crowd screens (the Big Screen, the Wi-Fi pages and the online pages), the app, or both. **Choose Logo** on the **Club logo** card puts your logo on all of them. See [Looks and the club logo](../screens/looks-and-logo.md).
 
 ### Can drivers check themselves in?
 
 Yes, in three ways:
 
-- **At the desk:** scan printed QR check-ins with a USB scanner on **Race Day → Entries**.
+- **At the desk:** scan printed QR check-ins with a USB scanner in the **Scan to Check In** box on **Race Day → Who's Racing**.
 - **On the club Wi-Fi:** drivers use the self check-in page from **Local Screens**.
 - **From anywhere:** with online check-in on the **Club Website** page, drivers use a QR check-in or their own PIN.
 
@@ -151,7 +151,7 @@ With publishing switched on, the relay gets:
 - the live race
 - each session's results
 - championship standings
-- the day's schedule
+- the day's schedule (the race day's **Timetable**)
 - the badges drivers have earned
 - track layouts with their records
 
@@ -190,7 +190,7 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Sti
 
 Include these:
 
-- The version, from the title bar or startup screen (for example **BETA 0.52.0**).
+- The version, from the title bar or startup screen (for example **BETA 0.59.0**).
 - What you were doing.
 - The console text. Use **Copy** on the Developer Console on the **Connection** page.
 - `%AppData%\HeatCaller\crash.log`, if an error box appeared.

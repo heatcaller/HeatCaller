@@ -10,9 +10,57 @@ namespace HeatCaller;
 /// soundscape as it was. Custom sound FILES on an effect are kept as they
 /// are - this form picks packs; the Sound Effects page is where a file is
 /// chosen - and the row says when one is set, since it plays instead.
+///
+/// On the layout pieces (DialogFit): the name, the description and what
+/// plays underneath lined up in a field grid across the top; under them two
+/// cards side by side (a Beside) taking the height the window has - the
+/// sounds down the left, Set all to: over them and the sounds scrolling on
+/// their own, the card as wide as its widest line; and the announcer beside
+/// it taking the rest of the width, its delivery along one line, the lines'
+/// hint, and the race moments beside the lines of the one picked, the lines
+/// taking the height. Under the cards the note about the HeatCaller voice,
+/// when this PC speaks with it, and along the foot Preview and what it is
+/// doing on the left, and Delete Soundscape, Save and Cancel on the right.
+/// It opens at the size it always had, and can be made bigger. It used to
+/// be placed in pixels in a fixed 1000x790 window - taller than a 1280x720
+/// screen has room for, so Save and Cancel opened under its edge - with two
+/// group boxes of fixed sizes and every caption and field at a fixed place,
+/// whatever the text size.
 /// </summary>
 public sealed class SoundscapeEditorForm : Form
 {
+    /// <summary>
+    /// The window's inside at the normal text size - the size it always
+    /// opened at. It opens this big at the text size in use, never bigger
+    /// than the screen, and can be made bigger, the two cards taking the
+    /// room.
+    /// </summary>
+    private const int DialogWidth = 1000;
+    private const int DialogHeight = 790;
+
+    /// <summary>The name box, and the background and music drop-downs, at the normal text size, as they were - a drop-down wider when its longest choice needs it.</summary>
+    private const int NameWidth = 360;
+    private const int AmbienceWidth = 250;
+    private const int MusicWidth = 530;
+
+    /// <summary>A sound's pack drop-down at the normal text size, as it was - wider when its longest pack needs it.</summary>
+    private const int PackPickerWidth = 120;
+
+    /// <summary>The list of race moments at the normal text size, as it was - wider when its longest name needs it.</summary>
+    private const int MomentsWidth = 170;
+
+    /// <summary>The description box shows this many lines, as it did.</summary>
+    private const int DescriptionLines = 2;
+
+    /// <summary>The sounds show at least this many before the window scrolls instead.</summary>
+    private const int LeastSoundRows = 3;
+
+    /// <summary>The race moments show at least this many before the window scrolls instead.</summary>
+    private const int LeastMomentRows = 4;
+
+    /// <summary>The lines box shows at least this many lines before the window scrolls instead.</summary>
+    private const int LeastLines = 3;
+
     private readonly Theme _working;
     private readonly ThemeStore _store;
     private readonly Func<Theme, CancellationToken, Task> _preview;
@@ -30,13 +78,43 @@ public sealed class SoundscapeEditorForm : Form
     private readonly NumericUpDown _numSpeed = new();
 
     private readonly ListBox _lstEvents = new();
-    private readonly CheckBox _chkEventEnabled = new();
+    private readonly CheckBox _chkEventEnabled = new ThemedCheckBox();
     private readonly TextBox _txtLines = new();
     private AnnouncementEventType? _shownEvent;
 
     private readonly Button _btnPreview = new();
-    private readonly Label _lblStatus = new();
+
+    /// <summary>
+    /// What the preview is doing, beside Preview. As wide as the longest
+    /// thing it says, whatever it says now (SteadyLabel) - so the foot's
+    /// line never changes as it is rewritten.
+    /// </summary>
+    private readonly SteadyLabel _lblStatus = new()
+    {
+        Wordings = new[] { "Playing a short pretend race...", "Preview finished.", "Preview couldn't play.", "Preview stopped." },
+    };
+
     private CancellationTokenSource? _previewCts;
+
+    /// <summary>Set all to:, and the sounds under it - two grids with one caption column (FieldGrid.LineUp), so every pack drop-down lines up.</summary>
+    private readonly FieldGrid _setAllGrid = new();
+    private readonly FieldGrid _soundGrid = new();
+
+    /// <summary>The captions of both, which that column is as wide as the widest of.</summary>
+    private readonly List<Label> _soundCaptions = new();
+
+    /// <summary>Every pack drop-down - Set all to:'s and each sound's - all one width (SizeFields).</summary>
+    private readonly List<ComboBox> _packPickers = new();
+
+    /// <summary>The most a sound's line holds beside its drop-down - its Play button, and "own file" when it has one - with the gaps between them.</summary>
+    private int _soundExtrasWidth;
+
+    /// <summary>
+    /// The sounds card's width and the race moments list's, worked out in
+    /// SizeFields and read whenever the two columns are placed.
+    /// </summary>
+    private int _soundsColumnWidth;
+    private int _momentsColumnWidth;
 
     /// <summary>The edited soundscape - set when the form closes with Save.</summary>
     public Theme Result { get; private set; }
@@ -98,17 +176,16 @@ public sealed class SoundscapeEditorForm : Form
         Result = working;
 
         Text = isNew ? "New soundscape" : $"Edit soundscape - {working.Name}";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1000, 790);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        BuildLayout(currentVoice, canDelete: !isNew);
+        var page = BuildLayout(currentVoice, canDelete: !isNew);
 
         AppTheme.ApplyRecursively(this);
+
+        SizeFields();
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -117,33 +194,35 @@ public sealed class SoundscapeEditorForm : Form
         base.OnFormClosing(e);
     }
 
-    private void BuildLayout(VoiceProfile currentVoice, bool canDelete)
+    /// <summary>
+    /// The window's page - see the class notes. The two cards' columns are
+    /// sized from the faces the theme pass leaves, so their widths are
+    /// worked out after it (SizeFields) and read as the columns are placed.
+    /// </summary>
+    private FillPage BuildLayout(VoiceProfile currentVoice, bool canDelete)
     {
-        // ---- name and description
-        var lblName = new Label { Text = "Name:", AutoSize = true, Location = new Point(16, 20) };
-        _txtName.Location = new Point(120, 16);
-        _txtName.Width = 360;
+        // ---- name, description and what plays underneath
+        _txtName.Width = UiLayout.AtTextSize(NameWidth);
         _txtName.Text = _working.Name;
 
-        var lblDescription = new Label { Text = "Description:", AutoSize = true, Location = new Point(16, 56) };
-        _txtDescription.Location = new Point(120, 52);
-        _txtDescription.Size = new Size(860, 46);
         _txtDescription.Multiline = true;
         _txtDescription.Text = _working.Description;
 
-        Controls.AddRange(new Control[] { lblName, _txtName, lblDescription, _txtDescription });
-
-        BuildBackgroundRow();
+        var fields = new FieldGrid();
+        fields.AddRow("Name:", _txtName);
+        fields.AddRow("Description:", _txtDescription, stretch: true);
+        fields.AddRow("Background:", BuildBackgroundRow());
 
         // ---- sounds
-        var grpSounds = new GroupBox { Text = "Sounds", Location = new Point(16, 156), Size = new Size(420, 530) };
+        var tips = new ToolTip();
+        AppTheme.StyleToolTip(tips);
 
-        var y = UiLayout.InsideGroup(grpSounds) + 4;
+        // Disposed with the form. A ToolTip keeps every control it was given,
+        // so one left behind kept each closed editor alive with it.
+        Disposed += (_, _) => tips.Dispose();
 
-        var lblSetAll = new Label { Text = "Set all to:", AutoSize = true, Location = new Point(12, y + 5) };
         var cmbSetAll = NewSoundCombo(null);
         cmbSetAll.SelectedIndex = -1;
-        cmbSetAll.Location = new Point(150, y);
         cmbSetAll.SelectionChangeCommitted += (_, _) =>
         {
             if (cmbSetAll.SelectedItem is SoundChoice choice)
@@ -154,48 +233,26 @@ public sealed class SoundscapeEditorForm : Form
                 }
             }
         };
-        grpSounds.Controls.Add(lblSetAll);
-        grpSounds.Controls.Add(cmbSetAll);
 
-        y += 40;
-
-        var tips = new ToolTip();
-        AppTheme.StyleToolTip(tips);
-
-        // Disposed with the form. A ToolTip keeps every control it was given,
-        // so one left behind kept each closed editor alive with it.
-        Disposed += (_, _) => tips.Dispose();
+        _packPickers.Add(cmbSetAll);
+        _soundCaptions.Add(_setAllGrid.AddRow("Set all to:", cmbSetAll));
 
         // The same wake-up pad the race uses on this PC's output, or a short
         // test sound can vanish on a wireless speaker.
         var leadIn = AnnouncementService.LeadingSilenceFor(currentVoice.WirelessSpeaker);
 
-        // The rows scroll, under a Set All that stays put. Seventeen of them
-        // at 38 apart is taller than the group, which was sized for eleven -
-        // and making the group taller would push the whole editor off a
-        // laptop screen.
-        var rows = new Panel
-        {
-            Location = new Point(4, y),
-            Size = new Size(grpSounds.Width - 8, grpSounds.Height - y - 8),
-            AutoScroll = true,
-        };
-        grpSounds.Controls.Add(rows);
-
-        // Positions inside the scrolling panel, which starts 4px in - so the
-        // columns sit where they always have.
-        const int inset = 4;
-        y = 4;
+        // A line for each sound: its caption, its pack, a button that plays
+        // it, and - when it plays a file of its own instead - a note saying
+        // so. The first line is kept for the least the sounds can do with.
+        ButtonBar? firstLine = null;
 
         foreach (var kind in Enum.GetValues<SoundEffectKind>())
         {
             var config = _working.SoundEffects.Effects.GetValueOrDefault(kind.ToString());
 
-            var lbl = new Label { Text = SoundNames.GetValueOrDefault(kind, kind.ToString()), AutoSize = true, Location = new Point(12 - inset, y + 5) };
             var combo = NewSoundCombo(config?.BuiltInSound);
-            combo.Location = new Point(150 - inset, y);
 
-            var btnTest = new Button { Text = "▶", Location = new Point(278 - inset, y - 1), Size = new Size(36, 28) };
+            var btnTest = new Button { Text = "▶" };
             tips.SetToolTip(btnTest, "Play this sound");
             var testKind = kind;
             btnTest.Click += async (_, _) =>
@@ -205,9 +262,10 @@ public sealed class SoundscapeEditorForm : Form
                 await SoundPacks.PlayAsync(probe, testKind, 0.9f, 6, 3, leadIn);
             };
 
-            rows.Controls.Add(lbl);
-            rows.Controls.Add(combo);
-            rows.Controls.Add(btnTest);
+            var parts = new List<Control> { combo, btnTest };
+
+            // As the tight row sizes the button, and the gap after it.
+            var extras = UiLayout.TightButtonSizeFor(btnTest).Width + UiLayout.TightButtonGap;
 
             if (!string.IsNullOrWhiteSpace(config?.CustomFilePath))
             {
@@ -217,23 +275,42 @@ public sealed class SoundscapeEditorForm : Form
                     AutoSize = true,
                     Font = AppTheme.SmallFont,
                     ForeColor = AppTheme.Accent,
-                    Location = new Point(322 - inset, y + 6),
                 };
                 tips.SetToolTip(lblOwn, $"Plays {config!.CustomFilePath} instead of the pack. Change or clear it on Sounds → Effects.");
-                rows.Controls.Add(lblOwn);
+                parts.Add(lblOwn);
+
+                extras += lblOwn.GetPreferredSize(Size.Empty).Width + UiLayout.TightButtonGap;
             }
 
+            _soundExtrasWidth = Math.Max(_soundExtrasWidth, extras);
+
+            var line = SoundLine(parts.ToArray());
+            firstLine ??= line;
+
+            _soundCaptions.Add(_soundGrid.AddRow($"{SoundNames.GetValueOrDefault(kind, kind.ToString())}:", line));
+            _packPickers.Add(combo);
             _sounds[kind] = combo;
-            y += 38;
         }
 
-        Controls.Add(grpSounds);
+        // The sounds scroll on their own, under a Set all to: that stays
+        // put - seventeen of them are taller than the card at the height the
+        // window opens at. No margins of their own - the card's inset is
+        // round them - and no room under the last line, which the theme
+        // pass gives a panel that scrolls (see ScrollTheming.NoRoomBelow).
+        var soundRows = new PageStack { Padding = Padding.Empty };
+        ScrollTheming.NoRoomBelow(soundRows);
+        soundRows.Add(_soundGrid, gapBelow: 0);
+
+        var sounds = new Section("Sounds");
+        sounds.Add(_setAllGrid);
+        sounds.AddFill(
+            soundRows,
+            () => LeastSoundRows * ((firstLine?.GetPreferredSize(Size.Empty).Height ?? 0) + UiLayout.RowGap),
+            gapBelow: 0);
 
         // ---- announcer
-        var grpVoice = new GroupBox { Text = "Announcer", Location = new Point(452, 156), Size = new Size(532, 530) };
-        var vy = UiLayout.InsideGroup(grpVoice) + 4;
+        var tuning = new FieldRow();
 
-        var x = 12;
         foreach (var (caption, box, min, max, value) in new[]
                  {
                      ("Stability", _numStability, 0m, 1m, _working.Voice.Stability),
@@ -241,27 +318,23 @@ public sealed class SoundscapeEditorForm : Form
                      ("Speed", _numSpeed, 0.7m, 1.2m, _working.Voice.Speed),
                  })
         {
-            var lbl = new Label { Text = caption + ":", AutoSize = true, Location = new Point(x, vy + 5) };
             box.DecimalPlaces = 2;
             box.Increment = 0.05m;
             box.Minimum = min;
             box.Maximum = max;
             box.Value = Math.Clamp((decimal)value, min, max);
-            box.Width = 74;
-            box.Location = new Point(UiLayout.After(lbl), vy);
-            grpVoice.Controls.Add(lbl);
-            grpVoice.Controls.Add(box);
-            x = box.Right + 18;
+
+            // Room for its largest value, "1.20", at every text size.
+            box.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
+
+            tuning.Add(new Label { Text = caption + ":" }, box);
         }
 
         tips.SetToolTip(_numStability, "Lower is livelier and less even; higher is calmer and steadier. ElevenLabs voices only.");
         tips.SetToolTip(_numStyle, "How much character the delivery gets. ElevenLabs voices only.");
         tips.SetToolTip(_numSpeed, "Speaking speed.");
 
-        vy += 42;
-
-        _lstEvents.Location = new Point(12, vy);
-        _lstEvents.Size = new Size(170, 420);
+        // Given the height the card has, not snapped to whole rows.
         _lstEvents.IntegralHeight = false;
         foreach (var (type, name) in EditableEvents)
         {
@@ -272,82 +345,210 @@ public sealed class SoundscapeEditorForm : Form
 
         _chkEventEnabled.Text = "Announce this moment";
         _chkEventEnabled.AutoSize = true;
-        _chkEventEnabled.Location = new Point(196, vy);
 
+        // Across the card, over the moments and their lines, wrapping to the
+        // card's width.
         var lblLines = new Label
         {
             Text = "Lines - one per line, picked at random. {driver}, {time}, {lap} and {streak} are filled in; " +
                    "tags like [excited] or [shouting] steer ElevenLabs delivery and are dropped for other voices.",
             AutoSize = true,
-            MaximumSize = new Size(320, 0),
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
-            Location = new Point(196, vy + 28),
         };
 
-        var linesTop = UiLayout.Below(lblLines, 6);
-        _txtLines.Location = new Point(196, linesTop);
-        _txtLines.Size = new Size(322, vy + 420 - linesTop);
         _txtLines.Multiline = true;
         _txtLines.ScrollBars = ScrollBars.Vertical;
         _txtLines.WordWrap = false;
         _txtLines.AcceptsReturn = true;
 
-        grpVoice.Controls.AddRange(new Control[] { _lstEvents, _chkEventEnabled, lblLines, _txtLines });
-        Controls.Add(grpVoice);
+        // The moments down the left, as wide as the longest; the tick for the
+        // one picked and its lines beside them, the lines taking the height.
+        var moments = new Beside(() => _momentsColumnWidth) { SideOnLeft = true };
+        moments.AddSideFill(_lstEvents, _ => LeastMomentRows * _lstEvents.ItemHeight + 4, gapBelow: 0);
+        moments.Add(_chkEventEnabled, stretch: false);
+        moments.AddFill(_txtLines, _ => LeastLines * Pieces.LineHeight(_txtLines.Font) + UiLayout.HintGap * 2);
+
+        // Tab reaches the moments before their lines, as it did: the column
+        // on the left is added after the parts beside it, so it is put first.
+        FirstInTabOrder(moments, _lstEvents);
+
+        var announcer = new Section("Announcer");
+        announcer.Add(tuning);
+        announcer.Add(lblLines);
+
+        // Nothing in the moments' band wraps - the list, the tick on one
+        // line, the lines box - so its least is the same at any width it
+        // can have; the card asks without one (Section.AddFill).
+        announcer.AddFill(moments, () => moments.LeastHeight(UiLayout.AtTextSize(DialogWidth)), gapBelow: 0);
+
+        // The sounds down the left at the width their lines need, the
+        // announcer taking the rest. Both take the height the window has.
+        var band = new Beside(() => _soundsColumnWidth) { SideOnLeft = true };
+        band.AddSideFill(sounds, sounds.LeastHeight, gapBelow: 0);
+        band.AddFill(announcer, announcer.LeastHeight);
+
+        // The sounds before the announcer, as they were - see above.
+        FirstInTabOrder(band, sounds);
+
+        Label? lblHeatCaller = null;
 
         if (currentVoice.EffectiveEngine == VoiceEngine.HeatCaller)
         {
-            var lblHeatCaller = new Label
+            lblHeatCaller = new Label
             {
                 Text = "This PC speaks with the HeatCaller voice, which always uses the standard lines - these lines are saved, and apply once you use your own ElevenLabs key or the Windows voice.",
                 AutoSize = true,
-                MaximumSize = new Size(960, 0),
                 Font = AppTheme.SmallFont,
                 ForeColor = AppTheme.Accent,
-                Location = new Point(16, 694),
             };
-            Controls.Add(lblHeatCaller);
         }
 
-        // ---- bottom bar
-        var barY = ClientSize.Height - UiLayout.ButtonHeight - 14;
-
+        // ---- the foot
         _btnPreview.Text = "Preview";
         _btnPreview.Click += async (_, _) => await TogglePreviewAsync();
+
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+
+        // Centred up and down on Preview, as FieldGrid.Inline centres a label.
+        _lblStatus.Anchor = AnchorStyles.Left;
 
         var btnSave = new Button { Text = "Save" };
         btnSave.Click += (_, _) => Save();
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        AppTheme.LayoutButtonRow(16, barY, UiLayout.ButtonGap, _btnPreview);
-
-        _lblStatus.AutoSize = true;
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-        _lblStatus.Location = new Point(_btnPreview.Right + 12, barY + 9);
-        _lblStatus.MaximumSize = new Size(520, 0);
-
-        // Save and Cancel on the right.
-        AppTheme.LayoutButtonRow(0, barY, UiLayout.ButtonGap, btnSave, btnCancel);
-        btnCancel.Left = ClientSize.Width - 16 - btnCancel.Width;
-        btnSave.Left = btnCancel.Left - UiLayout.ButtonGap - btnSave.Width;
-
-        Controls.AddRange(new Control[] { _btnPreview, _lblStatus, btnSave, btnCancel });
+        // Save and Cancel on the right, Cancel furthest right - and Tab still
+        // reaches Save first: the bar takes them right to left, in the order
+        // they were added.
+        var closing = new ButtonBar(alignRight: true).With(btnCancel, btnSave);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
         if (canDelete)
         {
             // Abort tells ThemesControl to delete it - it owns the undo and
             // the confirmation.
             var btnDelete = new Button { Text = "Delete Soundscape", DialogResult = DialogResult.Abort };
-            AppTheme.LayoutButtonRow(0, barY, UiLayout.ButtonGap, btnDelete);
-            btnDelete.Left = btnSave.Left - UiLayout.ButtonGap * 3 - btnDelete.Width;
-            Controls.Add(btnDelete);
-            _lblStatus.MaximumSize = new Size(Math.Max(120, btnDelete.Left - _lblStatus.Left - 12), 0);
+            closing.With(btnDelete);
+            btnDelete.TabIndex = 2;
+
+            // Three gaps from Save rather than one, as it always was, so it is
+            // not pressed for Save: the bar keeps one on Save's side of it,
+            // and the other two go on this side.
+            btnDelete.Margin = new Padding(
+                btnDelete.Margin.Left,
+                btnDelete.Margin.Top,
+                btnDelete.Margin.Right + UiLayout.ButtonGap * 2,
+                btnDelete.Margin.Bottom);
         }
+
+        // Preview and what it is doing on the left.
+        var footer = new SplitBar(new ButtonBar().With(_btnPreview, _lblStatus), closing);
+
+        var page = new FillPage();
+        page.Add(fields);
+        page.AddFill(band, band.LeastHeight, gapBelow: lblHeatCaller is null ? UiLayout.SectionGap : UiLayout.RowGap);
+
+        if (lblHeatCaller is not null)
+        {
+            page.Add(lblHeatCaller);
+        }
+
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
+
         CancelButton = btnCancel;
 
         _lstEvents.SelectedIndex = 0;
+
+        return page;
+    }
+
+    /// <summary>
+    /// A sound's line: its pack, the button that plays it, and the note
+    /// that it has a file of its own - each only as wide as it needs (a
+    /// tight row, so the button is only as wide as its arrow), everything
+    /// but the button centred up and down on it, as FieldGrid.Inline does.
+    /// </summary>
+    private static ButtonBar SoundLine(params Control[] parts)
+    {
+        foreach (var part in parts)
+        {
+            if (part is not Button)
+            {
+                part.Anchor = AnchorStyles.Left;
+            }
+        }
+
+        return new ButtonBar(tight: true).With(parts);
+    }
+
+    /// <summary>
+    /// Puts a Beside's column first in the tab order. The column on the left
+    /// (SideOnLeft) is added after the parts beside it, so Tab would reach it
+    /// last; given the first tab index and the first place among its
+    /// siblings - which settles a tie of tab indexes - it comes first, as it
+    /// is first on screen.
+    /// </summary>
+    private static void FirstInTabOrder(Beside band, Control column)
+    {
+        column.TabIndex = 0;
+        band.Controls.SetChildIndex(column, 0);
+    }
+
+    /// <summary>
+    /// What is sized from the faces the theme pass leaves: the drop-downs as
+    /// wide as they were at the normal text size, at the size in use, or as
+    /// their longest choice needs (Pieces.PickerWidth) - every pack drop-down
+    /// one width; the description its lines of its face (Pieces.LineHeight);
+    /// the sounds' captions in one column with Set all to:'s. Then the two
+    /// columns: the sounds card as wide as its widest line - caption, pack,
+    /// Play and "own file" - with the card's inset either side and room for
+    /// the scrollbar the sounds take, since they scroll at the height the
+    /// window opens at; and the race moments as wide as the longest of them,
+    /// with room for their list's scrollbar.
+    /// </summary>
+    private void SizeFields()
+    {
+        (Font Font, int Count, int Width)? measured = null;
+        _cmbAmbience.Width = Math.Max(UiLayout.AtTextSize(AmbienceWidth), Pieces.PickerWidth(_cmbAmbience, ref measured));
+
+        measured = null;
+        _cmbMusic.Width = Math.Max(UiLayout.AtTextSize(MusicWidth), Pieces.PickerWidth(_cmbMusic, ref measured));
+
+        // Every pack drop-down holds the same packs, in the same face.
+        measured = null;
+        var packWidth = Math.Max(UiLayout.AtTextSize(PackPickerWidth), Pieces.PickerWidth(_packPickers[0], ref measured));
+
+        foreach (var picker in _packPickers)
+        {
+            if (picker.Width != packWidth)
+            {
+                picker.Width = packWidth;
+            }
+        }
+
+        _txtDescription.Height = DescriptionLines * Pieces.LineHeight(_txtDescription.Font) + UiLayout.HintGap * 2;
+
+        FieldGrid.LineUp(new[] { _setAllGrid, _soundGrid });
+
+        // The caption column as the grids work it out: the widest caption,
+        // measured as a label measures itself, and the gap after it.
+        var captionColumn = _soundCaptions.Max(caption => TextRenderer.MeasureText(caption.Text, caption.Font).Width) + UiLayout.LabelGap;
+
+        _soundsColumnWidth = Section.Inset.Horizontal
+            + captionColumn
+            + packWidth + UiLayout.TightButtonGap
+            + _soundExtrasWidth
+            + SystemInformation.VerticalScrollBarWidth;
+
+        var widestMoment = EditableEvents.Max(moment => TextRenderer.MeasureText(moment.Name, _lstEvents.Font).Width);
+
+        _momentsColumnWidth = Math.Max(
+            UiLayout.AtTextSize(MomentsWidth),
+            widestMoment + SystemInformation.VerticalScrollBarWidth + UiLayout.LabelGap);
     }
 
     // ------------------------------------------------------------ background
@@ -360,16 +561,14 @@ public sealed class SoundscapeEditorForm : Form
     /// <summary>
     /// Ambience bed and music playlist - "leave as it is" for either, so a
     /// soundscape can change the sounds and voice without touching what the
-    /// club already has playing underneath.
+    /// club already has playing underneath. One line, the music after the
+    /// ambience, going onto a second when the window is too narrow for both.
     /// </summary>
-    private void BuildBackgroundRow()
+    private FlowLayoutPanel BuildBackgroundRow()
     {
         var bg = _working.Background;
 
-        var lblAmbience = new Label { Text = "Background:", AutoSize = true, Location = new Point(16, 118) };
         _cmbAmbience.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbAmbience.Location = new Point(120, 114);
-        _cmbAmbience.Width = 250;
         _cmbAmbience.Items.Add(new Choice<string?>("Leave Ambience as it is", null));
         _cmbAmbience.Items.Add(new Choice<string?>("No soundscape crowd", string.Empty));
         foreach (var pack in SoundPacks.All)
@@ -380,10 +579,8 @@ public sealed class SoundscapeEditorForm : Form
         var wantedBed = bg?.AmbienceBed is null ? null : (SoundPacks.Find(bg.AmbienceBed)?.Key ?? string.Empty);
         _cmbAmbience.SelectedIndex = Math.Max(0, _cmbAmbience.Items.Cast<Choice<string?>>().ToList().FindIndex(c => c.Value == wantedBed));
 
-        var lblMusic = new Label { Text = "Music:", AutoSize = true, Location = new Point(392, 118) };
+        var lblMusic = new Label { Text = "Music:" };
         _cmbMusic.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbMusic.Location = new Point(450, 114);
-        _cmbMusic.Width = 530;
         _cmbMusic.Items.Add(new Choice<List<string>>("No music of its own", new List<string>()));
         foreach (var pack in SoundPacks.All)
         {
@@ -423,7 +620,7 @@ public sealed class SoundscapeEditorForm : Form
             "With no music of its own, Theme music plays your music instead. " +
             "Whether music is on at all stays as you have it on Sounds \u2192 Music.");
 
-        Controls.AddRange(new Control[] { lblAmbience, _cmbAmbience, lblMusic, _cmbMusic });
+        return FieldGrid.Inline(_cmbAmbience, lblMusic, _cmbMusic);
     }
 
     // ------------------------------------------------------------ sounds
@@ -435,7 +632,7 @@ public sealed class SoundscapeEditorForm : Form
 
     private static ComboBox NewSoundCombo(string? selectedKey)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         combo.Items.Add(new SoundChoice(SoundPacks.ClassicKey, SoundPacks.DisplayName(null)));
         foreach (var pack in SoundPacks.All)
         {

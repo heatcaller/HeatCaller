@@ -1088,24 +1088,43 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        using var dialog = new Form
-        {
-            Text = "Time penalty",
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            StartPosition = FormStartPosition.CenterParent,
-            MinimizeBox = false,
-            MaximizeBox = false,
-            ClientSize = new Size(300, 116),
-            BackColor = AppTheme.Background,
-            Font = AppTheme.BodyFont,
-        };
+        using var dialog = new TimePenaltyForm();
 
-        var label = new Label { Text = "Seconds to add:", Location = new Point(12, 18), AutoSize = true };
-
-        var seconds = new NumericUpDown
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Seconds != 0)
         {
-            Location = new Point(128, 15),
-            Width = 90,
+            AdjustSelected(0, (long)(dialog.Seconds * 1000));
+        }
+    }
+
+    /// <summary>
+    /// The window the leaderboard's Penalty... opens: how many seconds to
+    /// add to the selected driver - or, less than nothing, to take off. A
+    /// class of its own rather than built inside PenaltySelectedByHand, and
+    /// internal, so the layout test can build it (WindowCatalog) without a
+    /// race on the board.
+    ///
+    /// On the layout pieces (DialogFit): the caption and the seconds beside
+    /// it on one line (FieldRow), and Apply and Cancel at the foot; as tall
+    /// as that. It used to be placed in pixels in a 300x116 window: the box
+    /// at a fixed 128px from the left beside a caption that a larger text
+    /// size ran into, and the buttons a fixed 80px wide at fixed places.
+    /// </summary>
+    internal sealed class TimePenaltyForm : Form
+    {
+        /// <summary>
+        /// How wide the window is inside its frame at the normal text size.
+        /// Wider than the 300 it was made at: Apply and Cancel are standard
+        /// buttons now, and two of them side by side need 316px between the
+        /// page's margins - 348 in all. At 300, Apply would wrap onto a line
+        /// of its own under Cancel.
+        /// </summary>
+        private const int DialogWidth = 360;
+
+        /// <summary>The seconds box's width at the normal text size, as it was - wider if its widest value needs more.</summary>
+        private const int SecondsWidth = 90;
+
+        private readonly NumericUpDown _seconds = new()
+        {
             DecimalPlaces = 1,
             Increment = 0.5m,
             Minimum = -600m,
@@ -1113,17 +1132,51 @@ public sealed partial class RaceControlControl
             Value = 5m,
         };
 
-        var ok = new Button { Text = "Apply", Location = new Point(118, 66), Width = 80, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(206, 66), Width = 80, DialogResult = DialogResult.Cancel };
+        /// <summary>The seconds to add - less than nothing takes time off. Only meaningful after DialogResult.OK.</summary>
+        public decimal Seconds => _seconds.Value;
 
-        dialog.Controls.AddRange(new Control[] { label, seconds, ok, cancel });
-        dialog.AcceptButton = ok;
-        dialog.CancelButton = cancel;
-        AppTheme.ApplyRecursively(dialog);
-
-        if (dialog.ShowDialog(this) == DialogResult.OK && seconds.Value != 0)
+        public TimePenaltyForm()
         {
-            AdjustSelected(0, (long)(seconds.Value * 1000));
+            Text = "Time penalty";
+            BackColor = AppTheme.Background;
+            Font = AppTheme.BodyFont;
+
+            var ok = new Button { Text = "Apply", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            // A FieldRow rather than a field grid: it keeps the pixel round
+            // the box that the theme draws its ring in (Pieces.RingRoom), top
+            // and bottom as well - a grid's last row loses the bottom of it.
+            var row = new FieldRow();
+            row.Add(new Label { Text = "Seconds to add:" }, _seconds);
+
+            var page = new FillPage();
+            page.Add(row);
+
+            // Against the right-hand edge, Cancel furthest right, as they
+            // were - and Tab still reaches Apply first: the bar takes them
+            // right to left, in the order they were added.
+            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            // After the theme pass, in the face it leaves the box in: as wide
+            // as it was at the normal text size, at the size in use, and never
+            // too narrow for its widest value, "-600.0", with its arrows.
+            var widest = _seconds.Minimum.ToString("F" + _seconds.DecimalPlaces, System.Globalization.CultureInfo.CurrentCulture);
+
+            _seconds.Width = Math.Max(
+                UiLayout.AtTextSize(SecondsWidth),
+                TextRenderer.MeasureText(widest, _seconds.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+
+            DialogFit.Keep(this, page, width: DialogWidth);
         }
     }
 }

@@ -18,10 +18,38 @@ public sealed class SidebarNavList : Panel, IMessageFilter
 {
     private const int WM_MOUSEWHEEL = 0x020A;
 
-    public const int ItemHeight = 44;
+    /// <summary>
+    /// A page's row, at the text size in use. The names are drawn in the nav
+    /// face, which grows with the text size; a row that stayed 44px had them
+    /// filling it edge to edge at the larger sizes, beside an icon and a
+    /// count pill too small for them (the count's text no longer fitted its
+    /// pill). The rows' positions are worked out again when the text size
+    /// changes - see OnParentFontChanged.
+    /// </summary>
+    public static int ItemHeight => UiLayout.AtTextSize(44);
 
-    /// <summary>The height of a group heading ("ESSENTIALS", "CLUB TOOLS") above its first page.</summary>
-    public const int HeaderHeight = 30;
+    /// <summary>The height of a group heading ("ESSENTIALS", "CLUB TOOLS") above its first page, at the text size in use - it is drawn in the micro face, which grows with it.</summary>
+    public static int HeaderHeight => UiLayout.AtTextSize(30);
+
+    /// <summary>
+    /// The selected and hovered plate's inset from the list's left edge, and
+    /// how much narrower than the list it is. Part of the sidebar's frame,
+    /// which is a fixed width (MainForm.Designer) that follows the screen and
+    /// not the text size - so these do too, and what the frame has left over
+    /// goes to the page names, which end in "..." when it is not enough.
+    /// </summary>
+    private static int PlateLeft => UiLayout.AtDpi(7);
+
+    private static int PlateNarrowerBy => UiLayout.AtDpi(16);
+
+    /// <summary>
+    /// Where the icon starts inside the plate. A heading's text starts here
+    /// too, so it lines up with the icons under it. On the screen's scale but
+    /// not the text size, like the plate's other edges: the sidebar keeps its
+    /// width at every text size, so every gap that grew with the text would be
+    /// taken from the room the larger names need.
+    /// </summary>
+    private static int IconInset => UiLayout.AtDpi(14);
 
     private readonly List<string> _items = new();
 
@@ -228,6 +256,43 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         SetScrollOffset(_scrollOffset);
     }
 
+    /// <summary>
+    /// A new text size, reaching the list through the sidebar's font:
+    /// MainForm.ApplyFontScale gives the window the new body face, and the
+    /// sidebar, which wears no face of its own, passes it on. The list has a
+    /// face of its own (MainForm.Designer's NavFont), so it is told only this
+    /// way and never gets OnFontChanged for it.
+    /// </summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        FollowTextSize();
+    }
+
+    /// <summary>The list's own face set again - as for OnParentFontChanged.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        FollowTextSize();
+    }
+
+    /// <summary>
+    /// The rows and headings placed again at the text size in use - they are
+    /// kept in _itemTops, worked out at the size in use when they were - and
+    /// the scrolling range with them, keeping the selected page in view.
+    /// </summary>
+    private void FollowTextSize()
+    {
+        RecalculateRows();
+
+        // The range is the content's height less the list's, so it changed
+        // with the rows; clamped straight into the field, as SetItems does,
+        // since SetScrollOffset leaves an unchanged offset alone.
+        _scrollOffset = Math.Clamp(_scrollOffset, 0, MaxScrollOffset);
+        EnsureVisible(_selectedIndex);
+        Invalidate();
+    }
+
     private void SetScrollOffset(int value)
     {
         var clamped = Math.Clamp(value, 0, MaxScrollOffset);
@@ -326,15 +391,17 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             return;
         }
 
-        const int trackWidth = 4;
-        var x = Width - trackWidth - 2;
+        // A scrollbar: it follows the screen, not the text size, as the
+        // sidebar's width does.
+        var trackWidth = UiLayout.AtDpi(4);
+        var x = Width - trackWidth - UiLayout.AtDpi(2);
 
         using (var trackBrush = new SolidBrush(Color.FromArgb(40, AppTheme.SidebarText)))
         {
             g.FillRectangle(trackBrush, x, 0, trackWidth, Height);
         }
 
-        var thumbHeight = Math.Max(24, (int)(Height * (Height / (float)TotalContentHeight)));
+        var thumbHeight = Math.Max(UiLayout.AtDpi(24), (int)(Height * (Height / (float)TotalContentHeight)));
         var travel = Height - thumbHeight;
         var thumbY = MaxScrollOffset == 0 ? 0 : (int)(travel * (_scrollOffset / (float)MaxScrollOffset));
 
@@ -366,15 +433,25 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             g.FillRectangle(back, bounds);
         }
 
+        // In line with the icons under it (PlateLeft + IconInset), and run to
+        // the frame's margins on the right. Down the heading, at the text
+        // size in use, as the heading's height is.
+        var left = PlateLeft + IconInset;
+
         if (!first)
         {
             using var line = new Pen(Color.FromArgb(50, AppTheme.SidebarText));
-            g.DrawLine(line, 21, bounds.Top + 6, Width - 16, bounds.Top + 6);
+            var lineY = bounds.Top + UiLayout.AtTextSize(6);
+            g.DrawLine(line, left, lineY, Width - UiLayout.AtDpi(16), lineY);
         }
 
-        var textBounds = new Rectangle(21, bounds.Top + 8, Width - 32, bounds.Height - 8);
+        var textTop = UiLayout.AtTextSize(8);
+        var textBounds = new Rectangle(left, bounds.Top + textTop, Width - left - UiLayout.AtDpi(11), bounds.Height - textTop);
+
+        // Ended in "..." rather than cut off mid-letter if a heading ever
+        // outgrows the sidebar's fixed width at a large text size.
         TextRenderer.DrawText(g, text, AppTheme.MicroFont, textBounds, AppTheme.SidebarTextMuted,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
     }
 
     /// <summary>Rounded rectangle path for the count pill.</summary>
@@ -409,11 +486,20 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         // which these are not; and a band that touches both edges leaves
         // the list no margin, so 25 of them stacked looked like a striped
         // wall instead of a menu.
-        var plate = new Rectangle(bounds.Left + 7, bounds.Top + 3, Math.Max(10, bounds.Width - 16), bounds.Height - 6);
+        //
+        // Across, the plate keeps to the sidebar's frame (PlateLeft); down,
+        // it keeps its share of the row, and its rounding with it, at the
+        // text size in use.
+        var plateRadius = UiLayout.AtTextSize(9);
+        var plate = new Rectangle(
+            bounds.Left + PlateLeft,
+            bounds.Top + UiLayout.AtTextSize(3),
+            Math.Max(10, bounds.Width - PlateNarrowerBy),
+            bounds.Height - UiLayout.AtTextSize(6));
 
         if (selected || hovered)
         {
-            using var path = RoundedRect(plate, 9);
+            using var path = RoundedRect(plate, plateRadius);
             using var fill = new SolidBrush(selected
                 ? Color.FromArgb(AppTheme.CurrentMode == AppTheme.Mode.Light ? 46 : 38, AppTheme.SidebarSelected)
                 : AppTheme.SidebarHover);
@@ -425,13 +511,15 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             // A short accent bar at the left of the plate, clipped to the
             // plate so it takes the same corner radius. This is the only
             // saturated colour in the rail, which is what makes it findable.
-            using var path = RoundedRect(plate, 9);
+            // The bar is a line's thickness: it follows the screen, not the
+            // text size.
+            using var path = RoundedRect(plate, plateRadius);
             var saved = g.Save();
             g.SetClip(path);
 
             using (var accentBrush = new SolidBrush(AppTheme.SidebarSelected))
             {
-                g.FillRectangle(accentBrush, plate.Left, plate.Top, 3, plate.Height);
+                g.FillRectangle(accentBrush, plate.Left, plate.Top, UiLayout.AtDpi(3), plate.Height);
             }
 
             g.Restore(saved);
@@ -445,9 +533,16 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         var textColor = selected ? Color.White : (hovered ? AppTheme.SidebarText : AppTheme.SidebarTextMuted);
         var iconColor = selected ? AppTheme.SidebarSelected : textColor;
 
-        const int iconSize = 18;
-        var iconBounds = new Rectangle(plate.Left + 14, bounds.Top + (bounds.Height - iconSize) / 2, iconSize, iconSize);
+        // Everything inside the plate - the icon, the pill and the room round
+        // them - at the text size in use, so it stays in proportion to the
+        // name drawn beside it.
+        var iconSize = UiLayout.AtTextSize(18);
+        var iconBounds = new Rectangle(plate.Left + IconInset, bounds.Top + (bounds.Height - iconSize) / 2, iconSize, iconSize);
         AppTheme.DrawNavIcon(g, iconBounds, name, iconColor);
+
+        // Between the name, or the pill, and the plate's right-hand end. A
+        // gap, on the screen's scale only - see IconInset.
+        var endGap = UiLayout.AtDpi(10);
 
         // A count pill, when this item has one. Measured first so the label
         // can be given the remaining width rather than running underneath.
@@ -458,15 +553,17 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         {
             var countText = count > 99 ? "99+" : count.ToString();
             var measured = TextRenderer.MeasureText(countText, AppTheme.SmallFont);
-            pillWidth = Math.Max(22, measured.Width + 12);
+            pillWidth = Math.Max(UiLayout.AtTextSize(22), measured.Width + UiLayout.AtTextSize(12));
 
+            var pillHeight = UiLayout.AtTextSize(18);
             var pillRect = new Rectangle(
-                plate.Right - pillWidth - 10,
-                bounds.Top + (bounds.Height - 18) / 2,
+                plate.Right - pillWidth - endGap,
+                bounds.Top + (bounds.Height - pillHeight) / 2,
                 pillWidth,
-                18);
+                pillHeight);
 
-            using (var path = RoundedRect(pillRect, 9))
+            // Rounded by half its height, so it stays a capsule at every size.
+            using (var path = RoundedRect(pillRect, pillHeight / 2))
             using (var fill = new SolidBrush(AppTheme.Accent))
             {
                 g.FillPath(fill, path);
@@ -475,12 +572,15 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             TextRenderer.DrawText(g, countText, AppTheme.SmallFont, pillRect,
                 AppTheme.OnAccent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            pillWidth += 8; // breathing room between label and pill
+            pillWidth += UiLayout.AtDpi(8); // breathing room between label and pill - a gap, see IconInset
         }
 
-        var textLeft = iconBounds.Right + 12;
+        // The name gets what is left of the plate, and ends in "..." when
+        // that is not enough - the sidebar keeps its width at every text
+        // size, so at the larger ones the longer names are shortened.
+        var textLeft = iconBounds.Right + UiLayout.AtDpi(12);
         var textRect = new Rectangle(textLeft, bounds.Top,
-            Math.Max(10, plate.Right - textLeft - 10 - pillWidth), bounds.Height);
+            Math.Max(10, plate.Right - textLeft - endGap - pillWidth), bounds.Height);
 
         TextRenderer.DrawText(g, name, AppTheme.NavFont, textRect, textColor,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);

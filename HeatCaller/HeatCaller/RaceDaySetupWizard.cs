@@ -168,10 +168,10 @@ internal sealed class RaceDaySetupWizard : Form
     // --- racing ---
     private readonly PageStack _racingStep = new();
     private readonly FieldGrid _racingGrid = new();
-    private readonly CheckedListBox _lstClasses = new();
+    private readonly CheckedListBox _lstClasses = new ThemedCheckedListBox();
     private readonly NumericUpDown _numRounds = new();
     private readonly NumericUpDown _numHeatSize = new();
-    private readonly CheckBox _chkFirstRace = new();
+    private readonly CheckBox _chkFirstRace = new ThemedCheckBox();
     private readonly TimePicker _dtpFirstRace = new();
 
     /// <summary>The rounds caption, reworded for the kind of night - see LoadRacingStep. Made by the grid it is in.</summary>
@@ -193,8 +193,8 @@ internal sealed class RaceDaySetupWizard : Form
     // --- the drivers step: who's here ---
     private readonly FillPage _driversStep = new();
     private readonly ComboBox _cmbWhoClass = new();
-    private readonly CheckBox _chkOnlyMissing = new();
-    private readonly CheckedListBox _lstWhosHere = new();
+    private readonly CheckBox _chkOnlyMissing = new ThemedCheckBox();
+    private readonly CheckedListBox _lstWhosHere = new ThemedCheckedListBox();
     private readonly Button _btnCheckAllShown = new();
     private readonly Button _btnClearAll = new();
 
@@ -214,7 +214,7 @@ internal sealed class RaceDaySetupWizard : Form
     }
 
     private readonly Label _lblCheckInState = new();
-    private readonly CheckBox _chkCheckedInOnly = new();
+    private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
     private readonly Button _btnGoToCheckIn = new();
 
     // --- the programme ---
@@ -368,7 +368,7 @@ internal sealed class RaceDaySetupWizard : Form
 
             if (stepPage is ScrollableControl scrolls)
             {
-                LayoutDoctor.NoRoomBelow(scrolls);
+                ScrollTheming.NoRoomBelow(scrolls);
             }
 
             _stepHolder.Controls.Add(stepPage);
@@ -390,7 +390,7 @@ internal sealed class RaceDaySetupWizard : Form
         // More room above and to the right than a dialog's usual margin, as
         // the step always had, and the rail's own gap on the left (Beside).
         _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
-        LayoutDoctor.NoRoomBelow(_stepPage);
+        ScrollTheming.NoRoomBelow(_stepPage);
 
         _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
         _stepPage.Add(_lblStepBody);
@@ -441,7 +441,7 @@ internal sealed class RaceDaySetupWizard : Form
         // as it needs to be with nothing under its last step (LeastHeight).
         _rail.Dock = DockStyle.None;
         _rail.Padding = new Padding(inset, UiLayout.SectionGap, inset, UiLayout.PageTop);
-        LayoutDoctor.NoRoomBelow(_rail);
+        ScrollTheming.NoRoomBelow(_rail);
 
         _rail.Add(_lblBrand, gapBelow: UiLayout.HintGap);
         _rail.Add(_lblRailCaption);

@@ -9,7 +9,7 @@ HeatCaller is a Windows app for running an RC car race night from one laptop. It
 
 **Race control and timing.** With a direct decoder connection, HeatCaller runs the race itself: staging, countdown, green, yellow and red flags, and the checkered flag. You can set lap or time limits, a minimum lap time, and several start types, including staggered and pursuit starts. See [Running a race](../race-control/running-a-race.md).
 
-**Race days.** You create a race day, check drivers in, and build the whole qualifying program in one press. From qualifying, HeatCaller seeds A, B and C mains with bump-ups, assigns corner marshals, and saves heat sheets to print. See [Events and entries](../race-day/events-and-entries.md) and [Program and mains](../race-day/program-and-mains.md).
+**Race days.** You create a race day, check drivers in, and build the whole qualifying program in one press, with a card that always says what to do next. From qualifying, HeatCaller seeds A, B and C mains with bump-ups, assigns corner marshals, keeps a timetable, and saves heat sheets to print. A club night of plain races, with no finals, works too. See [Events and entries](../race-day/events-and-entries.md) and [Program and mains](../race-day/program-and-mains.md).
 
 **The announcer.** A spoken race caller announces the start, laps, lead changes, close battles, personal bests and the finish. It speaks with one of three voices: the HeatCaller voice, a natural announcer that comes with HeatCaller and needs no account of your own; ElevenLabs on your own account; or the free voice built into Windows. It can also use rivalry lines and AI commentary from a model running on your own PC. Sound effects, crowd ambience, music and per-driver lap beeps go with it. See [Voice announcements](../announcer/voice.md), [Commentary](../announcer/commentary.md) and [Sounds and music](../announcer/sounds-and-music.md).
 
@@ -21,7 +21,7 @@ HeatCaller is a Windows app for running an RC car race night from one laptop. It
 
 **Online pages and check-in.** HeatCaller can also publish to a small online server called the relay. It gives your club a public web address for results, standings, the live race, and online check-in from racers' own phones. See [Online](../online/index.md).
 
-**Practice and extras.** Open practice, ghost cars to race against when you're alone on the track, a demo mode that runs a fake race to rehearse your setup, handicaps, rental transponders, battery tracking, a setup log and a track designer.
+**Practice and extras.** Open practice, ghost cars to race against when you're alone on the track, a demo mode that runs a fake race to rehearse your setup, handicaps, rental transponders, battery tracking, a garage for your cars and their setups, and a track designer.
 
 ## Who it's for
 

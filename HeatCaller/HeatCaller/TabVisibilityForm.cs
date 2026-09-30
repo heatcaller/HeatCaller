@@ -1,8 +1,24 @@
 namespace HeatCaller;
 
-/// <summary>Lets the user check/uncheck which nav items are visible and reorder them with Move Up/Down. "Connection" is never listed - it can't be hidden, so there's always somewhere to land - and it keeps its place in the sidebar.</summary>
+/// <summary>
+/// Lets the user check/uncheck which nav items are visible and reorder them with Move Up/Down. "Connection" is never listed - it can't be hidden, so there's always somewhere to land - and it keeps its place in the sidebar.
+///
+/// On the layout pieces (DialogFit): the explanation across the top, the
+/// pages taking the height with Move Up and Move Down in a column beside
+/// them (Beside), the race-night tick under them, and at the foot Restore
+/// Defaults and Show All on the left and OK and Cancel against the right -
+/// under the other two when the window is too narrow for all four on one
+/// line, as they always were at the normal text size (SplitBar). It used to
+/// be placed in pixels in a 400x600 window whatever the text size: the list
+/// a fixed 270x350, the buttons at fixed places and widths beside and under
+/// it, and the tick at a fixed height under the list, with room left by
+/// hand for it to wrap onto a second line.
+/// </summary>
 public sealed class TabVisibilityForm : Form
 {
+    /// <summary>The pages show at least this many before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly ListBox _list = new();
     private readonly List<NavEntry> _entries;
 
@@ -30,59 +46,48 @@ public sealed class TabVisibilityForm : Form
             .ToList();
 
         Text = "Manage Navigation";
-        StartPosition = FormStartPosition.CenterParent;
-        // Taller than it was, for the race-night row added below. This dialog
-        // is laid out at fixed coordinates, so the row went in with everything
-        // under it moved down rather than squeezed into the gap that happened
-        // to be free - and with room to spare, because the checkbox wraps to a
-        // second line at the larger text sizes and a themed button is ten
-        // pixels taller than the WinForms default this arithmetic was
-        // originally done with.
-        Size = new Size(400, 600);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
 
         var lblIntro = new Label
         {
             Text = "Uncheck pages you don't use; Move Up/Down reorders. Connection can't be hidden, so it isn't listed and keeps its place.",
-            Location = new Point(12, 12),
             AutoSize = true,
-            MaximumSize = new Size(370, 0),
             ForeColor = AppTheme.TextMuted,
         };
 
-        _list.Location = new Point(12, 60);
-        _list.Size = new Size(270, 350);
         _list.BackColor = AppTheme.Surface;
         _list.Font = AppTheme.BodyFont;
         _list.DrawMode = DrawMode.OwnerDrawFixed;
-        _list.ItemHeight = 26;
+
+        // A row the 26px it was at the normal text size, and taller with the
+        // text: a fixed 26 cut the names off at 150% and 200%, where a line
+        // of the list's font is taller than that. The tick box grows with the
+        // text as well, centred in the row (TickBoxIn).
+        _list.ItemHeight = UiLayout.AtTextSize(26);
+
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+        _list.IntegralHeight = false;
         _list.DrawItem += List_DrawItem;
         RefreshListItems();
 
-        var btnMoveUp = new Button { Text = "Move Up", Location = new Point(292, 60), Width = 90 };
+        var btnMoveUp = new Button { Text = "Move Up" };
         btnMoveUp.Click += (_, _) => MoveSelected(-1);
 
-        var btnMoveDown = new Button { Text = "Move Down", Location = new Point(292, 96), Width = 90 };
+        var btnMoveDown = new Button { Text = "Move Down" };
         btnMoveDown.Click += (_, _) => MoveSelected(1);
 
-        // One line, and the whole explanation in it. A separate hint label
-        // under a checkbox is a third thing to keep from colliding with the
-        // buttons below at every text size, in a dialog that has no measured
-        // layout to fall back on.
-        var chkRaceNight = new CheckBox
+        // The whole explanation in the tick's own text, wrapping to the
+        // window's width, rather than a hint label under it - one thing
+        // under the list rather than two.
+        var chkRaceNight = new ThemedCheckBox
         {
             Text = "While a race day is open, bring Race Day, Race Control and Championship to the top",
-            Location = new Point(12, 418),
             AutoSize = true,
-            MaximumSize = new Size(370, 0),
             Checked = RaceNightFocus,
             Font = AppTheme.BodyFont,
         };
 
-        var btnDefaults = new Button { Text = "Restore Defaults", Location = new Point(12, 470), Width = 130 };
+        var btnDefaults = new Button { Text = "Restore Defaults" };
         btnDefaults.Click += (_, _) =>
         {
             // Back to the app's own order with everything visible, and the
@@ -103,7 +108,7 @@ public sealed class TabVisibilityForm : Form
             _list.Invalidate();
         };
 
-        var btnShowAll = new Button { Text = "Show All", Location = new Point(150, 470), Width = 100 };
+        var btnShowAll = new Button { Text = "Show All" };
         btnShowAll.Click += (_, _) =>
         {
             foreach (var entry in _entries)
@@ -113,14 +118,14 @@ public sealed class TabVisibilityForm : Form
             _list.Invalidate();
         };
 
-        var btnOk = new Button { Text = "OK", Location = new Point(208, 508), Width = 80, DialogResult = DialogResult.OK };
+        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK };
         btnOk.Click += (_, _) =>
         {
             HiddenTabs = new HashSet<string>(_entries.Where(e => !e.Visible).Select(e => e.Name));
             RaceNightFocus = chkRaceNight.Checked;
         };
 
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(292, 508), Width = 90, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         // Toggle visibility by clicking directly on an item (space bar or
         // click near the checkbox area) - simplest reliable interaction
@@ -133,8 +138,13 @@ public sealed class TabVisibilityForm : Form
             {
                 return;
             }
+            // The row's left edge to just past its tick box, as drawn at the
+            // text size in use - the box and its inset either side, which is
+            // the 24px it was at the normal text size. A fixed 24 missed most
+            // of the box once it grew at 150% and 200%.
             var itemRect = _list.GetItemRectangle(index);
-            if (e.X - itemRect.Left <= 24)
+            var box = TickBoxIn(itemRect);
+            if (e.X <= box.Right + TickBoxInset())
             {
                 _entries[index].Visible = !_entries[index].Visible;
                 _list.Invalidate();
@@ -158,21 +168,48 @@ public sealed class TabVisibilityForm : Form
             e.SuppressKeyPress = true;
         };
 
-        Controls.Add(lblIntro);
-        Controls.Add(_list);
-        Controls.Add(btnMoveUp);
-        Controls.Add(btnMoveDown);
-        Controls.Add(chkRaceNight);
-        Controls.Add(btnDefaults);
-        Controls.Add(btnShowAll);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        // --- Layout ---
+        //
+        // Move Up and Move Down in a column down the right of the list, as
+        // wide as the wider caption needs; the list takes the width the
+        // column leaves and the height down to the tick.
+        var band = new Beside();
+        band.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+        band.AddSide(btnMoveUp, gapBelow: UiLayout.ButtonGap);
+        band.AddSide(btnMoveDown, gapBelow: 0);
+
+        // Restore Defaults and Show All on the left, OK and Cancel against
+        // the right-hand edge, Cancel furthest right - on one line when the
+        // window has room for all four, and OK and Cancel under the other
+        // two when it has not (SplitBar), as they were placed. The bar is
+        // handed Cancel first, as its first button goes furthest right; Tab
+        // still reaches OK before Cancel, as it did, from the order set here.
+        var footer = new SplitBar(
+            new ButtonBar().With(btnDefaults, btnShowAll),
+            new ButtonBar(alignRight: true).With(btnCancel, btnOk));
+
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(chkRaceNight);
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
+
+        // Wider than the 400 it was made at: Move Up and Move Down are as
+        // wide as a standard button now, 148px rather than 90, and this
+        // keeps the list the 270px it had. The height it had inside its
+        // frame. It can be made bigger, for every page at once.
+        DialogFit.Keep(this, page, width: 460, height: 560);
     }
 
     private void RefreshListItems()
@@ -219,27 +256,38 @@ public sealed class TabVisibilityForm : Form
             e.Graphics.FillRectangle(backBrush, e.Bounds);
         }
 
-        var checkboxRect = new Rectangle(e.Bounds.Left + 4, e.Bounds.Top + 5, 16, 16);
+        // The app's tick box (TickBox), as every check box in the app is
+        // drawn, in the place TickBoxIn gives it - where a click ticks it.
+        TickBox.Draw(e.Graphics, TickBoxIn(e.Bounds), entry.Visible ? CheckState.Checked : CheckState.Unchecked, Enabled);
 
-        // Disposed rather than leaked: this runs on every paint of every
-        // row, and an undisposed Pen holds a GDI handle. Windows caps
-        // handles per process, so a leak here degrades and eventually
-        // crashes the app on a long-running machine - the kind of failure
-        // that only shows up hours into a race day.
-        using (var boxPen = new Pen(AppTheme.TextMuted))
-        {
-            e.Graphics.DrawRectangle(boxPen, checkboxRect);
-        }
-        if (entry.Visible)
-        {
-            using var checkBrush = new SolidBrush(AppTheme.Primary);
-            e.Graphics.FillRectangle(checkBrush, checkboxRect.X + 3, checkboxRect.Y + 3, 10, 10);
-        }
-
+        // The name clear of the box, and short of the row's right edge, at
+        // the text size in use - 28px in and 4px short at the normal size.
+        var textLeft = UiLayout.AtTextSize(28);
         var textColor = entry.Visible ? AppTheme.TextDark : AppTheme.TextMuted;
-        var textRect = new Rectangle(e.Bounds.Left + 28, e.Bounds.Top, e.Bounds.Width - 32, e.Bounds.Height);
+        var textRect = new Rectangle(e.Bounds.Left + textLeft, e.Bounds.Top, e.Bounds.Width - UiLayout.AtTextSize(32), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, entry.Name, AppTheme.BodyFont, textRect, textColor,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+    }
+
+    /// <summary>
+    /// How far in from the row's left edge the tick box sits, and the room
+    /// kept after it that a click still counts for: 4px at the normal text
+    /// size, at the size in use.
+    /// </summary>
+    private static int TickBoxInset() => UiLayout.AtTextSize(4);
+
+    /// <summary>
+    /// Where a row's tick box is drawn: 16px square at the normal text size,
+    /// at the size in use, centred up and down in the row. One place for the
+    /// drawing and the click that toggles it, so the part that answers a
+    /// click is the box that is drawn at every text size. Worked out when
+    /// asked, never kept - the text size can change between two paints.
+    /// </summary>
+    private static Rectangle TickBoxIn(Rectangle row)
+    {
+        var size = UiLayout.AtTextSize(16);
+
+        return new Rectangle(row.Left + TickBoxInset(), row.Top + (row.Height - size) / 2, size, size);
     }
 
     private sealed class NavEntry

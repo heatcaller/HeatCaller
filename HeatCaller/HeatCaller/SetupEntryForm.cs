@@ -7,10 +7,57 @@ namespace HeatCaller;
 /// The field editors are generated from the template rather than hardcoded,
 /// so a chassis with different springs or an extra adjustment needs no code
 /// change - just an edit to its template.
+///
+/// On the layout pieces (DialogFit): who, where and in what car along one
+/// line, and the chassis sheet and the session it ran in along the next -
+/// each a FieldRow, wrapping when the window is narrow, its last field
+/// running to the right-hand edge; under them the diagram down the left and
+/// the sheet's fields beside it (a Beside), the two taking the height, the
+/// fields scrolling on their own - a line per field, its caption wrapping to
+/// the room left of its editor and the editors in one column down the right
+/// (BuildFieldLine); and the hint, and Save and Cancel against the right-hand
+/// edge, along the foot. It used to be placed in pixels in a 1120x760 window
+/// with a 900x600 floor - taller than a 1280x720 screen has room for, so it
+/// opened there with Save and Cancel under the screen's edge - the header's
+/// captions and fields at fixed places whatever their length, the diagram a
+/// fixed 520px, and each field's caption wrapped at 210px beside an editor
+/// at a fixed place, 280px wide, whatever the text size.
 /// </summary>
 public sealed class SetupEntryForm : Form
 {
     private const string NotSet = "(not set)";
+
+    /// <summary>
+    /// The window's inside at the normal text size - the size it always
+    /// opened at. It opens this big at the text size in use, never bigger
+    /// than the screen, and can be made bigger, the diagram and the fields
+    /// taking the height.
+    /// </summary>
+    private const int DialogWidth = 1120;
+    private const int DialogHeight = 760;
+
+    /// <summary>The header's fields at the normal text size, as they were - a drop-down wider when its longest choice needs it, the car and the session running on to the right-hand edge.</summary>
+    private const int DriverWidth = 190;
+    private const int TrackWidth = 180;
+    private const int CarWidth = 170;
+    private const int TemplateWidth = 250;
+    private const int SessionWidth = 330;
+
+    /// <summary>The diagram's width at the normal text size, as it was - narrower only to leave the fields their least (see DiagramColumnWidth) - and the narrowest it gets before it shares the room with them.</summary>
+    private const int DiagramWidth = 520;
+    private const int DiagramLeastWidth = 240;
+
+    /// <summary>The diagram's least height at the normal text size, below which the window scrolls instead.</summary>
+    private const int DiagramLeastHeight = 240;
+
+    /// <summary>A field's editor at the normal text size, as it was - every editor wider when a drop-down's longest option needs it (SizeEditors).</summary>
+    private const int EditorWidth = 280;
+
+    /// <summary>The least room a field's caption has at the normal text size, its marker included - about the 210px it used to be wrapped at.</summary>
+    private const int CaptionLeastWidth = 200;
+
+    /// <summary>The fields show at least this many lines before the window scrolls instead.</summary>
+    private const int LeastFieldLines = 3;
 
     private readonly ChassisTemplateStore _templates;
     private readonly SessionHistoryStore _history;
@@ -22,10 +69,28 @@ public sealed class SetupEntryForm : Form
     private readonly TextBox _txtCar = new();
 
     private readonly ChassisCanvas _canvas = new();
-    private readonly Panel _fieldsPanel = new();
+
+    /// <summary>
+    /// Where the fields go, beside the diagram. The fields themselves are a
+    /// column made afresh for each chassis sheet (LoadTemplateIntoUi) - a
+    /// sheet's fields are not another's - and this holds whichever is in use.
+    /// </summary>
+    private readonly Panel _fieldsHost = new() { Tag = AppTheme.KeepBackColor };
+
+    /// <summary>The current sheet's fields, a line each, scrolling on their own - see LoadTemplateIntoUi. Null only until the first sheet is loaded.</summary>
+    private PageStack? _fields;
 
     /// <summary>Editor control per field id, read back on save.</summary>
     private readonly Dictionary<string, Control> _editors = new();
+
+    /// <summary>The current sheet's lines, for sizing their editors and levelling their captions (SizeEditors).</summary>
+    private readonly List<FieldLine> _lines = new();
+
+    /// <summary>How wide every field's editor is: the width it was at the normal text size, at the size in use, or wider for a drop-down's longest option - see SizeEditors.</summary>
+    private int _editorWidth;
+
+    /// <summary>Set once the window's own theme pass has run: a sheet loaded after that themes its own lines.</summary>
+    private bool _themed;
 
     private ChassisTemplate _template;
 
@@ -48,26 +113,57 @@ public sealed class SetupEntryForm : Form
         }
 
         Text = "Setup Sheet";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1120, 760);
-        MinimumSize = new Size(900, 600);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        BuildHeader(profiles, trackLayouts);
-        BuildCanvas();
-        BuildFieldsPanel();
-        BuildButtons();
+        _editorWidth = UiLayout.AtTextSize(EditorWidth);
 
+        var (who, sheet) = BuildHeader(profiles, trackLayouts);
+        BuildCanvas();
+        var footer = BuildButtons();
+
+        // The diagram down the left, the width it always was; the fields
+        // beside it taking the rest, and never less than they can do with -
+        // the diagram gives way first (DiagramColumnWidth). Both take the
+        // height the header and the foot leave.
+        Beside? band = null;
+
+        band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
+
+        // A few lines of fields - a drop-down and the gap under it for each -
+        // before the window scrolls instead.
+        band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
+        band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
+
+        var page = new FillPage();
+        page.Add(who, gapBelow: UiLayout.RowGap);
+        page.Add(sheet);
+        page.AddFill(band, band.LeastHeight);
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
+
+        // Once the fields' place is in the window, so what they are measured
+        // in is the window's face.
         LoadTemplateIntoUi();
+
         AppTheme.ApplyRecursively(this);
+        _themed = true;
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
 
-    private void BuildHeader(ProfileStore profiles, TrackLayoutStore trackLayouts)
+    /// <summary>
+    /// Who, where and in what car along one line; the chassis sheet and the
+    /// session along the next - each a FieldRow, so a line too narrow for all
+    /// of it wraps rather than running off the edge. The drop-downs as wide as
+    /// they were at the normal text size, at the size in use, or as their
+    /// longest choice needs - measured whenever the row is, and kept until
+    /// the face or the list changes (Pieces.PickerWidth). The car and the
+    /// session run on to the right-hand edge, never narrower than they were.
+    /// </summary>
+    private (FieldRow Who, FieldRow Sheet) BuildHeader(ProfileStore profiles, TrackLayoutStore trackLayouts)
     {
-        var lblDriver = new Label { Text = "Driver:", Location = new Point(16, 18), AutoSize = true };
-        _cmbDriver.Location = new Point(80, 15);
-        _cmbDriver.Width = 190;
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDown;
         foreach (var name in profiles.All.Select(p => p.DriverName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
         {
@@ -75,9 +171,6 @@ public sealed class SetupEntryForm : Form
         }
         _cmbDriver.Text = Result.DriverName;
 
-        var lblTrack = new Label { Text = "Track:", Location = new Point(288, 18), AutoSize = true };
-        _cmbTrack.Location = new Point(340, 15);
-        _cmbTrack.Width = 180;
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbTrack.Items.Add("(none)");
         foreach (var t in trackLayouts.All)
@@ -87,15 +180,9 @@ public sealed class SetupEntryForm : Form
         _cmbTrack.SelectedItem = string.IsNullOrWhiteSpace(Result.TrackLayoutName) ? "(none)" : Result.TrackLayoutName;
         if (_cmbTrack.SelectedIndex < 0) { _cmbTrack.SelectedIndex = 0; }
 
-        var lblCar = new Label { Text = "Car:", Location = new Point(538, 18), AutoSize = true };
-        _txtCar.Location = new Point(578, 15);
-        _txtCar.Width = 170;
         _txtCar.Text = Result.CarModel;
         _txtCar.PlaceholderText = "e.g. MR-03 / Audi R8";
 
-        var lblTemplate = new Label { Text = "Chassis sheet:", Location = new Point(16, 52), AutoSize = true };
-        _cmbTemplate.Location = new Point(122, 49);
-        _cmbTemplate.Width = 250;
         _cmbTemplate.DropDownStyle = ComboBoxStyle.DropDownList;
         RefreshTemplateList();
         _cmbTemplate.SelectedIndexChanged += (_, _) =>
@@ -110,9 +197,6 @@ public sealed class SetupEntryForm : Form
             }
         };
 
-        var lblSession = new Label { Text = "Ran in session:", Location = new Point(390, 52), AutoSize = true };
-        _cmbSession.Location = new Point(500, 49);
-        _cmbSession.Width = 330;
         _cmbSession.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSession.Items.Add(SessionItem.None);
         foreach (var s in _history.All.Take(60))
@@ -121,61 +205,69 @@ public sealed class SetupEntryForm : Form
         }
         SelectSession(Result.LinkedSessionId);
 
-        Controls.AddRange(new Control[]
+        // The name typed on an existing entry counts too: a driver no longer
+        // on file is not in the list, and would be cut short in the box.
+        var who = new FieldRow();
+        who.Add(new Label { Text = "Driver:" }, _cmbDriver, Picker(_cmbDriver, DriverWidth, Result.DriverName));
+        who.Add(new Label { Text = "Track:" }, _cmbTrack, Picker(_cmbTrack, TrackWidth));
+        who.AddLast(new Label { Text = "Car:" }, _txtCar, () => UiLayout.AtTextSize(CarWidth));
+
+        var sheet = new FieldRow();
+        sheet.Add(new Label { Text = "Chassis sheet:" }, _cmbTemplate, Picker(_cmbTemplate, TemplateWidth));
+        sheet.AddLast(new Label { Text = "Ran in session:" }, _cmbSession, Picker(_cmbSession, SessionWidth));
+
+        return (who, sheet);
+
+        static Func<int> Picker(ComboBox combo, int least, string alsoFits = "")
         {
-            lblDriver, _cmbDriver, lblTrack, _cmbTrack, lblCar, _txtCar,
-            lblTemplate, _cmbTemplate, lblSession, _cmbSession,
-        });
+            (Font Font, int Count, int Width)? measured = null;
+
+            return () => Math.Max(UiLayout.AtTextSize(least), Pieces.PickerWidth(combo, ref measured, alsoFits));
+        }
     }
 
     private void BuildCanvas()
     {
-        _canvas.Location = new Point(16, 88);
-        _canvas.Size = new Size(520, 600);
-        _canvas.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
         _canvas.EditMode = false;
 
         // Clicking a callout jumps to its editor on the right, which is what
         // ties the picture to the form rather than leaving them separate.
         _canvas.SelectionChanged += FocusSelectedField;
         _canvas.PointActivated += _ => FocusSelectedField();
-
-        Controls.Add(_canvas);
     }
 
-    private void BuildFieldsPanel()
+    /// <summary>
+    /// The foot: the hint on the left, and Save and Cancel against the
+    /// right-hand edge, on one line as they were (a SplitBar) - Cancel
+    /// furthest right, and Tab still reaching Save first: the bar takes them
+    /// right to left, in the order they were added.
+    /// </summary>
+    private SplitBar BuildButtons()
     {
-        _fieldsPanel.Location = new Point(548, 88);
-        _fieldsPanel.Size = new Size(556, 600);
-        _fieldsPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        _fieldsPanel.AutoScroll = true;
-        _fieldsPanel.BackColor = AppTheme.Background;
-        Controls.Add(_fieldsPanel);
-    }
-
-    private void BuildButtons()
-    {
-        var btnSave = new Button { Text = "Save", Location = new Point(916, 706), Width = 90, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
 
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(1014, 706), Width = 90, Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         var lblHint = new Label
         {
             Text = "Click a callout on the diagram to jump to its field. Filled callouts are highlighted.",
-            Location = new Point(16, 712),
             AutoSize = true,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
-        Controls.Add(lblHint);
+        var footer = new SplitBar(
+            new ButtonBar().With(lblHint),
+            new ButtonBar(alignRight: true).With(btnCancel, btnSave));
+
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
+
+        return footer;
     }
 
     private void RefreshTemplateList()
@@ -201,74 +293,99 @@ public sealed class SetupEntryForm : Form
         }
     }
 
-    /// <summary>Rebuilds the diagram and the generated field editors for the current template.</summary>
+    /// <summary>
+    /// Rebuilds the diagram and the generated field editors for the current
+    /// template.
+    ///
+    /// The fields go in a new column each time, in place of the last, which
+    /// is disposed: a line per field under its section's heading, a row's gap
+    /// between lines and a section's between sections, nothing under the
+    /// last (the column scrolls by it). A sheet loaded once the window is
+    /// themed has its lines themed here as the rest of the window was, then
+    /// sized in the faces that leaves them in (SizeEditors).
+    /// </summary>
     private void LoadTemplateIntoUi()
     {
         _canvas.Values = Result.Values;
         _canvas.SetTemplate(_template, _templates.ResolveImagePath(_template));
 
-        _fieldsPanel.Controls.Clear();
         _editors.Clear();
+        _lines.Clear();
 
-        var y = 8;
+        // As wide as the diagram leaves it, its lines running to its edges:
+        // no margins of its own - the page's are round it - and no room under
+        // its last line, which the theme pass gives a panel that scrolls (see
+        // ScrollTheming.NoRoomBelow).
+        var fields = new PageStack { Padding = Padding.Empty };
+        ScrollTheming.NoRoomBelow(fields);
 
-        foreach (var section in _template.Sections)
+        var sections = _template.Sections.Where(section => section.Fields.Count > 0).ToList();
+
+        for (var s = 0; s < sections.Count; s++)
         {
-            if (section.Fields.Count == 0)
-            {
-                continue;
-            }
+            var section = sections[s];
 
-            var header = new Label
+            fields.Add(new Label
             {
                 Text = section.Name.ToUpperInvariant(),
-                Location = new Point(6, y),
                 AutoSize = true,
                 Font = AppTheme.BoldFont,
                 ForeColor = AppTheme.Primary,
-            };
-            _fieldsPanel.Controls.Add(header);
-            y += 24;
 
-            foreach (var field in section.Fields)
+                // "CHASSIS & DRIVETRAIN" shows its ampersand, rather than
+                // underlining the space after it.
+                UseMnemonic = false,
+            }, gapBelow: UiLayout.HintGap);
+
+            for (var f = 0; f < section.Fields.Count; f++)
             {
-                y = AddFieldEditor(field, y);
-            }
+                var gapBelow = f < section.Fields.Count - 1
+                    ? UiLayout.RowGap
+                    : s < sections.Count - 1 ? UiLayout.SectionGap : 0;
 
-            y += 10;
+                fields.Add(BuildFieldLine(section.Fields[f]), gapBelow: gapBelow);
+            }
         }
+
+        var old = _fields;
+        _fields = fields;
+
+        if (old is not null)
+        {
+            _fieldsHost.Controls.Remove(old);
+            old.Dispose();
+        }
+
+        _fieldsHost.Controls.Add(fields);
+
+        if (_themed)
+        {
+            AppTheme.ApplyRecursively(_fieldsHost);
+        }
+
+        SizeEditors();
     }
 
-    /// <summary>Creates the right editor for a field's kind and returns the next Y position.</summary>
-    private int AddFieldEditor(SetupField field, int y)
+    /// <summary>
+    /// A field's line: its caption - the field's label and unit - wrapping to
+    /// the room left of its editor, and the editor for the field's kind down
+    /// the right, every editor as wide as the others (a Beside, the editor its
+    /// column). The caption is a StatusLine whose light is the marker a
+    /// field pinned to the diagram gets - one that draws nothing for the
+    /// others, so every caption starts in the same place.
+    /// </summary>
+    private Beside BuildFieldLine(SetupField field)
     {
         var suffix = string.IsNullOrWhiteSpace(field.Unit) ? "" : $"  ({field.Unit})";
-        var label = new Label
-        {
-            Text = field.Label + suffix,
-            Location = new Point(10, y + 4),
-            AutoSize = true,
-            MaximumSize = new Size(210, 0),
-        };
-        _fieldsPanel.Controls.Add(label);
+        var text = new Label { Text = field.Label + suffix, UseMnemonic = false };
 
         // Pinned fields get a marker, so it's clear which ones also appear
         // on the diagram.
-        if (field.OnDiagram)
-        {
-            _fieldsPanel.Controls.Add(new Label
-            {
-                Text = "\u25CF",
-                Location = new Point(2, y + 4),
-                AutoSize = true,
-                ForeColor = AppTheme.Success,
-                Font = AppTheme.SmallFont,
-            });
-        }
+        var caption = new StatusLine(new PinMarker(field.OnDiagram), text);
 
         var current = Result.Values.TryGetValue(field.Id, out var existing) ? existing : string.Empty;
-        var editorX = 232;
-        var editorWidth = 280;
+        var listRows = 0;
+        Control editor;
 
         switch (field.Kind)
         {
@@ -276,8 +393,6 @@ public sealed class SetupEntryForm : Form
             {
                 var combo = new ComboBox
                 {
-                    Location = new Point(editorX, y),
-                    Width = editorWidth,
                     DropDownStyle = ComboBoxStyle.DropDownList,
                 };
                 combo.Items.Add(NotSet);
@@ -295,20 +410,22 @@ public sealed class SetupEntryForm : Form
                     combo.SelectedItem = current;
                 }
                 combo.SelectedIndexChanged += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
-                _fieldsPanel.Controls.Add(combo);
-                _editors[field.Id] = combo;
-                return y + 32;
+                editor = combo;
+                break;
             }
 
             case SetupFieldKind.MultiChoice:
             {
-                var height = Math.Min(96, Math.Max(40, field.Options.Count * 18 + 6));
-                var list = new CheckedListBox
+                // As many rows as it has options, from two to five, as it
+                // always showed - sized in its face (SizeEditors). Given
+                // that height, not snapped to whole rows.
+                listRows = Math.Clamp(field.Options.Count, 2, 5);
+
+                var list = new ThemedCheckedListBox
                 {
-                    Location = new Point(editorX, y),
-                    Size = new Size(editorWidth, height),
                     CheckOnClick = true,
                     BorderStyle = BorderStyle.FixedSingle,
+                    IntegralHeight = false,
                 };
                 var selected = current.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 foreach (var option in field.Options)
@@ -324,31 +441,25 @@ public sealed class SetupEntryForm : Form
                     if (!IsHandleCreated || IsDisposed) { return; }
                     BeginInvoke(() => { ReadEditorsIntoResult(); _canvas.Invalidate(); });
                 };
-                _fieldsPanel.Controls.Add(list);
-                _editors[field.Id] = list;
-                return y + height + 8;
+                editor = list;
+                break;
             }
 
             case SetupFieldKind.Boolean:
             {
-                var check = new CheckBox
+                var check = new ThemedCheckBox
                 {
-                    Location = new Point(editorX, y + 2),
-                    AutoSize = true,
                     Checked = string.Equals(current, "true", StringComparison.OrdinalIgnoreCase),
                 };
                 check.CheckedChanged += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
-                _fieldsPanel.Controls.Add(check);
-                _editors[field.Id] = check;
-                return y + 28;
+                editor = check;
+                break;
             }
 
             default:
             {
                 var box = new TextBox
                 {
-                    Location = new Point(editorX, y),
-                    Width = editorWidth,
                     Text = current,
                 };
                 if (field.Kind == SetupFieldKind.Number)
@@ -356,12 +467,153 @@ public sealed class SetupEntryForm : Form
                     box.PlaceholderText = field.Unit;
                 }
                 box.Leave += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
-                _fieldsPanel.Controls.Add(box);
-                _editors[field.Id] = box;
-                return y + 32;
+                editor = box;
+                break;
             }
         }
+
+        _editors[field.Id] = editor;
+
+        var row = new Beside(() => _editorWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        row.Add(caption, gapBelow: 0);
+        row.AddSide(editor, gapBelow: 0);
+
+        // The line is as tall as a drop-down's or a box's own height when it
+        // is placed, and those settle their heights by themselves - once they
+        // have a window, once the theme takes a box's border off - which lays
+        // nothing out. Told, the line lays itself out again at the height the
+        // editor has (see Pieces.KeepHeightTold).
+        Pieces.KeepHeightTold(editor);
+
+        var line = new FieldLine(row, caption, text, editor, listRows);
+        _lines.Add(line);
+
+        // The caption level with the editor again whenever the editor's
+        // height changes - see Level.
+        editor.SizeChanged += (_, _) => Level(line);
+
+        return row;
     }
+
+    /// <summary>
+    /// The lines' editors, in the faces they wear in the window: every editor
+    /// as wide as the widest drop-down's longest option needs, and never
+    /// narrower than the 280px they were at the normal text size, at the
+    /// size in use; a checklist its rows of options; a tick box a line of its
+    /// caption tall, its box level with the caption's middle; and each
+    /// caption level with its editor's first line. Run as each sheet is
+    /// loaded, once its lines are in the window.
+    /// </summary>
+    private void SizeEditors()
+    {
+        var width = UiLayout.AtTextSize(EditorWidth);
+
+        foreach (var line in _lines)
+        {
+            if (line.Editor is ComboBox combo)
+            {
+                (Font Font, int Count, int Width)? measured = null;
+                width = Math.Max(width, Pieces.PickerWidth(combo, ref measured));
+            }
+            else if (line.Editor is CheckedListBox list)
+            {
+                var height = line.ListRows * list.ItemHeight + 4;
+
+                if (list.Height != height)
+                {
+                    list.Height = height;
+                }
+            }
+            else if (line.Editor is CheckBox check)
+            {
+                var height = Math.Max(check.GetPreferredSize(Size.Empty).Height, Pieces.LineHeight(line.Text.Font));
+
+                if (check.Height != height)
+                {
+                    check.Height = height;
+                }
+            }
+
+            Level(line);
+        }
+
+        _editorWidth = width;
+
+        // A line's column is not told when its editor's width rule or a
+        // height given here changes - its own size has not - so each is
+        // placed again.
+        foreach (var line in _lines)
+        {
+            line.Row.PerformLayout();
+        }
+
+        // And the diagram gives way to the fields' new least width
+        // (DiagramColumnWidth) when the editors got wider - the band hears
+        // it through its filling part's layout. Needed after a change of
+        // chassis sheet: on opening, DialogFit lays everything out anyway.
+        _fieldsHost.PerformLayout();
+    }
+
+    /// <summary>
+    /// Puts a caption's first line level with its editor's: centred on a
+    /// drop-down, a box or a tick box, and on the first option of a
+    /// checklist. The editor sits a pixel in for the ring the theme draws
+    /// round a box or a list (Pieces.RingRoom), which counts.
+    /// </summary>
+    private static void Level(FieldLine line)
+    {
+        var first = (line.Editor is CheckedListBox list ? list.ItemHeight : line.Editor.Height)
+            + Pieces.RingRoom(line.Editor).Vertical;
+
+        var top = Math.Max(0, (first - Pieces.LineHeight(line.Text.Font)) / 2);
+
+        if (line.Caption.Margin.Top != top)
+        {
+            line.Caption.Margin = new Padding(0, top, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// The diagram's width in a band <paramref name="band"/> wide: the 520px
+    /// it always was, at the text size in use, the fields beside it taking
+    /// the rest - narrower when that would leave the fields less than their
+    /// least (FieldsLeastWidth), down to 240px at the text size in use; and
+    /// with too little room for both at that, each gives up the same share.
+    /// The gap a Beside keeps between the two comes off first.
+    /// </summary>
+    private int DiagramColumnWidth(int band)
+    {
+        var wanted = UiLayout.AtTextSize(DiagramWidth);
+        var least = UiLayout.AtTextSize(DiagramLeastWidth);
+        var fields = FieldsLeastWidth();
+        var room = Math.Max(0, band - UiLayout.RowGap);
+
+        if (wanted + fields <= room)
+        {
+            return wanted;
+        }
+
+        if (least + fields <= room)
+        {
+            return room - fields;
+        }
+
+        return (int)((long)room * least / (least + fields));
+    }
+
+    /// <summary>
+    /// The least the fields can do with across: a caption's least room, the
+    /// gap a line keeps before its editor, the editors, and the scrollbar the
+    /// fields take their width from when there are more than the window
+    /// shows.
+    /// </summary>
+    private int FieldsLeastWidth() =>
+        UiLayout.AtTextSize(CaptionLeastWidth) + UiLayout.RowGap + _editorWidth + SystemInformation.VerticalScrollBarWidth;
 
     /// <summary>Pulls every editor's current state into Result.Values.</summary>
     private void ReadEditorsIntoResult()
@@ -388,7 +640,7 @@ public sealed class SetupEntryForm : Form
         }
     }
 
-    /// <summary>Scrolls the right-hand panel to the editor for whichever callout is selected.</summary>
+    /// <summary>Scrolls the fields to the editor for whichever callout is selected.</summary>
     private void FocusSelectedField()
     {
         if (_canvas.SelectedPointId is not { } id || !_editors.TryGetValue(id, out var editor))
@@ -396,7 +648,7 @@ public sealed class SetupEntryForm : Form
             return;
         }
 
-        _fieldsPanel.ScrollControlIntoView(editor);
+        _fields?.ScrollControlIntoView(editor);
         editor.Focus();
     }
 
@@ -435,6 +687,55 @@ public sealed class SetupEntryForm : Form
 
         DialogResult = DialogResult.OK;
         Close();
+    }
+
+    /// <summary>A field's line and what in it is sized and levelled once it is in the window - see SizeEditors. ListRows is a checklist's rows of options, 0 for any other editor.</summary>
+    private sealed record FieldLine(Beside Row, StatusLine Caption, Label Text, Control Editor, int ListRows);
+
+    /// <summary>
+    /// The mark beside a field that is also a callout on the diagram: a dot
+    /// in the success colour. It used to be a dot character in the small
+    /// type, a few pixels left of the caption; drawn now, at a little over
+    /// half the light it is (StatusLine), it grows with the text size. A
+    /// field that is not on the diagram has one that draws nothing.
+    /// </summary>
+    private sealed class PinMarker : Control
+    {
+        private readonly bool _pinned;
+
+        public PinMarker(bool pinned)
+        {
+            _pinned = pinned;
+
+            SetStyle(
+                ControlStyles.UserPaint
+                | ControlStyles.AllPaintingInWmPaint
+                | ControlStyles.OptimizedDoubleBuffer
+                | ControlStyles.ResizeRedraw,
+                true);
+
+            TabStop = false;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            if (!_pinned)
+            {
+                return;
+            }
+
+            // A little over half the light, centred in it - about the dot
+            // the character drew at the normal text size.
+            var side = Math.Max(1, Math.Min(Width, Height));
+            var dot = Math.Max(4, side * 4 / 7);
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using var brush = new SolidBrush(AppTheme.Success);
+            e.Graphics.FillEllipse(brush, (Width - dot) / 2f, (Height - dot) / 2f, dot, dot);
+        }
     }
 
     private sealed record TemplateItem(ChassisTemplate Template)

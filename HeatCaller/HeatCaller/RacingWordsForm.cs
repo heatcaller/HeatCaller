@@ -21,6 +21,15 @@ namespace HeatCaller;
 ///
 /// It is a reference sheet and nothing else: it reads no stores, changes
 /// nothing, and can be opened and shut at any point in a race day.
+///
+/// On the layout pieces (DialogFit): the introduction wrapping across the
+/// top, the words under it taking the height the window has and scrolling
+/// on their own - each group's heading and line about it, then each word in
+/// bold and what it means, all wrapping to the window's width - and Close at
+/// the foot. It used to be placed in pixels: the introduction in a docked
+/// strip sized to it by hand, the words placed down a scrolling panel one
+/// under another on every resize, and Close at the left of a footer of fixed
+/// height.
 /// </summary>
 public sealed class RacingWordsForm : Form
 {
@@ -34,98 +43,69 @@ public sealed class RacingWordsForm : Form
 
     private sealed record Group(string Heading, string Blurb, Word[] Words);
 
-    private const int Pad = 18;
+    /// <summary>The words show at least this many lines of text before the window scrolls instead.</summary>
+    private const int LeastLines = 6;
 
-    private readonly Panel _body = new();
-    private readonly Panel _header = new();
-    private readonly Label _lblIntro = new();
-
-    /// <summary>Every label placed by Relayout, in the order they appear.</summary>
-    private readonly List<Control> _flow = new();
+    /// <summary>
+    /// How narrow the window can be made inside its frame, at the normal text
+    /// size: the 560 across its frame it always could be.
+    /// </summary>
+    private const int LeastWidth = 544;
 
     public RacingWordsForm()
     {
         Text = "What these words mean";
-        StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(560, 420);
-        ClientSize = new Size(720, 620);
         Font = AppTheme.BodyFont;
 
-        _header.Dock = DockStyle.Top;
-        _header.Height = 1;
-
-        _lblIntro.AutoSize = true;
-        _lblIntro.Font = AppTheme.BodyFont;
-        _lblIntro.ForeColor = AppTheme.TextMuted;
-        _lblIntro.Text =
-            "The buttons in HeatCaller say what they do. The words below are the sport's own, "
-            + "and they are the ones you will hear in the pits and see on a printed heat sheet, "
-            + "so they are left as they are and explained here instead.";
-
-        _header.Controls.Add(_lblIntro);
-
-        _body.Dock = DockStyle.Fill;
-        _body.AutoScroll = true;
-
-        // Both bands measure and place their own children on every resize, so
-        // the repair pass is told to keep out of them - otherwise the two
-        // take turns moving the same labels.
-        LayoutDoctor.LeaveAlone(_body);
-        LayoutDoctor.LeaveAlone(_header);
-
-        BuildWords();
-
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = UiLayout.ButtonHeight + 24 };
-
-        var btnClose = new Button
+        var lblIntro = new Label
         {
-            Text = "Close",
-            Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight),
-            Location = new Point(12, 12),
+            AutoSize = true,
+            Font = AppTheme.BodyFont,
+            ForeColor = AppTheme.TextMuted,
+            Text =
+                "The buttons in HeatCaller say what they do. The words below are the sport's own, "
+                + "and they are the ones you will hear in the pits and see on a printed heat sheet, "
+                + "so they are left as they are and explained here instead.",
         };
 
-        btnClose.Click += (_, _) => Close();
-        footer.Controls.Add(btnClose);
+        // The words scroll down on their own, as wide as the introduction
+        // over them: no margins of their own - the page's are round them -
+        // and no room under the last line, which the theme pass gives a
+        // panel that scrolls (see ScrollTheming.NoRoomBelow).
+        var words = new PageStack { Padding = Padding.Empty };
+        ScrollTheming.NoRoomBelow(words);
+        BuildWords(words);
 
-        // Fill is added first and docks last: WinForms resolves docking from
-        // the end of the collection backwards.
-        Controls.Add(_body);
-        Controls.Add(footer);
-        Controls.Add(_header);
+        var btnClose = new Button { Text = "Close" };
+        btnClose.Click += (_, _) => Close();
+
+        var page = new FillPage();
+        page.Add(lblIntro);
+
+        // The words take the height; they keep a few lines before the window
+        // scrolls instead.
+        page.AddFill(words, _ => LeastLines * Pieces.LineHeight(Font), gapBelow: UiLayout.RowGap);
+
+        // Against the right-hand edge, as a dialog's buttons go.
+        page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
 
-        // Both hooked and both run once, AFTER theming: a label that is not
-        // yet parented and styled reports the WinForms default font's
-        // metrics, and every position below is measured from the real ones.
-        _header.Resize += (_, _) => LayoutHeader();
-        _body.Resize += (_, _) => Relayout();
+        DialogFit.Keep(this, page, width: 720, height: 620);
 
-        LayoutHeader();
-        Relayout();
-    }
-
-    /// <summary>
-    /// Wraps the opening paragraph to the window's width and sizes the band
-    /// to it. Re-run on resize, so the intro is not stuck at the width the
-    /// window happened to open at.
-    /// </summary>
-    private void LayoutHeader()
-    {
-        _lblIntro.MaximumSize = new Size(Math.Max(200, _header.Width - Pad * 2), 0);
-        _lblIntro.Location = new Point(Pad, 14);
-
-        var wanted = UiLayout.Below(_lblIntro, 12);
-
-        // Only when it changed: assigning Height re-runs this through Resize,
-        // and an unconditional assignment would never settle.
-        if (_header.Height != wanted)
-        {
-            _header.Height = wanted;
-        }
+        // And it can be made narrower than it opened, down to the 560 it
+        // always could, at the text size in use: nothing in it is measured
+        // for its width - the introduction and every word wrap to what they
+        // have. After DialogFit's own Load handler, added above, which sets
+        // the least to the width it opened at.
+        Load += (_, _) => MinimumSize = new Size(
+            Math.Min(MinimumSize.Width, Width - ClientSize.Width + UiLayout.AtTextSize(LeastWidth)),
+            MinimumSize.Height);
     }
 
     /// <summary>Opens it, owned, so it centres on the page that asked.</summary>
@@ -257,43 +237,45 @@ public sealed class RacingWordsForm : Form
             }),
     };
 
-    private void BuildWords()
+    /// <summary>
+    /// The sheet, down <paramref name="words"/>: for each group its heading
+    /// and the line about it, then each word in bold with what it means
+    /// under it - every line as wide as the column, wrapping to it. Spaced
+    /// as it always was: a hair between a heading and its line, a row's gap
+    /// and a hair before each word, a hint's gap between a word and its
+    /// meaning, and a section's gap before the next group. Nothing under the
+    /// last meaning - the last part of a column that scrolls, whose gap
+    /// would be scrolled to as blank room.
+    /// </summary>
+    private static void BuildWords(PageStack words)
     {
-        var first = true;
+        var groups = Words();
 
-        foreach (var group in Words())
+        for (var g = 0; g < groups.Length; g++)
         {
-            var heading = new Label
+            var group = groups[g];
+
+            words.Add(new Label
             {
                 Text = group.Heading.ToUpperInvariant(),
                 AutoSize = true,
                 Font = AppTheme.MicroFont,
                 ForeColor = AppTheme.Primary,
-                // Tagged so Relayout knows this row opens a section and
-                // wants the bigger gap above it - the alternative is a
-                // parallel list of indices that has to stay in step.
-                Tag = first ? "group-first" : "group",
-            };
+            }, gapBelow: 2);
 
-            first = false;
-
-            var blurb = new Label
+            words.Add(new Label
             {
                 Text = group.Blurb,
                 AutoSize = true,
                 Font = AppTheme.SmallFont,
                 ForeColor = AppTheme.TextMuted,
-                Tag = "blurb",
-            };
+            }, gapBelow: UiLayout.RowGap + 2);
 
-            _body.Controls.Add(heading);
-            _body.Controls.Add(blurb);
-            _flow.Add(heading);
-            _flow.Add(blurb);
-
-            foreach (var word in group.Words)
+            for (var w = 0; w < group.Words.Length; w++)
             {
-                var term = new Label
+                var word = group.Words[w];
+
+                words.Add(new Label
                 {
                     Text = word.WasCalled is null
                         ? word.Term
@@ -301,80 +283,20 @@ public sealed class RacingWordsForm : Form
                     AutoSize = true,
                     Font = AppTheme.BoldFont,
                     ForeColor = AppTheme.TextDark,
-                    Tag = "term",
-                };
+                }, gapBelow: UiLayout.HintGap);
 
-                var meaning = new Label
+                var lastInGroup = w == group.Words.Length - 1;
+
+                words.Add(new Label
                 {
                     Text = word.Meaning,
                     AutoSize = true,
                     Font = AppTheme.BodyFont,
                     ForeColor = AppTheme.TextDark,
-                    Tag = "meaning",
-                };
-
-                _body.Controls.Add(term);
-                _body.Controls.Add(meaning);
-                _flow.Add(term);
-                _flow.Add(meaning);
+                }, gapBelow: !lastInGroup
+                    ? UiLayout.RowGap + 2
+                    : g < groups.Length - 1 ? UiLayout.SectionGap : 0);
             }
-        }
-    }
-
-    /// <summary>
-    /// Places every line down the page at whatever width the window
-    /// currently is.
-    ///
-    /// The content width is taken from the panel's OUTER width less a
-    /// permanent allowance for the scrollbar, rather than from ClientSize.
-    /// ClientSize shrinks the moment the scrollbar appears, which would
-    /// re-fire Resize, re-wrap every paragraph, and - at the one window
-    /// height where the content is just longer than the panel - flip between
-    /// the two states forever.
-    /// </summary>
-    private void Relayout()
-    {
-        var width = Math.Max(
-            220,
-            _body.Width - Pad * 2 - SystemInformation.VerticalScrollBarWidth);
-
-        var y = Pad;
-
-        foreach (var control in _flow)
-        {
-            var kind = control.Tag as string;
-
-            y += kind switch
-            {
-                "group-first" => 0,
-                "group" => UiLayout.SectionGap,
-                "blurb" => 2,
-                "term" => UiLayout.RowGap + 2,
-                _ => UiLayout.HintGap,
-            };
-
-            if (control is Label label)
-            {
-                label.MaximumSize = new Size(width, 0);
-            }
-
-            control.Location = new Point(Pad, y);
-            y = control.Top + UiLayout.HeightOf(control);
-        }
-
-        // A spacer rather than Padding: AutoScroll measures the scroll range
-        // from where the children end and ignores the container's bottom
-        // padding, so without this the last line sits hard against the
-        // footer when the sheet is scrolled to the end.
-        //
-        // Assigned only when it changed, for the same reason the two bands
-        // guard their heights: it can bring a scrollbar in or out, which
-        // re-fires Resize.
-        var wanted = new Size(0, y + Pad);
-
-        if (_body.AutoScrollMinSize != wanted)
-        {
-            _body.AutoScrollMinSize = wanted;
         }
     }
 }

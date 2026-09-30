@@ -32,7 +32,12 @@ public sealed class SplashForm : Form
         // finding its startup screen behind the window you launched it
         // from is its own small annoyance.
         TopMost = true;
-        Size = new Size(520, 300);
+
+        // At the screen's DPI, as the point-size text drawn on it is - on a
+        // screen the app draws at 150% (--dpi-aware) the name alone is half
+        // as tall again, and would run into the lines under it. Everything
+        // OnPaint places is at the same scale, so the picture keeps its shape.
+        Size = new Size(UiLayout.AtDpi(520), UiLayout.AtDpi(300));
 
         // The theme has not necessarily been chosen yet - this runs before
         // settings load on a cold start - so the splash carries its own
@@ -48,7 +53,7 @@ public sealed class SplashForm : Form
         DoubleBuffered = true;
 
         // Rounded, like every other surface in the app.
-        using var path = Rounded(new Rectangle(0, 0, Width, Height), 14);
+        using var path = Rounded(new Rectangle(0, 0, Width, Height), UiLayout.AtDpi(14));
         Region = new Region(path);
 
         _tick.Tick += (_, _) =>
@@ -134,24 +139,33 @@ public sealed class SplashForm : Form
         var violet = Color.FromArgb(124, 58, 237);
         var muted = Color.FromArgb(150, 142, 178);
 
+        // Every place and size below is at the screen's DPI, as the window
+        // and its point-size text are (see the constructor). The grid's and
+        // the edge's hairlines stay one pixel.
+        var skyHeight = UiLayout.AtDpi(150);
+        var sunSize = UiLayout.AtDpi(110);
+        var sunLeft = Width / 2 - UiLayout.AtDpi(55);
+        var sunTop = UiLayout.AtDpi(34);
+        var horizon = UiLayout.AtDpi(152);
+
         // A horizon: the sun sitting on a grid.
         using (var sky = new LinearGradientBrush(
-                   new Rectangle(0, 0, Width, 150), Color.FromArgb(38, 16, 64), Color.FromArgb(14, 10, 28), 90f))
+                   new Rectangle(0, 0, Width, skyHeight), Color.FromArgb(38, 16, 64), Color.FromArgb(14, 10, 28), 90f))
         {
-            g.FillRectangle(sky, 0, 0, Width, 150);
+            g.FillRectangle(sky, 0, 0, Width, skyHeight);
         }
 
         using (var sun = new LinearGradientBrush(
-                   new Rectangle(Width / 2 - 55, 34, 110, 110), Color.FromArgb(255, 196, 61), pink, 90f))
+                   new Rectangle(sunLeft, sunTop, sunSize, sunSize), Color.FromArgb(255, 196, 61), pink, 90f))
         {
-            g.FillEllipse(sun, Width / 2 - 55, 34, 110, 110);
+            g.FillEllipse(sun, sunLeft, sunTop, sunSize, sunSize);
         }
 
         // The grid, drawn over the sun's lower half so the sun appears to
         // be setting into it.
         using (var line = new Pen(Color.FromArgb(90, violet), 1f))
         {
-            for (var y = 118; y < 152; y += 8)
+            for (var y = UiLayout.AtDpi(118); y < horizon; y += UiLayout.AtDpi(8))
             {
                 g.DrawLine(line, 0, y, Width, y);
             }
@@ -159,7 +173,7 @@ public sealed class SplashForm : Form
 
         using (var cover = new SolidBrush(Color.FromArgb(14, 10, 28)))
         {
-            g.FillRectangle(cover, 0, 152, Width, Height - 152);
+            g.FillRectangle(cover, 0, horizon, Width, Height - horizon);
         }
 
         // Built through FontLibrary rather than with new Font("Oxanium", ...).
@@ -181,7 +195,7 @@ public sealed class SplashForm : Form
         {
             var text = "HEATCALLER";
             var size = g.MeasureString(text, nameFont);
-            g.DrawString(text, nameFont, brush, (Width - size.Width) / 2f, 168);
+            g.DrawString(text, nameFont, brush, (Width - size.Width) / 2f, UiLayout.AtDpi(168));
         }
 
         using (var versionFont = FontLibrary.Create(AppTheme.DisplayFamily, 11F, FontStyle.Bold))
@@ -189,20 +203,21 @@ public sealed class SplashForm : Form
         {
             var text = AppVersion.Short;
             var size = g.MeasureString(text, versionFont);
-            g.DrawString(text, versionFont, brush, (Width - size.Width) / 2f, 212);
+            g.DrawString(text, versionFont, brush, (Width - size.Width) / 2f, UiLayout.AtDpi(212));
         }
 
         // The sweeping bar - a car going round, near enough. Deliberately
         // not a percentage: the startup has no honest progress to report,
         // and a bar that pretends to know is worse than one that just says
         // something is happening.
-        var trackY = 244;
-        var trackLeft = 60;
+        var trackY = UiLayout.AtDpi(244);
+        var trackLeft = UiLayout.AtDpi(60);
         var trackWidth = Width - trackLeft * 2;
+        var trackHeight = UiLayout.AtDpi(3);
 
         using (var track = new SolidBrush(Color.FromArgb(40, 30, 70)))
         {
-            g.FillRectangle(track, trackLeft, trackY, trackWidth, 3);
+            g.FillRectangle(track, trackLeft, trackY, trackWidth, trackHeight);
         }
 
         var lightWidth = trackWidth * 0.28f;
@@ -210,13 +225,13 @@ public sealed class SplashForm : Form
         var lightLeft = trackLeft - lightWidth + travel * _sweep;
 
         var clip = g.Clip;
-        g.SetClip(new RectangleF(trackLeft, trackY, trackWidth, 3));
+        g.SetClip(new RectangleF(trackLeft, trackY, trackWidth, trackHeight));
 
         using (var light = new LinearGradientBrush(
-                   new RectangleF(lightLeft, trackY, lightWidth, 3),
+                   new RectangleF(lightLeft, trackY, lightWidth, trackHeight),
                    Color.FromArgb(0, pink), pink, 0f))
         {
-            g.FillRectangle(light, lightLeft, trackY, lightWidth, 3);
+            g.FillRectangle(light, lightLeft, trackY, lightWidth, trackHeight);
         }
 
         g.Clip = clip;
@@ -225,11 +240,11 @@ public sealed class SplashForm : Form
         using (var brush = new SolidBrush(muted))
         {
             var size = g.MeasureString(_stage, stageFont);
-            g.DrawString(_stage, stageFont, brush, (Width - size.Width) / 2f, 258);
+            g.DrawString(_stage, stageFont, brush, (Width - size.Width) / 2f, UiLayout.AtDpi(258));
         }
 
         using (var edge = new Pen(Color.FromArgb(60, violet)))
-        using (var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), 14))
+        using (var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), UiLayout.AtDpi(14)))
         {
             g.DrawPath(edge, path);
         }

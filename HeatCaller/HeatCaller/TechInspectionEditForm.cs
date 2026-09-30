@@ -137,9 +137,9 @@ public sealed class TechInspectionEditForm : Form
         // The checklist scrolls down on its own, its lines as wide as the
         // fields above and below it: no margins of its own - the page's are
         // round it - and no room under its last line, which the theme pass
-        // gives a panel that scrolls (see LayoutDoctor.NoRoomBelow).
+        // gives a panel that scrolls (see ScrollTheming.NoRoomBelow).
         _checksPanel.Padding = Padding.Empty;
-        LayoutDoctor.NoRoomBelow(_checksPanel);
+        ScrollTheming.NoRoomBelow(_checksPanel);
 
         // First in it, over the lines, for a class with nothing to check -
         // see BuildChecklist.

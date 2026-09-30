@@ -1,8 +1,8 @@
 # Commentary
 
-Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the **Announcer** page. The recap can be dressed up as a TV broadcast, with an opening, a sign-off and, after a main, a quick interview with the winner's mechanic in a second voice. The words are written by a language model running on your own laptop through a free program called Ollama. It's optional. Without it, HeatCaller's normal announcements work exactly the same.
+Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the [Announcer screen](voice.md#announcer-screen). The recap can be dressed up as a TV broadcast, with an opening, a sign-off and, after a main, a quick interview with the winner's mechanic in a second voice. The words are written by a language model running on your own laptop through a free program called Ollama. It's optional. Without it, HeatCaller's normal announcements work exactly the same.
 
-Settings are on **Voice Announcements → Commentary**.
+Settings are on **Voice → Commentary**.
 
 ## What it's used for
 
@@ -17,7 +17,7 @@ The model is given facts HeatCaller has already worked out (positions, gaps, lap
 
 Commentary is never used for live lap-by-lap calls. A lap takes a few seconds and a local model usually takes longer than that to answer, so the line would describe a moment that had already passed.
 
-Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Windows voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
+Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice → Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Windows voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
 
 ## Before you start
 
@@ -40,7 +40,7 @@ Intros and summaries are spoken by the announcer, in the voice chosen under **Sp
 
 ## Turn commentary on
 
-1. Open **Voice Announcements → Commentary**.
+1. Open **Voice → Commentary**.
 2. Tick **Enable local LLM commentary**.
 3. Check **Endpoint:** and **Model:**. The defaults are `http://localhost:11434` (Ollama's usual address on the same laptop) and `llama3.2:3b`.
 4. Press **Test Connection**.
@@ -75,11 +75,11 @@ The settings are on five cards down the tab, in the order below: **Connection**,
 | Setting | What it does | Default |
 |---|---|---|
 | **Race intros - a "coming up" line before a round starts** | Speaks a short intro when a round is staged. | On |
-| **Only for a main, or a race with a known rivalry on the grid** | Skips the intro for every other race, so heats start without one. The console says "No round intro for ... - intros are set to mains and rivalries only, and this race is neither." Rivalries are set on **Voice Announcements → Rivalries**. | Off |
+| **Only for a main, or a race with a known rivalry on the grid** | Skips the intro for every other race, so heats start without one. The console says "No round intro for ... - intros are set to mains and rivalries only, and this race is neither." Rivalries are set on **Voice → Rivalries**. | Off |
 | **Race recaps - a wrap-up after the checkered flag** | Speaks a recap after each race. | On |
 | **Mention up to:** _n_ **finishers in the recap** | 1 to 20. How many finishers the recap names. | 5 |
 | **Also mention the fastest lap of the race** | Includes the fastest lap in the recap. Turn it off if it feels repetitive, since the fastest lap already gets its own live announcement. | On |
-| **Announcer talking points - suggested lines on screen, never spoken automatically** | Writes a suggested line at the top of the **Announcer** page's talking points during a race. | On |
+| **Announcer talking points - suggested lines on screen, never spoken automatically** | Writes a suggested line at the top of the talking points on the Announcer screen during a race. | On |
 | **Refresh every:** | 5 to 120 seconds. How often a new talking point is requested. Lower feels fresher; higher means less repeated wording. | 20 |
 | **Consider up to:** | 1 to 12. How many of the current talking points the model picks from. | 6 |
 
@@ -132,7 +132,7 @@ These dress the recap up as a TV broadcast. The model writes each part from the 
 | **Mechanic's name:** | What the announcer calls the mechanic. Leave it blank and the mechanic is "the team's mechanic"; the model never makes a name up. | Blank |
 | **Mechanic's voice:** | The voice the mechanic answers in. See below. | The announcer's own voice |
 
-What the mechanic says about the car comes from the **Garage**: the setup logged for the winning car on the day, and what changed from the setup before it (see [Setup Log](../race-day/drivers-and-classes.md#setup-log)). The mechanic is told to say those changes exactly as they were logged, and to say nothing about the car's settings when none are logged for the day. A setup from an earlier day isn't treated as a change made for this race.
+What the mechanic says about the car comes from the **Garage**: the setup logged for the winning car on the day, and what changed from the setup before it (see [Garage](../race-day/drivers-and-classes.md#garage)). The mechanic is told to say those changes exactly as they were logged, and to say nothing about the car's settings when none are logged for the day. A setup from an earlier day isn't treated as a change made for this race.
 
 #### Pick the mechanic's voice
 
@@ -155,16 +155,16 @@ The interview and the sign-off are written straight after the recap, while the t
 
 Commentary is best-effort. If Ollama isn't running, the model name is wrong, or the model doesn't answer in time, HeatCaller just carries on:
 
-- The normal announcement lines from **Voice Settings** play as usual. Commentary never replaces them.
+- The normal announcement lines from **Voice → Announcements** play as usual. Commentary never replaces them.
 - No race intro is spoken.
 - After a race, the teaser is still spoken (it's fixed text, not written by the model), but no recap follows.
-- No suggested line appears on the **Announcer** page; the other talking points still do.
+- No suggested line appears on the Announcer screen; the other talking points still do.
 
 The console notes what happened, for example "No recap - the local model isn't reachable." or a line starting `[llm]` saying whether the request timed out or was refused. Nothing interrupts the race.
 
-## Using the recap on the Announcer page
+## Using the recap on the Announcer screen
 
-The last race summary is shown under **LAST RACE SUMMARY** on **Voice Announcements → Announcer**. Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if Ollama has since stopped. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer page](voice.md#announcer-page).
+The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Open Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if Ollama has since stopped. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
 
 ## Privacy
 

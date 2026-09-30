@@ -74,10 +74,10 @@ public sealed class RaceDayEventControl : UserControl
     // and the round count sitting above them, and the Program tab is a
     // better page for having nothing on it but the running order and the
     // next thing to do.
-    private readonly CheckedListBox _lstClasses = new();
+    private readonly CheckedListBox _lstClasses = new ThemedCheckedListBox();
     private readonly NumericUpDown _numHeatSize = new();
-    private readonly CheckBox _chkCheckedInOnly = new();
-    private readonly CheckBox _chkAutoAdvance = new();
+    private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
+    private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
     private readonly Label _lblAutoAdvanceHint = new();
     private Label? _lblAutoAdvanceScope;
@@ -128,7 +128,7 @@ public sealed class RaceDayEventControl : UserControl
     /// with a comment describing a run sheet measuring drift against it -
     /// and nothing anywhere read or wrote it. This is that UI.
     /// </summary>
-    private readonly CheckBox _chkFirstRace = new();
+    private readonly CheckBox _chkFirstRace = new ThemedCheckBox();
 
     private readonly TimePicker _dtpFirstRace = new();
 

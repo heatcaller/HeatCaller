@@ -13,7 +13,7 @@ internal static partial class WindowCatalog
     /// Checklist... opens (RaceClassEditForm.TechChecklistForm), with more
     /// checks than it shows and the longest name in its title, and with
     /// none yet; and the line that checklist's Add... and Rename... ask for
-    /// (RaceClassEditForm.TextPrompt), empty and holding a long check. And
+    /// (TextPromptForm), empty and holding a long check. And
     /// the Race Classes dialog (RaceClassManagerForm) over a club's classes,
     /// the longest name among them, and over none.
     /// </summary>
@@ -139,8 +139,8 @@ internal static partial class WindowCatalog
                 RaceClassStore.Load())),
             ("Tech Checklist", () => new RaceClassEditForm.TechChecklistForm(LongClassName(), Checks(12))),
             ("Tech Checklist (none yet)", () => new RaceClassEditForm.TechChecklistForm(string.Empty, new List<string>())),
-            ("Add check", () => new RaceClassEditForm.TextPrompt("Add check", "What should be checked?", string.Empty)),
-            ("Rename check", () => new RaceClassEditForm.TextPrompt("Rename check", "What should be checked?", Checks(12)[6])),
+            ("Add check", () => new TextPromptForm("Add check", "What should be checked?", string.Empty)),
+            ("Rename check", () => new TextPromptForm("Rename check", "What should be checked?", Checks(12)[6])),
             ("Race Classes", () => Manager(Club())),
             ("Race Classes (none yet)", () => Manager(new List<RaceClass>())),
         };

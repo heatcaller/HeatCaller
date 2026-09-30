@@ -66,6 +66,10 @@ public static class ResultsCardRenderer
         var height = headerHeight + results.Count * rowHeight + footerHeight + badgeLines * 21;
 
         var bitmap = new Bitmap(width, height);
+
+        // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
+        bitmap.SetResolution(96, 96);
+
         using var g = Graphics.FromImage(bitmap);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;

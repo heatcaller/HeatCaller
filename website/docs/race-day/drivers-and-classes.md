@@ -2,7 +2,7 @@
 
 This page covers the reference data you set up once and then keep up to date: the drivers who race, the classes they race in, and the club's gear — rental transponders, battery packs, venues, track layouts and car setups. Everything on the Race Day pages is built from this data, so it's worth getting right before your first race night.
 
-The pages covered here are all in the sidebar: **Driver Profiles**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Setup Log**.
+The pages covered here are all in the sidebar: **Driver Profiles**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Garage**.
 
 ## Driver Profiles
 
@@ -23,7 +23,7 @@ You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click
 
 ### Add a driver
 
-1. On the **Driver Profiles** page, click **Add...**.
+1. On the **Driver Profiles** page, click **Add**.
 2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
@@ -34,7 +34,7 @@ You can also create profiles from Race Control. When transponders with no profil
 
 ### Edit or delete a driver
 
-- To edit, double-click a driver, or select one and click **Edit...** (or **Edit Profile...** on the card).
+- To edit, double-click a driver, or select one and click **Edit** (or **Edit Profile** on the card).
 - To delete, select one or more drivers and click **Delete**. You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
 
 Undo never overwrites a driver who has one of the deleted driver's transponders now, as their main or alternate transponder, and never puts two drivers on one transponder. A deleted driver whose transponder has been taken since stays deleted:
@@ -63,8 +63,8 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Contact:** | For organizer use only. It's never announced. |
 | **Email:** | Where the driver's personal check-in PIN is sent. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
 | **Alt transponder:** | A second transponder the driver runs, for a second car. Its laps count as this driver's — see [Alternate transponder](../timing/transponders.md#alternate-transponder). |
-| **Class:** | The class the driver races in, or **(none)**. Click **Manage...** to open the class list if the class you need doesn't exist yet. |
-| **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, use the [Setup Log](#setup-log). |
+| **Class:** | The class the driver races in, or **(none)**. Click **Manage** to open the class list if the class you need doesn't exist yet. |
+| **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, log setups against the car in the [Garage](#garage). |
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |
 | **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
 | **Notes:** | Free text. Shown at the bottom of the driver card. |
@@ -86,8 +86,8 @@ Each driver can have a photo. It appears in the roster, on the driver card and, 
 
 To add or change a photo:
 
-- In the profile dialog, click **Choose Photo...**. Click **Remove Photo** to go back to the initials disc.
-- Or, to swap photos quickly without opening the whole profile, select the driver and click **Photo...** on the card. This is handy when you're taking photos of a whole class at the pit table.
+- In the profile dialog, click **Choose Photo**. Click **Remove Photo** to go back to the initials disc.
+- Or, to swap photos quickly without opening the whole profile, select the driver and click **Photo** on the card. This is handy when you're taking photos of a whole class at the pit table.
 
 You can pick JPG, PNG, BMP or GIF files. HeatCaller makes its own copy of the picture: it rotates phone photos the right way up, scales them down so the longest side is 640 pixels, and stores the copy in its own data folder. Moving or deleting the original file afterwards doesn't affect the profile.
 
@@ -160,7 +160,7 @@ The **Classes** page lists every class in a grid, so you can compare them side b
 | **Race format** | The class's race format, or "app default". If the class has a separate qualifier format, it's shown after `quals:`. |
 | **Tech** | How many items are on the class's tech checklist, or "-" if there's none. |
 
-Use **Add a Class...**, **Edit...** (or double-click a row), **Sanctioning Preset...** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage...** next to **Class:**.
+Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage** next to **Class:**.
 
 When you delete a class, drivers keep the class name on their profile, but it no longer appears in the class list. You can undo a delete with the **Undo** button.
 
@@ -188,16 +188,16 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **Detect jump starts (crossing before the green)** | Watches for cars crossing the line before the green flag. | On |
 | **Automatic penalty:** | Seconds added to a jump-starter's time (0–120). **0** means flag only: the jump start is logged, announced and shown, but what to do about it is up to you. | 0 |
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
-| **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared in the Tech Log today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
+| **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist...**, **Race Format...**, **Qualifier Format...**, **Colour...** and **Sanctioning Preset...**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Colour** and **Sanctioning Preset**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
 
 ### Race format and qualifier format
 
-A race format is how a class's races are run: limits, the start procedure and streak rules. Click **Race Format...** to set the class's format, and **Qualifier Format...** if its qualifying heats should run differently (the common "five-minute quals, eight-minute mains" setup).
+A race format is how a class's races are run: limits, the start procedure and streak rules. Click **Race Format** to set the class's format, and **Qualifier Format** if its qualifying heats should run differently (the common "five-minute quals, eight-minute mains" setup).
 
 HeatCaller picks the format for a race in this order:
 
@@ -216,7 +216,8 @@ In the format dialog, **Use a custom format (untick to follow the app default)**
 | **Streak window ±%:** and **faster too** | How far a lap can differ from the previous one and still count toward a lap streak, and whether a much faster lap also breaks the streak. | 25, on |
 | **Start:** | The start procedure (see below). | Standard |
 | **Stagger gap (s):** and **Clock:** | For staggered starts: seconds between releases, and whether each car's clock starts at its own release (**Clock: own release**) or at the green (**Clock: shared green**). | 5, own release |
-| **Auto-advance: Stage → Countdown → Green** | Staging runs straight into the countdown and the green by itself. | On |
+| **Warm-up (s, 0 = none):** | Free laps before the race, which aren't counted (0–1800, in steps of 30). See [Warm-up](../race-control/running-a-race.md#warm-up). | 0 (off) |
+| **Run the start sequence automatically (Stage → Countdown → Green)** | Staging runs straight into the countdown and the green by itself. | On |
 | **Stage (s):** | Staging time (1–300). | 15 |
 | **Countdown (s):** | Countdown time (1–60). | 5 |
 | **Leader takes the flag, others finish their lap** | When the limit is reached, the leader takes the checkered flag and everyone else finishes the lap they're on. | On |
@@ -233,9 +234,9 @@ For what each start type looks like on race day, see [Running a race](../race-co
 
 ### Tech checklist
 
-Click **Tech Checklist...** to set what a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row when a car is inspected in the [Tech Log](events-and-entries.md#race-day-tech-log).
+Click **Tech Checklist** to set what a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row when a car is [inspected](events-and-entries.md#inspect-a-car).
 
-Use **Add...**, **Rename...**, **Remove**, **Move Up** and **Move Down** to build the list. **Add Common** adds six starting suggestions you can edit: "Body secure and undamaged", "Motor legal for class", "Tyres legal for class", "Ride height", "Transponder fitted and working" and "No loose parts". An empty checklist means you don't run tech for this class.
+Use **Add**, **Rename**, **Remove**, **Move Up** and **Move Down** to build the list. **Add Common** adds six starting suggestions you can edit: "Body secure and undamaged", "Motor legal for class", "Tyres legal for class", "Ride height", "Transponder fitted and working" and "No loose parts". An empty checklist means you don't run tech for this class.
 
 If you do run tech for the class, **Warn when a driver in a heat hasn't passed tech today** in the class settings makes Race Control point out drivers who haven't been through tech yet. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control).
 
@@ -243,7 +244,7 @@ If you do run tech for the class, **Warn when a driver in a heat hasn't passed t
 
 Every class has a color, used on its name in lists and as a band on its printed heat sheets, so you can tell class sheets apart on the pit table. By default the color is worked out from the class name, so the same class is the same color on every computer at the club.
 
-Click **Colour...** (or the square next to the name) and choose **Choose a Colour...** to pick your own, or **Use the Colour from the Name** to go back to the automatic color.
+Click **Colour** (or the square next to the name) and choose **Choose a Colour...** to pick your own, or **Use the Colour from the Name** to go back to the automatic color.
 
 ### Sanctioning presets
 
@@ -251,7 +252,7 @@ A sanctioning preset applies a governing body's published rules to a class. It o
 
 To apply one:
 
-1. Select a class on the **Classes** page and click **Sanctioning Preset...** (or click the same button inside the class editor).
+1. Select a class on the **Classes** page and click **Sanctioning Preset** (or click the same button inside the class editor).
 2. Pick a preset from the list. The right side explains **WHERE IT CAME FROM**, **WHAT IT SETS** and **WHAT IT DOES NOT SET** — read the last one before you apply it.
 3. Click **Apply to This Class**, check the list of changes, and click **Yes**.
 
@@ -263,7 +264,7 @@ To apply one:
 
 !!! warning
     - None of the presets set a points scale, and the PNWC preset sets the length of one leg only — HeatCaller doesn't model multi-leg mains. Read **WHAT IT DOES NOT SET** for each one.
-    - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format...** afterwards.
+    - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Race Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 
 ## Rentals
@@ -278,7 +279,7 @@ The grid lists units that are out first. Its columns are **Asset Tag**, **Transp
 
 ### Add a rental unit
 
-1. Click **Add Unit...**.
+1. Click **Add Unit**.
 2. Enter the **Transponder ID:** exactly as the decoder reports it. It can't be changed after you save, because it ties the unit to its loan history.
 3. Enter an **Asset tag:** — what people call it at the counter, such as "R4" or a sticker number.
 4. Add any **Notes:** and click **Save**.
@@ -287,14 +288,14 @@ Tick **Retired (out of service - keeps its history)** on a unit that's damaged o
 
 ### Lend and take back a unit
 
-1. Select an available unit and click **Check Out...** (or double-click it).
+1. Select an available unit and click **Check Out** (or double-click it).
 2. In **Loan to:**, pick a saved driver or just type a name — a walk-in doesn't need a profile.
 3. In **Deposit held:**, note what you're holding (a car key, a license, cash).
 4. Click **Check Out**.
 
-When it comes back, select it and click **Check In...** (or double-click it). The prompt reminds you what deposit to give back and asks for any notes on the unit's condition. Click **OK** to file the loan.
+When it comes back, select it and click **Check In** (or double-click it). The prompt reminds you what deposit to give back and asks for any notes on the unit's condition. Click **OK** to file the loan.
 
-A unit that's already out can't be checked out again — issuing one transponder to two drivers would mix their laps. **Loan History...** lists every completed loan for the selected unit. Check-outs, check-ins and edits to a unit can be undone with **Undo**.
+A unit that's already out can't be checked out again — issuing one transponder to two drivers would mix their laps. **Loan History** lists every completed loan for the selected unit. Check-outs, check-ins and edits to a unit can be undone with **Undo**.
 
 !!! note
     The Rentals page is separate from the **Rental / loaner transponder** checkbox on a driver profile. The checkbox is what keeps a loaner out of track records; the Rentals page is for tracking the hardware.
@@ -344,7 +345,7 @@ To use a venue, select it and click **Apply This Venue**, then confirm. HeatCall
 
 - sets **Connect via:** on the **Connection** page (a venue saved for Next Level Timing, which was retired in 0.50.0, gets the EasyLap decoder, and the console says so);
 - selects the preferred track layout, if it still exists;
-- applies the preferred soundscape, if it still exists, the same way **Apply** on **Sounds → Soundscapes** does: this PC's playback volume, wireless-speaker setting, output format and **Speak with** choice stay as they are (see [What applying a style changes](../announcer/sounds-and-music.md#what-applying-a-style-changes));
+- applies the preferred soundscape, if it still exists, the same way **Apply** on **Sounds → Soundscapes** does: this PC's playback volume, wireless-speaker setting, output format and **Speak with** choice stay as they are (see [Soundscapes](../announcer/sounds-and-music.md#soundscapes));
 - writes the race defaults into the **app default** race format.
 
 Because the race defaults go into the app default, a class or round with its own format still uses its own settings.
@@ -359,7 +360,7 @@ The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles
 
 ### Add or edit a layout
 
-Click **Add...** or **Edit...**. The **Add Track Layout** / **Edit Track Layout** dialog has:
+Click **Add** or **Edit**. The **Add Track Layout** / **Edit Track Layout** dialog has:
 
 | Field | What it's for |
 |---|---|
@@ -381,11 +382,11 @@ Each layout keeps its all-time fastest lap and who set it. If you change the phy
 
 ### Draw the layout in the Track Designer
 
-The Track Designer lets you draw an RCP-style tile track: lay the foam floor, stand rails along the seams, add turns and markings, and draw the racing line. Select a layout and click **Track Designer...**, or click it with nothing selected to draw a new track.
+The Track Designer lets you draw an RCP-style tile track: lay the foam floor, stand rails along the seams, add turns and markings, and draw the racing line. Select a layout and click **Track Designer**, or click it with nothing selected to draw a new track.
 
 <!-- screenshot: Track Designer with a traced photo underneath and rails drawn over it -->
 
-The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, **Erase** and **Photo** (keys <kbd>1</kbd> to <kbd>7</kbd>). The status line at the bottom explains how the current tool works. Other toolbar buttons:
+The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, **Erase** and **Photo** (keys <kbd>1</kbd> to <kbd>7</kbd>). The status line under the drawing area explains how the current tool works. Other toolbar buttons:
 
 - **Wall the edge** puts a rail round every open edge of the floor.
 - **Trace route** follows the corridor between the rails and lays the racing line down it.
@@ -412,11 +413,19 @@ When the designer opens a plan whose traced photo can't be shown, the plan opens
 | "The traced photo isn't where it was any more, so it isn't shown. Pick it again with the Choose photo button." | The photo has been moved, renamed or deleted since it was picked. The plan keeps the photo's location, not a copy of it. |
 | "That image couldn't be opened." | The photo is over the size limits, isn't a PNG, JPEG, GIF or BMP picture, or is damaged. |
 
-At the bottom, **Show this plan as the track's main picture** (on by default) makes the plan the layout's picture. **Save as PNG...** exports the plan as an image. Click **Save Layout** to save the plan onto the layout. You can undo the whole designer session with the sidebar **Undo** button.
+At the bottom, **Show this plan as the track's main picture** (on by default) makes the plan the layout's picture. **Save as PNG** exports the plan as an image. Click **Save Layout** to save the plan onto the layout. You can undo the whole designer session with the sidebar **Undo** button.
 
-## Setup Log
+<a id="setup-log"></a>
 
-Setups are logged against a car in the **Garage**: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
+## Garage
+
+The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be) and **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)).
+
+Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Retire** and **Delete**, and every setup logged for it.
+
+<!-- TODO: confirm and document the car window's details, Lend Out and Chassis Types in full; this section only covers setups in detail. -->
+
+Setups are logged against a car: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
 
 <!-- screenshot: a car in the Garage, its setups listed with Changed Since Last and Best Lap -->
 
@@ -428,7 +437,7 @@ The same changes are what the winner's mechanic talks about in the recap's inter
 
 ### Log a setup
 
-1. Click **Log a Setup...**.
+1. Click **Log a Setup**.
 2. Choose the **Driver:**, **Track:** and **Car:**.
 3. Pick a **Chassis sheet:** — the template of fields to fill in.
 4. In **Ran in session:**, pick the session this setup ran in, or leave it at **(not linked to a session)**. Linking it is what fills in **Best Lap**.
@@ -443,14 +452,14 @@ Setups saved before chassis sheets existed show as **(legacy entry)**. When you 
 
 A chassis sheet is the template a setup is filled in against: a diagram of the car with callouts, plus a list of fields. HeatCaller comes with a **Kyosho MR-04 / MR-03** sheet.
 
-Click **Chassis Sheets...** to manage them. **New...** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit...** opens it, and **Delete** removes it (setups that used it are kept but show as legacy entries; Undo can restore the sheet).
+Click **Chassis Sheets** to manage them. **New** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit** opens it, and **Delete** removes it (setups that used it are kept but show as legacy entries; Undo can restore the sheet).
 
 In the sheet editor (**Chassis Diagram**):
 
 - **Chassis name:** names the sheet.
 - **Set Diagram Image** uses your own picture of the chassis; **Use Built-in Outline** goes back to the drawn outline. The picture gets the same size and type check as a track photo (see [Add or edit a layout](#add-or-edit-a-layout)), and an **Image not set** message says why one is turned away. A diagram already stored that's over the limits isn't opened: the sheet shows the built-in outline instead.
-- Click a dot on the diagram to select a callout, or double-click empty space to add one. **Add Point**, **Delete Point** and **Edit Field...** manage callouts.
-- **Other tuning fields (not on the diagram)** holds things with no place on a picture, such as motor, gearing and battery. Use **Add...**, **Rename...**, **Edit Field...** and **Remove**.
+- Click a dot on the diagram to select a callout, or double-click empty space to add one. **Add Point**, **Delete Point** and **Edit Field** manage callouts.
+- **Other tuning fields (not on the diagram)** holds things with no place on a picture, such as motor, gearing and battery. Use **Add**, **Rename**, **Edit Field** and **Remove**.
 
 **Edit Field** sets a field's **Label:**, **Unit:** (for example mm), whether to **Show as a callout on the chassis diagram**, and how it's **Filled in as:**:
 
@@ -460,6 +469,6 @@ In the sheet editor (**Chassis Diagram**):
 - **Free text**
 - **Yes / no tickbox**
 
-For the dropdown and checklist kinds, build the **Options:** list with **Add...**, **Rename...**, **Remove**, **Move Up** and **Move Down**.
+For the dropdown and checklist kinds, build the **Options:** list with **Add**, **Rename**, **Remove**, **Move Up** and **Move Down**.
 
 Because setup values are stored as text, you can edit a sheet's fields later without losing setups already saved against it.

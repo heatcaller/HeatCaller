@@ -366,8 +366,8 @@ public sealed class RaceProgramControl : UserControl
         // No blank band under the card: this pane's bottom edge is the
         // window's, and the room the theme leaves under a scrolling page
         // was 32px taken from the half above, which gives way to this one's
-        // least. See LayoutDoctor.NoRoomBelow.
-        LayoutDoctor.NoRoomBelow(page);
+        // least. See ScrollTheming.NoRoomBelow.
+        ScrollTheming.NoRoomBelow(page);
 
         _page = page;
         Controls.Add(page);

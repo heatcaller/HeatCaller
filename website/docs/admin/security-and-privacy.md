@@ -33,12 +33,13 @@ This held before the race-day manager could be reached through the relay, and it
 ### What counts as a secret
 
 - The ElevenLabs API key (your own; the HeatCaller voice has no key on the laptop at all — it uses the publish token)
-- The relay publish token (and the last token that tested clean)
+- The relay publish token (and the last token that tested clean), and the token for a voice relay typed in on **Voice → Voice Settings**, if any
 - The QR check-in key, which the online check-in ids on printed QR check-ins are made from
 - The Local Screens remote, check-in and manager PINs
 - The online staff PIN and every racer's personal PIN
 - The email app password
 - The backup password
+- The invite codes for online driver sign-up
 
 ### How they're stored
 
@@ -54,7 +55,7 @@ This doesn't reach copies made before the upgrade, such as old backups. See [Kno
 
 ### In backups
 
-Because DPAPI-sealed values are useless on another PC, a backup carries a second copy of the secrets only if you've set a backup password on the **Backup & Restore** page (the **Backup password** card). That copy (a file named `secrets.hgk` inside the backup) is encrypted with AES-GCM, using a key derived from your backup password with PBKDF2-SHA256 and 210,000 iterations. The stretching makes each password guess slow for anyone who gets hold of a backup file.
+Because DPAPI-sealed values are useless on another PC, a backup carries a second copy of the secrets only if you've set a backup password on the **Backup & Restore** page (the **Backup password** card). That copy (a file named `secrets.hgk` inside the backup) is encrypted with AES-GCM, using a key derived from your backup password with PBKDF2-SHA256 and 210,000 iterations. The stretching makes each password guess slow for anyone who gets hold of a backup file. The sign-up invite codes aren't part of that copy.
 
 With no backup password, backups carry no usable secrets at all. See [Backups](backups.md#the-backup-password) for what that means when restoring on a new PC.
 
@@ -219,7 +220,7 @@ Pictures are sized from their header before they're ever opened, so a picture to
 A backup can't carry your secrets onto the laptop that made it without the backup password, but it does carry plain addresses: the relay's, the voice relay's and the mail server's. Restoring a backup whose address this laptop wasn't already using would have sent this laptop's own sealed token, or mailbox password and racers' PINs, to that address. So after a restore, a new address is held back until you check it on the page where it's shown:
 
 - **The relay:** the **Club Website** page shows **Check these settings** and publishes nothing until you press **Save** or **Test Connection**.
-- **The voice relay:** nothing is asked of it until you click in its address box on **Voice Settings** and press <kbd>Enter</kbd>.
+- **The voice relay:** nothing is asked of it until you click in its address box on **Voice → Voice Settings** and press <kbd>Enter</kbd>.
 - **The mail server:** nothing is emailed until **Send Test Email** goes through, or you choose or type the server again. Gmail, iCloud and Outlook.com are never held back.
 
 Restoring your own backup on your own laptop, with the same addresses, asks nothing. The console log says what's held back when HeatCaller starts.

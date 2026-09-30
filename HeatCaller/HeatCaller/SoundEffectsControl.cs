@@ -1106,8 +1106,8 @@ public sealed class SoundEffectsControl : UserControl
         // No pop-up on the name: it only repeated the name and detail
         // already written on the row.
 
-        var chkRace = new CheckBox { AutoSize = true, Checked = config.Enabled };
-        var chkPractice = new CheckBox { AutoSize = true, Checked = config.EnabledInPractice ?? config.Enabled };
+        var chkRace = new ThemedCheckBox { AutoSize = true, Checked = config.Enabled };
+        var chkPractice = new ThemedCheckBox { AutoSize = true, Checked = config.EnabledInPractice ?? config.Enabled };
 
         _tips.SetToolTip(chkRace, $"Play \"{name}\" during races.");
         _tips.SetToolTip(chkPractice, $"Play \"{name}\" during practice.");
@@ -1266,7 +1266,7 @@ public sealed class SoundEffectsControl : UserControl
 
             // Per-lap sounds are held while a flag is out, so chimes don't
             // play over a caution. Tick this for one that should carry on.
-            var chkCaution = new CheckBox
+            var chkCaution = new ThemedCheckBox
             {
                 Text = "Caution",
                 AutoSize = true,

@@ -51,14 +51,14 @@ public sealed class RaceClassEditForm : Form
     private readonly NumericUpDown _numMainSize = new();
     private readonly NumericUpDown _numBumpUp = new();
     private readonly NumericUpDown _numCountBest = new();
-    private readonly CheckBox _chkJumpStart = new();
+    private readonly CheckBox _chkJumpStart = new ThemedCheckBox();
     private readonly NumericUpDown _numJumpPenalty = new();
-    private readonly CheckBox _chkJumpCostsLap = new();
+    private readonly CheckBox _chkJumpCostsLap = new ThemedCheckBox();
 
     /// <summary>The caption of the penalty row, greyed with it - see UpdateJumpStartEnabled. The field grid makes it.</summary>
     private readonly Label _lblJumpPenalty;
 
-    private readonly CheckBox _chkWarnUninspected = new();
+    private readonly CheckBox _chkWarnUninspected = new ThemedCheckBox();
 
     /// <summary>
     /// The class's colour, shown rather than named. A swatch is the only
@@ -776,73 +776,10 @@ public sealed class RaceClassEditForm : Form
         /// <summary>Asks for one line of text over this window. Null when cancelled.</summary>
         private string? PromptForText(string title, string prompt, string defaultValue)
         {
-            using var dialog = new TextPrompt(title, prompt, defaultValue);
+            using var dialog = new TextPromptForm(title, prompt, defaultValue);
 
             return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
         }
-    }
-
-    /// <summary>
-    /// Small single-line prompt - the check the Tech Checklist's Add... and
-    /// Rename... ask for. A class of its own, and internal, so the layout
-    /// test can build it (WindowCatalog).
-    ///
-    /// On the layout pieces (DialogFit): the question, the box under it
-    /// across the window, and OK and Cancel at the foot; as tall as that.
-    /// It used to be built in pixels in a 400x130 window, the box a fixed
-    /// 372px and the buttons at fixed places and widths under it.
-    /// </summary>
-    internal sealed class TextPrompt : Form
-    {
-        private readonly TextBox _txt = new();
-
-        public TextPrompt(string title, string prompt, string defaultValue)
-        {
-            Text = title;
-            Font = AppTheme.BodyFont;
-            BackColor = AppTheme.Background;
-            ForeColor = AppTheme.TextDark;
-
-            var lbl = new Label { Text = prompt, AutoSize = true };
-            _txt.Text = defaultValue;
-
-            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK };
-            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-
-            var page = new FillPage();
-            page.Add(lbl, gapBelow: UiLayout.HintGap);
-            page.Add(_txt, gapBelow: UiLayout.SectionGap);
-
-            // A pixel either side of the box for the ring the theme draws round
-            // it, outside it, on what holds it (Pieces.RingRoom): stretched
-            // across the page, the box's sides would be the page's edges, and
-            // the ring's sides would be drawn past them, where nothing shows.
-            // The gap under the box stays as it was.
-            _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
-
-            // Its height is the box's own, and changes when the theme takes its
-            // border off - see Pieces.KeepHeightTold.
-            Pieces.KeepHeightTold(_txt);
-
-            // Against the right-hand edge, Cancel furthest right, as they
-            // were - and Tab still reaches OK first: the bar takes them right
-            // to left, in the order they were added.
-            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
-            ok.TabIndex = 0;
-            cancel.TabIndex = 1;
-
-            Controls.Add(page);
-
-            AcceptButton = ok;
-            CancelButton = cancel;
-
-            AppTheme.ApplyRecursively(this);
-
-            DialogFit.Keep(this, page, width: 400);
-        }
-
-        /// <summary>What was typed, as typed. Only meaningful after DialogResult.OK.</summary>
-        public string Answer => _txt.Text;
     }
 }
 

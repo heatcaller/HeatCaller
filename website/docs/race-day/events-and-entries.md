@@ -2,82 +2,174 @@
 
 This page covers the start of a race day: creating the event, getting drivers checked in at the desk, printing QR check-ins, scrutineering cars, and checking that every transponder is being heard before the first race.
 
-The **Race Day** page has five tabs, in the order the day runs: **Event**, **Entries**, **Program**, **Run Sheet** and **Tech Log**. This page covers **Event**, **Entries** and **Tech Log**. The program and run sheet are covered in [Program, heats and mains](program-and-mains.md).
+The **Race Day** page has three tabs: **Next Steps**, **Setup** and **Who's Racing**. This page covers **Setup** (the race day itself), **Who's Racing** (check-in and scrutineering) and the **Scrutineering log** window you open from it. **Next Steps**, with tonight's program under it, and the **Timetable** window are covered in [Program, heats and mains](program-and-mains.md).
 
 ## How events work
 
-An event (a race day) is what keeps one meeting's records separate from the next. Check-ins, tech inspections, the program and the run sheet are all filed against the **current** event. Starting a new race day starts all of them fresh, and last week's records stay filed under last week's event instead of being cleared away.
+An event (a race day) is what keeps one meeting's records separate from the next. Check-ins, tech inspections, the program and the timetable are all filed against the **current** event. Starting a new race day starts all of them fresh, and last week's records stay filed under last week's event instead of being cleared away.
 
 Events matter most for qualifying. Qualifying only counts the rounds that belong to the event, so a second race day doesn't seed its mains from both days' heats mixed together. This holds even on a brand-new race day before any heats have run: earlier days' results aren't borrowed. Seeding mains, bump-ups, marshal assignments and heat sheets also only look at the current race day's rounds. With no race day open, everything recorded is used.
 
 Anything recorded before you started using events lives in a built-in **legacy event**. You can look at it, but you can't edit it, and it's never the default.
 
-## Race Day → Event
+While a race day is open, the sidebar lifts **Race Day**, **Race Control** and **Championship** into a **TONIGHT** group at the top. See [The pages](../getting-started/tour.md#the-pages).
 
-<!-- screenshot: Race Day Event tab with a race day selected and classes ticked -->
+### Race day or club night
 
-### Start a race day
+Every race day is one of two kinds, chosen when the day is started (**What kind of night is it?** in the **Start a race day** window, **What kind of night:** in the wizard) and changeable afterwards in **What kind of night:** on **Setup**. It decides what the program offers.
 
-1. Go to **Race Day → Event**.
-2. Click **New Race Day**. HeatCaller creates an event named after today's date (for example "Race Day 21 Sep 2026"), makes it current, and puts the cursor in the name box.
-3. Type a proper name if you want one, and fill in the fields below.
-4. Tick the classes that are racing today under **Classes racing:**.
-5. Click **Save Changes**.
+| Kind | What it means |
+|---|---|
+| **Race day - heats, then finals** | Qualifying heats, then finals (mains) built from them. Heats are built from drivers who have checked in. |
+| **Club night - just races** | A flat list of races: no finals, no seeding, no bump-ups. Everyone in a racing class is in them. |
 
-!!! warning
-    Changes on this tab aren't saved until you click **Save Changes** — including the classes you tick.
+On a club night, the program builds races instead of heats (named "Race 1", or "Race 1 Heat 2" when a class is too big for one go), the finals commands and **Move the Top Finishers Up** aren't offered, and **Standings** becomes **Tonight's Standings**. See [Program, heats and mains](program-and-mains.md).
 
-### Event fields
+The kind of night also sets **Only include drivers who have checked in** when the day is started: on for a race day, off for a club night. You can change it afterwards on **Setup**.
+
+## Start a race day
+
+There are three ways in, and they all make the same kind of race day:
+
+- **New Race Day** on **Race Day → Setup** (or **New Race Day** on **Championship → Calendar**) asks two questions and starts the day.
+- **Set Up Tonight** on **Race Day → Setup** walks you through the whole evening, step by step. See [The Set Up Tonight wizard](#the-set-up-tonight-wizard).
+- **Start a Race Day**, offered on **Next Steps** and on **Who's Racing** when no race day is open, opens the Set Up Tonight wizard at the first step that isn't done yet.
+
+### New Race Day
+
+1. Go to **Race Day → Setup**.
+2. Click **New Race Day**. The **Start a race day** window opens.
+3. Choose **What kind of night is it?**: **Race day - heats, then finals** or **Club night - just races**.
+4. Under **Which classes are racing?**, tick the classes running today.
+5. Click **Start the Day**.
+
+The new day becomes current straight away, and the cursor goes to the **Name:** box so you can give it a proper name. Everything the window didn't ask about starts from your last race day: the venue, the track layout, the championship, the number of heats each driver gets and the drivers per heat. The name is today's date, for example "Race Day 21 Sep 2026" (or "Club Night 21 Sep 2026").
+
+On a club's first race day, every class starts ticked. After that, the classes from the last race day start ticked. If there are no classes yet, you can still start the day: **Next Steps** then walks you through setting them up.
+
+**Undo** takes a new race day away again, as long as nothing has been done with it yet. Once it has rounds, check-ins or timetable lines, the undo is refused; close the day instead if it isn't wanted.
+
+### The Set Up Tonight wizard
+
+**Set Up Tonight** on **Race Day → Setup** opens a window that walks through everything a race night needs, in order. You can also open it with <kbd>Shift</kbd>+<kbd>S</kbd>. HeatCaller also offers it once, on a start with no race day open ("Would you like a hand setting up a race night?").
+
+The steps are listed down the left: **Tonight**, **The day**, **Classes**, **Drivers**, **Program** and **All set**.
+
+| Step | What you do |
+|---|---|
+| **The day** | Choose what kind of night it is, and where. Moving on from here opens the day. |
+| **Classes** | Tick the classes out tonight (**Add Class** for a new one), then how many times each driver races, how many drivers go out at once, and the race format each class runs. |
+| **Drivers** | Tick everyone who has turned up, a class at a time if you like. **Add Driver** puts someone new on file and checks them in. |
+| **Program** | Builds tonight's races from the classes and drivers above. **Build It** builds them; **Back** lets you change anything first. |
+
+Every step can be skipped, and **Skip setup** leaves the wizard at any point. A step is saved when you move off it with **Next**, **Back** or a step name on the left. **Skip setup**, or closing the window, doesn't save the step you're on, but the steps you've already left are kept. Anything left to do is shown on **Next Steps**.
+
+<!-- screenshot: Set Up Tonight wizard on the Classes step -->
+
+## Race Day → Setup
+
+**Setup** is the race day itself: which day the app is working on, what the day is, and how its program gets built.
+
+<!-- screenshot: Race Day Setup tab with a race day selected and classes ticked -->
+
+There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day** and **Delete Day** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
+
+### Which race day
+
+| Field | What it does |
+|---|---|
+| **Working on:** | The race day the whole page is about. Real race days are listed newest first, with their date and whether they're open or closed; the legacy event is always last. **Picking a day here makes it the current race day**, so check-in, scrutineering, the heats and the timetable all follow it. **Undo** switches back. |
+
+Beside the picker are **New Race Day** and **Set Up Tonight** (see [Start a race day](#start-a-race-day)).
+
+The line under the picker shows what the selected day already holds, for example: "CURRENT - the whole page is about this race day.  14 checked in · 2 classes racing · 12 rounds in the program, 4 recorded · 12 timetable lines".
+
+!!! tip
+    Scrolling the page with the mouse wheel never changes **Working on:**. The box only changes when you click it and pick a day.
+
+### About the day
 
 | Field | What it does | Default |
 |---|---|---|
-| **Working on:** | Picks which event the fields below show. Real events are listed newest first, with their date and whether they're open or closed; the legacy event is always last. | The current event |
-| **Name:** | The event's name. | "Race Day" and the date |
-| **Venue:** | Where it's being run. Pick a saved venue or type any name — you don't need a venue profile. | Empty |
-| **Track layout:** | The layout every generated round starts on. Pick a saved layout or type a name. | Empty |
-| **Championship:** | The championship this event counts toward, or **(standalone - no championship)**. See [Results and championships](../race-control/results-and-championships.md). | Standalone |
-| **Qualifying rounds:** | How many qualifying rounds each class runs (1–10). | 3 |
-| **Classes racing:** | Tick the classes running today. The Program tab builds the qualifying program for all of them in one go. | None |
-| **Drivers per heat:** | How many drivers share a heat when the program is built (2–20). | 8 |
-| **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on the Entries tab. When unticked, it uses every driver in the class. | Off |
+| **Name:** | The race day's name. | "Race Day" (or "Club Night") and the date |
+| **What kind of night:** | **Race day - heats, then finals** or **Club night - just races**. See [Race day or club night](#race-day-or-club-night). | As chosen when the day was started |
+| **Venue:** | Where it's being run. Pick a saved venue or type any name — you don't need a venue profile. | From the last race day |
+| **Track layout:** | The layout every generated round starts on. Pick a saved layout or type a name. | From the last race day |
+| **Championship:** | The championship this race day counts toward, or **(standalone - no championship)**. See [Results and championships](../race-control/results-and-championships.md). | From the last race day |
+| **First race at:** | When the first race goes out. Tick **Set** to give the day a time; unticked, the day has none. **Fill In the Times...** on the Timetable starts from it, and writes back the time you use there. See [The Timetable](program-and-mains.md#the-timetable). | Not set |
+| **Notes:** | Free text about the day. The same notes show on **Championship → Calendar**. | Empty |
 
-The line under the picker shows what the selected event already holds, for example: "CURRENT - the whole page is about this event. 14 checked in · 2 classes racing · 12 rounds in the programme, 4 recorded · 12 run sheet lines".
+### Building the program
+
+| Field | What it does | Default |
+|---|---|---|
+| **Heats each driver gets:** | How many qualifying rounds each class runs (1–10). On a club night it reads **Races each driver gets:**. | 3, or the last race day's |
+| **Classes racing:** | Tick the classes running today. **Next Steps** builds tonight's heats (or races) for every one of them in one press. | As ticked when the day was started |
+| **Drivers per heat:** | How many drivers share a heat when the program is built (2–20). | The last race day's |
+| **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on **Who's Racing**. When unticked, it uses every driver in the class. | On for a race day, off for a club night |
+| **Start the next race automatically** | When a race finishes without a round picked on **Race Control**, it's recorded against the next round that hasn't run yet, so you can work through the program without picking each round by hand. See [Which round a race counts for](program-and-mains.md#which-round-a-race-counts-for). | On |
+| **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. | the class that was racing |
+
+<!-- TODO: confirm the Drivers per heat default on a club's first race day. The box shows 8 for a day that has no heat size of its own, but the build then uses the app's remembered heat size (6 on a new install) until the box is changed. -->
 
 !!! tip
-    Leave **Only include drivers who have checked in** off if your club doesn't run a sign-on desk. With it on and nobody checked in, the program would have no one in it.
+    If your club doesn't run a sign-on desk, untick **Only include drivers who have checked in**. With it on and nobody checked in, the program has no one in it, and **Next Steps** says "Nobody has checked in yet."
 
-### Switch, close and reopen events
+The legacy event can be selected and made current, to look at older records, but its fields can't be edited.
 
-- **Make Current** points check-in, tech, the program and the run sheet at the selected event. It's grayed out when the selected event is already current. You can make the legacy event current to look at older records.
-- **Close Day** stops new rounds joining the event. Its results and standings are kept and can still be reported. If you close the current event, "current" falls back to the legacy event. The button changes to **Reopen Day** for a closed event.
+### Close, reopen and delete a race day
 
-For a list of every event, with the days each one ran and how many rounds it holds, see [Calendar](#championship-calendar) below.
+- **Close Day** stops new rounds joining the selected race day. Its results and standings are kept and can still be reported. If you close the current day, no race day is current until you open or start another. The button changes to **Reopen Day** for a closed day. Reopening a day makes it current again if no other day is.
+- **Delete Day** deletes the selected race day. See below.
 
-## Race Day → Entries
+Both can be undone with **Undo**.
 
-The Entries tab is the sign-on desk: who's here today, whether their waiver is signed, and whether their car has passed tech.
+#### Delete Day
 
-<!-- screenshot: Race Day Entries tab with some drivers ticked in and the Scan to Check In panel -->
+**Delete Day** opens the **Delete race day** window. The day always goes, and so do the heats and finals on it, with its check-in sheet, its scrutineering and its timetable. If races were saved on the day, you choose what happens to them:
+
+- **Delete the *N* saved races from Race History** — their finishing order, lap times and notes. Personal bests, pace charts and head-to-head read from these, so those go too. Leave it unticked and the races stay; they just stop belonging to a race day.
+- **Also clear *N* track records set in them** — a lap record lives on the track layout, so it survives unless you clear it here. Cleared means no record; it isn't worked out again from the races that are left.
+- **Also take them out of *N* championships that picked them by hand** — for a championship where someone picked the races one by one. Deleting the day already stops its races counting toward a championship that scores by race day.
+- **Also take back *N* badges earned in them.**
+
+The three "Also" choices can only be ticked while the races themselves are being deleted. Click **Delete** to go ahead; **Cancel** is the default, so <kbd>Enter</kbd> never deletes a day. **Undo** puts all of it back, but only until a few more changes are made or the app is closed. The legacy event can't be deleted. The same delete is on **Championship → Calendar**, where you can delete several days at once.
+
+## Race Day → Who's Racing
+
+**Who's Racing** is the sign-on desk: who's here today, and whether their car has passed tech. It's also where scrutineering happens: the **Tech** column is the gate, and the **Scrutineering Log** button opens the full record.
+
+<!-- screenshot: Race Day Who's Racing tab with some drivers ticked in and the Scan to Check In card -->
+
+If no race day is open, a banner at the top says "No race day is open." Check-ins made then aren't kept with tonight's racing, and the heats can't be built from them. Click **Start a Race Day** in the banner to set one up.
+
+### The Drivers card
 
 Each row is a driver profile. The class shown is the class on the driver's profile — to move a driver to another class, edit their profile on the [Driver Profiles](drivers-and-classes.md#driver-profiles) page.
 
 | Column | What it shows |
 |---|---|
 | **Checked In** | Tick when the driver arrives. |
-| **Waiver Signed** | Tick if your venue tracks waivers. |
 | **Driver** | The driver's name. |
 | **Class** | The driver's class. |
-| **Tech** | The result of the driver's most recent inspection today in their class: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. Double-click the cell to inspect them. |
+| **Tech** | The result of the inspection that counts for this driver in their class: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. Passes are green, fails red. Double-click the cell to inspect the car. |
 
-A single click on a checkbox ticks or unticks it straight away. Check-ins and waivers are both kept per event, so a new race day starts with an empty sheet.
+A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet.
 
-The **Class:** filter at the top shows one class at a time, and HeatCaller remembers your choice. The summary beside it reads, for example, "9 of 12 checked in, 7 waivers signed (21 total checked in across all classes)".
+Above the list:
+
+- The **Class:** filter shows one class at a time, or **(all classes)**. HeatCaller remembers your choice.
+- **Only those not through tech** narrows the list to the cars still to be cleared: not inspected, or failed. With **(all classes)** in the **Class:** filter, it covers every class at once. See [Who still needs inspecting](#who-still-needs-inspecting).
+- The summary reads, for example, "9 of 12 checked in (21 total checked in across all classes)", followed by how tonight's program is built: "heats are built from checked-in drivers only" or "everyone in a racing class is in the heats, checked in or not" (on a club night, "tonight's races").
 
 The buttons under the list:
 
-- **Check In All Shown** ticks in every driver currently in the list (so it respects the class filter).
-- **Check Out Everyone** clears all check-ins for the current event, after you confirm. Waivers aren't touched. You can undo it with the **Undo** button in the sidebar: the drivers are checked back in to the event they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
-- **Inspect...** opens a tech inspection for the selected driver. See [Tech Log](#race-day-tech-log).
+- **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Class**. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
+- **Check In All Shown** ticks in every driver currently in the list (so it respects the filters).
+- **Check Out Everyone** clears all check-ins for the current race day, after you confirm. You can undo it with **Undo**: the drivers are checked back in to the race day they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
+- **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car).
+- **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
+- **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 
 ### Drivers checking themselves in
 
@@ -90,12 +182,12 @@ Online taps reach the laptop a few seconds late. If the desk changes a driver's 
 
 ### Scan QR check-ins
 
-The **Scan to Check In** panel lets you check drivers in by scanning their QR check-in with a USB barcode scanner. Scanners plug in and type like a keyboard, so there's nothing to set up.
+The **Scan to Check In** card lets you check drivers in by scanning their QR check-in with a USB barcode scanner. Scanners plug in and type like a keyboard, so there's nothing to set up.
 
 1. Click in the box that says **Waiting for scan...**.
 2. Scan a driver's QR check-in.
 
-The driver is checked in immediately, and the panel tells you what happened:
+The driver is checked in immediately, and the card tells you what happened:
 
 | Message | Meaning |
 |---|---|
@@ -109,11 +201,11 @@ The scanner reads both kinds of QR check-in described below, so QR check-ins you
 
 ### Print QR check-ins
 
-1. On the Entries tab, set the **Class:** filter to the drivers you want QR check-ins for (or all classes).
-2. Click **Print QR Check-ins...** and choose where to save.
+1. On **Who's Racing**, set the **Class:** filter to the drivers you want QR check-ins for (or all classes).
+2. Click **Print QR Check-ins** and choose where to save.
 3. Print the saved images, cut the QR check-ins out and hand them to drivers.
 
-HeatCaller saves the QR check-ins as PNG images sized for letter paper, 12 QR check-ins (3 across, 4 down) per page, with dashed cut lines. If there's more than one page, each page is saved as its own file (`driver-QR check-ins-page1.png`, `driver-QR check-ins-page2.png` and so on). Each QR check-in shows a QR code, the driver's name, and their class and transponder.
+HeatCaller saves the QR check-ins as PNG images sized for letter paper, 12 QR check-ins (3 across, 4 down) per page, with dashed cut lines. If there's more than one page, each page is saved as its own file, numbered after the name you chose (`qr-check-ins-page1.png`, `qr-check-ins-page2.png` and so on). Each QR check-in shows a QR code, the driver's name, and their class and transponder.
 
 There are two kinds of QR check-in, and HeatCaller picks one automatically:
 
@@ -125,27 +217,28 @@ There are two kinds of QR check-in, and HeatCaller picks one automatically:
 
 ### Self check-in poster
 
-**Self Check-In Poster...** opens a poster with a QR code that takes a phone to the laptop's check-in page, where drivers find their own name and tap it. The poster reads **CHECK IN** with the line "Scan, find your name, tap it. Same Wi-Fi as the timing laptop."
+**Self Check-In Poster** opens a poster with a QR code that takes a phone to the laptop's check-in page, where drivers find their own name and tap it. The poster reads **CHECK IN** with the line "Scan, find your name, tap it. Same Wi-Fi as the timing laptop."
 
 The laptop's web server must be running first, and phones must be on the same Wi-Fi as the laptop. If it isn't running, you'll see **Web server is not running**. Start it on the **Local Screens** page — see [Local Screens](../screens/phone-and-web.md).
 
 The poster opens in its own window, so you can leave it on a second screen by the door while racing carries on:
 
-- **Print...** prints it at full printer resolution.
+- **Print** prints it at full printer resolution.
 - **Full screen** fills the screen. Press <kbd>Esc</kbd> to leave full screen, and <kbd>Esc</kbd> again to close the window.
 - **Close** closes it.
 
-## Race Day → Tech Log
+## Scrutineering
 
-The Tech Log records scrutineering: which cars have been checked and cleared to race. Each class's checklist is set on the **Classes** page — see [Tech checklist](drivers-and-classes.md#tech-checklist).
+Scrutineering records which cars have been checked and cleared to race. Each class's checklist is set on the **Classes** page — see [Tech checklist](drivers-and-classes.md#tech-checklist).
 
-<!-- screenshot: Race Day Tech Log tab listing today's inspections -->
-
-The list shows **When**, **Driver**, **Class**, **Car**, **Result**, **Checks** (for example "5 ok, 1 fail"), **Inspector** and **Notes**. **Today only** (on by default) limits it to today's inspections, and **Class:** filters by class. The summary reads, for example, "12 inspected, 1 NOT cleared."
+The gate is the **Tech** column on **Who's Racing**. You record inspections from there, and the **Scrutineering log** window holds the full record.
 
 ### Inspect a car
 
-1. Click **New Inspection...** (or use **Inspect...** on the Entries tab, which fills in the driver for you). If the car was already inspected today (or in the last 6 hours, for a club night that runs past midnight), **Inspect...** opens that inspection to edit instead of starting a new one. An older inspection, such as Saturday's at a weekend meeting, is left as it was, and a new one is recorded for today. To change an older inspection, pick it in the Tech Log list and use **Edit...**.
+1. On **Who's Racing**, select the driver and click **Inspect Selected Car** (or double-click their **Tech** cell). Or click **New Inspection** in the Scrutineering log.
+
+    From **Who's Racing**, if the car was already inspected today (or in the last 6 hours, for a club night that runs past midnight), that inspection opens to edit instead of starting a new one. An older inspection, such as Saturday's at a weekend meeting, is left as it was, and a new one is recorded for today. To change an older inspection, pick it in the Scrutineering log and use **Edit**.
+
 2. Pick the **Driver:**. The **Class:** and **Car:** fill in from their profile; you can change them.
 3. For each item on the class's checklist, choose **OK**, **FAIL** or leave it at **not checked**. The line under the checklist sums it up: "FAILS - 1 check failed.", "2 checks not looked at yet." or "All checks passed."
 4. Enter the **Inspector:** and any **Notes:**.
@@ -165,26 +258,40 @@ If a check has since been taken off the class's checklist, older inspections sti
 
 A driver who runs two classes is inspected separately in each, because they may have two cars.
 
-### Who's outstanding?
+Recording or editing an inspection can be undone with **Undo**. **Cancel** in the inspection window leaves the inspection as it was. Changing only the notes, the inspector or the car doesn't change the inspection's time.
 
-Pick a class in **Class:** and click **Who's Outstanding?** to list every driver in that class who isn't cleared yet at the current event — either not inspected or failed. It needs a specific class selected.
+<a id="whos-outstanding"></a>
 
-Inspections are filed against the current event, so a car cleared on the first day of a two-day meeting stays cleared on the second. Re-inspecting a car files the new inspection under the race day that's open now. With no race day open, a pass counts for 18 hours after it was recorded, so a club night that runs past midnight doesn't lose its passes.
+### Who still needs inspecting
 
-The Entries tab, **Who's Outstanding?** and the tech warning on Race Control all use the same rule, so they agree on who's cleared.
+Tick **Only those not through tech** on **Who's Racing** to list every driver who isn't cleared yet at the current race day — either not inspected or failed — across all classes. Use the **Class:** filter to narrow it to one class, and **Inspect Selected Car** to deal with each one.
 
-**Edit...** (or double-click) changes an inspection, and **Delete** removes the selected ones. Both can be undone. **Cancel** in the inspection window leaves the inspection as it was. Changing only the notes, the inspector or the car doesn't change the inspection's time.
+Inspections are filed against the current race day, so a car cleared on the first day of a two-day meeting stays cleared on the second. Re-inspecting a car files the new inspection under the race day that's open now. With no race day open, a pass counts for 18 hours after it was recorded, so a club night that runs past midnight doesn't lose its passes.
+
+The **Tech** column, **Only those not through tech** and the tech warning on Race Control all use the same rule, so they agree on who's cleared.
+
+### The Scrutineering log
+
+**Scrutineering Log** on **Who's Racing** opens the **Scrutineering log** window: every inspection, with its car, its checks, who did it and their notes.
+
+<!-- screenshot: Scrutineering log window listing today's inspections -->
+
+The list shows **When**, **Driver**, **Class**, **Car**, **Result**, **Checks** (for example "5 ok, 1 fail"), **Inspector** and **Notes**. **Today only** (on by default) limits it to today's inspections, and **Class:** filters by class. The count at the end of the filters reads, for example, "12 inspected, 1 NOT cleared." or "12 inspected, all cleared."
+
+- **New Inspection** records an inspection. See [Inspect a car](#inspect-a-car).
+- **Edit** (or double-click a row) changes the selected inspection.
+- **Delete** removes the selected inspections, after you confirm.
+
+All of these can be undone with **Undo**. Click **Close** or press <kbd>Esc</kbd> to close the window.
 
 ### Tech warnings on Race Control
 
 HeatCaller can remind you, at the moment it matters, that a car in the next heat hasn't been through tech. This is controlled per class by **Warn when a driver in a heat hasn't passed tech today** in the class editor on the **Classes** page. It's on by default. See [Class settings](drivers-and-classes.md#class-settings).
 
-The warning only applies when you're running tech for that class: the class has a tech checklist, or someone has been inspected in that class today or at the current event. Classes you don't scrutineer never get warnings.
+The warning only applies when you're running tech for that class: the class has a tech checklist, or someone has been inspected in that class at the current race day (or recently, with no race day open). Classes you don't scrutineer never get warnings.
 
-When you stage a heat (or throw the green straight from idle):
-
-- The Race Control log shows a "[tech] WARNING" line listing the drivers on the round who haven't been cleared in the Tech Log.
-- The Next Up bar adds "· N not through tech".
+- The Next Up bar on **Race Control** adds "· N not through tech" to the next round, ahead of time.
+- When you stage a heat (or throw the green straight from idle), the Race Control log shows a "[tech] WARNING" line listing the drivers on the round who haven't been cleared, and says to record their inspection on **Race Day → Who's Racing**.
 
 The warning never stops the race; whether an uninspected car runs is your call. Practice, demo races and races with no round selected are never checked.
 
@@ -192,7 +299,7 @@ The warning never stops the race; whether an uninspected car runs is your call. 
 
 Before a race, it's worth checking that every car on the grid is actually being heard by the decoder. A flat or badly mounted transponder found now costs a driver two minutes; found after the race, it costs everyone a re-run.
 
-On the **Race Control** page, click **Pre-race check...**. Have the drivers put their cars on the track (or run them over the timing loop) first.
+On the **Race Control** page, click **Pre-race check** (or press <kbd>R</kbd>). Have the drivers put their cars on the track (or run them over the timing loop) first.
 
 <!-- screenshot: Pre-race check window with one car not heard and one weak -->
 
@@ -221,14 +328,14 @@ The line above the list names the current race day ("Current: *name*"), adds "(c
 
 | Button | What it does |
 |---|---|
-| **New Race Day** | Starts a race day with the same dialog as **Race Day → Setup**: it asks what kind of night it is and which classes are racing, and carries the rest over from the last day. You stay on the Calendar. |
-| **Rename** | Changes the selected race day's **Name:** and **Notes:**. |
-| **Switch to This Day** | Makes the selected race day current, so check-in, tech, the program and the run sheet follow it. You can also double-click a race day. A closed day can be switched to, to look at its results — nothing new joins it until you reopen it. |
+| **New Race Day** | Starts a race day with the same window as **Race Day → Setup**: it asks what kind of night it is and which classes are racing, and carries the rest over from the last day. You stay on the Calendar. |
+| **Rename** | Changes the selected race day's **Name:** and **Notes:**. Everything else about a day is set on **Race Day → Setup**. |
+| **Switch to This Day** | Makes the selected race day current, so check-in, scrutineering, the program and the timetable follow it. You can also double-click a race day. A closed day can be switched to, to look at its results — nothing new joins it until you reopen it. |
 | **Close Day** | Asks first, then stops new rounds joining the selected race day. Its rounds and results are kept. Select a closed day and click it again to reopen it; a reopened day becomes current if no other day is. |
 | **Rounds** | Lists the race day's rounds by class, and whether each has been run. |
-| **Delete Day** | Deletes the selected race day, or all of them if you select several (Ctrl+A selects the lot). It's the same delete as on **Race Day → Setup**: the heats and finals go with the day, and you choose whether its saved races, the track records set in them, championship picks and badges go too. With several days selected, one question covers them all. The legacy event is never deleted. |
+| **Delete Day** | Deletes the selected race day, or all of them if you select several (<kbd>Ctrl</kbd>+<kbd>A</kbd> selects the lot). It's the same delete as on **Race Day → Setup** (see [Delete Day](#delete-day)): the heats and finals go with the day, and you choose whether its saved races, the track records set in them, championship picks and badges go too. With several days selected, one question covers them all. The legacy event is never deleted. |
 
-All of these can be undone with the **Undo** button in the sidebar. An undo only reverses that one action, and a deleted day comes back one day at a time. If an undo changes which race day is current, check-in, tech and the run sheet switch with it.
+All of these can be undone with **Undo**. An undo only reverses that one action, and a deleted day comes back one day at a time. If an undo changes which race day is current, check-in, scrutineering and the timetable switch with it.
 
 !!! tip
     Picking a day in the **Working on:** box on **Race Day → Setup** switches to it too. Use whichever page you happen to be on.

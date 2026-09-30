@@ -48,7 +48,7 @@ public sealed class NewRaceDayForm : Form
     /// <summary>The hint under the shape picker, worded from it - as tall as the longer wording, so the class list never moves as the box is used.</summary>
     private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
 
-    private readonly CheckedListBox _lstClasses = new();
+    private readonly CheckedListBox _lstClasses = new ThemedCheckedListBox();
     private readonly Label _lblNoClasses = new();
 
     /// <summary>One entry in the shape picker. ToString is what the combo draws.</summary>

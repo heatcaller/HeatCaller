@@ -7,13 +7,23 @@ namespace HeatCaller;
 /// Read-only, and the PINs are masked until "Show PINs" is ticked - this
 /// is the kind of window that gets opened on a laptop with a queue of
 /// racers stood behind it.
+///
+/// On the layout pieces (DialogFit): the racers taking the height, and
+/// under them Show PINs and the count on the left with Copy All and Close
+/// against the right-hand edge. It used to be placed in pixels in a 760x540
+/// window: the list a fixed distance above a row of buttons at a fixed
+/// height from the bottom, the count beside the tick box at an x worked out
+/// from the tick box's width, all of it anchored to follow a resize.
 /// </summary>
 public sealed class RacerPinsForm : Form
 {
     private const string Mask = "\u2022\u2022\u2022\u2022\u2022\u2022";
 
+    /// <summary>The list shows its headings and at least this many racers before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly DataGridView _grid = new();
-    private readonly CheckBox _chkShow = new();
+    private readonly CheckBox _chkShow = new ThemedCheckBox();
 
     /// <summary>The rows as shown, PINs and all - the grid holds the mask until Show is ticked.</summary>
     private readonly List<(string Name, string ClassName, string Pin, string Email, bool Emailed)> _rows;
@@ -21,9 +31,6 @@ public sealed class RacerPinsForm : Form
     public RacerPinsForm(AppSettings settings, ProfileStore profiles)
     {
         Text = "Racer Check-in PINs";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(760, 540);
-        MinimumSize = new Size(600, 400);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
@@ -39,9 +46,6 @@ public sealed class RacerPinsForm : Form
             .OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        _grid.Location = new Point(12, 12);
-        _grid.Size = new Size(ClientSize.Width - 24, ClientSize.Height - 12 - UiLayout.ButtonHeight - 24);
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -66,12 +70,9 @@ public sealed class RacerPinsForm : Form
             _grid.Rows[index].Tag = row.Pin;
         }
 
-        var buttonsTop = ClientSize.Height - 12 - UiLayout.ButtonHeight;
-
         _chkShow.Text = "Show PINs";
         _chkShow.AutoSize = true;
         _chkShow.Font = AppTheme.BodyFont;
-        _chkShow.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _chkShow.CheckedChanged += (_, _) => ShowPins(_chkShow.Checked);
 
         var lblCount = new Label
@@ -80,38 +81,50 @@ public sealed class RacerPinsForm : Form
                 ? "Nobody has a PIN yet."
                 : $"{Plural.Of(_rows.Count, "racer")} - {_rows.Count(r => r.Email.Length == 0)} without an email address.",
             AutoSize = true,
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        var btnCopy = new Button { Text = "Copy All", Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
+        var btnCopy = new Button { Text = "Copy All" };
         btnCopy.Click += (_, _) => CopyAll(btnCopy);
         btnCopy.Enabled = _rows.Count > 0;
 
-        var btnClose = new Button { Text = "Close", Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
+        var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        // Right-aligned: measured first, then placed from the right edge.
-        var copyWidth = UiLayout.WidthFor(btnCopy);
-        var closeWidth = UiLayout.WidthFor(btnClose);
-        btnClose.Size = new Size(closeWidth, UiLayout.ButtonHeight);
-        btnCopy.Size = new Size(copyWidth, UiLayout.ButtonHeight);
-        btnClose.Location = new Point(ClientSize.Width - 12 - closeWidth, buttonsTop);
-        btnCopy.Location = new Point(btnClose.Left - UiLayout.ButtonGap - copyWidth, buttonsTop);
+        // The tick box and the count level with the middle of the buttons,
+        // as they were: in a row of their own, anchored to neither its top
+        // nor its bottom, each is centred up and down on it.
+        _chkShow.Anchor = AnchorStyles.Left;
+        lblCount.Anchor = AnchorStyles.Left;
 
-        _chkShow.Location = new Point(12, UiLayout.CentreOn(_chkShow, buttonsTop, UiLayout.ButtonHeight));
-        lblCount.Location = new Point(_chkShow.Left + _chkShow.PreferredSize.Width + 16, UiLayout.CentreOn(lblCount, buttonsTop, UiLayout.ButtonHeight));
+        // Show PINs and the count on the left, Copy All and Close against the
+        // right-hand edge with Close furthest right, as they were - on one
+        // line, or the buttons under the count when there is not room.
+        // Tab still reaches Copy All before Close, as it did: the right-hand
+        // bar takes its buttons right to left, in the order they were added.
+        var footer = new SplitBar(
+            new ButtonBar().With(_chkShow, lblCount),
+            new ButtonBar(alignRight: true).With(btnClose, btnCopy));
 
-        Controls.Add(_grid);
-        Controls.Add(_chkShow);
-        Controls.Add(lblCount);
-        Controls.Add(btnCopy);
-        Controls.Add(btnClose);
+        btnCopy.TabIndex = 0;
+        btnClose.TabIndex = 1;
+
+        var page = new FillPage();
+        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_grid);
+
+        // The size it had at the normal text size. It can be made bigger.
+        DialogFit.Keep(this, page, width: 760, height: 540);
     }
 
     private void ShowPins(bool show)

@@ -22,12 +22,17 @@ file names of source code, or implementation details a user can't see — except
 names/paths/commands are what the reader needs.
 
 ## Navigation (exact sidebar page names in the app, in order)
-Race Control, Race Day (tabs: Event, Entries, Program, Run Sheet, Tech Log), Championship (tabs include Standings and Calendar),
+Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (tabs include Standings and Calendar),
 Driver Profiles, Classes, Rentals, Handicaps, Batteries, Track Layouts, Race History,
-Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Setup Log,
-Practice, Ghost Cars, Demo Mode, Venues, Themes (tabs: Announcer Style, Looks), Sponsors, Local Screens, Club Website,
-Voice Announcements (Voice Settings, Announcer, Commentary, Rivalries), Sounds (Mixer, Effects, Ambience, Music, Lap Beeps),
+Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Garage,
+Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens, Club Website,
+Voice (Voice Settings, Announcements, Commentary, Rivalries), Sounds (Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps),
 Connection, Backup & Restore. There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages.
+(Checked against the code on 30 Sep 2026: MainForm.Pages.cs `_navItems` and each page's TabPages. "Voice Announcements"
+was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became Sounds → Soundscapes.)
+Some things are windows, not tabs: the **Timetable** (the race day's run sheet, from the program's **Timetable** button),
+the **Scrutineering log** (from **Scrutineering Log** on Who's Racing) and the **Announcer screen** (from **Open Announcer
+Screen** on Race Control).
 Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (bold, with →).
 
 ## Voice and style
@@ -54,21 +59,21 @@ docs/getting-started/index.md                  What HeatCaller does, what you ne
 docs/getting-started/install.md                Installing/running, updates, where data lives, first-run wizard
 docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
-docs/race-day/drivers-and-classes.md           Driver Profiles, Classes, Rentals, Batteries, Venues, Track Layouts, Setup Log
-docs/race-day/events-and-entries.md            Race Day → Event, Entries, Calendar; check-in desk; Tech Log; readiness check; QR check-ins
-docs/race-day/program-and-mains.md             Race Day → Program, Run Sheet, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
+docs/race-day/drivers-and-classes.md           Driver Profiles, Classes, Rentals, Batteries, Venues, Track Layouts, Garage
+docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins
+docs/race-day/program-and-mains.md             Race Day → Next Steps and its program, the Timetable window, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
 docs/race-control/running-a-race.md            Race Control page: staging → countdown → green → flags → checkered; start types; limits
 docs/race-control/corrections-and-recovery.md  Lap adjust, penalties, undo, crash recovery journal, closing mid-race, restarts
 docs/race-control/practice-and-ghosts.md       Practice, Ghost Cars, Demo Mode, Handicaps
-docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, Race Day → Standings
-docs/announcer/voice.md                        Voice Announcements → Voice Settings (Speak With: the free Windows voice or ElevenLabs, and the Windows voice standing in), Announcer, Rivalries; ElevenLabs setup, templates, events
+docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, tonight's standings
+docs/announcer/voice.md                        Voice → Voice Settings (Speak with: ElevenLabs, the HeatCaller voice or the free Windows voice), Announcements, Rivalries; the Announcer screen; ElevenLabs setup, templates, events
 docs/announcer/commentary.md                   Commentary (local LLM / Ollama)
-docs/announcer/sounds-and-music.md             Sounds → Effects, Ambience, Music, Mixer, Lap Beeps; audio auto-start; Themes → Announcer Style
+docs/announcer/sounds-and-music.md             Sounds → Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps; audio auto-start
 docs/timing/decoders.md                        Connection page: direct EasyLap, I-Lap; auto-connect; troubleshooting (Next Level Timing retired in 0.50.0)
 docs/timing/transponders.md                    Transponder handling, unknown transponders, rentals, signal/readiness, minimum lap time
 docs/screens/big-screen.md                     Big Screen window, leaderboard columns (KPIs), Sponsors
 docs/screens/phone-and-web.md                  Local Screens page: LAN server, live page, overlay, remote, check-in page, PINs, firewall/URL ACL
-docs/screens/looks-and-logo.md                 Themes → Looks: built-in and custom looks, app vs crowd-screen look, club logo, Appearance options
+docs/screens/looks-and-logo.md                 Themes page: built-in and custom looks, app vs crowd-screen look, club logo, Appearance options
 docs/online/index.md                           What the online relay is; pages it serves; what's published and what never is
 docs/online/setup.md                           Club Website page: address, club, token, test connection, what's published, Look (welcome line), Share/posters
 docs/online/check-in.md                        Online check-in: QR check-ins/QR, staff PIN, personal PINs, rotation, photos switch, the racer's view

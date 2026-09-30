@@ -105,9 +105,34 @@ public sealed class ChartExportOptions
     public Size ImageSize { get; set; } = new(1280, 680);
 }
 
-/// <summary>Asks how a chart image should be rendered before saving it.</summary>
+/// <summary>
+/// Asks how a chart image should be rendered before saving it.
+///
+/// On the layout pieces (DialogFit): the style and the size lined up in a
+/// field grid, each drop-down running to the right-hand edge; the preview
+/// under them taking the width and the height that are left; Save and
+/// Cancel at the foot against the right-hand edge. It opens at the size it
+/// had - wider when the longest style needs more - and can be made bigger,
+/// the preview growing with it. The preview draws itself as it always did;
+/// only the room it is given is new. It used to be placed in pixels in a
+/// fixed 520x420 window: the drop-downs at a fixed 380px beside captions
+/// at a fixed 110px, which cut the monochrome style's description short
+/// even at the normal text size, and the preview a fixed 474x226.
+/// </summary>
 public sealed class ChartExportForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size, at the least - the width it had, wider when the drop-downs need more.</summary>
+    private const int DialogWidth = 520;
+
+    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
+    private const int DialogHeight = 420;
+
+    /// <summary>The drop-downs' width at the normal text size - the width they had, wider when the longest choice needs more.</summary>
+    private const int DropDownWidth = 380;
+
+    /// <summary>The preview's least height at the normal text size, below which the window scrolls instead.</summary>
+    private const int PreviewLeastHeight = 160;
+
     private readonly ComboBox _cmbStyle = new();
     private readonly ComboBox _cmbSize = new();
     private readonly Panel _preview = new();
@@ -120,17 +145,9 @@ public sealed class ChartExportForm : Form
         _drawPreview = drawPreview;
 
         Text = "Save chart as image";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 420);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var lblStyle = new Label { Text = "Style:", Location = new Point(16, 20), AutoSize = true };
-        _cmbStyle.Location = new Point(110, 17);
-        _cmbStyle.Width = 380;
         _cmbStyle.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbStyle.Items.AddRange(new object[]
         {
@@ -140,9 +157,6 @@ public sealed class ChartExportForm : Form
         });
         _cmbStyle.SelectedIndexChanged += (_, _) => _preview.Invalidate();
 
-        var lblSize = new Label { Text = "Size:", Location = new Point(16, 56), AutoSize = true };
-        _cmbSize.Location = new Point(110, 53);
-        _cmbSize.Width = 380;
         _cmbSize.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSize.Items.AddRange(new object[]
         {
@@ -156,15 +170,19 @@ public sealed class ChartExportForm : Form
         SelectStyle(settings.ChartExportStyle);
         SelectSize(settings.ChartExportWidth);
 
-        var lblPreview = new Label { Text = "Preview:", Location = new Point(16, 94), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblPreview = new Label { Text = "Preview:", AutoSize = true, Font = AppTheme.BoldFont };
 
-        _preview.Location = new Point(16, 116);
-        _preview.Size = new Size(474, 226);
         _preview.BorderStyle = BorderStyle.FixedSingle;
         _preview.Paint += (_, e) =>
             _drawPreview(e.Graphics, _preview.ClientRectangle, ChartPalette.For(CurrentStyleKey()));
 
-        var btnSave = new Button { Text = "Save...", Location = new Point(310, 366), Width = 90 };
+        // The preview is drawn to its whole size, and it now grows and
+        // shrinks with the window. A panel resized repaints only the strip
+        // the resize uncovers, which left the drawing made for the old size
+        // in the rest - so all of it is drawn again.
+        _preview.Resize += (_, _) => _preview.Invalidate();
+
+        var btnSave = new Button { Text = "Save..." };
         btnSave.Click += (_, _) =>
         {
             Options.StyleKey = CurrentStyleKey();
@@ -178,21 +196,58 @@ public sealed class ChartExportForm : Form
             Close();
         };
 
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(408, 366), Width = 84, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(lblStyle);
-        Controls.Add(_cmbStyle);
-        Controls.Add(lblSize);
-        Controls.Add(_cmbSize);
-        Controls.Add(lblPreview);
-        Controls.Add(_preview);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        // Both drop-downs run to the right-hand edge, where the preview
+        // ends, as they did beside their captions.
+        var fields = new FieldGrid();
+        var captions = new List<Label>
+        {
+            fields.AddRow("Style:", _cmbStyle, stretch: true),
+            fields.AddRow("Size:", _cmbSize, stretch: true),
+        };
+
+        var page = new FillPage();
+        page.Add(fields);
+        page.Add(lblPreview, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_preview, _ => UiLayout.AtTextSize(PreviewLeastHeight));
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when a drop-down needs more for its longest choice: at a
+        // fixed 380px, "Monochrome - white background, grey lines (mono
+        // printers)" came out cut short once it was picked. Measured in the
+        // faces the theme pass left them in, and never read back from the
+        // drop-downs, which take the whole of the fields' column (stretch)
+        // and have already been cut to a window not sized yet. The caption
+        // column beside them as the grid works it out: its widest caption
+        // and the gap after it.
+        (Font Font, int Count, int Width)? styleWidth = null;
+        (Font Font, int Count, int Width)? sizeWidth = null;
+
+        var fieldColumn = Math.Max(
+            UiLayout.AtTextSize(DropDownWidth),
+            Math.Max(Pieces.PickerWidth(_cmbStyle, ref styleWidth), Pieces.PickerWidth(_cmbSize, ref sizeWidth)));
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
 
     private string CurrentStyleKey() => (_cmbStyle.SelectedItem as StyleItem)?.Key ?? "print";

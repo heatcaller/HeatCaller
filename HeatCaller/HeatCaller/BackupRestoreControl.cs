@@ -53,7 +53,7 @@ public sealed class BackupRestoreControl : UserControl
     private readonly Button _btnBackupNow = new();
 
     private readonly Label _lblLastBackup = new();
-    private readonly CheckBox _chkAutoBackupEnabled = new();
+    private readonly CheckBox _chkAutoBackupEnabled = new ThemedCheckBox();
     private readonly NumericUpDown _numIntervalDays = new();
     private readonly NumericUpDown _numKeepCount = new();
     private readonly TextBox _txtFolder = new();
@@ -326,7 +326,7 @@ public sealed class BackupRestoreControl : UserControl
 
         foreach (var service in Enum.GetValues<CloudService>())
         {
-            var check = new CheckBox
+            var check = new ThemedCheckBox
             {
                 Text = CloudBackup.NameOf(service),
                 AutoSize = true,

@@ -501,9 +501,26 @@ public sealed class EventsControl : UserControl
     }
 }
 
-/// <summary>Renames a race day and edits its notes. Everything else about a day is set on Race Day &gt; The Day.</summary>
+/// <summary>
+/// Renames a race day and edits its notes. Everything else about a day is set on Race Day &gt; The Day.
+///
+/// On the layout pieces (DialogFit): the name and the notes lined up in a
+/// field grid, running to the right-hand edge, the hint under the name in
+/// the field's column, and Save and Cancel at the foot; as tall as that. It
+/// used to be placed in pixels in a 440x260 window: the fields at a fixed x
+/// of 100 whatever the captions beside them needed, the hint wrapped at a
+/// fixed 324px, the notes a fixed 90px tall at every text size, and Save and
+/// Cancel in a row starting at a fixed x of 230 - which, at a larger text
+/// size, ran Cancel past the window's right-hand edge.
+/// </summary>
 public sealed class EventEditForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 440;
+
+    /// <summary>How many lines of notes show before the box scrolls - about the 90px it was at the normal text size.</summary>
+    private const int NotesLines = 4;
+
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtNotes = new();
 
@@ -514,35 +531,13 @@ public sealed class EventEditForm : Form
         Result = existing ?? new RaceEvent();
 
         Text = existing is null ? "New Event" : $"Edit {Result.DisplayName}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(440, 260);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        var lblName = new Label { Text = "Name:", Location = new Point(16, 20), AutoSize = true };
-        _txtName.Location = new Point(100, 17);
-        _txtName.Width = 324;
         _txtName.Text = Result.Name;
         _txtName.PlaceholderText = "Spring Regional, Club Night 12 Sept...";
 
-        var lblHint = new Label
-        {
-            Text = "Rounds built while this race day is the current one belong to it. Qualifying and mains are then worked out "
-                 + "from those rounds alone.",
-            Location = new Point(100, 46),
-            AutoSize = true,
-            MaximumSize = new Size(324, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, 110), AutoSize = true };
-        _txtNotes.Location = new Point(100, 107);
-        _txtNotes.Size = new Size(324, 90);
         _txtNotes.Multiline = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
@@ -563,13 +558,37 @@ public sealed class EventEditForm : Form
         };
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        AppTheme.LayoutButtonRow(230, 214, 8, btnSave, btnCancel);
 
-        Controls.AddRange(new Control[] { lblName, _txtName, lblHint, lblNotes, _txtNotes, btnSave, btnCancel });
+        // Both fields run to the right-hand edge, where the buttons end, as
+        // the 324px fields did beside their captions; the hint under the
+        // name, wrapping to the field's width.
+        var fields = new FieldGrid();
+        fields.AddRow("Name:", _txtName, stretch: true);
+        fields.AddHint("Rounds built while this race day is the current one belong to it. Qualifying and mains are then worked out "
+                       + "from those rounds alone.");
+        fields.AddRow("Notes:", _txtNotes, stretch: true);
+
+        var page = new FillPage();
+        page.Add(fields);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, in the face it leaves the box in: a few
+        // lines of it, as the box draws them (Pieces.LineHeight).
+        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
+
+        DialogFit.Keep(this, page, width: DialogWidth);
     }
 }

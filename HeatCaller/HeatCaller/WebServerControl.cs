@@ -16,8 +16,8 @@ public sealed class WebServerControl : UserControl
     private readonly TextBox _txtPin = new();
     private readonly TextBox _txtCheckInPin = new();
     private readonly TextBox _txtManagerPin = new();
-    private readonly CheckBox _chkAllowResultEditing = new();
-    private readonly CheckBox _chkShowPins = new();
+    private readonly CheckBox _chkAllowResultEditing = new ThemedCheckBox();
+    private readonly CheckBox _chkShowPins = new ThemedCheckBox();
     private readonly Button _btnStart = new();
     private readonly Button _btnStop = new();
     private readonly Label _lblStatus = new();
@@ -327,7 +327,7 @@ public sealed class WebServerControl : UserControl
 
         _textSize.Wear(lblPinHint, () => AppTheme.SmallFont);
 
-        var chkAutoStart = new CheckBox
+        var chkAutoStart = new ThemedCheckBox
         {
             Text = "Start the server automatically when the app opens",
             AutoSize = true,

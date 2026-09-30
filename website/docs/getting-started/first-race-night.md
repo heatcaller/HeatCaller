@@ -58,23 +58,26 @@ Full detail: [Drivers and classes](../race-day/drivers-and-classes.md) and [Tran
 
 ## Step 4: Start a race day
 
-Everything on race night (check-ins, tech, the program, the run sheet) is filed against a race day. Starting a new one gives you a clean sheet, and last week's stays with last week.
+Everything on race night (check-ins, tech, the program, the timetable) is filed against a race day. Starting a new one gives you a clean sheet, and last week's stays with last week.
 
-1. Open **Race Day → Event**.
-2. Click **New Race Day**. It becomes the current event straight away, named with today's date. Type a better **Name:** if you like.
-3. Set **Track layout:**.
-4. Under **Classes racing:**, tick the classes running tonight.
-5. Check **Qualifying rounds:** (default 3) and **Drivers per heat:** (default 8).
-6. Optional: tick **Only include drivers who have checked in**. Heats are then built only from the drivers who are actually here.
-7. Click **Save Changes**.
+1. Open **Race Day → Setup**.
+2. Click **New Race Day**. In the **Start a race day** window, choose **Race day - heats, then finals** (or **Club night - just races** if your club just races, with no finals), tick the classes running tonight, and click **Start the Day**.
+3. The new day is current straight away, named with today's date. Type a better **Name:** if you like.
+4. Set **Track layout:**.
+5. Check **Heats each driver gets:** (default 3) and **Drivers per heat:**.
+6. Check **Only include drivers who have checked in**. On a race day it starts ticked, so heats are built only from the drivers who are actually here. Untick it if you don't run a sign-on desk.
+
+There's no Save button: every change on **Setup** saves itself.
+
+Would you rather be walked through it? Click **Set Up Tonight** instead. It takes you through the day, tonight's classes, who's here and the program, one step at a time, and covers steps 4 to 6 of this walkthrough too.
 
 Full detail: [Events and entries](../race-day/events-and-entries.md).
 
 ## Step 5: Check drivers in
 
-1. Open **Race Day → Entries**.
+1. Open **Race Day → Who's Racing**.
 2. Tick **Checked In** for each driver as they arrive. **Check In All Shown** does everyone in the list at once.
-3. If your venue uses waivers, tick **Waiver Signed** too.
+3. Someone new at the desk? **Add Driver** puts them on file and checks them in.
 
 Want it faster? Print QR check-ins (**Print QR Check-ins**) and scan them with a USB barcode scanner into the **Scan to Check In** box. Or start the web server on **Local Screens** and put up the **Self Check-In Poster**, so drivers can check themselves in from their phones. The online relay can also do this from anywhere (see [Online check-in](../online/check-in.md)).
 
@@ -88,7 +91,7 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 
 If the card says something else comes first, such as "No race day is open.", its button does that instead.
 
-Optional: on **Race Day → Run Sheet**, click **Build from Program** for a timed running order that ticks itself off as heats are recorded.
+Optional: click **Timetable** under the program for a timed running order. It fills itself from the program and ticks itself off as heats are recorded; **Fill In the Times...** on its **More** menu puts a time against every line.
 
 Full detail: [Program and mains](../race-day/program-and-mains.md).
 
@@ -104,7 +107,7 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 
 ## Step 8: Run the first heat
 
-1. On **Race Day → Program**, the banner now reads "Next up: ..." (for example, the first qualifying heat) with a **Start** button for it. Click it. Or select a round and click **Start Selected**.
+1. On **Race Day → Next Steps**, the card now reads "Next up: ..." (for example, the first qualifying heat) with a **Start** button for it, such as **Start Q1 Heat 1**. Click it. Or select a round in the program and click **Start Selected**.
 2. HeatCaller switches to **Race Control** and runs the start sequence: **Stage**, then **Countdown**, then **Green (Start)**. By default each step follows on from the last once the announcer has finished speaking.
 3. Race. Laps appear on the leaderboard as cars cross the line.
 4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green (Start)** to resume. You can also use <kbd>F1</kbd> to <kbd>F6</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
@@ -119,9 +122,9 @@ Full detail: [Running a race](../race-control/running-a-race.md). If something g
 
 ## Step 9: Let the announcer call it
 
-The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Windows voice. For a more natural one, go to **Voice Announcements → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
+The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Windows voice. For a more natural one, go to **Voice → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
 
-- The **Announcer** button on **Race Control** opens **Voice Announcements → Announcer**, which has talking points for whoever is on the mic. It has a button back to **Race Control**.
+- **Open Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
 - If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
 
@@ -136,7 +139,7 @@ When a race finishes, HeatCaller saves it to **Race History** automatically. The
 
 Open **Race History** to see full results, lap times and exports.
 
-When qualifying is done for a class, the **Program** banner says "Qualifying is complete for ..." and offers **Seed the Mains**. That builds the A, B and C mains from the qualifying order. As lower mains finish, it offers **Apply Bump-Ups**. At the end of the night, **Qualifying Standings** and the event report sum it all up.
+When qualifying is done for a class, the card on **Next Steps** says "Qualifying is complete for ..." and offers **Build the finals from qualifying**. That builds the A, B and C mains from the qualifying order. As lower mains finish, it offers **Move the top finishers up** (the bump-ups). At the end of the night, **Qualifying Standings** and the event report sum it all up.
 
 Full detail: [Program and mains](../race-day/program-and-mains.md) and [Results and championships](../race-control/results-and-championships.md).
 
@@ -164,5 +167,5 @@ For results, standings and check-in that anyone can open from anywhere, set up t
 
 - **Back up.** Automatic backups are on by default, once a day. Before you pack up, pressing **Back Up Now** on **Backup & Restore** costs nothing. See [Backups](../admin/backups.md).
 - **Rentals.** If the sidebar shows a count next to **Rentals**, a club transponder is still out.
-- **Close the day.** On **Race Day → Event**, **Close Day** stops new rounds joining the event. Its results and standings stay available.
+- **Close the day.** On **Race Day → Setup**, **Close Day** stops new rounds joining the race day. Its results and standings stay available.
 - **Championship.** To count tonight toward a season, see [Results and championships](../race-control/results-and-championships.md).

@@ -29,7 +29,7 @@ public sealed class DemoModeControl : UserControl
     private readonly ComboBox _cmbRound = new();
 
     private readonly Label _lblRoundHint = new();
-    private readonly CheckedListBox _clbDrivers = new();
+    private readonly CheckedListBox _clbDrivers = new ThemedCheckedListBox();
     private readonly NumericUpDown _numPlaceholderCount = new();
     private readonly NumericUpDown _numStagingSeconds = new();
     private readonly NumericUpDown _numCountdownSeconds = new();
@@ -103,7 +103,7 @@ public sealed class DemoModeControl : UserControl
     private readonly TextSize _textSize = new();
 
     /// <summary>The save-to-history box, and the settings' captions, measured for the least the cards beside the racers can do with - see RacersWidth.</summary>
-    private readonly CheckBox _chkSaveDemo = new();
+    private readonly CheckBox _chkSaveDemo = new ThemedCheckBox();
     private readonly List<Label> _settingsCaptions = new();
 
     /// <summary>The racers' card and the caption of its round picker, which the column's width is measured from - see RacersWidth.</summary>

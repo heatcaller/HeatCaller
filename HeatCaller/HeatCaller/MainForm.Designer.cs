@@ -24,7 +24,7 @@ partial class MainForm
     private Label lblBaud = null!;
     private ComboBox cmbBaud = new();
     private ComboBox cmbConnectionType = new();
-    private CheckBox chkAutoConnect = new();
+    private CheckBox chkAutoConnect = new ThemedCheckBox();
     private Button btnConnect = new();
     private Button btnDisconnect = new();
     private Label lblStatus = new();
@@ -49,10 +49,10 @@ partial class MainForm
 
     // The developer console, on the Connection page.
     private TextBox txtConsole = new();
-    private CheckBox chkAutoScroll = new();
+    private CheckBox chkAutoScroll = new ThemedCheckBox();
     private TextBox txtConsoleFilter = new();
     private ComboBox cmbConsolePreset = new();
-    private CheckBox chkFilterExclude = new();
+    private CheckBox chkFilterExclude = new ThemedCheckBox();
     private Button btnCopyConsole = new();
     private Button btnClearConsole = new();
 
@@ -200,8 +200,13 @@ partial class MainForm
         }
 
         // --- Sidebar ---
+        //
+        // Its width, the header's height and the footer's row of buttons are
+        // at the screen's DPI (UiLayout.AtDpi), as the point-size text in
+        // them is: on a screen the app draws at 150% (--dpi-aware) that text
+        // is half as big again in pixels. Exactly these sizes at 96 DPI.
         pnlSidebar.Dock = DockStyle.Left;
-        pnlSidebar.Width = 220;
+        pnlSidebar.Width = SidebarWidth;
         pnlSidebar.BackColor = AppTheme.SidebarBackground;
 
         // CurrentMode is the running look's family, set by AppTheme.UseLook
@@ -215,7 +220,7 @@ partial class MainForm
         // the moving grid lines flicker.
         lblAppTitle = new SidebarHeader("HEATCALLER", string.Empty) { SynthwaveMode = isSynthwave };
         lblAppTitle.Dock = DockStyle.Top;
-        lblAppTitle.Height = isSynthwave ? 132 : 64;
+        lblAppTitle.Height = isSynthwave ? UiLayout.AtDpi(132) : UiLayout.AtDpi(64);
         lblAppTitle.BackColor = AppTheme.SidebarBackground;
 
         lstNav.Dock = DockStyle.Fill;
@@ -226,30 +231,31 @@ partial class MainForm
         // A single row of three icon-only buttons rather than three stacked
         // text rows - see MainForm.SetUpFooterButton. Same 12px margin
         // either side as the old stack (12 + 60 + 8 + 60 + 8 + 60 + 12 =
-        // 220 = pnlSidebar.Width), so the row lines up with the nav list
-        // above it without its own separate inset.
+        // 220, the sidebar's width at the normal text size), so the row lines
+        // up with the nav list above it without its own separate inset; kept
+        // in the middle when the sidebar is wider (PlaceSidebar).
         pnlSidebarFooter.Dock = DockStyle.Bottom;
-        pnlSidebarFooter.Height = 70;
+        pnlSidebarFooter.Height = UiLayout.AtDpi(70);
         pnlSidebarFooter.BackColor = AppTheme.SidebarBackground;
 
-        btnManageNav.Location = new Point(12, 14);
-        btnManageNav.Size = new Size(60, 42);
+        btnManageNav.Location = new Point(UiLayout.AtDpi(12), UiLayout.AtDpi(14));
+        btnManageNav.Size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
         btnManageNav.FlatStyle = FlatStyle.Flat;
         btnManageNav.BackColor = AppTheme.SidebarHover;
         btnManageNav.ForeColor = AppTheme.SidebarText;
         btnManageNav.Font = AppTheme.SmallFont;
         btnManageNav.Cursor = Cursors.Hand;
 
-        btnMuteToggle.Location = new Point(80, 14);
-        btnMuteToggle.Size = new Size(60, 42);
+        btnMuteToggle.Location = new Point(UiLayout.AtDpi(80), UiLayout.AtDpi(14));
+        btnMuteToggle.Size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
         btnMuteToggle.FlatStyle = FlatStyle.Flat;
         btnMuteToggle.BackColor = AppTheme.SidebarHover;
         btnMuteToggle.ForeColor = AppTheme.SidebarText;
         btnMuteToggle.Font = AppTheme.SmallFont;
         btnMuteToggle.Cursor = Cursors.Hand;
 
-        btnUndo.Location = new Point(148, 14);
-        btnUndo.Size = new Size(60, 42);
+        btnUndo.Location = new Point(UiLayout.AtDpi(148), UiLayout.AtDpi(14));
+        btnUndo.Size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
         btnUndo.FlatStyle = FlatStyle.Flat;
         btnUndo.BackColor = AppTheme.SidebarHover;
         btnUndo.ForeColor = AppTheme.SidebarText;

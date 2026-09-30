@@ -7,7 +7,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 ## Open the Big Screen
 
 1. Connect the second screen or projector to the laptop and set Windows to extend the desktop onto it. <!-- TODO: confirm whether we want to document the Windows display settings step (Win+P > Extend) here or in getting-started -->
-2. Press **Open Big Screen**. The button is on the **Race Control** page, and also on the **Local Screens** page.
+2. Press **Open Big Screen**. The button is on the **Race Control** page (or press <kbd>B</kbd> there), and also on the **Practice** and **Local Screens** pages.
 3. The window opens in the middle of the laptop screen, titled "HeatCaller — Big Screen". Drag it onto the second screen.
 4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window.
 5. Press <kbd>Esc</kbd> to close it.
@@ -25,13 +25,13 @@ From top to bottom:
 - **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
 - **Countdown** on the right, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit.
 - **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news, such as the quickest lap of the session, is highlighted in color. Warnings aren't shown on the Big Screen, so it stays readable from across the room.
-- **ON DECK:** bar at the bottom: the next unfinished entry on **Race Day → Run Sheet**, with its time, class and description. See [Program and mains](../race-day/program-and-mains.md).
+- **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable).
 
-If you've set a club logo, it sits in the top-left corner. Untick **Show the logo on the Big Screen and Wi-Fi pages** on **Themes → Looks** to hide it. A logo that would vanish on the background, such as a black logo on a black screen, is put on a plate.
+If you've set a club logo, it sits in the top-left corner. Untick **Show the logo on the Big Screen and Wi-Fi pages** on the **Themes** page to hide it. A logo that would vanish on the background, such as a black logo on a black screen, is put on a plate.
 
 ### Colors
 
-The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on **Themes → Looks**, in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
+The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on the **Themes** page, in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
 
 A change of look or logo shows on an open Big Screen straight away; you don't need to reopen it. For the dark Big Screen of earlier versions, choose **Race Wall**. See [Looks and the club logo](looks-and-logo.md).
 
@@ -41,10 +41,10 @@ Each leaderboard in HeatCaller keeps its own choice of columns, because what's u
 
 | Leaderboard | Where to change it | Default columns |
 |---|---|---|
-| Race Control | **Columns...** on the **Race Control** page | Pos, Driver, Car, Laps, Best Lap, Gap to P1, Streak |
-| Practice | **Choose Columns...** on the **Practice** page | Driver, Laps, Last Lap, vs Best, Best Lap, Rolling Avg, Std Dev, Streak, Best Streak, Streak Pace, Trend, PBs |
-| Big Screen | **Choose Big Screen Columns...** on the **Local Screens** page | Pos, Driver, Laps, Best Lap, Gap to P1 |
-| Live Results web page | **Choose Web Columns...** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
+| Race Control | **Columns** on the **Race Control** page | Pos, Driver, Car, Laps, Best Lap, Gap to P1, Streak |
+| Practice | **Choose Columns** on the **Practice** page | Driver, Laps, Last Lap, vs Best, Best Lap, Rolling Avg, Std Dev, Streak, Best Streak, Streak Pace, Trend, PBs |
+| Big Screen | **Choose Big Screen Columns** on the **Local Screens** page | Pos, Driver, Laps, Best Lap, Gap to P1 |
+| Live Results web page | **Choose Web Columns** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
 
 To change the columns:
 
@@ -136,10 +136,10 @@ Leave **Never interrupt the leaderboard while a race is actually running (recomm
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Column change not showing on the Big Screen | The Big Screen reads its columns when it opens. | Close it with <kbd>Esc</kbd> and open it again. |
-| The Big Screen turned light after updating to 0.48 | The crowd screens match the app, and the app uses a light look such as **Daylight**. | On **Themes → Looks**, choose **Race Wall** (or another dark look) for the crowd screens. |
+| The Big Screen turned light after updating to 0.48 | The crowd screens match the app, and the app uses a light look such as **Daylight**. | On the **Themes** page, choose **Race Wall** (or another dark look) for the crowd screens. |
 | Sponsor slides never appear | **Show sponsor slides on the Big Screen** is off, no slides are listed, or a race is running with the recommended setting on. | Check the **Sponsors** page; wait until the race ends; reopen the Big Screen after turning slides on. |
 | One slide never shows, and its preview on the **Sponsors** page is blank | The image is missing, unreadable, or over the size limits (50 MB, 20000 pixels across or down, 40 million pixels in all). | Remove it, save a smaller copy of the picture, and add that. |
-| ON DECK bar is empty | Everything on the Run Sheet is done, or there's nothing on it. | Build or add entries on **Race Day → Run Sheet**. |
+| ON DECK bar is empty | Everything on the timetable is done, or there's nothing on it. | Build tonight's program on **Race Day → Next Steps** (the timetable fills itself from it), or add lines in the **Timetable** window. |
 | Countdown is blank | The race has no lap or time limit. | Set a limit on **Race Control**. See [Running a race](../race-control/running-a-race.md). |
 | Qual column shows dashes | The current session isn't a qualifier. | Nothing to fix. |
 

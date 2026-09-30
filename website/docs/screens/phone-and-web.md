@@ -64,11 +64,11 @@ HeatCaller works out the laptop's address on the local network for you (usually 
 
 ### QR posters
 
-Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("LIVE RESULTS", "RACE REMOTE", "CHECK IN" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print...**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
+Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("LIVE RESULTS", "RACE REMOTE", "CHECK IN" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
 
 The poster opens in its own window, so you can leave it up on a second screen while you carry on racing. If the server isn't running, you'll see "Start the web server first - there's no address to put in a code until it's listening."
 
-The check-in page also has its own wall poster on the **Race Day → Entries** page. See [Events and entries](../race-day/events-and-entries.md).
+The check-in page also has its own wall poster: **Self Check-In Poster** on **Race Day → Who's Racing**. See [Events and entries](../race-day/events-and-entries.md).
 
 ## The pages
 
@@ -77,9 +77,9 @@ The check-in page also has its own wall poster on the **Race Day → Entries** p
 The page at `/` is a read-only view of the race, for spectators' phones or a display in the pits. Anyone on the Wi-Fi can open it; it needs no PIN.
 
 - The top bar shows "LIVE RESULTS", the race state and flag (for example "Racing - Green flag") and the race clock.
-- An "ON DECK:" line shows what's next on the day's schedule, when there is something.
+- An "ON DECK:" line shows what's next on the race day's **Timetable**, when there is something.
 - Swipe left and right between three views:
-    - The **standings** table. Choose its columns with **Choose Web Columns...** on the **Local Screens** page.
+    - The **standings** table. Choose its columns with **Choose Web Columns** on the **Local Screens** page.
     - **Lap times**: a line chart of each driver's laps (up to ten drivers). It needs two laps before it has anything to draw.
     - **Best lap & consistency**: a bar for each driver's best lap, with a paler tail showing how much their lap times vary.
 - If you've set up sponsor slides on the **Sponsors** page, the page cuts to them between spells of standings, using the timings set there. See [The Big Screen and sponsors](big-screen.md).
@@ -136,12 +136,12 @@ Each row shows a driver's name and class, marked **TAP** or **HERE**. The top ba
 
 - The list is every driver on the **Driver Profiles** page. Ghost cars aren't included.
 - Tapping a name that's already **HERE** asks "Check *name* out?" before checking them out, so a slip of the finger while scrolling doesn't sign anyone off.
-- A check-in from a phone shows up on the **Race Day → Entries** page straight away, and the console notes "[web] *name* checked in from a phone."
+- A check-in from a phone shows up on **Race Day → Who's Racing** straight away, and the console notes "[web] *name* checked in from a phone."
 - The page refreshes itself every few seconds.
 
 Behind the scenes, the page identifies each driver by a random code rather than their transponder number, so the list on a phone never reveals transponder numbers. The codes change every time the server starts, so a code seen at one meeting is useless at the next.
 
-The check-in page doesn't offer camera scanning of QR check-ins on the local network, because phone browsers only allow the camera on secure (https) pages. Use a USB scanner on the **Race Day → Entries** page for QR check-ins. See [Events and entries](../race-day/events-and-entries.md) and, for internet check-in, [Online check-in](../online/check-in.md).
+The check-in page doesn't offer camera scanning of QR check-ins on the local network, because phone browsers only allow the camera on secure (https) pages. Use a USB scanner in the **Scan to Check In** box on **Race Day → Who's Racing** for QR check-ins. See [Events and entries](../race-day/events-and-entries.md) and, for internet check-in, [Online check-in](../online/check-in.md).
 
 ### Race-day manager
 
@@ -177,20 +177,20 @@ The server also sends the sponsor slide images to the live results page. There's
 
 ### Colors and logo
 
-The live results page, the overlay, the phone remote and the check-in page all use the crowd-screen look, light looks included, and show the club logo in their header if **Show the logo on the Big Screen and Wi-Fi pages** is ticked. When you change the look or the logo on **Themes → Looks**, an open page reloads itself within about 5 seconds, so an OBS source or a TV left on Live Results picks it up with nobody touching it. A page waits while someone is typing in it, and the check-in page waits until nobody is part way through checking in. The phone remote's flag buttons always keep their own flag colors. See [Looks and the club logo](looks-and-logo.md).
+The live results page, the overlay, the phone remote and the check-in page all use the crowd-screen look, light looks included, and show the club logo in their header if **Show the logo on the Big Screen and Wi-Fi pages** is ticked. When you change the look or the logo on the **Themes** page, an open page reloads itself within about 5 seconds, so an OBS source or a TV left on Live Results picks it up with nobody touching it. A page waits while someone is typing in it, and the check-in page waits until nobody is part way through checking in. The phone remote's flag buttons always keep their own flag colors. See [Looks and the club logo](looks-and-logo.md).
 
 ## Other settings on this page
 
 | Setting | What it does |
 |---|---|
-| **Choose Web Columns...** | Picks the columns on the live results page, the overlay and the remote's table. |
-| **Choose Big Screen Columns...** | Picks the columns on the Big Screen window. |
+| **Choose Web Columns** | Picks the columns on the live results page, the overlay and the remote's table. |
+| **Choose Big Screen Columns** | Picks the columns on the Big Screen window. |
 | **Open Big Screen** | Opens the Big Screen window. |
-| **Club Website Settings...** | Opens the **Club Website** page. |
+| **Club Website Settings** | Opens the **Club Website** page. |
 
 Column changes apply to the web pages immediately, and to the Big Screen the next time it's opened. See [The Big Screen and sponsors](big-screen.md).
 
-The page notes that "The Big Screen and these pages use the crowd-screen look set on Themes → Looks." The **Use the Synthwave palette on the Big Screen** checkbox of earlier versions has gone; choose **Synthwave** there instead.
+A note on the page says the Big Screen and these pages use the crowd-screen look, which is set on the **Themes** page. The **Use the Synthwave palette on the Big Screen** checkbox of earlier versions has gone; choose **Synthwave** there instead.
 
 Near the bottom, one line tells you whether the club's online relay is publishing. When it's off, it reads "Online publishing is off. These pages are reachable only from this Wi-Fi, and results stop being visible when this laptop closes." See [Setting up online publishing](../online/setup.md).
 

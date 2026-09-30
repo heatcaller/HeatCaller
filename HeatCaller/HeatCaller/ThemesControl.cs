@@ -25,7 +25,7 @@ public sealed class ThemesControl : UserControl
 
     private readonly CardWall _cards;
     private readonly Label _lblStatus = new();
-    private readonly CheckBox _chkPreviewVoice = new();
+    private readonly CheckBox _chkPreviewVoice = new ThemedCheckBox();
 
     private CancellationTokenSource? _previewCts;
     private Button? _previewButton;
@@ -1157,30 +1157,22 @@ public sealed class ThemesControl : UserControl
     internal static Theme Clone(Theme theme) =>
         System.Text.Json.JsonSerializer.Deserialize<Theme>(System.Text.Json.JsonSerializer.Serialize(theme))!;
 
+    /// <summary>
+    /// Asks for one line of text over this page - the new soundscape's name,
+    /// then its description (BtnSaveNew_Click). Null when cancelled; the
+    /// answer as typed otherwise.
+    ///
+    /// In the app's shared prompt (TextPromptForm): the same window this
+    /// method used to build for itself - the question, the box under it, OK
+    /// and Cancel, in the body face - on the layout pieces, and a class the
+    /// layout test can build (WindowCatalog). The one built here was placed
+    /// in pixels: a 420x176 window, the box a fixed 380px wide and the two
+    /// buttons a fixed 80px at fixed places under it.
+    /// </summary>
     private string? PromptForText(string title, string prompt, string defaultValue)
     {
-        using var dialog = new Form
-        {
-            Text = title,
-            StartPosition = FormStartPosition.CenterParent,
-            Size = new Size(420, 176),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-        };
+        using var dialog = new TextPromptForm(title, prompt, defaultValue);
 
-        var lbl = new Label { Text = prompt, Location = new Point(12, 16), AutoSize = true };
-        var txt = new TextBox { Location = new Point(12, 40), Width = 380, Text = defaultValue };
-        var btnOk = new Button { Text = "OK", Location = new Point(228, 78), Width = 80, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(312, 78), Width = 80, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[] { lbl, txt, btnOk, btnCancel });
-        dialog.AcceptButton = btnOk;
-        dialog.CancelButton = btnCancel;
-        dialog.BackColor = AppTheme.Background;
-        AppTheme.ApplyRecursively(dialog);
-
-        return dialog.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
     }
 }

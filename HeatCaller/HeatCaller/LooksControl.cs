@@ -63,10 +63,10 @@ public sealed class LooksControl : UserControl
     private readonly Panel _logoPreview = new();
     private readonly Button _btnChooseLogo = new();
     private readonly Button _btnRemoveLogo = new();
-    private readonly CheckBox _chkLogoInApp = new();
-    private readonly CheckBox _chkLogoOnScreens = new();
-    private readonly CheckBox _chkAnimate = new();
-    private readonly CheckBox _chk24Hour = new();
+    private readonly CheckBox _chkLogoInApp = new ThemedCheckBox();
+    private readonly CheckBox _chkLogoOnScreens = new ThemedCheckBox();
+    private readonly CheckBox _chkAnimate = new ThemedCheckBox();
+    private readonly CheckBox _chk24Hour = new ThemedCheckBox();
     private readonly Label _lblStatus = new();
 
     private Image? _logoImage;

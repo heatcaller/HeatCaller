@@ -306,8 +306,8 @@ public sealed class TodayControl : UserControl
         // No blank band under the tiles either: the splitter is right under
         // them, and ContentHeight counts the room the theme leaves under a
         // scrolling page - so the split gave 32px to nothing, where the page's
-        // own 16px margin will do. See LayoutDoctor.NoRoomBelow.
-        LayoutDoctor.NoRoomBelow(_page);
+        // own 16px margin will do. See ScrollTheming.NoRoomBelow.
+        ScrollTheming.NoRoomBelow(_page);
 
         Controls.Add(_page);
     }

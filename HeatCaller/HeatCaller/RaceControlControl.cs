@@ -89,12 +89,13 @@ public sealed partial class RaceControlControl : UserControl
     /// <summary>
     /// The narrowest the clock column down the right-hand side gets - the
     /// clock, the buttons under it and the stat tiles all share its width.
-    /// Wider when a button's caption needs it (a larger text size).
+    /// Wider when a button's caption needs it (a larger text size). At the
+    /// screen's DPI, as the clock's point-size text is.
     /// </summary>
-    private const int ClockWidth = 260;
+    private static int ClockWidth => UiLayout.AtDpi(260);
 
-    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given. (The stat tiles under the column size themselves - see RaceStatStrip.)</summary>
-    private const int ClockHeight = 200;
+    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given. (The stat tiles under the column size themselves - see RaceStatStrip.) At the screen's DPI, as the clock's point-size text is.</summary>
+    private static int ClockHeight => UiLayout.AtDpi(200);
 
     /// <summary>
     /// The page: the host's Session row (see ShowSessionRow), the Next Up

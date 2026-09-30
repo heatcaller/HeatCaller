@@ -30,8 +30,12 @@ public sealed class AnnouncerControl : UserControl
 
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 500 };
 
-    private readonly Label _lblState = new();
-    private readonly Label _lblClock = new();
+    /// <summary>The race's state, as tall and as wide as the longest thing it can say - so the clock beside it never moves as it changes.</summary>
+    private readonly SteadyLabel _lblState = new();
+
+    /// <summary>The race clock, as wide as a race of a hundred minutes or more needs - so it never moves anything as it counts.</summary>
+    private readonly SteadyLabel _lblClock = new();
+
     private readonly DataGridView _gridOrder = new();
     private readonly ListBox _lstTalkingPoints = new();
     private readonly ComboBox _cmbSpotlight = new();
@@ -39,7 +43,9 @@ public sealed class AnnouncerControl : UserControl
     private readonly Label _lblOnDeck = new();
     private readonly Button _btnRepeat = new();
     private readonly Label _lblLastSummary = new();
-    private readonly Label _lblSummaryCaption = new();
+
+    /// <summary>The heading over the last summary, which says what kind of line it is - see RefreshRepeatButton. As tall as the longest it can say.</summary>
+    private readonly SteadyLabel _lblSummaryCaption = new();
 
     /// <summary>Events worth mentioning, newest first. Capped so it stays readable at a glance.</summary>
     private readonly List<string> _feed = new();
@@ -48,6 +54,67 @@ public sealed class AnnouncerControl : UserControl
 
     /// <summary>For Clear Points. Optional so an older host still builds; the clear then isn't undoable.</summary>
     private readonly UndoService? _undo;
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
+    private readonly FillPage _page = new();
+
+    /// <summary>
+    /// The two bands of cards: the running order beside the talking points,
+    /// and the spotlight beside the last summary. Both are shared out by
+    /// SideWidth, so their columns line up. Held so a picker grown by a new
+    /// driver list can have them share out again (SizeFields).
+    /// </summary>
+    private Beside? _topBand;
+    private Beside? _bottomBand;
+
+    /// <summary>The cards whose captions a column is never narrower than - see SideWidth.</summary>
+    private Section? _orderCard;
+    private Section? _talkCard;
+    private Section? _spotlightCard;
+
+    /// <summary>
+    /// The state's and the clock's own faces, made by this page - see
+    /// MakeOwnFonts. Made again at a new text size, and the old ones
+    /// disposed; the last ones go with the page (Dispose).
+    /// </summary>
+    private Font? _stateFont;
+    private Font? _clockFont;
+
+    /// <summary>The spotlight picker's width, measured from its names - see Pieces.PickerWidth. Forgotten whenever the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _spotlightWidth;
+
+    /// <summary>The state's and the clock's sizes in points, at the normal text size.</summary>
+    private const float StatePoints = 16F;
+    private const float ClockPoints = 26F;
+
+    /// <summary>The spotlight picker's width at the normal text size, which it was before it was measured - it is never narrower.</summary>
+    private const int SpotlightPickerLeast = 250;
+
+    /// <summary>The least the running order and the talking points can do with, in rows - below that the page scrolls instead (FillPage).</summary>
+    private const int OrderLeastRows = 3;
+    private const int TalkingPointsLeastRows = 3;
+
+    /// <summary>
+    /// Lines kept for the spotlight and the last summary whatever they say,
+    /// so the cards do not hop as they are rewritten - the spotlight twice a
+    /// second during a race. The spotlight's are its five kinds of line
+    /// (standing, last three, personal best, car, note); four is a talking
+    /// point or a short summary. Longer, and they grow.
+    /// </summary>
+    private const int SpotlightLines = 5;
+    private const int SummaryLines = 4;
+
+    /// <summary>The Repeat button's two captions - it says which line it will speak. The column it is in is wide enough for either (SideWidth).</summary>
+    private const string RepeatSummaryCaption = "Repeat Race Summary";
+    private const string RepeatLineCaption = "Repeat Last Line";
+
+    private const string ClearPointsCaption = "Clear Points";
+
+    /// <summary>The heading over a race summary. A talking point shown there instead has its own - see RefreshRepeatButton.</summary>
+    private const string SummaryCaption = "LAST RACE SUMMARY";
 
     public AnnouncerControl(RaceControlSession race, ProfileStore profiles,
         SessionHistoryStore history, DayScheduleStore schedule, AnnouncementService announcer,
@@ -63,11 +130,17 @@ public sealed class AnnouncerControl : UserControl
         _announcer = announcer;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
-        ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 620);
-        MinimumSize = new Size(900, 560);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No Size or MinimumSize. The page used to insist on 900x560 whatever
+        // its window, which WinForms honours over the size it is given - so
+        // a shorter window cut the bottom of it off. A short window scrolls
+        // the page instead (FillPage), and the window is never made shorter
+        // than the page's least (AnnouncerForm).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
+        ForeColor = AppTheme.TextDark;
 
         BuildLayout();
 
@@ -86,31 +159,79 @@ public sealed class AnnouncerControl : UserControl
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its window's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Builds the page on the layout pieces (LayoutPieces.cs). Top to
+    /// bottom:
+    ///
+    ///   - A card of what is happening now: the state and the clock in their
+    ///     own big faces, Race Control against the right-hand edge, and
+    ///     what is on deck under them, wrapping when it runs long.
+    ///   - The running order beside the talking points, in two equal
+    ///     columns taking the height that is left - the grid and the list
+    ///     filling their cards, never shorter than three rows each (below
+    ///     that the page scrolls), Clear Points under the list it clears.
+    ///   - The spotlight beside the last summary, in the same two columns,
+    ///     the two cards ending level: the driver picker and their story;
+    ///     the summary's heading, the Repeat button and the line it speaks.
+    ///
+    /// The columns are shared out equally, as the page always had them,
+    /// but never narrower than the picker's longest name or the Repeat
+    /// button's longer caption need (SideWidth). Nothing is placed by hand,
+    /// and a window too short for all of it scrolls the page.
+    ///
+    /// It used to be placed in pixels: two 470x300 boxes side by side at
+    /// fixed positions under the clock, the buttons flowed along one row
+    /// from x=380, and the spotlight and the summary shifted down by
+    /// however far that row turned out to reach - all of it inside a
+    /// 900x560 floor the page kept whatever its window, which was taller
+    /// than a 1280x720 screen has room for.
+    /// </summary>
     private void BuildLayout()
     {
-        _lblState.Location = new Point(12, 12);
-        _lblState.AutoSize = true;
-        _lblState.Font = new Font(AppTheme.BodyFont.FontFamily, 16F, FontStyle.Bold);
+        // --- Now: the state, the clock and what is on deck ---
+        //
+        // Each as wide and as tall as the longest thing it can say
+        // (SteadyLabel), so the clock never shifts as the state changes and
+        // nothing shifts as the clock counts. In faces the page makes itself,
+        // at the text size in use - see MakeOwnFonts.
+        _lblState.Wordings = Enum.GetValues<FlagState>()
+            .Select(flag => $"{flag.ToString().ToUpperInvariant()} FLAG")
+            .Concat(new[] { "COUNTDOWN", "STAGING", "FINISHED", "IDLE" })
+            .ToArray();
 
-        _lblClock.Location = new Point(12, 44);
-        _lblClock.AutoSize = true;
-        _lblClock.Font = new Font("Consolas", 26F, FontStyle.Bold);
+        // Minutes are not wrapped into hours (RefreshLive), so a practice
+        // left running past a hundred minutes has a third digit.
+        _lblClock.Wordings = new[] { "00:00", "000:00" };
 
-        _lblOnDeck.Location = new Point(300, 20);
+        // Centred up and down on the line they share, as FieldGrid.Inline
+        // has anything that is not a button.
+        _lblState.Anchor = AnchorStyles.Left;
+        _lblClock.Anchor = AnchorStyles.Left;
+
+        _textSize.Keep(MakeOwnFonts);
+
+        // One line kept whatever it says, so the cards under it do not hop
+        // when the schedule runs out and the line empties.
         _lblOnDeck.AutoSize = true;
-        _lblOnDeck.MaximumSize = new Size(588, 0);  // capped to the page's own minimum width, not a wider guess
         _lblOnDeck.ForeColor = AppTheme.Accent;
-        _lblOnDeck.Font = AppTheme.BoldFont;
+        _textSize.Wear(_lblOnDeck, () => AppTheme.BoldFont);
+        _textSize.ReserveLines(_lblOnDeck, 1);
 
         // --- Running order, kept short on purpose ---
-        var lblOrder = new Label { Text = "RUNNING ORDER", Location = new Point(12, 96), AutoSize = true, Font = AppTheme.BoldFont, ForeColor = AppTheme.Primary };
-
-        _gridOrder.Location = new Point(12, 120);
-        _gridOrder.Size = new Size(470, 300);
-        // Top/Left/Right only - NOT Bottom. Bottom anchoring stretches the
-        // grid downward on a taller window, painting over whatever sits
-        // below it and making those controls invisible.
-        _gridOrder.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         _gridOrder.ReadOnly = true;
         _gridOrder.AllowUserToAddRows = false;
         _gridOrder.RowHeadersVisible = false;
@@ -134,11 +255,6 @@ public sealed class AnnouncerControl : UserControl
         };
 
         // --- Talking points ---
-        var lblTalk = new Label { Text = "TALKING POINTS", Location = new Point(498, 96), AutoSize = true, Font = AppTheme.BoldFont, ForeColor = AppTheme.Primary };
-
-        _lstTalkingPoints.Location = new Point(498, 120);
-        _lstTalkingPoints.Size = new Size(470, 300);
-        _lstTalkingPoints.Anchor = AnchorStyles.Top | AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _lstTalkingPoints.BackColor = AppTheme.Surface;
         _lstTalkingPoints.IntegralHeight = false;
 
@@ -157,46 +273,74 @@ public sealed class AnnouncerControl : UserControl
         // re-adds the items, which re-measures them.
         _lstTalkingPoints.Resize += (_, _) => RefreshTalkingPoints();
 
-        // Everything from here down used to be anchored to the PAGE's
-        // bottom edge while the running-order grid above is Top|Left at a
-        // fixed height - so the grid's bottom stays at y=420 and this
-        // whole block slid up over it on any window shorter than the 620
-        // these literals were measured against. The page's own minimum is
-        // 560, so it did not even need resizing to happen.
-        //
-        // Top-anchored now, like the grid. If the content does not fit,
-        // the page scrolls - which is what LayoutDoctor turns on, and is a
-        // far better answer than two things drawn on top of each other.
-        // --- Spotlight ---
-        var lblSpot = new Label { Text = "SPOTLIGHT", Location = new Point(12, 436), AutoSize = true, Anchor = AnchorStyles.Top | AnchorStyles.Left, Font = AppTheme.BoldFont, ForeColor = AppTheme.Primary };
+        var btnClear = new Button { Text = ClearPointsCaption };
+        btnClear.Click += (_, _) =>
+        {
+            if (_feed.Count == 0)
+            {
+                return;
+            }
 
-        _cmbSpotlight.Location = new Point(110, 432);
-        _cmbSpotlight.Width = 250;
-        _cmbSpotlight.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            // The feed lives only on this page - there is no store behind
+            // it - so the undo has to put it back here. It says so plainly if
+            // the page has gone rather than appearing to work.
+            var cleared = _feed.ToList();
+            _undo?.Capture($"Clear {Plural.Of(cleared.Count, "talking point")}", () =>
+            {
+                if (IsDisposed || Disposing)
+                {
+                    throw new InvalidOperationException("The Announcer screen has been closed, so its talking points can't be put back.");
+                }
+
+                // Behind anything said since the clear - they're older.
+                _feed.AddRange(cleared);
+                if (_feed.Count > MaxFeed)
+                {
+                    _feed.RemoveRange(MaxFeed, _feed.Count - MaxFeed);
+                }
+
+                RefreshTalkingPoints();
+            });
+
+            _feed.Clear();
+            RefreshTalkingPoints();
+        };
+
+        // --- Spotlight ---
+        //
+        // As wide as its longest name (SizeFields), and the story under it
+        // with its five kinds of line kept, so the card does not hop as the
+        // race moves the driver's standing on.
         _cmbSpotlight.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSpotlight.SelectedIndexChanged += (_, _) => RefreshSpotlight();
 
-        _lblSpotlight.Location = new Point(12, 464);
-        _lblSpotlight.Size = new Size(460, 120);
-        _lblSpotlight.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _lblSpotlight.AutoSize = true;
         _lblSpotlight.ForeColor = AppTheme.TextDark;
+        _textSize.Wear(_lblSpotlight, () => AppTheme.BodyFont);
+        _textSize.ReserveLines(_lblSpotlight, SpotlightLines);
 
-        // The summary text sits directly under the Repeat button that
-        // speaks it, so it's obvious what pressing that button will say.
-        _lblSummaryCaption.Text = "LAST RACE SUMMARY";
-        _lblSummaryCaption.Location = new Point(488, 470);
-        _lblSummaryCaption.AutoSize = true;
-        _lblSummaryCaption.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        _lblSummaryCaption.Font = AppTheme.BoldFont;
-        _lblSummaryCaption.ForeColor = AppTheme.Primary;
+        // --- Last race summary ---
+        //
+        // Its heading is not the card's own: it says what KIND of line is
+        // shown under it (RefreshRepeatButton), so it is a label the page
+        // rewrites, dressed as a card's caption is - the small face, muted,
+        // spaced when short (CardCaption).
+        _lblSummaryCaption.ForeColor = AppTheme.TextMuted;
+        _lblSummaryCaption.UseMnemonic = false;
+        _lblSummaryCaption.Wordings = new[]
+        {
+            // The kinds CommentaryService records a line as.
+            SummaryCaption, "LAST LINE (INTRO)", "LAST LINE (CLOSING)", "LAST LINE (TALKING POINT)", "LAST LINE (SUMMARY)",
+        }.Select(caption => CardCaption(caption)).ToArray();
+        _textSize.Wear(_lblSummaryCaption, () => AppTheme.MicroFont);
+        SetSummaryCaption(SummaryCaption);
 
-        _lblLastSummary.Location = new Point(488, 494);
-        _lblLastSummary.Size = new Size(480, 90);
-        _lblLastSummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblLastSummary.AutoSize = true;
         _lblLastSummary.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblLastSummary, () => AppTheme.BodyFont);
+        _textSize.ReserveLines(_lblLastSummary, SummaryLines);
 
-        _btnRepeat.Text = "Repeat Race Summary";
-        _btnRepeat.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _btnRepeat.Text = RepeatSummaryCaption;
         _btnRepeat.Enabled = false;
         _btnRepeat.Click += (_, _) =>
         {
@@ -231,63 +375,261 @@ public sealed class AnnouncerControl : UserControl
         };
 
         // The other half of the pair - see RaceControlControl.
-        var btnRaceControl = new Button { Text = "Race Control", Anchor = AnchorStyles.Top | AnchorStyles.Left };
+        var btnRaceControl = new Button { Text = "Race Control" };
         btnRaceControl.Click += (_, _) => RaceControlRequested?.Invoke();
 
-        var btnClear = new Button { Text = "Clear Points", Anchor = AnchorStyles.Top | AnchorStyles.Left };
-        btnClear.Click += (_, _) =>
+        // --- The cards ---
+        //
+        // Now: no caption - the state is its heading. The state and the
+        // clock on the left of one line and Race Control against the right,
+        // Race Control going under them when the line is too narrow for both
+        // (SplitBar).
+        var now = new Section();
+
+        now.Add(new SplitBar(
+            new ButtonBar().With(_lblState, _lblClock),
+            new ButtonBar(alignRight: true).With(btnRaceControl)));
+        now.Add(_lblOnDeck, gapBelow: 0);
+
+        var order = new Section("Running order");
+
+        order.AddFill(_gridOrder, LeastOrderHeight, gapBelow: 0);
+
+        var talk = new Section("Talking points");
+
+        talk.AddFill(_lstTalkingPoints, LeastTalkingPointsHeight);
+        talk.Add(new ButtonBar().With(btnClear), gapBelow: 0);
+
+        var spotlight = new Section("Spotlight");
+
+        spotlight.Add(_cmbSpotlight, stretch: false);
+        Pieces.KeepHeightTold(_cmbSpotlight);
+        spotlight.Add(_lblSpotlight, gapBelow: 0);
+
+        // The summary sits directly under the Repeat button that speaks it,
+        // so it's obvious what pressing that button will say - and the
+        // button stays put however long the summary runs.
+        var summaryCard = new Section();
+
+        summaryCard.Add(_lblSummaryCaption, gapBelow: UiLayout.HeadingGap);
+        summaryCard.Add(new ButtonBar().With(_btnRepeat));
+        summaryCard.Add(_lblLastSummary, gapBelow: 0);
+
+        // Before the bands, which ask for them as they are put together.
+        _orderCard = order;
+        _talkCard = talk;
+        _spotlightCard = spotlight;
+
+        // Each pair of cards ends level: the left one fills its column, the
+        // right one takes whatever height its column has.
+        var top = Band(sizesItself: false);
+
+        top.AddFill(order, order.LeastHeight);
+        top.AddSideFill(talk, talk.LeastHeight, gapBelow: 0);
+
+        var bottom = Band(sizesItself: true);
+
+        bottom.AddFill(spotlight, spotlight.LeastHeight);
+        bottom.AddSideFill(summaryCard, summaryCard.LeastHeight, gapBelow: 0);
+
+        _topBand = top;
+        _bottomBand = bottom;
+
+        // --- The page ---
+        _page.Add(now);
+        _page.AddFill(top, top.LeastHeight);
+        _page.Add(bottom, gapBelow: 0);
+
+        // Race Control last from the keyboard, as it was on the row of
+        // buttons it shared with Repeat and Clear Points - it leaves this
+        // window, the rest act on it.
+        now.TabIndex = bottom.TabIndex + 1;
+
+        // The page ends at its last card. The theme gives a page that
+        // scrolls room under its last control; in a window of its own that
+        // is a blank band the window has to be taller for, which on a
+        // 1280x720 screen is room the running order does not get.
+        ScrollTheming.NoRoomBelow(_page);
+
+        Controls.Add(_page);
+
+        // Once everything is on the page and wears its face - what they are
+        // measured in.
+        //
+        // Every heading of the running order whole, at the text size in
+        // use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_gridOrder));
+        _textSize.Keep(SizeFields);
+    }
+
+    /// <summary>
+    /// The least the page can do with at <paramref name="width"/>: what is
+    /// on now, the running order's headings and three drivers beside three
+    /// talking points and Clear Points, and the spotlight beside the last
+    /// summary - for the Announcer window, which is never made shorter than
+    /// this (AnnouncerForm). Shorter than that, the page scrolls.
+    /// </summary>
+    internal int LeastHeight(int width) => _page.LeastHeight(width);
+
+    /// <summary>
+    /// A band of two cards side by side, shared out by SideWidth. The top
+    /// one takes the height the page has left; the bottom one is as tall as
+    /// its taller card needs (it sizes itself).
+    /// </summary>
+    private Beside Band(bool sizesItself)
+    {
+        Beside? band = null;
+
+        band = new Beside(() => SideWidth(band?.Width ?? 0));
+
+        if (sizesItself)
         {
-            if (_feed.Count == 0)
-            {
-                return;
-            }
-
-            // The feed lives only on this page - there is no store behind
-            // it - so the undo has to put it back here. It says so plainly if
-            // the page has gone rather than appearing to work.
-            var cleared = _feed.ToList();
-            _undo?.Capture($"Clear {Plural.Of(cleared.Count, "talking point")}", () =>
-            {
-                if (IsDisposed || Disposing)
-                {
-                    throw new InvalidOperationException("The Announcer screen has been closed, so its talking points can't be put back.");
-                }
-
-                // Behind anything said since the clear - they're older.
-                _feed.AddRange(cleared);
-                if (_feed.Count > MaxFeed)
-                {
-                    _feed.RemoveRange(MaxFeed, _feed.Count - MaxFeed);
-                }
-
-                RefreshTalkingPoints();
-            });
-
-            _feed.Clear();
-            RefreshTalkingPoints();
-        };
-        AppTheme.LayoutButtonRow(380, 430, 8, _btnRepeat, btnClear, btnRaceControl);
-
-        // Everything under that row sat at a flat 464 / 470 / 494, which
-        // was clear of buttons 30 high and two pixels inside buttons 36
-        // high - so the doctor dropped the spotlight panel ten pixels every
-        // startup. Measured from the row itself now, and shifted as a block
-        // so the three keep the spacing they were given.
-        var drop = UiLayout.Below(_btnRepeat, UiLayout.RowGap) - _lblSpotlight.Top;
-
-        if (drop > 0)
-        {
-            _lblSpotlight.Top += drop;
-            _lblSummaryCaption.Top += drop;
-            _lblLastSummary.Top += drop;
+            band.AutoSize = true;
+            band.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         }
 
-        Controls.AddRange(new Control[]
+        return band;
+    }
+
+    /// <summary>
+    /// The right-hand column of both bands - the talking points and the
+    /// last summary. Half of the band, as the page always had it: two equal
+    /// columns. But never so wide that the left-hand cards get less than
+    /// the spotlight picker's longest name, the running order's headings or
+    /// their captions need; and never narrower itself than the Repeat
+    /// button's longer caption, Clear Points or its captions need. Too
+    /// narrow for both, and each gives up the same share of its width, as
+    /// Batteries' two cards do. Nothing here scrolls sideways (FillPage).
+    ///
+    /// The picker's width as it is meant to be, not as it is: a table cuts
+    /// a field down to the column it has.
+    /// </summary>
+    private int SideWidth(int band)
+    {
+        // What the two share: all of the band but the gap a Beside leaves
+        // between its parts and its column.
+        var room = Math.Max(0, band - UiLayout.RowGap);
+
+        var left = Math.Max(
+            Math.Max(SpotlightPickerWidth(), GridHeadingsWidth()),
+            Math.Max(_orderCard?.CaptionWidth ?? 0, _spotlightCard?.CaptionWidth ?? 0))
+            + Section.Inset.Horizontal;
+
+        // A button in a bar keeps a gap beside it, which the bar counts when
+        // it decides whether the button fits on its line.
+        var buttons = Math.Max(
+            Math.Max(UiLayout.WidthFor(RepeatSummaryCaption), UiLayout.WidthFor(RepeatLineCaption)),
+            UiLayout.WidthFor(ClearPointsCaption)) + UiLayout.ButtonGap;
+
+        var right = Math.Max(
+            buttons,
+            Math.Max(_talkCard?.CaptionWidth ?? 0, _lblSummaryCaption.GetPreferredSize(Size.Empty).Width))
+            + Section.Inset.Horizontal;
+
+        var side = room / 2;
+
+        if (room - side < left)
         {
-            _lblState, _lblClock, _lblOnDeck,
-            lblOrder, _gridOrder, lblTalk, _lstTalkingPoints,
-            lblSpot, _cmbSpotlight, _lblSpotlight, _lblSummaryCaption, _lblLastSummary, _btnRepeat, btnClear, btnRaceControl,
-        });
+            side = room - left;
+        }
+
+        side = Math.Max(side, right);
+
+        if (left + right > room)
+        {
+            side = (int)((long)right * room / Math.Max(1, left + right));
+        }
+
+        return Math.Max(0, side);
+    }
+
+    /// <summary>The running order's headings, each whole, side by side - see Pieces.KeepHeadingsWhole.</summary>
+    private int GridHeadingsWidth() =>
+        _gridOrder.Columns
+            .Cast<DataGridViewColumn>()
+            .Sum(column => Math.Max(2, AppTheme.HeaderLeastWidth(column.HeaderText)));
+
+    /// <summary>The spotlight picker: as wide as its longest name, and never narrower than it was at the normal text size.</summary>
+    private int SpotlightPickerWidth() =>
+        Math.Max(UiLayout.AtTextSize(SpotlightPickerLeast), Pieces.PickerWidth(_cmbSpotlight, ref _spotlightWidth));
+
+    /// <summary>
+    /// The fields' sizes at the text size in use: the spotlight picker as
+    /// wide as its longest name. Run again when the text size changes
+    /// (TextSize.Keep) and when the list is refilled (RefreshSpotlightList).
+    /// </summary>
+    private void SizeFields()
+    {
+        var width = SpotlightPickerWidth();
+
+        // Only when it changed: a new width lays the card out again.
+        if (_cmbSpotlight.Width == width)
+        {
+            return;
+        }
+
+        _cmbSpotlight.Width = width;
+
+        // The columns are shared out from it (SideWidth), and a band only
+        // asks when it is laid out - both, so the two stay lined up.
+        _topBand?.PerformLayout();
+        _bottomBand?.PerformLayout();
+    }
+
+    /// <summary>
+    /// The state's and the clock's faces: the state in the body's family,
+    /// bold, and the clock in Consolas, bold, so its digits do not shift as
+    /// they count - at the sizes they always had, times the text size.
+    /// Made again only when the text size has changed, the old one disposed
+    /// once the label wears the new.
+    /// </summary>
+    private void MakeOwnFonts()
+    {
+        var scale = AppTheme.FontScale;
+
+        if (_stateFont is null || Math.Abs(_stateFont.SizeInPoints - StatePoints * scale) > 0.01F)
+        {
+            var old = _stateFont;
+
+            _stateFont = new Font(AppTheme.BodyFont.FontFamily, StatePoints * scale, FontStyle.Bold);
+            _lblState.Font = _stateFont;
+            old?.Dispose();
+        }
+
+        if (_clockFont is null || Math.Abs(_clockFont.SizeInPoints - ClockPoints * scale) > 0.01F)
+        {
+            var old = _clockFont;
+
+            _clockFont = new Font("Consolas", ClockPoints * scale, FontStyle.Bold);
+            _lblClock.Font = _clockFont;
+            old?.Dispose();
+        }
+    }
+
+    /// <summary>The least the running order can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastOrderHeight() =>
+        _gridOrder.ColumnHeadersHeight + OrderLeastRows * _gridOrder.RowTemplate.Height + 2;
+
+    /// <summary>
+    /// The least the talking points can do with: three one-line points, as
+    /// TalkingPoints_MeasureItem sizes a row - its line and six pixels
+    /// round it.
+    /// </summary>
+    private int LeastTalkingPointsHeight() =>
+        TalkingPointsLeastRows * (Pieces.LineHeight(_lstTalkingPoints.Font) + 6) + 4;
+
+    /// <summary>A heading as a card draws its own (Section): spaced capitals when it is short enough for the spacing to help.</summary>
+    private static string CardCaption(string text) => text.Length <= 28 ? AppTheme.Spaced(text) : text;
+
+    /// <summary>The summary's heading, dressed as a card's caption - and named plainly for a screen reader, which would spell the spaced one out.</summary>
+    private void SetSummaryCaption(string text)
+    {
+        _lblSummaryCaption.Text = CardCaption(text);
+
+        if (_lblSummaryCaption.AccessibleName != text)
+        {
+            _lblSummaryCaption.AccessibleName = text;
+        }
     }
 
     /// <summary>
@@ -528,7 +870,7 @@ public sealed class AnnouncerControl : UserControl
         // The label tracks what it will actually say - falling back to the
         // generic wording when no summary exists yet avoids promising a
         // race summary it can't deliver.
-        _btnRepeat.Text = summary is { Length: > 0 } ? "Repeat Race Summary" : "Repeat Last Line";
+        _btnRepeat.Text = summary is { Length: > 0 } ? RepeatSummaryCaption : RepeatLineCaption;
 
         // Shows the same line the button speaks, so what you'll hear is
         // visible at a glance. The caption tracks which KIND of line
@@ -539,13 +881,13 @@ public sealed class AnnouncerControl : UserControl
         {
             _lblLastSummary.Text = $"\u201C{shown}\u201D";
             _lblLastSummary.ForeColor = summary is { Length: > 0 } ? AppTheme.TextDark : AppTheme.TextMuted;
-            _lblSummaryCaption.Text = summary is { Length: > 0 }
-                ? "LAST RACE SUMMARY"
-                : $"LAST LINE ({_commentary?.LastLineKind?.ToUpperInvariant()})";
+            SetSummaryCaption(summary is { Length: > 0 }
+                ? SummaryCaption
+                : $"LAST LINE ({_commentary?.LastLineKind?.ToUpperInvariant()})");
         }
         else
         {
-            _lblSummaryCaption.Text = "LAST RACE SUMMARY";
+            SetSummaryCaption(SummaryCaption);
             _lblLastSummary.Text = _commentary?.IsAvailable == true
                 ? "No race summary yet - one is generated after the checkered flag."
                 : "Commentary is off. Enable it on the Commentary page.";
@@ -654,6 +996,11 @@ public sealed class AnnouncerControl : UserControl
         {
             _cmbSpotlight.Items.Add(new SpotlightItem(profile.Transponder, profile.DriverName));
         }
+
+        // As wide as the longest name now in it - measured afresh, since a
+        // refill can change the names without changing how many there are.
+        _spotlightWidth = null;
+        SizeFields();
 
         if (previous is not null)
         {
@@ -771,6 +1118,15 @@ public sealed class AnnouncerControl : UserControl
         }
 
         base.Dispose(disposing);
+
+        // After the labels that wear them are gone.
+        if (disposing)
+        {
+            _stateFont?.Dispose();
+            _stateFont = null;
+            _clockFont?.Dispose();
+            _clockFont = null;
+        }
     }
 
     private sealed record SpotlightItem(string Transponder, string DriverName)

@@ -34,7 +34,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Label _lblSaveStatus = new();
 
     // --- Speak With (see BuildEngineCard) ---
-    private readonly RadioButton _rdoHeatCaller = new();
+    private readonly RadioButton _rdoHeatCaller = new ThemedRadioButton();
     private readonly ComboBox _cmbHeatCallerVoice = new();
     private readonly Button _btnHeatCallerRefresh = new();
     private readonly Label _lblHeatCallerStatus = new();
@@ -44,9 +44,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly TextBox _txtVoiceRelayUrl = new();
     private readonly TextBox _txtVoiceRelayClub = new();
     private readonly TextBox _txtVoiceRelayToken = new();
-    private readonly RadioButton _rdoElevenLabs = new();
-    private readonly RadioButton _rdoWindows = new();
-    private readonly CheckBox _chkWindowsStandsIn = new();
+    private readonly RadioButton _rdoElevenLabs = new ThemedRadioButton();
+    private readonly RadioButton _rdoWindows = new ThemedRadioButton();
+    private readonly CheckBox _chkWindowsStandsIn = new ThemedCheckBox();
     private readonly ComboBox _cmbWindowsVoice = new();
     private readonly Button _btnTestWindowsVoice = new();
     private readonly Label _lblWindowsVoiceStatus = new();
@@ -58,7 +58,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     private const string PrepareNotNeededText = "Not needed with the Windows voice - it speaks each line as it's wanted.";
 
     private readonly TextBox _txtApiKey = new();
-    private readonly CheckBox _chkShowApiKey = new();
+    private readonly CheckBox _chkShowApiKey = new ThemedCheckBox();
     private readonly ComboBox _cmbVoice = new();
     private readonly Button _btnLoadVoices = new();
     private readonly ComboBox _cmbModel = new();
@@ -67,16 +67,16 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly NumericUpDown _numSimilarity = new();
     private readonly NumericUpDown _numStyle = new();
     private readonly NumericUpDown _numSpeed = new();
-    private readonly CheckBox _chkSpeakerBoost = new();
+    private readonly CheckBox _chkSpeakerBoost = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
     private readonly NumericUpDown _numVolumePercent = new();
-    private readonly CheckBox _chkWirelessSpeaker = new();
+    private readonly CheckBox _chkWirelessSpeaker = new ThemedCheckBox();
     private readonly NumericUpDown _numMaxPerLap = new();
     private readonly NumericUpDown _numStreakEveryN = new();
-    private readonly CheckBox _chkOnlyLongestStreak = new();
-    private readonly CheckBox _chkMentionStreakChaser = new();
+    private readonly CheckBox _chkOnlyLongestStreak = new ThemedCheckBox();
+    private readonly CheckBox _chkMentionStreakChaser = new ThemedCheckBox();
     private readonly NumericUpDown _numPositionEveryLaps = new();
     private readonly NumericUpDown _numPositionDepth = new();
     private readonly NumericUpDown _numLapTimeEveryN = new();
@@ -134,11 +134,11 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>The inline Restore Default Lines button, so it can be switched off with the wording it restores.</summary>
     private Button? _btnRestoreLines;
-    private readonly CheckBox _chkIncludeLapTime = new();
-    private readonly CheckBox _chkOnlyBestLap = new();
-    private readonly CheckBox _chkSayLapTimeLabel = new();
-    private readonly CheckBox _chkIncludeDriverNameInLapTime = new();
-    private readonly CheckBox _chkFastLapIncludeTime = new();
+    private readonly CheckBox _chkIncludeLapTime = new ThemedCheckBox();
+    private readonly CheckBox _chkOnlyBestLap = new ThemedCheckBox();
+    private readonly CheckBox _chkSayLapTimeLabel = new ThemedCheckBox();
+    private readonly CheckBox _chkIncludeDriverNameInLapTime = new ThemedCheckBox();
+    private readonly CheckBox _chkFastLapIncludeTime = new ThemedCheckBox();
 
     private readonly VoiceSettingsStore _store;
 
@@ -506,14 +506,27 @@ public sealed partial class VoiceSettingsControl : UserControl
     }
 
     /// <summary>
-    /// Moves a part added to a card in by the indent, under the choice it
-    /// belongs to - the voice picker under the HeatCaller voice, the stand-in
-    /// under ElevenLabs. The card measures its parts inside their margins, so
-    /// the part is narrower by the indent and wraps to that.
+    /// Moves a part added to a card in, under the choice it belongs to - the
+    /// voice picker under the HeatCaller voice, the stand-in under
+    /// ElevenLabs - by TickBox.CaptionIndent: the usual indent, or as far in
+    /// as the radio button's caption starts once its dot has grown past that
+    /// with the text. Again whenever the text size changes. The card
+    /// measures its parts inside their margins, so the part is narrower by
+    /// the indent and wraps to that.
     /// </summary>
-    private static T Indented<T>(T part) where T : Control
+    private T Indented<T>(T part) where T : Control
     {
-        part.Margin = new Padding(UiLayout.Indent, part.Margin.Top, part.Margin.Right, part.Margin.Bottom);
+        _textSize.Keep(() =>
+        {
+            var indent = TickBox.CaptionIndent;
+
+            // Only when it changed: a new margin lays the card out again.
+            if (part.Margin.Left != indent)
+            {
+                part.Margin = new Padding(indent, part.Margin.Top, part.Margin.Right, part.Margin.Bottom);
+            }
+        });
+
         return part;
     }
 

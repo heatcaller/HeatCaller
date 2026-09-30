@@ -13,11 +13,11 @@ public sealed class MusicControl : UserControl
     private readonly MusicPlayer _player;
     private readonly UndoService _undo;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly NumericUpDown _numVolume = new();
-    private readonly CheckBox _chkShuffle = new();
-    private readonly CheckBox _chkPauseDuringRaces = new();
-    private readonly CheckBox _chkDuck = new();
+    private readonly CheckBox _chkShuffle = new ThemedCheckBox();
+    private readonly CheckBox _chkPauseDuringRaces = new ThemedCheckBox();
+    private readonly CheckBox _chkDuck = new ThemedCheckBox();
     private readonly NumericUpDown _numDuckTo = new();
 
     private readonly Label _lblNowPlaying = new();
@@ -36,8 +36,8 @@ public sealed class MusicControl : UserControl
     private readonly Label _lblStatus = new();
 
     // "Play: (o) Theme music  ( ) My music" - see MusicSettings.PlayThemeMusic.
-    private readonly RadioButton _rdoThemeMusic = new();
-    private readonly RadioButton _rdoMyMusic = new();
+    private readonly RadioButton _rdoThemeMusic = new ThemedRadioButton();
+    private readonly RadioButton _rdoMyMusic = new ThemedRadioButton();
 
     /// <summary>
     /// The sentence under the Theme music / My music choice - see

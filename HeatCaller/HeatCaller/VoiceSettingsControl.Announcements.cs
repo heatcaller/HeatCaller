@@ -666,13 +666,13 @@ public sealed partial class VoiceSettingsControl
         var extras = BuildAnnouncementExtras(rows, type, config);
 
         // --- The ticks, the name and the three numbers ---
-        var chkRace = new CheckBox
+        var chkRace = new ThemedCheckBox
         {
             AutoSize = true,
             Checked = config.Enabled,
         };
 
-        var chkPractice = new CheckBox
+        var chkPractice = new ThemedCheckBox
         {
             AutoSize = true,
 
@@ -723,7 +723,7 @@ public sealed partial class VoiceSettingsControl
         // announcer isn't talking over an instruction to the drivers. This
         // is the per-announcement exception to that - a column of its own
         // now rather than a captioned tick squeezed under the name.
-        var chkCaution = new CheckBox
+        var chkCaution = new ThemedCheckBox
         {
             AutoSize = true,
             Checked = config.AllowUnderCaution,

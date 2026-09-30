@@ -14,9 +14,9 @@ public partial class MainForm
     ///
     /// While it is set, showing the window does nothing that showing it
     /// normally does - no web server, no relay, no startup questions, no
-    /// reveal (the window stays invisible) - and LayoutDoctor is kept off
-    /// every page, so what is measured is each page's own layout rather
-    /// than the doctor's repairs of it.
+    /// reveal (the window stays invisible). (It also used to keep the
+    /// layout repair pass off every page, so what was measured was each
+    /// page's own layout; that pass was deleted on 30 Sep.)
     /// </summary>
     internal bool LayoutCheckMode { get; set; }
 
@@ -31,7 +31,7 @@ public partial class MainForm
     internal IReadOnlyList<(string Name, Control Page)> LayoutCheckPages =>
         _navItems.Select(item => (item.Name, (Control)item.Page)).ToList();
 
-    /// <summary>Puts a page on screen the way clicking it does - its refresh runs - without the doctor.</summary>
+    /// <summary>Puts a page on screen the way clicking it does - its refresh runs.</summary>
     internal void ShowPageForLayoutCheck(string name) => ShowPage(name);
 
     /// <summary>

@@ -7,13 +7,31 @@ namespace HeatCaller;
 /// name, because "CSV" alone doesn't tell you whether you're getting one row
 /// per driver or one row per lap - and that's the only thing that matters
 /// when deciding which to pick.
+///
+/// On the layout pieces (DialogFit): the format beside its caption and its
+/// shape under it, as tall as the longest of the shapes (SteadyLabel), so
+/// picking another format never moves what is under it; then the sessions
+/// to export under their heading, the note on the formats, and Export and
+/// Cancel at the foot. All but the buttons is the window's body, which
+/// scrolls on a screen too short for it. It used to be placed in pixels in
+/// a 480x320 window: the shape in a box of a fixed 374x76 at every text
+/// size, and the note wrapped at a fixed 448px - three lines of it, the
+/// last of which came down past the top of the buttons.
 /// </summary>
 public sealed class ResultsExportForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 480;
+
     private readonly ComboBox _cmbFormat = new();
-    private readonly RadioButton _rbSelected = new();
-    private readonly RadioButton _rbAll = new();
-    private readonly Label _lblShape = new();
+    private readonly RadioButton _rbSelected = new ThemedRadioButton();
+    private readonly RadioButton _rbAll = new ThemedRadioButton();
+
+    /// <summary>The shape of the format picked, under it - as tall as the longest of them, so picking another never moves what is under it.</summary>
+    private readonly SteadyLabel _lblShape = new()
+    {
+        Wordings = Enum.GetValues<ResultsExporter.Format>().Select(ShapeOf).ToArray(),
+    };
 
     public ResultsExporter.Format Format =>
         (_cmbFormat.SelectedItem as FormatItem)?.Format ?? ResultsExporter.Format.ResultsCsv;
@@ -23,18 +41,10 @@ public sealed class ResultsExportForm : Form
     public ResultsExportForm(int selectedCount, int totalCount)
     {
         Text = "Export Results";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(480, 320);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        var lblFormat = new Label { Text = "Format:", Location = new Point(16, 20), AutoSize = true };
-        _cmbFormat.Location = new Point(90, 17);
-        _cmbFormat.Width = 374;
         _cmbFormat.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbFormat.Items.AddRange(new object[]
         {
@@ -45,23 +55,16 @@ public sealed class ResultsExportForm : Form
         _cmbFormat.SelectedIndex = 0;
         _cmbFormat.SelectedIndexChanged += (_, _) => UpdateShape();
 
-        _lblShape.Location = new Point(90, 50);
-        _lblShape.Size = new Size(374, 76);
-        _lblShape.ForeColor = AppTheme.TextMuted;
-        _lblShape.Font = AppTheme.SmallFont;
-
-        var lblScope = new Label { Text = "Sessions", Location = new Point(16, 140), AutoSize = true, Font = AppTheme.BoldFont };
+        var lblScope = new Label { Text = "Sessions", AutoSize = true, Font = AppTheme.BoldFont };
 
         _rbSelected.Text = selectedCount > 0
             ? $"Selected only ({selectedCount})"
             : "Selected only (nothing selected)";
-        _rbSelected.Location = new Point(28, 166);
         _rbSelected.AutoSize = true;
         _rbSelected.Enabled = selectedCount > 0;
         _rbSelected.Checked = selectedCount > 0;
 
         _rbAll.Text = $"All recorded sessions ({totalCount})";
-        _rbAll.Location = new Point(28, 192);
         _rbAll.AutoSize = true;
         _rbAll.Checked = selectedCount == 0;
 
@@ -70,31 +73,71 @@ public sealed class ResultsExportForm : Form
             Text = "There's no single file layout that RC timing software agrees on, so these are formats whose shape is "
                  + "fully documented rather than a guess at one vendor's. If you need a specific layout, a sample file "
                  + "is enough to match it.",
-            Location = new Point(16, 226),
             AutoSize = true,
-            MaximumSize = new Size(448, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
         var btnExport = new Button { Text = "Export...", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        AppTheme.LayoutButtonRow(268, 276, 8, btnExport, btnCancel);
 
-        Controls.AddRange(new Control[]
-        {
-            lblFormat, _cmbFormat, _lblShape, lblScope, _rbSelected, _rbAll, lblNote, btnExport, btnCancel,
-        });
+        // The format beside its caption, the box running to the right-hand
+        // edge as it did, and its shape under it in the box's column, in the
+        // small muted type of a hint (FieldGrid.AddHint).
+        var fields = new FieldGrid();
+        var lblFormat = fields.AddRow("Format:", _cmbFormat, stretch: true);
+        fields.AddHint(_lblShape);
+
+        var page = new FillPage();
+
+        // Everything but the buttons: on a screen too short for all of it,
+        // it scrolls and Export and Cancel stay in view. The two choices are
+        // in the same column, so they are still one group - picking one
+        // clears the other.
+        var body = DialogFit.Body(page);
+        body.Add(fields);
+        body.Add(lblScope, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_rbSelected, stretch: false, gapBelow: UiLayout.HintGap);
+        body.Add(_rbAll, stretch: false);
+        body.Add(lblNote, gapBelow: 0);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Export first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnExport), gapBelow: 0);
+        btnExport.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnExport;
         CancelButton = btnCancel;
 
         UpdateShape();
         AppTheme.ApplyRecursively(this);
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider if the format box ever needs more for its longest name than
+        // the fields' column leaves it there, which today it does not at any
+        // text size. Measured in the face the theme pass left the box in; the
+        // box itself takes the whole of the fields' column (stretch), beside
+        // the caption and the gap after it.
+        (Font Font, int Count, int Width)? formatWidth = null;
+
+        var captionColumn = lblFormat.GetPreferredSize(Size.Empty).Width + lblFormat.Margin.Horizontal;
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + Pieces.PickerWidth(_cmbFormat, ref formatWidth) + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
     /// <summary>Shows the actual column layout, so there's no guessing about what lands in the file.</summary>
-    private void UpdateShape() => _lblShape.Text = Format switch
+    private void UpdateShape() => _lblShape.Text = ShapeOf(Format);
+
+    /// <summary>A format's shape, in words. Every one of them is measured for the room under the format box (see _lblShape).</summary>
+    private static string ShapeOf(ResultsExporter.Format format) => format switch
     {
         ResultsExporter.Format.ResultsCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, "

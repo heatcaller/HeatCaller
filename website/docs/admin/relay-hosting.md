@@ -340,7 +340,7 @@ Only a render that isn't already on disk is charged to ElevenLabs and counted ag
 
 Rendered audio lives in `dataDir/voice/` — `shared/` for the lines every club may have, `clubs/<club>/` for the rest — content-addressed and swept oldest-used-first at 200 MB shared and 25 MB per club. None of it counts against a club's 50 MB publishing quota.
 
-Renders are capped at six at once across the whole relay, and a club may ask 300 times a minute, which is enough for a laptop's **Prepare Lines** to walk a whole announcer style.
+Renders are capped at six at once across the whole relay, and a club may ask 300 times a minute, which is enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines.
 
 ### What a club sees when it goes wrong
 
@@ -497,7 +497,7 @@ voice-test.cmd
 
 The first run builds, writes `relay.config.voice-test.json` with a catalog made from the voices that ElevenLabs account already has, mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
 
-Those three go into **Voice Announcements → Voice Settings**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
+Those three go into **Voice → Voice Settings**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
 
 Three things it's careful about, because it's your own credits:
 
@@ -582,7 +582,7 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Windows voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |
 | One spoken line | `voice.maxChars` (600 by default) | Refused. The app has a 600-character limit of its own, measured on the spoken words, and the Windows voice says that line. |
 | Renders at once | 6, across the whole relay | Refused as busy; the Windows voice says that line and the next is asked for as normal. |
-| Voice requests from one club | 300 a minute | Refused as busy. Enough for a laptop's **Prepare Lines** to walk a whole announcer style. |
+| Voice requests from one club | 300 a minute | Refused as busy. Enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines. |
 | Rendered audio kept | 200 MB shared, 25 MB per club | The least recently used are swept. None of it counts against a club's 50 MB. |
 
 Rate limits on PINs and check-in are covered in [Security and privacy](security-and-privacy.md#pins-and-rate-limits).

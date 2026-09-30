@@ -156,7 +156,7 @@ public sealed class RentalUnitEditForm : Form
     private readonly TextBox _txtTransponder = new();
     private readonly TextBox _txtAssetTag = new();
     private readonly TextBox _txtNotes = new();
-    private readonly CheckBox _chkRetired = new();
+    private readonly CheckBox _chkRetired = new ThemedCheckBox();
 
     /// <summary>
     /// What Save hands back - a COPY of the stored unit when editing. The

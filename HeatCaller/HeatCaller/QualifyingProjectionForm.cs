@@ -16,9 +16,20 @@ namespace HeatCaller;
 /// Closing it costs nothing: it holds no state, it is rebuilt from the
 /// projector on every tick, and the projector is cached so an open window
 /// that nobody is watching is a dictionary lookup four times a second.
+///
+/// On the layout pieces (DialogFit): the class and the rule it is ranked
+/// by across the top, each wrapping to the window's width; the order
+/// taking the height under them - or, in its place, the note that no
+/// qualifier is running; and the keep-on-top box at the foot. It used to be
+/// placed in pixels: the two heading lines in a docked strip of fixed
+/// height, a line each, so a class and round long enough to wrap onto a
+/// second line lost it.
 /// </summary>
 public sealed class QualifyingProjectionForm : Form
 {
+    /// <summary>The order shows its headings and at least this many drivers before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly QualifyingProjector _projector;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
 
@@ -26,52 +37,27 @@ public sealed class QualifyingProjectionForm : Form
     private readonly Label _lblRule = new();
     private readonly Label _lblEmpty = new();
     private readonly DataGridView _grid = new();
-    private readonly CheckBox _chkOnTop = new();
+    private readonly CheckBox _chkOnTop = new ThemedCheckBox();
 
     public QualifyingProjectionForm(QualifyingProjector projector)
     {
         _projector = projector;
 
         Text = "Qualifying projection";
-        StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(620, 620);
-        MinimumSize = new Size(480, 400);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-        Padding = new Padding(UiLayout.PageLeft);
 
-        // The two heading lines live in one docked strip, positioned
-        // inside it rather than docked themselves. Two Top controls in a
-        // row work only if you know which way WinForms resolves the
-        // z-order, and a layout that depends on knowing that is a layout
-        // that breaks the first time somebody reorders an Add.
-        var headingHeight = AppTheme.MicroFont.Height + 8;
-        var ruleHeight = AppTheme.SmallFont.Height + 10;
-
-        var header = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = headingHeight + ruleHeight,
-            BackColor = AppTheme.Background,
-        };
-
-        _lblHeading.Dock = DockStyle.Top;
-        _lblHeading.Height = headingHeight;
+        // Both sized to what they say, wrapping to the page's width: the
+        // heading carries the class and round names, which can be long.
+        _lblHeading.AutoSize = true;
         _lblHeading.Font = AppTheme.MicroFont;
         _lblHeading.ForeColor = AppTheme.Primary;
-        _lblHeading.TextAlign = ContentAlignment.MiddleLeft;
 
-        _lblRule.Dock = DockStyle.Bottom;
-        _lblRule.Height = ruleHeight;
+        _lblRule.AutoSize = true;
         _lblRule.Font = AppTheme.SmallFont;
         _lblRule.ForeColor = AppTheme.TextMuted;
-        _lblRule.TextAlign = ContentAlignment.MiddleLeft;
 
-        header.Controls.Add(_lblHeading);
-        header.Controls.Add(_lblRule);
-
-        _chkOnTop.Dock = DockStyle.Bottom;
-        _chkOnTop.Height = AppTheme.BodyFont.Height + 12;
+        _chkOnTop.AutoSize = true;
         _chkOnTop.Text = "Keep this window on top";
         _chkOnTop.Font = AppTheme.BodyFont;
         _chkOnTop.CheckedChanged += (_, _) => TopMost = _chkOnTop.Checked;
@@ -86,19 +72,75 @@ public sealed class QualifyingProjectionForm : Form
 
         BuildGrid();
 
-        // One Top, one Bottom, and two Fills of which exactly one is ever
-        // visible - so there is nothing for the docking order to decide.
-        Controls.Add(_grid);
-        Controls.Add(_lblEmpty);
-        Controls.Add(header);
-        Controls.Add(_chkOnTop);
+        // The order and the note that nothing is running take turns in one
+        // place: both fill the panel they share, and exactly one of them is
+        // ever visible (Render) - so there is nothing for the docking order
+        // to decide, and the page sees one part whichever is showing.
+        var order = new Panel { Tag = AppTheme.KeepBackColor };
+        order.Controls.Add(_grid);
+        order.Controls.Add(_lblEmpty);
+
+        var page = new FillPage();
+        page.Add(_lblHeading, gapBelow: UiLayout.HintGap);
+        page.Add(_lblRule, gapBelow: UiLayout.RowGap);
+        page.AddFill(order, OrderLeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(_chkOnTop, stretch: false, gapBelow: 0);
+
+        Controls.Add(page);
 
         _timer.Tick += (_, _) => Render(_projector.Current());
-        _timer.Start();
+
+        // Ticking from when the window is shown rather than from when it is
+        // built - the same moment in practice, since Race Control shows it
+        // as soon as it is made, and the first order is drawn below either
+        // way. A window built and never shown (the layout test's) never
+        // reaches OnFormClosed, where the timer is stopped, and would have
+        // left it ticking on after the window was gone.
+        Load += (_, _) => _timer.Start();
 
         Render(_projector.Current());
 
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_grid);
+
+        DialogFit.Keep(this, page, width: 620, height: 620);
+
+        // A window of its own, shown beside the app rather than over it
+        // (Race Control's ToggleProjectionWindow) - often on a second screen
+        // - so it can be minimized and is on the taskbar, as it always was.
+        // Keep dresses every window as a dialog.
+        MinimizeBox = true;
+        ShowInTaskbar = true;
+
+        // And it can be made narrower than it opened, down to the 480 it
+        // always could, at the text size in use: nothing in it is measured
+        // for its width - the headings wrap and the order fills what it has
+        // - and a projector can be a smaller screen than the one it opened
+        // on. After DialogFit's own Load handler, added above, which sets
+        // the least to the width it opened at.
+        Load += (_, _) => MinimumSize = new Size(
+            Math.Min(MinimumSize.Width, Width - ClientSize.Width + UiLayout.AtTextSize(480)),
+            MinimumSize.Height);
+    }
+
+    /// <summary>
+    /// The least the order's place can do with at <paramref name="width"/>:
+    /// the order's headings and a few drivers, or the whole of the note that
+    /// nothing is running, wrapped to that width - whichever is taller, so
+    /// the window's least does not change when a qualifier starts or ends.
+    /// The note is measured as the label draws it, wrapped in its own box.
+    /// </summary>
+    private int OrderLeastHeight(int width)
+    {
+        var note = TextRenderer.MeasureText(
+            _lblEmpty.Text,
+            _lblEmpty.Font,
+            new Size(Math.Max(1, width - _lblEmpty.Padding.Horizontal), int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + _lblEmpty.Padding.Vertical;
+
+        return Math.Max(_grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, note);
     }
 
     private void BuildGrid()

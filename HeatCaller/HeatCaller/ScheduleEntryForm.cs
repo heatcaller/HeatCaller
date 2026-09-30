@@ -1,9 +1,29 @@
 namespace HeatCaller;
 
+/// <summary>
+/// One line of the run sheet (DayScheduleControl), added or edited: when it
+/// happens, the class it is for and what it says.
+///
+/// On the layout pieces (DialogFit): the time with its No set time tick
+/// beside it, the class and the description lined up in a field grid, and
+/// Save and Cancel at the foot; as tall as that, and wider than it was made
+/// when a class's name needs the drop-down wider. It used to be placed in
+/// pixels in a 360x210 window: the fields at a fixed x of 90 beside
+/// captions that ran into them ("Description:" needs more than that at the
+/// normal text size), the drop-down and the box 254px wide however long the
+/// longest class's name, the time picker a fixed 130x26 that a larger text
+/// size clipped, and Save and Cancel a fixed 90 and 80px wide.
+/// </summary>
 public sealed class ScheduleEntryForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 360;
+
+    /// <summary>The fields' width at the normal text size - wider when a class's name needs the drop-down wider, or the time and its tick need more.</summary>
+    private const int FieldWidth = 254;
+
     private readonly TimePicker _dtpTime = new();
-    private readonly CheckBox _chkNoTime = new();
+    private readonly CheckBox _chkNoTime = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
     private readonly TextBox _txtDescription = new();
 
@@ -14,19 +34,14 @@ public sealed class ScheduleEntryForm : Form
         Result = existing ?? new ScheduleEntry();
 
         Text = existing is null ? "Add Schedule Entry" : "Edit Schedule Entry";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(360, 210);
         Font = AppTheme.BodyFont;
 
-        var lblTime = new Label { Text = "Time:", Location = new Point(16, 18), AutoSize = true };
-        _dtpTime.Location = new Point(90, 15);
-        _dtpTime.Size = new Size(130, 26);
+        // As big as its time needs in its font (TimePicker.GetPreferredSize) -
+        // at 130x26 it held the time at the normal text size and clipped it
+        // at any larger one.
+        _dtpTime.AutoSize = true;
 
         _chkNoTime.Text = "No set time";
-        _chkNoTime.Location = new Point(222, 17);
         _chkNoTime.AutoSize = true;
         _chkNoTime.CheckedChanged += (_, _) => _dtpTime.Enabled = !_chkNoTime.Checked;
 
@@ -49,9 +64,6 @@ public sealed class ScheduleEntryForm : Form
             _dtpTime.Value = new TimeSpan(next.Hour, 0, 0);
         }
 
-        var lblClass = new Label { Text = "Class:", Location = new Point(16, 50), AutoSize = true };
-        _cmbClass.Location = new Point(90, 47);
-        _cmbClass.Width = 254;
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDown;
         foreach (var c in raceClasses.All)
         {
@@ -59,31 +71,65 @@ public sealed class ScheduleEntryForm : Form
         }
         _cmbClass.Text = Result.ClassName;
 
-        var lblDescription = new Label { Text = "Description:", Location = new Point(16, 82), AutoSize = true };
-        _txtDescription.Location = new Point(90, 79);
-        _txtDescription.Width = 254;
         _txtDescription.Text = Result.Description;
         _txtDescription.PlaceholderText = "e.g. Qualifying Round 1, A-Main";
 
-        var btnSave = new Button { Text = "Save", Location = new Point(168, 160), Width = 90 };
+        var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(264, 160), Width = 80, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(lblTime);
-        Controls.Add(_dtpTime);
-        Controls.Add(_chkNoTime);
-        Controls.Add(lblClass);
-        Controls.Add(_cmbClass);
-        Controls.Add(lblDescription);
-        Controls.Add(_txtDescription);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        // The time, and the tick that says there is none, on one line - on
+        // two when the line is too narrow for both. The class and the
+        // description run to the right-hand edge, as they did.
+        var timeRow = FieldGrid.Inline(_dtpTime, _chkNoTime);
+
+        var fields = new FieldGrid();
+        var captions = new List<Label>
+        {
+            fields.AddRow("Time:", timeRow),
+            fields.AddRow("Class:", _cmbClass, stretch: true),
+            fields.AddRow("Description:", _txtDescription, stretch: true),
+        };
+
+        var page = new FillPage();
+        page.Add(fields);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         CancelButton = btnCancel;
         AcceptButton = btnSave;
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the fields' column needs more: the drop-down as wide as
+        // the longest class's name, or the name the line already has when it
+        // is not one on file, and the time and its tick on one line. Measured
+        // in the faces the theme pass left them in; the drop-down and the
+        // box take the whole of the column (stretch). The caption column
+        // beside it as the grid works it out: its widest caption and the gap
+        // after it.
+        (Font Font, int Count, int Width)? classWidth = null;
+
+        var fieldColumn = Math.Max(
+            Math.Max(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbClass, ref classWidth, Result.ClassName)),
+            timeRow.GetPreferredSize(Size.Empty).Width + timeRow.Margin.Horizontal);
+
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, widthMeasured: true);
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

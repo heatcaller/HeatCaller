@@ -6,9 +6,29 @@ namespace HeatCaller;
 /// The owner picker carries "The club" as a real choice rather than
 /// leaving it as an empty selection, because a club car is a deliberate
 /// thing and not a car somebody forgot to assign - see Car.OwnerTransponder.
+///
+/// On the layout pieces (DialogFit): the name with its hint under it, the
+/// owner, the class, the chassis, the shell, the race number and the notes
+/// lined up in a field grid, and Save and Cancel at the foot. The fields are
+/// the window's body, which scrolls on a screen too short for all of them
+/// while Save and Cancel stay in view. As wide as it was made at the normal
+/// text size, at the size in use - wider when a drop-down's longest choice
+/// needs it. It used to be placed in pixels in a window 540px wide: the
+/// captions in a column 180px wide, every field 320px beside it however long
+/// the longest driver, class or chassis name, and the notes three lines of
+/// the font's height rather than of the lines the box draws.
 /// </summary>
 internal sealed class CarForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 540;
+
+    /// <summary>The fields' width at the normal text size - wider when a drop-down's longest choice needs it.</summary>
+    private const int FieldWidth = 320;
+
+    /// <summary>How many lines of notes show before the box scrolls.</summary>
+    private const int NotesLines = 3;
+
     private readonly Car _car;
 
     private readonly TextBox _txtName = new();
@@ -37,56 +57,10 @@ internal sealed class CarForm : Form
         _car = car;
 
         Text = isNew ? "Add a Car" : "Edit Car";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
-
-        const int fieldWidth = 320;
-        var right = UiLayout.FieldLeft + fieldWidth;
-
-        var y = UiLayout.PageTop;
-
-        Label Row(string caption, Control field, int width)
-        {
-            // Parented before it is measured. A label measures itself in
-            // the font it currently has, and until it is added to this form
-            // it has the WinForms default rather than this one - so a
-            // position worked out first is a position for a control that is
-            // about to change size.
-            var label = new Label { Text = caption, AutoSize = true, Font = AppTheme.BodyFont };
-
-            Controls.Add(label);
-            label.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(label, y, UiLayout.RowHeight));
-
-            field.Location = new Point(UiLayout.FieldLeft, y);
-            field.Width = width;
-
-            Controls.Add(field);
-
-            y += UiLayout.RowStep;
-
-            return label;
-        }
 
         _txtName.Text = car.Name;
         _txtName.MaxLength = 60;
-        Row("Name:", _txtName, fieldWidth);
-
-        var lblNameHint = new Label
-        {
-            Text = "What people call it - \"the red one\", \"Dave's Audi\". Left blank, the shell is used instead.",
-            Location = new Point(UiLayout.FieldLeft, y - UiLayout.RowStep + UiLayout.RowHeight + UiLayout.HintGap),
-            AutoSize = true,
-            MaximumSize = new Size(fieldWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        Controls.Add(lblNameHint);
-        y = UiLayout.Below(lblNameHint, UiLayout.RowGap);
 
         _cmbOwner.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbOwner.Items.Add(new OwnerChoice(string.Empty, "The club"));
@@ -102,8 +76,6 @@ internal sealed class CarForm : Form
             .FirstOrDefault(o => string.Equals(o.Transponder, car.OwnerTransponder, StringComparison.OrdinalIgnoreCase))
             ?? _cmbOwner.Items[0];
 
-        Row("Owner:", _cmbOwner, fieldWidth);
-
         // Editable rather than a fixed list: a club can put a car in a
         // class it has not set up yet, and the Garage groups on the name
         // either way. Refusing here would mean the class had to be created
@@ -117,8 +89,6 @@ internal sealed class CarForm : Form
         }
 
         _cmbClass.Text = car.ClassName;
-
-        Row("Class:", _cmbClass, fieldWidth);
 
         _cmbChassis.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbChassis.Items.Add(new ChassisChoice(string.Empty, "(not said)"));
@@ -141,48 +111,54 @@ internal sealed class CarForm : Form
             .FirstOrDefault(c => string.Equals(c.Id, car.ChassisTypeId, StringComparison.Ordinal))
             ?? _cmbChassis.Items[0];
 
-        Row("Chassis:", _cmbChassis, fieldWidth);
-
         _txtShell.Text = car.Bodyshell;
         _txtShell.MaxLength = 60;
         _txtShell.PlaceholderText = "e.g. Audi R8";
-        Row("Shell:", _txtShell, fieldWidth);
 
         _txtNumber.Text = car.RaceNumber;
         _txtNumber.MaxLength = 8;
-        Row("Race number:", _txtNumber, UiLayout.NumericWidth);
 
         _txtNotes.Text = car.Notes;
         _txtNotes.Multiline = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
-        _txtNotes.Height = AppTheme.BodyFont.Height * 3 + 8;
 
-        var lblNotes = new Label
+        var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+        // Every field runs to the right-hand edge, where the buttons end, as
+        // the 320px fields did beside their captions - all but the race
+        // number, a box sized for what goes in it. The hint under the name,
+        // wrapping to the fields' width.
+        var fields = new FieldGrid();
+        var captions = new List<Label>
         {
-            Text = "Notes:",
-            Location = new Point(UiLayout.PageLeft, y),
-            AutoSize = true,
+            fields.AddRow("Name:", _txtName, stretch: true),
         };
 
-        _txtNotes.Location = new Point(UiLayout.FieldLeft, y);
-        _txtNotes.Width = fieldWidth;
+        fields.AddHint("What people call it - \"the red one\", \"Dave's Audi\". Left blank, the shell is used instead.");
 
-        Controls.Add(lblNotes);
-        Controls.Add(_txtNotes);
+        captions.Add(fields.AddRow("Owner:", _cmbOwner, stretch: true));
+        captions.Add(fields.AddRow("Class:", _cmbClass, stretch: true));
+        captions.Add(fields.AddRow("Chassis:", _cmbChassis, stretch: true));
+        captions.Add(fields.AddRow("Shell:", _txtShell, stretch: true));
+        captions.Add(fields.AddRow("Race number:", _txtNumber));
+        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
 
-        y = UiLayout.Below(_txtNotes, UiLayout.SectionGap);
+        // The fields are the body: on a screen too short for all seven -
+        // 1280x720 at a larger text size - they scroll, and Save and Cancel
+        // under them stay in view.
+        var page = new FillPage();
+        var body = DialogFit.Body(page);
+        body.Add(fields, gapBelow: 0);
 
-        var btnOk = new Button { Text = "Save", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
-
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
@@ -224,7 +200,41 @@ internal sealed class CarForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        ClientSize = new Size(right + UiLayout.PageLeft, UiLayout.Below(btnOk, UiLayout.PageTop));
+        // After the theme pass, in the faces it leaves them in: the race
+        // number as wide as it was at the normal text size, at the size in
+        // use, and the notes a few lines of their font, as the box draws
+        // them (Pieces.LineHeight).
+        _txtNumber.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
+        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the fields' column needs more: never narrower than the
+        // 320px the fields had, and wide enough for each drop-down's longest
+        // choice, the class's typed name included - a class not set up yet
+        // is not in its list. At 320px a long class's name came out cut
+        // short once it was picked. With room for the body's scrollbar,
+        // which takes its width from the fields on a screen too short for
+        // them. The caption column beside it as the grid works it out: its
+        // widest caption and the gap after it.
+        (Font Font, int Count, int Width)? ownerWidth = null;
+        (Font Font, int Count, int Width)? classWidth = null;
+        (Font Font, int Count, int Width)? chassisWidth = null;
+
+        var fieldColumn = new[]
+        {
+            UiLayout.AtTextSize(FieldWidth),
+            Pieces.PickerWidth(_cmbOwner, ref ownerWidth),
+            Pieces.PickerWidth(_cmbClass, ref classWidth, _cmbClass.Text),
+            Pieces.PickerWidth(_cmbChassis, ref chassisWidth),
+        }.Max();
+
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 }
 
@@ -239,9 +249,35 @@ internal sealed class CarForm : Form
 /// is deliberate: the caller captures an undo entry that puts the names
 /// back, and a name whose file had been deleted would put back a broken
 /// picture. A few kilobytes is the cheaper mistake.
+///
+/// On the layout pieces (DialogFit): what the window is for across the top;
+/// the list of photos down the left at its own width, beside the preview,
+/// which takes the width left and the height; and under them the buttons
+/// that change the photos on the left, Done and Cancel against the
+/// right-hand edge, all on one line - the window made wide enough for it at
+/// the text size in use. It opens at the size it had and can be made
+/// bigger, the list and the preview taking the room. It used to be placed in
+/// pixels in a window 652px wide: the list and the preview each a fixed
+/// 260px tall, and the five buttons in one row that did not fit it - Done
+/// was placed over Make it First.
 /// </summary>
 internal sealed class CarPhotosForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size, at the least - wider when its buttons need more to stay on one line.</summary>
+    private const int DialogWidth = 652;
+
+    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
+    private const int DialogHeight = 370;
+
+    /// <summary>The list's width at the normal text size.</summary>
+    private const int ListWidth = 220;
+
+    /// <summary>The list shows at least this many photos before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
+    /// <summary>The preview's least height at the normal text size.</summary>
+    private const int PreviewLeastHeight = 160;
+
     private readonly Car _car;
     private readonly ListBox _list = new();
     private readonly PictureBox _preview = new();
@@ -257,77 +293,60 @@ internal sealed class CarPhotosForm : Form
         _car = car;
 
         Text = $"Photos - {car.DisplayName}";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
-
-        const int width = 620;
 
         var lblIntro = new Label
         {
             Text = "Pictures are copied into the app, so they stay with the car. The first one is the picture the car is "
                  + "shown by.",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        Controls.Add(lblIntro);
-
-        var y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        _list.Location = new Point(UiLayout.PageLeft, y);
-        _list.Size = new Size(220, 260);
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+        _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => ShowSelected();
 
-        _preview.Location = new Point(_list.Right + UiLayout.ButtonGap, y);
-        _preview.Size = new Size(width - 220 - UiLayout.ButtonGap, 260);
         _preview.SizeMode = PictureBoxSizeMode.Zoom;
         _preview.BackColor = AppTheme.Background;
 
-        Controls.Add(_list);
-        Controls.Add(_preview);
-
-        y = UiLayout.Below(_list, UiLayout.RowGap);
-
-        var btnAdd = new Button { Text = "Add a Photo...", Font = AppTheme.BodyFont };
+        var btnAdd = new Button { Text = "Add a Photo..." };
         btnAdd.Click += (_, _) => AddPhoto();
 
         _btnRemove.Text = "Remove";
-        _btnRemove.Font = AppTheme.BodyFont;
         _btnRemove.Click += (_, _) => RemoveSelected();
 
         _btnFirst.Text = "Make it First";
-        _btnFirst.Font = AppTheme.BodyFont;
         _btnFirst.Click += (_, _) => MakeFirst();
 
-        var btnDone = new Button { Text = "Done", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
+        var btnDone = new Button { Text = "Done", DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        foreach (var button in new[] { btnAdd, _btnRemove, _btnFirst, btnDone, btnCancel })
-        {
-            button.Size = new Size(UiLayout.WidthFor(button), UiLayout.ButtonHeight);
-        }
+        // The list down the left at the width it had, at the text size in
+        // use, and the preview beside it taking the rest - both the height
+        // the window leaves them.
+        var photos = new Beside(UiLayout.AtTextSize(ListWidth)) { SideOnLeft = true };
+        photos.AddFill(_preview, _ => UiLayout.AtTextSize(PreviewLeastHeight));
+        photos.AddSideFill(_list, _ => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
 
-        btnAdd.Location = new Point(UiLayout.PageLeft, y);
-        _btnRemove.Location = new Point(btnAdd.Right + UiLayout.ButtonGap, y);
-        _btnFirst.Location = new Point(_btnRemove.Right + UiLayout.ButtonGap, y);
+        // What changes the photos on the left, Done and Cancel against the
+        // right-hand edge, as they were - and Tab still reaches Done before
+        // Cancel: the right-hand bar takes them right to left, in the order
+        // they were added.
+        var buttons = new SplitBar(
+            new ButtonBar().With(btnAdd, _btnRemove, _btnFirst),
+            new ButtonBar(alignRight: true).With(btnCancel, btnDone));
 
-        var right = UiLayout.PageLeft + width;
+        btnDone.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnDone.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnDone.Width, y);
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(photos, photos.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(buttons, gapBelow: 0);
 
-        Controls.Add(btnAdd);
-        Controls.Add(_btnRemove);
-        Controls.Add(_btnFirst);
-        Controls.Add(btnDone);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         AcceptButton = btnDone;
         CancelButton = btnCancel;
@@ -338,9 +357,23 @@ internal sealed class CarPhotosForm : Form
         // is wearing, so a photo is judged on its own.
         _preview.BackColor = AppTheme.Background;
 
-        ClientSize = new Size(right + UiLayout.PageLeft, UiLayout.Below(btnDone, UiLayout.PageTop));
+        // Done keeps what was done here, and is this window's own button: in
+        // the app's colour, as Save and OK are in every other window. The
+        // theme goes by the caption, and "Done" is not one it knows.
+        AppTheme.StyleButton(btnDone, AppTheme.ButtonKind.Primary);
 
         Reload();
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the five buttons need more to stay on one line, as they
+        // do at every text size: about 814px of them at the normal one.
+        // Measured as the row measures itself on one line, in the faces the
+        // theme pass left the buttons in.
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + buttons.GetPreferredSize(Size.Empty).Width + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
     }
 
     private void Reload()
@@ -475,9 +508,23 @@ internal sealed class CarPhotosForm : Form
 /// One night, never open-ended: the loan carries the race day it is for,
 /// so it ends when the night does and there is no state anybody has to
 /// remember to clear. See Car.DriverFor.
+///
+/// On the layout pieces (DialogFit): whose car it is and what lending it
+/// means across the top, who is taking it under that, and Save and Cancel at
+/// the foot; as tall as that, and wider than it was made when a driver's name
+/// needs the drop-down wider. It used to be placed in pixels in a window
+/// 452px wide: the caption in a column 180px wide and the drop-down the 232px
+/// left beside it, too narrow at every text size for "Nobody - it stays with
+/// its owner" or a long name once it was picked.
 /// </summary>
 internal sealed class LendCarForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 452;
+
+    /// <summary>The drop-down's width at the normal text size - wider when a driver's name needs it.</summary>
+    private const int FieldWidth = 232;
+
     private readonly ComboBox _cmbTo = new();
 
     /// <summary>Who is taking it, or empty to hand it back.</summary>
@@ -491,14 +538,7 @@ internal sealed class LendCarForm : Form
     public LendCarForm(Car car, ProfileStore profiles, string dayName, string ownerName)
     {
         Text = "Lend a Car";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
-
-        const int width = 420;
 
         var owner = car.IsClubCar
             ? "This is a club car."
@@ -507,26 +547,12 @@ internal sealed class LendCarForm : Form
         var lblIntro = new Label
         {
             Text = $"{owner} Lending it applies to \"{dayName}\" only - it goes back to its owner when the day ends.",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        Controls.Add(lblIntro);
-
-        var y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        // Parented before it is measured - see the note in CarForm's Row.
-        var lblTo = new Label { Text = "Lend it to:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        Controls.Add(lblTo);
-        lblTo.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lblTo, y, UiLayout.RowHeight));
-
         _cmbTo.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbTo.Location = new Point(UiLayout.FieldLeft, y);
-        _cmbTo.Width = width - (UiLayout.FieldLeft - UiLayout.PageLeft);
 
         _cmbTo.Items.Add(new DriverChoice(string.Empty, "Nobody - it stays with its owner"));
 
@@ -545,23 +571,26 @@ internal sealed class LendCarForm : Form
             .FirstOrDefault(d => string.Equals(d.Transponder, car.LoanedToTransponder, StringComparison.OrdinalIgnoreCase))
             ?? _cmbTo.Items[0];
 
-        Controls.Add(_cmbTo);
+        var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        y = UiLayout.Below(_cmbTo, UiLayout.SectionGap);
+        // The drop-down runs to the right-hand edge, where the buttons end,
+        // as it did beside its caption.
+        var fields = new FieldGrid();
+        var lblTo = fields.AddRow("Lend it to:", _cmbTo, stretch: true);
 
-        var btnOk = new Button { Text = "Save", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.Add(fields);
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        var right = UiLayout.PageLeft + width;
-
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
-
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
@@ -576,7 +605,20 @@ internal sealed class LendCarForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        ClientSize = new Size(right + UiLayout.PageLeft, UiLayout.Below(btnOk, UiLayout.PageTop));
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the drop-down needs more for its longest choice, in the
+        // face the theme pass left it in. The caption column beside it as
+        // the grid works it out: the caption and the gap after it.
+        (Font Font, int Count, int Width)? toWidth = null;
+
+        var fieldColumn = Math.Max(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbTo, ref toWidth));
+        var captionColumn = lblTo.GetPreferredSize(Size.Empty).Width + lblTo.Margin.Horizontal;
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, widthMeasured: true);
     }
 }
 
@@ -588,9 +630,36 @@ internal sealed class LendCarForm : Form
 /// physical car and the setup-sheet schema meet. Retiring rather than
 /// deleting is offered first, because a chassis nobody runs any more is
 /// still what last season's cars were.
+///
+/// On the layout pieces (DialogFit): what the list is across the top; the
+/// chassis taking the height and the width the fields leave, and down the
+/// right the fields for the one selected, each under its caption, with the
+/// hint under the setup sheet; and under them the buttons that change the
+/// list on the left, Close against the right-hand edge, all on one line -
+/// the window made wide enough for it at the text size in use. It opens at
+/// the height it had and can be made bigger, the list taking the room. It
+/// used to be placed in pixels in a window 632px wide: the list a fixed
+/// 240x230, the fields 336px beside it however long a setup sheet's name,
+/// and the five buttons in one row that did not fit it - Close was placed
+/// over Retire and Delete, and Delete ran past the window's edge.
 /// </summary>
 internal sealed class ChassisTypesForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size, at the least - wider when its buttons or its fields need more.</summary>
+    private const int DialogWidth = 632;
+
+    /// <summary>How tall it opens inside its frame at the normal text size - the height it had.</summary>
+    private const int DialogHeight = 356;
+
+    /// <summary>The list's width at the normal text size, at the least - it takes whatever the fields leave.</summary>
+    private const int ListWidth = 240;
+
+    /// <summary>The fields' column at the normal text size - wider when a setup sheet's name needs the drop-down wider.</summary>
+    private const int FieldsWidth = 336;
+
+    /// <summary>The list shows at least this many chassis before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly ChassisTypeStore _types;
     private readonly ChassisTemplateStore _sheets;
     private readonly CarStore _cars;
@@ -601,6 +670,15 @@ internal sealed class ChassisTypesForm : Form
     private readonly ComboBox _cmbSheet = new();
     private readonly Button _btnRetire = new();
     private readonly Button _btnDelete = new();
+
+    /// <summary>
+    /// How wide the fields' column is: the width it had at the normal text
+    /// size, at the size in use, or as wide as the setup sheet drop-down's
+    /// longest choice if that is more. Worked out once the theme pass has
+    /// been and the drop-down is filled; the column asks for it whenever it
+    /// is placed.
+    /// </summary>
+    private int _fieldsWidth;
 
     private sealed record SheetChoice(string Id, string Caption)
     {
@@ -614,128 +692,128 @@ internal sealed class ChassisTypesForm : Form
         _cars = cars;
 
         Text = "Chassis Types";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
-
-        const int width = 600;
 
         var lblIntro = new Label
         {
             Text = "The chassis a car can be. This list is the club's own - the ones here to begin with are a starting "
                  + "point, not a rulebook.",
-            Location = new Point(UiLayout.PageLeft, UiLayout.PageTop),
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
-        Controls.Add(lblIntro);
-
-        var y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        _list.Location = new Point(UiLayout.PageLeft, y);
-        _list.Size = new Size(240, 230);
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+        _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => LoadSelected();
 
-        Controls.Add(_list);
-
-        var fieldsLeft = _list.Right + UiLayout.SectionGap;
-        var fieldWidth = width - (fieldsLeft - UiLayout.PageLeft);
-        var fieldY = y;
-
-        void Field(string caption, Control field)
+        Label Caption(string text) => new()
         {
-            var label = new Label
-            {
-                Text = caption,
-                Location = new Point(fieldsLeft, fieldY),
-                AutoSize = true,
-                Font = AppTheme.SmallFont,
-                ForeColor = AppTheme.TextMuted,
-            };
-
-            Controls.Add(label);
-
-            field.Location = new Point(fieldsLeft, UiLayout.Below(label, UiLayout.HintGap));
-            field.Width = fieldWidth;
-
-            Controls.Add(field);
-
-            fieldY = UiLayout.Below(field, UiLayout.RowGap);
-        }
-
-        _txtName.MaxLength = 40;
-        Field("Name", _txtName);
-
-        _txtMaker.MaxLength = 40;
-        Field("Maker", _txtMaker);
-
-        _cmbSheet.DropDownStyle = ComboBoxStyle.DropDownList;
-        Field("Setup sheet to use", _cmbSheet);
-
-        var lblSheetHint = new Label
-        {
-            Text = "Logging a setup for a car on this chassis opens on that sheet.",
-            Location = new Point(fieldsLeft, fieldY),
-            AutoSize = true,
-            MaximumSize = new Size(fieldWidth, 0),
-            ForeColor = AppTheme.TextMuted,
+            Text = text,
             Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
         };
 
-        Controls.Add(lblSheetHint);
+        var lblName = Caption("Name");
+        var lblMaker = Caption("Maker");
+        var lblSheet = Caption("Setup sheet to use");
+        var lblSheetHint = Caption("Logging a setup for a car on this chassis opens on that sheet.");
 
-        y = Math.Max(UiLayout.Below(_list, UiLayout.RowGap), UiLayout.Below(lblSheetHint, UiLayout.RowGap));
+        _txtName.MaxLength = 40;
+        _txtMaker.MaxLength = 40;
+        _cmbSheet.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        var btnAdd = new Button { Text = "Add", Font = AppTheme.BodyFont };
+        var btnAdd = new Button { Text = "Add" };
         btnAdd.Click += (_, _) => AddType();
 
-        var btnSave = new Button { Text = "Save Changes", Font = AppTheme.BodyFont };
+        var btnSave = new Button { Text = "Save Changes" };
         btnSave.Click += (_, _) => SaveSelected();
 
         _btnRetire.Text = "Retire";
-        _btnRetire.Font = AppTheme.BodyFont;
         _btnRetire.Click += (_, _) => RetireSelected();
 
         _btnDelete.Text = "Delete";
-        _btnDelete.Font = AppTheme.BodyFont;
         _btnDelete.Click += (_, _) => DeleteSelected();
 
-        var btnClose = new Button { Text = "Close", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
+        var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        foreach (var button in new[] { btnAdd, btnSave, _btnRetire, _btnDelete, btnClose })
-        {
-            button.Size = new Size(UiLayout.WidthFor(button), UiLayout.ButtonHeight);
-        }
+        // The chassis taking the height and whatever width the fields leave;
+        // the fields down the right, each under its caption as they were,
+        // as wide as SizeFields works out - until then, the width they had.
+        // A caption and the hint are given their heights there too: a part
+        // in the column keeps the height it is given.
+        _fieldsWidth = UiLayout.AtTextSize(FieldsWidth);
 
-        btnAdd.Location = new Point(UiLayout.PageLeft, y);
-        btnSave.Location = new Point(btnAdd.Right + UiLayout.ButtonGap, y);
-        _btnRetire.Location = new Point(btnSave.Right + UiLayout.ButtonGap, y);
-        _btnDelete.Location = new Point(_btnRetire.Right + UiLayout.ButtonGap, y);
+        var band = new Beside(() => _fieldsWidth);
+        band.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+        band.AddSide(lblName, gapBelow: UiLayout.HintGap);
+        band.AddSide(_txtName);
+        band.AddSide(lblMaker, gapBelow: UiLayout.HintGap);
+        band.AddSide(_txtMaker);
+        band.AddSide(lblSheet, gapBelow: UiLayout.HintGap);
+        band.AddSide(_cmbSheet, gapBelow: UiLayout.HintGap);
+        band.AddSide(lblSheetHint, gapBelow: 0);
 
-        var right = UiLayout.PageLeft + width;
+        // What changes the list on the left, Close against the right-hand
+        // edge, as they were.
+        var buttons = new SplitBar(
+            new ButtonBar().With(btnAdd, btnSave, _btnRetire, _btnDelete),
+            new ButtonBar(alignRight: true).With(btnClose));
 
-        btnClose.Location = new Point(right - btnClose.Width, y);
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(buttons, gapBelow: 0);
 
-        Controls.Add(btnAdd);
-        Controls.Add(btnSave);
-        Controls.Add(_btnRetire);
-        Controls.Add(_btnDelete);
-        Controls.Add(btnClose);
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
 
-        ClientSize = new Size(right + UiLayout.PageLeft, UiLayout.Below(btnClose, UiLayout.PageTop));
-
+        // Filled before the fields are sized: the setup sheet drop-down is
+        // filled here, and its longest choice can widen the column.
         Reload();
+
+        SizeFields(new[] { lblName, lblMaker, lblSheet, lblSheetHint });
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the five buttons need more to stay on one line, as they
+        // do at every text size (about 814px of them at the normal one), or
+        // the list and the fields beside it need more than that. Measured
+        // as the row measures itself on one line, in the faces the theme
+        // pass left the buttons in.
+        var width = new[]
+        {
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + buttons.GetPreferredSize(Size.Empty).Width + UiLayout.PageRight,
+            UiLayout.PageLeft + UiLayout.AtTextSize(ListWidth) + UiLayout.RowGap + _fieldsWidth + UiLayout.PageRight,
+        }.Max();
+
+        DialogFit.Keep(this, page, width, height: DialogHeight, widthMeasured: true);
+    }
+
+    /// <summary>
+    /// The fields' column and what is in it, in the faces the theme pass left
+    /// them in: as wide as it was at the normal text size, at the size in
+    /// use, or as the setup sheet drop-down's longest choice if that is more
+    /// - measured once the drop-down is filled, which LoadSelected does again
+    /// with the same sheets whenever a chassis is picked. The captions and
+    /// the hint each as tall as their text wrapped to it. Once: the dialog
+    /// is built at the text size in use and is not kept in step with a
+    /// change made while it is up (see DialogFit).
+    /// </summary>
+    private void SizeFields(IEnumerable<Label> labels)
+    {
+        (Font Font, int Count, int Width)? sheetWidth = null;
+
+        _fieldsWidth = Math.Max(UiLayout.AtTextSize(FieldsWidth), Pieces.PickerWidth(_cmbSheet, ref sheetWidth));
+
+        foreach (var label in labels)
+        {
+            label.Height = label.GetPreferredSize(new Size(_fieldsWidth, 0)).Height;
+        }
     }
 
     private void Reload()
@@ -890,9 +968,44 @@ internal sealed class ChassisTypesForm : Form
 ///
 /// Every change is written through the stores before this closes, so the
 /// wall behind it just re-reads. Nothing is handed back.
+///
+/// On the layout pieces (DialogFit): the photo down the left at the width
+/// it had, and beside it what the car is - the heading, the facts, the
+/// notes - wrapping to the room left, the photo as tall as the words when
+/// they need more than its own height. Under both, one toolbar: the photo's
+/// arrows, which one is showing and Photos... on the left, the car's own
+/// buttons against the right-hand edge, over the facts they act on - onto a
+/// second line when there is not room for both. Then the setups under their
+/// heading, taking the height, and their buttons on the left with Close on
+/// the right at the foot. It opens at the size it had at the normal text
+/// size, at the size in use - never taller than the screen - and can be made
+/// bigger, the setups taking the room. It used to be placed in pixels, over
+/// a floor of 1000x720 whatever the screen: the photo a fixed 460x300, the
+/// facts beside it wrapped at a fixed width, the two toolbars at fixed
+/// places under the photo and the setups a fixed 220px tall above buttons
+/// anchored to the foot - taller than a 1280x720 screen leaves a window, so
+/// the buttons were under its edge.
 /// </summary>
 internal sealed class CarDetailForm : Form
 {
+    /// <summary>How big the window opens inside its frame at the normal text size - the size it had. It can be made bigger; the setups take the height.</summary>
+    private const int DialogWidth = 1138;
+    private const int DialogHeight = 692;
+
+    /// <summary>The photo's width at the normal text size - the column down the left.</summary>
+    private const int PhotoWidth = 460;
+
+    /// <summary>
+    /// The photo's height at the normal text size - taller when what is said
+    /// beside it needs more. 40px shorter than the 300 it was, so that all
+    /// of the window, the setups at their least, fits a 1280x720 screen, and
+    /// a 1920x1080 one at twice the text size, without scrolling.
+    /// </summary>
+    private const int PhotoHeight = 260;
+
+    /// <summary>The setups show their headings and at least this many rows before the window scrolls instead.</summary>
+    private const int LeastRows = 2;
+
     private readonly Car _car;
     private readonly CarStore _cars;
     private readonly ChassisTypeStore _chassisTypes;
@@ -906,7 +1019,10 @@ internal sealed class CarDetailForm : Form
     private readonly RaceEventStore? _events;
 
     private readonly PictureBox _photo = new();
-    private readonly Label _lblCount = new();
+
+    /// <summary>Which photo is showing - as wide as the longest it can say, so the toolbar never moves as it changes.</summary>
+    private readonly SteadyLabel _lblCount = new();
+
     private readonly Button _btnPrev = new();
     private readonly Button _btnNext = new();
 
@@ -951,67 +1067,47 @@ internal sealed class CarDetailForm : Form
         _events = events;
 
         Text = car.DisplayName;
-        StartPosition = FormStartPosition.CenterParent;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
-        MinimumSize = new Size(1000, 720);
 
-        BuildLayout();
+        var page = BuildLayout();
         AppTheme.ApplyRecursively(this);
 
         // After the theme pass: the picture sits on a neutral field so a
         // car is judged on its own colours, not the app's.
         _photo.BackColor = AppTheme.Background;
 
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_setupGrid);
+
         RefreshAll();
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
 
     private string? CurrentEventId => _events?.Active is { IsLegacy: false } day ? day.Id : null;
 
-    private void BuildLayout()
+    /// <summary>The window's page, built: see the class notes. Returned for DialogFit to size the window to.</summary>
+    private FillPage BuildLayout()
     {
-        const int photoWidth = 460;
-        const int photoHeight = 300;
-
-        _photo.Location = new Point(UiLayout.PageLeft, UiLayout.PageTop);
-        _photo.Size = new Size(photoWidth, photoHeight);
         _photo.SizeMode = PictureBoxSizeMode.Zoom;
 
-        Controls.Add(_photo);
-
         _btnPrev.Text = "◀";
-        _btnPrev.Size = new Size(44, UiLayout.ButtonHeight);
-        _btnPrev.Location = new Point(UiLayout.PageLeft, UiLayout.Below(_photo, UiLayout.HintGap));
         _btnPrev.Click += (_, _) => Step(-1);
 
         _btnNext.Text = "▶";
-        _btnNext.Size = new Size(44, UiLayout.ButtonHeight);
-        _btnNext.Location = new Point(_btnPrev.Right + UiLayout.ButtonGap, _btnPrev.Top);
         _btnNext.Click += (_, _) => Step(1);
 
+        // Centred up and down on the buttons beside it (see FieldGrid.Inline),
+        // and as wide as the longest it can say.
         _lblCount.AutoSize = true;
+        _lblCount.Anchor = AnchorStyles.Left;
         _lblCount.ForeColor = AppTheme.TextMuted;
         _lblCount.Font = AppTheme.SmallFont;
-        _lblCount.Location = new Point(_btnNext.Right + UiLayout.ButtonGap, _btnPrev.Top + 9);
+        _lblCount.Wordings = new[] { "No photographs yet", "1 photograph", "88 of 88" };
 
         var btnPhotos = new Button { Text = "Photos..." };
-        btnPhotos.Size = new Size(UiLayout.WidthFor(btnPhotos), UiLayout.ButtonHeight);
-        btnPhotos.Location = new Point(UiLayout.PageLeft + photoWidth - btnPhotos.Width, _btnPrev.Top);
         btnPhotos.Click += (_, _) => EditPhotos();
 
-        Controls.Add(_btnPrev);
-        Controls.Add(_btnNext);
-        Controls.Add(_lblCount);
-        Controls.Add(btnPhotos);
-
-        // --- the facts, beside the picture ---
-
-        var factsLeft = UiLayout.PageLeft + photoWidth + UiLayout.SectionGap;
-
-        // The car's own buttons, built first so the column can be as wide as
-        // they need. It was a fixed 460, four standard buttons are about 620,
-        // and Delete ran off the side of the window.
         var btnEdit = new Button { Text = "Edit..." };
         btnEdit.Click += (_, _) => EditCar();
 
@@ -1024,60 +1120,59 @@ internal sealed class CarDetailForm : Form
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteCar();
 
-        var carButtons = new[] { btnEdit, _btnLend, _btnRetire, btnDelete };
-        var carButtonsWidth = carButtons.Sum(UiLayout.WidthFor) + UiLayout.ButtonGap * (carButtons.Length - 1);
+        // --- the facts, beside the picture ---
 
-        var factsWidth = Math.Max(460, carButtonsWidth);
-
-        _lblHeading.Location = new Point(factsLeft, UiLayout.PageTop);
         _lblHeading.AutoSize = true;
-        _lblHeading.MaximumSize = new Size(factsWidth, 0);
         _lblHeading.Font = AppTheme.HeadingFont;
 
-        Controls.Add(_lblHeading);
-
-        _lblFacts.Location = new Point(factsLeft, UiLayout.Below(_lblHeading, UiLayout.RowGap));
         _lblFacts.AutoSize = true;
-        _lblFacts.MaximumSize = new Size(factsWidth, 0);
 
-        Controls.Add(_lblFacts);
-
-        _lblNotes.Location = new Point(factsLeft, UiLayout.Below(_lblFacts, UiLayout.RowGap));
         _lblNotes.AutoSize = true;
-        _lblNotes.MaximumSize = new Size(factsWidth, 0);
         _lblNotes.ForeColor = AppTheme.TextMuted;
         _lblNotes.Font = AppTheme.SmallFont;
 
-        Controls.Add(_lblNotes);
+        // The photo down the left at the width it had, at the text size in
+        // use, and the heading, the facts and the notes beside it, each
+        // wrapping to the width left - the two as tall as the taller needs,
+        // the photo taking any height the words need past its own.
+        var band = new Beside(UiLayout.AtTextSize(PhotoWidth))
+        {
+            SideOnLeft = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
 
-        // On the same line as the photo's own row - arrows, count, Photos -
-        // so the two columns end in one toolbar rather than two rows a
-        // button apart. It was pinned to the photo's bottom edge instead,
-        // which put it just above Photos and never level with it.
-        UiLayout.ButtonRow(factsLeft, _btnPrev.Top, carButtons);
+        band.AddSideFill(_photo, _ => UiLayout.AtTextSize(PhotoHeight), gapBelow: 0);
+        band.Add(_lblHeading);
+        band.Add(_lblFacts);
+        band.Add(_lblNotes, gapBelow: 0);
 
-        Controls.Add(btnEdit);
-        Controls.Add(_btnLend);
-        Controls.Add(_btnRetire);
-        Controls.Add(btnDelete);
+        // One toolbar under the two columns, as there was one line under
+        // them before: the photo's arrows, which one is showing and Photos...
+        // on the left, the arrows only as wide as their marks; the car's own
+        // buttons against the right-hand edge, over the facts they act on,
+        // and under the photo's when the line is too short for both. Tab
+        // still goes through them in the order they read, as it did: the
+        // right-hand bar takes them right to left, in the order they were
+        // added.
+        var toolbar = new SplitBar(
+            new ButtonBar().With(new ButtonBar(tight: true).With(_btnPrev, _btnNext), _lblCount, btnPhotos),
+            new ButtonBar(alignRight: true).With(btnDelete, _btnRetire, _btnLend, btnEdit));
+
+        btnEdit.TabIndex = 0;
+        _btnLend.TabIndex = 1;
+        _btnRetire.TabIndex = 2;
+        btnDelete.TabIndex = 3;
 
         // --- its setups ---
-
-        var setupsTop = UiLayout.Below(_btnPrev, UiLayout.SectionGap);
 
         var lblSetups = new Label
         {
             Text = "Setups logged for this car",
-            Location = new Point(UiLayout.PageLeft, setupsTop),
             AutoSize = true,
             Font = AppTheme.BoldFont,
         };
 
-        Controls.Add(lblSetups);
-
-        _setupGrid.Location = new Point(UiLayout.PageLeft, UiLayout.Below(lblSetups, UiLayout.RowGap));
-        _setupGrid.Size = new Size(factsLeft + factsWidth - UiLayout.PageLeft, 220);
-        _setupGrid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _setupGrid.ReadOnly = true;
         _setupGrid.AllowUserToAddRows = false;
         _setupGrid.AllowUserToDeleteRows = false;
@@ -1102,8 +1197,6 @@ internal sealed class CarDetailForm : Form
         _setupGrid.SelectionChanged += (_, _) => UpdateButtons();
         _setupGrid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditSetup(); };
 
-        Controls.Add(_setupGrid);
-
         var btnLog = new Button { Text = "Log a Setup..." };
         btnLog.Click += (_, _) => AddSetup();
 
@@ -1118,32 +1211,27 @@ internal sealed class CarDetailForm : Form
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
-        var setupButtonsY = _setupGrid.Bottom + UiLayout.RowGap;
+        // The setups' own buttons on the left, Close against the right-hand
+        // edge, as they were.
+        var setupButtons = new SplitBar(
+            new ButtonBar().With(btnLog, _btnEditSetup, _btnDuplicateSetup, _btnDeleteSetup),
+            new ButtonBar(alignRight: true).With(btnClose));
 
-        UiLayout.ButtonRow(UiLayout.PageLeft, setupButtonsY, btnLog, _btnEditSetup, _btnDuplicateSetup, _btnDeleteSetup);
+        // The setups take the height; they keep their headings and a couple
+        // of rows before the window scrolls instead.
+        var page = new FillPage();
+        page.Add(band, gapBelow: UiLayout.HintGap);
+        page.Add(toolbar, gapBelow: UiLayout.SectionGap);
+        page.Add(lblSetups, stretch: false, gapBelow: UiLayout.RowGap);
+        page.AddFill(_setupGrid, _ => _setupGrid.ColumnHeadersHeight + LeastRows * _setupGrid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        page.Add(setupButtons, gapBelow: 0);
 
-        btnClose.Size = new Size(UiLayout.WidthFor(btnClose), UiLayout.ButtonHeight);
-        btnClose.Location = new Point(_setupGrid.Right - btnClose.Width, setupButtonsY);
-
-        foreach (var button in new[] { btnLog, _btnEditSetup, _btnDuplicateSetup, _btnDeleteSetup, btnClose })
-        {
-            button.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-        }
-
-        btnClose.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-
-        Controls.Add(btnLog);
-        Controls.Add(_btnEditSetup);
-        Controls.Add(_btnDuplicateSetup);
-        Controls.Add(_btnDeleteSetup);
-        Controls.Add(btnClose);
+        Controls.Add(page);
 
         AcceptButton = btnClose;
         CancelButton = btnClose;
 
-        ClientSize = new Size(
-            _setupGrid.Right + UiLayout.PageLeft,
-            UiLayout.Below(btnClose, UiLayout.PageTop));
+        return page;
     }
 
     private void RefreshAll()
@@ -1185,7 +1273,6 @@ internal sealed class CarDetailForm : Form
 
         _lblNotes.Text = _car.Notes;
         _lblNotes.Visible = !string.IsNullOrWhiteSpace(_car.Notes);
-        _lblNotes.Location = new Point(_lblNotes.Left, UiLayout.Below(_lblFacts, UiLayout.RowGap));
 
         _btnRetire.Text = _car.Retired ? "Put Back" : "Retire";
         _btnLend.Enabled = eventId is not null;

@@ -100,7 +100,7 @@ public sealed class LayoutPiecesTests
 
             grid.AddRow("Track layout:", track, stretch: true);
             grid.AddRow("Session name:", FieldGrid.Inline(new TextBox { Width = 220 }, new Button { Text = "Use Heat Name" }));
-            grid.AddWide(new CheckBox { Text = "Announce lap times", AutoSize = true });
+            grid.AddWide(new ThemedCheckBox { Text = "Announce lap times", AutoSize = true });
 
             var actions = stack.Add(new Section("Actions"));
             var bar = actions.Add(new ButtonBar());
@@ -616,7 +616,7 @@ public sealed class LayoutPiecesTests
             var hint = aboutGrid.AddHint(new SteadyLabel { Wordings = new[] { shortWording, longWording } });
             hint.Text = shortWording;
 
-            var only = aboutGrid.AddField(new CheckBox { Text = "Checked-in drivers only", AutoSize = true });
+            var only = aboutGrid.AddField(new ThemedCheckBox { Text = "Checked-in drivers only", AutoSize = true });
 
             // A row of controls that wraps when the page is narrow, and a box
             // of several lines: their captions beside their first lines.
@@ -667,7 +667,7 @@ public sealed class LayoutPiecesTests
             classes.Items.Add("(all classes)");
             classes.SelectedIndex = 0;
 
-            var tech = new CheckBox { Text = "Only those not through tech", AutoSize = true };
+            var tech = new ThemedCheckBox { Text = "Only those not through tech", AutoSize = true };
             var summary = new Label { AutoSize = false, AutoEllipsis = true, Text = "3 of 12 checked in" };
 
             row.Add(new Label { Text = "Class:" }, classes);

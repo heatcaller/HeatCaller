@@ -15,9 +15,21 @@ namespace HeatCaller;
 /// sheet measuring drift against it, and nothing has ever read or written
 /// it. The start time chosen here is saved onto the day, so the field on
 /// The Day and this dialog are the same number.
+///
+/// On the layout pieces (DialogFit): what it does in a line across the top,
+/// the two fields beside their captions in one measured column, the note on
+/// what the gap covers wrapping under them, and the buttons at the foot -
+/// the window as tall as all of it, and on a screen too short for that, the
+/// text and the fields scroll and the buttons stay in view. It used to be
+/// placed in pixels: the text wrapped at a fixed 460px, the fields' column
+/// worked out from the captions by hand, and the time picker a fixed 130x26
+/// that held the time at the normal text size and clipped it at a larger one.
 /// </summary>
 public sealed class FillTimesForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size: the 460px its text wrapped at, and the margins either side.</summary>
+    private const int DialogWidth = 492;
+
     private readonly TimePicker _dtpStart = new();
     private readonly NumericUpDown _numMinutes = new();
 
@@ -32,68 +44,33 @@ public sealed class FillTimesForm : Form
     public FillTimesForm(TimeSpan startAt, int minutesEach)
     {
         Text = "Fill in the times";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MinimizeBox = false;
-        MaximizeBox = false;
-
-        var y = UiLayout.PageTop;
+        Font = AppTheme.BodyFont;
 
         var lblIntro = new Label
         {
             Text = "Every line gets a time, worked down the sheet from the first race.",
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
             Font = AppTheme.BodyFont,
-            Location = new Point(UiLayout.PageLeft, y),
         };
-
-        Controls.Add(lblIntro);
-
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        // Measured from the captions rather than set at a number, so a
-        // larger text size does not clip the longer of the two.
-        var fieldLeft = UiLayout.PageLeft;
-
-        foreach (var caption in new[] { "First race at:", "Minutes per race:" })
-        {
-            var measured = TextRenderer.MeasureText(
-                caption,
-                AppTheme.BodyFont,
-                new Size(int.MaxValue, int.MaxValue),
-                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-
-            fieldLeft = Math.Max(fieldLeft, UiLayout.PageLeft + measured.Width + UiLayout.LabelGap * 2);
-        }
-
-        void Row(string caption, Control field, int width)
-        {
-            var lbl = new Label { Text = caption, AutoSize = true, Font = AppTheme.BodyFont };
-
-            field.Font = AppTheme.BodyFont;
-            field.Width = width;
-            field.Location = new Point(fieldLeft, y);
-            lbl.Location = new Point(UiLayout.PageLeft, UiLayout.CentreOn(lbl, y, field.Height));
-
-            Controls.Add(lbl);
-            Controls.Add(field);
-
-            y = UiLayout.Below(field, UiLayout.RowGap);
-        }
 
         // TimePicker, not WinForms' DateTimePicker: that one ignores the
         // theme's colours and renders in system grey. See RaceDayEventControl.
-        _dtpStart.Height = 26;
+        // As big as its time needs in its font (TimePicker.GetPreferredSize)
+        // rather than the fixed 130x26 it was, which clipped the time at a
+        // larger text size.
+        _dtpStart.AutoSize = true;
         _dtpStart.Value = startAt;
-
-        Row("First race at:", _dtpStart, 130);
 
         _numMinutes.Minimum = 1;
         _numMinutes.Maximum = 240;
         _numMinutes.Value = Math.Clamp(minutesEach, 1, 240);
 
-        Row("Minutes per race:", _numMinutes, 70);
+        // The captions share one column, as wide as the longer of the two at
+        // the text size in use, so neither is clipped, and the fields line up
+        // beside it.
+        var fields = new FieldGrid();
+        fields.AddRow("First race at:", _dtpStart);
+        fields.AddRow("Minutes per race:", _numMinutes);
 
         var lblHint = new Label
         {
@@ -102,37 +79,49 @@ public sealed class FillTimesForm : Form
                  + "time keeps it, and the rest of the day is worked on from there, so \"lunch 13:00\" moves "
                  + "the afternoon rather than being moved by it.",
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(UiLayout.PageLeft, y),
         };
 
-        Controls.Add(lblHint);
+        var btnOk = new Button { Text = "Fill In the Times", DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        y = UiLayout.Below(lblHint, UiLayout.SectionGap);
+        var page = new FillPage();
 
-        var btnOk = new Button { Text = "Fill In the Times", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
+        // Everything but the buttons: on a screen too short for all of it at
+        // a large text size, it scrolls and the buttons stay in view.
+        var body = DialogFit.Body(page);
+        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        body.Add(fields, gapBelow: UiLayout.RowGap);
+        body.Add(lblHint, gapBelow: 0);
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Fill In the Times first: the bar takes them
+        // right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        var right = UiLayout.PageLeft + 460;
-
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
-
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
 
-        ClientSize = new Size(
-            right + UiLayout.PageLeft,
-            UiLayout.Below(btnOk, UiLayout.PageTop));
+        // The window's own button in the app's colour, as Save and OK are in
+        // every other window - the theme goes by the caption, and "Fill In
+        // the Times" is not one it knows, so it came out grey beside a grey
+        // Cancel.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        // Wide enough for three digits - the most it goes to - in the face
+        // the theme pass leaves it in, and never narrower than a number box
+        // is anywhere else at this text size.
+        _numMinutes.Width = Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText("000", _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+
+        DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
 }

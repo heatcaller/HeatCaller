@@ -18,7 +18,7 @@ public sealed class PracticeModeControl : UserControl
     private readonly SessionHistoryStore _history;
     private readonly TrackLayoutStore _trackLayouts;
     private readonly AppSettings _settings;
-    private readonly CheckBox _chkAutoSave = new();
+    private readonly CheckBox _chkAutoSave = new ThemedCheckBox();
 
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
@@ -66,10 +66,10 @@ public sealed class PracticeModeControl : UserControl
 
     private readonly NumericUpDown _numLapTarget = new();
     private readonly NumericUpDown _numTimeTarget = new();
-    private readonly CheckBox _chkAutoStartOnGate = new();
+    private readonly CheckBox _chkAutoStartOnGate = new ThemedCheckBox();
     private readonly GhostStore _ghostStore;
-    private readonly CheckBox _chkGhosts = new();
-    private readonly CheckedListBox _clbGhosts = new();
+    private readonly CheckBox _chkGhosts = new ThemedCheckBox();
+    private readonly CheckedListBox _clbGhosts = new ThemedCheckedListBox();
     private readonly SteadyLabel _lblGhostHint = new();
 
     /// <summary>The ghosts' card and its button, which the card's width is measured from - see GhostsWidth.</summary>
@@ -82,11 +82,11 @@ public sealed class PracticeModeControl : UserControl
     /// <summary>The track picker's width as last measured - see Pieces.PickerWidth. Forgotten when the layouts are read again (RefreshAll).</summary>
     private (Font Font, int Count, int Width)? _trackWidth;
 
-    /// <summary>The clock column's width at its narrowest - the clock, and Open Big Screen under it. Wider when that button's caption needs it.</summary>
-    private const int ClockWidth = 260;
+    /// <summary>The clock column's width at its narrowest - the clock, and Open Big Screen under it. Wider when that button's caption needs it. At the screen's DPI, as the clock's point-size text is.</summary>
+    private static int ClockWidth => UiLayout.AtDpi(260);
 
-    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given.</summary>
-    private const int ClockHeight = 206;
+    /// <summary>The clock's height. It is drawn, and drawn to fit whatever it is given. At the screen's DPI, as the clock's point-size text is.</summary>
+    private static int ClockHeight => UiLayout.AtDpi(206);
 
     /// <summary>The ghost card's width at the normal text size, at its narrowest and widest - see GhostsWidth.</summary>
     private const int GhostsLeastWidth = 260;

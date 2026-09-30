@@ -243,31 +243,80 @@ public sealed partial class RaceControlControl
     /// <summary>A one-line reason typed by hand, or null if cancelled or left empty.</summary>
     private string? AskForReason(string driverName)
     {
-        using var dialog = new Form
-        {
-            Text = $"Warning for {driverName}",
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            StartPosition = FormStartPosition.CenterParent,
-            MinimizeBox = false,
-            MaximizeBox = false,
-            ClientSize = new Size(380, 116),
-            BackColor = AppTheme.Background,
-            Font = AppTheme.BodyFont,
-        };
+        using var dialog = new WarningReasonForm(driverName);
 
-        var label = new Label { Text = "Reason:", Location = new Point(12, 18), AutoSize = true };
-        var text = new TextBox { Location = new Point(80, 15), Width = 288, MaxLength = 80 };
-
-        var ok = new Button { Text = "Warn", Location = new Point(198, 66), Width = 80, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(288, 66), Width = 80, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[] { label, text, ok, cancel });
-        dialog.AcceptButton = ok;
-        dialog.CancelButton = cancel;
-        AppTheme.ApplyRecursively(dialog);
-
-        return dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(text.Text)
-            ? text.Text.Trim()
+        return dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.Reason)
+            ? dialog.Reason.Trim()
             : null;
+    }
+
+    /// <summary>
+    /// The window the warnings list's "Other reason..." opens: a reason of
+    /// one line, typed by hand. A class of its own rather than built inside
+    /// AskForReason, and internal, so the layout test can build it
+    /// (WindowCatalog) without a race on the board.
+    ///
+    /// On the layout pieces (DialogFit): the caption and the box on one line
+    /// (FieldRow), the box running to the right-hand edge, and Warn and
+    /// Cancel at the foot; as tall as that. It used to be placed in pixels in
+    /// a 380x116 window: the box at a fixed 80px from the left and 288px
+    /// wide beside a caption that a larger text size ran into, and the
+    /// buttons a fixed 80px wide at fixed places.
+    /// </summary>
+    internal sealed class WarningReasonForm : Form
+    {
+        /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+        private const int DialogWidth = 380;
+
+        private readonly TextBox _txt = new() { MaxLength = 80 };
+
+        /// <summary>What was typed, as typed - the caller trims it. Only meaningful after DialogResult.OK.</summary>
+        public string Reason => _txt.Text;
+
+        /// <param name="driverName">Who the warning is for, for the title.</param>
+        public WarningReasonForm(string driverName)
+        {
+            Text = $"Warning for {driverName}";
+            BackColor = AppTheme.Background;
+            Font = AppTheme.BodyFont;
+
+            var ok = new Button { Text = "Warn", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            // A FieldRow rather than a field grid: it keeps the pixel round
+            // the box that the theme draws its ring in (Pieces.RingRoom), top
+            // and bottom as well - a grid's last row loses the bottom of it.
+            // The box takes the rest of the line. The least it can do with -
+            // a standard text box's width - is only what the row asks for
+            // when it is measured with no width to fit: the only pair on its
+            // line, it never moves onto one of its own.
+            var row = new FieldRow();
+            row.AddLast(new Label { Text = "Reason:" }, _txt, () => UiLayout.AtTextSize(UiLayout.FieldWidth));
+
+            var page = new FillPage();
+            page.Add(row);
+
+            // Against the right-hand edge, Cancel furthest right, as they
+            // were - and Tab still reaches Warn first: the bar takes them
+            // right to left, in the order they were added.
+            page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            // The window's own button in the app's colour, as OK and Save are
+            // in every other window: the theme goes by the caption, and
+            // "Warn" is not one it knows, so it came out grey beside a grey
+            // Cancel.
+            AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
+
+            DialogFit.Keep(this, page, width: DialogWidth);
+        }
     }
 }

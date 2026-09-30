@@ -12,7 +12,7 @@ public sealed class SeasonsControl : UserControl
 
     private readonly ListBox _lstSeasons = new();
     private readonly DataGridView _dgvPointsScheme = new();
-    private readonly CheckedListBox _clbSessions = new();
+    private readonly CheckedListBox _clbSessions = new ThemedCheckedListBox();
 
     // Needed to answer "is this race a main, and whose class is it" - the
     // rule reads a session's round, not the session itself.
@@ -770,31 +770,25 @@ public sealed class SeasonsControl : UserControl
         LoadSelectedSeasonIntoUi();
     }
 
+    /// <summary>
+    /// Asks for one line of text over this page - a new championship's name,
+    /// or a new name for one - in the app's shared prompt (TextPromptForm):
+    /// the question, the box under it with the default in it, and OK and
+    /// Cancel. Null when cancelled; the answer as typed otherwise, which the
+    /// callers trim.
+    ///
+    /// That prompt is this window exactly, on the layout pieces - the one
+    /// the Tech Checklist, a chassis sheet and a setup sheet's fields ask
+    /// with. This one used to be built here, in pixels, where the layout test
+    /// could not reach it: a 380x150 window with the box a fixed 340px, and
+    /// OK and Cancel a fixed 80px wide at fixed places under it whatever the
+    /// text size.
+    /// </summary>
     private string? PromptForText(string title, string prompt, string defaultValue)
     {
-        using var dialog = new Form
-        {
-            Text = title,
-            StartPosition = FormStartPosition.CenterParent,
-            Size = new Size(380, 150),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-        };
+        using var dialog = new TextPromptForm(title, prompt, defaultValue);
 
-        var lbl = new Label { Text = prompt, Location = new Point(12, 16), AutoSize = true };
-        var txt = new TextBox { Location = new Point(12, 40), Width = 340, Text = defaultValue };
-        var btnOk = new Button { Text = "OK", Location = new Point(188, 74), Width = 80, DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(272, 74), Width = 80, DialogResult = DialogResult.Cancel };
-
-        dialog.Controls.AddRange(new Control[] { lbl, txt, btnOk, btnCancel });
-        dialog.AcceptButton = btnOk;
-        dialog.CancelButton = btnCancel;
-        dialog.BackColor = AppTheme.Background;
-        AppTheme.ApplyRecursively(dialog);
-
-        return dialog.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.Answer : null;
     }
 
     private sealed record SeasonListItem(Season Season)

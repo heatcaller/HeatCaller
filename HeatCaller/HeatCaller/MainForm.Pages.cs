@@ -276,42 +276,14 @@ public partial class MainForm
 
         void ShowScrutineeringLog()
         {
-            using var host = new Form
-            {
-                Text = "Scrutineering log",
-                StartPosition = FormStartPosition.CenterParent,
-                MinimizeBox = false,
-                ShowIcon = false,
-                ClientSize = new Size(1040, 660),
-                MinimumSize = new Size(720, 480),
-            };
-
             var log = new TechInspectionControl(_techInspections, _profiles, _raceClasses, _undo)
             {
                 Dock = DockStyle.Fill,
             };
 
-            var logFooter = new Panel { Dock = DockStyle.Bottom, Height = UiLayout.ButtonHeight + 24 };
-
-            var btnCloseLog = new Button
-            {
-                Text = "Close",
-                Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight),
-                Location = new Point(12, 12),
-            };
-
-            btnCloseLog.Click += (_, _) => host.Close();
-            logFooter.Controls.Add(btnCloseLog);
-
-            // Fill added first and docked last: WinForms resolves docking from
-            // the end of the collection backwards.
-            host.Controls.Add(log);
-            host.Controls.Add(logFooter);
-
-            host.AcceptButton = btnCloseLog;
-            host.CancelButton = btnCloseLog;
-
-            AppTheme.ApplyRecursively(host);
+            // The page filling a window of its own with Close under it, and
+            // Close or Esc to shut it - see PageWindow.
+            using var host = PageWindow.ScrutineeringLog(log);
 
             techLog = log;
 
@@ -727,37 +699,9 @@ public partial class MainForm
                 return;
             }
 
-            using var host = new Form
-            {
-                Text = "Timetable",
-                StartPosition = FormStartPosition.CenterParent,
-                MinimizeBox = false,
-                ShowIcon = false,
-                ClientSize = new Size(1040, 700),
-                MinimumSize = new Size(760, 520),
-            };
-
-            var footer = new Panel { Dock = DockStyle.Bottom, Height = UiLayout.ButtonHeight + 24 };
-
-            var btnClose = new Button
-            {
-                Text = "Close",
-                Size = new Size(UiLayout.ButtonWidth, UiLayout.ButtonHeight),
-                Location = new Point(12, 12),
-            };
-
-            btnClose.Click += (_, _) => host.Close();
-            footer.Controls.Add(btnClose);
-
-            // Fill added first and docked last: WinForms resolves docking
-            // from the end of the collection backwards.
-            host.Controls.Add(daySchedule);
-            host.Controls.Add(footer);
-
-            host.AcceptButton = btnClose;
-            host.CancelButton = btnClose;
-
-            AppTheme.ApplyRecursively(host);
+            // Moved in here: the page filling a window of its own with Close
+            // under it, and Close or Esc to shut it - see PageWindow.
+            using var host = PageWindow.Timetable(daySchedule);
 
             timetableHost = host;
 
@@ -766,7 +710,7 @@ public partial class MainForm
             // that has been thrown away.
             host.FormClosed += (_, _) =>
             {
-                host.Controls.Remove(daySchedule);
+                host.GiveBackPage();
                 timetableHost = null;
             };
 
@@ -865,12 +809,12 @@ public partial class MainForm
         // the page in either dark theme.
         todaySplit.BackColor = AppTheme.Border;
 
-        // The layout repair pass never comes in here: Race Day is on
-        // LayoutAudit.ConvertedPages, and both halves are built on the layout
-        // pieces. It used to have to be told to keep out of this split in
-        // particular - a SplitContainer is a scrollable control, and caught
-        // mid-resize with a half hanging past its edge, the pass turned
-        // scrolling on for the WHOLE split, which put a second pair of
+        // Both halves are built on the layout pieces, and nothing else moves
+        // them. The layout repair pass that used to run over every page (it
+        // was deleted on 30 Sep) once had to be told to keep out of this
+        // split in particular - a SplitContainer is a scrollable control, and
+        // caught mid-resize with a half hanging past its edge, the pass
+        // turned scrolling on for the WHOLE split, which put a second pair of
         // scrollbars round the entire tab.
 
         todaySplit.Panel1.Controls.Add(today);
@@ -1803,8 +1747,6 @@ public partial class MainForm
         // ordering above does - see _navRaceNight.
         lstNav.SectionOf = name => NavTiers.SectionOf(name, _navRaceNight);
 
-        WireLayoutReporting();
-
         // Before the first build, not after: a club that closed the app
         // mid-race-day reopens it with that day still current, and the sidebar
         // should already be in race-night order rather than rearranging itself
@@ -1813,9 +1755,8 @@ public partial class MainForm
 
         RebuildNav();
 
-        // After the window is actually up: the check needs real handles and
-        // real font metrics, neither of which exist while it is still being
-        // built.
-        Shown += (_, _) => TidyAllPages();
+        // After the window is actually up: the pages' handles are made in
+        // the window's, which does not exist while it is still being built.
+        Shown += (_, _) => WarmPages();
     }
 }

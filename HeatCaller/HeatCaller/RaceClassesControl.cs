@@ -140,13 +140,6 @@ public sealed class RaceClassesControl : UserControl
         _page.AddFill(list, list.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);
-
-        // The repair pass is kept out. The Classes page is left alone by
-        // name (LayoutAudit.ConvertedPages), but this page is also the
-        // Race Classes dialog (RaceClassManagerForm), and every dialog is
-        // checked and nudged when it is first shown (LayoutDoctor.Watch) -
-        // a second authority moving controls the pieces place.
-        LayoutDoctor.LeaveAlone(this);
     }
 
     /// <summary>

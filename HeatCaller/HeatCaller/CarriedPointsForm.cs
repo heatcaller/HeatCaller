@@ -4,9 +4,28 @@ namespace HeatCaller;
 /// The points each driver brings into a championship from before it ran in
 /// HeatCaller (27 Sep 2026) - typed in here, or brought in with the drivers
 /// by Driver Profiles' Import from CSV, and changed here either way.
+///
+/// On the layout pieces (DialogFit): the note on what the points are across
+/// the top, the drivers and their points taking the height, two lines kept
+/// under them for what is wrong with a row, and Clear All on the left of
+/// the foot with Save and Cancel against the right-hand edge. It used to be
+/// placed in pixels in a 520px-wide window: the note wrapped at a fixed
+/// 488px, the list 300px tall under it, the window sized to where the
+/// buttons ended up, and the list, the message and the buttons anchored
+/// from there to follow a resize.
 /// </summary>
 internal sealed class CarriedPointsForm : Form
 {
+    /// <summary>The list shows its headings and at least this many rows before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
+    /// <summary>
+    /// Lines kept for what is wrong with a row, so a message appearing
+    /// moves nothing. A longer one still grows the label, and the list
+    /// gives it the room.
+    /// </summary>
+    private const int ProblemLines = 2;
+
     private readonly DataGridView _grid = new();
     private readonly Label _lblProblem = new();
 
@@ -17,40 +36,39 @@ internal sealed class CarriedPointsForm : Form
     public CarriedPointsForm(string seasonName, IEnumerable<CarriedPointsEntry> current, IEnumerable<string> knownNames)
     {
         Text = $"Points carried in - {(string.IsNullOrWhiteSpace(seasonName) ? "championship" : seasonName)}";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.Sizable;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-        ClientSize = new Size(520, 520);
 
-        BuildLayout(current, knownNames);
+        var page = BuildLayout(current, knownNames);
 
         AppTheme.ApplyRecursively(this);
+
+        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
+        Pieces.KeepHeadingsWhole(_grid);
+
+        // In the face it wears, as the label draws its lines (Pieces.LineHeight) - see ProblemLines.
+        _lblProblem.MinimumSize = new Size(0, ProblemLines * Pieces.LineHeight(_lblProblem.Font) + _lblProblem.Padding.Vertical);
+
+        // Wider than the 520 it was made at: Clear All on the left and Save
+        // and Cancel on the right come to 498px with the gaps between them
+        // at the normal text size, and at 520 the line inside the margins is
+        // 488 - Save and Cancel would have gone onto a line of their own. The
+        // height it had. It can be made bigger, for a long list.
+        DialogFit.Keep(this, page, width: 540, height: 520);
     }
 
-    private void BuildLayout(IEnumerable<CarriedPointsEntry> current, IEnumerable<string> knownNames)
+    /// <summary>The page, top to bottom, with the list taking the height the rest leave. Returns it, for DialogFit.</summary>
+    private FillPage BuildLayout(IEnumerable<CarriedPointsEntry> current, IEnumerable<string> knownNames)
     {
-        const int left = 16;
-        var width = ClientSize.Width - left * 2;
-
         var lblIntro = new Label
         {
             Text = "Points each driver brings in from before this championship ran here - from the club's old software, "
                    + "say. They're added to what the driver scores, and never dropped by \"count each driver's best\". "
                    + "Use the name exactly as the standings show it. Leave a row empty, or delete it, to carry nothing in.",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
-            Location = new Point(left, 16),
             Font = AppTheme.BodyFont,
         };
 
-        Controls.Add(lblIntro);
-
-        _grid.Location = new Point(left, UiLayout.Below(lblIntro, UiLayout.RowGap));
-        _grid.Size = new Size(width, 300);
         _grid.AllowUserToAddRows = true;
         _grid.AllowUserToDeleteRows = true;
         _grid.AllowUserToResizeRows = false;
@@ -86,36 +104,15 @@ internal sealed class CarriedPointsForm : Form
             }
         };
 
-        Controls.Add(_grid);
-
-        var y = UiLayout.Below(_grid, UiLayout.RowGap);
-
+        // Wraps to the width the page gives it; two lines kept for it once
+        // the theme pass has left it in its face (see the constructor).
         _lblProblem.AutoSize = true;
-        _lblProblem.MaximumSize = new Size(width, 0);
         _lblProblem.ForeColor = AppTheme.Danger;
         _lblProblem.Font = AppTheme.BodyFont;
-        _lblProblem.Location = new Point(left, y);
-
-        Controls.Add(_lblProblem);
-
-        y += AppTheme.BodyFont.Height * 2 + UiLayout.RowGap;
 
         var btnClear = new Button { Text = "Clear All" };
         var btnSave = new Button { Text = "Save" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-
-        Controls.Add(btnClear);
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
-
-        foreach (var button in new[] { btnClear, btnSave, btnCancel })
-        {
-            button.Size = new Size(UiLayout.WidthFor(button), UiLayout.ButtonHeight);
-        }
-
-        btnClear.Location = new Point(left, y);
-        btnCancel.Location = new Point(left + width - btnCancel.Width, y);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnSave.Width, y);
 
         btnClear.Click += (_, _) =>
         {
@@ -125,17 +122,29 @@ internal sealed class CarriedPointsForm : Form
 
         btnSave.Click += (_, _) => TrySave();
 
+        // Clear All on the left, Save and Cancel against the right-hand
+        // edge with Cancel furthest right, as they were - on one line
+        // (SplitBar; see the width given to DialogFit.Keep). Tab still goes
+        // Clear All, Save, Cancel: the right-hand bar takes its buttons right
+        // to left, in the order they were added.
+        var footer = new SplitBar(
+            new ButtonBar().With(btnClear),
+            new ButtonBar(alignRight: true).With(btnCancel, btnSave));
+
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
+
         CancelButton = btnCancel;
 
-        // Sized to what was laid out, then anchored - see CsvMappingForm.
-        ClientSize = new Size(ClientSize.Width, UiLayout.Below(btnSave, 16));
-        MinimumSize = new Size(420, Math.Max(320, Height - 200));
-
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-        _lblProblem.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
-        btnClear.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
-        btnSave.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
-        btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        return page;
     }
 
     /// <summary>Checks every row and closes with them; otherwise says which row to put right.</summary>

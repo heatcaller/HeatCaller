@@ -66,8 +66,8 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtContact = new();
     private readonly TextBox _txtEmail = new();
     private readonly TextBox _txtAltTransponder = new();
-    private readonly CheckBox _chkRental = new();
-    private readonly CheckBox _chkExcludeRecords = new();
+    private readonly CheckBox _chkRental = new ThemedCheckBox();
+    private readonly CheckBox _chkExcludeRecords = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
     private readonly TextBox _txtSetupConfiguration = new();
     private readonly TextBox _txtNotes = new();

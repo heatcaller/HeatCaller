@@ -15,38 +15,38 @@ public sealed class AmbienceControl : UserControl
     private readonly AmbienceService _ambience;
     private readonly UndoService _undo;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly NumericUpDown _numMasterVolume = new();
 
     // Which layers play. Music has the same idea as a pair; this is three,
     // because ambience layers mix rather than replace one another. See
     // AmbienceSource.
-    private readonly RadioButton _rdoSourceBoth = new();
-    private readonly RadioButton _rdoSourceSoundscape = new();
-    private readonly RadioButton _rdoSourceMine = new();
+    private readonly RadioButton _rdoSourceBoth = new ThemedRadioButton();
+    private readonly RadioButton _rdoSourceSoundscape = new ThemedRadioButton();
+    private readonly RadioButton _rdoSourceMine = new ThemedRadioButton();
     private readonly SteadyLabel _lblSource = new();
 
     /// <summary>Set while the radios are being brought into line with the store, so seeding them isn't read as a click.</summary>
     private bool _syncingSource;
 
     private readonly DataGridView _grid = new();
-    private readonly CheckBox _chkReact = new();
+    private readonly CheckBox _chkReact = new ThemedCheckBox();
     private readonly NumericUpDown _numSurgeSeconds = new();
     private readonly NumericUpDown _numFinishSeconds = new();
-    private readonly CheckBox _chkDuck = new();
+    private readonly CheckBox _chkDuck = new ThemedCheckBox();
     private readonly NumericUpDown _numDuckTo = new();
-    private readonly CheckBox _chkBoostVoice = new();
+    private readonly CheckBox _chkBoostVoice = new ThemedCheckBox();
     private readonly NumericUpDown _numVoiceBoost = new();
-    private readonly CheckBox _chkFastLap = new();
-    private readonly CheckBox _chkLeadChange = new();
-    private readonly CheckBox _chkTrackRecord = new();
-    private readonly CheckBox _chkJumpStart = new();
-    private readonly CheckBox _chkFinish = new();
-    private readonly CheckBox _chkLastLap = new();
-    private readonly CheckBox _chkCloseBattle = new();
-    private readonly CheckBox _chkStreak = new();
-    private readonly CheckBox _chkPersonalBest = new();
-    private readonly CheckBox _chkLapped = new();
+    private readonly CheckBox _chkFastLap = new ThemedCheckBox();
+    private readonly CheckBox _chkLeadChange = new ThemedCheckBox();
+    private readonly CheckBox _chkTrackRecord = new ThemedCheckBox();
+    private readonly CheckBox _chkJumpStart = new ThemedCheckBox();
+    private readonly CheckBox _chkFinish = new ThemedCheckBox();
+    private readonly CheckBox _chkLastLap = new ThemedCheckBox();
+    private readonly CheckBox _chkCloseBattle = new ThemedCheckBox();
+    private readonly CheckBox _chkStreak = new ThemedCheckBox();
+    private readonly CheckBox _chkPersonalBest = new ThemedCheckBox();
+    private readonly CheckBox _chkLapped = new ThemedCheckBox();
     private readonly NumericUpDown _numFadeUp = new();
     private readonly NumericUpDown _numFadeDown = new();
     private readonly SteadyLabel _lblStatus = new();
@@ -70,10 +70,11 @@ public sealed class AmbienceControl : UserControl
 
     /// <summary>
     /// A check box's box and the gap after it, on top of its caption - the
-    /// room LayoutAudit counts for one that does not size itself. See
-    /// CheckBoxSize.
+    /// room LayoutAudit counts for one that does not size itself: 26 at the
+    /// normal text size, and the app's tick box grows with the text
+    /// (TickBox.Side). See CheckBoxSize.
     /// </summary>
-    private const int CheckBoxChrome = 26;
+    private static int CheckBoxChrome => 26 - 13 + TickBox.Side;
 
     // What the line above the React switch says - see UpdateEnabledState. Both
     // are measured for the room it keeps (SteadyLabel). A sentence of its own
@@ -738,11 +739,36 @@ public sealed class AmbienceControl : UserControl
         using var border = new Pen(AppTheme.Border);
         g.DrawRectangle(border, 0, 0, _monitor.Width - 1, _monitor.Height - 1);
 
+        // Everything in here is laid out at the text size in use, as the
+        // panel's own height is (SizeFields): the stage labels, the surge
+        // line and the meters' names are in the small face, and at fixed
+        // pixels the labels overran their segments and the names ran into
+        // the meters under them at 200%. Worked out on every paint, and the
+        // timer repaints ten times a second, so a new text size is picked
+        // up at once.
+        var inset = UiLayout.AtTextSize(10);
+
         if (!_ambience.IsRunning)
         {
             using var offBrush = new SolidBrush(AppTheme.TextMuted);
+
+            // Given the panel's width, inside its inset, so a long line
+            // wraps - and ellipsizes on the last line the panel holds -
+            // rather than running off the right-hand edge. Only whole lines
+            // are drawn (LineLimit), so none is sliced through by the foot.
+            using var offFormat = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisWord,
+                FormatFlags = StringFormatFlags.LineLimit,
+            };
+
+            var offRect = new RectangleF(
+                inset, inset,
+                Math.Max(1, _monitor.ClientSize.Width - inset * 2),
+                Math.Max(1, _monitor.ClientSize.Height - inset * 2));
+
             g.DrawString("Ambience is not playing - enable it above, or press Preview to audition your layers.",
-                AppTheme.BodyFont, offBrush, 10, 10);
+                AppTheme.BodyFont, offBrush, offRect, offFormat);
             return;
         }
 
@@ -760,10 +786,13 @@ public sealed class AmbienceControl : UserControl
 
         // Intensity ladder - the lit segment is where it is NOW, with the
         // base mood outlined separately so a surge reads as temporary
-        // rather than looking like the race state itself changed.
-        const int segW = 92;
-        const int segH = 22;
-        var x = 10;
+        // rather than looking like the race state itself changed. The
+        // segments and the gap between them at the text size in use: at a
+        // fixed 92x22, "STAGING" and "EXCITED" were cut off at 200%.
+        var segW = UiLayout.AtTextSize(92);
+        var segH = UiLayout.AtTextSize(22);
+        var segGap = UiLayout.AtTextSize(4);
+        var x = inset;
 
         using var litBrush = new SolidBrush(AppTheme.Primary);
         using var dimBrush = new SolidBrush(AppTheme.Background);
@@ -778,7 +807,7 @@ public sealed class AmbienceControl : UserControl
 
         foreach (var (intensity, label) in stages)
         {
-            var rect = new Rectangle(x, 10, segW, segH);
+            var rect = new Rectangle(x, inset, segW, segH);
             var isCurrent = intensity == effective;
 
             g.FillRectangle(isCurrent ? litBrush : dimBrush, rect);
@@ -789,8 +818,26 @@ public sealed class AmbienceControl : UserControl
             }
 
             g.DrawString(label, AppTheme.SmallFont, isCurrent ? litText : dimText, rect, centered);
-            x += segW + 4;
+            x += segW + segGap;
         }
+
+        // The line after the ladder, at the text size in use, and given the
+        // rest of the panel's width on one line: the ladder grows with the
+        // text, so a long surge reason ellipsizes at the panel's edge rather
+        // than running through its border. A line that fits is drawn exactly
+        // where it was.
+        var noteLeft = x + UiLayout.AtTextSize(8);
+        var noteTop = UiLayout.AtTextSize(15);
+        var noteRect = new RectangleF(
+            noteLeft, noteTop,
+            Math.Max(1, _monitor.ClientSize.Width - inset - noteLeft),
+            Math.Max(1, _monitor.ClientSize.Height - noteTop));
+
+        using var noteFormat = new StringFormat
+        {
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap,
+        };
 
         if (_ambience.IsSurging)
         {
@@ -800,12 +847,12 @@ public sealed class AmbienceControl : UserControl
             // the finish celebration is not the Surge lasts setting.
             var reason = string.IsNullOrWhiteSpace(_ambience.SurgeReason) ? "Surge" : _ambience.SurgeReason;
             g.DrawString($"SURGE: {reason} ({_ambience.SurgePeak}) - settling back in {_ambience.SurgeSecondsLeft:0.0}s",
-                AppTheme.SmallFont, surgeBrush, x + 8, 15);
+                AppTheme.SmallFont, surgeBrush, noteRect, noteFormat);
         }
         else if (baseLevel != effective)
         {
             using var hintBrush = new SolidBrush(AppTheme.TextMuted);
-            g.DrawString("(outline = base level)", AppTheme.SmallFont, hintBrush, x + 8, 15);
+            g.DrawString("(outline = base level)", AppTheme.SmallFont, hintBrush, noteRect, noteFormat);
         }
         else if (!string.IsNullOrWhiteSpace(_ambience.SurgeReason) && _ambience.LastSurgeUtc > DateTime.MinValue)
         {
@@ -813,13 +860,22 @@ public sealed class AmbienceControl : UserControl
             var ago = DateTime.UtcNow - _ambience.LastSurgeUtc;
             var when = ago.TotalMinutes >= 1 ? $"{(int)ago.TotalMinutes}m ago" : $"{(int)ago.TotalSeconds}s ago";
             using var lastBrush = new SolidBrush(AppTheme.TextMuted);
-            g.DrawString($"Last surge: {_ambience.SurgeReason}, {when}", AppTheme.SmallFont, lastBrush, x + 8, 15);
+            g.DrawString($"Last surge: {_ambience.SurgeReason}, {when}", AppTheme.SmallFont, lastBrush, noteRect, noteFormat);
         }
 
         // Per-layer meters showing real current volume, mid-fade included.
+        // Their names over them and their levels beside them are in the
+        // small face, so the meters, their rows and the room between them
+        // are at the text size in use too - the panel's height is.
         var volumes = _ambience.CurrentLayerVolumes();
-        var meterX = 10;
-        const int meterW = 150;
+        var meterX = inset;
+        var meterW = UiLayout.AtTextSize(150);
+        var meterH = UiLayout.AtTextSize(8);
+        var nameTop = UiLayout.AtTextSize(44);
+        var meterTop = UiLayout.AtTextSize(60);
+        var levelLeft = UiLayout.AtTextSize(6);
+        var levelTop = UiLayout.AtTextSize(56);
+        var meterStep = meterW + UiLayout.AtTextSize(60);
 
         foreach (var layer in _store.Current.Layers.Where(l => l.Enabled))
         {
@@ -829,25 +885,25 @@ public sealed class AmbienceControl : UserControl
             }
 
             var name = layer.DisplayName.Length > 18 ? layer.DisplayName[..18] : layer.DisplayName;
-            g.DrawString(name, AppTheme.SmallFont, dimText, meterX, 44);
+            g.DrawString(name, AppTheme.SmallFont, dimText, meterX, nameTop);
 
-            var track = new Rectangle(meterX, 60, meterW, 8);
+            var track = new Rectangle(meterX, meterTop, meterW, meterH);
             g.FillRectangle(dimBrush, track);
 
             var filled = (int)(meterW * Math.Clamp(volume, 0f, 1f));
             if (filled > 0)
             {
-                g.FillRectangle(litBrush, new Rectangle(meterX, 60, filled, 8));
+                g.FillRectangle(litBrush, new Rectangle(meterX, meterTop, filled, meterH));
             }
 
             g.DrawRectangle(border, track);
-            g.DrawString($"{volume * 100:0}%", AppTheme.SmallFont, dimText, meterX + meterW + 6, 56);
+            g.DrawString($"{volume * 100:0}%", AppTheme.SmallFont, dimText, meterX + meterW + levelLeft, levelTop);
 
-            meterX += meterW + 60;
+            meterX += meterStep;
 
             // Only as many meters as fit - a long layer list shouldn't spill
             // out of the panel.
-            if (meterX + meterW > _monitor.Width - 10)
+            if (meterX + meterW > _monitor.Width - inset)
             {
                 break;
             }
@@ -1321,12 +1377,42 @@ public sealed class AmbienceControl : UserControl
     }
 }
 
-/// <summary>Adds or edits one ambience layer.</summary>
+/// <summary>
+/// Adds or edits one ambience layer.
+///
+/// On the layout pieces (DialogFit): the name and the file lined up in a
+/// field grid, Browse... beside the file and its hint under it; the layer's
+/// switches and its always-on level along one line (a FieldRow), their hint
+/// under them; the volumes' heading and hint, and Play while I drag with
+/// what the preview is doing beside it; then a line for each race state -
+/// its caption in one column, the slider across the room left, and its
+/// value and what the state means in columns of their own on its right -
+/// and Save and Cancel at the foot. Everything but the buttons is the
+/// window's body, so on a screen too short for all of it, it scrolls and
+/// Save and Cancel stay in view. It used to be placed by hand in a 672px
+/// window as tall as its rows came to - each row under the measured bottom
+/// of the one before and each column at an x worked out from the others -
+/// which at a larger text size ran off the bottom of a small screen,
+/// buttons and all.
+/// </summary>
 public sealed class AmbienceLayerForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size: the 640px it laid its rows out in, and its margins.</summary>
+    private const int DialogWidth = 672;
+
+    /// <summary>
+    /// The file box at the normal text size - enough to show a path's end
+    /// with Browse... beside it on one line at every text size, the body's
+    /// scrollbar or not.
+    /// </summary>
+    private const int FileBoxWidth = 360;
+
+    /// <summary>A race state's slider at the normal text size - its lines the 46px apart they always were.</summary>
+    private const int SliderHeight = 36;
+
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtFile = new();
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
 
     private readonly Dictionary<AmbienceService.Intensity, SliderControl> _sliders = new();
     private readonly Dictionary<AmbienceService.Intensity, Label> _valueLabels = new();
@@ -1338,8 +1424,8 @@ public sealed class AmbienceLayerForm : Form
     /// thumbs dragged, numbers frozen at where they started.
     /// </summary>
     private readonly System.Windows.Forms.Timer _sliderSync = new() { Interval = 150 };
-    private readonly CheckBox _chkLivePreview = new();
-    private readonly CheckBox _chkAlwaysOn = new();
+    private readonly CheckBox _chkLivePreview = new ThemedCheckBox();
+    private readonly CheckBox _chkAlwaysOn = new ThemedCheckBox();
     private readonly NumericUpDown _numConstantVolume = new();
     private readonly Label _lblPreviewState = new();
 
@@ -1372,57 +1458,30 @@ public sealed class AmbienceLayerForm : Form
         _ambienceWasRunning = ambience?.IsRunning ?? false;
 
         Text = existing is null ? "Add Ambience Layer" : $"Edit {Result.DisplayName}";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        BuildLayout();
+        // Stopped when the dialog closes (OnFormClosed), which is how the
+        // page always ends it. A dialog put away without being closed - the
+        // layout test builds each window and disposes it - would otherwise
+        // leave the timer ticking over a window that is gone, and holding it.
+        Disposed += (_, _) => _sliderSync.Dispose();
+
+        var (page, body) = BuildLayout();
+
         AppTheme.ApplyRecursively(this);
+
+        DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
 
-    private void BuildLayout()
+    /// <summary>The window's page, and its body - see the class notes.</summary>
+    private (FillPage Page, PageStack Body) BuildLayout()
     {
-        // Measured, not hand-picked pixels. This dialog predates the app's
-        // font scale, and its original fixed grid showed it: the file hint
-        // wrapped down over the checkbox row, the Level box fell off the
-        // right edge, and the percentage labels were 42px boxes that
-        // clipped "100%". Every row now sits below the measured bottom of
-        // the one before it, the way RaceFormatForm lays itself out.
-        var left = UiLayout.PageLeft;
-        const int contentWidth = 640;
-        var right = left + contentWidth;
-
-        var lblName = new Label { Text = "Name:", AutoSize = true, Font = AppTheme.BodyFont };
-        var lblFile = new Label { Text = "Audio file:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        // Both captions in this column, so the two fields line up.
-        var fieldLeft = left + Math.Max(lblName.PreferredWidth, lblFile.PreferredWidth) + UiLayout.LabelGap;
-
-        var y = UiLayout.PageTop;
-
-        _txtName.Font = AppTheme.BodyFont;
-        _txtName.Location = new Point(fieldLeft, y);
-        _txtName.Width = right - fieldLeft;
         _txtName.Text = Result.Name;
         _txtName.PlaceholderText = "Crowd, Track hum, Pit lane...";
-        lblName.Location = new Point(left, UiLayout.CentreOn(lblName, y, _txtName.Height));
-
-        y = UiLayout.Below(_txtName, UiLayout.RowGap);
 
         var btnBrowse = new Button { Text = "Browse..." };
-        btnBrowse.Width = UiLayout.WidthFor(btnBrowse);
-        btnBrowse.Height = UiLayout.ButtonHeight;
-
-        _txtFile.Font = AppTheme.BodyFont;
-        _txtFile.Location = new Point(fieldLeft, y);
-        _txtFile.Width = right - fieldLeft - btnBrowse.Width - UiLayout.ButtonGap;
-        _txtFile.Text = Result.FilePath;
-        lblFile.Location = new Point(left, UiLayout.CentreOn(lblFile, y, _txtFile.Height));
-        btnBrowse.Location = new Point(right - btnBrowse.Width, y + (_txtFile.Height - btnBrowse.Height) / 2);
         btnBrowse.Click += (_, _) =>
         {
             using var dialog = new OpenFileDialog
@@ -1437,87 +1496,66 @@ public sealed class AmbienceLayerForm : Form
             }
         };
 
-        y = Math.Max(UiLayout.Below(_txtFile, UiLayout.HintGap), UiLayout.Below(btnBrowse, UiLayout.HintGap));
+        _txtFile.Width = UiLayout.AtTextSize(FileBoxWidth);
+        _txtFile.Text = Result.FilePath;
 
-        var lblFileHint = new Label
-        {
-            Text = "A short clip that loops cleanly works best - it repeats continuously while the ambience is running.",
-            AutoSize = true,
-            MaximumSize = new Size(right - fieldLeft, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(fieldLeft, y),
-        };
-
-        y = UiLayout.Below(lblFileHint, UiLayout.RowGap + 4);
+        var fields = new FieldGrid();
+        fields.AddRow("Name:", _txtName, stretch: true);
+        fields.AddRow("Audio file:", FieldGrid.Inline(_txtFile, btnBrowse));
+        fields.AddHint("A short clip that loops cleanly works best - it repeats continuously while the ambience is running.");
 
         _chkEnabled.Text = "Layer enabled";
         _chkEnabled.AutoSize = true;
-        _chkEnabled.Font = AppTheme.BodyFont;
         _chkEnabled.Checked = Result.Enabled;
-        _chkEnabled.Location = new Point(left, y);
 
         _chkAlwaysOn.Text = "Always on - ignore race state";
         _chkAlwaysOn.AutoSize = true;
-        _chkAlwaysOn.Font = AppTheme.BodyFont;
         _chkAlwaysOn.Checked = Result.AlwaysOn;
         _chkAlwaysOn.CheckedChanged += (_, _) => UpdateAlwaysOnState();
-        _chkAlwaysOn.Location = new Point(left + _chkEnabled.PreferredSize.Width + UiLayout.SectionGap, y);
 
-        _numConstantVolume.Font = AppTheme.BodyFont;
-        _numConstantVolume.Width = UiLayout.NumericWidth;
+        // Room for "100", its largest value, at every text size.
+        _numConstantVolume.Width = UiLayout.AtTextSize(UiLayout.NumericWidth);
         _numConstantVolume.Minimum = 0;
         _numConstantVolume.Maximum = 100;
         _numConstantVolume.Increment = 5;
         _numConstantVolume.Value = (decimal)Math.Clamp(Result.ConstantVolume * 100f, 0, 100);
-        _numConstantVolume.Location = new Point(right - UiLayout.NumericWidth, y - 2);
 
-        var lblConstant = new Label { Text = "Level:", AutoSize = true, Font = AppTheme.BodyFont };
-        lblConstant.Location = new Point(_numConstantVolume.Left - lblConstant.PreferredWidth - UiLayout.LabelGap, y);
-
-        y = Math.Max(UiLayout.Below(_chkAlwaysOn, UiLayout.HintGap), UiLayout.Below(_numConstantVolume, UiLayout.HintGap));
+        // The two switches, and the level an always-on layer plays at after
+        // them - going onto a second line, rather than off the edge, when the
+        // window is too narrow for all three.
+        var switches = new FieldRow();
+        switches.Add(null, _chkEnabled);
+        switches.Add(null, _chkAlwaysOn);
+        switches.Add(new Label { Text = "Level:" }, _numConstantVolume);
 
         var lblAlwaysOnHint = new Label
         {
             Text = "For a background theme or your own uploaded track - plays at one level throughout, "
                  + "including between races. The per-state volumes below don't apply to it.",
             AutoSize = true,
-            MaximumSize = new Size(contentWidth, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.SectionAfter(UiLayout.Below(lblAlwaysOnHint, 0));
 
         var lblVolumes = new Label
         {
             Text = "Volume at each race state",
             AutoSize = true,
             Font = AppTheme.BoldFont,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.Below(lblVolumes, UiLayout.HintGap);
 
         var lblVolumeHint = new Label
         {
             Text = "This is what makes a layer react. A crowd might be quiet at idle and loud at peak; "
                  + "track noise might be the opposite, loud while racing and silent between.",
             AutoSize = true,
-            MaximumSize = new Size(contentWidth, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.Below(lblVolumeHint, UiLayout.RowGap);
 
         _chkLivePreview.Text = "Play while I drag";
         _chkLivePreview.AutoSize = true;
-        _chkLivePreview.Font = AppTheme.BodyFont;
         _chkLivePreview.Checked = true;
-        _chkLivePreview.Location = new Point(left, y);
         _chkLivePreview.CheckedChanged += (_, _) =>
         {
             if (!_chkLivePreview.Checked)
@@ -1527,13 +1565,26 @@ public sealed class AmbienceLayerForm : Form
             }
         };
 
-        _lblPreviewState.AutoSize = true;
+        // What the preview is doing, at the end of the tick's line - cut
+        // short with "..." rather than wrapped, or on a line of its own when
+        // the line leaves it less than the longest thing it says (FieldRow),
+        // so saying it never moves the sliders under it.
+        _lblPreviewState.AutoSize = false;
+        _lblPreviewState.AutoEllipsis = true;
         _lblPreviewState.Font = AppTheme.SmallFont;
         _lblPreviewState.ForeColor = AppTheme.TextMuted;
-        _lblPreviewState.Location = new Point(left + _chkLivePreview.PreferredSize.Width + UiLayout.SectionGap, y + 2);
-        _lblPreviewState.MaximumSize = new Size(Math.Max(120, right - _lblPreviewState.Left), 0);
 
-        y = UiLayout.Below(_chkLivePreview, UiLayout.RowGap + 2);
+        var previewWidth = new[]
+            {
+                "Set a file above to hear these.",
+                "Couldn't play that file.",
+                $"Playing \u2013 {AmbienceService.Intensity.Anticipation} at 100%",
+            }
+            .Max(wording => TextRenderer.MeasureText(wording, AppTheme.SmallFont).Width);
+
+        var preview = new FieldRow();
+        preview.Add(null, _chkLivePreview);
+        preview.AddLast(null, _lblPreviewState, () => previewWidth);
 
         var rows = new (AmbienceService.Intensity Intensity, string Label, string Hint)[]
         {
@@ -1544,39 +1595,26 @@ public sealed class AmbienceLayerForm : Form
             (AmbienceService.Intensity.Peak, "Peak", "finish, record, big moment"),
         };
 
-        // Three measured columns: captions to the widest of them, the
-        // value sized to "100%" so it can never clip, and the hint taking
-        // the right end.
-        var captionWidth = 0;
-        foreach (var (_, label, _) in rows)
-        {
-            captionWidth = Math.Max(captionWidth, TextRenderer.MeasureText($"{label}:", AppTheme.BodyFont).Width);
-        }
-
+        // Every line one height - the slider's, or a line of the value's face
+        // and a little room, when that is more - with the value and the hint
+        // drawn level with the middle of it. The value's column is wide
+        // enough for "100%" so it can never clip, and the hint's for the
+        // longest of them on one line, with a few pixels spare: a hint that
+        // wrapped would be two lines in one line's height at 150% and 200%.
+        var lineHeight = Math.Max(SliderHeight, Pieces.LineHeight(AppTheme.BoldFont) + UiLayout.HintGap * 2);
         var valueWidth = TextRenderer.MeasureText("100%", AppTheme.BoldFont).Width + 6;
-        var hintWidth = Math.Min(230, contentWidth / 3);
-        var hintLeft = right - hintWidth;
-        var valueLeft = hintLeft - valueWidth - UiLayout.LabelGap;
-        var sliderLeft = left + captionWidth + UiLayout.LabelGap;
+        var hintWidth = rows.Max(row => TextRenderer.MeasureText(row.Hint, AppTheme.SmallFont).Width) + UiLayout.HintGap;
+
+        var volumes = new FieldGrid();
 
         foreach (var (intensity, label, hint) in rows)
         {
-            var caption = new Label
-            {
-                Text = $"{label}:",
-                AutoSize = true,
-                Font = AppTheme.BodyFont,
-                Location = new Point(left, y + 8),
-            };
-
             // SliderControl, not TrackBar: a skinned TrackBar drew its handle
             // somewhere other than where it could be grabbed, so dragging
             // took several tries. See SliderControl.
             var slider = new SliderControl
             {
-                Location = new Point(sliderLeft, y),
-                Height = 40,
-                Width = Math.Max(140, valueLeft - UiLayout.LabelGap - sliderLeft),
+                Height = lineHeight,
                 Minimum = 0,
                 Maximum = 100,
                 SmallChange = 1,
@@ -1584,22 +1622,25 @@ public sealed class AmbienceLayerForm : Form
                 Value = (int)Math.Clamp(Result.VolumeFor(intensity) * 100f, 0, 100),
             };
 
+            // Sized by the line rather than by their text, so a new value
+            // never lays anything out again.
             var lblValue = new Label
             {
                 Text = $"{slider.Value}%",
-                AutoSize = true,
+                AutoSize = false,
+                Height = lineHeight,
+                TextAlign = ContentAlignment.MiddleLeft,
                 Font = AppTheme.BoldFont,
-                Location = new Point(valueLeft, y + 8),
             };
 
             var lblHint = new Label
             {
                 Text = hint,
-                AutoSize = true,
-                MaximumSize = new Size(hintWidth, 0),
+                AutoSize = false,
+                Height = lineHeight,
+                TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = AppTheme.TextMuted,
                 Font = AppTheme.SmallFont,
-                Location = new Point(hintLeft, y + 8),
             };
 
             var captured = intensity;
@@ -1612,12 +1653,7 @@ public sealed class AmbienceLayerForm : Form
             _valueLabels[intensity] = lblValue;
             _shownValues[intensity] = slider.Value;
 
-            Controls.Add(caption);
-            Controls.Add(slider);
-            Controls.Add(lblValue);
-            Controls.Add(lblHint);
-
-            y += Math.Max(UiLayout.HeightOf(slider), UiLayout.HeightOf(lblHint) + 8) + 6;
+            volumes.AddRow($"{label}:", VolumeLine(slider, lblValue, valueWidth, lblHint, hintWidth), stretch: true);
         }
 
         var btnSave = new Button { Text = "Save" };
@@ -1625,25 +1661,31 @@ public sealed class AmbienceLayerForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // Bottom-right, Cancel outermost - same as the app's other dialogs.
-        // ButtonRow returns the x past the trailing gap, so the gap is
-        // taken back off to land Cancel flush on the right margin.
-        var buttonsRight = UiLayout.ButtonRow(0, y + UiLayout.RowGap, btnSave, btnCancel) - UiLayout.ButtonGap;
-        var shift = right - buttonsRight;
-        btnSave.Left += shift;
-        btnCancel.Left += shift;
+        // A row's gap above the buttons rather than a section's - about what
+        // it always had - which is the difference between all of it and a
+        // few pixels short of it on a 1280x720 screen.
+        var page = new FillPage();
+        var body = DialogFit.Body(page, gapBelow: UiLayout.RowGap);
 
-        Controls.AddRange(new Control[]
-        {
-            lblName, _txtName, lblFile, _txtFile, btnBrowse, lblFileHint, _chkEnabled,
-            _chkAlwaysOn, lblConstant, _numConstantVolume, lblAlwaysOnHint,
-            lblVolumes, lblVolumeHint, _chkLivePreview, _lblPreviewState, btnSave, btnCancel,
-        });
+        body.Add(fields, gapBelow: UiLayout.RowGap);
+        body.Add(switches, gapBelow: UiLayout.HintGap);
+        body.Add(lblAlwaysOnHint);
+        body.Add(lblVolumes, gapBelow: UiLayout.HintGap);
+        body.Add(lblVolumeHint, gapBelow: UiLayout.RowGap);
+        body.Add(preview, gapBelow: UiLayout.RowGap);
+        body.Add(volumes, gapBelow: 0);
+
+        // Bottom-right, Cancel outermost - same as the app's other dialogs -
+        // and Tab still reaches Save first: the bar takes them right to
+        // left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
-
-        ClientSize = new Size(right + UiLayout.PageRight, UiLayout.Below(btnSave, UiLayout.PageTop));
 
         _sliderSync.Tick += (_, _) =>
         {
@@ -1656,6 +1698,36 @@ public sealed class AmbienceLayerForm : Form
 
         // After the sliders exist, or there would be nothing to grey.
         UpdateAlwaysOnState();
+
+        return (page, body);
+    }
+
+    /// <summary>
+    /// A race state's line: the slider across the room it has, and its value
+    /// and the state's hint in columns of their own down the right - a
+    /// Beside inside a Beside, each as tall as the line.
+    /// </summary>
+    private static Beside VolumeLine(SliderControl slider, Label value, int valueWidth, Label hint, int hintWidth)
+    {
+        var withValue = new Beside(valueWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        withValue.Add(slider, gapBelow: 0);
+        withValue.AddSide(value, gapBelow: 0);
+
+        var line = new Beside(hintWidth)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+
+        line.Add(withValue, gapBelow: 0);
+        line.AddSide(hint, gapBelow: 0);
+
+        return line;
     }
 
     /// <summary>

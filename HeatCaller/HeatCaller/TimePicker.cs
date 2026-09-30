@@ -80,6 +80,19 @@ public sealed class TimePicker : Control
     }
 
     /// <summary>
+    /// A new font is how a new text size reaches the picker - Race Day's
+    /// Setup hands it the body face at the size in use (TextSize.Wear) - and
+    /// the insets, gaps and arrows are at the text size in use, so the
+    /// segments are laid out again even when the size it is given has not
+    /// changed.
+    /// </summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        LayoutSegments();
+    }
+
+    /// <summary>
     /// The size its time needs in the font it is drawn in: each segment
     /// wide enough for the widest thing it shows ("00", "PM") with a little
     /// room either side, and as tall as a text box in the same font.
@@ -110,15 +123,36 @@ public sealed class TimePicker : Control
         return new Size(unit * 5 + FixedWidth + 4, Math.Max(26, Font.Height + 8));
     }
 
-    /// <summary>The arrows' strip down the right-hand side.</summary>
-    private const int ArrowWidth = 18;
+    // The picker's fixed parts - its left inset, the gaps after the hour and
+    // the minute, and the arrows' strip - are at the text size in use, as
+    // the time beside them is: at a fixed 18px the arrows were a sliver
+    // beside a time twice the size at 200%. Worked out each time they are
+    // asked, never kept, as the text size can change; OnFontChanged lays the
+    // segments out again when it does. Exactly the old pixels at 100%.
+
+    /// <summary>The arrows' strip down the right-hand side: 18px at the normal text size.</summary>
+    private static int ArrowWidth => UiLayout.AtTextSize(18);
+
+    /// <summary>The room before the hour: 4px at the normal text size.</summary>
+    private static int LeftInset => UiLayout.AtTextSize(4);
+
+    /// <summary>The gap after the hour, which the colon is drawn in: 8px at the normal text size.</summary>
+    private static int ColonWidth => UiLayout.AtTextSize(8);
+
+    /// <summary>The gap after the minute: 6px at the normal text size.</summary>
+    private static int MinuteGap => UiLayout.AtTextSize(6);
+
+    /// <summary>The room round the arrows' strip, most of it before it: 6px at the normal text size.</summary>
+    private static int ArrowRoom => UiLayout.AtTextSize(6);
 
     /// <summary>
     /// Room across that is not the segments': the left inset (4), the gaps
     /// after the hour (8) and the minute (6), and the arrows with a little
-    /// either side of them.
+    /// either side of them - 42px at the normal text size, at the size in
+    /// use. GetPreferredSize counts it, so a picker that sizes itself is
+    /// wide enough for the larger strip.
     /// </summary>
-    private const int FixedWidth = 4 + 8 + 6 + ArrowWidth + 6;
+    private static int FixedWidth => LeftInset + ColonWidth + MinuteGap + ArrowWidth + ArrowRoom;
 
     private void LayoutSegments()
     {
@@ -131,10 +165,13 @@ public sealed class TimePicker : Control
         // Hour and minute get equal space; the meridiem needs a little more
         // to fit "AM"/"PM" comfortably.
         var unit = textWidth / 5;
-        _hourRect = new Rectangle(4, 0, unit * 3 / 2, Height);
-        _minuteRect = new Rectangle(_hourRect.Right + 8, 0, unit * 3 / 2, Height);
-        _meridiemRect = new Rectangle(_minuteRect.Right + 6, 0, unit * 2, Height);
+        _hourRect = new Rectangle(LeftInset, 0, unit * 3 / 2, Height);
+        _minuteRect = new Rectangle(_hourRect.Right + ColonWidth, 0, unit * 3 / 2, Height);
+        _meridiemRect = new Rectangle(_minuteRect.Right + MinuteGap, 0, unit * 2, Height);
 
+        // Two pixels clear of the border on the right, as the strip is above
+        // and below: that is the border's clearance, not a size that follows
+        // the text.
         var arrowX = Width - ArrowWidth - 2;
         _upRect = new Rectangle(arrowX, 2, ArrowWidth, Height / 2 - 2);
         _downRect = new Rectangle(arrowX, Height / 2, ArrowWidth, Height / 2 - 2);
@@ -168,9 +205,10 @@ public sealed class TimePicker : Control
             DrawSegment(g, _meridiemRect, _isPm ? "PM" : "AM", Segment.Meridiem, text);
         }
 
-        // Colon between hour and minute, vertically centered.
+        // Colon between hour and minute, vertically centered - in the gap
+        // after the hour, as wide as it is at the text size in use.
         TextRenderer.DrawText(g, ":", Font,
-            new Rectangle(_hourRect.Right, 0, 8, Height), text,
+            new Rectangle(_hourRect.Right, 0, ColonWidth, Height), text,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
         DrawArrow(g, _upRect, up: true, text);
@@ -194,8 +232,11 @@ public sealed class TimePicker : Control
         using var brush = new SolidBrush(color);
         var cx = rect.X + rect.Width / 2f;
         var cy = rect.Y + rect.Height / 2f;
-        const float w = 4f;
-        const float h = 3f;
+
+        // The glyph's half-width and half-height, at the text size in use,
+        // in step with its strip - 4 by 3 at the normal size.
+        float w = UiLayout.AtTextSize(4f);
+        float h = UiLayout.AtTextSize(3f);
 
         var points = up
             ? new[] { new PointF(cx, cy - h), new PointF(cx - w, cy + h), new PointF(cx + w, cy + h) }

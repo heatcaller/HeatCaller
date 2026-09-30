@@ -46,7 +46,14 @@ internal sealed class ThinScrollBar : Control
     private const int SB_THUMBTRACK = 5;
     private const int SB_ENDSCROLL = 8;
 
-    private const int MinimumThumb = 26;
+    /// <summary>
+    /// The shortest the thumb gets, at the screen's DPI - as the bar's own
+    /// thickness is (SystemInformation's scroll bar size already is).
+    /// </summary>
+    private static int MinimumThumb => UiLayout.AtDpi(26);
+
+    /// <summary>The thumb's thickness across the bar, at the screen's DPI for the same reason.</summary>
+    private static int ThumbThickness => UiLayout.AtDpi(7);
 
     private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedV = new();
     private static readonly ConditionalWeakTable<Control, ThinScrollBar> AttachedH = new();
@@ -581,7 +588,10 @@ internal sealed class ThinScrollBar : Control
             var range = Math.Max(1, _max - _min + 1);
             var proportion = _page <= 0 ? 0.2f : Math.Clamp(_page / (float)range, 0.05f, 1f);
 
-            return Math.Clamp((int)(TrackLength * proportion), MinimumThumb, TrackLength);
+            // The least never above the track: Math.Clamp throws when it is,
+            // and a bar shorter than the least thumb (a short list, or any
+            // bar at a high DPI) would have thrown from paint.
+            return Math.Clamp((int)(TrackLength * proportion), Math.Min(MinimumThumb, TrackLength), TrackLength);
         }
     }
 
@@ -614,12 +624,14 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
-        // 7px thick, centred on the short axis; long axis follows the thumb.
+        // 7px thick at 96 DPI (ThumbThickness), centred on the short axis;
+        // long axis follows the thumb. Its rounding scales with it.
+        var across = ThumbThickness;
         var thumb = _horizontal
-            ? new RectangleF(ThumbStart, Height / 2f - 3.5f, Math.Max(MinimumThumb, ThumbLength), 7f)
-            : new RectangleF(Width / 2f - 3.5f, ThumbStart, 7f, Math.Max(MinimumThumb, ThumbLength));
+            ? new RectangleF(ThumbStart, Height / 2f - across / 2f, Math.Max(MinimumThumb, ThumbLength), across)
+            : new RectangleF(Width / 2f - across / 2f, ThumbStart, across, Math.Max(MinimumThumb, ThumbLength));
 
-        using var path = AppTheme.RoundedRect(thumb, 3);
+        using var path = AppTheme.RoundedRect(thumb, UiLayout.AtDpi(3));
         using var brush = new SolidBrush(_dragging || _hot ? AppTheme.Primary : AppTheme.TextMuted);
 
         g.FillPath(brush, path);

@@ -66,17 +66,35 @@ public sealed class DayScheduleControl : UserControl
     private bool _announced5Min;
     private bool _announced1Min;
 
-    // Set once BuildLayout has run - the stretch pass needs them, and an
-    // early resize arrives before the constructor has built anything.
-    private GroupBox? _grpReminder;
-    private Button[]? _actionButtons;
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
+    private readonly FillPage _page = new();
+
+    /// <summary>The countdown's card, and the two rows in it the card's width is measured from - see ReminderWidth.</summary>
+    private Section? _reminderCard;
+    private FlowLayoutPanel? _minutesRow;
+    private ButtonBar? _countdownButtons;
+
+    /// <summary>The countdown's figure, a face this page makes itself at the text size in use - see FitCountdown.</summary>
+    private Font? _countdownFont;
+
+    /// <summary>The countdown's figure at the normal text size, in points - the size it always was.</summary>
+    private const float CountdownPoints = 16F;
+
+    /// <summary>The longest the countdown's figure comes to: two hours, the most it can be set to.</summary>
+    private const string CountdownWidest = "120:00";
+
+    /// <summary>The countdown's column at the normal text size - the narrowest its group box ever was.</summary>
+    private const int ReminderLeastWidth = 240;
 
     /// <summary>
-    /// The action buttons split into the rows they are laid out in - see
-    /// where they are built for why the split is where it is.
+    /// The fewest lines the sheet shows under its headings before the page
+    /// scrolls instead - about the 160px the old page never let the grid go
+    /// under, at the normal text size.
     /// </summary>
-    private Button[][]? _actionRows;
-    private int _gridTop;
+    private const int GridLeastRows = 4;
 
     /// <summary>
     /// The line to put the cursor back on after the next redraw, or null.
@@ -105,8 +123,15 @@ public sealed class DayScheduleControl : UserControl
         _events = events;
 
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(900, 560);
-        Font = AppTheme.BodyFont;
+
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No MinimumSize. It was 900x560, which WinForms honours over the
+        // size the page is given - so a window shorter than that had the
+        // buttons under the grid off the bottom of the page. A short window
+        // scrolls the page instead (FillPage).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
@@ -114,6 +139,59 @@ public sealed class DayScheduleControl : UserControl
         _countdownTimer.Tick += CountdownTimer_Tick;
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - one way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// Put into a window, or taken back out of one. This is the one page
+    /// MainForm keeps for the timetable, lent to a new window each time the
+    /// drawer opens (PageWindow, MainForm's ShowTimetable) and out of every
+    /// window in between - where a new text size never reaches it. Nor is
+    /// it always told on the way in: a window whose font is already the new
+    /// size when the page is put in it changes no font the page sees, since
+    /// the page wears a face of its own. So it catches up here, each time it
+    /// moves: its faces, its field and figure sizes and its grid's headings
+    /// at the text size in use now - and, as it lays out in the new window,
+    /// everything measured from them.
+    ///
+    /// Not while it is being disposed, which takes it out of its window too.
+    /// </summary>
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+
+        if (!IsDisposed && !Disposing)
+        {
+            _textSize.Apply();
+        }
+    }
+
+    /// <summary>
+    /// The intro and the Up Next line across the top, then the sheet: the
+    /// grid in a card, taking the height that is left, with Add Entry and
+    /// More under it - and beside it, down the right-hand side, the reminder
+    /// countdown in a card of its own, as wide as its widest row. On the
+    /// layout pieces (LayoutPieces.cs), so nothing is placed by hand, and a
+    /// window too short for all of it scrolls the page rather than cutting
+    /// off the buttons under the grid.
+    ///
+    /// It used to be placed in pixels: the intro capped at 860px, the grid
+    /// and the countdown's group box placed on every resize over a 900x560
+    /// floor the page kept however small its window, the two buttons pinned
+    /// to its bottom edge - and the countdown's 16pt figure made once, at
+    /// the normal text size, whatever the text size was.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
@@ -123,30 +201,14 @@ public sealed class DayScheduleControl : UserControl
                  + "move it here or on Next Steps and both follow. Add your own lines (doors open, lunch, presentation) "
                  + "anywhere between them; they stay where you put them.",
             AutoSize = true,
-            Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
-            Location = new Point(12, 12),
         };
 
-        // Wrapped against the page's design width; the stretch pass widens
-        // the grid, not the prose.
-        lblIntro.MaximumSize = new Size(860, 0);
-
+        // The line the countdown's hint points at ("Up Next" above). It
+        // wraps to the page when a class's name runs long.
         _lblNextUp.AutoSize = true;
-        _lblNextUp.Font = AppTheme.BoldFont;
-        _lblNextUp.Location = new Point(12, UiLayout.Below(lblIntro, UiLayout.RowGap));
+        _textSize.Wear(_lblNextUp, () => AppTheme.BoldFont);
 
-        _gridTop = UiLayout.Below(_lblNextUp, UiLayout.RowGap);
-
-        _grid.Location = new Point(12, _gridTop);
-        _grid.Size = new Size(640, 320);
-
-        // PLACED by LayoutStretch on every resize - no anchors, so there is
-        // exactly one authority on this rectangle. The old page anchored
-        // the width and fixed the height, and the note it carried ("that
-        // half of the stretch waits for this page's rebuild") is this
-        // rebuild.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
@@ -165,6 +227,10 @@ public sealed class DayScheduleControl : UserControl
             new DataGridViewTextBoxColumn { Name = "description", HeaderText = "What", FillWeight = 44, ReadOnly = true },
             new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 42, ReadOnly = true }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
         // Left button only. CellClick fires for either, and the grid now has
         // a right-click menu - so right-clicking a line to reach it, with
         // the pointer over the Done box, would have ticked the line off on
@@ -189,7 +255,7 @@ public sealed class DayScheduleControl : UserControl
             }
         };
 
-        // --- The action row, flowed and bottom-pinned by LayoutStretch ---
+        // --- The action row, under the grid ---
         //
         // Two buttons, where there were eight.
         //
@@ -210,37 +276,27 @@ public sealed class DayScheduleControl : UserControl
         _btnMore.Text = "More...";
         _btnMore.Click += (_, _) => _lineMenu?.Show(_btnMore, new Point(0, _btnMore.Height));
 
-        _actionRows = new[] { new[] { btnAdd, _btnMore } };
-        _actionButtons = _actionRows.SelectMany(row => row).ToArray();
-
         BuildLineMenu();
 
-        // --- Reminder countdown panel, measured ---
-        var grpReminder = new GroupBox { Text = "Reminder Countdown", Font = AppTheme.BoldFont, Size = new Size(240, 100) };
+        // No caption: the window's title already says "Timetable", and the
+        // Up Next line over it says where the sheet has got to.
+        var sheet = new Section();
 
-        var inside = UiLayout.InsideGroup(grpReminder);
+        sheet.AddFill(_grid, LeastGridHeight);
+        sheet.Add(new ButtonBar().With(btnAdd, _btnMore), gapBelow: 0);
 
-        var lblFor = new Label
-        {
-            Text = "Announces to \"Up Next\" above at 5 minutes, 1 minute, and when time's up.",
-            AutoSize = true,
-            MaximumSize = new Size(216, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-            Location = new Point(12, inside),
-        };
+        // --- The reminder countdown ---
+        var lblFor = _textSize.Wear(
+            new Label
+            {
+                Text = "Announces to \"Up Next\" above at 5 minutes, 1 minute, and when time's up.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
-        var lblMinutes = new Label
-        {
-            Text = "Minutes until start:",
-            AutoSize = true,
-            Font = AppTheme.BodyFont,
-            Location = new Point(12, UiLayout.Below(lblFor, UiLayout.RowGap)),
-        };
+        var lblMinutes = new Label { Text = "Minutes until start:", AutoSize = true };
 
-        _numMinutes.Font = AppTheme.BodyFont;
-        _numMinutes.Location = new Point(12, UiLayout.Below(lblMinutes, UiLayout.HintGap));
-        _numMinutes.Width = UiLayout.NumericWidth;
         _numMinutes.Minimum = 1;
         _numMinutes.Maximum = 120;
         _numMinutes.Value = 10;
@@ -248,82 +304,136 @@ public sealed class DayScheduleControl : UserControl
         _btnStartCountdown.Text = "Start";
         _btnStopCountdown.Text = "Stop";
         _btnStopCountdown.Enabled = false;
-        UiLayout.ButtonRow(12, UiLayout.Below(_numMinutes, UiLayout.RowGap), _btnStartCountdown, _btnStopCountdown);
         _btnStartCountdown.Click += (_, _) => StartCountdown();
         _btnStopCountdown.Click += (_, _) => StopCountdown(announceNow: false);
 
+        // Sized by the page, not by itself - see FitCountdown.
         _lblCountdown.Text = string.Empty;
-        _lblCountdown.AutoSize = true;
-        _lblCountdown.Font = new Font(AppTheme.BoldFont.FontFamily, 16F, FontStyle.Bold);
+        _lblCountdown.AutoSize = false;
         _lblCountdown.ForeColor = AppTheme.Accent;
-        _lblCountdown.Location = new Point(12, UiLayout.Below(_btnStartCountdown, UiLayout.RowGap));
+        _textSize.Keep(FitCountdown);
 
-        grpReminder.Controls.AddRange(new Control[] { lblFor, lblMinutes, _numMinutes, _btnStartCountdown, _btnStopCountdown, _lblCountdown });
-        grpReminder.Size = new Size(
-            Math.Max(240, _btnStopCountdown.Right + 12),
-            _lblCountdown.Bottom + AppTheme.BoldFont.Height + 16);
-        _grpReminder = grpReminder;
+        // The minutes beside their caption, the box going under it only if
+        // the column were ever too narrow for both - it is made wide enough
+        // (ReminderWidth).
+        var minutesRow = FieldGrid.Inline(lblMinutes, _numMinutes);
+        var countdownButtons = new ButtonBar().With(_btnStartCountdown, _btnStopCountdown);
 
-        Controls.Add(lblIntro);
-        Controls.Add(_lblNextUp);
-        Controls.Add(_grid);
-        foreach (var button in _actionButtons)
-        {
-            Controls.Add(button);
-        }
-        Controls.Add(grpReminder);
+        var reminder = new Section("Reminder countdown");
 
-        LayoutStretch();
+        reminder.Add(lblFor);
+        reminder.Add(minutesRow);
+        reminder.Add(countdownButtons);
+        reminder.Add(_lblCountdown, gapBelow: 0);
+
+        _reminderCard = reminder;
+        _minutesRow = minutesRow;
+        _countdownButtons = countdownButtons;
+
+        // --- The page ---
+        //
+        // The countdown beside the sheet, as tall as it needs to be at the
+        // top of its column; the sheet takes the rest of the width and all
+        // of the height.
+        var band = new Beside(ReminderWidth);
+
+        band.AddFill(sheet, sheet.LeastHeight);
+        band.AddSideCard(reminder, gapBelow: 0);
+
+        _page.Add(lblIntro);
+        _page.Add(_lblNextUp, gapBelow: UiLayout.RowGap);
+        _page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        Controls.Add(_page);
+
+        // Once the fields are on the page and wear its face - what they are
+        // measured in.
+        _textSize.Keep(SizeFields);
     }
 
     /// <summary>
-    /// The one layout authority: the action row flows against the real
-    /// width and sits on the bottom margin, the reminder panel rides the
-    /// right edge, and the grid takes every remaining pixel of both
-    /// directions.
+    /// The least the page can do with at <paramref name="width"/> - its
+    /// intro, the Up Next line, and the taller of the countdown's card and
+    /// the sheet's (the grid's headings and four lines, and its buttons) -
+    /// for the window it is shown in, which gives the page the height it
+    /// has (PageWindow.Timetable).
     /// </summary>
-    private void LayoutStretch()
+    internal int LeastHeight(int width) => _page.LeastHeight(width);
+
+    /// <summary>The least the grid can do with: its headings and a few lines. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastGridHeight() =>
+        _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2;
+
+    /// <summary>
+    /// The countdown's column: the width its group box was at the normal
+    /// text size, at the size in use - and never narrower than its caption,
+    /// the minutes beside their caption, or Start and Stop on one line need.
+    /// </summary>
+    private int ReminderWidth() =>
+        Math.Max(
+            UiLayout.AtTextSize(ReminderLeastWidth),
+            Math.Max(
+                _reminderCard?.CaptionWidth ?? 0,
+                Math.Max(_minutesRow?.GetPreferredSize(Size.Empty).Width ?? 0, _countdownButtons?.OneLineWidth ?? 0))
+            + Section.Inset.Horizontal);
+
+    /// <summary>
+    /// The minutes box: wide enough for the most minutes it takes and its
+    /// arrows, and never narrower than a number box at the normal text size,
+    /// at this size. Run again when the text size changes (TextSize.Keep).
+    /// </summary>
+    private void SizeFields()
     {
-        if (_grpReminder is null || _actionButtons is null || _actionRows is null)
+        var digits = ((int)_numMinutes.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(UiLayout.NumericWidth),
+            TextRenderer.MeasureText(new string('0', digits), _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+
+        // Only when it changed: a new width lays the row out again.
+        if (_numMinutes.Width != width)
         {
-            return;
+            _numMinutes.Width = width;
         }
-
-        var width = Math.Max(MinimumSize.Width, ClientSize.Width);
-        var height = Math.Max(MinimumSize.Height, ClientSize.Height);
-        var right = width - 12;
-
-        // Laid out at the top first to learn the block's height, then the
-        // whole block is dropped so its last row rests on the bottom
-        // margin - placing it directly at a guessed bottom either clips
-        // the second row or leaves a gap under a single one.
-        //
-        // The rows are the page's own, not the window's - see where
-        // _actionRows is built - with one width across both so the columns
-        // line up down the block.
-        var flowBottom = UiLayout.ButtonRows(12, 0, _actionRows);
-        var drop = height - 12 - flowBottom;
-
-        foreach (var button in _actionButtons)
-        {
-            button.Top += drop;
-        }
-
-        var buttonsTop = height - 12 - flowBottom;
-
-        _grpReminder.Location = new Point(right - _grpReminder.Width, _gridTop);
-
-        _grid.SetBounds(
-            12,
-            _gridTop,
-            Math.Max(400, _grpReminder.Left - UiLayout.RowGap - 12),
-            Math.Max(160, buttonsTop - UiLayout.RowGap - _gridTop));
     }
 
-    protected override void OnResize(EventArgs e)
+    /// <summary>
+    /// The countdown's figure: the 16pt bold it always was, at the text
+    /// size in use - a face this page makes itself, so it is made again when
+    /// the text size changes and the old one let go - and one line of it
+    /// kept whatever it says, so nothing moves as the countdown starts,
+    /// ticks and stops.
+    ///
+    /// Kept by the page rather than sized by the label. A label that sizes
+    /// itself asks what it is in to lay out again every time it is
+    /// rewritten, which here is every second the countdown runs; one given
+    /// its height is only repainted.
+    /// </summary>
+    private void FitCountdown()
     {
-        base.OnResize(e);
-        LayoutStretch();
+        var points = CountdownPoints * AppTheme.FontScale;
+
+        if (_countdownFont is null || Math.Abs(_countdownFont.SizeInPoints - points) >= 0.01F)
+        {
+            var old = _countdownFont;
+
+            _countdownFont = new Font(AppTheme.BoldFont.FontFamily, points, FontStyle.Bold);
+            _lblCountdown.Font = _countdownFont;
+            old?.Dispose();
+        }
+
+        // A line of the figure as the label draws it (Pieces.LineHeight), or
+        // as the figure measures, whichever is taller.
+        var line = Math.Max(
+            Pieces.LineHeight(_lblCountdown.Font),
+            TextRenderer.MeasureText(CountdownWidest, _lblCountdown.Font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height);
+
+        var height = line + _lblCountdown.Padding.Vertical;
+
+        if (_lblCountdown.Height != height)
+        {
+            _lblCountdown.Height = height;
+        }
     }
 
     /// <summary>Call whenever this page becomes visible - the program and check-ins change elsewhere while it's not active.</summary>
@@ -1231,6 +1341,13 @@ public sealed class DayScheduleControl : UserControl
         }
 
         base.Dispose(disposing);
+
+        // After the figure that wears it is gone - see FitCountdown.
+        if (disposing)
+        {
+            _countdownFont?.Dispose();
+            _countdownFont = null;
+        }
     }
 
 }

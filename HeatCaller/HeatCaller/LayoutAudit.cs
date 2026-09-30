@@ -7,35 +7,36 @@ namespace HeatCaller;
 /// each other, text cut short, things running past the edge of whatever
 /// holds them, parts squashed to nothing. It changes nothing.
 ///
-/// This is the measuring half of LayoutDoctor without the repairs. The
-/// doctor nudges a fixed-position page at runtime until it stops
-/// overlapping, on every launch, and a page it has tidied can look fine
-/// while its own layout is still wrong underneath. This only reports. It
-/// is what the layout test (HeatCaller.Tests\LayoutTests) runs over every
-/// page and every tab, at several window sizes and text sizes, and what a
-/// page rebuilt on the layout pieces (LayoutPieces.cs) has to come through
-/// with nothing to say. Once every page does, the doctor goes - see the
-/// roadmap, "The fixed-pixel layout".
+/// It began as the measuring half of the layout repair pass ("the doctor")
+/// without the repairs. The doctor nudged a fixed-position page at runtime
+/// until it stopped overlapping, on every launch, and a page it had tidied
+/// could look fine while its own layout was still wrong underneath. This
+/// only reports. It is what the layout test (HeatCaller.Tests\LayoutTests)
+/// runs over every page and every tab, at several window sizes and text
+/// sizes, and what every page - each rebuilt on the layout pieces
+/// (LayoutPieces.cs) - has to come through with nothing to say. Once every
+/// page did, the doctor went (30 Sep) - see the roadmap, "The fixed-pixel
+/// layout".
 ///
-/// The rules are the doctor's, so a page the doctor is happy with is one
-/// this is happy with: the same padding round a button's caption, the same
-/// "wider than a line" test for a block of text, the same indifference to
-/// one control sitting wholly inside another. Where the doctor guessed and
-/// this can measure - a label's text wrapping inside its own box - it
-/// measures.
+/// The rules started as the doctor's: the same padding round a button's
+/// caption, the same "wider than a line" test for a block of text, the same
+/// indifference to one control sitting wholly inside another. Where the
+/// doctor guessed and this can measure - a label's text wrapping inside its
+/// own box - it measures.
 /// </summary>
 internal static class LayoutAudit
 {
-    /// <summary>Between a page's name and a tab's in a finding - the same mark the doctor's log lines use.</summary>
+    /// <summary>Between a page's name and a tab's in a finding - the same mark the old repair pass's log lines used.</summary>
     internal const string Separator = " › ";
 
     /// <summary>
     /// The pages rebuilt so they lay themselves out.
     ///
-    /// The layout test fails if any of these has anything to report at any
-    /// size it tries, and the doctor keeps out of them - a page that lays
-    /// itself out does not need a second authority moving its controls.
-    /// A page goes on this list in the same change that converts it.
+    /// Every page in the sidebar is on it (30 Sep). The layout test fails if
+    /// any page has anything to report at any size it tries - whether or not
+    /// it is on this list, so a page added later without the pieces fails
+    /// too. The list marks the rebuilt pages in the test's report; a new page
+    /// goes on it in the same change that adds it.
     /// </summary>
     internal static readonly IReadOnlyList<string> ConvertedPages = new[]
     {
@@ -210,10 +211,10 @@ internal static class LayoutAudit
         // What a scrutineer checks for a class (RaceClassEditForm.TechChecklistForm, titled "Tech Checklist - <class>").
         "Tech Checklist",
 
-        // One check typed in, from the Tech Checklist's Add... (RaceClassEditForm.TextPrompt).
+        // One check typed in, from the Tech Checklist's Add... (TextPromptForm).
         "Add check",
 
-        // The same, from its Rename... (RaceClassEditForm.TextPrompt).
+        // The same, from its Rename... (TextPromptForm).
         "Rename check",
 
         // The Classes page as a window, from a driver profile's Manage... (RaceClassManagerForm).
@@ -239,6 +240,181 @@ internal static class LayoutAudit
 
         // A car's inspection against its class's checklist, new or edited (TechInspectionEditForm, titled "New Tech Inspection" / "Edit Inspection - <driver>").
         "Tech Inspection",
+
+        // The rest of race night, and its paperwork (30 Sep).
+
+        // The live qualifying order while a heat runs, or the note that none is (QualifyingProjectionForm, from Race Control's Qualifying Projection).
+        "Qualifying projection",
+
+        // The first race's time and the gap between races, for the timetable (FillTimesForm, from the Timetable's Fill In the Times...).
+        "Fill in the times",
+
+        // What a race day's delete takes with it - saved races, records, championship picks, badges (DeleteRaceDayForm).
+        "Delete race day",
+
+        // A new line of the run sheet: its time, class and description (ScheduleEntryForm).
+        "Add Schedule Entry",
+
+        // A run sheet line changed (ScheduleEntryForm).
+        "Edit Schedule Entry",
+
+        // A race day renamed, and its notes (EventEditForm, titled "Edit <race day>").
+        "Edit Race Day",
+
+        // Points each driver brings into a championship from before it ran here (CarriedPointsForm, titled "Points carried in - <championship>").
+        "Points carried in",
+
+        // Every racer's personal check-in PIN, masked until Show PINs is ticked (RacerPinsForm).
+        "Racer Check-in PINs",
+
+        // The backup password asked for after a backup is restored onto another PC (SecretRecovery.PasswordPromptForm).
+        "Backup password",
+
+        // What to export from Race History, and in which format (ResultsExportForm).
+        "Export Results",
+
+        // What goes in a race day's event report (EventReportForm).
+        "Event Report",
+
+        // The seconds Race Control's Penalty... adds to the selected driver (RaceControlControl.TimePenaltyForm).
+        "Time penalty",
+
+        // A warning's reason typed by hand, from the warnings list's "Other reason..." (RaceControlControl.WarningReasonForm, titled "Warning for <driver>").
+        "Warning for",
+
+        // The garage, setup sheets and batteries (30 Sep).
+
+        // A car added or edited: its fields lined up, the hint under the name, the notes (CarForm, titled "Add a Car" / "Edit Car").
+        "Add a Car",
+        "Edit Car",
+
+        // A car's photos beside the one selected, from a car's Photos... (CarPhotosForm, titled "Photos - <car>").
+        "Photos",
+
+        // Who a car is lent to for the race day that is open, from a car's Lend Out... (LendCarForm).
+        "Lend a Car",
+
+        // The club's chassis list beside the fields for the one selected, from the Garage's Chassis Types... (ChassisTypesForm).
+        "Chassis Types",
+
+        // A car opened from the Garage's wall: the photo beside the facts, one toolbar, the setups logged for it (CarDetailForm, titled with the car's name).
+        "Car Details",
+
+        // A chassis sheet's editor: the diagram beside the selected point and the other tuning fields (ChassisTemplateForm).
+        "Chassis Diagram",
+
+        // The club's chassis sheets and their buttons, from the Garage's and the setup log's Chassis Sheets... (ChassisSheetsForm).
+        "Chassis Setup Sheets",
+
+        // A car's setup filled in against a chassis sheet: the diagram beside the sheet's fields, a line each (SetupEntryForm).
+        "Setup Sheet",
+
+        // One field of a chassis sheet: its label, kind and unit, and its options beside their buttons (SetupFieldEditorForm).
+        "Edit Field",
+
+        // A new battery pack's label, type and notes (BatteryPackEditForm).
+        "Add Pack",
+
+        // A battery pack's details changed, or retired (BatteryPackEditForm, titled "Edit <pack>").
+        "Edit Pack",
+
+        // The packs in rotation, to tag a session with the one in the car, from Batteries' Set Pack... (BatteryPackControl.PackPicker).
+        "Which pack?",
+
+        // The club tools (30 Sep).
+
+        // One driver's handicap, from the Handicaps page's Edit... (HandicapEditForm, titled "Handicap - <driver>").
+        "Handicap",
+
+        // Time credits from recent pace, ticked before they are applied, from Suggest from History... (HandicapSuggestForm, titled "Suggest Handicaps - <class>").
+        "Suggest Handicaps",
+
+        // What a championship counts and how it adds it up, from Championship's Scoring Rules... (SeasonRulesForm, titled "Scoring rules - <championship>").
+        "Scoring rules",
+
+        // A new championship's name, from Championship's New... (TextPromptForm).
+        "New Season",
+
+        // A championship renamed, from its Rename... (TextPromptForm).
+        "Rename Season",
+
+        // A ghost car added: its name and car, and its pace from the source picked (GhostEditForm).
+        "Add Ghost Car",
+
+        // A ghost car changed: only the rows its pace source uses, the rest hidden (GhostEditForm).
+        "Edit Ghost Car",
+
+        // Whose best lap a Quick Rival is built from, from the Ghost Cars page's Quick Rival (GhostRivalPickerForm).
+        "Quick Rival",
+
+        // A badge opened from Achievements: the medallion, how rare it is and who has it (AchievementDetailForm, titled with the badge's name).
+        "Badge Details",
+
+        // A leaderboard's columns and their order - Race Control, Practice, the web page, the Big Screen (KpiPickerForm, titled "Choose columns - <leaderboard>").
+        "Choose columns",
+
+        // Which pages the sidebar shows and in what order, from the sidebar's Manage Navigation (TabVisibilityForm).
+        "Manage Navigation",
+
+        // The ? cheat sheet: every shortcut in two columns, the note to close it at the foot (ShortcutSheetForm).
+        "Keyboard shortcuts",
+
+        // The glossary from Next Steps' Glossary: the sport's words and what they mean (RacingWordsForm).
+        "What these words mean",
+
+        // The scan-to-join poster over Print, Full screen and Close (JoinPosterForm, titled "<heading> - scan to join").
+        "Scan to join",
+
+        // A CSV file's columns matched to a driver's fields, over its first rows, before an import (CsvMappingForm, titled "Import drivers - <file>").
+        "Import drivers",
+
+        // The big editors (30 Sep).
+
+        // A club's own look made from a copy of another: its fields and eleven colours beside the preview and the readability warnings (LookEditorForm).
+        "New Look",
+
+        // One of the club's own looks changed (LookEditorForm, titled "Edit Look - <look>").
+        "Edit Look",
+
+        // The new soundscape's name, then its description, from Soundscapes' Save Current Settings as New... (TextPromptForm).
+        "Save Current Settings as New Soundscape",
+
+        // A soundscape changed: its sounds beside the announcer's delivery and lines, from Soundscapes' Edit... (SoundscapeEditorForm, titled "Edit soundscape - <name>").
+        "Edit soundscape",
+
+        // A built-in soundscape customized into a new one, from Soundscapes' Customize... (SoundscapeEditorForm).
+        "New soundscape",
+
+        // A new ambience layer: its file, switches and a volume for each race state, from Ambience's Add Layer... (AmbienceLayerForm).
+        "Add Ambience Layer",
+
+        // An ambience layer changed, from Ambience's Edit... (AmbienceLayerForm, titled "Edit <layer>").
+        "Edit Ambience Layer",
+
+        // How a chart or results card is saved as an image: its style, its size and a preview (ChartExportForm).
+        "Save chart as image",
+
+        // One race's pace table as a window, from Race History's Pace... (PaceAnalysisForm, titled "Pace - <race>").
+        "Pace",
+
+        // The RCP track designer: the toolbar, the board between the palette and the side panel, and the status line under the board (RcpTrackEditorForm, titled "Track Designer - <track>").
+        "Track Designer",
+
+        // A track layout added or edited: the figures lined up, the notes, the photo's place beside its name and buttons, the main picture (TrackLayoutEditForm).
+        "Add Track Layout",
+        "Edit Track Layout",
+
+        // A finished race played back: the lanes taking the room over one line of playback controls (RaceReplayForm, titled "Replay - <race>").
+        "Replay",
+
+        // The night's inspections as a window of their own, from Who's Racing's Scrutineering Log (TechInspectionControl in a PageWindow).
+        "Scrutineering log",
+
+        // The race day's run sheet as a window of its own, from the program's Timetable (DayScheduleControl in a PageWindow).
+        "Timetable",
+
+        // The announcer's window: the running order beside the talking points, the spotlight and the feed (AnnouncerControl, measured in a stand-in window of the same title and size - see the test's AnnouncerHost).
+        "Announcer",
     };
 
     /// <summary>
@@ -392,9 +568,9 @@ internal static class LayoutAudit
     }
 
     /// <summary>
-    /// Whether to look inside something. The doctor's list: a grid's
-    /// editing controls, a spinner's own buttons and a drop-down's edit box
-    /// are part of how those are built, not page layout.
+    /// Whether to look inside something. The old repair pass's list: a
+    /// grid's editing controls, a spinner's own buttons and a drop-down's
+    /// edit box are part of how those are built, not page layout.
     /// </summary>
     private static bool LooksInside(Control control) =>
         control.HasChildren
@@ -495,7 +671,7 @@ internal static class LayoutAudit
     private const int FlatButtonInset = 16;
 
     /// <summary>
-    /// Buttons, check boxes and radio buttons. The widths are the doctor's:
+    /// Buttons, check boxes and radio buttons. The widths were the doctor's:
     /// a caption plus 22px for a button and 26px for a box and its gap, and
     /// a button's height is its caption's plus 12 - the rule the theme sizes
     /// every button by (AppTheme.StyleButton).
@@ -503,7 +679,7 @@ internal static class LayoutAudit
     /// And one the doctor never had, for a button: its caption measured with
     /// the room TextRenderer keeps either side of a line, which grows with
     /// the font, plus the flat button's own border and insets. The doctor's
-    /// 22 is enough at the normal text size and not at 200% - Race Control's
+    /// 22 was enough at the normal text size and not at 200% - Race Control's
     /// Reset, 105px wide at 200%, passed it and showed "Rese" in the layout
     /// pictures of 28 Sep. The 16 is what that picture showed was needed.
     ///
@@ -532,7 +708,11 @@ internal static class LayoutAudit
         }
 
         var isButton = button is Button || button is CheckBox { Appearance: Appearance.Button };
-        var chrome = isButton ? 22 : 26;
+        // A check box's box, or a radio button's dot, and the gap after it: 26
+        // at the normal text size, as Windows' own glyph needed, and the app's
+        // tick box and dot grow with the text (TickBox.Side is 13 at the
+        // normal size; RadioDot is drawn the same size).
+        var chrome = isButton ? 22 : 26 - 13 + TickBox.Side;
         var room = button.Width - chrome;
         var font = button.Font;
 
@@ -735,12 +915,12 @@ internal static class LayoutAudit
     /// <summary>
     /// Two controls in the same container covering part of each other.
     ///
-    /// The doctor's rules for what does not count: an overlap of a pixel or
-    /// less, and one control lying wholly inside another - a caption on a
-    /// panel, a badge on a card, a message over an empty grid are all put
-    /// there on purpose. Two docked controls cannot overlap (WinForms places
-    /// them), so a pair is only looked at when one of them was placed by
-    /// hand.
+    /// The old repair pass's rules for what does not count: an overlap of a
+    /// pixel or less, and one control lying wholly inside another - a caption
+    /// on a panel, a badge on a card, a message over an empty grid are all
+    /// put there on purpose. Two docked controls cannot overlap (WinForms
+    /// places them), so a pair is only looked at when one of them was placed
+    /// by hand.
     /// </summary>
     private static void CheckOverlaps(Control container, List<Control> kids, string where, bool isPage, List<Finding> findings)
     {
@@ -784,8 +964,9 @@ internal static class LayoutAudit
     /// simply not on screen. In one that does, running off the bottom is
     /// what scrolling is for and is fine - but running off the side means
     /// a sideways scrollbar, which on these pages is a fault being hidden
-    /// rather than a way of reaching things (see the doctor's note on
-    /// AbsorbOverflow), so that is still reported.
+    /// rather than a way of reaching things (the old repair pass refused to
+    /// turn on sideways scrolling for the same reason), so that is still
+    /// reported.
     ///
     /// On the page itself, the top strip is the page's heading (PageHeader
     /// reserves it with the page's Padding), and a control placed in it

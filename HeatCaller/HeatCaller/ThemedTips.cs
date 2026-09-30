@@ -366,9 +366,12 @@ internal static class QuietEllipsis
 /// </summary>
 internal sealed class HoverNote : IDisposable
 {
-    private const int PadX = 10;
-    private const int PadY = 7;
-    private const int MaxWidth = 460;
+    // The margins round the note and the width it wraps at are at the
+    // screen's DPI, as its point-size text is - on a screen the app draws at
+    // 150% (--dpi-aware) the words are half as big again in pixels.
+    private static int PadX => UiLayout.AtDpi(10);
+    private static int PadY => UiLayout.AtDpi(7);
+    private static int MaxWidth => UiLayout.AtDpi(460);
 
     private const TextFormatFlags Format =
         TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;

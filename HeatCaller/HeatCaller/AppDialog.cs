@@ -469,7 +469,11 @@ public static class AppDialog
                     _ => "i",
                 };
 
-                using var font = new Font(AppTheme.BoldFont.FontFamily, bounds.Height * 0.52f, FontStyle.Bold);
+                // A share of the circle's height in pixels, taken as points:
+                // PointsForPixels keeps the mark that share of the circle on a
+                // screen the app draws at 150% (--dpi-aware), rather than half
+                // as big again. The same size at 96 DPI.
+                using var font = new Font(AppTheme.BoldFont.FontFamily, UiLayout.PointsForPixels(bounds.Height * 0.52f, g), FontStyle.Bold);
                 using var brush = new SolidBrush(_accent);
 
                 var size = g.MeasureString(mark, font);

@@ -30,18 +30,18 @@ public sealed class MixerControl : UserControl
     private readonly Button _btnAuditionAll = new();
     private readonly NumericUpDown _numAnnounceEvery = new();
     private readonly Button _btnSpeakNow = new();
-    private readonly CheckBox _chkStartRaces = new();
-    private readonly CheckBox _chkStartPractice = new();
+    private readonly CheckBox _chkStartRaces = new ThemedCheckBox();
+    private readonly CheckBox _chkStartPractice = new ThemedCheckBox();
     private readonly ComboBox _cmbStartAt = new();
-    private readonly CheckBox _chkStartMusic = new();
-    private readonly CheckBox _chkStartAmbience = new();
-    private readonly CheckBox _chkUnmute = new();
-    private readonly CheckBox _chkStopAmbience = new();
-    private readonly CheckBox _chkStopMusic = new();
+    private readonly CheckBox _chkStartMusic = new ThemedCheckBox();
+    private readonly CheckBox _chkStartAmbience = new ThemedCheckBox();
+    private readonly CheckBox _chkUnmute = new ThemedCheckBox();
+    private readonly CheckBox _chkStopAmbience = new ThemedCheckBox();
+    private readonly CheckBox _chkStopMusic = new ThemedCheckBox();
     private readonly ComboBox _cmbMusicEnd = new();
     private readonly NumericUpDown _numMusicFade = new();
-    private readonly CheckBox _chkDuckAmbience = new();
-    private readonly CheckBox _chkDuckMusic = new();
+    private readonly CheckBox _chkDuckAmbience = new ThemedCheckBox();
+    private readonly CheckBox _chkDuckMusic = new ThemedCheckBox();
 
     /// <summary>Repeats the sample announcement while auditioning, so there's always something to balance against.</summary>
     private readonly System.Windows.Forms.Timer _auditionVoice = new() { Interval = 9000 };

@@ -1,15 +1,15 @@
 # Looks and the club logo
 
-A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page.
+A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page, which has no tabs: its **Looks**, **Club logo** and **Appearance** cards are all on the one page.
 
 You can open the page in two ways:
 
 - Click **Themes** in the sidebar.
-- Click **Open Looks** in the **Look** group on the **Club Website** page.
+- Click **Open Looks** on the **Look** card of the **Club Website** page.
 
 Typing `look`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo` or `24-hour` in the **Search pages...** box also opens it.
 
-How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Announcer styles](../announcer/sounds-and-music.md#announcer-styles).
+How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
 <!-- screenshot: Themes page with the Looks card (the list of looks beside the preview) and the Club logo card -->
 

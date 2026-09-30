@@ -9,12 +9,36 @@ namespace HeatCaller;
 /// A form of its own rather than a panel on the Local Screens page: the point
 /// of it is to be big and to be the only thing on the screen, which a panel
 /// sharing a settings page can't be.
+///
+/// On the layout pieces (DialogFit): the poster taking the height the
+/// window has - drawn on a panel of its own, as big as fits it - and Print,
+/// Full screen and Close under it with the note about Esc after them,
+/// wrapping onto another line in a narrow window. Full screen hides the
+/// buttons, and the poster takes the room they leave. It used to be placed
+/// in pixels: the poster drawn on the window itself, sized from the window
+/// less a strip of fixed height for the buttons, which sat at fixed places
+/// along it, in a window 820px tall inside its frame - taller than a
+/// 1366x768 screen has room for.
 /// </summary>
 public sealed class JoinPosterForm : Form
 {
+    /// <summary>
+    /// The least room the poster has before the window scrolls instead -
+    /// the smallest the renderer draws it (JoinPosterRenderer.Render), below
+    /// which it is a bigger picture shrunk. Not at the text size: the poster
+    /// is drawn to the room it has, whatever size the text is.
+    /// </summary>
+    private const int PosterLeast = 220;
+
     private readonly string _url;
     private readonly string _heading;
     private readonly string _subtitle;
+
+    /// <summary>What the poster is drawn on: the room the window leaves above its buttons, or - full screen - all of it.</summary>
+    private readonly PosterCanvas _canvas = new();
+
+    /// <summary>The buttons under the poster, hidden while it is full screen.</summary>
+    private readonly ButtonBar _bar;
 
     private Bitmap? _poster;
 
@@ -25,33 +49,48 @@ public sealed class JoinPosterForm : Form
         _subtitle = subtitle;
 
         Text = $"{heading} - scan to join";
-        StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(760, 820);
         BackColor = Color.White;
-        DoubleBuffered = true;
         KeyPreview = true;
 
-        var bar = new Panel { Dock = DockStyle.Bottom, Height = 52, BackColor = Color.White };
-
-        var btnPrint = new Button { Text = "Print...", Location = new Point(12, 10), Width = 110, Height = 30 };
+        var btnPrint = new Button { Text = "Print..." };
         btnPrint.Click += (_, _) => Print();
 
-        var btnFullScreen = new Button { Text = "Full screen", Location = new Point(130, 10), Width = 110, Height = 30 };
+        var btnFullScreen = new Button { Text = "Full screen" };
         btnFullScreen.Click += (_, _) => ToggleFullScreen();
 
-        var btnClose = new Button { Text = "Close", Location = new Point(248, 10), Width = 110, Height = 30 };
+        var btnClose = new Button { Text = "Close" };
         btnClose.Click += (_, _) => Close();
 
         var hint = new Label
         {
             Text = "Esc leaves full screen.",
-            Location = new Point(370, 17),
             AutoSize = true,
             ForeColor = Color.FromArgb(120, 120, 120),
+
+            // Centred up and down on the buttons' line, as a label among
+            // buttons is (FieldGrid.Inline).
+            Anchor = AnchorStyles.Left,
         };
 
-        bar.Controls.AddRange(new Control[] { btnPrint, btnFullScreen, btnClose, hint });
-        Controls.Add(bar);
+        // Along the foot, in the order they always were, the note after
+        // them - each button as wide as its caption needs.
+        _bar = new ButtonBar().With(btnPrint, btnFullScreen, btnClose, hint);
+
+        // The poster is drawn again at the canvas's new size, as it was at
+        // the window's.
+        _canvas.Resize += (_, _) => { DisposePoster(); _canvas.Invalidate(); };
+        _canvas.Paint += OnPaintPoster;
+
+        // The poster to the window's edges, as it was always drawn - in full
+        // screen, the whole screen - and the page's margins round the buttons
+        // only, which take them with them when they are hidden (the table
+        // and FillPage leave a hidden part out, margins and all).
+        var page = new FillPage { Padding = Padding.Empty };
+        page.AddFill(_canvas, PosterLeast, gapBelow: 0);
+        page.Add(_bar, gapBelow: 0);
+        _bar.Margin = new Padding(UiLayout.PageLeft, UiLayout.RowGap, UiLayout.PageRight, UiLayout.PageTop);
+
+        Controls.Add(page);
 
         // Escape gets you out of full screen, and out of the form when you
         // are not in it - the two things anyone tries when a window has
@@ -73,8 +112,35 @@ public sealed class JoinPosterForm : Form
             }
         };
 
-        Resize += (_, _) => { DisposePoster(); Invalidate(); };
-        Paint += OnPaintPoster;
+        // Never given the theme pass, and still not: the poster is on white
+        // whatever the app is wearing, and so is the window round it.
+        DialogFit.Keep(this, page, width: 760, height: 820);
+
+        // A window of its own, shown beside the app rather than over it
+        // (Local Screens', Who's Racing's and Club Website's posters are all
+        // shown modeless) - often on a second screen - so it can be
+        // minimized and is on the taskbar, as it always was. Keep dresses
+        // every window as a dialog.
+        MinimizeBox = true;
+        ShowInTaskbar = true;
+
+        // And it can be made far narrower than it opened, as it always could:
+        // the poster is drawn to whatever room it has, and the buttons wrap
+        // onto more lines. Only as narrow as keeps the widest of them whole,
+        // at the text size in use - with the page's margins, the gap the bar
+        // keeps after a button, and the scrollbar the page takes when the
+        // wrapped buttons leave it too short. After DialogFit's own Load
+        // handler, added above, which sets the least to the width it opened
+        // at.
+        var leastWidth = UiLayout.PageLeft
+            + new[] { btnPrint, btnFullScreen, btnClose }.Max(button => UiLayout.ButtonSizeFor(button).Width)
+            + UiLayout.ButtonGap
+            + SystemInformation.VerticalScrollBarWidth
+            + UiLayout.PageRight;
+
+        Load += (_, _) => MinimumSize = new Size(
+            Math.Min(MinimumSize.Width, Width - ClientSize.Width + leastWidth),
+            MinimumSize.Height);
     }
 
     private void ToggleFullScreen()
@@ -83,7 +149,7 @@ public sealed class JoinPosterForm : Form
         {
             FormBorderStyle = FormBorderStyle.Sizable;
             WindowState = FormWindowState.Normal;
-            Controls[0].Visible = true;
+            _bar.Visible = true;
         }
         else
         {
@@ -92,17 +158,19 @@ public sealed class JoinPosterForm : Form
             WindowState = FormWindowState.Normal;
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
-            Controls[0].Visible = false;
+            _bar.Visible = false;
         }
 
         DisposePoster();
-        Invalidate();
+        _canvas.Invalidate();
     }
 
     private void OnPaintPoster(object? sender, PaintEventArgs e)
     {
-        var barHeight = Controls[0].Visible ? Controls[0].Height : 0;
-        var available = Math.Min(ClientSize.Width, ClientSize.Height - barHeight);
+        // The canvas is the room the poster has: what the window leaves above
+        // its buttons, or all of it with the buttons hidden.
+        var room = _canvas.ClientSize;
+        var available = Math.Min(room.Width, room.Height);
 
         if (available < 60)
         {
@@ -122,7 +190,7 @@ public sealed class JoinPosterForm : Form
             _poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, renderSize);
         }
 
-        e.Graphics.DrawImage(_poster, (ClientSize.Width - available) / 2, 0, available, available);
+        e.Graphics.DrawImage(_poster, (room.Width - available) / 2, 0, available, available);
     }
 
     private void Print()
@@ -178,5 +246,18 @@ public sealed class JoinPosterForm : Form
         }
 
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// The panel the poster is drawn on, filling the room the page gives it.
+    /// Buffered, as the whole window was when the poster was drawn straight
+    /// onto it.
+    /// </summary>
+    private sealed class PosterCanvas : Panel
+    {
+        public PosterCanvas()
+        {
+            DoubleBuffered = true;
+        }
     }
 }

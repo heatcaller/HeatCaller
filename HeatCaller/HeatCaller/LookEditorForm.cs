@@ -12,10 +12,51 @@ namespace HeatCaller;
 ///
 /// Warnings about hard-to-read combinations are shown, never enforced: a
 /// club can save a look that fails them - it's their wall.
+///
+/// On the layout pieces (DialogFit): down the left, one field grid - the
+/// name, the description, the style and the note under it, then the colours
+/// under their heading, each a swatch and its code beside its caption - so
+/// every caption is in one column and the swatches and boxes line up down
+/// the window. Down the right, beside it (a Beside), the preview under its
+/// heading, as big as it was made at the normal text size, at the size in
+/// use, and what might be hard to read under that, down to the foot of the
+/// colours. The two are the window's body, which scrolls on a screen too
+/// short for them, and Save and Cancel stay in view under it. The preview is
+/// drawn as it always was (LookPreview). It used to be placed in pixels:
+/// each row stepped down from the one above, the fields at an x worked out
+/// from the widest caption and a fixed 300px wide, the right-hand column a
+/// fixed 420px beside them with the preview a fixed 250px tall whatever the
+/// text size - at 200% too short for what it draws - and the window sized
+/// to the two, with nothing to keep it to the screen.
 /// </summary>
 public sealed class LookEditorForm : Form
 {
-    private const int Inset = 16;
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size - what
+    /// the old one worked out there from its two columns: the captions, the
+    /// 300px fields, and the 420px preview beside them.
+    /// </summary>
+    private const int DialogWidth = 980;
+
+    /// <summary>The preview's size at the normal text size, as it was made. It is drawn in the app's own faces, so it grows with the text size.</summary>
+    private const int PreviewWidth = 420;
+    private const int PreviewHeight = 250;
+
+    /// <summary>The style picker's width at the normal text size, as it was - wider when its longest choice needs it.</summary>
+    private const int StyleWidth = 240;
+
+    /// <summary>A colour's swatch across at the normal text size, as it was. It is as tall as the code box beside it.</summary>
+    private const int SwatchWidth = 46;
+
+    /// <summary>Lines kept for what might be hard to read, whatever it says - the eight it always had at the least.</summary>
+    private const int WarningLines = 8;
+
+    /// <summary>
+    /// What the fields keep between themselves and the preview, on top of the
+    /// row's gap the Beside keeps between its two sides: a section's gap in
+    /// all, about the room there was between the two columns.
+    /// </summary>
+    private const int FieldsGap = UiLayout.SectionGap - UiLayout.RowGap;
 
     /// <summary>The key never changes: an edit replaces the look with the same key, a new look arrives with a fresh one.</summary>
     private readonly string _key;
@@ -26,6 +67,16 @@ public sealed class LookEditorForm : Form
     private readonly LookPreview _preview = new();
     private readonly Label _lblWarnings = new();
     private readonly List<ColourRow> _rows = new();
+
+    /// <summary>The fields beside the preview and the warnings - laid out again when the warnings are rewritten (UpdatePreview). Null only while the window is being built.</summary>
+    private Beside? _band;
+
+    /// <summary>
+    /// The least width the fields can do with, at the text size in use, the
+    /// gap before the preview included - worked out once the theme pass has
+    /// been (SizeFields); 0 until then. See PreviewColumnWidth.
+    /// </summary>
+    private int _fieldsLeast;
 
     /// <summary>The saved look, once Save has succeeded.</summary>
     public Look? Result { get; private set; }
@@ -43,22 +94,21 @@ public sealed class LookEditorForm : Form
         _key = look.Key;
 
         Text = isNew ? "New Look" : $"Edit Look - {look.Name}";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        BuildLayout(look);
+        var (page, body) = BuildLayout(look);
         UpdatePreview();
 
-        // Every row is placed from measured fonts above; the dialog repair
-        // pass would only nudge the columns out of line.
-        LayoutDoctor.LeaveAlone(this);
         AppTheme.ApplyRecursively(this);
+
+        // In the faces the theme pass leaves them in - see SizeFields.
+        SizeFields();
+
+        // As tall as the fields and the preview need - the body scrolling on
+        // a screen too short for them - and the width it had.
+        DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
 
     /// <summary>One colour: its caption, the swatch that opens the colour picker, and the hex box.</summary>
@@ -74,7 +124,8 @@ public sealed class LookEditorForm : Form
         public string LastGood { get; set; } = "#000000";
     }
 
-    private void BuildLayout(Look look)
+    /// <summary>Builds the window's content, as the class notes describe, and returns its page and the body in it.</summary>
+    private (FillPage Page, PageStack Body) BuildLayout(Look look)
     {
         var colours = look.Colors ?? new LookColors();
 
@@ -95,46 +146,20 @@ public sealed class LookEditorForm : Form
             ("Bad (errors, losses)", c => c.Bad, (c, v) => c.Bad = v),
         };
 
-        var body = AppTheme.BodyFont;
+        var bodyFont = AppTheme.BodyFont;
 
-        var lblName = new Label { Text = "Name:", AutoSize = true, Font = body };
-        var lblDescription = new Label { Text = "Description:", AutoSize = true, Font = body };
-        var lblStyle = new Label { Text = "Style:", AutoSize = true, Font = body };
-
-        var colourLabels = definitions.Select(d => new Label { Text = d.Caption + ":", AutoSize = true, Font = body }).ToList();
-
-        // One caption column for every row, measured in the font it is
-        // drawn in, so the swatches and boxes line up down the page.
-        var captionWidth = new[] { lblName, lblDescription, lblStyle }.Concat(colourLabels)
-            .Max(l => TextRenderer.MeasureText(l.Text, body).Width);
-
-        var fieldLeft = Inset + captionWidth + UiLayout.LabelGap;
-
-        const int swatchWidth = 46;
-        var hexWidth = TextRenderer.MeasureText("#DDDDDD", body).Width + 28;
-        var colourRight = fieldLeft + swatchWidth + UiLayout.LabelGap + hexWidth;
-        var textWidth = Math.Max(300, colourRight - fieldLeft);
-        var leftColumnRight = fieldLeft + textWidth;
-
-        var y = Inset;
-
-        _txtName.Font = body;
-        _txtName.Width = textWidth;
+        _txtName.Font = bodyFont;
         _txtName.MaxLength = 40;
         _txtName.Text = look.Name;
         _txtName.TextChanged += (_, _) => UpdatePreview();
-        y = Row(lblName, _txtName, fieldLeft, y);
 
-        _txtDescription.Font = body;
-        _txtDescription.Width = textWidth;
+        _txtDescription.Font = bodyFont;
         _txtDescription.MaxLength = 200;
         _txtDescription.Text = look.Description;
         _txtDescription.PlaceholderText = "Optional - a line about what it's for";
-        y = Row(lblDescription, _txtDescription, fieldLeft, y);
 
-        _cmbStyle.Font = body;
+        _cmbStyle.Font = bodyFont;
         _cmbStyle.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbStyle.Width = Math.Min(textWidth, 240);
 
         foreach (var (label, _) in Styles)
         {
@@ -145,45 +170,38 @@ public sealed class LookEditorForm : Form
         _cmbStyle.SelectedIndex = familyIndex < 0 ? 1 : familyIndex;
         _cmbStyle.SelectedIndexChanged += (_, _) => UpdatePreview();
 
-        lblStyle.Location = new Point(Inset, UiLayout.CentreOn(lblStyle, y, _cmbStyle.Height));
-        _cmbStyle.Location = new Point(fieldLeft, y);
-        y = UiLayout.Below(_cmbStyle, UiLayout.HintGap);
+        // One caption column for every row - the name's, the style's and each
+        // colour's - as wide as the widest caption in the font it is drawn
+        // in, so the swatches and boxes line up down the window. The name and
+        // the description run to the grid's right-hand edge.
+        var fields = new FieldGrid();
+        fields.AddRow("Name:", _txtName, stretch: true);
+        fields.AddRow("Description:", _txtDescription, stretch: true);
+        fields.AddRow("Style:", _cmbStyle);
+        fields.AddHint("Light or Dark sets how phones and the online pages treat the page. Synthwave effects adds the "
+                       + "animated sunset header and the neon race clock.");
 
-        var lblStyleHint = new Label
+        var lblColours = fields.AddWide(new Label { Text = "Colours", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false);
+
+        // Nearer the colours it heads than the note above it, as it was: a
+        // row's gap and a hint's above it, a hint's and two more below.
+        lblColours.Margin = new Padding(0, UiLayout.HintGap, 0, UiLayout.HintGap + 2);
+
+        foreach (var (caption, get, set) in definitions)
         {
-            Text = "Light or Dark sets how phones and the online pages treat the page. Synthwave effects adds the "
-                 + "animated sunset header and the neon race clock.",
-            Location = new Point(fieldLeft, y),
-            AutoSize = true,
-            MaximumSize = new Size(textWidth, 0),
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        y = UiLayout.Below(lblStyleHint, UiLayout.RowGap + 4);
-
-        var lblColours = new Label { Text = "Colours", AutoSize = true, Font = AppTheme.BoldFont, Location = new Point(Inset, y) };
-        y = UiLayout.Below(lblColours, UiLayout.HintGap + 2);
-
-        Controls.AddRange(new Control[] { lblName, _txtName, lblDescription, _txtDescription, lblStyle, _cmbStyle, lblStyleHint, lblColours });
-
-        for (var i = 0; i < definitions.Length; i++)
-        {
-            var (caption, get, set) = definitions[i];
-            var label = colourLabels[i];
-
+            // Its width is set once the theme pass is done (SizeFields).
             var box = new TextBox
             {
-                Font = body,
-                Width = hexWidth,
+                Font = bodyFont,
                 MaxLength = 7,
                 CharacterCasing = CharacterCasing.Upper,
                 AccessibleName = caption,
             };
 
+            // Sized once the theme pass has given the box beside it its
+            // height (SizeFields).
             var swatch = new ColourSwatch
             {
-                Size = new Size(swatchWidth, box.Height),
                 AccessibleName = $"Pick the {caption.ToLowerInvariant()} colour",
             };
 
@@ -208,94 +226,148 @@ public sealed class LookEditorForm : Form
 
             swatch.Click += (_, _) => PickColour(row);
 
-            label.Location = new Point(Inset, UiLayout.CentreOn(label, y, box.Height));
-            swatch.Location = new Point(fieldLeft, y);
-            box.Location = new Point(fieldLeft + swatchWidth + UiLayout.LabelGap, y);
-
-            // Tab goes caption-free: swatch, then its box, row by row.
-            Controls.Add(label);
-            Controls.Add(swatch);
-            Controls.Add(box);
+            // The swatch, then its box, beside the caption. Tab goes
+            // caption-free: swatch, then its box, row by row.
+            fields.AddRow(caption + ":", FieldGrid.Inline(swatch, box));
 
             _rows.Add(row);
-            y = UiLayout.Below(box, 6);
         }
 
-        var leftBottom = y;
+        // --- Down the right: the preview, and what might be hard to read ---
+        _preview.Height = UiLayout.AtTextSize(PreviewHeight);
+        _lblWarnings.Font = AppTheme.SmallFont;
 
-        // --- Right column: the preview and what might be hard to read ---
-        var rightLeft = leftColumnRight + 28;
-        const int rightWidth = 420;
-
-        var lblPreview = new Label { Text = "Preview", AutoSize = true, Font = AppTheme.BoldFont, Location = new Point(rightLeft, Inset) };
-
-        _preview.Location = new Point(rightLeft, UiLayout.Below(lblPreview, UiLayout.HintGap + 2));
-        _preview.Size = new Size(rightWidth, 250);
-
-        var lblReadability = new Label
+        // As tall as the taller of its two sides, in the body - see the class
+        // notes. The preview's column is as wide as PreviewColumnWidth says.
+        var band = new Beside(() => PreviewColumnWidth(_band?.Width ?? 0))
         {
-            Text = "Readability",
             AutoSize = true,
-            Font = AppTheme.BoldFont,
-            Location = new Point(rightLeft, UiLayout.Below(_preview, UiLayout.RowGap + 4)),
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        _lblWarnings.Location = new Point(rightLeft, UiLayout.Below(lblReadability, UiLayout.HintGap + 2));
-        _lblWarnings.AutoSize = false;
-        _lblWarnings.Font = AppTheme.SmallFont;
-        _lblWarnings.Size = new Size(rightWidth, Math.Max(AppTheme.SmallFont.Height * 8, leftBottom - _lblWarnings.Top));
+        band.Add(fields, gapBelow: 0);
+        fields.Margin = new Padding(0, 0, FieldsGap, 0);
 
-        Controls.Add(lblPreview);
-        Controls.Add(_preview);
-        Controls.Add(lblReadability);
-        Controls.Add(_lblWarnings);
+        band.AddSide(Heading("Preview"), gapBelow: UiLayout.HintGap + 2);
+        band.AddSide(_preview, gapBelow: UiLayout.RowGap + 4);
+        band.AddSide(Heading("Readability"), gapBelow: UiLayout.HintGap + 2);
 
-        var contentBottom = Math.Max(leftBottom, _lblWarnings.Bottom + UiLayout.RowGap);
-        var right = rightLeft + rightWidth;
+        // Whatever it says, wrapped to the column - never less than the lines
+        // kept for it - and down to the foot of the colours when they come
+        // further down the window. Rewritten as colours are typed, and laid
+        // out again then (UpdatePreview).
+        band.AddSideFill(
+            _lblWarnings,
+            width => Math.Max(
+                WarningLines * Pieces.LineHeight(_lblWarnings.Font),
+                _lblWarnings.GetPreferredSize(new Size(width, 0)).Height),
+            gapBelow: 0);
 
-        var btnSave = new Button { Text = "Save", Font = body };
+        _band = band;
+
+        var btnSave = new Button { Text = "Save", Font = bodyFont };
         btnSave.Click += BtnSave_Click;
 
-        var btnCancel = new Button { Text = "Cancel", Font = body, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", Font = bodyFont, DialogResult = DialogResult.Cancel };
 
-        // Right-aligned, Save first, as in the app's other dialogs.
-        var saveWidth = UiLayout.WidthFor(btnSave);
-        var cancelWidth = UiLayout.WidthFor(btnCancel);
-        btnCancel.Size = new Size(cancelWidth, UiLayout.ButtonHeight);
-        btnSave.Size = new Size(saveWidth, UiLayout.ButtonHeight);
-        btnCancel.Location = new Point(right - cancelWidth, contentBottom + UiLayout.RowGap);
-        btnSave.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - saveWidth, btnCancel.Top);
+        var page = new FillPage();
 
-        Controls.Add(btnSave);
-        Controls.Add(btnCancel);
+        // The fields and the preview: on a screen too short for them -
+        // 1280x720, or any at a larger text size - they scroll, and Save and
+        // Cancel stay in view under them.
+        var body = DialogFit.Body(page);
+        body.Add(band, gapBelow: 0);
+
+        // Right-aligned, Save first, as in the app's other dialogs: Cancel
+        // furthest right. Tab still reaches Save before Cancel - the bar
+        // takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
 
-        ClientSize = new Size(right + Inset, btnCancel.Bottom + Inset);
+        // Tab order follows the page, as it did: name, description, style,
+        // then each colour's swatch and box, then Save and Cancel - the order
+        // the rows are added to the grid in, and the fields before the
+        // buttons.
+        return (page, body);
 
-        // Tab order follows the page: name, description, style, then each
-        // colour's swatch and box, then Save and Cancel.
-        var order = 0;
-        _txtName.TabIndex = order++;
-        _txtDescription.TabIndex = order++;
-        _cmbStyle.TabIndex = order++;
+        // A heading over the preview or over the warnings: one line of the
+        // bold face. The column gives it its width, and this its height.
+        static Label Heading(string text)
+        {
+            var heading = new Label { Text = text, Font = AppTheme.BoldFont };
+            heading.Height = heading.GetPreferredSize(Size.Empty).Height;
+            return heading;
+        }
+    }
+
+    /// <summary>
+    /// The fields' sizes, in the faces the theme pass left them in: the style
+    /// picker the width it had at the normal text size, at the size in use,
+    /// or as wide as its longest choice needs; each code box as wide as a
+    /// colour code in its font, with room either side, as it was; and each
+    /// swatch the width it had at the normal text size, at the size in use,
+    /// and as tall as the box beside it. Then the least the fields can do
+    /// with across (see PreviewColumnWidth), from those widths - kept in
+    /// locals, never read back from the controls. Once: the dialog is built
+    /// at the text size in use and is not kept in step with a change made
+    /// while it is up (see DialogFit).
+    /// </summary>
+    private void SizeFields()
+    {
+        (Font Font, int Count, int Width)? measured = null;
+        var styleWidth = Math.Max(UiLayout.AtTextSize(StyleWidth), Pieces.PickerWidth(_cmbStyle, ref measured));
+        _cmbStyle.Width = styleWidth;
+
+        var swatchWidth = UiLayout.AtTextSize(SwatchWidth);
+        var hexWidth = TextRenderer.MeasureText("#DDDDDD", Font).Width + 28;
 
         foreach (var row in _rows)
         {
-            row.Swatch.TabIndex = order++;
-            row.Box.TabIndex = order++;
+            row.Box.Width = hexWidth;
+
+            // The box's height is the theme's, from its font (InputOutline),
+            // and settled by now.
+            row.Swatch.Size = new Size(swatchWidth, row.Box.Height);
         }
 
-        btnSave.TabIndex = order++;
-        btnCancel.TabIndex = order;
+        // The caption column as the grid works it out: the widest caption and
+        // the gap after it.
+        var captionColumn = new[] { "Name:", "Description:", "Style:" }
+            .Concat(_rows.Select(row => row.Caption + ":"))
+            .Max(caption => TextRenderer.MeasureText(caption, Font).Width) + UiLayout.LabelGap;
+
+        // A colour's row on one line, as its ButtonBar counts it: the swatch
+        // and the gap after it, the box with a pixel either side for its ring,
+        // and the gap after that.
+        var colourRow = swatchWidth + UiLayout.ButtonGap + 1 + hexWidth + 1 + UiLayout.ButtonGap;
+
+        _fieldsLeast = captionColumn + Math.Max(styleWidth, colourRow) + FieldsGap;
     }
 
-    private static int Row(Label caption, Control field, int fieldLeft, int y)
+    /// <summary>
+    /// The preview's column: as wide as the preview was made at the normal
+    /// text size, at the size in use - or, in a window too narrow for that
+    /// beside the least the fields can do with (a larger text size on a
+    /// small screen, where DialogFit keeps the window to the screen), what
+    /// the fields leave it. The fields come first: they keep their least,
+    /// and the preview - a drawn sample, readable narrower - gives way.
+    /// </summary>
+    private int PreviewColumnWidth(int band)
     {
-        caption.Location = new Point(Inset, UiLayout.CentreOn(caption, y, field.Height));
-        field.Location = new Point(fieldLeft, y);
-        return UiLayout.Below(field, UiLayout.RowGap);
+        var made = UiLayout.AtTextSize(PreviewWidth);
+
+        if (band <= 0 || _fieldsLeast <= 0)
+        {
+            return made;
+        }
+
+        return Math.Clamp(band - UiLayout.RowGap - _fieldsLeast, 1, made);
     }
 
     /// <summary>"#1a2b3c", "1A2B3C" and " #1A2B3C " all come back as "#1A2B3C"; anything else as null.</summary>
@@ -413,6 +485,12 @@ public sealed class LookEditorForm : Form
                 + "\n\nYou can still save it - these are only warnings.";
             _lblWarnings.ForeColor = AppTheme.Danger;
         }
+
+        // The warnings are sized by the band beside the fields, not by
+        // themselves, so being rewritten does not lay anything out - and a
+        // longer list can need the column taller than the colours, and the
+        // body taller with it (Beside.AddSideFill).
+        _band?.PerformLayout();
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

@@ -6,12 +6,12 @@ public sealed class SponsorsControl : UserControl
     private readonly SponsorStore _store;
     private readonly UndoService _undo;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly ListBox _lstSlides = new();
     private readonly PictureBox _picPreview = new();
     private readonly NumericUpDown _numLeaderboardSeconds = new();
     private readonly NumericUpDown _numSlideSeconds = new();
-    private readonly CheckBox _chkPauseDuringRace = new();
+    private readonly CheckBox _chkPauseDuringRace = new ThemedCheckBox();
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();

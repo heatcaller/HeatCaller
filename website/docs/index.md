@@ -1,6 +1,6 @@
 # HeatCaller
 
-HeatCaller runs RC race nights from one Windows laptop. It times the laps from your decoder, runs the race from staging to the chequered flag, calls the action out loud like a trackside announcer, keeps every result, and builds your championship as the season goes. Racers can follow along on their phones — on the club Wi-Fi, or anywhere through your club's own online pages — and check themselves in with a badge or a personal PIN.
+HeatCaller runs RC race nights from one Windows laptop. It times the laps from your decoder, runs the race from staging to the checkered flag, calls the action out loud like a trackside announcer, keeps every result, and builds your championship as the season goes. Racers can follow along on their phones — on the club Wi-Fi, or anywhere through your club's own online pages — and check themselves in with a QR check-in or a personal PIN.
 
 <!-- screenshot: Race Control page mid-race, leaderboard and flag buttons visible -->
 
@@ -22,7 +22,7 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 
 **Getting started** — what you need, installing, a tour of the window, and a first-night walkthrough.
 
-**Race day** — drivers, classes and venues; events, entries and check-in at the desk; building the program, qualifying and mains.
+**Race day** — drivers, classes and venues; race days, check-in and scrutineering at the desk; building the program, qualifying, mains and the timetable.
 
 **Race control** — running a race, fixing mistakes, practice, ghost cars and handicaps, and results and championships.
 

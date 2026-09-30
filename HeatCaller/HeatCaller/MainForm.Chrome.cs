@@ -27,6 +27,41 @@ public partial class MainForm
         OnClientRawMessage($"{AppTime.LogStampNow()}  [ui] Text size {AppTheme.FontScale * 100:0}% (Ctrl+0 resets).");
     }
 
+    /// <summary>The most the sidebar grows past its 220px with the text - see SidebarWidth.</summary>
+    private const int SidebarMostGrowth = 12;
+
+    /// <summary>
+    /// The sidebar's width: 220 at the normal text size and a little wider
+    /// with the text - by a sixth or so of the text's growth, and never more
+    /// than 12px (Asher, 30 Sep: "Side bar can grow a little") - at the
+    /// screen's DPI. Only a little because every pixel it takes comes off the
+    /// page beside it, and at 200% on a 1920 screen the widest pages (Demo
+    /// Mode's two columns) had only a few tens of pixels to spare; the page
+    /// names that still do not fit end in "...".
+    /// </summary>
+    internal static int SidebarWidth => UiLayout.AtDpi(
+        220 + Math.Clamp((int)Math.Round(220 * (AppTheme.FontScale - 1f) * 0.15f), 0, SidebarMostGrowth));
+
+    /// <summary>
+    /// The sidebar at its width for the text size in use (SidebarWidth), and
+    /// the footer's row of three buttons kept in the middle under it.
+    /// </summary>
+    private void PlaceSidebar()
+    {
+        var width = SidebarWidth;
+
+        if (pnlSidebar.Width != width)
+        {
+            pnlSidebar.Width = width;
+        }
+
+        var shift = (width - UiLayout.AtDpi(220)) / 2;
+
+        btnManageNav.Left = UiLayout.AtDpi(12) + shift;
+        btnMuteToggle.Left = UiLayout.AtDpi(80) + shift;
+        btnUndo.Left = UiLayout.AtDpi(148) + shift;
+    }
+
     /// <summary>
     /// Pushes the current scale through the whole window.
     ///
@@ -43,6 +78,11 @@ public partial class MainForm
         try
         {
             Font = AppTheme.BodyFont;
+
+            // Before the theme pass lays the window out again, so the page
+            // beside the sidebar is laid out once, at the width it keeps.
+            PlaceSidebar();
+
             AppTheme.ApplyRecursively(this);
 
             // The recursive pass paints the sidebar in the CONTENT theme's
@@ -64,20 +104,17 @@ public partial class MainForm
         }
 
         // The heading strip is measured from the micro font, which has just
-        // changed size - so it has to be re-reserved before anything below
-        // measures a page, or every page would be checked against the old
-        // strip and the content would sit under or away from the rule.
+        // changed size - so it has to be re-reserved before the pages are
+        // laid out again below, or every page would be laid out against the
+        // old strip and the content would sit under or away from the rule.
         foreach (var item in _navItems)
         {
             PageHeader.Reserve(item.Page);
         }
 
-        // Every page's spacing was judged against the font that was in
-        // effect when it was last checked, so a size change invalidates all
-        // of them. The one on screen is re-checked now; the rest are done as
-        // they're opened.
-        _tidiedPages.Clear();
-        TidyAllPages();
+        // Every page and tab walked through once more at the new size, off
+        // screen, as the window's first showing does - see WarmPages.
+        WarmPages();
 
         Invalidate(true);
     }
@@ -284,10 +321,13 @@ public partial class MainForm
     {
         var text = count > 99 ? "99+" : count.ToString();
 
+        // The font is in points, so it grows with the screen's DPI by itself;
+        // the pill round it is in pixels, so it is told to (UiLayout.AtDpi -
+        // exactly these numbers while the app runs DPI-unaware, the default).
         using var font = new Font(AppTheme.SmallFont.FontFamily, 7.5f, FontStyle.Bold);
         var textWidth = TextRenderer.MeasureText(g, text, font).Width;
-        var width = Math.Max(16, textWidth + 8);
-        var badgeRect = new Rectangle(button.Width - width - 4, 3, width, 15);
+        var width = Math.Max(UiLayout.AtDpi(16), textWidth + UiLayout.AtDpi(8));
+        var badgeRect = new Rectangle(button.Width - width - UiLayout.AtDpi(4), UiLayout.AtDpi(3), width, UiLayout.AtDpi(15));
 
         using (var path = AppTheme.RoundedRect(badgeRect, badgeRect.Height / 2))
         using (var fill = new SolidBrush(AppTheme.Accent))
@@ -353,7 +393,9 @@ public partial class MainForm
             logo?.Dispose();
         }
 
-        var height = lblAppTitle.HasLogo || AppTheme.CurrentMode == AppTheme.Mode.Synthwave ? 132 : 64;
+        // At the screen's DPI, as the designer's first height is (132 or 64
+        // while the app runs DPI-unaware, the default).
+        var height = UiLayout.AtDpi(lblAppTitle.HasLogo || AppTheme.CurrentMode == AppTheme.Mode.Synthwave ? 132 : 64);
 
         if (lblAppTitle.Height != height)
         {

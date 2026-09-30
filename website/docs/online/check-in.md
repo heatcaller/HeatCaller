@@ -1,6 +1,6 @@
 # Online check-in
 
-Online check-in lets drivers tell the timing desk they've arrived from their own phones, on any network: mobile data, the car park, or a guest Wi-Fi that keeps phones apart. A check-in made online lands on the laptop exactly like one made at the desk or on the Wi-Fi check-in page, so the **Race Day → Entries** list and everything that uses it can't tell the difference.
+Online check-in lets drivers tell the timing desk they've arrived from their own phones, on any network: mobile data, the car park, or a guest Wi-Fi that keeps phones apart. A check-in made online lands on the laptop exactly like one made at the desk or on the Wi-Fi check-in page, so the list on **Race Day → Who's Racing** and everything that uses it can't tell the difference.
 
 There are three ways in, all on your club's check-in page:
 
@@ -27,7 +27,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 3. Decide on **Include photos (drivers can be children - off unless you're sure)**. It's off by default.
 4. Check the state line under it (see [Check-in states](#check-in-states)).
 5. Click **Open Check-in Page** to see the page as drivers will.
-6. Print QR check-ins: go to **Race Day → Entries** and click **Print QR Check-ins...** (see [QR check-ins](#qr-check-ins)).
+6. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
 
 The **Check in** tab appears on your club's pages while online check-in is on, and a **Check in** tile ("Tell the desk you're here") appears on the home page.
 
@@ -52,14 +52,14 @@ The line under the photos checkbox says whether check-in is working:
 
 ## QR check-ins
 
-QR check-ins are printed from **Race Day → Entries** with **Print QR Check-ins...**. It saves QR check-in sheets as PNG images (12 QR check-ins to a page, one file per page) for the drivers currently shown, which you then print and cut up.
+QR check-ins are printed from **Race Day → Who's Racing** with **Print QR Check-ins**, on the **Scan to Check In** card. It saves QR check-in sheets as PNG images (12 QR check-ins to a page, one file per page) for the drivers currently shown, which you then print and cut up.
 
 What the QR code holds depends on whether online check-in is on when you print:
 
 - **Online check-in on** (and publishing set up): the code is a web link to that driver's card on your club's check-in page. The QR check-in also says "Scan with your phone camera to check in". Any phone camera opens it.
 - **Online check-in off**: the code is the older Wi-Fi-only form, which only the desk's USB scanner and the laptop's Wi-Fi check-in page understand.
 
-The desk's USB scanner (the **Scan to Check In** box on **Race Day → Entries**) reads both kinds, so every QR check-in ever printed keeps working at the desk, except online QR check-ins printed before the QR check-ins were reissued (see [Reissue all QR check-ins](#reissue-all-qr-check-ins)).
+The desk's USB scanner (the **Scan to Check In** box on **Race Day → Who's Racing**) reads both kinds, so every QR check-in ever printed keeps working at the desk, except online QR check-ins printed before the QR check-ins were reissued (see [Reissue all QR check-ins](#reissue-all-qr-check-ins)).
 
 A QR check-in link never contains the transponder number. It carries a code the laptop makes from the transponder with a secret key that never leaves the laptop, so it can't be guessed. The code stays the same from meeting to meeting, so a QR check-in printed once works all season, until you reissue the QR check-ins. QR check-ins of the older Wi-Fi-only kind don't use the key, so a reissue doesn't affect them.
 
@@ -74,7 +74,7 @@ Anyone holding a QR check-in can check that driver in or out, so treat QR check-
 
 1. Click **Reissue All QR Check-ins**.
 2. Read the question and click **Yes**. **No** is the default, so a stray <kbd>Enter</kbd> changes nothing.
-3. Print new QR check-ins on **Race Day → Entries** with **Print QR Check-ins**, and hand them out.
+3. Print new QR check-ins on **Race Day → Who's Racing** with **Print QR Check-ins**, and hand them out.
 
 What changes:
 
@@ -84,7 +84,7 @@ What changes:
 - The check-in list goes to the relay again straight away, with the new codes.
 - **Undo** in the sidebar puts the old QR check-in key back, so the old QR check-ins work again. Only use it before you print new QR check-ins: QR check-ins printed with the new key stop working if you undo.
 
-When it's done, HeatCaller says "Done. Print new QR check-ins on Race Day → Entries with Print QR Check-ins, and hand them out - the old ones no longer work.", and the console notes "[relay] Reissued all QR check-ins: ...".
+When it's done, HeatCaller says "Done. Print new QR check-ins on Race Day → Entries with Print QR Check-ins, and hand them out - the old ones no longer work." (the message still uses the tab's old name: it's **Race Day → Who's Racing** now), and the console notes "[relay] Reissued all QR check-ins: ...".
 
 !!! warning
     Make a fresh backup straight afterwards. Restoring a backup made before the reissue puts the old QR check-in key back: QR check-ins printed since won't scan, and the old ones work again. See [Backups](../admin/backups.md#the-backup-password).
@@ -115,7 +115,7 @@ The relay never sees the PINs themselves, only a scrambled (hashed) form to chec
 
 With the staff PIN, the page shows how many are checked in ("*N* of *M* checked in") with a progress bar, a class picker ("Every class") when there's more than one class, a **Find a name** box (searches names, or type a race number exactly), and a row per driver. Tap a row to check that driver in; it shows "Checked in ✓". Tap again to check them out.
 
-The event name at the top comes from the current event on **Race Day → Event**.
+The event name at the top comes from the current race day, set up on **Race Day → Setup**.
 
 ## Personal PINs
 
@@ -138,11 +138,11 @@ PINs only matter while online check-in is on. New racers get a PIN within a few 
 
 The state line shows where things stand, for example "24 racers have PINs · made 14 Sep · change next 21 Sep · 20 emailed". If the **Email (for racer PINs)** card isn't filled in, it adds "Set up the Email group below to send racers their PINs."
 
-### Show PINs..., New PINs Now and Email PINs...
+### Show PINs, New PINs Now and Email PINs
 
-- **Show PINs...** opens the **Racer Check-in PINs** window: **Name**, **Class**, **PIN**, **Email** and **Emailed** for every racer. PINs are hidden until you tick **Show PINs**, since this window often gets opened with a queue of racers behind you. **Copy All** copies the whole table, with the real PINs, ready to paste into a spreadsheet.
-- **New PINs Now** makes a new set straight away, after asking "Make a new PIN for every racer now?". Every racer's old PIN stops working immediately. If automatic email is on, each racer with an email address is sent their new one; otherwise nobody is told, so use **Email PINs...** afterwards or hand them out from **Show PINs...**. Use this if PINs have leaked. **Undo** puts the old PINs back, but it can't take back an email: a racer already sent a new PIN has one that stops working again.
-- **Email PINs...** emails every racer who has an address their current PIN. See [Emailing racer PINs](email.md).
+- The **Show PINs** button opens the **Racer Check-in PINs** window: **Name**, **Class**, **PIN**, **Email** and **Emailed** for every racer. PINs are hidden until you tick **Show PINs**, since this window often gets opened with a queue of racers behind you. **Copy All** copies the whole table, with the real PINs, ready to paste into a spreadsheet.
+- **New PINs Now** makes a new set straight away, after asking "Make a new PIN for every racer now?". Every racer's old PIN stops working immediately. If automatic email is on, each racer with an email address is sent their new one; otherwise nobody is told, so use **Email PINs** afterwards or hand them out from **Show PINs**. Use this if PINs have leaked. **Undo** puts the old PINs back, but it can't take back an email: a racer already sent a new PIN has one that stops working again.
+- **Email PINs** emails every racer who has an address their current PIN. See [Emailing racer PINs](email.md).
 
 ## Photos
 
@@ -185,13 +185,13 @@ Messages a racer might see:
 1. The racer taps **Check in** (or **Checked in ✓** to check out). Their phone shows the change straight away.
 2. The relay puts the tap in a queue for your club and shows it on the relay's copy of the list, so the next person to open it sees it too.
 3. The laptop asks the relay for new taps every 4 seconds.
-4. It applies each tap to the Entries list and logs it in the console, for example "[relay] *name* checked in from their phone."
+4. It applies each tap to the list on **Who's Racing** and logs it in the console, for example "[relay] *name* checked in from their phone."
 5. Only once a tap has been applied does the laptop tell the relay to forget it. If the laptop closes or crashes halfway, the taps it hadn't applied are collected again next time.
 
 Some taps are deliberately ignored:
 
 - **Old taps.** The relay drops taps older than 12 hours, and the laptop ignores them too, so a laptop that was off overnight doesn't open the next meeting by checking in everybody from the last one.
-- **Taps the desk has overruled.** If the desk (the Entries list, the USB scanner or the Wi-Fi check-in page) changed a driver after the phone tap was made, the desk wins and the phone tap is ignored. The console says "Ignored a check-in for *name* from their phone - it was changed here since." The laptop measures how far its clock is from the relay's and allows for it, so this works even if the laptop's clock is wrong. If the laptop's clock is corrected while it's running, the ordering is right again within seconds, and collecting taps doesn't pause.
+- **Taps the desk has overruled.** If the desk (the **Who's Racing** list, the USB scanner or the Wi-Fi check-in page) changed a driver after the phone tap was made, the desk wins and the phone tap is ignored. The console says "Ignored a check-in for *name* from their phone - it was changed here since." The laptop measures how far its clock is from the relay's and allows for it, so this works even if the laptop's clock is wrong. If the laptop's clock is corrected while it's running, the ordering is right again within seconds, and collecting taps doesn't pause.
 - **Unknown drivers.** A tap for a driver the laptop no longer has a profile for is logged and dropped.
 
 Only the latest tap per driver waits in the queue; a newer tap for the same driver replaces an older one. If the queue fills up (500 drivers waiting because the laptop hasn't collected them), new taps are refused with the "Check-in is busy" message rather than old ones being lost.
@@ -233,7 +233,7 @@ Check the state line in the **Online check-in** card for a red message:
 Also check the console for "[relay] Ignored ..." lines. A tap made before the desk's last change for that driver is ignored on purpose.
 
 **A racer says their PIN doesn't work.**
-Open **Show PINs...** and check their current PIN and whether it has been emailed. If PINs changed recently, their old email is out of date; send it again with **Email PINs...**, or read it to them.
+Open **Show PINs** and check their current PIN and whether it has been emailed. If PINs changed recently, their old email is out of date; send it again with **Email PINs**, or read it to them.
 
 **The staff PIN doesn't open the list.**
 A new staff PIN must be 6 to 8 digits, and it's only saved when you leave the box. Check the state line.

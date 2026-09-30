@@ -5,9 +5,21 @@ namespace HeatCaller;
 /// what order. Used by Race Control, Practice, the Big Screen and the web
 /// pages - each keeps its own selection, since what's useful on a laptop
 /// mid-race is not what's readable on a screen across the room.
+///
+/// On the layout pieces (DialogFit): the explanation across the top, the
+/// columns taking the height with their buttons in a column beside them
+/// (Beside), the selected column's description under them and OK and Cancel
+/// at the foot. It used to be placed in pixels, though every number in it
+/// was measured from the captions and the font: a 330px list fourteen rows
+/// tall, the buttons stepped down beside it, three lines of the small font
+/// kept for the description, and a window sized round all of it that could
+/// not be resized.
 /// </summary>
 public sealed class KpiPickerForm : Form
 {
+    /// <summary>The columns show at least this many before the window scrolls instead - or as many as the buttons beside them are tall, when that is more.</summary>
+    private const int LeastRows = 4;
+
     private sealed class Entry
     {
         public required KpiDefinition Definition { get; init; }
@@ -16,7 +28,7 @@ public sealed class KpiPickerForm : Form
 
     private readonly List<Entry> _entries = new();
     private readonly ListBox _list = new();
-    private readonly Label _lblDescription = new();
+    private readonly SteadyLabel _lblDescription = new();
 
     /// <summary>Chosen KPI keys, in display order.</summary>
     public List<string> SelectedKeys { get; private set; } = new();
@@ -41,21 +53,9 @@ public sealed class KpiPickerForm : Form
         }
 
         Text = $"Choose columns - {surfaceName}";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        // --- Measured, not typed in ---
-        //
-        // Every number in this dialog used to be a literal chosen against a
-        // smaller font: a 106px side column holding a button captioned
-        // "Restore Defaults", a 26px row for a font that is now taller than
-        // that, and a 470px dialog that the side column then hung off the
-        // edge of. All of it is now measured from the captions and the font
-        // actually in use, and the dialog is sized to what it contains.
         var btnUp = new Button { Text = "Move Up" };
         btnUp.Click += (_, _) => MoveSelected(-1);
 
@@ -88,45 +88,21 @@ public sealed class KpiPickerForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        foreach (var button in new[] { btnUp, btnDown, btnDefaults, btnOk, btnCancel })
-        {
-            button.Size = new Size(UiLayout.WidthFor(button), UiLayout.ButtonHeight);
-        }
-
-        // One width for the side column, taken from its widest caption, so
-        // the three buttons read as a column rather than as three chips.
-        var sideWidth = Math.Max(btnUp.Width, Math.Max(btnDown.Width, btnDefaults.Width));
-
-        btnUp.Width = sideWidth;
-        btnDown.Width = sideWidth;
-        btnDefaults.Width = sideWidth;
-
-        const int left = 16;
-        const int listWidth = 330;
-
-        var sideLeft = left + listWidth + UiLayout.SectionGap;
-        var contentRight = sideLeft + sideWidth;
-
         var lblIntro = new Label
         {
             Text = "Click the left edge of a row to show or hide that column. Use Move Up/Down to set the order they appear in.",
-            Location = new Point(left, 12),
             AutoSize = true,
-            MaximumSize = new Size(contentRight - left, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.BodyFont,
         };
-
-        var listTop = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        _list.Location = new Point(left, listTop);
 
         // The row follows the font, so a taller text setting gets taller
         // rows rather than clipped ones - and the tick box below is drawn
         // from the same number.
         _list.ItemHeight = Math.Max(26, AppTheme.BodyFont.Height + 10);
+
+        // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
         _list.IntegralHeight = false;
-        _list.Size = new Size(listWidth, _list.ItemHeight * 14);
         _list.BackColor = AppTheme.Surface;
         _list.DrawMode = DrawMode.OwnerDrawFixed;
         _list.DrawItem += List_DrawItem;
@@ -134,33 +110,41 @@ public sealed class KpiPickerForm : Form
         _list.MouseDown += List_MouseDown;
         RefreshList();
 
-        btnUp.Location = new Point(sideLeft, listTop);
-        btnDown.Location = new Point(sideLeft, btnUp.Bottom + UiLayout.ButtonGap);
-        btnDefaults.Location = new Point(sideLeft, btnDown.Bottom + UiLayout.SectionGap);
-
-        // Three lines of description, measured - the descriptions in the
-        // catalogue are a sentence and a half now, and 44 pixels was one
-        // line and a half of the old font.
-        _lblDescription.Location = new Point(left, UiLayout.Below(_list, UiLayout.RowGap));
-        _lblDescription.Size = new Size(contentRight - left, AppTheme.SmallFont.Height * 3 + 6);
+        // As tall as the longest description in the catalogue at the width
+        // it has, whichever row is selected - so picking a row never moves
+        // OK and Cancel under it. It used to keep three lines of the small
+        // font, whatever the width.
         _lblDescription.ForeColor = AppTheme.TextMuted;
         _lblDescription.Font = AppTheme.SmallFont;
+        _lblDescription.Wordings = KpiCatalog.All.Select(definition => definition.Description).ToList();
 
-        var exitTop = UiLayout.Below(_lblDescription, UiLayout.RowGap);
+        // --- Layout ---
+        //
+        // The buttons in one column down the right of the list, all as wide
+        // as the widest caption needs, so they read as a column rather than
+        // as three chips: a button's gap between the two that reorder and a
+        // section's before Restore Defaults. The list takes the width the
+        // column leaves and the height down to the description.
+        var columns = new Beside();
+        columns.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+        columns.AddSide(btnUp, gapBelow: UiLayout.ButtonGap);
+        columns.AddSide(btnDown, gapBelow: UiLayout.SectionGap);
+        columns.AddSide(btnDefaults, gapBelow: 0);
 
-        btnCancel.Location = new Point(contentRight - btnCancel.Width, exitTop);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, exitTop);
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(_lblDescription, gapBelow: UiLayout.RowGap);
 
-        ClientSize = new Size(contentRight + left, exitTop + UiLayout.ButtonHeight + left);
+        // Against the right-hand edge, Cancel furthest right, as they were.
+        // The bar is handed Cancel first, as its first button goes furthest
+        // right; Tab still reaches OK before Cancel, as it did, from the
+        // order set here.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
-        Controls.Add(lblIntro);
-        Controls.Add(_list);
-        Controls.Add(btnUp);
-        Controls.Add(btnDown);
-        Controls.Add(btnDefaults);
-        Controls.Add(_lblDescription);
-        Controls.Add(btnOk);
-        Controls.Add(btnCancel);
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
@@ -174,6 +158,12 @@ public sealed class KpiPickerForm : Form
         AppTheme.StyleButton(btnDefaults, AppTheme.ButtonKind.Secondary);
 
         ShowDescription();
+
+        // The width and height it measured itself to at the normal text
+        // size - 541 by about 596, the list fourteen rows tall. It can be
+        // made bigger, for every column at once, or shorter down to a few
+        // rows.
+        DialogFit.Keep(this, page, width: 540, height: 600);
     }
 
     private void RefreshList()
@@ -208,8 +198,12 @@ public sealed class KpiPickerForm : Form
         var rect = _list.GetItemRectangle(index);
 
         // Matches where the box is actually drawn - a fixed 24 was a hit
-        // target for a box that has since moved.
-        if (e.X - rect.Left <= 30)
+        // target for a box that has since moved. The row's left edge to just
+        // past the box, as TickBoxIn draws it at the text size in use: the
+        // 30px it was at the normal size, and the box's own growth past that
+        // at 150% and 200%, which a fixed 30 missed.
+        var box = TickBoxIn(rect);
+        if (e.X <= box.Right + TickBoxInset())
         {
             _entries[index].Selected = !_entries[index].Selected;
             _list.Invalidate();
@@ -249,25 +243,44 @@ public sealed class KpiPickerForm : Form
         // Centred in whatever the row height turned out to be, rather than
         // five pixels down from the top of a 26px row that no longer
         // exists at every text size.
-        var boxSize = Math.Max(13, Math.Min(18, e.Bounds.Height - 8));
-        var box = new Rectangle(
-            e.Bounds.Left + 6,
-            e.Bounds.Top + (e.Bounds.Height - boxSize) / 2,
-            boxSize,
-            boxSize);
-        using (var pen = new Pen(AppTheme.TextMuted))
-        {
-            e.Graphics.DrawRectangle(pen, box);
-        }
-        if (entry.Selected)
-        {
-            using var fill = new SolidBrush(AppTheme.Primary);
-            e.Graphics.FillRectangle(fill, box.X + 3, box.Y + 3, box.Width - 5, box.Height - 5);
-        }
+        var box = TickBoxIn(e.Bounds);
 
-        var textRect = new Rectangle(box.Right + 10, e.Bounds.Top, e.Bounds.Width - (box.Right + 14), e.Bounds.Height);
+        // The app's tick box (TickBox), as every check box in the app is
+        // drawn, where TickBoxIn puts it - where a click ticks it.
+        TickBox.Draw(e.Graphics, box, entry.Selected ? CheckState.Checked : CheckState.Unchecked, Enabled);
+
+        // The label clear of the box, and short of the row's right edge, at
+        // the text size in use - 10px after the box and 4px short at the
+        // normal size.
+        var textGap = UiLayout.AtTextSize(10);
+        var textRect = new Rectangle(box.Right + textGap, e.Bounds.Top, e.Bounds.Width - (box.Right + UiLayout.AtTextSize(14)), e.Bounds.Height);
         TextRenderer.DrawText(e.Graphics, entry.Definition.Label, AppTheme.BodyFont, textRect,
             entry.Selected ? AppTheme.TextDark : AppTheme.TextMuted,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+    }
+
+    /// <summary>
+    /// How far in from the row's left edge the tick box sits, and the room
+    /// kept after it that a click still counts for: 6px at the normal text
+    /// size, at the size in use.
+    /// </summary>
+    private static int TickBoxInset() => UiLayout.AtTextSize(6);
+
+    /// <summary>
+    /// Where a row's tick box is drawn: 13 to 18px square at the normal text
+    /// size - as much as the row leaves it - at the size in use, centred up
+    /// and down in the row. A fixed 13 to 18 stayed the size it was at the
+    /// normal text size beside a label twice as tall at 200%. One place for
+    /// the drawing and the click that toggles it, so the part that answers a
+    /// click is the box that is drawn at every text size. Worked out when
+    /// asked, never kept - the text size can change between two paints.
+    /// </summary>
+    private static Rectangle TickBoxIn(Rectangle row)
+    {
+        var size = Math.Max(
+            UiLayout.AtTextSize(13),
+            Math.Min(UiLayout.AtTextSize(18), row.Height - UiLayout.AtTextSize(8)));
+
+        return new Rectangle(row.Left + TickBoxInset(), row.Top + (row.Height - size) / 2, size, size);
     }
 }

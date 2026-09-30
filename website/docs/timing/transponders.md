@@ -77,7 +77,7 @@ Ghost cars are simulated drivers you can add to a race (see [Practice, ghosts an
 
 Because ghosts are stored like drivers, they appear on the leaderboard and in race rosters. HeatCaller keeps them out of the places where only real cars make sense:
 
-- They aren't listed for check-in, tech inspection, batteries or the setup log.
+- They aren't listed for check-in, tech inspection, batteries or the **Garage**.
 - They never count as evidence that a transponder is working, so they don't appear in the pre-race check.
 - Their laps run on their own clock and never affect how real decoder passes are timed.
 
@@ -89,7 +89,7 @@ The pre-race check answers one question before the green flag: is every car that
 
 1. Connect a direct decoder (EasyLap or I-Lap). See [Connecting your decoder](decoders.md).
 2. Ask drivers to put their cars on the track, or roll them over the loop.
-3. On the **Race Control** page, click **Pre-race check...**.
+3. On the **Race Control** page, click **Pre-race check** (or press <kbd>R</kbd>).
 4. Read the headline and the list. Fix any problems, have those cars cross the loop again, and click **Check again**.
 
 <!-- screenshot: Pre-race check window with one driver marked X (not heard) and one marked ! (weak) -->
@@ -125,7 +125,7 @@ A transponder sitting near the loop, or a car that bounces over it after a crash
 
 The limit is **Min valid lap (ms):** in the race format. The default is 3000 ms (3 seconds), and you can set anything from 100 to 60000 ms.
 
-- To change it for the current race, click **Race Format...** on the **Race Control** page.
+- To change it for the current race, click **Race Format** on the **Race Control** page.
 - Each class can have its own format, and a round can override its class. See [Running a race](../race-control/running-a-race.md).
 - A venue can carry its own default as **Minimum lap time (ms):** on the **Venues** page.
 

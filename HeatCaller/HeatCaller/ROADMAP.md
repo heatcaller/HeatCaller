@@ -138,8 +138,11 @@ day: the layout overhaul is finished before the beta rather than after it
 (item 4).
 
 1. **Finish the layout overhaul - before anything else** (Asher, 30 Sep;
-   item 4 below has where it stands). Nothing new starts until the working
-   copy is a green commit.
+   item 4 below has where it stands). The windows came first (b58-b61),
+   then the drawn controls, the DPI seam and deleting `LayoutDoctor`
+   (b62-b64, asked for the same day) - all of it checked together by one
+   `check.cmd`. Nothing new starts until the working copy is a green
+   commit.
 2. **Rehearsal 4** - owed under the rule above, since the timing path
    changed after rehearsal 3. On a commit that went green on GitHub:
    - the timing-warning drills: unplug the decoder, pull the loop cable,
@@ -173,16 +176,65 @@ day: the layout overhaul is finished before the beta rather than after it
    meets first followed (30 Sep, b53): the first-run wizard, the driver
    profile, the class editor with its tech checklist, warnings, sanctioning
    preset and two prompts, Race Classes, rental check-out, unit and
-   check-in, and the tech inspection: 12 more. Left, counted on 30 Sep:
-   about 50 windows - 39 dialog classes and 11 small windows built inside
-   other code (`new Form { ... }`), which `LayoutDoctor` still tidies - in
-   four batches: the rest of race night and the day's paperwork; the
-   garage, setups and batteries; the club tools (handicaps, seasons,
-   ghosts, achievements, pickers, CSV import, poster); and the big editors
-   (looks, soundscapes, ambience, track designer, replay, charts). Then the
-   drawn controls, deleting `LayoutDoctor` (the non-dialog windows - Big
-   Screen, Announcer, splash, tour, tips - checked for what they rely on
-   from it), and `PerMonitorV2` last.
+   check-in, and the tech inspection: 12 more. Then two batches at once
+   (30 Sep, b58): the rest of race night and the day's paperwork - the
+   qualifying projection, fill in the times, delete a race day, a
+   timetable entry, rename a race day, points carried in, racer PINs, the
+   backup password, export results, the event report, Race Control's time
+   penalty and warning reason - and the garage, setups and batteries - add
+   and edit a car, its photos, lending it, chassis types, a car's details,
+   the chassis diagram, chassis setup sheets (one window where two were
+   built inline), a setup sheet and its field editor, a battery pack and
+   the pack picker: 24 more, with the one-line prompt they shared made one
+   window (`TextPromptForm`). Then the last three batches (30 Sep,
+   b59-b61): the club tools - a handicap and the suggested handicaps, the
+   season's scoring rules, new and rename season, add and edit a ghost car
+   and the quick rival, a badge's details, the columns picker, the
+   sidebar's pages, the keyboard shortcuts, the racing words, the join
+   poster and the CSV import - the big editors - a look, a soundscape and
+   its name, an ambience layer, saving a chart as an image, a race's pace,
+   the track designer, a track layout and the replay - and the pages shown
+   in windows of their own: the scrutineering log and the timetable (each
+   page on the pieces now, in a `PageWindow`) and the Announcer (its page
+   on the pieces; its window still places itself beside the main one, and
+   is measured in a stand-in): 23 more, and with them every dialog in the
+   app is on `DialogFit`. Then (30 Sep, b62-b64, the plan in the project's
+   `overhaul-next-phases.md`): **the DPI seam** - `UiLayout.AtTextSize` is
+   the text size times `UiLayout.DpiScale`, `AtDpi` follows the screen only,
+   `PointsForPixels` for a font sized from pixels; `DpiScale` is 1 unless
+   the app was started with `--dpi-aware` (Program.cs: SystemAware, as a
+   preview), so nothing changes by default or in the tests; bitmaps drawn
+   off screen are 96 DPI (`SetResolution`), and the Big Screen, splash,
+   tips, the main window's sidebar/header/footer, the race clock, the
+   scrollbar and slider thumbs count in `AtDpi`. **The drawn controls grow
+   with the text size** (all exact at 100%): the sidebar's rows, icons and
+   count pills (its width stays 220, so the longer names end in "..." at
+   the larger sizes - owner's call whether it should widen), the Garage's
+   car cards, the badge details header and holders, the lap and trend
+   charts, the ambience monitor, the replay lanes, the tick boxes in Manage
+   Navigation and Choose columns, the time picker's arrows, the look
+   previews. The race clock keeps its size (Asher: it stays); the sidebar
+   grows a little with the text (up to +12px, `MainForm.SidebarWidth` -
+   Asher: "can grow a little"; more would come off Demo Mode's tight 200%
+   budget); and every tick box is the app's own (`TickBoxes.cs`: `TickBox`
+   drawn by `ThemedCheckBox`, `ThemedCheckedListBox`, grid tick columns and
+   the owner-drawn lists - all 151 check box creations moved over, found by a
+   Roslyn scan), never smaller than Windows' own asked for; and every radio
+   button too (Asher: "Theme the radio buttons as well" - `RadioDot` drawn by
+   `ThemedRadioButton`, all 12 moved over; the check box and the radio button
+   share one layout, `ToggleCaption`, so they line up; what belongs under a
+   choice or a tick - Voice's settings, the notes in Scoring rules and
+   Handicap - sits under its caption, `TickBox.CaptionIndent`, 24 at 100%).
+   **`LayoutDoctor` is deleted**:
+   what it still did lives on in `ScrollTheming` (the themed bars and the
+   32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and
+   Ctrl+/- walk over every page and tab is kept as `WarmPages` (it builds
+   every page's handles ahead of time); the tour sizes its own buttons and
+   lines; every `LeaveAlone` call is gone; and the page test fails on a
+   finding on ANY page, converted or not. Left: the Big Screen and the
+   splash at larger text sizes (DPI only so far), a hardware spike for
+   `PerMonitorV2`, then making `--dpi-aware` the default (SystemAware) once
+   it has been used on a 150% laptop.
 5. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4). The installer before the relay
    work (Beta readiness 6): every beta club needs it, and only a club
@@ -515,12 +567,20 @@ from. Ranked by what decides whether a club switches, and stays.
    on a small screen and a high-DPI one in a rehearsal; start the change
    below only once beta clubs say which screens hurt on their laptops.
 
-   **Today:** about 1,500 hand-placed positions (`Location = new Point(...)`),
-   two TableLayoutPanels and two FlowLayoutPanels in the whole app. The app
-   runs `DpiUnaware`, so on a scaled screen Windows stretches it like a
-   picture (right size, slightly soft). When the text size changes (Ctrl +/-,
-   `AppTheme.FontScale`), `LayoutDoctor` repairs each page afterwards -
-   widening what no longer fits, pushing overlaps apart.
+   **Before (28 Sep):** about 1,500 hand-placed positions (`Location = new
+   Point(...)`), two TableLayoutPanels and two FlowLayoutPanels in the whole
+   app. The app runs `DpiUnaware`, so on a scaled screen Windows stretches it
+   like a picture (right size, slightly soft). When the text size changed
+   (Ctrl +/-, `AppTheme.FontScale`), `LayoutDoctor` repaired each page
+   afterwards - widening what no longer fit, pushing overlaps apart.
+
+   **Now (30 Sep):** steps 1-4 below are done - every page and dialog lays
+   itself out, the drawn controls scale with the text, the layout test holds
+   every page and window, and `LayoutDoctor` is deleted. Step 5 has its
+   first half: the DPI seam (`UiLayout.DpiScale`) and a `--dpi-aware`
+   preview (SystemAware). Custom-drawn controls use `UiLayout.AtTextSize` /
+   `AtDpi` rather than `DeviceDpi` / 96 (step 3's wording): one system DPI
+   while the app is SystemAware; `DeviceDpi` comes in with `PerMonitorV2`.
 
    **The change - page by page, never a rewrite:**
 
@@ -741,7 +801,7 @@ from. Ranked by what decides whether a club switches, and stays.
    **The rest of the sidebar converted (29 Sep): Sponsors, Local Screens,
    Club Website, Voice, Sounds and Backup & Restore** - every page in the
    sidebar, all 25 and every tab in them, is on `LayoutAudit.ConvertedPages`
-   now, so `LayoutDoctor` tidies only dialogs. Group boxes became cards throughout (sentence-case
+   now, so `LayoutDoctor` tidied only dialogs (and was deleted on 30 Sep, once they were converted too). Group boxes became cards throughout (sentence-case
    captions - the docs follow). Sponsors: the slides and their preview side
    by side in a card that takes the height, Rotation timing under it. Local
    Screens and Backup & Restore: a `PageStack` of cards, the address rows
@@ -981,7 +1041,7 @@ what didn't fit an area:
 | Any displayed time | `AppTime` - honours the 12/24-hour setting |
 | A count on a nav item | `SidebarNavList.SetBadge(name, count)` |
 | A row of buttons | `ButtonBar` (`LayoutPieces.cs`) on a page built from the layout pieces - sizes each button to its caption, wraps when narrow; `AppTheme.LayoutButtonRow` on a hand-placed page |
-| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `StatTile`/`TileStrip`, `TextSize`; `Pieces.KeepHeadingsWhole` for a grid, `Pieces.FitListColumns` for a details-view list. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off, and LayoutDoctor leaves it alone. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
+| A page that lays itself out | `LayoutPieces.cs`: `PageStack`, `FillPage`, `Section`, `FieldGrid`, `FieldRow`, `ButtonBar`, `Beside`, `SplitBar`, `SteadyLabel`, `StatusLine`, `StatTile`/`TileStrip`, `TextSize`; `Pieces.KeepHeadingsWhole` for a grid, `Pieces.FitListColumns` for a details-view list. Add the page to `LayoutAudit.ConvertedPages` in the same change - the layout test then holds it to nothing overlapping or cut off. Race Control is the worked example (`RaceControlControl.Layout.cs`, the end of `BuildLayout`) |
 | A dialog that lays itself out | A `FillPage` filling the form - a list in it by `AddFill`, the buttons last in a `ButtonBar(alignRight: true)` - then `DialogFit.Keep(this, page, width, height)` after the theme pass; no height for a dialog as tall as its content, and `DialogFit.Body(page)` for a middle that scrolls on a short screen while the buttons stay. Set the buttons' `TabIndex` - a right-aligned bar reverses them. Work the window's width out from the widths you set, never from a control's `Width` read back once it is in the page: the page's table cuts it to the column it has then, before the window is sized (Quick Driver, 29 Sep). Add it to `LayoutAudit.ConvertedWindows` and give it a builder with made-up data in `WindowCatalog` (`HeatCaller.Tests\WindowCatalog.*.cs`, collected in `WindowLayoutTests.cs`) in the same change. `MainRoundForm` is the worked example; `ApproveSignupForm` for `Body` |
 | Reversible destructive action | `UndoService.Capture` - 25 levels |
 | Writing a data file | `SafeFile` - atomic, never over a file that couldn't be read, raises `WriteFailed` |

@@ -15,7 +15,7 @@ public sealed class LapBeepControl : UserControl
     private readonly SoundEffectsStore _sounds;
     private readonly UndoService _undo;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
 

@@ -4,6 +4,18 @@ namespace HeatCaller;
 /// The preview before a driver list is imported (27 Sep 2026): the file's
 /// first rows, with a list above each column to say what it is - guessed
 /// from its heading and changeable - and where any "points so far" go.
+///
+/// On the layout pieces (DialogFit): what to do across the top, the grid
+/// taking the height, and under it the note on how drivers are matched,
+/// where the points go with the hint under it, the line that says what is
+/// wrong with the picks, and Import and Cancel at the foot. The hint and
+/// that line are each as tall as the longest thing they can say
+/// (SteadyLabel), so nothing moves as columns are picked or Import is
+/// pressed. It used to be placed in pixels in a window 900px wide at every
+/// text size, the grid 260px tall and anchored to take any height the
+/// window was given, and the columns between 140px and 260px wide whatever
+/// the text size - "Announcer name" was cut short in the lists above them
+/// at every size, and most of the choices at a larger one.
 /// </summary>
 /// <remarks>
 /// Any CSV, rather than only the app's own template: a club switching from
@@ -16,11 +28,41 @@ internal sealed class CsvMappingForm : Form
     /// <summary>How many of the file's rows are shown under the lists.</summary>
     private const int PreviewRows = 8;
 
+    /// <summary>The grid shows its headings and at least this many rows - the lists, and the file's first rows under them - before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
+    /// <summary>The choice in "Points so far go into" that sends each driver's points to the championship for their class.</summary>
+    private const string PerClassChoice = "The championship for each driver's class";
+
+    // What the hint under "Points so far go into" says - see UpdateSeasonChoices.
+
+    private const string NoPointsHint = "Pick a column as Points so far to bring each driver's championship points in with them.";
+
+    private const string NoChampionshipHint =
+        "There's no championship to carry points into yet. Make one on Championship → Standings first, or set the "
+        + "points column to (ignore).";
+
+    private const string ChampionshipHint =
+        "Each driver's points so far become their starting total in that championship, added to what they score "
+        + "here. Importing again replaces them. They can be changed on Championship → Standings with Points "
+        + "Carried In.";
+
+    // What is wrong with the picks, when Import is pressed - see TryImport
+    // and PickedTwice.
+
+    private const string NoTransponderProblem =
+        "Pick the Transponder column - drivers are matched by it. Without one, only points so far can be "
+        + "imported, and that needs a name column and a Points so far column.";
+
+    private const string NoChampionshipProblem =
+        "There's no championship for the points to go into. Make one on Championship → Standings first, "
+        + "or set the points column to (ignore).";
+
     private readonly DataGridView _grid = new();
     private readonly ComboBox _cmbSeason = new();
     private readonly Label _lblSeason = new();
-    private readonly Label _lblSeasonHint = new();
-    private readonly Label _lblProblem = new();
+    private readonly SteadyLabel _lblSeasonHint = new();
+    private readonly SteadyLabel _lblProblem = new();
     private readonly IReadOnlyList<Season> _seasons;
 
     /// <summary>A choice in "Points so far go into". A null Season is "the championship for each driver's class".</summary>
@@ -43,43 +85,46 @@ internal sealed class CsvMappingForm : Form
         _seasons = seasons;
 
         Text = "Import drivers - " + fileName;
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.Sizable;
-        MinimizeBox = false;
-        MaximizeBox = true;
-        ShowInTaskbar = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
-        ClientSize = new Size(900, 560);
 
-        BuildLayout(headers, rows, guesses);
+        var page = BuildLayout(headers, rows, guesses);
 
         AppTheme.ApplyRecursively(this);
         UpdateSeasonChoices();
+
+        // After the theme pass and the list's first filling, in the face it
+        // is drawn in: as wide as it was made at the normal text size, at the
+        // size in use, or as its longest championship if that is wider. The
+        // choice for each driver's class comes and goes as a Class column is
+        // picked, so it is counted whenever it can be offered at all, and the
+        // box never has to change width while the window is up.
+        (Font Font, int Count, int Width)? seasonWidth = null;
+        var perClass = _seasons.Any(s => !string.IsNullOrWhiteSpace(s.ClassName)) ? PerClassChoice : string.Empty;
+        _cmbSeason.Width = Math.Max(UiLayout.AtTextSize(360), Pieces.PickerWidth(_cmbSeason, ref seasonWidth, perClass));
+
+        // The size it had at the normal text size. It can be made taller, or
+        // as big as the screen, to see more of a wide file.
+        DialogFit.Keep(this, page, width: 900, height: 560);
     }
 
-    private void BuildLayout(IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses)
+    /// <summary>
+    /// The page: what to do across the top, the grid taking the height left,
+    /// and under it the note on matching, the championship picker and its
+    /// hint, the problem line and the buttons - each as tall as it needs at
+    /// the width the window has.
+    /// </summary>
+    private FillPage BuildLayout(IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses)
     {
-        const int left = 16;
-        var width = ClientSize.Width - left * 2;
-
         var lblIntro = new Label
         {
             Text = $"{Plural.Of(rows.Count, "row")} in the file. Pick what each column is from the list at the top of it - "
                    + "the guesses come from the headings. Columns left at (ignore) aren't imported.",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
-            Location = new Point(left, 16),
             Font = AppTheme.BodyFont,
         };
 
-        Controls.Add(lblIntro);
-
-        var gridTop = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
         // --- The grid: the lists on the first row, the file under them ---
-        _grid.Location = new Point(left, gridTop);
-        _grid.Size = new Size(width, 260);
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
@@ -92,6 +137,20 @@ internal sealed class CsvMappingForm : Form
 
         var captions = DriverImport.All.Select(DriverImport.Caption).ToArray();
 
+        // Each column as wide as its heading and room either side, between
+        // two widths - the room and the widths chosen at the normal text size
+        // and followed at the size in use - so a long heading ends in "..."
+        // rather than taking the width, and a wide file scrolls sideways
+        // inside the grid. And never so narrow that the longest choice in
+        // the list at its top is cut short: as wide as Pieces.PickerWidth
+        // makes a drop-down for it, the arrow and room either side of the
+        // text, which the cell's own padding comes out of. At 140px,
+        // "Announcer name" was cut short at every text size.
+        var widestChoice = captions.Max(caption => TextRenderer.MeasureText(caption, AppTheme.BoldFont).Width)
+                           + SystemInformation.VerticalScrollBarWidth + 24;
+        var narrowest = Math.Max(UiLayout.AtTextSize(140), widestChoice);
+        var widest = Math.Max(UiLayout.AtTextSize(260), narrowest);
+
         for (var i = 0; i < headers.Count; i++)
         {
             var heading = string.IsNullOrWhiteSpace(headers[i]) ? $"Column {i + 1}" : headers[i].Trim();
@@ -101,7 +160,7 @@ internal sealed class CsvMappingForm : Form
                 Name = "c" + i,
                 HeaderText = heading,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
-                Width = Math.Clamp(TextRenderer.MeasureText(heading, AppTheme.BoldFont).Width + 30, 140, 260),
+                Width = Math.Clamp(TextRenderer.MeasureText(heading, AppTheme.BoldFont).Width + UiLayout.AtTextSize(30), narrowest, widest),
             });
         }
 
@@ -161,102 +220,84 @@ internal sealed class CsvMappingForm : Form
         // throws a dialog of its own would be worse than ignoring it.
         _grid.DataError += (_, e) => e.ThrowException = false;
 
-        Controls.Add(_grid);
-
-        var y = _grid.Bottom + UiLayout.RowGap;
-
         var lblMatch = new Label
         {
             Text = "Drivers are matched by transponder: a new one becomes a new driver, and one already here is updated - only "
                    + "with cells that are filled in. With no transponder column, only points so far are imported, matched by "
                    + "driver name.",
             AutoSize = true,
-            MaximumSize = new Size(width, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-
-        Controls.Add(lblMatch);
-
-        y = UiLayout.Below(lblMatch, UiLayout.RowGap);
 
         // --- Where the points go ---
         _lblSeason.Text = "Points so far go into:";
         _lblSeason.AutoSize = true;
         _lblSeason.Font = AppTheme.BodyFont;
 
+        // Its width is set once the list has been filled - see the constructor.
         _cmbSeason.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbSeason.Font = AppTheme.BodyFont;
-        _cmbSeason.Width = 360;
 
-        Controls.Add(_lblSeason);
-        Controls.Add(_cmbSeason);
+        var seasonRow = new FieldRow();
+        seasonRow.Add(_lblSeason, _cmbSeason);
 
-        _lblSeason.Location = new Point(left, UiLayout.CentreOn(_lblSeason, y, _cmbSeason.Height));
-        _cmbSeason.Location = new Point(UiLayout.After(_lblSeason), y);
-
-        y = UiLayout.Below(_cmbSeason, UiLayout.HintGap);
-
-        _lblSeasonHint.Text = "Each driver's points so far become their starting total in that championship, added to what they "
-                              + "score here. Importing again replaces them. They can be changed on Championship → Standings "
-                              + "with Points Carried In.";
-        _lblSeasonHint.AutoSize = true;
-        _lblSeasonHint.MaximumSize = new Size(width, 0);
+        // Reworded as columns are picked (UpdateSeasonChoices), and as tall
+        // as the longer of the two things it can say in this window - with
+        // championships to pick from or without - so the lines under it
+        // never move while it is used.
+        _lblSeasonHint.Wordings = new[] { NoPointsHint, _seasons.Count == 0 ? NoChampionshipHint : ChampionshipHint };
         _lblSeasonHint.ForeColor = AppTheme.TextMuted;
         _lblSeasonHint.Font = AppTheme.SmallFont;
-        _lblSeasonHint.Location = new Point(left, y);
-
-        Controls.Add(_lblSeasonHint);
-
-        y = UiLayout.Below(_lblSeasonHint, UiLayout.RowGap);
 
         // --- What's wrong, if anything, and the buttons ---
-        _lblProblem.AutoSize = true;
-        _lblProblem.MaximumSize = new Size(width, 0);
+
+        // Empty until Import is pressed with picks that can't be imported,
+        // and as tall as the longest thing it can say then from the start,
+        // so saying it moves nothing - the old window kept two lines of the
+        // body face for it.
+        _lblProblem.Wordings = DriverImport.All
+            .Where(column => column != ImportColumn.Ignore)
+            .Select(PickedTwice)
+            .Append(NoTransponderProblem)
+            .Append(NoChampionshipProblem)
+            .ToList();
         _lblProblem.ForeColor = AppTheme.Danger;
         _lblProblem.Font = AppTheme.BodyFont;
-        _lblProblem.Location = new Point(left, y);
-
-        Controls.Add(_lblProblem);
-
-        y += AppTheme.BodyFont.Height * 2 + UiLayout.RowGap;
 
         var btnImport = new Button { Text = "Import" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.Add(btnImport);
-        Controls.Add(btnCancel);
-
-        btnImport.Size = new Size(UiLayout.WidthFor(btnImport), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
-
-        btnCancel.Location = new Point(left + width - btnCancel.Width, y);
-        btnImport.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnImport.Width, y);
-
         btnImport.Click += (_, _) => TryImport();
+
+        // Spaced as the old window spaced them: a row's gap between parts,
+        // and a hint's under the picker the hint is about.
+        var page = new FillPage();
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        page.Add(lblMatch, gapBelow: UiLayout.RowGap);
+        page.Add(seasonRow, gapBelow: UiLayout.HintGap);
+        page.Add(_lblSeasonHint, gapBelow: UiLayout.RowGap);
+        page.Add(_lblProblem, gapBelow: UiLayout.RowGap);
+
+        // Against the right-hand edge, Cancel furthest right, as a dialog's
+        // buttons go - and Tab still reaches Import first, as it did: the bar
+        // takes them right to left, in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnImport), gapBelow: 0);
+        btnImport.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnImport;
         CancelButton = btnCancel;
 
-        // Sized to what was just laid out, THEN anchored: an anchor keeps a
-        // control's distance from the edge as it is when it is set, so one
-        // set before the window fitted its contents would have kept the
-        // buttons below the bottom edge. From here the grid takes any height
-        // the window is given, and everything under it stays at the foot.
-        ClientSize = new Size(ClientSize.Width, UiLayout.Below(btnImport, 16));
-        MinimumSize = new Size(640, Math.Max(360, Height - 150));
-
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-
-        foreach (var control in new Control[] { lblMatch, _lblSeason, _cmbSeason, _lblSeasonHint, _lblProblem })
-        {
-            control.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
-        }
-
-        btnImport.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
-        btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        return page;
     }
+
+    /// <summary>What is wrong when one kind of column is picked for two: "Transponder" is picked for more than one column...</summary>
+    private static string PickedTwice(ImportColumn column) =>
+        $"\"{DriverImport.Caption(column)}\" is picked for more than one column. Pick it for one, and set the others to (ignore).";
 
     /// <summary>What each column is set to now, in the file's order.</summary>
     private List<ImportColumn> CurrentColumns()
@@ -291,7 +332,7 @@ internal sealed class CsvMappingForm : Form
 
         if (perClass)
         {
-            _cmbSeason.Items.Add(new SeasonChoice(null, "The championship for each driver's class"));
+            _cmbSeason.Items.Add(new SeasonChoice(null, PerClassChoice));
         }
 
         foreach (var season in _seasons)
@@ -321,13 +362,10 @@ internal sealed class CsvMappingForm : Form
         _cmbSeason.Enabled = points && _cmbSeason.Items.Count > 0;
         _lblSeason.Enabled = points;
         _lblSeasonHint.Text = !points
-            ? "Pick a column as Points so far to bring each driver's championship points in with them."
+            ? NoPointsHint
             : _seasons.Count == 0
-                ? "There's no championship to carry points into yet. Make one on Championship → Standings first, or set the "
-                  + "points column to (ignore)."
-                : "Each driver's points so far become their starting total in that championship, added to what they score "
-                  + "here. Importing again replaces them. They can be changed on Championship → Standings with Points "
-                  + "Carried In.";
+                ? NoChampionshipHint
+                : ChampionshipHint;
     }
 
     /// <summary>Checks the picks make an import, and closes with them if they do; otherwise says what to put right.</summary>
@@ -342,7 +380,7 @@ internal sealed class CsvMappingForm : Form
 
         if (twice is not null)
         {
-            _lblProblem.Text = $"\"{DriverImport.Caption(twice.Key)}\" is picked for more than one column. Pick it for one, and set the others to (ignore).";
+            _lblProblem.Text = PickedTwice(twice.Key);
             return;
         }
 
@@ -352,15 +390,13 @@ internal sealed class CsvMappingForm : Form
 
         if (!hasTransponder && !(hasName && hasPoints))
         {
-            _lblProblem.Text = "Pick the Transponder column - drivers are matched by it. Without one, only points so far can be "
-                               + "imported, and that needs a name column and a Points so far column.";
+            _lblProblem.Text = NoTransponderProblem;
             return;
         }
 
         if (hasPoints && _cmbSeason.SelectedItem is not SeasonChoice)
         {
-            _lblProblem.Text = "There's no championship for the points to go into. Make one on Championship → Standings first, "
-                               + "or set the points column to (ignore).";
+            _lblProblem.Text = NoChampionshipProblem;
             return;
         }
 

@@ -134,7 +134,7 @@ public sealed class FirstRunWizard : Form
     private readonly ListBox _lstLooks = new();
     private readonly Panel _lookPreview = new();
     private readonly Label _lblLookDescription = new();
-    private readonly CheckBox _chk24Hour = new();
+    private readonly CheckBox _chk24Hour = new ThemedCheckBox();
 
     /// <summary>The looks list's width at the text size in use - see SizeFields.</summary>
     private int _lookListWidth = UiLayout.AtTextSize(LookListWidth);
@@ -187,7 +187,7 @@ public sealed class FirstRunWizard : Form
     private readonly Label _lblDoneSkipped = new();
 
     private readonly Label _lblRaceNight = new();
-    private readonly CheckBox _chkTour = new();
+    private readonly CheckBox _chkTour = new ThemedCheckBox();
 
     // What each step actually did, for the summary on the last page.
     private string? _doneLook;
@@ -305,7 +305,7 @@ public sealed class FirstRunWizard : Form
         {
             stepPage.Padding = Padding.Empty;
             stepPage.Visible = false;
-            LayoutDoctor.NoRoomBelow(stepPage);
+            ScrollTheming.NoRoomBelow(stepPage);
 
             _stepHolder.Controls.Add(stepPage);
         }
@@ -326,7 +326,7 @@ public sealed class FirstRunWizard : Form
         // More room above and to the right than a dialog's usual margin, as
         // the step always had, and the rail's own gap on the left (Beside).
         _stepPage.Padding = new Padding(UiLayout.PageLeft, UiLayout.SectionGap, UiLayout.SectionGap, UiLayout.SectionGap);
-        LayoutDoctor.NoRoomBelow(_stepPage);
+        ScrollTheming.NoRoomBelow(_stepPage);
 
         _stepPage.Add(_lblStepTitle, gapBelow: UiLayout.RowGap);
         _stepPage.Add(_lblStepBody);
@@ -377,7 +377,7 @@ public sealed class FirstRunWizard : Form
         // as it needs to be with nothing under its last step (LeastHeight).
         _rail.Dock = DockStyle.None;
         _rail.Padding = new Padding(inset, UiLayout.SectionGap, inset, UiLayout.PageTop);
-        LayoutDoctor.NoRoomBelow(_rail);
+        ScrollTheming.NoRoomBelow(_rail);
 
         _rail.Add(_lblBrand, gapBelow: UiLayout.HintGap);
         _rail.Add(_lblRailCaption);
@@ -1257,7 +1257,17 @@ public sealed class FirstRunWizard : Form
         }
 
         // A tiny window: a sidebar, a card with a heading, and two buttons.
-        var side = new Rectangle(bounds.Left, bounds.Top, 60, bounds.Height);
+        //
+        // Every measure in it at the text size in use, as the preview's own
+        // height is (SizeFields gives it AtTextSize(PreviewHeight)), so the
+        // picture keeps its proportions: at fixed pixels the sidebar, the
+        // insets and the bars stayed their normal-size selves in a preview
+        // twice as tall at 200%, huddled in its top-left corner. Worked out
+        // on every paint.
+        static int At(int pixels) => UiLayout.AtTextSize(pixels);
+
+        var inset = At(14);
+        var side = new Rectangle(bounds.Left, bounds.Top, At(60), bounds.Height);
         using (var b = new SolidBrush(sidebar))
         {
             g.FillRectangle(b, side);
@@ -1266,10 +1276,10 @@ public sealed class FirstRunWizard : Form
         for (var i = 0; i < 5; i++)
         {
             using var b = new SolidBrush(i == 0 ? primary : muted);
-            g.FillRectangle(b, side.Left + 10, side.Top + 14 + i * 18, i == 0 ? 38 : 30, 6);
+            g.FillRectangle(b, side.Left + At(10), side.Top + inset + i * At(18), i == 0 ? At(38) : At(30), At(6));
         }
 
-        var card = new Rectangle(side.Right + 14, bounds.Top + 14, bounds.Width - side.Width - 28, bounds.Height - 28);
+        var card = new Rectangle(side.Right + inset, bounds.Top + inset, bounds.Width - side.Width - inset * 2, bounds.Height - inset * 2);
 
         void Fill(Color colour, int x, int y, int w, int h)
         {
@@ -1277,12 +1287,14 @@ public sealed class FirstRunWizard : Form
             g.FillRectangle(b, x, y, w, h);
         }
 
+        var cardInset = At(12);
+
         Fill(surface, card.Left, card.Top, card.Width, card.Height);
-        Fill(text, card.Left + 12, card.Top + 14, 110, 8);
-        Fill(muted, card.Left + 12, card.Top + 30, Math.Min(150, card.Width - 24), 5);
-        Fill(muted, card.Left + 12, card.Top + 40, Math.Min(130, card.Width - 24), 5);
-        Fill(primary, card.Left + 12, card.Bottom - 30, 70, 18);
-        Fill(accent, card.Left + 92, card.Bottom - 30, 40, 18);
+        Fill(text, card.Left + cardInset, card.Top + inset, At(110), At(8));
+        Fill(muted, card.Left + cardInset, card.Top + At(30), Math.Min(At(150), card.Width - cardInset * 2), At(5));
+        Fill(muted, card.Left + cardInset, card.Top + At(40), Math.Min(At(130), card.Width - cardInset * 2), At(5));
+        Fill(primary, card.Left + cardInset, card.Bottom - At(30), At(70), At(18));
+        Fill(accent, card.Left + At(92), card.Bottom - At(30), At(40), At(18));
 
         using var edge = new Pen(Color.FromArgb(80, text));
         g.DrawRectangle(edge, bounds.Left, bounds.Top, bounds.Width - 1, bounds.Height - 1);

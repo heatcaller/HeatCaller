@@ -2,9 +2,11 @@
 
 These are all the keyboard shortcuts in HeatCaller. The most useful ones are the flag keys on **Race Control**, which let you run a race without aiming the mouse at a small button.
 
-## Race Control flags
+Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the main shortcuts in the app itself. Any key or a click closes it. Pointing at a button on **Race Control** also shows its shortcut.
 
-These work while the **Race Control** page is the page selected in the sidebar.
+## Race Control
+
+These work while the **Race Control** page is showing, and throughout Race Mode.
 
 | Key | Does the same as |
 |---|---|
@@ -14,14 +16,17 @@ These work while the **Race Control** page is the page selected in the sidebar.
 | <kbd>F4</kbd> | **Yellow** |
 | <kbd>F5</kbd> | **Red** |
 | <kbd>F6</kbd> | **Checkered** |
+| <kbd>F7</kbd> | **Reset**. If a race is staging, counting down or running, it asks first ("A race is under way. Reset it? (Undo can still bring it back.)"). |
+| <kbd>F8</kbd> | **Quick Race** |
+| <kbd>B</kbd> | **Open Big Screen** |
+| <kbd>R</kbd> | **Pre-race check** |
+| <kbd>A</kbd> | **Open Announcer Screen** |
 
-Each key does exactly what clicking its button does, including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
+Each key does what clicking its button does (except that <kbd>F7</kbd> asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
 
-**Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the flag keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
+**Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
 
-The flag keys work whenever the **Race Control** page is showing, including throughout Race Mode, and even while you're typing in a box on the page. They don't work on any other page, or while a dialog is open.
-
-There's no key for **Reset**. Use the button.
+The F-keys work even while you're typing in a box on the page. The letter keys don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open.
 
 !!! tip "Flag buttons and the Space bar"
     After you click a flag button, the focus moves off it. So a stray <kbd>Space</kbd> or <kbd>Enter</kbd> can't press the same flag again, and restart a race that's already running.
@@ -29,18 +34,42 @@ There's no key for **Reset**. Use the button.
 !!! note "Race Mode and the flag keys"
     <kbd>F11</kbd> always switches to the Race Control page and selects **Race Control** in the sidebar, even if you press it on another page. The flag keys work straight away in Race Mode, and still work when you leave it.
 
-## Main window
+## The selected driver
+
+Click a driver on the Race Control leaderboard first. These work while **Race Control** is showing, and not while you're typing in a box.
 
 | Key | What it does |
 |---|---|
+| <kbd>+</kbd> | Adds a lap (same as **+1 Lap**). The <kbd>=</kbd> key and the number-pad <kbd>+</kbd> work too. |
+| <kbd>-</kbd> | Removes a lap (same as **-1 Lap**). |
+| <kbd>P</kbd> | Adds a 5-second penalty. |
+| <kbd>Shift</kbd>+<kbd>P</kbd> | Adds a 10-second penalty. |
+| <kbd>C</kbd> | Clears the driver's penalties. |
+| <kbd>W</kbd> | Opens the warning menu at the driver's row. Then <kbd>1</kbd> to <kbd>7</kbd> picks a reason, or <kbd>0</kbd> lets you type one. |
+| <kbd>Shift</kbd>+<kbd>W</kbd> | Takes back the driver's last warning. |
+| <kbd>L</kbd> | Opens the driver's lap breakdown. |
+| <kbd>E</kbd> | Edits the driver. |
+
+If no driver is selected, nothing happens and the Race Control log says why. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
+
+## Anywhere in the app
+
+| Key | What it does |
+|---|---|
+| <kbd>?</kbd> | Shows the keyboard shortcuts sheet. |
+| <kbd>Shift</kbd>+<kbd>S</kbd> | Opens the Set Up Tonight wizard, which sets up a race night step by step. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard). |
+| <kbd>Shift</kbd>+<kbd>T</kbd> | Starts the app tour, a short look around the main pages. See [The app tour](../getting-started/install.md#the-app-tour). Not in Race Mode. |
+| <kbd>M</kbd> | Mutes or unmutes all sound, the same as the mute button at the bottom of the sidebar. |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo, the same as the **Undo** button at the bottom of the sidebar. In a text box, it undoes your typing instead. |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> | Opens that page in the sidebar, counting from the top (hidden pages are skipped). Not in Race Mode. |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Puts the cursor in the **Search pages...** box. Not in Race Mode. |
 | <kbd>F11</kbd> | Turns **Race Mode** on or off. Race Mode is full screen with no sidebar, showing only the **Race Control** page. Turning it on also selects **Race Control** in the sidebar. |
-| <kbd>Esc</kbd> | Leaves Race Mode (only while it's on). |
-| <kbd>Shift</kbd>+<kbd>T</kbd> | Starts the app tour, a short look around the main pages. See [The app tour](../getting-started/install.md#the-app-tour). Not while you're typing in a box, or in Race Mode. |
+| <kbd>Esc</kbd> | Leaves Race Mode (only while it's on, and not while you're editing a grid cell or a list is open). |
 | <kbd>Ctrl</kbd>+<kbd>+</kbd> | Makes all text in the app bigger, 10% at a time (up to 200%). |
 | <kbd>Ctrl</kbd>+<kbd>-</kbd> | Makes all text smaller, 10% at a time (down to 85%). |
 | <kbd>Ctrl</kbd>+<kbd>0</kbd> | Puts the text size back to 100%. |
 
-These work on every page, whatever has the focus. The number-pad <kbd>+</kbd>, <kbd>-</kbd> and <kbd>0</kbd> keys work too. The text size is remembered between sessions.
+<kbd>?</kbd>, <kbd>Shift</kbd>+<kbd>S</kbd>, <kbd>Shift</kbd>+<kbd>T</kbd> and <kbd>M</kbd> are ignored while you're typing in a box. The <kbd>Ctrl</kbd> keys work on every page, whatever has the focus. The number-pad <kbd>+</kbd>, <kbd>-</kbd> and <kbd>0</kbd> keys work too, and so do the number-pad digits for <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>9</kbd>. The text size is remembered between sessions.
 
 ## Big Screen
 
@@ -53,7 +82,7 @@ The Big Screen shows a reminder of these two keys. Click the Big Screen window f
 
 ## QR posters
 
-This covers the "scan to join" posters opened from **Local Screens** (**QR code**), **Race Day → Entries** (**Self Check-In Poster**) and **Club Website** (**Show Poster**).
+This covers the "scan to join" posters opened from **Local Screens** (**QR code**), **Race Day → Who's Racing** (**Self Check-In Poster**) and **Club Website** (**Show Poster**).
 
 | Key | What it does |
 |---|---|
@@ -66,13 +95,13 @@ This covers the "scan to join" posters opened from **Local Screens** (**QR code*
 | <kbd>Enter</kbd> | Presses the dialog's main button, usually **Save**, **OK** or **Close**. |
 | <kbd>Esc</kbd> | Cancels or closes the dialog. On a Yes/No question, <kbd>Esc</kbd> answers **No**. |
 
-## Race Day → Entries: scanning QR check-ins
+## Race Day → Who's Racing: scanning QR check-ins
 
-Click the **Scan to Check In** box, then scan a driver's QR check-in. A USB barcode scanner types the code and then presses <kbd>Enter</kbd>, which checks the driver in. You can also type a code and press <kbd>Enter</kbd> yourself. See [Events and entries](../race-day/events-and-entries.md).
+Click the box in the **Scan to Check In** card, then scan a driver's QR check-in. A USB barcode scanner types the code and then presses <kbd>Enter</kbd>, which checks the driver in. You can also type a code and press <kbd>Enter</kbd> yourself. See [Events and entries](../race-day/events-and-entries.md).
 
 ## Move drivers between heats
 
-In the **Move drivers between heats** window (**Race Day → Program**, **More** → **Move Drivers Between Heats...**):
+In the **Move drivers between heats** window (right-click the program on **Race Day → Next Steps** and choose **Move Drivers Between Heats...**):
 
 | Key | What it does |
 |---|---|
@@ -121,7 +150,7 @@ The mouse wheel moves a fader by 1% too.
 
 ## Time boxes
 
-In the **Time:** box when you add or edit a **Race Day → Run Sheet** line:
+In a time box, such as the **Time:** box when you add or edit a line in the **Timetable** window, **First race at:** on **Race Day → Setup**, or **First race at:** in **Fill in the times**:
 
 | Key | What it does |
 |---|---|

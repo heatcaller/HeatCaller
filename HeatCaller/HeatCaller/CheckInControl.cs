@@ -88,7 +88,7 @@ public sealed class CheckInControl : UserControl
     /// it is a filter over the roster rather than a page of its own. Only
     /// built when there is a tech store to ask.
     /// </summary>
-    private readonly CheckBox _chkNeedsTech = new();
+    private readonly CheckBox _chkNeedsTech = new ThemedCheckBox();
 
     /// <summary>Opens the scrutineer's full record list. Not on the page when there is no tech store.</summary>
     private readonly Button _btnTechLog = new() { Text = "Scrutineering Log..." };

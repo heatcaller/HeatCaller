@@ -153,137 +153,14 @@ public sealed class SetupLogControl : UserControl
 
 
     /// <summary>
-    /// Opens the chassis sheet manager. Editing a sheet's fields changes
-    /// what every entry using it can record, so the log is refreshed
-    /// afterwards to pick up renamed sheets and re-summarise rows.
+    /// Opens the chassis sheet manager (ChassisSheetsForm - the window the
+    /// Garage's Chassis Sheets... opens too). Editing a sheet's fields
+    /// changes what every entry using it can record, so the log is
+    /// refreshed afterwards to pick up renamed sheets and re-summarise rows.
     /// </summary>
     private void ManageTemplates()
     {
-        using var picker = new Form
-        {
-            Text = "Chassis Setup Sheets",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(460, 340),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-        };
-
-        var list = new ListBox { Location = new Point(12, 12), Size = new Size(300, 280) };
-
-        void Reload()
-        {
-            list.Items.Clear();
-            foreach (var t in _chassisTemplates.All)
-            {
-                list.Items.Add(t.Name);
-            }
-            if (list.Items.Count > 0)
-            {
-                list.SelectedIndex = 0;
-            }
-        }
-
-        ChassisTemplate? Selected() =>
-            list.SelectedIndex >= 0 ? _chassisTemplates.All.ElementAtOrDefault(list.SelectedIndex) : null;
-
-        var btnEdit = new Button { Text = "Edit...", Location = new Point(322, 12), Width = 120 };
-        btnEdit.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-
-            // The editor saves as it goes (a field edit is written straight
-            // away), so the undo is captured once it closes, if anything
-            // actually changed - whichever button closed it.
-            var before = ChassisTemplateStore.CopyOf(t);
-            var beforeJson = System.Text.Json.JsonSerializer.Serialize(before);
-
-            using var editor = new ChassisTemplateForm(_chassisTemplates, t);
-            editor.ShowDialog(picker);
-
-            if (_chassisTemplates.Get(before.Id) is { } after
-                && System.Text.Json.JsonSerializer.Serialize(after) != beforeJson)
-            {
-                var templates = _chassisTemplates;
-
-                _undo.Capture($"Edit chassis sheet '{before.Name}'", () =>
-                {
-                    if (!templates.PutBack(before))
-                    {
-                        throw new InvalidOperationException($"the chassis sheet '{before.Name}' has been deleted since, so there is nothing to put back.");
-                    }
-                });
-            }
-
-            Reload();
-        };
-
-        var btnNew = new Button { Text = "New...", Location = new Point(322, 50), Width = 120 };
-        btnNew.Click += (_, _) =>
-        {
-            var created = ChassisTemplate.CreateKyoshoDefault();
-            created.Name = "New chassis sheet";
-            _chassisTemplates.Upsert(created);
-
-            using var editor = new ChassisTemplateForm(_chassisTemplates, created);
-            editor.ShowDialog(picker);
-            Reload();
-        };
-
-        var btnDuplicate = new Button { Text = "Duplicate", Location = new Point(322, 88), Width = 120 };
-        btnDuplicate.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-            _chassisTemplates.Upsert(t.Clone());
-            Reload();
-        };
-
-        var btnDelete = new Button { Text = "Delete", Location = new Point(322, 126), Width = 120 };
-        btnDelete.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-
-            if (AppDialog.Show(picker,
-                    $"Delete the '{t.Name}' sheet?\r\n\r\nSetup entries that used it are kept, but will show as legacy entries. This can be reversed with Undo.",
-                    "Confirm delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-            {
-                // The template carries every section, field and option, so
-                // the whole object goes into the undo capture - back in its
-                // old place. The store, not this page, in the undo: the page
-                // may be gone by then, and re-reads the store when shown.
-                var templates = _chassisTemplates;
-                var entries = _store;
-                var index = _chassisTemplates.IndexOf(t.Id);
-                var wasLast = _chassisTemplates.All.Count == 1;
-                string? seededId = null;
-
-                _undo.Capture($"Delete chassis sheet '{t.Name}'", () =>
-                {
-                    templates.RestoreDeleted(t, index, seededId, seededId is not null && entries.UsesTemplate(seededId));
-                });
-
-                _chassisTemplates.Delete(t.Id);
-
-                // Deleting the last sheet seeds a default in its place; the
-                // undo takes that one away again.
-                if (wasLast && _chassisTemplates.All.Count == 1)
-                {
-                    seededId = _chassisTemplates.All[0].Id;
-                }
-
-                Reload();
-            }
-        };
-
-        var btnClose = new Button { Text = "Close", Location = new Point(322, 262), Width = 120, DialogResult = DialogResult.OK };
-
-        picker.Controls.AddRange(new Control[] { list, btnEdit, btnNew, btnDuplicate, btnDelete, btnClose });
-        picker.AcceptButton = btnClose;
-
-        Reload();
-        AppTheme.ApplyRecursively(picker);
+        using var picker = new ChassisSheetsForm(_chassisTemplates, _store, _undo);
         picker.ShowDialog(this);
 
         RefreshGrid();

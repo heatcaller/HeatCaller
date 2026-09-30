@@ -13,29 +13,29 @@ public sealed class CommentaryControl : UserControl
     private readonly AppSettings _settings;
     private readonly CommentaryService _commentary;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly TextBox _txtEndpoint = new();
     private readonly TextBox _txtModel = new();
     private readonly NumericUpDown _numTimeout = new();
-    private readonly CheckBox _chkIntros = new();
-    private readonly CheckBox _chkIntrosSelective = new();
-    private readonly CheckBox _chkSummaries = new();
-    private readonly CheckBox _chkTalkingPoints = new();
+    private readonly CheckBox _chkIntros = new ThemedCheckBox();
+    private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
+    private readonly CheckBox _chkSummaries = new ThemedCheckBox();
+    private readonly CheckBox _chkTalkingPoints = new ThemedCheckBox();
     private readonly NumericUpDown _numFinishers = new();
-    private readonly CheckBox _chkMentionFastestLap = new();
+    private readonly CheckBox _chkMentionFastestLap = new ThemedCheckBox();
     private readonly NumericUpDown _numInterval = new();
     private readonly NumericUpDown _numObservations = new();
     private readonly ComboBox _cmbTone = new();
     private readonly NumericUpDown _numMaxWords = new();
     private readonly NumericUpDown _numVariety = new();
-    private readonly CheckBox _chkBroadcastVoice = new();
+    private readonly CheckBox _chkBroadcastVoice = new ThemedCheckBox();
     private readonly NumericUpDown _numStability = new();
     private readonly NumericUpDown _numStyleEx = new();
     private readonly NumericUpDown _numSummaryDelay = new();
-    private readonly CheckBox _chkTeaser = new();
+    private readonly CheckBox _chkTeaser = new ThemedCheckBox();
     private readonly TextBox _txtTeaser = new();
     private readonly NumericUpDown _numTeaserGap = new();
-    private readonly CheckBox _chkDeepDuck = new();
+    private readonly CheckBox _chkDeepDuck = new ThemedCheckBox();
     private readonly NumericUpDown _numDuckPercent = new();
 
     /// <summary>
@@ -47,10 +47,10 @@ public sealed class CommentaryControl : UserControl
     private readonly SteadyLabel _lblTestResult = new();
 
     // --- Broadcast (27 Sep 2026) ---
-    private readonly CheckBox _chkOpening = new();
-    private readonly CheckBox _chkClosing = new();
+    private readonly CheckBox _chkOpening = new ThemedCheckBox();
+    private readonly CheckBox _chkClosing = new ThemedCheckBox();
     private readonly TextBox _txtShowName = new();
-    private readonly CheckBox _chkInterview = new();
+    private readonly CheckBox _chkInterview = new ThemedCheckBox();
     private readonly TextBox _txtMechanicName = new();
     private readonly ComboBox _cmbMechanicVoice = new();
     private readonly Button _btnLoadVoices = new();

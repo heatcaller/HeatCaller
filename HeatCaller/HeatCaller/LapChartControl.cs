@@ -16,7 +16,7 @@ public sealed class LapChartControl : UserControl
     private readonly AppSettings _settings;
 
     private readonly ComboBox _cmbSession = new();
-    private readonly CheckedListBox _clbDrivers = new();
+    private readonly CheckedListBox _clbDrivers = new ThemedCheckedListBox();
     private readonly Panel _chartPanel = new();
     private readonly Label _lblInfo = new();
     private readonly DataGridView _statsTable = new();
@@ -342,14 +342,22 @@ public sealed class LapChartControl : UserControl
             using var msgBrush = new SolidBrush(palette.Muted);
             var msg = _currentSession is null ? "Select a session." : "Tick a driver to plot their laps.";
             var size = g.MeasureString(msg, AppTheme.BodyFont);
-            g.DrawString(msg, AppTheme.BodyFont, msgBrush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - 10);
+
+            // Lifted by about half a line of the body face, at the text size
+            // in use, so it stays centred as the face grows.
+            g.DrawString(msg, AppTheme.BodyFont, msgBrush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - UiLayout.AtTextSize(10));
             return;
         }
 
-        const int padLeft = 64;
-        const int padRight = 16;
-        const int padTop = 16;
-        const int padBottom = 40;
+        // The room round the plot holds the time labels down the left and
+        // the lap numbers and "Lap" under it, all in the small face - so it
+        // grows with the text size, or at 200% the labels run into the plot
+        // and off the bottom. Worked out on every paint, so a new text size
+        // is picked up by the repaint it brings.
+        var padLeft = UiLayout.AtTextSize(64);
+        var padRight = UiLayout.AtTextSize(16);
+        var padTop = UiLayout.AtTextSize(16);
+        var padBottom = UiLayout.AtTextSize(40);
 
         var plot = new Rectangle(
             bounds.Left + padLeft, bounds.Top + padTop,
@@ -372,13 +380,20 @@ public sealed class LapChartControl : UserControl
         using var gridPen = new Pen(palette.Grid);
         using var labelBrush = new SolidBrush(palette.Muted);
 
+        // The labels' offsets from their lines are fractions of a line of
+        // the small face they are drawn in, so they follow the text size
+        // with it - a time label lifted a fixed 7px sits below its gridline
+        // once the face is twice as tall.
+        var labelGap = UiLayout.AtTextSize(6);
+        var halfLabel = UiLayout.AtTextSize(7);
+
         // Horizontal gridlines + y-axis time labels.
         for (var i = 0; i <= 4; i++)
         {
             var y = plot.Bottom - (plot.Height * i / 4f);
             g.DrawLine(gridPen, plot.Left, y, plot.Right, y);
             var valueMs = lowMs + range * i / 4.0;
-            g.DrawString($"{valueMs / 1000.0:0.00}s", AppTheme.SmallFont, labelBrush, bounds.Left + 6, y - 7);
+            g.DrawString($"{valueMs / 1000.0:0.00}s", AppTheme.SmallFont, labelBrush, bounds.Left + labelGap, y - halfLabel);
         }
 
         g.DrawLine(axisPen, plot.Left, plot.Top, plot.Left, plot.Bottom);
@@ -389,15 +404,30 @@ public sealed class LapChartControl : UserControl
         for (var lap = 1; lap <= maxLaps; lap += labelStep)
         {
             var x = plot.Left + (maxLaps == 1 ? plot.Width / 2f : plot.Width * (lap - 1f) / (maxLaps - 1f));
-            g.DrawString(lap.ToString(), AppTheme.SmallFont, labelBrush, x - 6, plot.Bottom + 6);
+            g.DrawString(lap.ToString(), AppTheme.SmallFont, labelBrush, x - labelGap, plot.Bottom + labelGap);
         }
 
+        // "Lap" a line below the lap numbers, at the text size in use.
         using var axisLabelBrush = new SolidBrush(palette.Muted);
-        g.DrawString("Lap", AppTheme.SmallFont, axisLabelBrush, plot.Left + plot.Width / 2f - 12, plot.Bottom + 22);
+        g.DrawString("Lap", AppTheme.SmallFont, axisLabelBrush,
+            plot.Left + plot.Width / 2f - UiLayout.AtTextSize(12), plot.Bottom + UiLayout.AtTextSize(22));
 
         // Rebuilt every paint so hover data can never describe a stale
         // chart - only the on-screen render is hit-tested.
         _plotted.Clear();
+
+        // A lap's dot, and the legend's rows, at the text size in use: the
+        // legend's names are in the small face, so rows a fixed 18px apart
+        // overlapped once it grew, and the dots and swatches beside them
+        // grow in step so the chart keeps its proportions.
+        var dot = (float)UiLayout.AtTextSize(5f);
+        var legendTop = UiLayout.AtTextSize(4);
+        var legendRow = UiLayout.AtTextSize(18);
+        var swatchLeft = UiLayout.AtTextSize(8);
+        var swatchDrop = UiLayout.AtTextSize(4);
+        var swatchWidth = UiLayout.AtTextSize(14);
+        var swatchHeight = UiLayout.AtTextSize(4);
+        var legendTextLeft = UiLayout.AtTextSize(26);
 
         // One polyline per driver.
         for (var d = 0; d < drivers.Count; d++)
@@ -423,14 +453,14 @@ public sealed class LapChartControl : UserControl
 
             foreach (var p in points)
             {
-                g.FillEllipse(dotBrush, p.X - 2.5f, p.Y - 2.5f, 5f, 5f);
+                g.FillEllipse(dotBrush, p.X - dot / 2f, p.Y - dot / 2f, dot, dot);
             }
 
             // Legend entry, stacked down the top-left inside the plot.
-            var legendY = plot.Top + 4 + d * 18;
-            g.FillRectangle(dotBrush, plot.Left + 8, legendY + 4, 14, 4);
+            var legendY = plot.Top + legendTop + d * legendRow;
+            g.FillRectangle(dotBrush, plot.Left + swatchLeft, legendY + swatchDrop, swatchWidth, swatchHeight);
             using var legendBrush = new SolidBrush(palette.Text);
-            g.DrawString(driver.DriverName, AppTheme.SmallFont, legendBrush, plot.Left + 26, legendY);
+            g.DrawString(driver.DriverName, AppTheme.SmallFont, legendBrush, plot.Left + legendTextLeft, legendY);
         }
 
         DrawHoverReadout(g, bounds, palette);
@@ -490,37 +520,56 @@ public sealed class LapChartControl : UserControl
         }
 
         var text = $"{h.Driver}  -  lap {h.Lap}  -  {h.Ms / 1000.0:0.000}s";
-        using var font = new Font(AppTheme.BoldFont.FontFamily, 9F, FontStyle.Bold);
+
+        // Nine points at the text size in use - no shared face is nine
+        // points at the normal size, and a fixed 9pt stayed small at 200%
+        // beside axis labels twice its size.
+        using var font = new Font(AppTheme.BoldFont.FontFamily, 9F * AppTheme.FontScale, FontStyle.Bold);
         var size = TextRenderer.MeasureText(text, font);
 
-        var width = size.Width + 18;
-        var height = size.Height + 10;
+        // The box's padding, its distance from the point and from the
+        // chart's edges, and the ring and swatch in it, all at the text size
+        // in use, so the box grows round the larger text rather than
+        // pinching it.
+        var padX = UiLayout.AtTextSize(18);
+        var padY = UiLayout.AtTextSize(10);
+        var offsetX = UiLayout.AtTextSize(12);
+        var offsetY = UiLayout.AtTextSize(10);
+        var dropBelow = UiLayout.AtTextSize(14);
+        var edge = UiLayout.AtTextSize(4);
+        var ring = (float)UiLayout.AtTextSize(11f);
+        var swatchLeft = UiLayout.AtTextSize(6);
+        var swatchSize = UiLayout.AtTextSize(6);
+        var textLeft = UiLayout.AtTextSize(16);
+
+        var width = size.Width + padX;
+        var height = size.Height + padY;
 
         // Sits just above and to the right of the point so the value reads
         // next to the data it describes, rather than parked in a corner.
-        var x = (int)h.At.X + 12;
-        var y = (int)h.At.Y - height - 10;
+        var x = (int)h.At.X + offsetX;
+        var y = (int)h.At.Y - height - offsetY;
 
         // Flip sides or below when that would run off the plot, so the box
         // stays fully visible near the edges.
-        if (x + width > bounds.Right - 4)
+        if (x + width > bounds.Right - edge)
         {
-            x = (int)h.At.X - width - 12;
+            x = (int)h.At.X - width - offsetX;
         }
-        if (y < bounds.Top + 4)
+        if (y < bounds.Top + edge)
         {
-            y = (int)h.At.Y + 14;
+            y = (int)h.At.Y + dropBelow;
         }
 
-        x = Math.Clamp(x, bounds.Left + 4, Math.Max(bounds.Left + 4, bounds.Right - width - 4));
-        y = Math.Clamp(y, bounds.Top + 4, Math.Max(bounds.Top + 4, bounds.Bottom - height - 4));
+        x = Math.Clamp(x, bounds.Left + edge, Math.Max(bounds.Left + edge, bounds.Right - width - edge));
+        y = Math.Clamp(y, bounds.Top + edge, Math.Max(bounds.Top + edge, bounds.Bottom - height - edge));
 
         var box = new Rectangle(x, y, width, height);
 
         // Ring the hovered point so it's obvious which one is being read.
         using (var marker = new Pen(h.Color, 2f))
         {
-            g.DrawEllipse(marker, h.At.X - 5.5f, h.At.Y - 5.5f, 11f, 11f);
+            g.DrawEllipse(marker, h.At.X - ring / 2f, h.At.Y - ring / 2f, ring, ring);
         }
 
         // Leader line from the point to the box.
@@ -541,11 +590,11 @@ public sealed class LapChartControl : UserControl
         }
         using (var swatch = new SolidBrush(h.Color))
         {
-            g.FillEllipse(swatch, box.Left + 6, box.Top + box.Height / 2 - 3, 6, 6);
+            g.FillEllipse(swatch, box.Left + swatchLeft, box.Top + box.Height / 2 - swatchSize / 2, swatchSize, swatchSize);
         }
 
         TextRenderer.DrawText(g, text, font,
-            new Rectangle(box.Left + 16, box.Top, box.Width - 18, box.Height),
+            new Rectangle(box.Left + textLeft, box.Top, box.Width - padX, box.Height),
             palette.Text, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
     }
 
@@ -586,6 +635,13 @@ public sealed class LapChartControl : UserControl
             _hover = null;
 
             using var bitmap = new Bitmap(size.Width, size.Height);
+
+            // A new bitmap takes the screen's DPI, and in a DPI-aware run
+            // (144 DPI at 150%) that would draw the chart's point-size text
+            // half as big again inside the same pixels. At 96 DPI, which is
+            // what a DPI-unaware run always sees, this changes nothing.
+            bitmap.SetResolution(96, 96);
+
             using (var g = Graphics.FromImage(bitmap))
             {
                 DrawChart(g, new Rectangle(0, 0, size.Width, size.Height), palette);

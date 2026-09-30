@@ -73,12 +73,6 @@ public sealed class PaceAnalysisControl : UserControl
 
         BuildLayout();
 
-        // It is also the whole of PaceAnalysisForm, and the repair pass
-        // watches dialogs: it is told to keep out, since everything in here
-        // is placed by the layout pieces, and two things moving the same
-        // control is worse than neither. See LayoutDoctor.LeaveAlone.
-        LayoutDoctor.LeaveAlone(this);
-
         RefreshAll();
     }
 

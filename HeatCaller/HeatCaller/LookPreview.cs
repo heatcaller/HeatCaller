@@ -134,7 +134,15 @@ public sealed class LookPreview : Control
         }
 
         // --- The content ---
-        const int pad = 10;
+        //
+        // Its paddings, insets and corners at the text size in use, as its
+        // faces and the preview's own height are (LooksControl and the look
+        // editor size it with AtTextSize): at fixed pixels the text doubled
+        // at 200% inside margins that did not. Worked out on every paint, so
+        // a new text size is picked up by the repaint it brings. The sidebar
+        // above is left as it was - it draws no text, and its width is a
+        // share of the preview's, not a size that follows the text.
+        var pad = UiLayout.AtTextSize(10);
         var left = sidebar.Right + pad;
         var right = bounds.Right - pad;
         var contentWidth = right - left;
@@ -152,14 +160,14 @@ public sealed class LookPreview : Control
 
         // Page title, in the look's own text colour.
         TextRenderer.DrawText(g, "Race Control", bold, new Rectangle(left, y0, contentWidth, bold.Height), look.Text, textFlags);
-        y0 += bold.Height + 6;
+        y0 += bold.Height + UiLayout.AtTextSize(6);
 
         // --- A card with a header rule and three rows ---
-        var rowHeight = small.Height + 6;
-        var cardHeight = micro.Height + 10 + rowHeight * 3 + 8;
+        var rowHeight = small.Height + UiLayout.AtTextSize(6);
+        var cardHeight = micro.Height + UiLayout.AtTextSize(10) + rowHeight * 3 + UiLayout.AtTextSize(8);
         var card = new RectangleF(left, y0, contentWidth, cardHeight);
 
-        using (var path = AppTheme.RoundedRect(RectangleF.Inflate(card, -0.5f, -0.5f), 6))
+        using (var path = AppTheme.RoundedRect(RectangleF.Inflate(card, -0.5f, -0.5f), UiLayout.AtTextSize(6)))
         using (var surface = new SolidBrush(look.Surface))
         using (var border = new Pen(look.Border))
         {
@@ -167,19 +175,20 @@ public sealed class LookPreview : Control
             g.DrawPath(border, path);
         }
 
-        var inner = Rectangle.Round(RectangleF.Inflate(card, -8, 0));
-        var headerY = (int)card.Top + 5;
+        var inner = Rectangle.Round(RectangleF.Inflate(card, -UiLayout.AtTextSize(8), 0));
+        var headerY = (int)card.Top + UiLayout.AtTextSize(5);
 
         // Column captions in the primary colour over a thin rule - the way
         // every grid header in the app is drawn.
-        var posWidth = Math.Min(34, inner.Width / 6);
-        var lapWidth = Math.Min(80, inner.Width / 3);
+        // At the text size in use, as the letters in them are.
+        var posWidth = Math.Min(UiLayout.AtTextSize(34), inner.Width / 6);
+        var lapWidth = Math.Min(UiLayout.AtTextSize(80), inner.Width / 3);
         TextRenderer.DrawText(g, "POS", micro, new Rectangle(inner.Left, headerY, posWidth, micro.Height), look.Primary, textFlags);
         TextRenderer.DrawText(g, "DRIVER", micro, new Rectangle(inner.Left + posWidth, headerY, inner.Width - posWidth - lapWidth, micro.Height), look.Primary, textFlags);
         TextRenderer.DrawText(g, "BEST", micro, new Rectangle(inner.Right - lapWidth, headerY, lapWidth, micro.Height), look.Primary,
             textFlags | TextFormatFlags.Right);
 
-        var ruleY = headerY + micro.Height + 4;
+        var ruleY = headerY + micro.Height + UiLayout.AtTextSize(4);
 
         using (var rule = new Pen(look.Border))
         {
@@ -211,17 +220,17 @@ public sealed class LookPreview : Control
             rowY += rowHeight;
         }
 
-        y0 = (int)card.Bottom + 10;
+        y0 = (int)card.Bottom + UiLayout.AtTextSize(10);
 
         // --- A primary button, a link and the two signal chips ---
-        var controlHeight = Math.Max(bold.Height, small.Height) + 8;
+        var controlHeight = Math.Max(bold.Height, small.Height) + UiLayout.AtTextSize(8);
         var x = left;
 
         var buttonText = "Start";
-        var buttonWidth = TextRenderer.MeasureText(g, buttonText, bold, Size.Empty, TextFormatFlags.NoPadding).Width + 24;
+        var buttonWidth = TextRenderer.MeasureText(g, buttonText, bold, Size.Empty, TextFormatFlags.NoPadding).Width + UiLayout.AtTextSize(24);
         var button = new RectangleF(x, y0, buttonWidth, controlHeight);
 
-        using (var path = AppTheme.RoundedRect(button, 5))
+        using (var path = AppTheme.RoundedRect(button, UiLayout.AtTextSize(5)))
         using (var fill = new SolidBrush(look.Primary))
         {
             g.FillPath(fill, path);
@@ -230,7 +239,7 @@ public sealed class LookPreview : Control
         TextRenderer.DrawText(g, buttonText, bold, Rectangle.Round(button), look.OnPrimary,
             TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-        x = (int)button.Right + 12;
+        x = (int)button.Right + UiLayout.AtTextSize(12);
 
         var linkText = "Results";
         var linkSize = TextRenderer.MeasureText(g, linkText, small, Size.Empty, TextFormatFlags.NoPadding);
@@ -244,11 +253,11 @@ public sealed class LookPreview : Control
             g.DrawLine(underline, x, baseline, x + linkSize.Width, baseline);
         }
 
-        x = linkRect.Right + 12;
+        x = linkRect.Right + UiLayout.AtTextSize(12);
         x = DrawChip(g, x, y0, controlHeight, "+2", look.Good, look.OnGood, micro);
-        DrawChip(g, x + 6, y0, controlHeight, "DNF", look.Bad, look.OnBad, micro);
+        DrawChip(g, x + UiLayout.AtTextSize(6), y0, controlHeight, "DNF", look.Bad, look.OnBad, micro);
 
-        y0 += controlHeight + 8;
+        y0 += controlHeight + UiLayout.AtTextSize(8);
 
         // --- A hint ---
         TextRenderer.DrawText(g, "Hints and captions look like this.", small, new Rectangle(left, y0, contentWidth, small.Height), look.Muted, textFlags);
@@ -256,11 +265,12 @@ public sealed class LookPreview : Control
         g.Restore(saved);
     }
 
-    /// <summary>A filled, rounded chip with its caption. Returns the x just past it.</summary>
+    /// <summary>A filled, rounded chip with its caption. Returns the x just past it. Its room round the caption, and its inset from the line's top and foot, at the text size in use, as the caption is.</summary>
     private static int DrawChip(Graphics g, int x, int y, int height, string text, Color fill, Color ink, Font font)
     {
-        var width = TextRenderer.MeasureText(g, text, font, Size.Empty, TextFormatFlags.NoPadding).Width + 16;
-        var chip = new RectangleF(x, y + 2, width, height - 4);
+        var inset = UiLayout.AtTextSize(2);
+        var width = TextRenderer.MeasureText(g, text, font, Size.Empty, TextFormatFlags.NoPadding).Width + UiLayout.AtTextSize(16);
+        var chip = new RectangleF(x, y + inset, width, height - inset * 2);
 
         using (var path = AppTheme.RoundedRect(chip, (int)(chip.Height / 2)))
         using (var brush = new SolidBrush(fill))

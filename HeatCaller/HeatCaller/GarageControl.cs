@@ -30,7 +30,7 @@ public sealed class GarageControl : UserControl
     private readonly UndoService _undo;
 
     private readonly ComboBox _cmbOwnerFilter = new();
-    private readonly CheckBox _chkRetired = new();
+    private readonly CheckBox _chkRetired = new ThemedCheckBox();
     private readonly Label _lblSummary = new();
     private readonly Panel _wall = new();
     private readonly Label _lblEmpty = new();
@@ -176,7 +176,8 @@ public sealed class GarageControl : UserControl
         _wall.Controls.Add(_lblEmpty);
 
         // The class headings are in the bold face at the text size in use,
-        // so a new one lays the wall out again.
+        // and the cards are sized at it (CarCard.CardWidth), so a new one
+        // lays the wall out again.
         _textSize.Keep(LayoutWall);
 
         var btnAdd = new Button { Text = "Add a Car..." };
@@ -194,7 +195,9 @@ public sealed class GarageControl : UserControl
         page.Add(filterRow, gapBelow: UiLayout.RowGap);
 
         // At least a row of cars under a heading - below that the page
-        // scrolls.
+        // scrolls. Asked each time the page works out its range, so it is a
+        // card at the text size in use; a larger one only makes the page's
+        // least taller, and a window shorter than that scrolls the page.
         page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets), gapBelow: 0);
 
@@ -460,12 +463,18 @@ public sealed class GarageControl : UserControl
         _layingOut = true;
         _wall.SuspendLayout();
 
+        // The cards' size at the text size in use (see CarCard.CardWidth).
+        // Read once here, for the whole wall; this runs again when the text
+        // size changes (TextSize.Keep in BuildLayout).
+        var cardWidth = CarCard.CardWidth;
+        var cardHeight = CarCard.CardHeight;
+
         // ClientSize, not Width: once the cards overflow, AutoScroll puts a
         // vertical scrollbar inside the panel and the usable width drops by
         // its thickness. Laying out against Width instead leaves the last
         // column of every row clipped behind the bar.
-        var usable = Math.Max(CarCard.CardWidth, _wall.ClientSize.Width - WallPad * 2);
-        var perRow = Math.Max(1, (usable + CardGap) / (CarCard.CardWidth + CardGap));
+        var usable = Math.Max(cardWidth, _wall.ClientSize.Width - WallPad * 2);
+        var perRow = Math.Max(1, (usable + CardGap) / (cardWidth + CardGap));
 
         var y = WallPad;
 
@@ -491,14 +500,18 @@ public sealed class GarageControl : UserControl
                 var column = i % perRow;
                 var row = i / perRow;
 
-                cards[i].Location = new Point(
-                    left + WallPad + column * (CarCard.CardWidth + CardGap),
-                    top + y + row * (CarCard.CardHeight + CardGap));
+                // Sized as well as placed: a card is built at the text size
+                // in use then, and this is what brings it to a new one.
+                cards[i].Bounds = new Rectangle(
+                    left + WallPad + column * (cardWidth + CardGap),
+                    top + y + row * (cardHeight + CardGap),
+                    cardWidth,
+                    cardHeight);
             }
 
             var rows = (cards.Count + perRow - 1) / perRow;
 
-            y += rows * (CarCard.CardHeight + CardGap) + UiLayout.SectionGap;
+            y += rows * (cardHeight + CardGap) + UiLayout.SectionGap;
         }
 
         _wall.ResumeLayout();
@@ -611,145 +624,21 @@ public sealed class GarageControl : UserControl
     }
 
     /// <summary>
-    /// The setup-sheet manager, carried over from the Tuning page whole.
+    /// The setup-sheet manager, carried over from the Tuning page whole
+    /// (ChassisSheetsForm - the window the setup log opens too).
     ///
     /// Deliberately the same code rather than a fresh version of it: the
-    /// undo here has two awkward corners - the editor saves as it goes, so
+    /// undo in it has two awkward corners - the editor saves as it goes, so
     /// the entry is captured afterwards by comparing JSON, and deleting the
     /// LAST sheet seeds a replacement that the undo then has to take away
     /// again. Both were got right once. Rewriting them from the outside is
-    /// how you get an undo that looks fine and quietly loses a sheet.
+    /// how you get an undo that looks fine and quietly loses a sheet. The
+    /// two pages used to build a copy of the window each, line for line;
+    /// they open the one class now. The garage is refreshed once it closes.
     /// </summary>
     private void ManageChassisSheets()
     {
-        using var picker = new Form
-        {
-            Text = "Chassis Setup Sheets",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(460, 340),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-        };
-
-        var list = new ListBox { Location = new Point(12, 12), Size = new Size(300, 280) };
-
-        void Reload()
-        {
-            list.Items.Clear();
-
-            foreach (var t in _chassisTemplates.All)
-            {
-                list.Items.Add(t.Name);
-            }
-
-            if (list.Items.Count > 0)
-            {
-                list.SelectedIndex = 0;
-            }
-        }
-
-        ChassisTemplate? Selected() =>
-            list.SelectedIndex >= 0 ? _chassisTemplates.All.ElementAtOrDefault(list.SelectedIndex) : null;
-
-        var btnEdit = new Button { Text = "Edit...", Location = new Point(322, 12), Width = 120 };
-        btnEdit.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-
-            // The editor saves as it goes (a field edit is written straight
-            // away), so the undo is captured once it closes, if anything
-            // actually changed - whichever button closed it.
-            var before = ChassisTemplateStore.CopyOf(t);
-            var beforeJson = System.Text.Json.JsonSerializer.Serialize(before);
-
-            using var editor = new ChassisTemplateForm(_chassisTemplates, t);
-            editor.ShowDialog(picker);
-
-            if (_chassisTemplates.Get(before.Id) is { } after
-                && System.Text.Json.JsonSerializer.Serialize(after) != beforeJson)
-            {
-                var templates = _chassisTemplates;
-
-                _undo.Capture($"Edit chassis sheet '{before.Name}'", () =>
-                {
-                    if (!templates.PutBack(before))
-                    {
-                        throw new InvalidOperationException($"the chassis sheet '{before.Name}' has been deleted since, so there is nothing to put back.");
-                    }
-                });
-            }
-
-            Reload();
-        };
-
-        var btnNew = new Button { Text = "New...", Location = new Point(322, 50), Width = 120 };
-        btnNew.Click += (_, _) =>
-        {
-            var created = ChassisTemplate.CreateKyoshoDefault();
-            created.Name = "New chassis sheet";
-            _chassisTemplates.Upsert(created);
-
-            using var editor = new ChassisTemplateForm(_chassisTemplates, created);
-            editor.ShowDialog(picker);
-            Reload();
-        };
-
-        var btnDuplicate = new Button { Text = "Duplicate", Location = new Point(322, 88), Width = 120 };
-        btnDuplicate.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-
-            _chassisTemplates.Upsert(t.Clone());
-            Reload();
-        };
-
-        var btnDelete = new Button { Text = "Delete", Location = new Point(322, 126), Width = 120 };
-        btnDelete.Click += (_, _) =>
-        {
-            if (Selected() is not { } t) { return; }
-
-            if (AppDialog.Show(picker,
-                    $"Delete the '{t.Name}' sheet?\r\n\r\nSetup entries that used it are kept, but will show as legacy entries. This can be reversed with Undo.",
-                    "Confirm delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-            {
-                // The template carries every section, field and option, so
-                // the whole object goes into the undo capture - back in its
-                // old place. The store, not this page, in the undo: the page
-                // may be gone by then, and re-reads the store when shown.
-                var templates = _chassisTemplates;
-                var entries = _setups;
-                var index = _chassisTemplates.IndexOf(t.Id);
-                var wasLast = _chassisTemplates.All.Count == 1;
-                string? seededId = null;
-
-                _undo.Capture($"Delete chassis sheet '{t.Name}'", () =>
-                {
-                    templates.RestoreDeleted(t, index, seededId, seededId is not null && entries.UsesTemplate(seededId));
-                });
-
-                _chassisTemplates.Delete(t.Id);
-
-                // Deleting the last sheet seeds a default in its place; the
-                // undo takes that one away again.
-                if (wasLast && _chassisTemplates.All.Count == 1)
-                {
-                    seededId = _chassisTemplates.All[0].Id;
-                }
-
-                Reload();
-            }
-        };
-
-        var btnClose = new Button { Text = "Close", Location = new Point(322, 262), Width = 120, DialogResult = DialogResult.OK };
-
-        picker.Controls.AddRange(new Control[] { list, btnEdit, btnNew, btnDuplicate, btnDelete, btnClose });
-        picker.AcceptButton = btnClose;
-
-        Reload();
-        AppTheme.ApplyRecursively(picker);
+        using var picker = new ChassisSheetsForm(_chassisTemplates, _setups, _undo);
         picker.ShowDialog(this);
 
         RefreshAll();

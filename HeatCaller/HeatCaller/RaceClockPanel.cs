@@ -97,9 +97,10 @@ public sealed class RaceClockPanel : Control
     private Rectangle RingBounds()
     {
         // Square, centred horizontally, leaving room for the state strip at
-        // the bottom and the remaining text beneath the ring.
-        var size = Math.Max(40, Math.Min(Width - 88, Height - 58));
-        return new Rectangle((Width - size) / 2, 10, size, size);
+        // the bottom and the remaining text beneath the ring. The room is at
+        // the screen's DPI, as the point-size text in it is.
+        var size = Math.Max(UiLayout.AtDpi(40), Math.Min(Width - UiLayout.AtDpi(88), Height - UiLayout.AtDpi(58)));
+        return new Rectangle((Width - size) / 2, UiLayout.AtDpi(10), size, size);
     }
 
     private void DrawBackdrop(Graphics g, bool synth)
@@ -189,7 +190,8 @@ public sealed class RaceClockPanel : Control
 
     private void DrawProgressRing(Graphics g, Rectangle rect, Color accent, bool synth)
     {
-        const float thickness = 7f;
+        // At the screen's DPI, like the ring's room in RingBounds.
+        float thickness = UiLayout.AtDpi(7);
         var inset = rect;
         inset.Inflate(-(int)thickness, -(int)thickness);
 
@@ -205,8 +207,10 @@ public sealed class RaceClockPanel : Control
         if (progress is null)
         {
             // No limit set, so there's nothing to fill toward. Tick marks
-            // instead, so the ring doesn't just look broken.
-            using var ticks = new Pen(Color.FromArgb(90, AppTheme.TextMuted), 2f);
+            // instead, so the ring doesn't just look broken. At the screen's
+            // DPI, as the ring is, so they still stand proud of its track.
+            using var ticks = new Pen(Color.FromArgb(90, AppTheme.TextMuted), UiLayout.AtDpi(2));
+            var tick = UiLayout.AtDpi(4);
             var cx = inset.Left + inset.Width / 2f;
             var cy = inset.Top + inset.Height / 2f;
             var r = inset.Width / 2f;
@@ -214,8 +218,8 @@ public sealed class RaceClockPanel : Control
             {
                 var a = (135 + 270 * i / 8.0) * Math.PI / 180.0;
                 g.DrawLine(ticks,
-                    (float)(cx + Math.Cos(a) * (r - 4)), (float)(cy + Math.Sin(a) * (r - 4)),
-                    (float)(cx + Math.Cos(a) * (r + 4)), (float)(cy + Math.Sin(a) * (r + 4)));
+                    (float)(cx + Math.Cos(a) * (r - tick)), (float)(cy + Math.Sin(a) * (r - tick)),
+                    (float)(cx + Math.Cos(a) * (r + tick)), (float)(cy + Math.Sin(a) * (r + tick)));
             }
             return;
         }
@@ -229,7 +233,7 @@ public sealed class RaceClockPanel : Control
         // Glow pass underneath, then the solid arc over it.
         if (synth)
         {
-            using var halo = new Pen(Color.FromArgb(80, accent), thickness + 7f);
+            using var halo = new Pen(Color.FromArgb(80, accent), thickness + UiLayout.AtDpi(7));
             halo.StartCap = System.Drawing.Drawing2D.LineCap.Round;
             halo.EndCap = System.Drawing.Drawing2D.LineCap.Round;
             g.DrawArc(halo, inset, 135, sweep);
@@ -259,8 +263,13 @@ public sealed class RaceClockPanel : Control
         // Measured down to fit rather than set by a ratio, because the
         // string changes width between "9:59" and "59:59" and a fixed ratio
         // would either clip the long one or waste the short one.
+        //
+        // The size to start from is a share of the width in pixels, taken
+        // as points - PointsForPixels keeps it the same share on a screen
+        // the app draws at 150%, rather than starting half as big again and
+        // stepping down from there. The 16 is a point size of its own.
         var available = Width * 0.88f;
-        var font = FitFont(g, text, available, Math.Max(16f, Width * 0.40f));
+        var font = FitFont(g, text, available, Math.Max(16f, UiLayout.PointsForPixels(Width * 0.40f, g)));
         var measured = g.MeasureString(text, font);
         var x = ring.Left + (ring.Width - measured.Width) / 2f;
         var y = ring.Top + (ring.Height - measured.Height) / 2f - ring.Height * 0.045f;
@@ -268,11 +277,13 @@ public sealed class RaceClockPanel : Control
         if (synth)
         {
             // Offset copies in the theme's two accents - a cheap chromatic
-            // shift that reads as neon without needing real bloom.
+            // shift that reads as neon without needing real bloom. The shift
+            // is at the screen's DPI, as the digits it offsets are.
+            var shift = 1.6f * UiLayout.DpiScale;
             using var pink = new SolidBrush(Color.FromArgb(110, AppTheme.Primary));
             using var cyan = new SolidBrush(Color.FromArgb(110, AppTheme.SynthCyan));
-            g.DrawString(text, font, pink, x - 1.6f, y);
-            g.DrawString(text, font, cyan, x + 1.6f, y);
+            g.DrawString(text, font, pink, x - shift, y);
+            g.DrawString(text, font, cyan, x + shift, y);
         }
 
         using var main = new SolidBrush(synth ? Color.White : AppTheme.TextDark);
@@ -284,7 +295,10 @@ public sealed class RaceClockPanel : Control
         var caption = warmingUp ? "WARM-UP"
             : _race.Flag == FlagState.Red ? "PAUSED"
             : "ELAPSED";
-        using var capFont = FontLibrary.Create(AppTheme.DisplayFamily, Math.Max(6.5f, ring.Width * 0.055f), FontStyle.Bold);
+        // A share of the ring's width in pixels, taken as points - see the
+        // time's own size above. The 6.5 is a point size of its own, the
+        // smallest the caption is still read at.
+        using var capFont = FontLibrary.Create(AppTheme.DisplayFamily, Math.Max(6.5f, UiLayout.PointsForPixels(ring.Width * 0.055f, g)), FontStyle.Bold);
         var capSize = g.MeasureString(AppTheme.Spaced(caption), capFont);
         using var capBrush = new SolidBrush(_race.Flag == FlagState.Red ? accent : AppTheme.TextMuted);
         g.DrawString(AppTheme.Spaced(caption), capFont, capBrush,
@@ -302,10 +316,12 @@ public sealed class RaceClockPanel : Control
             return;
         }
 
+        // Its band above the state strip is at the screen's DPI, as the
+        // point-size text in it is.
         using var font = FontLibrary.Create(AppTheme.DisplayFamily, 11F, FontStyle.Bold);
         var size = g.MeasureString(text, font);
         using var brush = new SolidBrush(accent);
-        g.DrawString(text, font, brush, (Width - size.Width) / 2f, Height - 46);
+        g.DrawString(text, font, brush, (Width - size.Width) / 2f, Height - UiLayout.AtDpi(46));
     }
 
     /// <summary>State and flag along the bottom, so the clock also answers "what's happening right now".</summary>
@@ -318,12 +334,13 @@ public sealed class RaceClockPanel : Control
 
         // Sized to the text rather than spanning the panel: a full-width
         // tinted bar competed with the ring above it for the eye, and the
-        // flag state is a chip, not a header.
+        // flag state is a chip, not a header. The chip's margins and height
+        // are at the screen's DPI, as the point-size text in it is.
         using var font = FontLibrary.Create(AppTheme.DisplayFamily, 8.5F, FontStyle.Bold);
         var spaced = AppTheme.Spaced(label);
         var measured = TextRenderer.MeasureText(spaced, font);
-        var pillWidth = Math.Min(Width - 16, measured.Width + 26);
-        var pill = new RectangleF((Width - pillWidth) / 2f, Height - 28, pillWidth, 22);
+        var pillWidth = Math.Min(Width - UiLayout.AtDpi(16), measured.Width + UiLayout.AtDpi(26));
+        var pill = new RectangleF((Width - pillWidth) / 2f, Height - UiLayout.AtDpi(28), pillWidth, UiLayout.AtDpi(22));
 
         AppTheme.DrawPill(g, pill, Color.FromArgb(52, accent), string.Empty, accent);
 

@@ -25,7 +25,7 @@ public sealed class RoundRosterForm : Form
     private const int LeastRows = 4;
 
     private readonly ProfileStore _profiles;
-    private readonly CheckedListBox _list = new();
+    private readonly CheckedListBox _list = new ThemedCheckedListBox();
     private readonly Label _lblCount = new();
 
     /// <summary>Transponders in this round, in running order.</summary>

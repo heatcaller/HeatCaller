@@ -67,13 +67,13 @@ public sealed class RelaySettingsControl : UserControl
     /// </summary>
     private bool _loading;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly TextBox _txtBaseUrl = new();
     private readonly TextBox _txtClub = new();
     private readonly TextBox _txtToken = new();
-    private readonly CheckBox _chkShowToken = new();
-    private readonly CheckBox _chkRoster = new();
-    private readonly CheckBox _chkAbbreviate = new();
+    private readonly CheckBox _chkShowToken = new ThemedCheckBox();
+    private readonly CheckBox _chkRoster = new ThemedCheckBox();
+    private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
     private readonly Button _btnTest = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnRestore = new();
@@ -90,7 +90,7 @@ public sealed class RelaySettingsControl : UserControl
     /// <summary>Says what is wrong with a link that was just typed, or nothing.</summary>
     private readonly Label _lblSocialProblem = new();
     private readonly Button _btnOpenLooks = new();
-    private readonly CheckBox _chkCheckIn = new();
+    private readonly CheckBox _chkCheckIn = new ThemedCheckBox();
     private readonly TextBox _txtCheckInPin = new();
     private readonly Label _lblCheckInState = new();
     private readonly Button _btnOpenCheckIn = new();
@@ -103,24 +103,24 @@ public sealed class RelaySettingsControl : UserControl
     /// </summary>
     private bool _reissueOffered = true;
 
-    private readonly CheckBox _chkCheckInPhotos = new();
-    private readonly CheckBox _chkRacerPins = new();
+    private readonly CheckBox _chkCheckInPhotos = new ThemedCheckBox();
+    private readonly CheckBox _chkRacerPins = new ThemedCheckBox();
     private readonly ComboBox _cmbPinRotation = new();
     private readonly Label _lblPinsState = new();
     private readonly Button _btnShowPins = new();
     private readonly Button _btnNewPins = new();
     private readonly Button _btnEmailPins = new();
-    private readonly CheckBox _chkEmailPinsAuto = new();
+    private readonly CheckBox _chkEmailPinsAuto = new ThemedCheckBox();
     private readonly ComboBox _cmbMailPreset = new();
     private readonly TextBox _txtSmtpHost = new();
     private readonly NumericUpDown _numSmtpPort = new();
     private readonly TextBox _txtSmtpUser = new();
     private readonly TextBox _txtSmtpPassword = new();
-    private readonly CheckBox _chkShowSmtpPassword = new();
+    private readonly CheckBox _chkShowSmtpPassword = new ThemedCheckBox();
     private readonly TextBox _txtSmtpFromName = new();
     private readonly Button _btnTestMail = new();
     private readonly Label _lblMailResult = new();
-    private readonly CheckBox _chkManager = new();
+    private readonly CheckBox _chkManager = new ThemedCheckBox();
     private readonly Label _lblManagerState = new();
     private readonly Button _btnManagerPin = new();
     private readonly Button _btnOpenManage = new();

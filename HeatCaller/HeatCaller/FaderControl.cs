@@ -34,12 +34,15 @@ public sealed class FaderControl : Control
     /// <summary>Raised whenever <see cref="Percent"/> changes, however it changed.</summary>
     public event EventHandler? PercentChanged;
 
-    private const int ThumbHeight = 20;
-    private const int ThumbWidth = 28;
-    private const int TrackWidth = 6;
+    // The handle and the track are at the screen's DPI, as the rest of the
+    // window is once the app is started --dpi-aware (the host sizes the
+    // fader itself - see MixerControl). Exactly these sizes at 96 DPI.
+    private static int ThumbHeight => UiLayout.AtDpi(20);
+    private static int ThumbWidth => UiLayout.AtDpi(28);
+    private static int TrackWidth => UiLayout.AtDpi(6);
 
     /// <summary>How far either side of the handle still counts as grabbing it.</summary>
-    private const int GrabSlack = 5;
+    private static int GrabSlack => UiLayout.AtDpi(5);
 
     private int _percent = 100;
     private bool _dragging;

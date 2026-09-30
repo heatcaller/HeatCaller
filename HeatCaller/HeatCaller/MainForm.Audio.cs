@@ -727,12 +727,5 @@ public partial class MainForm
         AppTheme.ApplyRecursively(voiceSubPage);
         AppTheme.ApplyRecursively(_voiceAnnouncementsSubPage);
         AppTheme.ApplyRecursively(pageSound);
-
-        // Both pages were checked with the old controls in them, so the new
-        // ones were never checked at all - at a larger text size they kept
-        // whatever overlaps the check would have straightened. Forgotten
-        // here, they are checked again the next time either page is shown.
-        _tidiedPages.Remove("Voice");
-        _tidiedPages.Remove("Sounds");
     }
 }

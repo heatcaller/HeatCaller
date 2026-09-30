@@ -782,6 +782,12 @@ public static class RcpTrackPainter
     {
         var bitmap = new Bitmap(Math.Max(16, size.Width), Math.Max(16, size.Height));
 
+        // 96 DPI whatever the screen: a bitmap otherwise takes the screen's
+        // DPI, and in a DPI-aware run (--dpi-aware) the tile labels' point-size
+        // text would draw half as big again inside the same pixels. Changes
+        // nothing at 96 DPI.
+        bitmap.SetResolution(96, 96);
+
         using var g = Graphics.FromImage(bitmap);
 
         g.Clear(background);

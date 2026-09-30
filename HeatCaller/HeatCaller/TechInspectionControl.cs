@@ -16,10 +16,28 @@ public sealed class TechInspectionControl : UserControl
     private readonly UndoService _undo;
 
     private readonly ComboBox _cmbClass = new();
-    private readonly CheckBox _chkTodayOnly = new();
+    private readonly CheckBox _chkTodayOnly = new ThemedCheckBox();
     private readonly DataGridView _grid = new();
     private readonly Label _lblSummary = new();
     private readonly Label _lblStatus = new();
+
+    /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
+    private readonly TextSize _textSize = new();
+
+    /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
+    private readonly FillPage _page = new();
+
+    /// <summary>The class filter, Today only and the count along one line - held so a refilled class list can re-measure it.</summary>
+    private readonly FieldRow _filterRow = new();
+
+    /// <summary>The class filter's width, measured from its choices - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
+    private (Font Font, int Count, int Width)? _classWidth;
+
+    /// <summary>The class filter's width at the normal text size - what it always had, and the least it has now.</summary>
+    private const int ClassFilterLeast = 220;
+
+    /// <summary>The longest the count usually comes to, for the room kept for it at the end of the filters' line - see SummaryWidth.</summary>
+    private const string LongestSummary = "999 inspected, 999 NOT cleared.";
 
     public TechInspectionControl(TechInspectionStore store, ProfileStore profiles, RaceClassStore classes, UndoService undo)
     {
@@ -29,16 +47,52 @@ public sealed class TechInspectionControl : UserControl
         _undo = undo;
 
         Dock = DockStyle.Fill;
-        Font = AppTheme.BodyFont;
         ForeColor = AppTheme.TextDark;
 
-        Size = new Size(980, 560);
-        MinimumSize = new Size(900, 540);
+        // The body face, worn rather than set once, so it follows the text
+        // size - see TextSize.
+        //
+        // No design size and no MinimumSize. The 900x540 floor was honoured
+        // over the size the page was given, so a window shorter than that -
+        // its own window on a 1280x720 screen - had the buttons under the
+        // grid off the bottom of the page. A short window scrolls the page
+        // instead (FillPage), and the window can ask how short that is
+        // (LeastHeight).
+        _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
         RefreshAll();
     }
 
+    /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>A new text size, reaching this page through its parent's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
+    protected override void OnParentFontChanged(EventArgs e)
+    {
+        base.OnParentFontChanged(e);
+        _textSize.Apply();
+    }
+
+    /// <summary>
+    /// The intro, then one card: the filters along a line - the class, Today
+    /// only, and the count at the end of the line - the inspections taking
+    /// the height that is left, the buttons under them and the line saying
+    /// what the last one did. On the layout pieces (LayoutPieces.cs), so
+    /// nothing is placed by hand.
+    ///
+    /// It used to be placed in pixels: each row put under the one above by
+    /// measuring it, the class filter 220px wide at every text size and the
+    /// count placed after Today only by hand, the grid 380px tall and
+    /// anchored to all four sides, the buttons and the status line pinned to
+    /// the bottom edge - over a 900x540 floor the page kept however small
+    /// its window, with the intro capped at that floor's width and every
+    /// face set once, so none of it followed the text size.
+    /// </summary>
     private void BuildLayout()
     {
         var lblIntro = new Label
@@ -49,65 +103,35 @@ public sealed class TechInspectionControl : UserControl
                  + "Control warns about any driver in it who hasn't passed today (a warning only; it can be switched "
                  + "off per class).",
             AutoSize = true,
-            MaximumSize = new Size(868, 0),  // capped to the page's own minimum width, not a wider guess
             ForeColor = AppTheme.TextMuted,
-
-            // Pinned rather than inherited: everything below is positioned
-            // by measuring what is above it, and until a control is added
-            // to this page it measures itself in the smaller WinForms
-            // default font.
-            Font = AppTheme.BodyFont,
         };
 
-        // The columns were measured already; the ROWS were not. The intro
-        // was allowed one line and takes two, so its second line came down
-        // on the class filter underneath it.
-        var y = UiLayout.PageTop;
+        // --- The filters ---
 
-        lblIntro.Location = new Point(UiLayout.PageLeft, y);
+        var lblClass = new Label { Text = "Class:" };
 
-        y = UiLayout.Below(lblIntro, UiLayout.RowGap);
-
-        var lblClass = new Label { Text = "Class:", AutoSize = true, Font = AppTheme.BodyFont };
-
-        _cmbClass.Font = AppTheme.BodyFont;
-        _cmbClass.Width = 220;
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbClass.SelectedIndexChanged += (_, _) => RefreshGrid();
 
         _chkTodayOnly.Text = "Today only";
         _chkTodayOnly.AutoSize = true;
-        _chkTodayOnly.Font = AppTheme.BodyFont;
         _chkTodayOnly.Checked = true;
         _chkTodayOnly.CheckedChanged += (_, _) => RefreshGrid();
 
-        _lblSummary.AutoSize = true;
-        _lblSummary.Font = AppTheme.BoldFont;
+        // How many, and how many not cleared, in the bold face at the end of
+        // the filters' line - or on a line of its own when it no longer fits
+        // there (FieldRow), never cut short: the room it is kept is its
+        // longest wording's (SummaryWidth).
+        _lblSummary.AutoSize = false;
+        _lblSummary.AutoEllipsis = true;
+        _textSize.Wear(_lblSummary, () => AppTheme.BoldFont);
 
-        lblClass.Location = new Point(
-            UiLayout.PageLeft, UiLayout.CentreOn(lblClass, y, _cmbClass.Height));
+        _filterRow.Add(lblClass, _cmbClass, ClassFilterWidth);
+        _filterRow.Add(null, _chkTodayOnly);
+        _filterRow.AddLast(null, _lblSummary, SummaryWidth);
 
-        _cmbClass.Location = new Point(UiLayout.After(lblClass), y);
+        // --- The inspections ---
 
-        _chkTodayOnly.Location = new Point(
-            UiLayout.After(_cmbClass) + UiLayout.RowGap,
-            UiLayout.CentreOn(_chkTodayOnly, y, _cmbClass.Height));
-
-        // Centred on the font, not on itself - RefreshGrid fills this in
-        // later, so right now it is an empty label with nothing to measure.
-        _lblSummary.Location = new Point(
-            UiLayout.After(_chkTodayOnly) + UiLayout.RowGap,
-            y + Math.Max(0, (_cmbClass.Height - AppTheme.BoldFont.Height) / 2));
-
-        y = UiLayout.Below(_cmbClass, UiLayout.RowGap);
-
-        _grid.Location = new Point(UiLayout.PageLeft, y);
-        _grid.Size = new Size(Math.Max(600, Width - UiLayout.PageLeft - UiLayout.PageRight), 380);
-        // All four sides now. The old warning against Bottom was written
-        // when the buttons under the grid sat at fixed positions; they are
-        // bottom-anchored themselves these days, so the grid growing down
-        // fills exactly the gap that opens above them.
-        _grid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
@@ -125,6 +149,10 @@ public sealed class TechInspectionControl : UserControl
             new DataGridViewTextBoxColumn { Name = "inspector", HeaderText = "Inspector", FillWeight = 60 },
             new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 90 }
         );
+
+        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+
         _grid.CellDoubleClick += (_, args) =>
         {
             if (args.RowIndex >= 0)
@@ -133,10 +161,10 @@ public sealed class TechInspectionControl : UserControl
             }
         };
 
-        var btnInspect = new Button { Text = "New Inspection...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnInspect = new Button { Text = "New Inspection..." };
         btnInspect.Click += (_, _) => AddOrEdit(null);
 
-        var btnEdit = new Button { Text = "Edit...", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnEdit = new Button { Text = "Edit..." };
         btnEdit.Click += (_, _) => AddOrEdit(Selected());
 
         // "Who's Outstanding?" used to sit here. It made you pick a class
@@ -148,24 +176,59 @@ public sealed class TechInspectionControl : UserControl
         // through tech" and the roster narrows to exactly those cars, across
         // every class at once, with Inspect Selected Car beside each name. The
         // answer and the thing you do about it are in the same place.
-        var btnDelete = new Button { Text = "Delete", Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
+        var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteSelected();
 
-        AppTheme.LayoutButtonRow(
-            UiLayout.PageLeft, UiLayout.Below(_grid, UiLayout.RowGap), UiLayout.ButtonGap,
-            btnInspect, btnEdit, btnDelete);
-
-        _lblStatus.Location = new Point(UiLayout.PageLeft, UiLayout.Below(btnInspect, UiLayout.RowGap));
+        // What the last command did.
         _lblStatus.AutoSize = true;
-        _lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _lblStatus.ForeColor = AppTheme.TextMuted;
 
-        Controls.AddRange(new Control[]
-        {
-            lblIntro, lblClass, _cmbClass, _chkTodayOnly, _lblSummary, _grid,
-            btnInspect, btnEdit, btnDelete, _lblStatus,
-        });
+        // No caption: the window it opens in is already called Scrutineering
+        // log, and the count on the filters' line says how many.
+        var records = new Section();
+
+        records.Add(_filterRow);
+        records.AddFill(_grid, LeastGridHeight);
+        records.Add(new ButtonBar().With(btnInspect, btnEdit, btnDelete));
+        records.Add(_lblStatus, gapBelow: 0);
+
+        // --- The page ---
+
+        _page.Add(lblIntro);
+        _page.AddFill(records, records.LeastHeight, gapBelow: 0);
+
+        Controls.Add(_page);
     }
+
+    /// <summary>
+    /// The least the page can do with at <paramref name="width"/> - its
+    /// intro, the filters, the grid's headings and three inspections, the
+    /// buttons and the status line - for the window it is shown in, which
+    /// gives the page the height it has (PageWindow.ScrutineeringLog).
+    /// </summary>
+    internal int LeastHeight(int width) => _page.LeastHeight(width);
+
+    /// <summary>The least the grid can do with: its headings and three inspections. Below that the page scrolls instead - see FillPage.</summary>
+    private int LeastGridHeight() =>
+        _grid.ColumnHeadersHeight + 3 * _grid.RowTemplate.Height + 2;
+
+    /// <summary>
+    /// The class filter: wide enough for the longest class name, and never
+    /// under the 220px it always had at the normal text size.
+    /// </summary>
+    private int ClassFilterWidth() =>
+        Math.Max(UiLayout.AtTextSize(ClassFilterLeast), Pieces.PickerWidth(_cmbClass, ref _classWidth));
+
+    /// <summary>
+    /// The least room the count is kept at the end of the filters' line: what
+    /// it says now, or its usual longest, whichever is wider - so it takes a
+    /// line of its own rather than end in "...", and does not hop between
+    /// lines as the filters change what it says.
+    /// </summary>
+    private int SummaryWidth() =>
+        Math.Max(
+            _lblSummary.GetPreferredSize(Size.Empty).Width,
+            TextRenderer.MeasureText(LongestSummary, _lblSummary.Font).Width + _lblSummary.Padding.Horizontal);
 
     private TechInspection? Selected() =>
         _grid.CurrentRow?.Tag is string id ? _store.Get(id) : null;
@@ -192,6 +255,11 @@ public sealed class TechInspectionControl : UserControl
 
         var index = previous is null ? 0 : _cmbClass.Items.IndexOf(previous);
         _cmbClass.SelectedIndex = index >= 0 ? index : 0;
+
+        // The longest class may have come or gone: measured again, and the
+        // filters' line with it.
+        _classWidth = null;
+        _filterRow.PerformLayout();
     }
 
     private void RefreshGrid()

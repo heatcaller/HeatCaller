@@ -25,7 +25,7 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
     Practice and races use the same timing session, so HeatCaller keeps them apart:
 
     - **Start Practice** is refused while a race is staged, counting down or running: "Finish the race or reset it on Race Control first". If a finished race is still showing on the **Race Control** board, it asks before clearing it.
-    - While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Checkered**, **Reset**, **Reset Round**, starting a round from the Program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
+    - While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
     - **Start automatically when a car crosses the gate** only starts practice when nothing else is going on.
     - When practice stops, the next race goes back to its own lap or time limit and start type.
 
@@ -55,7 +55,7 @@ A saved practice session goes into **Race History** as a Practice session named 
 - **Never counts toward:** track records, championship points or achievement badges.
 - **Ghosts:** never saved.
 
-Practice is never kept for crash recovery. If you close HeatCaller while practice is running, it asks "Practice is running. Close HeatCaller anyway?". Choosing **Yes** stops practice the same as pressing **Stop**, so it's saved if **Save automatically on stop** is ticked. Practice and demos never mark a line on the **Run Sheet** as started.
+Practice is never kept for crash recovery. If you close HeatCaller while practice is running, it asks "Practice is running. Close HeatCaller anyway?". Choosing **Yes** stops practice the same as pressing **Stop**, so it's saved if **Save automatically on stop** is ticked. Practice and demos never mark a line on the timetable as started.
 
 The announcer doesn't call flags during practice, because practice has none.
 
@@ -132,7 +132,7 @@ If a ghost's pace can't be worked out when the session starts, that ghost sits o
 
 Ghosts don't slow down for a yellow or stop for a red. Their laps aren't counted while the red flag is out.
 
-Ghosts from the previous race stop as soon as you stage the next race. If you undo that **Stage** (or a **Countdown** over a running race, a **Reset** or a **Reset Round**), the old race comes back with its ghosts carrying on mid-lap, on their own rhythm, as though they had kept lapping. The crossings they would have made in the gap aren't counted, the same as for real cars, so each ghost's lap across the gap comes out long. The console says, for example, "[ghost] *name* back on track at 6.500s, carrying on from 12 laps - ...".
+Ghosts from the previous race stop as soon as you stage the next race. If you undo that **Stage** (or a **Countdown** over a running race, or a **Reset**), the old race comes back with its ghosts carrying on mid-lap, on their own rhythm, as though they had kept lapping. The crossings they would have made in the gap aren't counted, the same as for real cars, so each ghost's lap across the gap comes out long. The console says, for example, "[ghost] *name* back on track at 6.500s, carrying on from 12 laps - ...".
 
 ## Demo Mode
 
@@ -146,7 +146,7 @@ Ghosts from the previous race stop as soon as you stage the next race. If you un
 2. Set **Staging (sec):** and **Countdown (sec):**.
 3. In the **Racers** card, choose what to **Run:**:
     - **Free-form - use the drivers ticked below**: tick driver profiles (using real profiles tests real names and rivalry lines), and add up to 8 made-up placeholder racers. Ghost cars are in the list too, marked "[ghost]". Only the drivers and ghosts you tick run in the demo.
-    - **A round from today's program**: runs the drivers already in that round. It reads the round but never changes it. A round with nobody assigned uses placeholders.
+    - A round from today's program: runs the drivers already in that round. It reads the round but never changes it. A round with nobody assigned uses placeholders.
 4. Press **Start Demo Race**. The demo's log starts with who's in it, for example "In this demo: ... Ghost cars run only if ticked under Racers."
 
 A demo can't start while practice is running ("Stop practice first on the Practice page"), or while a real race is staged, counting down or running. A demo of ghost cars only is refused with **Nobody to race** when none of them can run, because ghost cars are switched off or none of the ticked ghosts is switched on.
@@ -155,7 +155,7 @@ The demo uses the race format in force on **Race Control**, so it ends at the la
 
 Now and then the demo sends a pass that's too quick, to show the minimum lap time filter at work.
 
-You can also right-click a round on **Race Day → Program** and choose **Start as Demo...**. It's refused while a real race is staged, counting down or running ("A race is running. Starting a demo would wipe it. Finish it or reset it on Race Control first."), before anything is changed. See [Program and mains](../race-day/program-and-mains.md).
+You can also right-click a round in the program on **Race Day → Next Steps** and choose **Start as Demo...**. It's refused while a real race is staged, counting down or running ("A race is running. Starting a demo would wipe it. Finish it or reset it on Race Control first."), before anything is changed. See [Program and mains](../race-day/program-and-mains.md).
 
 ### Stop a demo safely
 
@@ -192,14 +192,14 @@ The **Handicaps** page evens out a grid where drivers have very different pace. 
     - **Off - scratch racing**: no handicap (the default). The page shows "Handicaps are OFF for this class".
     - **Time credit (seconds off total)**: takes each driver's credit off their time. See [How time credits are scored](#how-time-credits-are-scored).
     - **Lap credit (whole laps added)**: adds whole laps to each driver's lap count.
-3. Select a driver and press **Edit...** (or double-click the row). Set the **Time credit:** (0 to 600 seconds) or the **Lap credit:** (0 to 20 laps). Only the one that matches the class's mode is used.
+3. Select a driver and press **Edit** (or double-click the row). Set the **Time credit:** (0 to 600 seconds) or the **Lap credit:** (0 to 20 laps). Only the one that matches the class's mode is used.
 4. Press **Save**.
 
 The grid lists everyone in the class, with **Driver**, **Transponder**, **Time credit**, **Lap credit**, **Locked**, **Recent best lap** and **Notes**. **Clear Handicap** removes the selected driver's handicap, and **Clear All in Class** removes everyone's, including locked ones. All changes can be undone.
 
 ### Suggested credits
 
-**Suggest from History...** works out time credits from recent pace:
+**Suggest from History** works out time credits from recent pace:
 
 1. Set **Use last:** (how many of each driver's recent sessions to use, default 5) and **Typical race:** (laps, default 20).
 2. HeatCaller averages each driver's best lap across those sessions. It gives each driver the gap to the quickest driver's average, multiplied by the typical race length. The quickest driver is scratch. The aim is for everyone to finish together.

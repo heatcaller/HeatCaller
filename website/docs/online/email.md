@@ -119,20 +119,20 @@ For each racer, HeatCaller uses:
 
 Anything else, such as "Dad: 07700 900123, dad@example.com" in the Contact box, isn't treated as an address.
 
-To add addresses in bulk, use **Import from CSV...** on the **Driver Profiles** page with an `Email` column (a column called `e-mail`, `email address` or `e-mail address` also works). **Download Template...** on the same page gives a file with the column already in place. See [Drivers and classes](../race-day/drivers-and-classes.md).
+To add addresses in bulk, use **Import from CSV** on the **Driver Profiles** page with an `Email` column (a column called `e-mail`, `email address` or `e-mail address` also works). **Download Template** on the same page gives a file with the column already in place. See [Drivers and classes](../race-day/drivers-and-classes.md).
 
 Email addresses stay on the laptop. They're never published to the relay.
 
 ## Sending PINs
 
-### By hand: Email PINs...
+### By hand: Email PINs
 
-1. In the **Personal PINs** card, click **Email PINs...**.
+1. In the **Personal PINs** card, click **Email PINs**.
 2. HeatCaller asks, for example, "Email 24 racers their PIN?", says how many racers have no email address and won't get one, and estimates the time ("They go one at a time - about 1 minute. Everything else keeps working meanwhile.").
 3. Click **Yes**. The state line shows "Emailing *X* of *Y*...".
 4. When it's done, a summary lists who was emailed, any emails that didn't go and why, and who has no address ("Add one in the Email box on their driver profile.").
 
-**Email PINs...** sends every racer who has an address their current PIN, whether or not they've been sent it before.
+**Email PINs** sends every racer who has an address their current PIN, whether or not they've been sent it before.
 
 ### Automatically
 
@@ -142,9 +142,9 @@ Tick **Email automatically when PINs change** in the **Personal PINs** card. The
 - a racer added later is sent theirs within ten minutes
 - anybody who hasn't yet been sent their current PIN is sent it
 
-HeatCaller checks at start-up and every 10 minutes after, and straight away after **New PINs Now** or switching personal PINs on. It doesn't send while a race is staging, counting down or running. Each racer is only sent their current PIN once; the **Emailed** column in **Show PINs...** shows who has had theirs.
+HeatCaller checks at start-up and every 10 minutes after, and straight away after **New PINs Now** or switching personal PINs on. It doesn't send while a race is staging, counting down or running. Each racer is only sent their current PIN once; the **Emailed** column in **Show PINs** shows who has had theirs.
 
-Automatic sends report to the console, for example "[pins] Emailed 3 racers their new PIN; 1 has no email." If an address is refused, that racer isn't retried automatically while the app is running. Fix the address and use **Email PINs...**.
+Automatic sends report to the console, for example "[pins] Emailed 3 racers their new PIN; 1 has no email." If an address is refused, that racer isn't retried automatically while the app is running. Fix the address and use **Email PINs**.
 
 ### Sending pace
 
@@ -166,4 +166,4 @@ Emails go one at a time, about a second and a half apart, so the provider doesn'
 | "Online check-in isn't set up and switched on yet, so there is nowhere to use a PIN." | Publishing or online check-in is off. | See [Online check-in](check-in.md). |
 | "Nobody with a PIN has an email address yet." | No racer has a usable address. | Add addresses to profiles, or import a CSV with an Email column. |
 
-When a send stops partway, the message says how many went before it stopped. Those racers are marked as emailed. With automatic email on, the rest are picked up on a later pass once the problem is fixed; otherwise use **Email PINs...** again.
+When a send stops partway, the message says how many went before it stopped. Those racers are marked as emailed. With automatic email on, the rest are picked up on a later pass once the problem is fixed; otherwise use **Email PINs** again.

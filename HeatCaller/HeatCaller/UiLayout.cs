@@ -39,8 +39,9 @@ public static class UiLayout
     // text is 11.5pt now, and a row height or a label column sized for the
     // old font is the difference between a page that breathes and one where
     // every label is touching the field beside it. They have been scaled to
-    // match. LayoutDoctor repairs pages that are already built; these stop
-    // the pages that use them needing repair at all.
+    // match. LayoutDoctor used to repair pages after they were built (it was
+    // deleted on 30 Sep 2026, once every page laid itself out); these stopped
+    // the pages that used them needing repair at all.
 
     /// <summary>A standard control row: a label with a field beside it.</summary>
     public const int RowHeight = 32;
@@ -129,7 +130,11 @@ public static class UiLayout
     /// </summary>
     private static Font ButtonFont => AppTheme.BoldFont;
 
-    /// <summary>Indent for controls that belong under a checkbox above them.</summary>
+    /// <summary>
+    /// Indent for controls that belong under a checkbox above them. Where
+    /// the part should sit under the box's caption, TickBox.CaptionIndent
+    /// grows past this with the tick box at the larger text sizes.
+    /// </summary>
     public const int Indent = 24;
 
     /// <summary>
@@ -139,8 +144,67 @@ public static class UiLayout
     /// otherwise hold half as much at 200%. Measure what can be measured - a
     /// caption, a button, a drop-down's longest choice - rather than scale
     /// a guess at it.
+    ///
+    /// And at the screen's DPI, as the text is: a font is sized in points,
+    /// so Windows draws it bigger on a screen set to 150% once the app says
+    /// it can handle that (see DpiScale). While the app runs DPI-unaware, as
+    /// it does by default, DpiScale is 1 and this is exactly the text size.
     /// </summary>
-    public static int AtTextSize(int pixels) => (int)Math.Round(pixels * AppTheme.FontScale);
+    public static int AtTextSize(int pixels) => (int)Math.Round(pixels * AppTheme.FontScale * DpiScale);
+
+    /// <summary>As <see cref="AtTextSize(int)"/>, for a size worked out in fractions of a pixel (a drawn part's inset).</summary>
+    public static int AtTextSize(float pixels) => (int)Math.Round(pixels * AppTheme.FontScale * DpiScale);
+
+    /// <summary>
+    /// A size that follows the screen's DPI but not the text size - a line's
+    /// thickness, a window's frame of fixed parts (the sidebar's width, the
+    /// Big Screen's bands), a gap. Exactly <paramref name="pixels"/> while the
+    /// app runs DPI-unaware, which is the default (see DpiScale).
+    /// </summary>
+    public static int AtDpi(int pixels) => (int)Math.Round(pixels * DpiScale);
+
+    /// <summary>
+    /// How much bigger than 96 DPI the screen is, as this process draws it:
+    /// 1 while the app is DPI-unaware - Windows then tells it every screen is
+    /// 96 DPI and stretches the whole window itself, which is the default
+    /// (HeatCaller.csproj) - and the system's scale (1.5 at 150%) when it was
+    /// started DPI-aware (Program's --dpi-aware). Read once, from the screen:
+    /// the system DPI cannot change while the app runs.
+    ///
+    /// Only when Program actually started the app DPI-aware - never from the
+    /// screen alone. The tests never run Program and always measure at 96 DPI
+    /// (TestSetup); a test host that happened to be DPI-aware on a machine set
+    /// to 150% must not have every size in the app come out half as big again.
+    /// </summary>
+    public static float DpiScale => Program.StartedDpiAware ? LazyDpiScale.Value : 1f;
+
+    private static readonly Lazy<float> LazyDpiScale = new(() =>
+    {
+        try
+        {
+            using var screen = Graphics.FromHwnd(IntPtr.Zero);
+            return screen.DpiY > 0 ? screen.DpiY / 96f : 1f;
+        }
+        catch (Exception)
+        {
+            // No screen to ask (a service, a test host without a desktop):
+            // the size everything was designed at.
+            return 1f;
+        }
+    });
+
+    /// <summary>
+    /// A font size in points that was worked out from a size in pixels (a
+    /// box's height, a ring's width) as if a point were a pixel, as it is
+    /// never quite: at 96 DPI this changes nothing, and on a screen the app
+    /// draws at 150% it takes the 150% back off, so the letters stay the
+    /// size of the box they were fitted to rather than growing past it.
+    /// </summary>
+    public static float PointsForPixels(float pixelsAsPoints, Graphics g) =>
+        // 96f / DpiY first: at 96 DPI that is exactly 1, so the size comes
+        // back to the bit (multiplying by 96 and then dividing can be a float
+        // step off).
+        g.DpiY > 0 ? pixelsAsPoints * (96f / g.DpiY) : pixelsAsPoints;
 
     // --- Helpers ----------------------------------------------------------
 
@@ -239,9 +303,10 @@ public static class UiLayout
     ///
     /// The counterpart to <see cref="InsideGroup"/>: that clears the
     /// caption at the top, this clears the border at the bottom. The
-    /// eleven is LayoutDoctor's own arithmetic - its eight-pixel gap plus
-    /// its three-pixel bottom border - so a group box sized through here
-    /// is one the repair pass has nothing to say about. Pages that guessed
+    /// eleven was LayoutDoctor's own arithmetic (the repair pass, since
+    /// deleted) - its eight-pixel gap plus its three-pixel bottom border - so
+    /// a group box sized through here was one it had nothing to say about.
+    /// Pages that guessed
     /// at it were reported "grown by 1px" or "by 5px" at every startup,
     /// which is a real shortfall however small, and the sort that gets
     /// worse at the next text size up.
@@ -267,8 +332,8 @@ public static class UiLayout
     /// app fell into it anyway: a control built but not yet added to its
     /// page still has the WinForms default font, which is smaller than this
     /// app's, so it reports a width for a size it is never drawn at and the
-    /// field after it lands several pixels short. LayoutDoctor then shunted
-    /// those fields right at every startup - "moved ComboBox 10px right,
+    /// field after it lands several pixels short. LayoutDoctor (the repair
+    /// pass, since deleted) used to shunt those fields right at every startup - "moved ComboBox 10px right,
     /// clear of Announcer voice:" and about forty more like it, across
     /// Voice, Sounds, Head to Head, Personal Bests and Lap Times.
     ///
@@ -317,12 +382,12 @@ public static class UiLayout
         // control already wears the font it will keep.
         //
         // PreferredSize is what the control will AUTOSIZE itself to, and
-        // LayoutDoctor asks TextRenderer directly, which includes the
-        // padding an autosize width does not. The gap is about ten pixels
-        // at this text size, which is precisely the ten the doctor spent
-        // every startup shunting fields right of "Announcer voice:",
-        // "Driver B:", "Track:" and thirty more. Measuring the same way
-        // the doctor does is what makes it stop.
+        // TextRenderer measures with the padding an autosize width leaves
+        // out. The gap is about ten pixels at this text size, which is
+        // precisely the ten the old repair pass (LayoutDoctor, since
+        // deleted) spent every startup shunting fields right of "Announcer
+        // voice:", "Driver B:", "Track:" and thirty more. Measuring the way
+        // it measured is what made it stop.
         var coming = Equals(caption.Font, Control.DefaultFont) ? AppTheme.BodyFont : caption.Font;
 
         // Everything the control is wider than its own text by - a check
@@ -507,8 +572,8 @@ public static class UiLayout
     ///
     /// A single row is what every page here assumed, and five buttons whose
     /// captions have since grown is how a toolbar ends up with its last
-    /// button half off the page - or, once the repair pass has had a go at
-    /// it, stacked on top of the one before. Wrapping is the honest answer:
+    /// button half off the page - or, once the old repair pass had had a go
+    /// at it, stacked on top of the one before. Wrapping is the honest answer:
     /// the row gets taller rather than wider, and everything below it is
     /// positioned from the value this returns.
     /// </summary>

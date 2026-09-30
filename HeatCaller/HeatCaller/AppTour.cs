@@ -94,6 +94,15 @@ public sealed class AppTour : Form
             + "That's the tour. Press Shift+T any time to see it again."),
     };
 
+    /// <summary>How wide the card is, unless its buttons need more - see LayOut.</summary>
+    private const int CardWidth = 440;
+
+    // The buttons' widths at the normal text size, and the least each is
+    // ever given: a caption that needs more gets more (CaptionWidth).
+    private const int SkipLeast = 110;
+    private const int BackLeast = 90;
+    private const int NextLeast = 110;
+
     private readonly Form _host;
     private readonly Action<string> _goToPage;
 
@@ -117,7 +126,7 @@ public sealed class AppTour : Form
         StartPosition = FormStartPosition.Manual;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Surface;
-        Size = new Size(440, 260);
+        Size = new Size(CardWidth, 260);
 
         BuildLayout();
         AppTheme.ApplyRecursively(this);
@@ -151,15 +160,15 @@ public sealed class AppTour : Form
         _lblBody.Location = new Point(20, 76);
 
         _btnSkip.Text = "Skip tour";
-        _btnSkip.Width = 110;
+        _btnSkip.Width = SkipLeast;
         _btnSkip.Click += (_, _) => Close();
 
         _btnBack.Text = "Back";
-        _btnBack.Width = 90;
+        _btnBack.Width = BackLeast;
         _btnBack.Click += (_, _) => ShowStop(_index - 1);
 
         _btnNext.Text = "Next";
-        _btnNext.Width = 110;
+        _btnNext.Width = NextLeast;
         _btnNext.Click += (_, _) => NextClicked();
 
         Controls.AddRange(new Control[] { _accent, _lblStep, _lblTitle, _lblBody, _btnSkip, _btnBack, _btnNext });
@@ -265,7 +274,33 @@ public sealed class AppTour : Form
     /// <summary>Sizes the card to its text and pins it to the host's bottom-right corner.</summary>
     private void LayOut()
     {
+        // The title under the step line, and the body under the title, by
+        // their real heights: placed at fixed y (18, 40, 76) they overlapped
+        // from 150% text, where each line is taller, and a long title wraps.
+        // At the normal text size they land where they always did.
+        _lblTitle.Top = Math.Max(40, _lblStep.Bottom + 2);
+        _lblBody.Top = Math.Max(76, _lblTitle.Bottom + 6);
+
         var buttonTop = Math.Max(_lblBody.Bottom + 20, 150);
+
+        // Each button as wide as its caption needs, here rather than once at
+        // build because Next's caption changes (Start, Next, Done). The
+        // layout repair pass used to widen them when the card was first shown
+        // (it was deleted on 30 Sep); without that, "Skip tour" would be cut
+        // off at the larger text sizes.
+        _btnSkip.Width = CaptionWidth(_btnSkip, SkipLeast);
+        _btnBack.Width = CaptionWidth(_btnBack, BackLeast);
+        _btnNext.Width = CaptionWidth(_btnNext, NextLeast);
+
+        // The card widens only if the row cannot fit across it - Skip on the
+        // left, Back and Next on the right, 20px margins and 10px gaps - so
+        // Skip can never run into Back. All three are counted whichever are
+        // showing, so the card does not change width from one stop to the
+        // next. At the text sizes the app offers the row fits the usual 440
+        // with room to spare, and this changes nothing.
+        var row = 20 + _btnSkip.Width + 10 + _btnBack.Width + 10 + _btnNext.Width + 20;
+
+        Width = Math.Max(CardWidth, row);
 
         _btnNext.Location = new Point(Width - 20 - _btnNext.Width, buttonTop);
         _btnBack.Location = new Point(_btnNext.Left - 10 - _btnBack.Width, buttonTop);
@@ -274,6 +309,31 @@ public sealed class AppTour : Form
         Height = _btnNext.Bottom + 20;
         HostMoved(this, EventArgs.Empty);
         Invalidate();
+    }
+
+    /// <summary>
+    /// How wide <paramref name="button"/> has to be for its caption, never
+    /// less than <paramref name="least"/>.
+    ///
+    /// Measured in the button's own face, which the theme set when the card
+    /// was built: the card keeps the text size it opened at. The rule is the
+    /// one the layout test holds a button to (LayoutAudit.CheckButton): the
+    /// bare caption and 22px, or the caption with the room TextRenderer keeps
+    /// either side of it and 16px, whichever is wider. At the normal text size
+    /// every caption here needs less than its least, so the widths are the
+    /// ones the card has always had.
+    /// </summary>
+    private static int CaptionWidth(Button button, int least)
+    {
+        var bare = TextRenderer.MeasureText(
+            button.Text,
+            button.Font,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width + 22;
+
+        var padded = TextRenderer.MeasureText(button.Text, button.Font).Width + 16;
+
+        return Math.Max(least, Math.Max(bare, padded));
     }
 
     private void HostMoved(object? sender, EventArgs e)

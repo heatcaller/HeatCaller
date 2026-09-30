@@ -6,10 +6,11 @@ namespace HeatCaller;
 //
 // What pages are rebuilt on, one at a time, in place of hand-placed
 // coordinates. Every page in this app was laid out in pixels chosen by eye
-// against the font of the day, and LayoutDoctor has been nudging them back
-// into shape at runtime ever since the font moved. These pieces measure
-// instead: a caption column as wide as its widest caption, a button as wide
-// as its own caption in the font it is drawn in, a hint that wraps to the
+// against the font of the day, and a repair pass nudged them back into
+// shape at runtime from when the font moved until every page was rebuilt on
+// these (it was deleted on 30 Sep). These pieces measure instead: a
+// caption column as wide as its widest caption, a button as wide as its own
+// caption in the font it is drawn in, a hint that wraps to the
 // room it has, a row of buttons that wraps when the window is narrow, a list
 // that takes the height that is left. Change the text size, or the window,
 // and a page built from them re-measures itself - nothing to repair.
@@ -473,7 +474,7 @@ internal sealed class FillPage : Panel
     ///
     /// That is the scrolling range (see OnLayout) and the theme's room under
     /// the last control on top of it (AutoScrollMargin, which the theme pass
-    /// gives every page that scrolls - LayoutDoctor.ThemeScrolling): WinForms
+    /// gives every page that scrolls - ScrollTheming.Apply): WinForms
     /// adds that room to AutoScrollMinSize, and a page shorter than the two
     /// together scrolls, by as much as the room.
     /// </summary>
@@ -1242,7 +1243,13 @@ internal sealed class FieldGrid : TableLayoutPanel
         {
             case FlowLayoutPanel flow:
             {
-                var shown = flow.Controls.Cast<Control>().Where(control => control.Visible).ToList();
+                // A control with no height takes no room on a line: one given
+                // its size later - the look editor's colour swatches have
+                // none until the theme pass is done - would have made the
+                // first line nothing at all, and there is no first line of
+                // nothing (it threw, 30 Sep: the grid is laid out as its rows
+                // are added, and a grid with no parent yet counts as shown).
+                var shown = flow.Controls.Cast<Control>().Where(control => control.Visible && control.Height > 0).ToList();
 
                 if (shown.Count == 0)
                 {
@@ -3647,7 +3654,7 @@ internal static class Pieces
     /// <summary>
     /// Scrolls down, never sideways. The sideways bar is switched off BEFORE
     /// AutoScroll goes on - once it is on, WinForms ignores these settings
-    /// (LayoutDoctor found the same, the hard way).
+    /// (the old layout repair pass found the same, the hard way).
     /// </summary>
     internal static void ScrollDownOnly(ScrollableControl scrollable)
     {

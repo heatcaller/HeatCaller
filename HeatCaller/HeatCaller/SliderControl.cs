@@ -27,9 +27,12 @@ public sealed class SliderControl : Control
     /// <summary>Raised when the user moves the value with the mouse, wheel or keyboard.</summary>
     public event EventHandler? Scroll;
 
-    private const int ThumbWidth = 14;
-    private const int ThumbHeight = 20;
-    private const int TrackHeight = 5;
+    // The handle and the track are at the screen's DPI, as the rest of the
+    // window is once the app is started --dpi-aware (the host sizes the
+    // slider itself). Exactly these sizes at 96 DPI.
+    private static int ThumbWidth => UiLayout.AtDpi(14);
+    private static int ThumbHeight => UiLayout.AtDpi(20);
+    private static int TrackHeight => UiLayout.AtDpi(5);
 
     private int _minimum;
     private int _maximum = 100;

@@ -14,22 +14,77 @@ namespace HeatCaller;
 ///
 /// To get a real layout in exactly, drop a photo of it underneath with
 /// Trace photo and draw over the top.
+///
+/// On the layout pieces (DialogFit): the toolbar along the top - the tools,
+/// then Wall the edge, Trace route and Play, then Undo, Redo, Fit and Clear,
+/// each group a row of buttons only as wide as their captions and the three
+/// a section gap apart, a group that does not fit on the line starting the
+/// next (a FieldRow). Under it the board takes the room, with the status line
+/// under it; the palette is a column down its left and the side panel one
+/// down its right (two Besides, one inside the other), each a column of cards
+/// that scrolls by itself when the window is too short for all of it. At the
+/// foot, against the right-hand edge: the main-picture box, Save as PNG...,
+/// Save Layout and Cancel. It opens at the size it always did, at the text
+/// size in use - never bigger than the screen - and can be made bigger, or as
+/// narrow as it always could; the board takes what it is given. It used to be
+/// placed in pixels: a 1360x840 window - taller than a 1280x720 screen has
+/// room for - with a toolbar strip and a footer of fixed heights docked along
+/// the top and the bottom and the palette and the side panel of fixed widths
+/// docked down either side, every control in them at a fixed place and most
+/// at a fixed size; the toolbar's buttons at widths worked out in the body
+/// face though drawn in the bold one; the status line wrapped at a fixed
+/// 560px; and the footer's buttons placed from the window's width.
 /// </summary>
 public sealed class RcpTrackEditorForm : Form
 {
+    /// <summary>
+    /// How big the window opens inside its frame at the normal text size -
+    /// the size it always opened at. It opens this big at the text size in
+    /// use, never bigger than the screen, and can be made bigger: the board
+    /// takes the room.
+    /// </summary>
+    private const int DialogWidth = 1360;
+    private const int DialogHeight = 840;
+
+    /// <summary>How narrow the window could always be made, frame and all, at the normal text size - see the constructor.</summary>
+    private const int LeastWindowWidth = 1120;
+
+    /// <summary>The board's least height at the normal text size - below it, the window scrolls instead.</summary>
+    private const int CanvasLeastHeight = 240;
+
+    /// <summary>The least the palette and the side panel show at the normal text size before each scrolls by itself.</summary>
+    private const int ColumnLeastHeight = 160;
+
+    /// <summary>
+    /// A palette entry at the normal text size, as it always was. The
+    /// palette is as wide as one in its card, beside its scrollbar - or as
+    /// its row of turn radii needs, when that is more (PaletteWidth).
+    /// </summary>
+    private const int PaletteEntryWidth = 192;
+    private const int PaletteEntryHeight = 54;
+
+    /// <summary>The side panel's width at the normal text size, as it always was - or as wide as its widest line needs, when that is more (SideWidth).</summary>
+    private const int SidePanelWidth = 314;
+
+    /// <summary>The tile size's number box, and the photo's opacity slider's height, at the normal text size, as they were.</summary>
+    private const int TileSizeBoxWidth = 90;
+    private const int SliderHeight = 32;
+
     private readonly RcpTrackCanvas _canvas = new();
-    private readonly Panel _paletteHost = new();
     private readonly List<PaletteButton> _paletteButtons = new();
     private readonly ToolTip _tips = new();
 
-    private readonly Label _lblStats = new();
+    /// <summary>What the plan comes to - as tall as the most it can say (see BuildSidePanel), so the kit check under it stays where it is as the plan changes.</summary>
+    private readonly SteadyLabel _lblStats = new();
     private readonly Label _lblKitCheck = new();
-    private readonly Label _lblStatus = new();
+
+    /// <summary>How the tool in hand works, or what the board has just done - as tall as the longest a tool says (ToolHint), so the board over it keeps its size as tools are picked.</summary>
+    private readonly SteadyLabel _lblStatus = new();
     private readonly ComboBox _cmbKit = new();
     private readonly NumericUpDown _numTileSize = new();
     private readonly TextBox _txtName = new();
-    private readonly CheckBox _chkClosedRoute = new();
-    private readonly CheckBox _chkUseAsPhoto = new();
+    private readonly CheckBox _chkClosedRoute = new ThemedCheckBox();
+    private readonly CheckBox _chkUseAsPhoto = new ThemedCheckBox();
     private readonly Button _btnPlay = new();
     private readonly SliderControl _barBackdrop = new();
 
@@ -37,6 +92,9 @@ public sealed class RcpTrackEditorForm : Form
     private Button? _btn50;
     private (Button Button, RcpTool Tool)[] _toolButtons = Array.Empty<(Button, RcpTool)>();
     private (Button Button, float Radius)[] _radiusButtons = Array.Empty<(Button, float)>();
+
+    /// <summary>What the kit drop-down needs across for its longest choice, kept until its face or its list changes - see SideWidth.</summary>
+    private (Font Font, int Count, int Width)? _kitWidth;
 
     private readonly string _trackName;
 
@@ -64,9 +122,6 @@ public sealed class RcpTrackEditorForm : Form
         _trackName = string.IsNullOrWhiteSpace(trackName) ? string.Empty : trackName;
 
         Text = string.IsNullOrEmpty(_trackName) ? "Track Designer" : $"Track Designer - {_trackName}";
-        StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(1120, 700);
-        ClientSize = new Size(1360, 840);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         KeyPreview = true;
@@ -76,21 +131,7 @@ public sealed class RcpTrackEditorForm : Form
         _canvas.DesignChanged += RefreshReadouts;
         _canvas.StatusChanged += message => _lblStatus.Text = message;
 
-        var toolbar = BuildToolbar();
-        BuildPalette();
-        var side = BuildSidePanel();
-        var footer = BuildFooter();
-
-        var canvasHost = new Panel { Dock = DockStyle.Fill, BackColor = AppTheme.Background };
-
-        _canvas.Dock = DockStyle.Fill;
-        canvasHost.Controls.Add(_canvas);
-
-        Controls.Add(canvasHost);
-        Controls.Add(side);
-        Controls.Add(_paletteHost);
-        Controls.Add(toolbar);
-        Controls.Add(footer);
+        var page = BuildLayout();
 
         AppTheme.StyleToolTip(_tips);
         AppTheme.ApplyRecursively(this);
@@ -100,7 +141,13 @@ public sealed class RcpTrackEditorForm : Form
         HighlightTileSize();
         HighlightRadius();
         RefreshReadouts();
-        _canvas.Fit();
+
+        // The plan framed in the board. It used to be framed here, in a
+        // window already at its full size; the board has its size only once
+        // the window is sized as it opens (DialogFit, on Load) - so it is
+        // framed each time the board is resized until the window is on
+        // screen, and left as it is after that, as it always was.
+        _canvas.SizeChanged += FrameUntilShown;
 
         // Why the plan's traced photo is missing, if it is. Said when the
         // plan was loaded, before the status line existed to show it - and
@@ -110,33 +157,90 @@ public sealed class RcpTrackEditorForm : Form
             _lblStatus.Text = why;
         }
 
-        Shown += (_, _) => _canvas.Focus();
+        Shown += (_, _) =>
+        {
+            _canvas.SizeChanged -= FrameUntilShown;
+            _canvas.Focus();
+        };
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
+
+        // And it can be made as narrow as it always could: 1120px, frame and
+        // all, at the text size in use. The palette and the side panel keep
+        // their widths, the toolbar goes onto a second line, and the board
+        // takes what is left. After DialogFit's own Load handler, added
+        // above, which sets the least to the width it opened at.
+        Load += (_, _) => MinimumSize = new Size(
+            Math.Min(MinimumSize.Width, UiLayout.AtTextSize(LeastWindowWidth)),
+            MinimumSize.Height);
     }
 
     // --- Chrome ---------------------------------------------------------------
 
-    private Panel BuildToolbar()
+    /// <summary>The window's page, built as the class notes describe. Returned for DialogFit to size the window to.</summary>
+    private FillPage BuildLayout()
     {
-        var toolbar = new Panel { Dock = DockStyle.Top, Height = 54, BackColor = AppTheme.Surface };
+        var toolbar = BuildToolbar();
+        var (palette, paletteWidth) = BuildPalette();
+        var (side, sideWidth) = BuildSidePanel();
+        var footer = BuildFooter();
 
-        var x = 12;
+        // Under the board and as wide as it, and as tall as the longest a
+        // tool says there - so picking a tool never resizes the board.
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+        _lblStatus.Wordings = Enum.GetValues<RcpTool>().Select(tool => ToolHint(tool)).ToArray();
 
+        // The board and its status line, with the side panel down their
+        // right; the board takes the height the status line leaves it.
+        var board = new Beside(sideWidth);
+        board.AddFill(_canvas, _ => UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: UiLayout.RowGap);
+        board.Add(_lblStatus, gapBelow: 0);
+        board.AddSideFill(side, _ => UiLayout.AtTextSize(ColumnLeastHeight), gapBelow: 0);
+
+        // And the palette down the left of all of it.
+        var band = new Beside(paletteWidth) { SideOnLeft = true };
+        band.AddFill(board, board.LeastHeight);
+        band.AddSideFill(palette, _ => UiLayout.AtTextSize(ColumnLeastHeight), gapBelow: 0);
+
+        var page = new FillPage();
+        page.Add(toolbar, gapBelow: UiLayout.RowGap);
+        page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(footer, gapBelow: 0);
+
+        // Tab goes from the board to the side panel, the palette, the toolbar
+        // and the buttons at the foot, as it always did - the board has the
+        // focus as the window opens (Shown), and Tab from it reaches the
+        // track's name first. The toolbar is at the top of the page, so it is
+        // put after the band here.
+        if (band.Parent is { } bandHolder)
+        {
+            bandHolder.TabIndex = 0;
+        }
+
+        toolbar.TabIndex = 1;
+        footer.TabIndex = 2;
+
+        Controls.Add(page);
+
+        return page;
+    }
+
+    /// <summary>
+    /// The toolbar: the seven tools, then Wall the edge, Trace route and
+    /// Play, then Undo, Redo, Fit and Clear - each group a row of buttons
+    /// only as wide as their captions (a tight ButtonBar), the three a
+    /// section gap apart, and a group that does not fit on the line starting
+    /// the next (a FieldRow).
+    /// </summary>
+    private FieldRow BuildToolbar()
+    {
         Button Add(string text, string tip, Action click)
         {
-            var button = new Button
-            {
-                Text = text,
-                Location = new Point(x, 11),
-                Height = 32,
-                Width = Math.Max(78, TextRenderer.MeasureText(text, AppTheme.BodyFont).Width + 24),
-            };
+            var button = new Button { Text = text };
 
             button.Click += (_, _) => { click(); _canvas.Focus(); };
 
             _tips.SetToolTip(button, tip);
-
-            toolbar.Controls.Add(button);
-            x += button.Width + 6;
 
             return button;
         }
@@ -156,15 +260,10 @@ public sealed class RcpTrackEditorForm : Form
             (photo, RcpTool.Backdrop),
         };
 
-        x += 12;
-
-        Add("Wall the edge", "Put a rail round every open edge of the floor.", () => _canvas.WallThePerimeter());
-        Add("Trace route", "Follow the corridor between the rails and lay the racing line down it.", () => _canvas.AutoRoute());
+        var wallEdge = Add("Wall the edge", "Put a rail round every open edge of the floor.", () => _canvas.WallThePerimeter());
+        var traceRoute = Add("Trace route", "Follow the corridor between the rails and lay the racing line down it.", () => _canvas.AutoRoute());
 
         _btnPlay.Text = "Play";
-        _btnPlay.Location = new Point(x, 11);
-        _btnPlay.Height = 32;
-        _btnPlay.Width = 76;
         _btnPlay.Click += (_, _) =>
         {
             _canvas.TogglePlay();
@@ -173,19 +272,33 @@ public sealed class RcpTrackEditorForm : Form
         };
 
         _tips.SetToolTip(_btnPlay, "Send a car round the line you drew.");
-        toolbar.Controls.Add(_btnPlay);
-        x += _btnPlay.Width + 6;
 
-        x += 12;
+        // As wide saying Stop as saying Play, so the buttons after it never
+        // move as it changes - it was a fixed 76px for the same reason. Its
+        // row sizes it to its caption; this keeps it to the wider of the two,
+        // measured the way the row measures (UiLayout.TightButtonSizeFor).
+        _btnPlay.MinimumSize = new Size(Math.Max(TightWidth("Play"), TightWidth("Stop")), 0);
 
-        Add("Undo", "Ctrl+Z", () => _canvas.Undo());
-        Add("Redo", "Ctrl+Y", () => _canvas.Redo());
-        Add("Fit", "Frame the whole plan. (F)", () => _canvas.Fit());
-        Add("Clear", "Start again.", ClearAll);
+        var undo = Add("Undo", "Ctrl+Z", () => _canvas.Undo());
+        var redo = Add("Redo", "Ctrl+Y", () => _canvas.Redo());
+        var fit = Add("Fit", "Frame the whole plan. (F)", () => _canvas.Fit());
+        var clear = Add("Clear", "Start again.", ClearAll);
 
         SetTool(RcpTool.Floor);
 
+        var toolbar = new FieldRow();
+        toolbar.Add(null, new ButtonBar(tight: true).With(floor, wall, curve, marker, route, erase, photo));
+        toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, _btnPlay));
+        toolbar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit, clear));
+
         return toolbar;
+
+        static int TightWidth(string caption)
+        {
+            using var probe = new Button { Text = caption };
+
+            return UiLayout.TightButtonSizeFor(probe).Width;
+        }
     }
 
     private void SetTool(RcpTool tool)
@@ -199,63 +312,34 @@ public sealed class RcpTrackEditorForm : Form
             button.FlatAppearance.BorderSize = 0;
         }
 
-        _lblStatus.Text = tool switch
-        {
-            RcpTool.Floor => "Drag to paint floor tiles - the whole track sits on these. Ctrl-drag takes them back off.",
-            RcpTool.Wall => "Drag along the grid to run rail, and a turn rail drops in wherever you round a corner. A single click on a seam still adds one, doubles it up, or takes it away.",
-            RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
-            RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
-            RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
-            RcpTool.Erase => "Click to take off whatever is under the pointer.",
-            _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
-        };
+        _lblStatus.Text = ToolHint(tool);
     }
 
-    private void BuildPalette()
+    /// <summary>How a tool works, as the status line says when it is picked.</summary>
+    private static string ToolHint(RcpTool tool) => tool switch
     {
-        _paletteHost.Dock = DockStyle.Left;
-        _paletteHost.Width = 224;
-        _paletteHost.BackColor = AppTheme.Surface;
-        _paletteHost.Padding = new Padding(10);
-        _paletteHost.AutoScroll = true;
+        RcpTool.Floor => "Drag to paint floor tiles - the whole track sits on these. Ctrl-drag takes them back off.",
+        RcpTool.Wall => "Drag along the grid to run rail, and a turn rail drops in wherever you round a corner. A single click on a seam still adds one, doubles it up, or takes it away.",
+        RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
+        RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
+        RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
+        RcpTool.Erase => "Click to take off whatever is under the pointer.",
+        _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
+    };
 
-        var y = 8;
-
-        void Heading(string text, string note)
+    /// <summary>
+    /// The palette: the floor, the barriers - with the turn radius under
+    /// them - and the markings, each a card of entries under a line of help,
+    /// in a column that scrolls by itself. Returns the column, and the rule
+    /// for its width (PaletteWidth).
+    /// </summary>
+    private (PageStack Column, Func<int> Width) BuildPalette()
+    {
+        PaletteButton Entry(RcpPaletteItem item)
         {
-            var label = new Label
-            {
-                Text = AppTheme.Spaced(text.ToUpperInvariant()),
-                Location = new Point(10, y),
-                AutoSize = true,
-                Font = AppTheme.MicroFont,
-                ForeColor = AppTheme.TextMuted,
-            };
-
-            _paletteHost.Controls.Add(label);
-            y += 20;
-
-            var hint = new Label
-            {
-                Text = note,
-                Location = new Point(10, y),
-                AutoSize = true,
-                MaximumSize = new Size(190, 0),
-                Font = AppTheme.SmallFont,
-                ForeColor = AppTheme.TextMuted,
-            };
-
-            _paletteHost.Controls.Add(hint);
-            y += hint.PreferredHeight + 8;
-        }
-
-        void AddItem(RcpPaletteItem item)
-        {
-            var button = new PaletteButton(item)
-            {
-                Location = new Point(10, y),
-                Size = new Size(192, 54),
-            };
+            // As wide as its card, and as tall as it always was, at the text
+            // size in use - it draws itself to the size it is given.
+            var button = new PaletteButton(item) { Height = UiLayout.AtTextSize(PaletteEntryHeight) };
 
             button.Chosen += chosen =>
             {
@@ -266,51 +350,51 @@ public sealed class RcpTrackEditorForm : Form
             };
 
             _paletteButtons.Add(button);
-            _paletteHost.Controls.Add(button);
 
-            y += button.Height + 6;
+            return button;
         }
 
-        Heading("Floor", "One continuous field of tiles. Lay it first.");
-
-        foreach (var item in RcpTiles.Floor)
+        // A card for each group: its caption, a line of help, and its
+        // entries as close together as they always were - with room under
+        // the last for whatever the card goes on to hold.
+        Section Group(string caption, string note, IReadOnlyList<RcpPaletteItem> items, int gapAfterLast = 0)
         {
-            AddItem(item);
+            var card = new Section(caption);
+
+            card.Add(new Label
+            {
+                Text = note,
+                AutoSize = true,
+                Font = AppTheme.SmallFont,
+                ForeColor = AppTheme.TextMuted,
+            });
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                card.Add(Entry(items[i]), gapBelow: i < items.Count - 1 ? UiLayout.TightButtonGap : gapAfterLast);
+            }
+
+            return card;
         }
 
-        y += 8;
-        Heading("Barriers", "Rails stand ON the floor, along the seams.");
-
-        foreach (var item in RcpTiles.Barriers)
-        {
-            AddItem(item);
-        }
+        var floor = Group("Floor", "One continuous field of tiles. Lay it first.", RcpTiles.Floor);
+        var barriers = Group("Barriers", "Rails stand ON the floor, along the seams.", RcpTiles.Barriers, gapAfterLast: UiLayout.RowGap);
 
         // Turn radius, since a sweeper and a hairpin are the same piece here.
         var lblRadius = new Label
         {
             Text = "Turn radius, in tiles:",
-            Location = new Point(10, y),
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
         };
 
-        _paletteHost.Controls.Add(lblRadius);
-        y += 22;
-
         var radii = new[] { 0.5f, 1f, 1.5f, 2f };
         var buttons = new List<(Button, float)>();
-        var rx = 10;
 
         foreach (var radius in radii)
         {
-            var button = new Button
-            {
-                Text = radius.ToString("0.#"),
-                Location = new Point(rx, y),
-                Size = new Size(44, 30),
-            };
+            var button = new Button { Text = radius.ToString("0.#") };
 
             var captured = radius;
 
@@ -322,24 +406,40 @@ public sealed class RcpTrackEditorForm : Form
                 _canvas.Focus();
             };
 
-            _paletteHost.Controls.Add(button);
             buttons.Add((button, radius));
-
-            rx += 48;
         }
 
         _radiusButtons = buttons.ToArray();
-        y += 40;
 
-        Heading("Markings", "Flat things stuck on the floor.");
+        // Only as wide as their numbers, and the four on one line: the
+        // palette is never narrower than they need (PaletteWidth).
+        var radiusRow = new ButtonBar(tight: true).With(_radiusButtons.Select(pair => (Control)pair.Button).ToArray());
 
-        foreach (var item in RcpTiles.Markings)
-        {
-            AddItem(item);
-        }
+        barriers.Add(lblRadius, gapBelow: UiLayout.HintGap);
+        barriers.Add(radiusRow, gapBelow: 0);
+
+        var markings = Group("Markings", "Flat things stuck on the floor.", RcpTiles.Markings);
+
+        var column = CardColumn();
+        column.Add(floor, gapBelow: UiLayout.RowGap);
+        column.Add(barriers, gapBelow: UiLayout.RowGap);
+        column.Add(markings, gapBelow: 0);
 
         HighlightPalette();
+
+        return (column, () => PaletteWidth(radiusRow));
     }
+
+    /// <summary>
+    /// The palette's width: an entry as wide as it always was, at the text
+    /// size in use - or the turn radii on one line, when they need more - in
+    /// its card, beside the scrollbar the column takes its width from when it
+    /// scrolls. Asked whenever the column is placed.
+    /// </summary>
+    private static int PaletteWidth(ButtonBar radii) =>
+        Math.Max(UiLayout.AtTextSize(PaletteEntryWidth), radii.OneLineWidth)
+        + Section.Inset.Horizontal
+        + SystemInformation.VerticalScrollBarWidth;
 
     private void HighlightPalette()
     {
@@ -361,56 +461,29 @@ public sealed class RcpTrackEditorForm : Form
         }
     }
 
-    private Panel BuildSidePanel()
+    /// <summary>
+    /// The side panel: the track's name, the tile size, the photo being
+    /// traced, the lap, and the kit it is checked against - a card each, in
+    /// a column that scrolls by itself. Returns the column, and the rule for
+    /// its width (SideWidth).
+    /// </summary>
+    private (PageStack Column, Func<int> Width) BuildSidePanel()
     {
-        var side = new Panel
-        {
-            Dock = DockStyle.Right,
-            Width = 314,
-            BackColor = AppTheme.Surface,
-            Padding = new Padding(12),
-            AutoScroll = true,
-        };
-
-        var y = 12;
-
-        void Caption(string text)
-        {
-            var label = new Label
-            {
-                Text = AppTheme.Spaced(text.ToUpperInvariant()),
-                Location = new Point(12, y),
-                AutoSize = true,
-                Font = AppTheme.MicroFont,
-                ForeColor = AppTheme.TextMuted,
-            };
-
-            side.Controls.Add(label);
-            y += 24;
-        }
-
-        Caption("Track name");
-
-        _txtName.Location = new Point(12, y);
-        _txtName.Width = 276;
+        // --- Track name ---
         _txtName.Text = _trackName;
-        side.Controls.Add(_txtName);
 
-        y += 40;
+        var nameCard = new Section("Track name");
+        nameCard.Add(_txtName, gapBelow: 0);
+        Pieces.KeepHeightTold(_txtName);
 
-        Caption("Tile size");
-
-        _btn30 = new Button { Text = "30 cm", Location = new Point(12, y), Size = new Size(84, 32) };
-        _btn50 = new Button { Text = "50 cm", Location = new Point(102, y), Size = new Size(84, 32) };
+        // --- Tile size ---
+        _btn30 = new Button { Text = "30 cm" };
+        _btn50 = new Button { Text = "50 cm" };
 
         _btn30.Click += (_, _) => SetTileSize(300);
         _btn50.Click += (_, _) => SetTileSize(500);
 
-        side.Controls.Add(_btn30);
-        side.Controls.Add(_btn50);
-
-        _numTileSize.Location = new Point(196, y + 2);
-        _numTileSize.Width = 90;
+        _numTileSize.Width = UiLayout.AtTextSize(TileSizeBoxWidth);
         _numTileSize.Minimum = 100;
         _numTileSize.Maximum = 2000;
         _numTileSize.Increment = 10;
@@ -427,38 +500,40 @@ public sealed class RcpTrackEditorForm : Form
             RefreshReadouts();
         };
 
-        side.Controls.Add(_numTileSize);
-
-        side.Controls.Add(new Label
+        var lblUnits = new Label
         {
             Text = "mm per tile",
-            Location = new Point(196, y + 36),
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
-        });
+        };
 
-        y += 62;
+        // The size in mm and its unit keep together: beside the two buttons,
+        // level with their middles - or, when the column is too narrow for
+        // all of it, on a line of their own under them.
+        var units = FieldGrid.Inline(_numTileSize, lblUnits);
+        units.Anchor = AnchorStyles.Left;
 
-        Caption("Trace a photo");
+        var tileCard = new Section("Tile size");
+        tileCard.Add(new ButtonBar(tight: true).With(_btn30, _btn50, units), gapBelow: 0);
 
-        var btnTrace = new Button { Text = "Choose photo...", Location = new Point(12, y), Size = new Size(140, 32) };
+        // --- Trace a photo ---
+        var btnTrace = new Button { Text = "Choose photo..." };
         btnTrace.Click += (_, _) => ChooseBackdrop();
 
-        var btnHide = new Button { Text = "Hide", Location = new Point(158, y), Size = new Size(64, 32) };
+        var btnHide = new Button { Text = "Hide" };
         btnHide.Click += (_, _) => { _canvas.ToggleBackdrop(); _canvas.Focus(); };
 
-        var btnDropPhoto = new Button { Text = "Remove", Location = new Point(228, y), Size = new Size(74, 32) };
+        var btnDropPhoto = new Button { Text = "Remove" };
         btnDropPhoto.Click += (_, _) => { _canvas.ClearBackdrop(); _canvas.Focus(); };
 
-        side.Controls.Add(btnTrace);
-        side.Controls.Add(btnHide);
-        side.Controls.Add(btnDropPhoto);
+        // Only as wide as their captions, and the three on one line: the
+        // side panel is never narrower than they need (SideWidth).
+        var traceButtons = new ButtonBar(tight: true).With(btnTrace, btnHide, btnDropPhoto);
 
-        y += 38;
-
-        _barBackdrop.Location = new Point(10, y);
-        _barBackdrop.Width = 280;
+        // As wide as the card, and as tall as it always was, at the text size
+        // in use - it draws its track and handle in the middle of that.
+        _barBackdrop.Height = UiLayout.AtTextSize(SliderHeight);
         _barBackdrop.Minimum = 5;
         _barBackdrop.Maximum = 100;
         _barBackdrop.Value = Math.Clamp(Result.BackdropOpacity, 5, 100);
@@ -468,27 +543,22 @@ public sealed class RcpTrackEditorForm : Form
             _canvas.Invalidate();
         };
 
-        side.Controls.Add(_barBackdrop);
-
-        y += 52;
-
-        side.Controls.Add(new Label
+        var lblTraceHint = new Label
         {
             Text = "Drop in a photo of the real track, line its tiles up with the grid using the Photo tool, "
                    + "then draw over it. That's the quickest way to get a layout in exactly.",
-            Location = new Point(12, y),
             AutoSize = true,
-            MaximumSize = new Size(276, 0),
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
-        });
+        };
 
-        y += 62;
+        var traceCard = new Section("Trace a photo");
+        traceCard.Add(traceButtons);
+        traceCard.Add(_barBackdrop);
+        traceCard.Add(lblTraceHint, gapBelow: 0);
 
-        Caption("The lap");
-
+        // --- The lap ---
         _chkClosedRoute.Text = "The line closes into a lap";
-        _chkClosedRoute.Location = new Point(12, y);
         _chkClosedRoute.AutoSize = true;
         _chkClosedRoute.Checked = Result.RouteClosed;
         _chkClosedRoute.CheckedChanged += (_, _) =>
@@ -502,20 +572,27 @@ public sealed class RcpTrackEditorForm : Form
             RefreshReadouts();
         };
 
-        side.Controls.Add(_chkClosedRoute);
-        y += 34;
+        // As tall as the most it can say, at a big layout's numbers: a lap
+        // round a floor with no rails on it yet, which is the most lines; no
+        // lap yet, whose line about it is the longest; and rails, dividers
+        // and a lap. The kit check under it then stays where it is as the
+        // plan changes. It used to be given a fixed 190px, which the most it
+        // can say ran past.
+        var floorOnly = new RcpInventory { Tiles = 480, Infield = 64 };
+        var railed = new RcpInventory { Tiles = 480, Infield = 64, StraightRails = 240, Dividers = 36, TurnRails = 28, EndCaps = 6 };
 
-        _lblStats.Location = new Point(12, y);
-        _lblStats.AutoSize = true;
-        _lblStats.MaximumSize = new Size(276, 0);
-        side.Controls.Add(_lblStats);
+        _lblStats.Wordings = new[]
+        {
+            Readout(floorOnly, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
+            Readout(floorOnly, lengthTiles: 0f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
+            Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
+        };
 
-        y += 190;
+        var lapCard = new Section("The lap");
+        lapCard.Add(_chkClosedRoute, stretch: false);
+        lapCard.Add(_lblStats, gapBelow: 0);
 
-        Caption("Check against a kit");
-
-        _cmbKit.Location = new Point(12, y);
-        _cmbKit.Width = 276;
+        // --- Check against a kit ---
         _cmbKit.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbKit.Items.Add("Don't check");
 
@@ -553,54 +630,73 @@ public sealed class RcpTrackEditorForm : Form
             RefreshReadouts();
         };
 
-        side.Controls.Add(_cmbKit);
-        y += 40;
-
-        _lblKitCheck.Location = new Point(12, y);
+        // Last in the column, so what it says can grow without moving anything.
         _lblKitCheck.AutoSize = true;
-        _lblKitCheck.MaximumSize = new Size(276, 0);
         _lblKitCheck.Font = AppTheme.SmallFont;
-        side.Controls.Add(_lblKitCheck);
 
-        return side;
+        // The drop-down as wide as the card, as it always was as wide as the
+        // panel - never narrower than its longest kit (SideWidth).
+        var kitCard = new Section("Check against a kit");
+        kitCard.Add(_cmbKit);
+        Pieces.KeepHeightTold(_cmbKit);
+        kitCard.Add(_lblKitCheck, gapBelow: 0);
+
+        var cards = new[] { nameCard, tileCard, traceCard, lapCard, kitCard };
+        var column = CardColumn();
+
+        for (var i = 0; i < cards.Length; i++)
+        {
+            column.Add(cards[i], gapBelow: i < cards.Length - 1 ? UiLayout.RowGap : 0);
+        }
+
+        return (column, () => SideWidth(traceButtons, cards));
     }
 
-    private Panel BuildFooter()
+    /// <summary>
+    /// The side panel's width: as wide as it always was, at the text size in
+    /// use - or, when one needs more, as the photo's three buttons on one
+    /// line, the kit drop-down's longest choice or a card's caption, in its
+    /// card, beside the scrollbar the column takes its width from when it
+    /// scrolls. Asked whenever the column is placed, so it follows the faces
+    /// the theme pass gives them.
+    /// </summary>
+    private int SideWidth(ButtonBar traceButtons, IReadOnlyList<Section> cards)
     {
-        // Width BEFORE the children go in, and that is the whole point.
-        //
-        // A Panel starts 200 wide. These buttons are placed from
-        // ClientSize.Width - 1360 - and anchored Right, and an anchor
-        // preserves the margins a child had when it was ADDED. Added to a
-        // 200-wide footer, "Cancel" at x=1250 got a right margin of
-        // 200 - 1346 = -1146, and kept it: once the footer docked out to
-        // 1360, Save, Cancel and Save as PNG sat about 1150px past the
-        // right edge of the window, where nobody could reach them. The
-        // Track Designer had no working Save button.
-        //
-        // Docking will set this width again in a moment. Setting it here
-        // is what makes the margins right.
-        var footer = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 60,
-            Width = ClientSize.Width,
-            BackColor = AppTheme.Surface,
-        };
+        var widest = Math.Max(
+            Math.Max(traceButtons.OneLineWidth, Pieces.PickerWidth(_cmbKit, ref _kitWidth)),
+            cards.Max(card => card.CaptionWidth));
 
-        _lblStatus.Location = new Point(16, 20);
-        _lblStatus.AutoSize = true;
-        _lblStatus.MaximumSize = new Size(560, 0);
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-        footer.Controls.Add(_lblStatus);
+        return Math.Max(
+            UiLayout.AtTextSize(SidePanelWidth),
+            widest + Section.Inset.Horizontal + SystemInformation.VerticalScrollBarWidth);
+    }
 
-        var btnSave = new Button { Text = "Save Layout", Width = 130, Height = 34, Anchor = AnchorStyles.Right | AnchorStyles.Top };
-        var btnCancel = new Button { Text = "Cancel", Width = 96, Height = 34, Anchor = AnchorStyles.Right | AnchorStyles.Top, DialogResult = DialogResult.Cancel };
-        var btnPng = new Button { Text = "Save as PNG...", Width = 140, Height = 34, Anchor = AnchorStyles.Right | AnchorStyles.Top };
+    /// <summary>
+    /// A column of cards down one side of the board: placed by the Beside it
+    /// is in rather than docked, with no margins of its own - the page's are
+    /// round it - and no room under its last card. It scrolls by itself when
+    /// the window is too short for all of it, as the palette and the side
+    /// panel always did.
+    /// </summary>
+    private static PageStack CardColumn()
+    {
+        var column = new PageStack { Dock = DockStyle.None, Padding = Padding.Empty };
+        ScrollTheming.NoRoomBelow(column);
 
-        btnSave.Location = new Point(ClientSize.Width - 246, 13);
-        btnCancel.Location = new Point(ClientSize.Width - 110, 13);
-        btnPng.Location = new Point(ClientSize.Width - 396, 13);
+        return column;
+    }
+
+    /// <summary>
+    /// The foot: the main-picture box, Save as PNG..., Save Layout and Cancel
+    /// against the right-hand edge, Cancel furthest right, as they were. The
+    /// bar holds them right to left, in the order they are added, so Tab's
+    /// order is set back to left to right, as it was.
+    /// </summary>
+    private ButtonBar BuildFooter()
+    {
+        var btnSave = new Button { Text = "Save Layout" };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        var btnPng = new Button { Text = "Save as PNG..." };
 
         btnSave.Click += (_, _) =>
         {
@@ -622,15 +718,18 @@ public sealed class RcpTrackEditorForm : Form
         btnPng.Click += (_, _) => ExportPng();
 
         _chkUseAsPhoto.Text = "Show this plan as the track's main picture";
-        _chkUseAsPhoto.Location = new Point(ClientSize.Width - 740, 20);
         _chkUseAsPhoto.AutoSize = true;
-        _chkUseAsPhoto.Anchor = AnchorStyles.Right | AnchorStyles.Top;
         _chkUseAsPhoto.Checked = true;
 
-        footer.Controls.Add(_chkUseAsPhoto);
-        footer.Controls.Add(btnPng);
-        footer.Controls.Add(btnSave);
-        footer.Controls.Add(btnCancel);
+        // Level with the middle of the buttons beside it (see FieldGrid.Inline).
+        _chkUseAsPhoto.Anchor = AnchorStyles.Left;
+
+        var footer = new ButtonBar(alignRight: true).With(btnCancel, btnSave, btnPng, _chkUseAsPhoto);
+
+        _chkUseAsPhoto.TabIndex = 0;
+        btnPng.TabIndex = 1;
+        btnSave.TabIndex = 2;
+        btnCancel.TabIndex = 3;
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
@@ -639,6 +738,9 @@ public sealed class RcpTrackEditorForm : Form
     }
 
     // --- Behaviour ------------------------------------------------------------
+
+    /// <summary>Frames the plan in the board at the size the board has now - see the constructor.</summary>
+    private void FrameUntilShown(object? sender, EventArgs e) => _canvas.Fit();
 
     private void SetTileSize(double mm)
     {
@@ -786,10 +888,25 @@ public sealed class RcpTrackEditorForm : Form
 
         var inventory = RcpPlan.Count(Result);
         var lengthTiles = RcpPlan.RouteLengthInTiles(Result);
-        var metres = lengthTiles * Result.TileSizeMm / 1000.0;
+
+        _lblStats.Text = Readout(inventory, lengthTiles, Result.TileSizeMm, _canvas.LapSeconds);
+
+        RefreshKitCheck(inventory);
+    }
+
+    /// <summary>
+    /// What the lap's readout says of a plan with <paramref name="inventory"/>
+    /// in it and a racing line <paramref name="lengthTiles"/> tiles long, at
+    /// <paramref name="tileSizeMm"/> a tile and <paramref name="lapSeconds"/>
+    /// a lap - for the plan being drawn, and for the most it can say, which
+    /// the readout is made as tall as (see BuildSidePanel).
+    /// </summary>
+    private static string Readout(RcpInventory inventory, float lengthTiles, double tileSizeMm, double lapSeconds)
+    {
+        var metres = lengthTiles * tileSizeMm / 1000.0;
         var feet = metres * 3.28084;
 
-        var perTile = Result.TileSizeMm / 1000.0;
+        var perTile = tileSizeMm / 1000.0;
         var area = inventory.Tiles * perTile * perTile;
 
         var lines = new List<string>
@@ -810,10 +927,10 @@ public sealed class RcpTrackEditorForm : Form
                 : "Lap: draw the racing line, or press Trace route",
         };
 
-        if (lengthTiles > 0 && _canvas.LapSeconds > 0)
+        if (lengthTiles > 0 && lapSeconds > 0)
         {
-            var speed = metres / _canvas.LapSeconds;
-            lines.Add($"At a {_canvas.LapSeconds:0.0}s lap that's {speed:0.0} m/s ({speed * 3.6:0.0} km/h).");
+            var speed = metres / lapSeconds;
+            lines.Add($"At a {lapSeconds:0.0}s lap that's {speed:0.0} m/s ({speed * 3.6:0.0} km/h).");
         }
 
         if (inventory.Tiles > 0 && inventory.StraightRails == 0)
@@ -822,9 +939,7 @@ public sealed class RcpTrackEditorForm : Form
             lines.Add("No rails yet - try Wall the edge, then add the dividers.");
         }
 
-        _lblStats.Text = string.Join(Environment.NewLine, lines);
-
-        RefreshKitCheck(inventory);
+        return string.Join(Environment.NewLine, lines);
     }
 
     private void RefreshKitCheck(RcpInventory inventory)
@@ -912,6 +1027,11 @@ public sealed class RcpTrackEditorForm : Form
     /// <summary>
     /// One palette entry, drawn with the same painter the canvas uses - so
     /// what you pick up always looks like what gets laid down.
+    ///
+    /// Its sample, name and hint are placed at the text size in use: at the
+    /// normal one exactly where they always were, and further apart as the
+    /// entry grows with the text, so the name and the hint have the room
+    /// their faces need rather than the 20px and 24px they had at 100%.
     /// </summary>
     private sealed class PaletteButton : Control
     {
@@ -981,8 +1101,13 @@ public sealed class RcpTrackEditorForm : Form
                 g.FillPath(wash, path);
             }
 
-            var size = Height - 14;
-            var origin = new PointF(10, 7);
+            // The room round the sample, and either side of the words, at the
+            // text size in use - see the class notes.
+            var inset = UiLayout.AtTextSize(7);
+            var edge = UiLayout.AtTextSize(10);
+
+            var size = Height - 2 * inset;
+            var origin = new PointF(edge, inset);
 
             var state = g.Save();
             g.SetClip(new RectangleF(origin.X - 3, origin.Y - 3, size + 6, size + 6));
@@ -1000,18 +1125,18 @@ public sealed class RcpTrackEditorForm : Form
                 LineAlignment = StringAlignment.Center,
             };
 
-            var textLeft = origin.X + size + 12;
-            var textWidth = Width - textLeft - 10;
+            var textLeft = origin.X + size + UiLayout.AtTextSize(12);
+            var textWidth = Width - textLeft - edge;
 
             g.DrawString(RcpTiles.NameOf(Item), AppTheme.BoldFont, nameBrush,
-                new RectangleF(textLeft, 7, textWidth, 20), format);
+                new RectangleF(textLeft, inset, textWidth, UiLayout.AtTextSize(20)), format);
 
             // Disposed like the one above: made fresh on every repaint (each
             // hover in and out), it was left for the finaliser every time.
             using var hintFormat = new StringFormat { Trimming = StringTrimming.EllipsisWord };
 
             g.DrawString(RcpTiles.HintOf(Item), AppTheme.SmallFont, hintBrush,
-                new RectangleF(textLeft, 25, textWidth, 24),
+                new RectangleF(textLeft, UiLayout.AtTextSize(25), textWidth, UiLayout.AtTextSize(24)),
                 hintFormat);
         }
     }

@@ -12,10 +12,10 @@ namespace HeatCaller.Tests;
 /// other, text cut short, things past the edge of whatever holds them,
 /// parts squashed to nothing.
 ///
-/// It fails only for a page on LayoutAudit.ConvertedPages - a page rebuilt
-/// to lay itself out has to come through every size with nothing to say.
-/// Every other page is reported, not failed: the report is the to-do list
-/// for converting them, and the pages are worked through against it.
+/// It fails for anything found on any page. Every page has been rebuilt to
+/// lay itself out (LayoutAudit.ConvertedPages), and each has to come through
+/// every size with nothing to say - as does a page added later, whether or
+/// not it made the list.
 ///
 /// The report is written beside the test dll, in layout\report.txt. Run
 /// layout.cmd (beside check.cmd) for pictures of every page at every size
@@ -82,12 +82,13 @@ public sealed partial class LayoutTests
                 $"Only {sweep.Pages.Count} pages were checked: {string.Join(", ", sweep.Pages)}.");
         }
 
-        var mustBeClean = sweep.Findings
-            .Where(found => LayoutAudit.IsConverted(found.Finding.Where))
-            .ToList();
+        // Every finding counts, not only those on LayoutAudit.ConvertedPages:
+        // every page is on it now, and a page added later without the layout
+        // pieces has to fail here too rather than slip into the report.
+        var mustBeClean = sweep.Findings;
 
         Assert.True(mustBeClean.Count == 0,
-            "A page rebuilt to lay itself out has something that does not fit:\n"
+            "A page has something that does not fit:\n"
             + string.Join("\n", mustBeClean.Take(40).Select(found =>
                 $"  {found.View.Name} | {found.Finding.Where} | {found.Finding.Kind}: {found.Finding.Detail}"))
             + (mustBeClean.Count > 40 ? $"\n  ...and {mustBeClean.Count - 40} more" : string.Empty)
@@ -336,7 +337,6 @@ internal static class LayoutSweep
             // Shared by every window in the process, and left at whatever the
             // last window built here was built at.
             AppTheme.SetFontScale(1f);
-            LayoutDoctor.Log = null;
         }
 
         return result;
@@ -504,8 +504,8 @@ internal static class LayoutReport
         text.AppendLine($"Written {DateTime.Now:yyyy-MM-dd HH:mm} by the layout test (HeatCaller.Tests\\LayoutTests.cs).");
         text.AppendLine();
         text.AppendLine("Every page in the sidebar, and every tab inside each one, built at each size below and measured.");
-        text.AppendLine("Nothing was repaired first: this is each page's own layout without LayoutDoctor's nudges -");
-        text.AppendLine("the layout a page rebuilt on the layout pieces has to get right by itself.");
+        text.AppendLine("This is each page's own layout, as the app shows it: nothing in the app nudges a page into shape");
+        text.AppendLine("afterwards, so every page has to get its layout right by itself.");
         text.AppendLine();
         text.AppendLine($"Sizes: the room inside a maximised window on that screen, less a {LayoutView.TaskbarHeight}px taskbar and the title bar.");
         text.AppendLine("1280x720 is what the app sees on a 1920x1080 laptop at Windows' 150% scaling (it runs without DPI awareness).");
@@ -518,7 +518,8 @@ internal static class LayoutReport
         }
 
         text.AppendLine();
-        text.AppendLine("Pages that must be clean (LayoutAudit.ConvertedPages): "
+        // Every page must be clean, on the list or not - see EveryPageFitsAtEverySize.
+        text.AppendLine("Every page must be clean. Rebuilt on the layout pieces (LayoutAudit.ConvertedPages): "
             + (LayoutAudit.ConvertedPages.Count == 0 ? "none yet." : string.Join(", ", LayoutAudit.ConvertedPages) + "."));
         text.AppendLine("Took: " + string.Join(", ", sweep.Timings.Select(t => $"{t.Key.Heading} {t.Value.TotalSeconds:0.0}s")) + ".");
 
@@ -652,7 +653,7 @@ internal static class LayoutReport
         if (LayoutAudit.ConvertedPages.Count > 0)
         {
             text.AppendLine();
-            text.AppendLine("* rebuilt to lay itself out - must be 0 everywhere");
+            text.AppendLine("* rebuilt to lay itself out - every page, starred or not, must be 0 everywhere");
         }
 
         return text.ToString();

@@ -984,8 +984,11 @@ public static class AppTheme
         // come out of the descenders - which is how "Copy" came to read
         // "Copv" and "Move Up" to read "Move Ub" at the larger text sizes.
         // The four extra pixels are the room the lift spends.
-        // MEASURED THE WAY LayoutDoctor MEASURES IT, and that is the whole
-        // point of this line's current shape.
+        // MEASURED THE WAY THE LAYOUT REPAIR PASS MEASURED IT, and that is
+        // the whole point of this line's current shape. (The repair pass -
+        // "the doctor" below - used to straighten every page as it opened; it
+        // was deleted on 30 Sep, and the layout test measures a button's
+        // height by this same rule - see LayoutAudit.CheckButton.)
         //
         // This used to be BoldFont.Height + 12 while the doctor's own check
         // was TextRenderer.MeasureText(text, font).Height + 12. Those are
@@ -1580,6 +1583,47 @@ public static class AppTheme
         // first so restyling on a theme change doesn't stack handlers.
         grid.CellPainting -= QuietHeaderPaint;
         grid.CellPainting += QuietHeaderPaint;
+
+        // A tick column's boxes as the app's own (TickBox), as every check
+        // box in the app is drawn, rather than Windows' 13px glyph.
+        grid.CellPainting -= TickCellPaint;
+        grid.CellPainting += TickCellPaint;
+    }
+
+    /// <summary>
+    /// Draws a tick column's cell: the cell as the grid draws it - background,
+    /// selection, border - and the app's tick box (TickBox) in the middle in
+    /// place of Windows' glyph. A click still ticks it as before: the grid
+    /// decides that, from the cell, not from what is drawn in it.
+    /// </summary>
+    private static void TickCellPaint(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.Graphics is not { } g || sender is not DataGridView grid)
+        {
+            return;
+        }
+
+        if (e.ColumnIndex >= grid.Columns.Count || grid.Columns[e.ColumnIndex] is not DataGridViewCheckBoxColumn)
+        {
+            return;
+        }
+
+        e.Paint(e.ClipBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.ContentForeground);
+
+        var state = e.FormattedValue switch
+        {
+            CheckState checkState => checkState,
+            bool ticked => ticked ? CheckState.Checked : CheckState.Unchecked,
+            _ => CheckState.Unchecked,
+        };
+
+        var cell = e.CellBounds;
+        var side = Math.Max(0, Math.Min(TickBox.Side, cell.Height - 6));
+        var box = new Rectangle(cell.X + (cell.Width - side) / 2, cell.Y + (cell.Height - side) / 2, side, side);
+
+        TickBox.Draw(g, box, state, grid.Enabled);
+
+        e.Handled = true;
     }
 
     /// <summary>
@@ -3109,16 +3153,6 @@ public static class AppTheme
             }
         }
 
-        // Every dialog runs this on itself, which makes it the one place to
-        // hook the layout check without each dialog having to remember. The
-        // main window is left out: its pages are checked individually as
-        // they're opened, which is the only point at which a page's controls
-        // report their real visibility.
-        if (root is Form dialog && dialog is not MainForm)
-        {
-            LayoutDoctor.Watch(dialog);
-        }
-
         // Buffer the container too. A flat-styled ComboBox repaints its
         // border on mouse enter/leave, and without a buffered parent that
         // shows as a flickering line just inside the control's edge.
@@ -3254,7 +3288,7 @@ public static class AppTheme
                     // bright white one down the right edge of the page.
                     if (userControl.AutoScroll)
                     {
-                        LayoutDoctor.ThemeScrolling(userControl);
+                        ScrollTheming.Apply(userControl);
                     }
 
                     FocusRelease.Attach(userControl);
@@ -3280,8 +3314,8 @@ public static class AppTheme
                     if (panel.AutoScroll)
                     {
                         // Both ways, and room at the bottom - see
-                        // LayoutDoctor.ThemeScrolling.
-                        LayoutDoctor.ThemeScrolling(panel);
+                        // ScrollTheming.Apply.
+                        ScrollTheming.Apply(panel);
                     }
 
                     FocusRelease.Attach(panel);

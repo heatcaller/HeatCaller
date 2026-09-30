@@ -17,7 +17,7 @@ public sealed class MainRoundForm : Form
 
     private readonly TextBox _txtLabel = new();
     private readonly ComboBox _cmbTrack = new();
-    private readonly CheckedListBox _clbDrivers = new();
+    private readonly CheckedListBox _clbDrivers = new ThemedCheckedListBox();
     private readonly NumericUpDown _numTopN = new();
 
     public RoundDefinition? Result { get; private set; }

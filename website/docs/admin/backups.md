@@ -1,6 +1,6 @@
 # Backups
 
-A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, your own looks, the club logo and all your settings. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
+A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, soundscapes and their recorded voice lines, your own looks, the club logo and all your settings. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
 
 <!-- screenshot: Backup & Restore page, its five cards -->
 
@@ -51,7 +51,7 @@ An automatic backup runs in the background, so the app keeps responding while it
 | **Automatically back up** | Turns automatic backups on or off. | On |
 | **every** *n* **day** / **days** | How long between automatic backups, from 1 to 30 days. | 1 day |
 | **Keep the last** *n* **automatic backups (older ones are deleted automatically)** | How many automatic backups to keep, from 1 to 200. | 14 |
-| **Folder:** | Where all backups go. Click **Change...** to pick another folder. | `Documents\HeatCaller Backups` |
+| **Folder:** | Where all backups go. Click **Change** to pick another folder. | `Documents\HeatCaller Backups` |
 
 Changes save as soon as you make them.
 
@@ -82,7 +82,7 @@ Then, on **Backup & Restore**, on the **Automatic backups** card, tick the servi
 - A copy that fails never affects the backup on the laptop. The reason shows on the page after **Back Up Now**, and in the Developer Console for automatic backups.
 - HeatCaller never signs in to your cloud account, and holds no password or token for it.
 
-To restore from a cloud copy, use **Restore from File...** and pick the zip in the **HeatCaller Backups** folder (on a new PC, install and sign in to the service's app first).
+To restore from a cloud copy, use **Restore from File** and pick the zip in the **HeatCaller Backups** folder (on a new PC, install and sign in to the service's app first).
 
 !!! tip "Set a backup password"
     Your keys, tokens and PINs are only in a backup, locked, when a backup password is set. Without one, a cloud copy holds your drivers, results and settings but no keys. See [The backup password](#the-backup-password).
@@ -96,7 +96,7 @@ The **Backup password** card decides whether backups carry your keys, tokens and
 - **With a password set**, the status line says `Keys and tokens travel with backups, locked with this password.` Each backup made from then on includes those secrets, encrypted with the password.
 - **With no password**, it says `No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.`
 
-The secrets a backup carries are: the ElevenLabs key, the relay publish token, the QR check-in key, the Local Screens PINs, the online staff PIN, every racer's personal PIN, and the email app password.
+The secrets a backup carries are: the ElevenLabs key, the relay publish token, the voice relay's token (if one is typed in on **Voice → Voice Settings**), the QR check-in key, the Local Screens PINs, the online staff PIN, every racer's personal PIN, and the email app password.
 
 The QR check-in key matters most. Every printed online QR check-in's QR code is made from it. Lose it, and every online QR check-in in every driver's box stops working and has to be reprinted.
 
@@ -132,13 +132,13 @@ Restoring replaces your current data with the backup's. HeatCaller protects you 
 ### Steps
 
 1. Open **Backup & Restore**.
-2. Either select a backup on the **Existing backups** card and click **Restore Selected**, or click **Restore from File...** and pick a `.zip` anywhere on the PC.
+2. Either select a backup on the **Existing backups** card and click **Restore Selected**, or click **Restore from File** and pick a `.zip` anywhere on the PC.
 3. Read the confirmation and click **Yes**. Once your club has online QR check-ins, the confirmation also says what a restore does to them: `QR check-ins: the backup's QR check-in key comes back with it. QR check-ins printed with the key in this backup work; if you have used Reissue All QR Check-ins since it was made, QR check-ins printed after that stop working - print them again, or reissue again on the Club Website page.`
 4. The `Restore complete.` message shows where your previous data was saved. Click **OK**, and HeatCaller restarts.
 
 A restore is refused while a race or practice is running ("A race or practice is running. Restore a backup once it has finished - restoring restarts the app, which would end it.") and while a backup is being written ("A backup is being written - try again in a moment.").
 
-The list on the **Existing backups** card shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File...** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
+The list on the **Existing backups** card shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
 
 ## Restoring on a new PC
 
@@ -164,14 +164,14 @@ If the password is wrong, the dialog says so and how many tries are left. You ge
 HeatCaller tells you, once, what needs entering again:
 
 - the relay token, for online results and check-in (**Club Website** page)
-- the ElevenLabs key (**Voice Announcements → Voice Settings**)
+- the ElevenLabs key (**Voice → Voice Settings**)
 - the email app password for racer PINs (**Club Website** page)
 - the Local Screens remote, check-in and manager PINs (**Local Screens** page)
 - racers' personal check-in PINs: make a new set (**Club Website** page)
 
 **The QR check-in key can't be recovered either, so QR check-ins printed on the old PC won't scan. Print new ones.** A new QR check-in key is made the next time one is needed.
 
-Everything else (drivers, classes, history, championships, tracks, sounds) comes across whether or not there was a password.
+Everything else (drivers, classes, history, championships, tracks, sounds, soundscapes) comes across whether or not there was a password.
 
 !!! note
     While HeatCaller is waiting to recover keys, it doesn't make automatic backups or new racer PINs. It picks up again once the recovery is dealt with.
@@ -196,7 +196,7 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 
 ## Save Support Info
 
-When something has gone wrong and you want help with it, **Save Support Info** on the **Getting help** card saves one `.zip` file to attach to an email. You can also right-click the **Developer Console** on the **Connection** page and choose **Save support info...**.
+When something has gone wrong and you want help with it, **Save Support Info** on the **Getting help** card saves one `.zip` file to attach to an email. You can also right-click the console on the **Developer console** card of the **Connection** page and choose **Save support info...**.
 
 1. Click **Save Support Info**.
 2. Choose where to save it. It suggests your desktop and a name like `HeatCaller support 2026-09-27 21-30.zip`.
@@ -232,7 +232,7 @@ Freeze dumps are never included. If HeatCaller stops responding, it saves a copy
 | `Password too short` | The backup password is under 8 characters. | Use a longer one. |
 | `Passwords don't match` | The two boxes differ. | Type the same password in both. |
 | `That password doesn't open this backup.` | Wrong backup password on a new PC. | Check caps lock and try again; you have three tries. |
-| `Backup failed` | The backup couldn't be written: the folder may be unavailable or the disk full. | Check the folder under **Folder:**, or pick another with **Change...**. |
+| `Backup failed` | The backup couldn't be written: the folder may be unavailable or the disk full. | Check the folder under **Folder:**, or pick another with **Change**. |
 | Automatic backups stopped appearing | **Automatically back up** is off, or the folder is unavailable (the console shows `[backup] Automatic backup failed:`). | Tick the box; check the folder. |
 
 More in [Troubleshooting](troubleshooting.md#backups-and-restore).

@@ -14,7 +14,7 @@ When a race finishes (see [Running a race](running-a-race.md#finishing)), HeatCa
 1. **Saves the result to Race History** straight away, with every driver's laps, lap times, best lap, total time, rejected passes, laps led and starting position.
     - Ghost cars are left out, and the places close up behind them.
     - The saved name is the session name you typed, or the round's name, or "Race".
-2. **Links the race to its round**, so **Race Day → Program** shows the round as run and qualifying can use the result.
+2. **Links the race to its round**, so the race program on **Race Day → Next Steps** shows the round as run and qualifying can use the result.
 3. **Works out badges** (see [Achievements](#achievements)).
 4. **Saves a results card image** to a **HeatCaller Results** folder in your Documents folder. The console shows the full path.
 
@@ -24,7 +24,7 @@ Corrections made on the **Race Control** board after the checkered flag change t
 
 ## Race History
 
-The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps** and **Fastest Lap**, plus **Handicap Pos** when the class uses handicaps.
+The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Warnings**, plus **Handicap Pos** when the class uses handicaps. **Warnings** shows "-", the number of warnings a driver was given in the race (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag; hover over it to see each warning.
 
 A saved demo race shows **Demo** as its type, and its detail title reads "Demo race (not scored)".
 
@@ -36,18 +36,18 @@ Below the results is a notes box, for the weather, the track surface, incidents 
 
 | Button | What it does |
 |---|---|
-| **Replay...** | Plays the race back as a running order over time. |
-| **Pace...** | Opens the pace table for the race (see [Pace](#pace)). |
-| **Share Results Card...** | Saves the result as an image to share. |
-| **Event Report...** | Builds a one-page report for a whole race day. |
-| **Export Session...** | Saves the selected session as a CSV file. |
-| **Export Results...** | Exports results or laps for many sessions, as CSV or JSON. |
+| **Replay** | Plays the race back as a running order over time. |
+| **Pace** | Opens the pace table for the race (see [Pace](#pace)). |
+| **Share Results Card** | Saves the result as an image to share. |
+| **Event Report** | Builds a one-page report for a whole race day. |
+| **Export Session** | Saves the selected session as a CSV file. |
+| **Export Results** | Exports results or laps for many sessions, as CSV or JSON. |
 | **Edit Result** | Corrects a saved race: laps, time and lap penalties, or an outcome such as DNF or DQ, with a reason. Needs **Allow corrections to saved results** ticked on **Local Screens**. You can undo this. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result). |
 | **Delete Session** | Deletes the selected sessions after you confirm. You can undo this. |
 
 ### Replay
 
-**Replay...** plays a finished race back as the running order over time. Each driver has a lane, and the lanes cross when positions change. The window doesn't show cars moving around a track: the decoder only records when each car crossed the line, so drawing anything in between would be made up.
+**Replay** plays a finished race back as the running order over time. Each driver has a lane, and the lanes cross when positions change. The window doesn't show cars moving around a track: the decoder only records when each car crossed the line, so drawing anything in between would be made up.
 
 Press **Play**, drag the slider to move through the race, and choose a speed from 1x to 16x.
 
@@ -55,14 +55,14 @@ Races saved before lap-by-lap times were recorded can't be replayed.
 
 ### Results card
 
-**Share Results Card...** makes an image of the result: title, date, track and the top eight finishers, with **POS**, **DRIVER**, **LAPS** and **FASTEST LAP**. It's ready to paste into a group chat or a social post.
+**Share Results Card** makes an image of the result: title, date, track and the top eight finishers, with **POS**, **DRIVER**, **LAPS** and **FASTEST LAP**. It's ready to paste into a group chat or a social post.
 
-1. Select a session and press **Share Results Card...**.
+1. Select a session and press **Share Results Card**.
 2. Choose a **Style:**:
     - **Print friendly - white background, dark ink**
     - **Monochrome - white background, grey lines (mono printers)**
     - **Match the app's look - as shown on screen**
-3. Check the **Preview:** and press **Save...**.
+3. Check the **Preview:** and press **Save**.
 4. Choose where to save the PNG file.
 
 The card saved automatically at the end of a race uses the app's own on-screen style. It also lists any badges the race unlocked, under **UNLOCKED**.
@@ -71,16 +71,16 @@ The card saved automatically at the end of a race uses the app's own on-screen s
 
 ### Exporting results
 
-**Export Session...** saves one session as a CSV file with the columns **Position**, **Driver**, **Car**, **Laps**, **Fastest Lap (s)**, **Elapsed** and **Status**.
+**Export Session** saves one session as a CSV file with the columns **Position**, **Driver**, **Car**, **Laps**, **Fastest Lap (s)**, **Elapsed** and **Status**.
 
-**Export Results...** opens the **Export Results** dialog:
+**Export Results** opens the **Export Results** dialog:
 
 1. Choose a **Format:**:
     - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds.
     - **Lap CSV - one row per lap**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, LapNumber, LapSeconds, CumulativeSeconds. Lap 1 is the start lap, which runs from the green to the car's first crossing.
     - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races.
 2. Under **Sessions**, choose **Selected only** or **All recorded sessions**.
-3. Press **Export...** and choose where to save the file.
+3. Press **Export** and choose where to save the file.
 
 All CSV exports are:
 
@@ -90,7 +90,7 @@ All CSV exports are:
 
 ### Event Report
 
-**Event Report...** builds one HTML page covering a whole race day. You can print it, email it or open it on a phone.
+**Event Report** builds one HTML page covering a whole race day. You can print it, email it or open it on a phone.
 
 1. Choose the **Day:**. Only days with saved sessions are listed.
 2. Enter an **Event name:**. The default is "Club Race Day".
@@ -99,11 +99,11 @@ All CSV exports are:
     - **Tech inspection summary**
     - **Rental transponders not returned**
     - **Every lap time (makes the report much longer)** (off by default).
-4. Press **Generate...**, choose where to save the report, and choose whether to open it.
+4. Press **Generate**, choose where to save the report, and choose whether to open it.
 
-The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. Rentals still out come next, so they get noticed. After that come the qualifying standings (worked out the same way as on **Race Day → Program**), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions".
+The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. Rentals still out come next, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions".
 
-**Which races the report covers.** When a race day (event) on **Race Day → Event** raced on the chosen day, the report covers that race day's own rounds, including any that ran past midnight. Practice and races with no round are included when they ran on a day that race day raced. Otherwise the report covers everything saved on that date. If more than one race day raced on the chosen date, the report covers everything recorded on the date and says so at the top. The tech inspection summary always covers the same races as the rest of the report. Saved demo races are always left out, and ghost cars never appear in the fastest laps or the driver count.
+**Which races the report covers.** When a race day (event) set up on **Race Day → Setup** raced on the chosen day, the report covers that race day's own rounds, including any that ran past midnight. Practice and races with no round are included when they ran on a day that race day raced. Otherwise the report covers everything saved on that date. If more than one race day raced on the chosen date, the report covers everything recorded on the date and says so at the top. The tech inspection summary always covers the same races as the rest of the report. Saved demo races are always left out, and ghost cars never appear in the fastest laps or the driver count.
 
 When a class uses handicaps, the results show a **Handicap pos** column, and the handicap winner is marked as the winner.
 
@@ -131,7 +131,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Add new races to this championship automatically** | Races that match the rules below join the championship as they're recorded. When it's off, you tick every race by hand. | On |
 | **Class:** | Only count races from this class, or **(every class)**. If the class is no longer on the **Classes** page (it was deleted, say), it shows as "(missing class) *name*" and the championship keeps it. Renaming a class carries the new name to its championships. | (every class) |
 | **Only count mains - leave qualifying heats out** | Leaves qualifying heats out. | On |
-| **Count every race day** | Untick it to choose which race days count. | On |
+| **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
 
 The rules read each race's round to find its class and whether it was a main. A freeform race with no round can't match a class or mains-only rule, but you can still tick it by hand.
@@ -233,11 +233,11 @@ Pick **Driver A:** and **Driver B:** to compare two drivers across every session
 
 ### Trends
 
-One driver's best lap per session over time. Choose the **Driver:** and a **Track:**. Comparing across different layouts would only show which track is faster, not whether anyone is improving, so pick one track. **Include practice sessions** is on by default. **Save Chart as Image...** exports the chart.
+One driver's best lap per session over time. Choose the **Driver:** and a **Track:**. Comparing across different layouts would only show which track is faster, not whether anyone is improving, so pick one track. **Include practice sessions** is on by default. **Save Chart as Image** exports the chart.
 
 ### Pace
 
-The pace table for any saved session. Choose it in **Race:**. The same table opens from **Pace...** on **Race History**.
+The pace table for any saved session. Choose it in **Race:**. The same table opens from **Pace** on **Race History**.
 
 It's sorted by each driver's best three laps in a row, the pace they could actually hold, rather than by result. Where the two orders disagree, a driver lost time somewhere other than outright speed.
 
@@ -318,7 +318,7 @@ Some notes on how badges are earned:
 - **A driver needs at least one lap** in a race for it to count toward anything.
 - **Some badges need newer races.** **Spotless**, **Wire to Wire**, **Through the Field**, **Converted**, **Late Show**, **Quick and Tidy**, **Grand Slam** and **Clean Slate** need data that only races saved by newer versions carry (rejected passes, laps led and grid positions).
 - **Some badges need a grid.** Badges about where a driver started (**Through the Field**, **Converted**, **Through the Pack**, **Rocket Start**, **Comeback Kid**, **Grand Slam**) need a known grid, which comes from the round's roster or the previous race's result.
-- **Rivals** for **Bragging Rights** are set on **Voice Announcements → Rivalries**. See [Voice announcements](../announcer/voice.md).
+- **Rivals** for **Bragging Rights** are set on **Voice → Rivalries**. See [Voice announcements](../announcer/voice.md).
 - **The rarest badges are announced first.** When a race earns several, Race Control reads out the rarest.
 - **Earned before you updated?** Badges aren't worked out again for old races. Most of the career badges (such as **Globetrotter**, **Car Collector** and **Old Friends**) count your earlier races, so they arrive at your next race that qualifies.
 - **Badges are tied to the transponder.** They follow the transponder, not the name on the profile.

@@ -39,7 +39,7 @@ You need:
 
 ## The startup screen
 
-A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.48.2**) shows while the app loads its pages. It shows short progress lines:
+A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.59.0**) shows while the app loads its pages. It shows short progress lines:
 
 - "Starting up..."
 - "Loading settings and driver profiles..."
@@ -92,18 +92,20 @@ You don't have to add every driver now. When an unknown transponder crosses the 
 
 The tour is a short look around the app. A small card in the bottom-right corner steps through the main pages, opening each one as it describes it. It's separate from the wizard and entirely optional.
 
-- Tick **Show me around the app now** on the wizard's last step to start it when setup finishes.
+- Tick **Show me around the app now (about two minutes)** on the wizard's last step to start it when setup finishes.
 - Press <kbd>Shift</kbd>+<kbd>T</kbd> any time to take it again.
 - **Next** and **Back** (or the arrow keys) move between stops. **Skip tour** or <kbd>Esc</kbd> closes it.
 - The app keeps working while the card is open, so you can try a page before moving on.
 
 ## Other things you might see at startup
 
+**Would you like a hand setting up a race night?** Once, on a later start when no race day is open, HeatCaller offers the **Set Up Tonight** wizard, which walks through the classes, the drivers, the day itself, who has turned up and the program. Say no and it isn't offered again; it's always on **Race Day → Setup** as **Set Up Tonight**, and <kbd>Shift</kbd>+<kbd>S</kbd> opens it. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard).
+
 **Restore the unfinished race?** If HeatCaller was closed or crashed while a race was running, it offers to bring that race back. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
 
 **A request for your backup password.** If you restored a backup onto a different PC, HeatCaller may ask for the backup's password so it can unlock your saved keys (ElevenLabs, relay token and PINs). See [Backups](../admin/backups.md).
 
-**A tip in the console.** The Developer Console on the **Connection** page shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
+**A tip in the console.** The Developer console on the **Connection** page shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
 ## Where your data lives
 

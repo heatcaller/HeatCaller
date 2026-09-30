@@ -121,8 +121,21 @@ public sealed class BigScreenForm : Form
 
         Text = "HeatCaller — Big Screen";
         StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(1280, 800);
-        MinimumSize = new Size(800, 500);
+
+        // 1280x800 at the screen's DPI (UiLayout.AtDpi - exactly that while
+        // the app runs DPI-unaware, the default), and in a DPI-aware run no
+        // bigger than the screen it opens on: at 150% on a 1080p laptop the
+        // scaled size would be 1920x1200, taller than the screen.
+        var opens = new Size(UiLayout.AtDpi(1280), UiLayout.AtDpi(800));
+
+        if (UiLayout.DpiScale > 1f)
+        {
+            var area = Screen.FromPoint(Cursor.Position).WorkingArea;
+            opens = new Size(Math.Min(opens.Width, area.Width), Math.Min(opens.Height, area.Height));
+        }
+
+        Size = opens;
+        MinimumSize = new Size(Math.Min(UiLayout.AtDpi(800), opens.Width), Math.Min(UiLayout.AtDpi(500), opens.Height));
         KeyPreview = true;
 
         BuildLayout();
@@ -363,19 +376,23 @@ public sealed class BigScreenForm : Form
         // again whenever the crowd-screen look changes.
         _lblHint.Text = "F11: toggle fullscreen     Esc: close";
         _lblHint.Dock = DockStyle.Top;
-        _lblHint.Height = 24;
+        _lblHint.Height = UiLayout.AtDpi(24);
         _lblHint.TextAlign = ContentAlignment.MiddleRight;
         _lblHint.Font = AppTheme.SmallFont;
-        _lblHint.Padding = new Padding(0, 0, 12, 0);
+        _lblHint.Padding = new Padding(0, 0, UiLayout.AtDpi(12), 0);
 
+        // The bands, columns and paddings round this window's point-size
+        // fonts are at the screen's DPI, as those fonts are: on a screen the
+        // app draws at 150% (--dpi-aware) a 56-point clock is half as tall
+        // again in pixels, and a band of fixed pixels would clip it.
         _pnlTop.Dock = DockStyle.Top;
-        _pnlTop.Height = 132;
+        _pnlTop.Height = UiLayout.AtDpi(132);
 
         _lblRaceState.Text = "IDLE";
         _lblRaceState.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 13F, FontStyle.Bold));
         _lblRaceState.AutoSize = false;
         _lblRaceState.Dock = DockStyle.Top;
-        _lblRaceState.Height = 32;
+        _lblRaceState.Height = UiLayout.AtDpi(32);
         _lblRaceState.TextAlign = ContentAlignment.MiddleCenter;
 
         _lblAnnouncement.Text = "Waiting for the race to start...";
@@ -407,7 +424,7 @@ public sealed class BigScreenForm : Form
         _pnlTop.Controls.Add(_logoBox);
 
         _pnlCountdown.Dock = DockStyle.Top;
-        _pnlCountdown.Height = 118;
+        _pnlCountdown.Height = UiLayout.AtDpi(118);
 
         _lblCountdown.Text = string.Empty;
         _lblCountdown.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 56F, FontStyle.Bold));
@@ -422,7 +439,7 @@ public sealed class BigScreenForm : Form
         _lblElapsed.Text = string.Empty;
         _lblElapsed.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 56F, FontStyle.Bold));
         _lblElapsed.Dock = DockStyle.Left;
-        _lblElapsed.Width = 320;
+        _lblElapsed.Width = UiLayout.AtDpi(320);
         _lblElapsed.TextAlign = ContentAlignment.MiddleCenter;
 
         _pnlCountdown.Controls.Add(_lblCountdown);
@@ -454,17 +471,17 @@ public sealed class BigScreenForm : Form
         _grid.MultiSelect = false;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersHeight = 38;
+        _grid.ColumnHeadersHeight = UiLayout.AtDpi(38);
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         _grid.ColumnHeadersDefaultCellStyle.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 12F, FontStyle.Bold));
         _grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
         _grid.DefaultCellStyle.Font = OwnFont(new Font(AppTheme.BodyFont.FontFamily, 24F, FontStyle.Bold));
-        _grid.DefaultCellStyle.Padding = new Padding(18, 4, 8, 4);
+        _grid.DefaultCellStyle.Padding = new Padding(UiLayout.AtDpi(18), UiLayout.AtDpi(4), UiLayout.AtDpi(8), UiLayout.AtDpi(4));
         // Deliberately NO zebra striping. At this size alternating fills halve
         // the contrast of every other row, and the hairline below already
         // separates them - striping is a small-type habit that hurts here.
         // (ApplyLook paints alternate rows the same as the rest.)
-        _grid.RowTemplate.Height = 64;
+        _grid.RowTemplate.Height = UiLayout.AtDpi(64);
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         RebuildKpiColumns();
 
@@ -482,7 +499,7 @@ public sealed class BigScreenForm : Form
 
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
-        _pnlOnDeck.Height = 62;
+        _pnlOnDeck.Height = UiLayout.AtDpi(62);
         _lblOnDeck.Dock = DockStyle.Fill;
         _lblOnDeck.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 20F, FontStyle.Bold));
         _lblOnDeck.TextAlign = ContentAlignment.MiddleCenter;
@@ -491,7 +508,7 @@ public sealed class BigScreenForm : Form
         _pnlOnDeck.Visible = _schedule is not null;
 
         _lblWarning.Dock = DockStyle.Top;
-        _lblWarning.Height = 84;
+        _lblWarning.Height = UiLayout.AtDpi(84);
         _lblWarning.AutoSize = false;
         _lblWarning.TextAlign = ContentAlignment.MiddleCenter;
         _lblWarning.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 30F, FontStyle.Bold));

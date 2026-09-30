@@ -97,15 +97,11 @@ internal static class DialogFit
         // of eleven columns wants all the width there is.
         dialog.MaximizeBox = height is not null && !frameless;
 
-        // Its own layout, nothing for the doctor to straighten - see
-        // LayoutDoctor.Watch, which every dialog is given by the theme pass.
-        LayoutDoctor.LeaveAlone(dialog);
-
         // The page ends at its buttons. The theme pass gives a panel that
         // scrolls room under its last control, so a page scrolled to its end
         // does not stop hard against the window's edge; under a dialog's
         // buttons it was a blank band, the page's own margin and 32px more.
-        LayoutDoctor.NoRoomBelow(page);
+        ScrollTheming.NoRoomBelow(page);
 
         Fittings.AddOrUpdate(dialog, new Fitting(page, width, height, body, widthMeasured));
         dialog.Load += (_, _) => Fit(dialog);
@@ -124,7 +120,7 @@ internal static class DialogFit
         // The page gives the margins; nothing under the last part, for the
         // reason Keep gives the page none.
         var body = new PageStack { Padding = Padding.Empty };
-        LayoutDoctor.NoRoomBelow(body);
+        ScrollTheming.NoRoomBelow(body);
 
         page.AddFill(
             body,

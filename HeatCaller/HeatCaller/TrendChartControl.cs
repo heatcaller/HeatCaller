@@ -19,7 +19,7 @@ public sealed class TrendChartControl : UserControl
 
     private readonly ComboBox _cmbDriver = new();
     private readonly ComboBox _cmbTrack = new();
-    private readonly CheckBox _chkIncludePractice = new();
+    private readonly CheckBox _chkIncludePractice = new ThemedCheckBox();
     private readonly Panel _chartPanel = new();
     private readonly Label _lblSummary = new();
 
@@ -310,11 +310,22 @@ public sealed class TrendChartControl : UserControl
             using var msgBrush = new SolidBrush(palette.Muted);
             const string msg = "No data for these filters.";
             var size = g.MeasureString(msg, AppTheme.BodyFont);
-            g.DrawString(msg, AppTheme.BodyFont, msgBrush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - 10);
+
+            // Lifted by about half a line of the body face, at the text size
+            // in use, so it stays centred as the face grows.
+            g.DrawString(msg, AppTheme.BodyFont, msgBrush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - UiLayout.AtTextSize(10));
             return;
         }
 
-        const int padLeft = 70, padRight = 20, padTop = 20, padBottom = 44;
+        // The room round the plot holds the time labels down the left and
+        // the dates under it, all in the small face - so it grows with the
+        // text size, or at 200% the labels run into the plot and off the
+        // bottom. Worked out on every paint, so a new text size is picked up
+        // by the repaint it brings.
+        var padLeft = UiLayout.AtTextSize(70);
+        var padRight = UiLayout.AtTextSize(20);
+        var padTop = UiLayout.AtTextSize(20);
+        var padBottom = UiLayout.AtTextSize(44);
         var plot = new Rectangle(
             bounds.Left + padLeft, bounds.Top + padTop,
             Math.Max(10, bounds.Width - padLeft - padRight),
@@ -331,11 +342,18 @@ public sealed class TrendChartControl : UserControl
         using var axisPen = new Pen(palette.Axis);
         using var labelBrush = new SolidBrush(palette.Muted);
 
+        // The labels' offsets from their lines are fractions of a line of
+        // the small face they are drawn in, so they follow the text size
+        // with it - a time label lifted a fixed 7px sits below its gridline
+        // once the face is twice as tall.
+        var labelGap = UiLayout.AtTextSize(8);
+        var halfLabel = UiLayout.AtTextSize(7);
+
         for (var i = 0; i <= 4; i++)
         {
             var y = plot.Bottom - plot.Height * i / 4f;
             g.DrawLine(gridPen, plot.Left, y, plot.Right, y);
-            g.DrawString($"{(low + range * i / 4.0) / 1000.0:0.00}s", AppTheme.SmallFont, labelBrush, bounds.Left + 8, y - 7);
+            g.DrawString($"{(low + range * i / 4.0) / 1000.0:0.00}s", AppTheme.SmallFont, labelBrush, bounds.Left + labelGap, y - halfLabel);
         }
 
         g.DrawLine(axisPen, plot.Left, plot.Top, plot.Left, plot.Bottom);
@@ -350,7 +368,11 @@ public sealed class TrendChartControl : UserControl
         }
         using (var bestBrush = new SolidBrush(palette.Highlight))
         {
-            g.DrawString("all-time best", AppTheme.SmallFont, bestBrush, plot.Right - 76, bestY - 16);
+            // Its room back from the right edge and up from the line, at the
+            // text size in use - the words grow with the small face, and a
+            // fixed 76px cut them off at the plot's edge at 200%.
+            g.DrawString("all-time best", AppTheme.SmallFont, bestBrush,
+                plot.Right - UiLayout.AtTextSize(76), bestY - UiLayout.AtTextSize(16));
         }
 
         var xFor = new Func<int, float>(i =>
@@ -370,19 +392,28 @@ public sealed class TrendChartControl : UserControl
 
         using var dotBrush = new SolidBrush(palette.Series[0]);
         using var pbBrush = new SolidBrush(palette.Highlight);
+
+        // The dots at the text size in use, in step with the labels round
+        // them, so the chart keeps its proportions as the text grows.
+        var bestDot = (float)UiLayout.AtTextSize(8f);
+        var dot = (float)UiLayout.AtTextSize(5f);
+
         for (var i = 0; i < linePoints.Length; i++)
         {
             var isBest = points[i].BestLapMs == minMs;
             var brush = isBest ? pbBrush : dotBrush;
-            var size = isBest ? 8f : 5f;
+            var size = isBest ? bestDot : dot;
             g.FillEllipse(brush, linePoints[i].X - size / 2, linePoints[i].Y - size / 2, size, size);
         }
 
         // Thin out date labels so they never overlap on a long history.
+        // Centred under their points by about half a date's width, and
+        // dropped clear of the axis, at the text size in use.
         var labelStep = Math.Max(1, points.Count / 12);
+        var halfDate = UiLayout.AtTextSize(14);
         for (var i = 0; i < points.Count; i += labelStep)
         {
-            g.DrawString(points[i].Label, AppTheme.SmallFont, labelBrush, xFor(i) - 14, plot.Bottom + 8);
+            g.DrawString(points[i].Label, AppTheme.SmallFont, labelBrush, xFor(i) - halfDate, plot.Bottom + labelGap);
         }
     }
 
@@ -423,6 +454,13 @@ public sealed class TrendChartControl : UserControl
             var palette = ChartPalette.For(optionsForm.Options.StyleKey);
 
             using var bitmap = new Bitmap(size.Width, size.Height);
+
+            // A new bitmap takes the screen's DPI, and in a DPI-aware run
+            // (144 DPI at 150%) that would draw the chart's point-size text
+            // half as big again inside the same pixels. At 96 DPI, which is
+            // what a DPI-unaware run always sees, this changes nothing.
+            bitmap.SetResolution(96, 96);
+
             using (var g = Graphics.FromImage(bitmap))
             {
                 DrawChart(g, new Rectangle(0, 0, size.Width, size.Height), palette);

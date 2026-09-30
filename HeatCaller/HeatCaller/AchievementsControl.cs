@@ -20,7 +20,7 @@ public sealed class AchievementsControl : UserControl
 {
     private readonly ProfileStore _profiles;
     private readonly ComboBox _cmbDriver = new();
-    private readonly CheckBox _chkHideLocked = new();
+    private readonly CheckBox _chkHideLocked = new ThemedCheckBox();
     private readonly ProgressStrip _progress = new();
     private readonly Panel _scroll = new();
     private readonly BadgeWall _wall = new();
@@ -348,7 +348,7 @@ public sealed class AchievementsControl : UserControl
     private sealed class ProgressStrip : Control
     {
         /// <summary>Scales a designed-at-100% measurement to the current text size, the same way BadgeWall does.</summary>
-        private static int Px(float value) => (int)Math.Round(value * AppTheme.FontScale);
+        private static int Px(float value) => UiLayout.AtTextSize(value);
 
         /// <summary>How tall the strip needs to be for the text it is about to draw.</summary>
         public static int HeightFor() =>
@@ -495,7 +495,7 @@ public sealed class AchievementsControl : UserControl
     {
         public sealed record Entry(AchievementDefinition Badge, UnlockedAchievement? Earned);
 
-        private static int Px(float value) => (int)Math.Round(value * AppTheme.FontScale);
+        private static int Px(float value) => UiLayout.AtTextSize(value);
 
         private static int Gap => Px(12);
         private static int SidePad => Px(4);

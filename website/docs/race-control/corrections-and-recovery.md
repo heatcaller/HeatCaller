@@ -4,10 +4,11 @@ No decoder is perfect, and no laptop is either. This page covers fixing the coun
 
 ## Correcting laps and penalties
 
-All corrections apply to the driver selected on the **Race Control** leaderboard. There are two ways to reach them:
+All corrections apply to the driver selected on the **Race Control** leaderboard. There are three ways to reach them:
 
 - **The toolbar** under the leaderboard: **+1 Lap**, **-1 Lap**, **+5s Penalty**, **+10s Penalty**, **Clear Penalties**. Click a driver's row first. If nobody is selected you'll see "Select a racer in the leaderboard first."
 - **Right-click** a driver's row: **Add a lap (+1)**, **Remove a lap (-1)**, **Penalty +5s**, **Penalty +10s**, **Penalty...**, **Clear penalty**. The menu always applies to the row you right-clicked, not the row that was selected before.
+- **The keyboard**, with a driver selected: <kbd>+</kbd> and <kbd>-</kbd> for laps, <kbd>P</kbd> and <kbd>Shift</kbd>+<kbd>P</kbd> for 5 and 10-second penalties, <kbd>C</kbd> to clear penalties. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md#the-selected-driver).
 
 A correction updates the board and the announcer's running order straight away. The announcer doesn't treat it as a car crossing the line, so there's no lap call or buzzer.
 
@@ -59,9 +60,11 @@ The race-day manager's **Results** tab makes the same correction from a phone. S
 
 ## Reset and undo
 
-**Reset** (in the flag row) clears the running race: the standings, the clock, the grid and any queued announcements. It also throws away the crash-recovery copy of the race.
+**Reset** (in the flag row, or <kbd>F7</kbd>) clears the running race: the standings, the clock, the grid and any queued announcements. It also clears the round and the name on the **Session** row, so the next race starts from a clean slate, and it throws away the crash-recovery copy of the race. <kbd>F7</kbd> asks first if a race is staging, counting down or running; the button doesn't.
 
-If there was anything to lose, the reset goes onto the **Undo** list as **Reset race**. The **Undo** button at the bottom of the sidebar shows the next step it will undo, for example "Undo: Reset race". Hover over it to see the full list. HeatCaller keeps the last three undoable actions from anywhere in the app.
+Reset doesn't start anything. Press **Stage** when you're ready.
+
+If there was anything to lose, the reset goes onto the **Undo** list as **Reset race**. Hover over the **Undo** button at the bottom of the sidebar to see what it will undo, in order; right-click it to undo several steps at once. HeatCaller keeps the last 25 undoable actions from anywhere in the app.
 
 Undoing a reset puts everything back as it was:
 
@@ -69,11 +72,12 @@ Undoing a reset puts everything back as it was:
 - the flag and the clock
 - a checkered flag that was already out, and who had taken it
 - the grid and any staggered releases
-- jump-start flags.
+- jump-start flags
+- the round and the name on the **Session** row.
 
 The flag calls aren't made again, and neither are "last lap" and "one minute to go" if they had already been called. Ghost cars in the race carry on mid-lap, as though they had kept lapping; see [Ghost Cars](practice-and-ghosts.md#ghost-cars).
 
-**Reset** during a demo ends the demo instead, and that can't be undone. Once **Countdown** or a first **Green (Start)** has taken over from a demo, the start on the board is a real race's, so a **Reset** pressed straight after can be undone as usual. While practice is running, **Reset**, **Checkered** and **Reset Round** are refused: use **Stop** or **Clear Stats** on the **Practice** page. See [Practice](practice-and-ghosts.md#practice).
+**Reset** during a demo ends the demo instead, and that can't be undone. Once **Countdown** or a first **Green (Start)** has taken over from a demo, the start on the board is a real race's, so a **Reset** pressed straight after can be undone as usual. While practice is running, **Reset** and **Checkered** are refused: use **Stop** or **Clear Stats** on the **Practice** page. See [Practice](practice-and-ghosts.md#practice).
 
 ### Why an undo can be refused
 
@@ -83,21 +87,12 @@ So HeatCaller refuses the undo once a new race has been started (as soon as you'
 
 > [undo] FAILED to undo 'Reset race': a new race has been started since the reset, and undoing it now would overwrite that race. Nothing was changed.
 
-The same rule applies to undoing **Reset Round**.
-
-### Reset Round
-
-**Reset Round** on the **Session** row clears the session back to zero: the leaderboard, the timer, the selected round and the name. It's the way back to a clean start when a round needs to be run again from scratch.
-
-The race, the leaderboard, the round and the name come back together with one **Undo** (**Reset round**), subject to the same rule about new races.
-
-**Reset Round** doesn't start anything. Press **Stage** when you're ready.
 
 ### Staging over a running race
 
 Pressing **Stage** or **Countdown** (or <kbd>F1</kbd>/<kbd>F2</kbd>) while a race is running would throw that race away, so HeatCaller asks first, in a **Race in progress** box: the running race would be abandoned, its laps cleared from the board and not saved to **Race History**. Choose **No** and use **Checkered** instead if you want to end the race and keep its result.
 
-Starting a round from **Race Day → Program** or **Start Next** while a race is running asks the same question ("Abandon the running race?") before anything is announced. A stage or countdown already confirmed on the phone remote isn't asked again on the laptop.
+Starting a round from **Race Day → Next Steps** or **Start Next** while a race is running asks the same question ("Abandon the running race?") before anything is announced. A stage or countdown already confirmed on the phone remote isn't asked again on the laptop.
 
 If you go ahead by mistake, **Undo** puts the abandoned race back, as long as the new race hasn't gone green yet. When the new race was started from the program or **Start Next**, the undo also puts back the abandoned race's round, track and label. After the green, the undo is refused, for the same reason as undoing a reset.
 
@@ -105,7 +100,7 @@ If the race finishes, is reset or changes in some other way while the question i
 
 Over a demo, the question is **Demo in progress** instead: "A demo is running. ..." Ending a demo this way doesn't save it to **Race History** (even with the save box ticked), and **Undo** doesn't bring it back. See [Demo Mode](practice-and-ghosts.md#demo-mode).
 
-A **Countdown** confirmed over a running race clears that race's flag, the same as **Stage** does. So if the running race was under a yellow or red flag, the new countdown still runs on to its automatic green (with auto-advance on), and that green is called as the new race's start. A yellow or red thrown during the new countdown still stops the automatic start, as it does for any start.
+A **Countdown** confirmed over a running race clears that race's flag, the same as **Stage** does. So if the running race was under a yellow or red flag, the new countdown still runs on to its automatic green (when the start sequence runs automatically), and that green is called as the new race's start. A yellow or red thrown during the new countdown still stops the automatic start, as it does for any start.
 
 ## Crash recovery
 
@@ -118,7 +113,7 @@ While a race is running, HeatCaller keeps a copy of it on disk. The copy is writ
 - the track, the limits and the minimum lap time the race was run under
 - the start type, the grid, a staggered start's release schedule and clock, and any jump starts.
 
-The copy is deleted the moment the race is saved to **Race History**, and when you press **Reset** or **Reset Round**. If it still exists the next time HeatCaller starts, the last race never finished. A copy saved more than 24 hours earlier isn't offered back.
+The copy is deleted the moment the race is saved to **Race History**, and when you press **Reset**. If it still exists the next time HeatCaller starts, the last race never finished. A copy saved more than 24 hours earlier isn't offered back.
 
 Demo races and practice are never kept. A race that hadn't gone green (it was still staging or counting down), or had no laps yet, isn't offered back, because staging again is quicker. A copy written during staging or a countdown would only hold the previous race's laps.
 

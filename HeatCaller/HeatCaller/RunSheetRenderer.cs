@@ -16,6 +16,10 @@ public static class RunSheetRenderer
     public static Bitmap Render(string title, IReadOnlyList<ScheduleEntry> entries)
     {
         var bitmap = new Bitmap(PageWidth, PageHeight);
+
+        // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
+        bitmap.SetResolution(96, 96);
+
         using var g = Graphics.FromImage(bitmap);
         g.Clear(Color.White);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;

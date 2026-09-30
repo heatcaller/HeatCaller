@@ -10,8 +10,8 @@ public sealed class GhostControl : UserControl
     private readonly SessionHistoryStore _history;
     private readonly UndoService _undo;
 
-    private readonly CheckBox _chkEnabled = new();
-    private readonly CheckBox _chkAnnounce = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
+    private readonly CheckBox _chkAnnounce = new ThemedCheckBox();
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
 
@@ -510,9 +510,25 @@ public sealed class GhostControl : UserControl
     }
 }
 
-/// <summary>Picks whose best lap a Quick Rival should be built from.</summary>
+/// <summary>
+/// Picks whose best lap a Quick Rival should be built from.
+///
+/// On the layout pieces (DialogFit): the question, the drivers' drop-down
+/// under it across the window, and Add and Cancel at the foot; as tall as
+/// that, and as wide as it was made at the normal text size, at the size in
+/// use - wider when a driver's name and transponder need the drop-down
+/// wider. It used to be placed in pixels in a 400x150 window: the drop-down
+/// a fixed 368px wide however long a driver's name, and Add and Cancel 84px
+/// wide at fixed places.
+/// </summary>
 public sealed class GhostRivalPickerForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size, as it was made.</summary>
+    private const int DialogWidth = 400;
+
+    /// <summary>The drop-down's width at the normal text size - the window's, less its margins - wider when a driver needs it.</summary>
+    private const int DriverPickerWidth = 368;
+
     private readonly ComboBox _cmbDriver = new();
 
     public string? SelectedTransponder { get; private set; }
@@ -520,23 +536,15 @@ public sealed class GhostRivalPickerForm : Form
     public GhostRivalPickerForm(List<DriverProfile> drivers)
     {
         Text = "Quick Rival";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(400, 150);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
         var lbl = new Label
         {
             Text = "Build a rival from whose best lap?",
-            Location = new Point(16, 20),
             AutoSize = true,
         };
 
-        _cmbDriver.Location = new Point(16, 48);
-        _cmbDriver.Width = 368;
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDownList;
 
         foreach (var driver in drivers)
@@ -550,16 +558,45 @@ public sealed class GhostRivalPickerForm : Form
 
         _cmbDriver.SelectedIndex = 0;
 
-        var btnOk = new Button { Text = "Add", Location = new Point(208, 100), Width = 84, DialogResult = DialogResult.OK };
+        var btnOk = new Button { Text = "Add", DialogResult = DialogResult.OK };
         btnOk.Click += (_, _) => SelectedTransponder = drivers[_cmbDriver.SelectedIndex].Transponder;
 
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(300, 100), Width = 84, DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        Controls.AddRange(new Control[] { lbl, _cmbDriver, btnOk, btnCancel });
+        // The question over the drop-down, which runs across the window as
+        // it did.
+        var page = new FillPage();
+        page.Add(lbl, gapBelow: UiLayout.HintGap);
+        page.Add(_cmbDriver);
+        Pieces.KeepHeightTold(_cmbDriver);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Add first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, in the face it leaves the drop-down in: the
+        // window as wide as it was at the normal text size, at the size in
+        // use, or wider when the longest driver's name and transponder need
+        // the drop-down wider than it was. Kept in a local, never read back
+        // from the drop-down - it is in the page already, which cuts it to
+        // the width of a window not sized yet.
+        (Font Font, int Count, int Width)? driverWidth = null;
+        var pickerWidth = Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(_cmbDriver, ref driverWidth));
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + pickerWidth + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, widthMeasured: true);
     }
 }

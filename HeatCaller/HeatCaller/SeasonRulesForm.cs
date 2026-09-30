@@ -9,16 +9,44 @@ namespace HeatCaller;
 /// lists that all want the height - a fourth block of settings wedged in
 /// there would cost the session list exactly the room it needs and be read
 /// twice a year.
+///
+/// On the layout pieces (DialogFit): under WHAT COUNTS, the automatic tick
+/// with its note a step in under it, the class beside its caption, the
+/// mains-only and every-race-day ticks, and the race days a step in with
+/// the note on them under the list; under HOW IT ADDS UP, the rounds
+/// counted with what that means beside the box, and the note on it. All of
+/// that is the window's body, which scrolls on a screen too short for it,
+/// with Save and Cancel under it, always in view. It used to be placed in
+/// pixels: a window 484px wide whatever the text size, the notes wrapped at
+/// a fixed 440px and the class a fixed 260px - a longer class name cut
+/// short. At a larger text size the words beside the rounds box ran past
+/// the window's edge, and the window grew taller than the screen, Save and
+/// Cancel under its edge.
 /// </summary>
 public sealed class SeasonRulesForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size - wider for a line that has to be on one (see the constructor).</summary>
+    private const int DialogWidth = 484;
+
+    /// <summary>The class drop-down's width at the normal text size - wider for a longer class name.</summary>
+    private const int ClassWidth = 260;
+
+    /// <summary>The rounds box's width at the normal text size.</summary>
+    private const int BestWidth = 80;
+
+    /// <summary>How many race days show before the list scrolls, as it always did.</summary>
+    private const int EventRows = 5;
+
+    /// <summary>What is said beside the rounds box when it is 0 - the longer of the two things said there.</summary>
+    private const string EveryRoundHint = "rounds  -  0 counts every round";
+
     private readonly Season _season;
 
-    private readonly CheckBox _chkAuto = new();
+    private readonly CheckBox _chkAuto = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
-    private readonly CheckBox _chkMainsOnly = new();
-    private readonly CheckedListBox _lstEvents = new();
-    private readonly CheckBox _chkAllEvents = new();
+    private readonly CheckBox _chkMainsOnly = new ThemedCheckBox();
+    private readonly CheckedListBox _lstEvents = new ThemedCheckedListBox();
+    private readonly CheckBox _chkAllEvents = new ThemedCheckBox();
     private readonly NumericUpDown _numBest = new();
     private readonly Label _lblBestHint = new();
 
@@ -29,43 +57,79 @@ public sealed class SeasonRulesForm : Form
         _season = season;
 
         Text = $"Scoring rules - {(string.IsNullOrWhiteSpace(season.Name) ? "championship" : season.Name)}";
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimizeBox = false;
-        MaximizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        BuildLayout(classes, events);
+        var (page, body, classCaption, bestCaption) = BuildLayout(classes, events);
         LoadFromSeason(events);
 
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, in the faces it leaves them in, and after
+        // the season is loaded - a class it names that is no longer on file
+        // is added to the drop-down then (ClassIndexFor). The class as wide
+        // as its longest choice, never narrower than it was at the normal
+        // text size; the rounds box the width it had, or wider for its
+        // largest value; the race days so many rows of the list.
+        (Font Font, int Count, int Width)? classPicker = null;
+        var classWidth = Math.Max(UiLayout.AtTextSize(ClassWidth), Pieces.PickerWidth(_cmbClass, ref classPicker));
+        _cmbClass.Width = classWidth;
+
+        var bestWidth = Math.Max(
+            UiLayout.AtTextSize(BestWidth),
+            TextRenderer.MeasureText("00", _numBest.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+        _numBest.Width = bestWidth;
+
+        _lstEvents.Height = EventRows * _lstEvents.ItemHeight + 4;
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider for the two lines that have to be on one: the class's caption
+        // and its drop-down, which cannot wrap; and the rounds counted - the
+        // caption, the box and the longer of the two things said beside it,
+        // which would otherwise go under the box. Each as the grid it is in
+        // works it out: the caption and the gap after it, then the field -
+        // the box and the words each with the gap the row keeps after them.
+        // And room beside them for the body's scrollbar, on a screen too
+        // short for all of it. Worked out from the widths set above, never
+        // read back from the controls: the page has cut them to the room it
+        // has before the window is sized.
+        var classLine = CaptionWidth(classCaption) + classWidth + _cmbClass.Margin.Horizontal;
+
+        var bestLine = CaptionWidth(bestCaption)
+            + bestWidth + _numBest.Margin.Horizontal
+            + TextRenderer.MeasureText(EveryRoundHint, _lblBestHint.Font).Width + _lblBestHint.Margin.Horizontal;
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + Math.Max(classLine, bestLine) + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
 
-    private void BuildLayout(RaceClassStore classes, RaceEventStore? events)
+    /// <summary>A caption's width on one line in its face, with the gap the grid keeps after it.</summary>
+    private static int CaptionWidth(Label caption) =>
+        caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal;
+
+    /// <summary>
+    /// The page: everything but the buttons in its body, top to bottom, and
+    /// Save and Cancel under it. Returns the page and the body, for
+    /// DialogFit, and the class's and the rounds' captions, which the
+    /// window's width is worked out from.
+    /// </summary>
+    private (FillPage Page, PageStack Body, Label ClassCaption, Label BestCaption) BuildLayout(RaceClassStore classes, RaceEventStore? events)
     {
-        const int left = 16;
-
-        var y = 16;
-
         var lblWhat = new Label
         {
             Text = "WHAT COUNTS",
             AutoSize = true,
             Font = AppTheme.MicroFont,
             ForeColor = AppTheme.Primary,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.Below(lblWhat, UiLayout.RowGap);
 
         _chkAuto.Text = "Add new races to this championship automatically";
         _chkAuto.AutoSize = true;
         _chkAuto.Font = AppTheme.BodyFont;
-        _chkAuto.Location = new Point(left, y);
         _chkAuto.CheckedChanged += (_, _) => UpdateEnabled();
-
-        y = UiLayout.Below(_chkAuto, 2);
 
         var lblAutoHint = new Label
         {
@@ -73,20 +137,13 @@ public sealed class SeasonRulesForm : Form
                  + "On means anything matching the rules below joins as it is recorded - "
                  + "and you can still untick a round to force it out.",
             AutoSize = true,
-            MaximumSize = new Size(440, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left + UiLayout.Indent, y),
         };
 
-        y = UiLayout.Below(lblAutoHint, UiLayout.RowGap);
-
         // --- Class ---
-        var lblClass = new Label { Text = "Class:", AutoSize = true, Font = AppTheme.BodyFont };
-
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbClass.Font = AppTheme.BodyFont;
-        _cmbClass.Width = 260;
         _cmbClass.Items.Add(AllClasses);
 
         foreach (var raceClass in classes.All)
@@ -94,33 +151,23 @@ public sealed class SeasonRulesForm : Form
             _cmbClass.Items.Add(raceClass.Name);
         }
 
-        lblClass.Location = new Point(left, UiLayout.CentreOn(lblClass, y, _cmbClass.Height));
-        _cmbClass.Location = new Point(UiLayout.After(lblClass) + 40, y);
-
-        y = UiLayout.Below(_cmbClass, UiLayout.RowGap);
+        var classRow = new FieldGrid();
+        var classCaption = classRow.AddRow("Class:", _cmbClass);
 
         _chkMainsOnly.Text = "Only count mains - leave qualifying heats out";
         _chkMainsOnly.AutoSize = true;
         _chkMainsOnly.Font = AppTheme.BodyFont;
-        _chkMainsOnly.Location = new Point(left, y);
-
-        y = UiLayout.Below(_chkMainsOnly, UiLayout.RowGap);
 
         // --- Race days ---
         _chkAllEvents.Text = "Count every race day";
         _chkAllEvents.AutoSize = true;
         _chkAllEvents.Font = AppTheme.BodyFont;
-        _chkAllEvents.Location = new Point(left, y);
         _chkAllEvents.CheckedChanged += (_, _) => UpdateEnabled();
-
-        y = UiLayout.Below(_chkAllEvents, UiLayout.RowGap);
 
         _lstEvents.CheckOnClick = true;
         _lstEvents.BorderStyle = BorderStyle.None;
         _lstEvents.IntegralHeight = false;
         _lstEvents.Font = AppTheme.BodyFont;
-        _lstEvents.Location = new Point(left + UiLayout.Indent, y);
-        _lstEvents.Size = new Size(420, AppTheme.BodyFont.Height * 5 + 10);
 
         if (events is not null)
         {
@@ -129,8 +176,6 @@ public sealed class SeasonRulesForm : Form
                 _lstEvents.Items.Add(new EventChoice(raceEvent, string.Equals(raceEvent.ChampionshipId, _season.Id, StringComparison.Ordinal)));
             }
         }
-
-        y = UiLayout.Below(_lstEvents, UiLayout.HintGap);
 
         // The other way a day joins a championship, said here so the two
         // do not look like they disagree.
@@ -145,13 +190,9 @@ public sealed class SeasonRulesForm : Form
         {
             Text = "A race day that names this championship on Race Day > Setup counts as well, and is marked \u2713 above.",
             AutoSize = true,
-            MaximumSize = new Size(440, 0),
-            Location = new Point(left + UiLayout.Indent, y),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
-
-        y = UiLayout.Below(lblTagged, UiLayout.SectionGap);
 
         // --- Scoring ---
         var lblScoring = new Label
@@ -160,67 +201,85 @@ public sealed class SeasonRulesForm : Form
             AutoSize = true,
             Font = AppTheme.MicroFont,
             ForeColor = AppTheme.Primary,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.Below(lblScoring, UiLayout.RowGap);
-
-        var lblBest = new Label { Text = "Count each driver's best:", AutoSize = true, Font = AppTheme.BodyFont };
 
         _numBest.Minimum = 0;
         _numBest.Maximum = 60;
         _numBest.Font = AppTheme.BodyFont;
-        _numBest.Width = 80;
         _numBest.ValueChanged += (_, _) => UpdateBestHint();
-
-        lblBest.Location = new Point(left, UiLayout.CentreOn(lblBest, y, _numBest.Height));
-        _numBest.Location = new Point(UiLayout.After(lblBest), y);
 
         _lblBestHint.AutoSize = true;
         _lblBestHint.ForeColor = AppTheme.TextMuted;
         _lblBestHint.Font = AppTheme.BodyFont;
-        _lblBestHint.Location = new Point(UiLayout.After(_numBest), UiLayout.CentreOn(_lblBestHint, y, _numBest.Height));
 
-        y = UiLayout.Below(_numBest, 2);
+        // The box and what it means beside it, going under the box on a line
+        // too narrow for both - see the width the constructor works out.
+        var bestRow = new FieldGrid();
+        var bestCaption = bestRow.AddRow("Count each driver's best:", FieldGrid.Inline(_numBest, _lblBestHint));
 
         var lblDropHint = new Label
         {
             Text = "A driver who has raced fewer rounds than this drops nothing - "
                  + "missing a round is already its own penalty.",
             AutoSize = true,
-            MaximumSize = new Size(440, 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-            Location = new Point(left, y),
         };
-
-        y = UiLayout.Below(lblDropHint, UiLayout.SectionGap);
 
         // --- Buttons ---
         var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        btnOk.Size = new Size(UiLayout.WidthFor(btnOk), UiLayout.ButtonHeight);
-        btnCancel.Size = new Size(UiLayout.WidthFor(btnCancel), UiLayout.ButtonHeight);
+        // --- Layout ---
+        //
+        // Every setting in the body: at a larger text size, or on a small
+        // screen, more than the window has room for, so it scrolls there and
+        // Save and Cancel stay in view under it. The ticks are only as wide
+        // as their captions, so the room beside one is not part of it; the
+        // headings, the notes and the list run to the right-hand edge, the
+        // notes wrapping there.
+        var page = new FillPage();
+        var body = DialogFit.Body(page);
 
-        var right = left + 452;
+        body.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        body.Add(_chkAuto, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(body.Add(lblAutoHint, gapBelow: UiLayout.RowGap));
+        body.Add(classRow, gapBelow: UiLayout.RowGap);
+        body.Add(_chkMainsOnly, stretch: false, gapBelow: UiLayout.RowGap);
+        body.Add(_chkAllEvents, stretch: false, gapBelow: UiLayout.RowGap);
 
-        btnCancel.Location = new Point(right - btnCancel.Width, y);
-        btnOk.Location = new Point(btnCancel.Left - UiLayout.ButtonGap - btnOk.Width, y);
+        // A pixel on the right for the ring the theme draws round the list,
+        // outside it (Pieces.RingRoom): at the edge of the body's column it
+        // would be drawn where nothing shows.
+        body.Add(_lstEvents, gapBelow: UiLayout.HintGap);
+        _lstEvents.Margin = new Padding(TickBox.CaptionIndent, 0, 1, UiLayout.HintGap);
+
+        Indented(body.Add(lblTagged, gapBelow: UiLayout.SectionGap));
+        body.Add(lblScoring, gapBelow: UiLayout.RowGap);
+        body.Add(bestRow, gapBelow: UiLayout.HintGap);
+        body.Add(lblDropHint, gapBelow: 0);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
+        btnOk.TabIndex = 0;
+        btnCancel.TabIndex = 1;
 
         AcceptButton = btnOk;
         CancelButton = btnCancel;
 
-        Controls.AddRange(new Control[]
-        {
-            lblWhat, _chkAuto, lblAutoHint,
-            lblClass, _cmbClass, _chkMainsOnly,
-            _chkAllEvents, _lstEvents, lblTagged,
-            lblScoring, lblBest, _numBest, _lblBestHint, lblDropHint,
-            btnOk, btnCancel,
-        });
+        Controls.Add(page);
 
-        ClientSize = new Size(right + left, UiLayout.Below(btnOk, 16));
+        return (page, body, classCaption, bestCaption);
+
+        // A step in, under the tick it belongs to, as it always was - and
+        // under its caption once the tick box has grown past the step with
+        // the text (TickBox.CaptionIndent). The column measures a part
+        // inside its margins, so the part is narrower by the step and wraps
+        // to that.
+        static void Indented(Control part) =>
+            part.Margin = new Padding(TickBox.CaptionIndent, part.Margin.Top, part.Margin.Right, part.Margin.Bottom);
     }
 
     /// <summary>
@@ -332,7 +391,7 @@ public sealed class SeasonRulesForm : Form
 
     private void UpdateBestHint() =>
         _lblBestHint.Text = _numBest.Value == 0
-            ? "rounds  -  0 counts every round"
+            ? EveryRoundHint
             : Plural.Word((long)_numBest.Value, "round");
 
     /// <summary>

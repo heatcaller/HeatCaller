@@ -205,7 +205,9 @@ internal sealed class DateTimePickerSkin : NativeWindow
             g.DrawPath(pen, path);
         }
 
-        const int arrowZone = 26;
+        // At the screen's DPI, as the rest of the window is once the app is
+        // started --dpi-aware. Exactly 26 at 96 DPI.
+        var arrowZone = UiLayout.AtDpi(26);
         var cx = width - arrowZone / 2f - 2;
         var cy = height / 2f - 1;
 
@@ -1831,9 +1833,11 @@ internal sealed class TrackBarSkin : NativeWindow
 
         var accent = _bar.Enabled ? AppTheme.Primary : AppTheme.TextMuted;
 
-        const float trackThickness = 5f;
-        const float thumbLong = 18f;
-        const float thumbShort = 12f;
+        // At the screen's DPI, as the rest of the window is once the app is
+        // started --dpi-aware. Exactly 5, 18 and 12 at 96 DPI.
+        float trackThickness = UiLayout.AtDpi(5);
+        float thumbLong = UiLayout.AtDpi(18);
+        float thumbShort = UiLayout.AtDpi(12);
 
         if (_bar.Orientation == Orientation.Vertical)
         {

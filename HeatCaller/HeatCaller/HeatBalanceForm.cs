@@ -281,19 +281,17 @@ public sealed class HeatBalanceForm : Form
         LayoutColumns();
 
         // The strip scrolls sideways ON PURPOSE - that is how a class with
-        // nine heats is looked at. The repair pass and the layout check both
-        // report content past the right edge as a fault, which is the right
-        // default everywhere else and wrong here, so the one keeps out and
-        // the other is told it is meant.
-        LayoutDoctor.LeaveAlone(_strip);
+        // nine heats is looked at. The layout check reports content past the
+        // right edge as a fault, which is the right default everywhere else
+        // and wrong here, so it is told this is meant.
         LayoutAudit.AllowOverflow(_strip);
 
         // And no room under the columns. The theme pass gives a panel that
-        // scrolls room below its last control (LayoutDoctor.ThemeScrolling),
+        // scrolls room below its last control (ScrollTheming.Apply),
         // for a page scrolled to its end; under columns that are exactly as
         // tall as the strip, it was a strip that also scrolled down, by that
         // much, for nothing.
-        LayoutDoctor.NoRoomBelow(_strip);
+        ScrollTheming.NoRoomBelow(_strip);
 
         AppTheme.ApplyRecursively(this);
 

@@ -13,7 +13,7 @@ Nobody can sign up without an invite. Each invite is a single-use eight-digit co
 
 ## Open Online Sign-ups
 
-Go to **Race Day → Entries** and click **Online Sign-ups** under the list. When sign-ups are waiting, the button shows how many, for example **Online Sign-ups (2)**, and so does a count beside **Race Day** in the sidebar.
+Go to **Race Day → Who's Racing** and click **Online Sign-ups**, under the list on the **Drivers** card. When sign-ups are waiting, the button shows how many, for example **Online Sign-ups (2)**, and so does a count beside **Race Day** in the sidebar.
 
 The window has three parts:
 

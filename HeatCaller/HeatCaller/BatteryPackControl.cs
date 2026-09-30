@@ -486,39 +486,13 @@ public sealed class BatteryPackControl : UserControl
             return;
         }
 
-        using var picker = new Form
-        {
-            Text = "Which pack?",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(320, 300),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false,
-            Font = Font,
-            BackColor = AppTheme.Background,
-            ForeColor = AppTheme.TextDark,
-        };
-
-        var list = new ListBox { Location = new Point(12, 12), Size = new Size(296, 220), BackColor = AppTheme.Surface };
-        foreach (var pack in packs)
-        {
-            list.Items.Add(new PackItem(pack));
-        }
-
+        // The packs in rotation, the session's own pack selected when it has
+        // one - see PackPicker.
         var current = _store.PackForSession(session.Id);
-        list.SelectedIndex = current is null
-            ? 0
-            : Math.Max(0, packs.ToList().FindIndex(p => p.Id == current.Id));
 
-        var ok = new Button { Text = "Set", Location = new Point(126, 246), Width = 84, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Location = new Point(218, 246), Width = 90, DialogResult = DialogResult.Cancel };
+        using var picker = new PackPicker(packs, current);
 
-        picker.Controls.AddRange(new Control[] { list, ok, cancel });
-        picker.AcceptButton = ok;
-        picker.CancelButton = cancel;
-        AppTheme.ApplyRecursively(picker);
-
-        if (picker.ShowDialog(this) != DialogResult.OK || list.SelectedItem is not PackItem chosen)
+        if (picker.ShowDialog(this) != DialogResult.OK || picker.Chosen is not { } chosen)
         {
             return;
         }
@@ -528,9 +502,9 @@ public sealed class BatteryPackControl : UserControl
         var previous = _store.PackIdForSession(sessionId);
 
         // Only this session's tag goes back.
-        _undo.Capture($"Tag session with pack {chosen.Pack.DisplayName}", () => store.AssignSession(sessionId, previous));
+        _undo.Capture($"Tag session with pack {chosen.DisplayName}", () => store.AssignSession(sessionId, previous));
 
-        _store.AssignSession(session.Id, chosen.Pack.Id);
+        _store.AssignSession(session.Id, chosen.Id);
         RefreshAll();
     }
 
@@ -568,15 +542,156 @@ public sealed class BatteryPackControl : UserControl
             $"{Pack.DisplayName}   {Pack.Chemistry}"
             + (string.IsNullOrWhiteSpace(Pack.Notes) ? string.Empty : $"   - {Pack.Notes}");
     }
+
+    /// <summary>
+    /// The window Set Pack... opens: the packs in rotation, to pick the one
+    /// that was in the car for the session - see AssignPack. A class of its
+    /// own rather than built inside that method, and internal, so the layout
+    /// test can build it (WindowCatalog) without a click. It wears the body
+    /// face, as the page it opens from does.
+    ///
+    /// On the layout pieces (DialogFit): the packs taking the height, and Set
+    /// and Cancel at the foot; as wide as it was made, or wider for the
+    /// longest pack's line and for Set and Cancel on one line. It used to be
+    /// built in pixels in a 320x300 window: a list 296px wide at every text
+    /// size, and the two buttons at fixed places and widths under it,
+    /// narrower than their captions at a larger text size.
+    /// </summary>
+    internal sealed class PackPicker : Form
+    {
+        /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+        private const int DialogWidth = 320;
+
+        /// <summary>The most the longest pack's line widens the window to, at the normal text size - see the constructor.</summary>
+        private const int MostWidth = 640;
+
+        /// <summary>The packs show at least this many before the window scrolls instead.</summary>
+        private const int LeastRows = 4;
+
+        private readonly ListBox _list = new();
+
+        /// <param name="packs">The packs to offer, in the order to list them.</param>
+        /// <param name="current">The pack the session is tagged with now, selected to start with - or null, when the first is.</param>
+        public PackPicker(IReadOnlyList<BatteryPack> packs, BatteryPack? current)
+        {
+            Text = "Which pack?";
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
+            ForeColor = AppTheme.TextDark;
+
+            _list.BackColor = AppTheme.Surface;
+
+            // Given the height the window has, not snapped to whole rows - see FillPage.AddFill.
+            _list.IntegralHeight = false;
+
+            foreach (var pack in packs)
+            {
+                _list.Items.Add(new PackItem(pack));
+            }
+
+            // The session's pack when it is on the list, else the first. Set
+            // Pack... only opens this with a pack to offer.
+            if (_list.Items.Count > 0)
+            {
+                _list.SelectedIndex = current is null
+                    ? 0
+                    : Math.Max(0, packs.ToList().FindIndex(p => p.Id == current.Id));
+            }
+
+            var ok = new Button { Text = "Set", DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+
+            var page = new FillPage();
+            page.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+
+            // Against the right-hand edge, Cancel furthest right, as they
+            // were - and Tab still reaches Set first: the bar takes them right
+            // to left, in the order they were added.
+            var buttons = page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
+            ok.TabIndex = 0;
+            cancel.TabIndex = 1;
+
+            Controls.Add(page);
+
+            AcceptButton = ok;
+            CancelButton = cancel;
+
+            AppTheme.ApplyRecursively(this);
+
+            // The window's own button in the app's colour, as Save and OK are
+            // in every other window - the theme goes by the caption, and "Set"
+            // is not one it knows.
+            AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
+
+            // The width it was made at, at the text size in use - or wider for
+            // the longest pack's line, measured in the face the theme pass
+            // left the list in, with room for its scrollbar, its edge and a
+            // little either side of the text; at 296px a long label ran off
+            // the list's edge, its type with it. Only up to twice the width it
+            // was made at, though: a pack's notes can run to a paragraph, and
+            // a window as wide as the screen for one of them reads as a
+            // mistake - the rest of a long note is cut at the list's edge, as
+            // it always was. And never too narrow for Set and Cancel on one
+            // line: at the standard width a button has now, two of them need
+            // more than 320 leaves.
+            var widest = _list.Items.Cast<object>()
+                .Take(400)
+                .Select(item => TextRenderer.MeasureText(
+                    _list.GetItemText(item) ?? string.Empty,
+                    _list.Font,
+                    new Size(int.MaxValue, int.MaxValue),
+                    TextFormatFlags.SingleLine).Width)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var forPacks = Math.Min(
+                UiLayout.AtTextSize(MostWidth),
+                UiLayout.PageLeft + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
+
+            var width = Math.Max(
+                Math.Max(UiLayout.AtTextSize(DialogWidth), forPacks),
+                UiLayout.PageLeft + buttons.OneLineWidth + UiLayout.PageRight);
+
+            // The height it had. It can be made bigger, for a long list.
+            DialogFit.Keep(this, page, width, height: 300, widthMeasured: true);
+        }
+
+        /// <summary>The pack picked, or null for none. Only meaningful after DialogResult.OK.</summary>
+        public BatteryPack? Chosen => _list.SelectedItem is PackItem item ? item.Pack : null;
+    }
 }
 
-/// <summary>Adds or edits a pack.</summary>
+/// <summary>
+/// Adds or edits a pack.
+///
+/// On the layout pieces (DialogFit): the label, the type and the notes lined
+/// up in a field grid, the hint under the label and the Retired tick under
+/// the notes, and Save and Cancel at the foot; as tall as that, and wider
+/// than it was made when the Retired tick's caption needs more than the
+/// fields had. It used to be placed in pixels in a 400x290 window: the
+/// captions in a column 84px wide, the label and the notes 284px beside
+/// them and the type 160px, the notes a fixed 80px tall at every text size,
+/// and the Retired tick at a fixed place with nothing to say its caption
+/// fitted - at a larger text size it ran past the window's edge.
+/// </summary>
 public sealed class BatteryPackEditForm : Form
 {
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 400;
+
+    /// <summary>The label's and the notes' width at the normal text size - wider when the Retired tick's caption needs it.</summary>
+    private const int FieldWidth = 284;
+
+    /// <summary>The type's width at the normal text size - wider for a longer type, up to the fields' width.</summary>
+    private const int TypeWidth = 160;
+
+    /// <summary>How many lines of notes show before the box scrolls.</summary>
+    private const int NotesLines = 3;
+
     private readonly TextBox _txtLabel = new();
     private readonly ComboBox _cmbChemistry = new();
     private readonly TextBox _txtNotes = new();
-    private readonly CheckBox _chkRetired = new();
+    private readonly CheckBox _chkRetired = new ThemedCheckBox();
 
     public BatteryPack Result { get; }
 
@@ -585,46 +700,22 @@ public sealed class BatteryPackEditForm : Form
         Result = existing ?? new BatteryPack();
 
         Text = existing is null ? "Add Pack" : $"Edit {Result.DisplayName}";
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(400, 290);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;
 
-        var lblLabel = new Label { Text = "Label:", Location = new Point(16, 20), AutoSize = true };
-        _txtLabel.Location = new Point(100, 17);
-        _txtLabel.Width = 284;
         _txtLabel.Text = Result.Label;
         _txtLabel.PlaceholderText = "3, Blue tape, A2...";
 
-        var lblLabelHint = new Label
-        {
-            Text = "Whatever's written on the pack.",
-            Location = new Point(100, 46),
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.SmallFont,
-        };
-
-        var lblChem = new Label { Text = "Type:", Location = new Point(16, 76), AutoSize = true };
-        _cmbChemistry.Location = new Point(100, 73);
-        _cmbChemistry.Width = 160;
         _cmbChemistry.DropDownStyle = ComboBoxStyle.DropDown;
         _cmbChemistry.Items.AddRange(new object[] { "NiMH", "LiPo", "LiFe", "Alkaline" });
         _cmbChemistry.Text = string.IsNullOrWhiteSpace(Result.Chemistry) ? "NiMH" : Result.Chemistry;
 
-        var lblNotes = new Label { Text = "Notes:", Location = new Point(16, 112), AutoSize = true };
-        _txtNotes.Location = new Point(100, 109);
-        _txtNotes.Size = new Size(284, 80);
         _txtNotes.Multiline = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
 
         _chkRetired.Text = "Retired (out of rotation, keeps its history)";
-        _chkRetired.Location = new Point(100, 200);
         _chkRetired.AutoSize = true;
         _chkRetired.Checked = Result.Retired;
 
@@ -647,17 +738,70 @@ public sealed class BatteryPackEditForm : Form
         };
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        AppTheme.LayoutButtonRow(190, 244, 8, btnSave, btnCancel);
 
-        Controls.AddRange(new Control[]
+        // The label and the notes run to the right-hand edge, where the
+        // buttons end, as the 284px fields did beside their captions; the
+        // type keeps a width of its own; the hint under the label, and the
+        // tick in the fields' column under the notes, where they were.
+        var fields = new FieldGrid();
+        var captions = new List<Label>
         {
-            lblLabel, _txtLabel, lblLabelHint, lblChem, _cmbChemistry,
-            lblNotes, _txtNotes, _chkRetired, btnSave, btnCancel,
-        });
+            fields.AddRow("Label:", _txtLabel, stretch: true),
+        };
+
+        fields.AddHint("Whatever's written on the pack.");
+
+        captions.Add(fields.AddRow("Type:", _cmbChemistry));
+        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
+        fields.AddField(_chkRetired);
+
+        var page = new FillPage();
+        page.Add(fields);
+
+        // Against the right-hand edge, Cancel furthest right, as they were -
+        // and Tab still reaches Save first: the bar takes them right to left,
+        // in the order they were added.
+        page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
+        btnSave.TabIndex = 0;
+        btnCancel.TabIndex = 1;
+
+        Controls.Add(page);
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, in the faces it leaves them in: the notes a
+        // few lines of their font, as the box draws them (Pieces.LineHeight);
+        // the type as wide as its longest choice, or as the type the pack
+        // has when that is one typed in - but never wider than the label and
+        // the notes are made (FieldWidth), which the fields' column always
+        // has room for: a type typed in can be any length.
+        _txtNotes.Height = NotesLines * Pieces.LineHeight(_txtNotes.Font) + UiLayout.HintGap * 2;
+
+        (Font Font, int Count, int Width)? typeWidth = null;
+
+        _cmbChemistry.Width = Math.Max(
+            UiLayout.AtTextSize(TypeWidth),
+            Math.Min(UiLayout.AtTextSize(FieldWidth), Pieces.PickerWidth(_cmbChemistry, ref typeWidth, _cmbChemistry.Text)));
+
+        // As wide as it was at the normal text size, at the size in use - or
+        // wider when the fields' column needs more: never narrower than the
+        // 284px the fields had, and wide enough for the Retired tick's
+        // caption on one line, which at its fixed place ran past the
+        // window's edge at a larger text size. The caption column beside it
+        // as the grid works it out: its widest caption and the gap after it.
+        var fieldColumn = Math.Max(
+            UiLayout.AtTextSize(FieldWidth),
+            _chkRetired.GetPreferredSize(Size.Empty).Width + _chkRetired.Margin.Horizontal);
+
+        var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
+
+        var width = Math.Max(
+            UiLayout.AtTextSize(DialogWidth),
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, widthMeasured: true);
     }
 }

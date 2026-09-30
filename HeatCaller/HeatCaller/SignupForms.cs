@@ -36,7 +36,7 @@ internal sealed class SignupsForm : Form
     private readonly RentalTransponderStore _rentals;
     private readonly UndoService? _undo;
 
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly Label _lblState = new();
     private readonly DataGridView _gridWaiting = new();
     private readonly DataGridView _gridInvites = new();

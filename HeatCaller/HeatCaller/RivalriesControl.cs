@@ -16,7 +16,7 @@ public sealed class RivalriesControl : UserControl
     private readonly ListBox _list = new();
     private readonly ComboBox _cmbDriverA = new();
     private readonly ComboBox _cmbDriverB = new();
-    private readonly CheckBox _chkEnabled = new();
+    private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly TextBox _txtTemplates = new();
     private readonly Button _btnRestoreLines = new();
     private readonly Label _lblHeatCallerLock = new();

@@ -20,11 +20,21 @@ namespace HeatCaller;
 /// </summary>
 internal sealed class CarCard : Control
 {
-    public const int CardWidth = 208;
-    public const int CardHeight = 172;
+    /// <summary>
+    /// The card's size, at the text size in use. The name band under the
+    /// picture carries two lines of text, which grow with the text size, so
+    /// the card grows with them and keeps its proportions - at a fixed size
+    /// the second line ran out of the band at the larger text sizes, and the
+    /// card was small beside the text round it. The wall sizes its cards
+    /// from these as it lays them out, which it does again when the text
+    /// size changes (GarageControl.LayoutWall).
+    /// </summary>
+    public static int CardWidth => UiLayout.AtTextSize(208);
 
-    /// <summary>How much of the card is the picture. The rest is the name band.</summary>
-    private const int PhotoHeight = 116;
+    public static int CardHeight => UiLayout.AtTextSize(172);
+
+    /// <summary>How much of the card is the picture, at the text size in use. The rest is the name band.</summary>
+    private static int PhotoHeight => UiLayout.AtTextSize(116);
 
     private readonly string _ownerName;
     private readonly string _chassisName;
@@ -33,8 +43,14 @@ internal sealed class CarCard : Control
 
     public Car Car { get; }
 
-    /// <summary>The thumbnail, owned by PhotoStore's cache - drawn, never disposed here.</summary>
-    private readonly Image? _photo;
+    /// <summary>The picture the car is shown by - its first photo (see CarPhotosForm) - or null when it has none.</summary>
+    private readonly string? _photoFile;
+
+    /// <summary>The thumbnail, owned by PhotoStore's cache - drawn, never disposed here. See Photo.</summary>
+    private Image? _photo;
+
+    /// <summary>The size _photo was asked for at, so a new text size asks again.</summary>
+    private int _photoSize;
 
     /// <summary>Raised on a click. The wall decides what opening a car means.</summary>
     public event Action<Car>? Opened;
@@ -52,9 +68,9 @@ internal sealed class CarCard : Control
         TabStop = true;
 
         // The first photo is the one it is shown by - see CarPhotosForm.
-        _photo = car.PhotoFileNames.Count > 0
-            ? PhotoStore.Cars.Thumb(car.PhotoFileNames[0], PhotoHeight * 2)
-            : null;
+        // Fetched now, as the card is built, rather than on its first paint.
+        _photoFile = car.PhotoFileNames.Count > 0 ? car.PhotoFileNames[0] : null;
+        Photo();
 
         SetStyle(
             ControlStyles.AllPaintingInWmPaint
@@ -62,6 +78,30 @@ internal sealed class CarCard : Control
             | ControlStyles.UserPaint
             | ControlStyles.ResizeRedraw,
             true);
+    }
+
+    /// <summary>
+    /// The thumbnail at twice the picture's height at the text size in use,
+    /// so it is scaled down into the card rather than stretched up - asked
+    /// for again only when that size has changed since the last ask (PhotoStore
+    /// keeps each size it has made).
+    /// </summary>
+    private Image? Photo()
+    {
+        // Twice the photo's height, in steps of the 232 it always was (232 at
+        // the normal text size and below, 464 from 110% to 200%): each size is
+        // decoded from the file on the UI thread and kept for good by
+        // PhotoStore, so one per text size step would be a disk read per card
+        // at every Ctrl+/- and a thumbnail each left in memory.
+        var size = 232 * Math.Max(1, (int)Math.Ceiling(PhotoHeight / 116f));
+
+        if (_photoFile is not null && size != _photoSize)
+        {
+            _photo = PhotoStore.Cars.Thumb(_photoFile, size);
+            _photoSize = size;
+        }
+
+        return _photo;
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -111,6 +151,8 @@ internal sealed class CarCard : Control
 
         var body = new Rectangle(0, 0, Width - 1, Height - 1);
 
+        // The rounding stays the app's one card rounding (AppTheme.CornerRadius)
+        // at every text size, as every other card's does.
         using var shape = Rounded(body, 10);
 
         // The card's own background, so a retired car reads as dimmed
@@ -120,14 +162,15 @@ internal sealed class CarCard : Control
             g.FillPath(back, shape);
         }
 
-        var photoArea = new Rectangle(0, 0, Width - 1, PhotoHeight);
+        var photoHeight = PhotoHeight;
+        var photoArea = new Rectangle(0, 0, Width - 1, photoHeight);
 
         var clip = g.Clip;
         g.SetClip(shape);
 
-        if (_photo is not null)
+        if (Photo() is { } photo)
         {
-            DrawCover(g, _photo, photoArea);
+            DrawCover(g, photo, photoArea);
         }
         else
         {
@@ -137,7 +180,7 @@ internal sealed class CarCard : Control
         g.Clip = clip;
 
         // The name band, under the picture.
-        var bandTop = PhotoHeight;
+        var bandTop = photoHeight;
 
         using (var band = new SolidBrush(AppTheme.Surface))
         {
@@ -146,7 +189,10 @@ internal sealed class CarCard : Control
             g.Clip = clip;
         }
 
-        var text = new Rectangle(10, bandTop + 6, Width - 20, Height - bandTop - 10);
+        // The room round the band's two lines, at the text size in use, as
+        // the lines themselves are.
+        var inset = UiLayout.AtTextSize(10);
+        var text = new Rectangle(inset, bandTop + UiLayout.AtTextSize(6), Width - UiLayout.AtTextSize(20), Height - bandTop - inset);
 
         TextRenderer.DrawText(
             g, Car.DisplayName, AppTheme.BoldFont,
@@ -160,15 +206,16 @@ internal sealed class CarCard : Control
 
         TextRenderer.DrawText(
             g, underline, AppTheme.SmallFont,
-            new Rectangle(text.X, text.Y + AppTheme.BoldFont.Height + 1, text.Width, AppTheme.SmallFont.Height),
+            new Rectangle(text.X, text.Y + AppTheme.BoldFont.Height + UiLayout.AtTextSize(1), text.Width, AppTheme.SmallFont.Height),
             AppTheme.TextMuted,
             TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
         // The race number, over the picture's top corner where it cannot
-        // collide with the name.
+        // collide with the name - in from the corner at the text size in
+        // use, as the number is.
         if (!string.IsNullOrWhiteSpace(Car.RaceNumber))
         {
-            DrawBadge(g, Car.RaceNumber.Trim(), new Point(Width - 12, 10));
+            DrawBadge(g, Car.RaceNumber.Trim(), new Point(Width - UiLayout.AtTextSize(12), UiLayout.AtTextSize(10)));
         }
 
         if (Car.Retired)
@@ -185,7 +232,8 @@ internal sealed class CarCard : Control
             ? AppTheme.Accent
             : _hot || Focused ? AppTheme.TextMuted : AppTheme.Border;
 
-        using var pen = new Pen(edge, IsSelected ? 2f : 1f);
+        // A line's thickness: it follows the screen, not the text size.
+        using var pen = new Pen(edge, UiLayout.AtDpi(IsSelected ? 2 : 1));
         g.DrawPath(pen, shape);
     }
 
@@ -217,7 +265,9 @@ internal sealed class CarCard : Control
             ? Initials(Car.DisplayName)
             : Car.RaceNumber.Trim();
 
-        using var font = new Font(AppTheme.BoldFont.FontFamily, 34f, FontStyle.Bold, GraphicsUnit.Pixel);
+        // Sized in pixels, so at the text size in use by hand - the plate
+        // grows with the card, and the mark with the plate.
+        using var font = new Font(AppTheme.BoldFont.FontFamily, UiLayout.AtTextSize(34), FontStyle.Bold, GraphicsUnit.Pixel);
 
         TextRenderer.DrawText(
             g, mark, font, box, Color.FromArgb(235, 255, 255, 255),
@@ -226,11 +276,14 @@ internal sealed class CarCard : Control
 
     private static void DrawBadge(Graphics g, string text, Point topRight)
     {
+        // The room round the number, and the box's rounding, at the text
+        // size in use, as the number is.
+        var padX = UiLayout.AtTextSize(12);
         var size = TextRenderer.MeasureText(text, AppTheme.BoldFont);
-        var box = new Rectangle(topRight.X - size.Width - 12, topRight.Y, size.Width + 12, size.Height + 4);
+        var box = new Rectangle(topRight.X - size.Width - padX, topRight.Y, size.Width + padX, size.Height + UiLayout.AtTextSize(4));
 
         using (var back = new SolidBrush(Color.FromArgb(190, 0, 0, 0)))
-        using (var shape = Rounded(box, 6))
+        using (var shape = Rounded(box, UiLayout.AtTextSize(6)))
         {
             g.FillPath(back, shape);
         }

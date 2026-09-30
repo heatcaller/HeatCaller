@@ -10,9 +10,39 @@ namespace HeatCaller;
 /// A badge on its own is a line of text. What makes one worth chasing is
 /// knowing that three people have it and one of them got it in April - so
 /// this is mostly other people's names, deliberately.
+///
+/// On the layout pieces (DialogFit): the header across the top and the
+/// holders taking the height under it, both edge to edge as they always
+/// were - each paints its own background - and the hint and Close along the
+/// foot, in from the window's edges by the page's margins. The header and
+/// the holders are drawn here, each measurement in them chosen at the normal
+/// text size and drawn at the text size in use (Px), so they keep their
+/// proportions at every size - at fixed pixels the badge's name was cut off
+/// from 150%, and the chips and rows were too small for their text. It used
+/// to be placed in pixels: the header and a 58px footer docked to a 760x640
+/// window, the hint at a fixed place in the footer and Close a fixed 100x34
+/// in from its right-hand edge.
+///
+/// Built at the text size in use when it opens, as every dialog is (see
+/// DialogFit): it is modal, and the text size is changed from the main
+/// window, so it cannot change while this is up.
 /// </summary>
 public sealed class AchievementDetailForm : Form
 {
+    /// <summary>
+    /// The header's height, at the text size in use - everything drawn in it
+    /// is (see Header.OnPaint), and its last line is placed from the bottom,
+    /// so the two stay in step. The page is given it as the header's own
+    /// height, which it lays the header out at.
+    /// </summary>
+    private static int HeaderHeight => Px(214);
+
+    /// <summary>A measurement chosen at the normal text size, at the text size in use - the header's and the holders', as LapDetailPopup and the badge page do theirs.</summary>
+    private static int Px(float value) => UiLayout.AtTextSize(value);
+
+    /// <summary>The holders show at least this many before the window scrolls instead.</summary>
+    private const int LeastRows = 4;
+
     private readonly AchievementDefinition _badge;
     private readonly string _transponder;
     private readonly AchievementStore _store;
@@ -40,15 +70,12 @@ public sealed class AchievementDetailForm : Form
         BuildHolders();
 
         Text = badge.Name;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(760, 640);
-        MinimumSize = new Size(620, 520);
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var header = new Header(this) { Dock = DockStyle.Top, Height = 214 };
+        var header = new Header(this) { Height = HeaderHeight };
 
-        _list = new HolderList(_holders, _transponder) { Dock = DockStyle.Fill };
+        _list = new HolderList(_holders, _transponder);
         _list.Picked += driver =>
         {
             SelectedTransponder = driver;
@@ -56,14 +83,11 @@ public sealed class AchievementDetailForm : Form
             Close();
         };
 
-        var footer = new Panel { Dock = DockStyle.Bottom, Height = 58, BackColor = AppTheme.Surface };
-
         var hint = new Label
         {
             Text = _holders.Count > 0
                 ? "Double-click somebody to see their badges."
                 : "Nobody has this one yet.",
-            Location = new Point(16, 20),
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -71,24 +95,36 @@ public sealed class AchievementDetailForm : Form
         var close = new Button
         {
             Text = "Close",
-            Width = 100,
-            Height = 34,
-            Location = new Point(ClientSize.Width - 116, 12),
-            Anchor = AnchorStyles.Right | AnchorStyles.Top,
             DialogResult = DialogResult.Cancel,
         };
 
-        footer.Controls.Add(hint);
-        footer.Controls.Add(close);
+        // No margins round the page: the header and the holders run to the
+        // window's edges, as they did docked, and draw their own insets. Only
+        // the foot is in from the edges - the page's usual margins, on the
+        // row itself - with the page's usual margin under it.
+        var page = new FillPage { Padding = new Padding(0, 0, 0, UiLayout.PageTop) };
+        page.Add(header, gapBelow: 0);
+        page.AddFill(_list, _ => HolderList.LeastHeight(LeastRows), gapBelow: UiLayout.RowGap);
 
-        Controls.Add(_list);
-        Controls.Add(header);
-        Controls.Add(footer);
+        // The hint on the left and Close against the right-hand edge, on one
+        // line - or Close under the hint when a narrow window has no room
+        // for both (SplitBar).
+        var footer = page.Add(
+            new SplitBar(new ButtonBar().With(hint), new ButtonBar(alignRight: true).With(close)),
+            gapBelow: 0);
+
+        footer.Margin = new Padding(UiLayout.PageLeft, 0, UiLayout.PageRight, 0);
+
+        Controls.Add(page);
 
         CancelButton = close;
         AcceptButton = close;
 
         AppTheme.ApplyRecursively(this);
+
+        // The size it had. It can be made bigger, or shorter down to the
+        // header, a few of the holders and the foot.
+        DialogFit.Keep(this, page, width: 760, height: 640);
     }
 
     /// <summary>Everyone at the club with this badge, oldest first.</summary>
@@ -189,14 +225,20 @@ public sealed class AchievementDetailForm : Form
 
             var earned = mine is not null;
 
+            // Every measurement below is at the text size in use (Px), so the
+            // header keeps its proportions as its text grows - the name, the
+            // chips' captions and the lines under them are all in faces that
+            // follow the text size.
+            var pad = Px(24);
+
             // Medallion, big. This is the one place the artwork gets to be
             // the size it deserves.
-            var medallion = new RectangleF(24, 24, 104, 104);
+            var medallion = new RectangleF(pad, pad, Px(104), Px(104));
             BadgeArt.DrawMedallion(g, medallion, badge, earned);
 
-            var left = medallion.Right + 24;
-            var right = Width - 24;
-            var width = Math.Max(80f, right - left);
+            var left = medallion.Right + pad;
+            var right = Width - pad;
+            var width = Math.Max(Px(80), right - left);
 
             using var titleBrush = new SolidBrush(AppTheme.TextDark);
             using var mutedBrush = new SolidBrush(AppTheme.TextMuted);
@@ -210,16 +252,20 @@ public sealed class AchievementDetailForm : Form
             using var nameFont = FontLibrary.Create(AppTheme.DisplayFamily,
                 Math.Max(6f, 19f * AppTheme.FontScale), FontStyle.Bold);
 
-            g.DrawString(badge.Name, nameFont, titleBrush, new RectangleF(left, 22, width, 32), near);
+            // The name's box at the text size in use, as its face is: a fixed
+            // 32px box was shorter than a line of it from 150%, which cut the
+            // name off.
+            g.DrawString(badge.Name, nameFont, titleBrush, new RectangleF(left, Px(22), width, Px(32)), near);
 
             // Tier and group, as chips.
-            var chipY = 58f;
-            var tierWidth = 86f;
+            float chipY = Px(58);
+            float tierWidth = Px(86);
+            float chipHeight = Px(24);
 
-            AppTheme.DrawPill(g, new RectangleF(left, chipY, tierWidth, 24),
+            AppTheme.DrawPill(g, new RectangleF(left, chipY, tierWidth, chipHeight),
                 BadgeArt.TierInk(badge.Tier), BadgeArt.TierName(badge.Tier), Color.White);
 
-            var groupWidth = 130f;
+            float groupWidth = Px(130);
 
             // The group chip is filled with a look colour (Warning, Success,
             // Accent or Primary), so its text is that colour's own "on"
@@ -234,17 +280,18 @@ public sealed class AchievementDetailForm : Form
                 _ => AppTheme.OnPrimary,
             };
 
-            AppTheme.DrawPill(g, new RectangleF(left + tierWidth + 8, chipY, groupWidth, 24),
+            AppTheme.DrawPill(g, new RectangleF(left + tierWidth + Px(8), chipY, groupWidth, chipHeight),
                 BadgeArt.CategoryColour(badge.Category), BadgeArt.CategoryName(badge.Category), groupInk);
 
             // What it takes.
             TextRenderer.DrawText(g, badge.Description, AppTheme.BodyFont,
-                Rectangle.Round(new RectangleF(left, chipY + 34, width, 44)),
+                Rectangle.Round(new RectangleF(left, chipY + Px(34), width, Px(44))),
                 AppTheme.TextDark,
                 TextFormatFlags.WordBreak | TextFormatFlags.Top | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
 
             // How this driver stands.
-            var statusY = 136f;
+            float statusY = Px(136);
+            float lineHeight = Px(22);
 
             if (earned)
             {
@@ -260,7 +307,7 @@ public sealed class AchievementDetailForm : Form
                 }
 
                 using var got = new SolidBrush(AppTheme.Success);
-                g.DrawString(text, AppTheme.BoldFont, got, new RectangleF(24, statusY, Width - 48, 22), near);
+                g.DrawString(text, AppTheme.BoldFont, got, new RectangleF(pad, statusY, Width - Px(48), lineHeight), near);
             }
             else if (AchievementProgress.For(badge.Id, _owner._store.For(_owner._transponder)) is { } progress)
             {
@@ -268,11 +315,12 @@ public sealed class AchievementDetailForm : Form
                 var fraction = Math.Clamp(progress.Current / (double)Math.Max(1, progress.Target), 0, 1);
 
                 g.DrawString($"{progress.Current} of {progress.Target} {progress.Noun}", AppTheme.BoldFont, titleBrush,
-                    new RectangleF(24, statusY, 260, 22), near);
+                    new RectangleF(pad, statusY, Px(260), lineHeight), near);
 
-                var track = new RectangleF(24, statusY + 26, Math.Max(120f, Width - 48), 10);
+                var track = new RectangleF(pad, statusY + Px(26), Math.Max(Px(120), Width - Px(48)), Px(10));
+                var radius = Px(5);
 
-                using (var trackPath = AppTheme.RoundedRect(track, 5))
+                using (var trackPath = AppTheme.RoundedRect(track, radius))
                 using (var trackFill = new SolidBrush(AppTheme.RowAlt))
                 {
                     g.FillPath(trackFill, trackPath);
@@ -280,9 +328,9 @@ public sealed class AchievementDetailForm : Form
 
                 if (fraction > 0)
                 {
-                    var fill = new RectangleF(track.Left, track.Top, Math.Max(10f, (float)(track.Width * fraction)), track.Height);
+                    var fill = new RectangleF(track.Left, track.Top, Math.Max(Px(10), (float)(track.Width * fraction)), track.Height);
 
-                    using var fillPath = AppTheme.RoundedRect(fill, 5);
+                    using var fillPath = AppTheme.RoundedRect(fill, radius);
                     using var brush = new LinearGradientBrush(fill, AppTheme.Primary, AppTheme.Accent, LinearGradientMode.Horizontal);
                     g.FillPath(brush, fillPath);
                 }
@@ -290,7 +338,7 @@ public sealed class AchievementDetailForm : Form
             else
             {
                 g.DrawString("Not earned yet.", AppTheme.BoldFont, mutedBrush,
-                    new RectangleF(24, statusY, Width - 48, 22), near);
+                    new RectangleF(pad, statusY, Width - Px(48), lineHeight), near);
             }
 
             // Rarity, and who got there first.
@@ -305,7 +353,7 @@ public sealed class AchievementDetailForm : Form
             }
 
             g.DrawString(rarity, AppTheme.SmallFont, mutedBrush,
-                new RectangleF(24, Height - 34, Width - 48, 20), near);
+                new RectangleF(pad, Height - Px(34), Width - Px(48), Px(20)), near);
 
             using var rule = new Pen(AppTheme.Border);
             g.DrawLine(rule, 0, Height - 1, Width, Height - 1);
@@ -343,7 +391,11 @@ public sealed class AchievementDetailForm : Form
     /// </summary>
     private sealed class HolderList : Control
     {
-        private const int RowHeight = 46;
+        /// <summary>A holder's row, at the text size in use - it carries a line of the bold face and one of the small face, which grow with it.</summary>
+        private static int RowHeight => Px(46);
+
+        /// <summary>Where the first row starts, under "WHO HAS IT", at the text size in use as the heading is.</summary>
+        private static int FirstRowTop => Px(34);
 
         private readonly List<Holder> _holders;
         private readonly string _mine;
@@ -352,6 +404,15 @@ public sealed class AchievementDetailForm : Form
         private int _scroll;
 
         public event Action<string>? Picked;
+
+        /// <summary>
+        /// How tall the list has to be to show its heading and
+        /// <paramref name="rows"/> holders whole: the first row starts
+        /// FirstRowTop down, under "WHO HAS IT" (see RowAt and OnPaint). At
+        /// the text size in use, as the rows are - asked by the window's page
+        /// whenever it works out its least height.
+        /// </summary>
+        public static int LeastHeight(int rows) => FirstRowTop + rows * RowHeight;
 
         public HolderList(List<Holder> holders, string mine)
         {
@@ -369,7 +430,7 @@ public sealed class AchievementDetailForm : Form
 
         private int RowAt(Point point)
         {
-            var index = (point.Y - 34 + _scroll) / RowHeight;
+            var index = (point.Y - FirstRowTop + _scroll) / RowHeight;
             return index >= 0 && index < _holders.Count ? index : -1;
         }
 
@@ -412,10 +473,11 @@ public sealed class AchievementDetailForm : Form
         {
             base.OnMouseWheel(e);
 
-            var content = _holders.Count * RowHeight + 34;
+            var content = _holders.Count * RowHeight + FirstRowTop;
             var most = Math.Max(0, content - Height);
 
-            _scroll = Math.Clamp(_scroll - e.Delta / 2, 0, most);
+            // A notch moves the same share of a row at every text size.
+            _scroll = Math.Clamp(_scroll - UiLayout.AtTextSize(e.Delta / 2), 0, most);
             Invalidate();
         }
 
@@ -439,24 +501,33 @@ public sealed class AchievementDetailForm : Form
                 LineAlignment = StringAlignment.Center,
             };
 
+            // The heading, the empty-list line and the rows' band at the text
+            // size in use, as their faces and the rows are.
+            var pad = Px(24);
+
             g.DrawString(AppTheme.Spaced("WHO HAS IT"), AppTheme.MicroFont, mutedBrush,
-                new RectangleF(24, 8, 300, 20), near);
+                new RectangleF(pad, Px(8), Px(300), Px(20)), near);
 
             if (_holders.Count == 0)
             {
                 g.DrawString("Nobody at the club has earned this one yet - it's there to be taken.",
-                    AppTheme.BodyFont, mutedBrush, new RectangleF(24, 44, Width - 48, 24), near);
+                    AppTheme.BodyFont, mutedBrush, new RectangleF(pad, Px(44), Width - Px(48), Px(24)), near);
                 return;
             }
 
             var clip = g.Save();
-            g.SetClip(new RectangleF(0, 30, Width, Height - 30));
+            var bandTop = Px(30);
+            g.SetClip(new RectangleF(0, bandTop, Width, Height - bandTop));
+
+            var rowHeight = RowHeight;
+            var firstRowTop = FirstRowTop;
+            var hiddenAbove = Px(24);
 
             for (var i = 0; i < _holders.Count; i++)
             {
-                var top = 34 + i * RowHeight - _scroll;
+                var top = firstRowTop + i * rowHeight - _scroll;
 
-                if (top > Height || top + RowHeight < 24)
+                if (top > Height || top + rowHeight < hiddenAbove)
                 {
                     continue;
                 }
@@ -470,7 +541,12 @@ public sealed class AchievementDetailForm : Form
         private void DrawRow(Graphics g, Holder holder, int index, float top)
         {
             var isMine = string.Equals(holder.Transponder, _mine, StringComparison.OrdinalIgnoreCase);
-            var bounds = new RectangleF(16, top, Width - 32, RowHeight - 6);
+
+            // The row's card and everything in it at the text size in use, as
+            // the lines in it are. The card's rounding stays the app's one
+            // (AppTheme.CornerRadius, which DrawCard uses), so the hover wash
+            // keeps it too.
+            var bounds = new RectangleF(Px(16), top, Width - Px(32), RowHeight - Px(6));
 
             AppTheme.DrawCard(g, bounds, isMine ? AppTheme.Primary : null);
 
@@ -497,34 +573,44 @@ public sealed class AchievementDetailForm : Form
                 Trimming = StringTrimming.EllipsisCharacter,
             };
 
-            var left = bounds.Left + 14;
+            var left = bounds.Left + Px(14);
 
             // Whoever got there first gets to be marked as such, for as long
             // as the club keeps records.
             if (holder.IsFirst)
             {
-                AppTheme.DrawPill(g, new RectangleF(left, bounds.Top + 11, 52, 20),
+                AppTheme.DrawPill(g, new RectangleF(left, bounds.Top + Px(11), Px(52), Px(20)),
                     AppTheme.Warning, "FIRST", AppTheme.OnWarning);
 
-                left += 62;
+                left += Px(62);
             }
 
             var name = isMine ? holder.Name + "  (this driver)" : holder.Name;
 
+            // Two lines on each side: the upper in a line of the bold or body
+            // face, the lower in a line of the small face.
+            float upperTop = bounds.Top + Px(4);
+            float upperHeight = Px(20);
+            float lowerTop = bounds.Top + Px(21);
+            float lowerHeight = Px(18);
+
             g.DrawString(name, AppTheme.BoldFont, nameBrush,
-                new RectangleF(left, bounds.Top + 4, bounds.Width * 0.45f, 20), near);
+                new RectangleF(left, upperTop, bounds.Width * 0.45f, upperHeight), near);
 
             if (!string.IsNullOrWhiteSpace(holder.Detail))
             {
                 g.DrawString(holder.Detail, AppTheme.SmallFont, mutedBrush,
-                    new RectangleF(left, bounds.Top + 21, bounds.Width * 0.45f, 18), near);
+                    new RectangleF(left, lowerTop, bounds.Width * 0.45f, lowerHeight), near);
             }
 
+            float dateLeft = bounds.Right - Px(190);
+            float dateWidth = Px(176);
+
             g.DrawString(holder.EarnedUtc.ToLocalTime().ToString("d MMM yyyy"), AppTheme.BodyFont, mutedBrush,
-                new RectangleF(bounds.Right - 190, bounds.Top + 4, 176, 20), far);
+                new RectangleF(dateLeft, upperTop, dateWidth, upperHeight), far);
 
             g.DrawString(Ago(holder.EarnedUtc), AppTheme.SmallFont, mutedBrush,
-                new RectangleF(bounds.Right - 190, bounds.Top + 21, 176, 18), far);
+                new RectangleF(dateLeft, lowerTop, dateWidth, lowerHeight), far);
         }
 
         private static string Ago(DateTime utc)
