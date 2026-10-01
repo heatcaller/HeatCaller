@@ -239,7 +239,7 @@ Built-in soundscapes can't be changed or deleted. A new version of HeatCaller ca
 ### Apply a soundscape
 
 1. Press **Apply** on the soundscape's card.
-2. Read the confirmation. It starts: "Apply "*name*"? This replaces your current announcer lines and sound effect settings." It then says anything else the soundscape switches (an ElevenLabs voice and model, or a language), what it does underneath (for example "Underneath: the Podium crowd is added to Ambience - ..."), and what it doesn't touch.
+2. Read the confirmation. It starts: "Apply "*name*"? This replaces your current announcer lines and sound effect settings." (With the HeatCaller voice chosen: "This replaces your sound effect settings.") It then says anything else the soundscape switches (an ElevenLabs voice and model, or a language), what it does underneath (for example "Underneath: the Podium crowd is added to Ambience - ..."), and what it doesn't touch.
 3. Click **Yes**.
 
 The card is marked **LAST APPLIED**, the line above the cards says "Applied "*name*".", and the **Voice** and **Sounds** pages show the new settings straight away. **Undo** in the sidebar puts back everything the apply changed, in one step: the announcer settings, the sound effects, the crowd in **Ambience** and which soundscape is marked as applied.
@@ -253,11 +253,11 @@ The card is marked **LAST APPLIED**, the line above the cards says "Applied "*na
 - **This PC's setup is left as it is:** the voice and sound effects volumes, the **Output format:**, and the **Speak with** choice: which of the three voices speaks, which Windows voice, which HeatCaller announcer voice, and the stand-in box.
 - **On the HeatCaller voice, a soundscape's lines aren't applied**, and neither is anything else on **Voice → Announcements** (the ticks, weights and speeds stay as you have them). Its sounds are. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
 
-The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the wireless speaker setting, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."
+The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."
 
 With the HeatCaller voice chosen it adds a paragraph, so you know before you press **Yes** rather than after:
 
-> The HeatCaller voice speaks the standard announcer lines, so this soundscape's own lines are NOT applied. Its sounds and delivery are. To use its lines, switch to your own ElevenLabs key or the free Windows voice on Voice Settings.
+> The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Windows voice on Voice Settings.
 
 A venue's **Preferred soundscape:**, on the **Venues** page, is applied the same way when you press **Apply This Venue**, and one **Undo** puts it back with the rest of the venue. See [Venues](../race-day/drivers-and-classes.md#venues).
 

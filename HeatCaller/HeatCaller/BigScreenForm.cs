@@ -381,22 +381,19 @@ public sealed class BigScreenForm : Form
         _lblHint.Font = AppTheme.SmallFont;
         _lblHint.Padding = new Padding(0, 0, UiLayout.AtDpi(12), 0);
 
-        // The bands, columns and paddings round this window's point-size
-        // fonts are at the screen's DPI, as those fonts are: on a screen the
-        // app draws at 150% (--dpi-aware) a 56-point clock is half as tall
-        // again in pixels, and a band of fixed pixels would clip it.
+        // The bands, columns, paddings and faces are sized in ApplyScale:
+        // at the screen's DPI, as the point-size faces are (on a screen the
+        // app draws at 150% - --dpi-aware - a 56-point clock is half as tall
+        // again in pixels, and a band of fixed pixels would clip it), and
+        // grown or shrunk with the window - see ApplyScale.
         _pnlTop.Dock = DockStyle.Top;
-        _pnlTop.Height = UiLayout.AtDpi(132);
 
         _lblRaceState.Text = "IDLE";
-        _lblRaceState.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 13F, FontStyle.Bold));
         _lblRaceState.AutoSize = false;
         _lblRaceState.Dock = DockStyle.Top;
-        _lblRaceState.Height = UiLayout.AtDpi(32);
         _lblRaceState.TextAlign = ContentAlignment.MiddleCenter;
 
         _lblAnnouncement.Text = "Waiting for the race to start...";
-        _lblAnnouncement.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 26F, FontStyle.Bold));
         _lblAnnouncement.AutoSize = false;
         _lblAnnouncement.Dock = DockStyle.Fill;
         _lblAnnouncement.TextAlign = ContentAlignment.MiddleCenter;
@@ -407,11 +404,9 @@ public sealed class BigScreenForm : Form
         // recognise from the back of the room without competing with the
         // race. Hidden (taking no room) when there is no logo to show.
         _logoBox.Dock = DockStyle.Left;
-        _logoBox.Width = _pnlTop.Height;
         _logoBox.Visible = false;
 
         _logoBalance.Dock = DockStyle.Right;
-        _logoBalance.Width = _pnlTop.Height;
         _logoBalance.Visible = false;
 
         // Docking is laid out from the last control added to the first: the
@@ -424,10 +419,8 @@ public sealed class BigScreenForm : Form
         _pnlTop.Controls.Add(_logoBox);
 
         _pnlCountdown.Dock = DockStyle.Top;
-        _pnlCountdown.Height = UiLayout.AtDpi(118);
 
         _lblCountdown.Text = string.Empty;
-        _lblCountdown.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 56F, FontStyle.Bold));
         _lblCountdown.Dock = DockStyle.Fill;
         _lblCountdown.TextAlign = ContentAlignment.MiddleCenter;
 
@@ -437,9 +430,7 @@ public sealed class BigScreenForm : Form
         // with no limits set showed no timing at all until a car crossed
         // the line. This ticks from the moment the race goes green.
         _lblElapsed.Text = string.Empty;
-        _lblElapsed.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 56F, FontStyle.Bold));
         _lblElapsed.Dock = DockStyle.Left;
-        _lblElapsed.Width = UiLayout.AtDpi(320);
         _lblElapsed.TextAlign = ContentAlignment.MiddleCenter;
 
         _pnlCountdown.Controls.Add(_lblCountdown);
@@ -471,17 +462,12 @@ public sealed class BigScreenForm : Form
         _grid.MultiSelect = false;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.EnableHeadersVisualStyles = false;
-        _grid.ColumnHeadersHeight = UiLayout.AtDpi(38);
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-        _grid.ColumnHeadersDefaultCellStyle.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 12F, FontStyle.Bold));
         _grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-        _grid.DefaultCellStyle.Font = OwnFont(new Font(AppTheme.BodyFont.FontFamily, 24F, FontStyle.Bold));
-        _grid.DefaultCellStyle.Padding = new Padding(UiLayout.AtDpi(18), UiLayout.AtDpi(4), UiLayout.AtDpi(8), UiLayout.AtDpi(4));
         // Deliberately NO zebra striping. At this size alternating fills halve
         // the contrast of every other row, and the hairline below already
         // separates them - striping is a small-type habit that hurts here.
         // (ApplyLook paints alternate rows the same as the rest.)
-        _grid.RowTemplate.Height = UiLayout.AtDpi(64);
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         RebuildKpiColumns();
 
@@ -499,19 +485,15 @@ public sealed class BigScreenForm : Form
 
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
-        _pnlOnDeck.Height = UiLayout.AtDpi(62);
         _lblOnDeck.Dock = DockStyle.Fill;
-        _lblOnDeck.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 20F, FontStyle.Bold));
         _lblOnDeck.TextAlign = ContentAlignment.MiddleCenter;
         _lblOnDeck.Text = string.Empty;
         _pnlOnDeck.Controls.Add(_lblOnDeck);
         _pnlOnDeck.Visible = _schedule is not null;
 
         _lblWarning.Dock = DockStyle.Top;
-        _lblWarning.Height = UiLayout.AtDpi(84);
         _lblWarning.AutoSize = false;
         _lblWarning.TextAlign = ContentAlignment.MiddleCenter;
-        _lblWarning.Font = OwnFont(new Font(AppTheme.BoldFont.FontFamily, 30F, FontStyle.Bold));
         _lblWarning.Visible = false;
 
         Controls.Add(_pnlLeaderboardArea);
@@ -520,6 +502,127 @@ public sealed class BigScreenForm : Form
         Controls.Add(_lblWarning);
         Controls.Add(_pnlTop);
         Controls.Add(_lblHint);
+
+        ApplyScale(force: true);
+    }
+
+    /// <summary>
+    /// The inside of the 1280x800 window this screen was laid out for, at
+    /// the normal size: every band, face and gap below is that size when the
+    /// window is, and grows or shrinks with it (ApplyScale).
+    /// </summary>
+    private const int DesignClientWidth = 1264;
+    private const int DesignClientHeight = 760;
+
+    /// <summary>How far the screen grows or shrinks at most - so a window dragged very small, or a huge wall, still shows something sensible.</summary>
+    private const float LeastScale = 0.6f;
+    private const float MostScale = 3f;
+
+    /// <summary>How big everything is drawn against the size it was laid out for - see ApplyScale.</summary>
+    private float _scale = 1f;
+
+    /// <summary>
+    /// Sizes the screen to its window: every band, column, gap and face is
+    /// the size it was laid out for in a 1280x800 window, times how much
+    /// bigger or smaller the window is - the lesser of the two ways, so
+    /// nothing runs off either edge. Run as the window opens and whenever
+    /// it is resized - full screen (F11) on the TV included.
+    ///
+    /// Why: it was laid out for 1280x800 and stayed that size whatever the
+    /// window was, so full screen on a 1080p TV the writing was small, with
+    /// a band of empty screen round it - on the screen that is meant to be
+    /// read from across the room. It does not follow the text size the
+    /// laptop is set to (Ctrl + and -): that is the director's, for the
+    /// laptop's screen, and the crowd is not at the laptop (Asher, 1 Oct).
+    /// </summary>
+    private void ApplyScale(bool force = false)
+    {
+        var client = ClientSize;
+
+        if (client.Width <= 0 || client.Height <= 0)
+        {
+            return;
+        }
+
+        var scale = Math.Clamp(
+            Math.Min(
+                client.Width / (float)UiLayout.AtDpi(DesignClientWidth),
+                client.Height / (float)UiLayout.AtDpi(DesignClientHeight)),
+            LeastScale,
+            MostScale);
+
+        // Not for a pixel or two: a window being dragged to a new size would
+        // make every face again at each step.
+        if (!force && Math.Abs(scale - _scale) < 0.02f)
+        {
+            return;
+        }
+
+        _scale = scale;
+
+        SuspendLayout();
+
+        try
+        {
+            _pnlTop.Height = Sized(132);
+            _lblRaceState.Height = Sized(32);
+            _logoBox.Width = _pnlTop.Height;
+            _logoBalance.Width = _pnlTop.Height;
+
+            _pnlCountdown.Height = Sized(118);
+            _lblElapsed.Width = Sized(320);
+
+            _grid.ColumnHeadersHeight = Math.Max(1, Sized(38));
+            _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(4), Sized(8), Sized(4));
+            _grid.RowTemplate.Height = Math.Max(1, Sized(64));
+
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                row.Height = _grid.RowTemplate.Height;
+            }
+
+            _pnlOnDeck.Height = Sized(62);
+            _lblWarning.Height = Sized(84);
+
+            // The faces made again at this size; the old ones disposed once
+            // nothing wears them.
+            var old = _ownedFonts.ToList();
+            _ownedFonts.Clear();
+
+            _lblRaceState.Font = Face(AppTheme.BoldFont.FontFamily, 13F);
+            _lblAnnouncement.Font = Face(AppTheme.BoldFont.FontFamily, 26F);
+            _lblCountdown.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
+            _lblElapsed.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
+            _grid.ColumnHeadersDefaultCellStyle.Font = Face(AppTheme.BoldFont.FontFamily, 12F);
+            _grid.DefaultCellStyle.Font = Face(AppTheme.BodyFont.FontFamily, 24F);
+            _lblOnDeck.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
+            _lblWarning.Font = Face(AppTheme.BoldFont.FontFamily, 30F);
+
+            foreach (var font in old)
+            {
+                font.Dispose();
+            }
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+
+        int Sized(int pixels) => (int)Math.Round(UiLayout.AtDpi(pixels) * _scale);
+
+        Font Face(FontFamily family, float points) =>
+            OwnFont(new Font(family, Math.Max(1f, points * _scale), FontStyle.Bold));
+    }
+
+    protected override void OnClientSizeChanged(EventArgs e)
+    {
+        base.OnClientSizeChanged(e);
+
+        // Before the window is built, there is nothing to size yet.
+        if (_ownedFonts.Count > 0)
+        {
+            ApplyScale();
+        }
     }
 
     /// <summary>Shows whatever's next on the day schedule, so racers can be called to the table. Hidden entirely when no schedule was passed in.</summary>

@@ -566,7 +566,7 @@ public sealed class VenuesControl : UserControl
         }
 
         var confirm = AppDialog.Show(this,
-            $"Apply \"{venue.Name}\"? This sets its decoder and selects its preferred track on the Connection page, applies its preferred announcer style, and updates the race defaults on Race Control.",
+            $"Apply \"{venue.Name}\"? This sets its decoder on the Connection page, applies its preferred soundscape, and on Race Control selects its preferred track and updates the race defaults.",
             "Confirm apply venue", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
         if (confirm != DialogResult.Yes)

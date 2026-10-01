@@ -1847,10 +1847,10 @@ internal sealed class RaceDaySetupWizard : Form
         {
             _numRounds.Value = Math.Clamp(day.QualifyingRounds, _numRounds.Minimum, _numRounds.Maximum);
 
-            if (day.DriversPerHeat > 0)
-            {
-                _numHeatSize.Value = Math.Clamp(day.DriversPerHeat, _numHeatSize.Minimum, _numHeatSize.Maximum);
-            }
+            // A day with no heat size of its own builds with the last race
+            // day's (RaceEventStore.HeatSizeFor, as the program does), so that
+            // is what the box starts at.
+            _numHeatSize.Value = Math.Clamp(_events.HeatSizeFor(day), (int)_numHeatSize.Minimum, (int)_numHeatSize.Maximum);
 
             _chkFirstRace.Checked = day.FirstRaceLocalTime is not null;
             _dtpFirstRace.Value = day.FirstRaceLocalTime ?? TimeSpan.FromHours(10);

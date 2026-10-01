@@ -480,7 +480,7 @@ public sealed class RelaySettingsControl : UserControl
         var lblAlways = new Label
         {
             Text = "The live race while one is running, each session's results as it is saved, championship "
-                 + "standings, today's schedule from Race Day's Run Sheet tab, the badges drivers have earned, and "
+                 + "standings, today's schedule from the Timetable, the badges drivers have earned, and "
                  + "every track layout with its lap record and best laps.",
             AutoSize = true,
         };
@@ -620,7 +620,7 @@ public sealed class RelaySettingsControl : UserControl
 
         var lblLooksNote = new Label
         {
-            Text = "Colours and club logo are set on Themes \u2192 Looks (shared with the app, Big Screen and Wi-Fi pages).",
+            Text = "Colours and club logo are set in the Looks card on Themes (shared with the app, Big Screen and Wi-Fi pages).",
             AutoSize = true,
         };
 
@@ -821,7 +821,7 @@ public sealed class RelaySettingsControl : UserControl
 
         var lblHint = HintLabel(
             "The staff PIN opens everybody's list at the club's check-in page - for a tablet on the desk. A "
-            + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on the Entries page while this "
+            + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on Race Day > Who's Racing while this "
             + "is on and any phone camera, iPhones included, opens them straight to a Check In button. A racer's "
             + "own PIN (Personal PINs, below) does the same without a QR check-in. Nobody is checked in until somebody "
             + "taps it. Taps reach this laptop within a few seconds and land exactly like the Wi-Fi check-in page's.");
@@ -1049,7 +1049,7 @@ public sealed class RelaySettingsControl : UserControl
 
         AppDialog.Show(
             this,
-            "Done. Print new QR check-ins on Race Day \u2192 Entries with Print QR Check-ins, and hand them out - the old ones no longer work.",
+            "Done. Print new QR check-ins with Print QR Check-ins on Race Day \u2192 Who's Racing, and hand them out - the old ones no longer work.",
             "Reissue All QR Check-ins",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);

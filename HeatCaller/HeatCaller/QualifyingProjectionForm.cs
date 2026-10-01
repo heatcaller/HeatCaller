@@ -67,7 +67,7 @@ public sealed class QualifyingProjectionForm : Form
         _lblEmpty.ForeColor = AppTheme.TextMuted;
         _lblEmpty.TextAlign = ContentAlignment.MiddleCenter;
         _lblEmpty.Text = "No qualifier is running.\r\n\r\n"
-                       + "Start a round marked as a qualifier from the Program tab and the order appears here, "
+                       + "Start a round marked as a qualifier from the program on Race Day > Next Steps and the order appears here, "
                        + "updating as the laps come in.";
 
         BuildGrid();

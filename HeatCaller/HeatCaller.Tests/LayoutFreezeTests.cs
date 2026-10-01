@@ -6,7 +6,8 @@ namespace HeatCaller.Tests;
 /// not showing stays held when its page is let go and is laid out the
 /// moment it is shown; and that the layout pieces made while the window is
 /// being built hold themselves until the building ends, or until the page
-/// they are in is let go - and not a moment longer.
+/// they are in is let go - and not a moment longer; and that a window's
+/// own hold (HoldWhileBuilding) does the same, and nothing inside another.
 ///
 /// Each is watched through a row of two buttons (Row): the second sits
 /// just past the first, so it moves when the row is laid out after the
@@ -147,6 +148,69 @@ public class LayoutFreezeTests
 
             first.Width = 80;
             Assert.Equal(80, second.Left);
+        }
+    });
+
+    [Fact]
+    public void AWindowsHoldLetsItsPiecesGoWhenItEnds() => Run(() =>
+    {
+        FlowLayoutPanel row;
+        Button first;
+        Button second;
+
+        using (LayoutFreeze.HoldWhileBuilding())
+        {
+            Assert.True(LayoutFreeze.Building);
+
+            (row, first, second) = Row(adopt: true);
+
+            // A hold inside it - a window's sheet loaded while the window is
+            // being built - does nothing, and ending it lets nothing go.
+            using (LayoutFreeze.HoldWhileBuilding())
+            {
+            }
+
+            Assert.True(LayoutFreeze.Building);
+            Assert.Equal(0, second.Left);
+        }
+
+        using (row)
+        {
+            Assert.False(LayoutFreeze.Building);
+            Assert.Equal(50, second.Left);
+
+            first.Width = 80;
+            Assert.Equal(80, second.Left);
+        }
+    });
+
+    [Fact]
+    public void AWindowsHoldInsideTheMainWindowsBuildingLeavesItToThatOne() => Run(() =>
+    {
+        FlowLayoutPanel row;
+        Button second;
+
+        LayoutFreeze.BeginBuilding();
+
+        try
+        {
+            using (LayoutFreeze.HoldWhileBuilding())
+            {
+                (row, _, second) = Row(adopt: true);
+            }
+
+            // The outer building goes on, and the piece is still held by it.
+            Assert.True(LayoutFreeze.Building);
+            Assert.Equal(0, second.Left);
+        }
+        finally
+        {
+            LayoutFreeze.EndBuilding(Array.Empty<Control>(), shown: null);
+        }
+
+        using (row)
+        {
+            Assert.Equal(50, second.Left);
         }
     });
 

@@ -139,7 +139,7 @@ public sealed partial class AnnouncementService
 
         if (!config.IsEnabledFor(IsPracticeMode))
         {
-            StatusMessage?.Invoke($"[sound] Skipped {label} - disabled for {(IsPracticeMode ? "practice" : "races")} in Sound Effects settings.");
+            StatusMessage?.Invoke($"[sound] Skipped {label} - disabled for {(IsPracticeMode ? "practice" : "races")} on Sounds \u2192 Effects.");
             finished?.TrySetResult();
             return;
         }

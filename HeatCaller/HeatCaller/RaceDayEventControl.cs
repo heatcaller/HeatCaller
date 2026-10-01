@@ -660,7 +660,16 @@ public sealed class RaceDayEventControl : UserControl
         _dtpFirstRace.ValueChanged += CommitNow;
         _numHeatSize.ValueChanged += (_, _) => CommitNow();
         _chkCheckedInOnly.CheckedChanged += (_, _) => CommitNow();
-        _chkAutoAdvance.CheckedChanged += (_, _) => CommitNow();
+        _chkAutoAdvance.CheckedChanged += (_, _) =>
+        {
+            // "Next race is:" only means something while the next race
+            // starts by itself: grayed out the moment the box is unticked,
+            // not only when the page is next filled (docs check, 30 Sep).
+            // Changeable as the day is - the legacy holder never is - read
+            // from the day, as the first race time's box is.
+            FollowAutoAdvance(!(Selected?.IsLegacy ?? true));
+            CommitNow();
+        };
         _cmbAutoAdvanceScope.SelectedIndexChanged += (_, _) => CommitNow();
 
         _lstClasses.ItemCheck += (_, _) =>
@@ -880,6 +889,21 @@ public sealed class RaceDayEventControl : UserControl
     }
 
     /// <summary>
+    /// "Next race is:" open only while the next race starts by itself, on a
+    /// race day that can be changed (<paramref name="editable"/>) - and its caption goes quiet with it, so
+    /// an unticked setting does not read as a live choice.
+    /// </summary>
+    private void FollowAutoAdvance(bool editable)
+    {
+        _cmbAutoAdvanceScope.Enabled = editable && _chkAutoAdvance.Checked;
+
+        if (_lblAutoAdvanceScope is not null)
+        {
+            _lblAutoAdvanceScope.ForeColor = _cmbAutoAdvanceScope.Enabled ? AppTheme.TextDark : AppTheme.TextMuted;
+        }
+    }
+
+    /// <summary>
     /// Fills the "Next race is:" list and picks the day's own answer.
     ///
     /// Rebuilt each time rather than held, because the club's classes can
@@ -1001,12 +1025,13 @@ public sealed class RaceDayEventControl : UserControl
         _chkFirstRace.Checked = raceEvent.FirstRaceLocalTime is not null;
         _dtpFirstRace.Value = raceEvent.FirstRaceLocalTime ?? TimeSpan.FromHours(10);
 
-        // Zero means "whatever was used last" and there is nothing sensible
-        // to show for that, so the box shows the club default instead.
-        // Shown, not written: this runs with _loading set, so the 8 goes on
-        // screen without being saved onto a day that never asked for it.
-        // It becomes real the moment somebody touches the box.
-        _numHeatSize.Value = Math.Clamp(raceEvent.DriversPerHeat <= 0 ? 8 : raceEvent.DriversPerHeat, 2, 20);
+        // Zero means "whatever was used last" - the number the program builds
+        // with (RaceEventStore.HeatSizeFor), so that is what the box shows. It
+        // showed 8 while the program built with a remembered 6, until the box
+        // was changed (docs check, 30 Sep). Not written here: this runs with
+        // _loading set. It is saved onto the day with the next change to any
+        // of the day's fields - the same number, so nothing moves.
+        _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
 
         // The club-wide setting is the answer for a day that never said -
@@ -1062,14 +1087,7 @@ public sealed class RaceDayEventControl : UserControl
         _numHeatSize.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
         _chkAutoAdvance.Enabled = editable;
-        _cmbAutoAdvanceScope.Enabled = editable && _chkAutoAdvance.Checked;
-
-        // The caption and the hint go quiet with the box they describe, so
-        // an unticked setting does not read as a live choice.
-        if (_lblAutoAdvanceScope is not null)
-        {
-            _lblAutoAdvanceScope.ForeColor = _cmbAutoAdvanceScope.Enabled ? AppTheme.TextDark : AppTheme.TextMuted;
-        }
+        FollowAutoAdvance(editable);
         _btnCloseDay.Enabled = editable;
 
         _btnCloseDay.Text = raceEvent.IsOpen ? "Close Day" : "Reopen Day";

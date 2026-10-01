@@ -105,12 +105,11 @@ The line under the picker shows what the selected day already holds, for example
 |---|---|---|
 | **Heats each driver gets:** | How many qualifying rounds each class runs (1–10). On a club night it reads **Races each driver gets:**. | 3, or the last race day's |
 | **Classes racing:** | Tick the classes running today. **Next Steps** builds tonight's heats (or races) for every one of them in one press. | As ticked when the day was started |
-| **Drivers per heat:** | How many drivers share a heat when the program is built (2–20). | The last race day's |
+| **Drivers per heat:** | How many drivers share a heat when the program is built (2–20). | The last race day's, or 8 on a club's first race day |
 | **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on **Who's Racing**. When unticked, it uses every driver in the class. | On for a race day, off for a club night |
 | **Start the next race automatically** | When a race finishes without a round picked on **Race Control**, it's recorded against the next round that hasn't run yet, so you can work through the program without picking each round by hand. See [Which round a race counts for](program-and-mains.md#which-round-a-race-counts-for). | On |
-| **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. | the class that was racing |
+| **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. | the class that was racing |
 
-<!-- TODO: confirm the Drivers per heat default on a club's first race day. The box shows 8 for a day that has no heat size of its own, but the build then uses the app's remembered heat size (6 on a new install) until the box is changed. -->
 
 !!! tip
     If your club doesn't run a sign-on desk, untick **Only include drivers who have checked in**. With it on and nobody checked in, the program has no one in it, and **Next Steps** says "Nobody has checked in yet."

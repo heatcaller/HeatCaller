@@ -96,7 +96,7 @@ public sealed class RaceEvent
     /// <summary>
     /// How many drivers share a heat when the programme is built.
     ///
-    /// Zero means "whatever was used last", which is the right default for
+    /// Zero means "whatever was used last" (RaceEventStore.HeatSizeFor), which is the right default for
     /// a club that runs the same shape every week and never thinks about
     /// it. It lives on the race day rather than in settings because a
     /// twelve-car club night and a four-car practice session are different
@@ -289,6 +289,36 @@ public sealed class RaceEventStore
 
     public RaceEvent? Get(string? id) =>
         id is null ? null : _events.FirstOrDefault(e => e.Id == id);
+
+    /// <summary>The heat size a club's first race day builds with, before any day has one of its own.</summary>
+    public const int DefaultDriversPerHeat = 8;
+
+    /// <summary>
+    /// How many drivers share a heat on <paramref name="day"/>: its own
+    /// number, or - for a day that never set one (RaceEvent.DriversPerHeat
+    /// zero: started from the phone, or at first launch) - the most recent
+    /// race day's that did, or 8 when none has. 2 to 20.
+    ///
+    /// One answer for everything that shows or uses it - Race Day → Setup
+    /// and Set Up Tonight show it, the program builds with it. They used to
+    /// disagree: the box showed 8 for such a day while the program built
+    /// with a remembered size (AppSettings.LastHeatSize) that nothing ever
+    /// wrote, 6 on a new install (docs check, 30 Sep).
+    /// </summary>
+    public int HeatSizeFor(RaceEvent? day)
+    {
+        if (day is { DriversPerHeat: > 0 })
+        {
+            return Math.Clamp(day.DriversPerHeat, 2, 20);
+        }
+
+        var last = _events
+            .Where(e => !e.IsLegacy && e.DriversPerHeat > 0 && !ReferenceEquals(e, day))
+            .OrderByDescending(e => e.StartedUtc)
+            .FirstOrDefault();
+
+        return Math.Clamp(last?.DriversPerHeat ?? DefaultDriversPerHeat, 2, 20);
+    }
 
     /// <summary>
     /// The event new rounds join, if any. Null means rounds aren't being

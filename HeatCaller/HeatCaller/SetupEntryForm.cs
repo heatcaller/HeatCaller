@@ -112,43 +112,52 @@ public sealed class SetupEntryForm : Form
             Result.MigrateLegacyFields(_template);
         }
 
-        Text = "Setup Sheet";
-        Font = AppTheme.BodyFont;
-        BackColor = AppTheme.Background;
+        // Built with its layout held, and laid out once at the end - see
+        // LayoutFreeze.HoldWhileBuilding. Forty lines of fields, each laid
+        // out again for every part added after it and every face the theme
+        // pass changed, took four seconds.
+        FillPage page;
 
-        _editorWidth = UiLayout.AtTextSize(EditorWidth);
+        using (LayoutFreeze.HoldWhileBuilding())
+        {
+            Text = "Setup Sheet";
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
 
-        var (who, sheet) = BuildHeader(profiles, trackLayouts);
-        BuildCanvas();
-        var footer = BuildButtons();
+            _editorWidth = UiLayout.AtTextSize(EditorWidth);
 
-        // The diagram down the left, the width it always was; the fields
-        // beside it taking the rest, and never less than they can do with -
-        // the diagram gives way first (DiagramColumnWidth). Both take the
-        // height the header and the foot leave.
-        Beside? band = null;
+            var (who, sheet) = BuildHeader(profiles, trackLayouts);
+            BuildCanvas();
+            var footer = BuildButtons();
 
-        band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
+            // The diagram down the left, the width it always was; the fields
+            // beside it taking the rest, and never less than they can do with -
+            // the diagram gives way first (DiagramColumnWidth). Both take the
+            // height the header and the foot leave.
+            Beside? band = null;
 
-        // A few lines of fields - a drop-down and the gap under it for each -
-        // before the window scrolls instead.
-        band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
-        band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
+            band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
 
-        var page = new FillPage();
-        page.Add(who, gapBelow: UiLayout.RowGap);
-        page.Add(sheet);
-        page.AddFill(band, band.LeastHeight);
-        page.Add(footer, gapBelow: 0);
+            // A few lines of fields - a drop-down and the gap under it for each -
+            // before the window scrolls instead.
+            band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
+            band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
 
-        Controls.Add(page);
+            page = new FillPage();
+            page.Add(who, gapBelow: UiLayout.RowGap);
+            page.Add(sheet);
+            page.AddFill(band, band.LeastHeight);
+            page.Add(footer, gapBelow: 0);
 
-        // Once the fields' place is in the window, so what they are measured
-        // in is the window's face.
-        LoadTemplateIntoUi();
+            Controls.Add(page);
 
-        AppTheme.ApplyRecursively(this);
-        _themed = true;
+            // Once the fields' place is in the window, so what they are measured
+            // in is the window's face.
+            LoadTemplateIntoUi();
+
+            AppTheme.ApplyRecursively(this);
+            _themed = true;
+        }
 
         DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
@@ -306,6 +315,10 @@ public sealed class SetupEntryForm : Form
     /// </summary>
     private void LoadTemplateIntoUi()
     {
+        // The new lines built with their layout held, as the window is (see
+        // the constructor), and laid out once when the hold ends.
+        using var hold = LayoutFreeze.HoldWhileBuilding();
+
         _canvas.Values = Result.Values;
         _canvas.SetTemplate(_template, _templates.ResolveImagePath(_template));
 

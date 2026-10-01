@@ -269,6 +269,14 @@ internal static class SecretRecovery
         if (settingsLocked)
         {
             toEnter.Add("the relay token (online results and check-in)");
+
+            // Only a club that pointed the voice at a relay of its own has
+            // a token there to lose; the rest borrow the one above. It was
+            // left off this list (docs check, 30 Sep).
+            if (!string.IsNullOrWhiteSpace(settings.VoiceRelayBaseUrl))
+            {
+                toEnter.Add("the voice relay's token, if it had its own (Voice Settings, under Voice relay)");
+            }
         }
 
         if (voiceLocked)

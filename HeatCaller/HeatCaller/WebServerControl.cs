@@ -227,7 +227,7 @@ public sealed class WebServerControl : UserControl
         // switch here could only disagree with it.
         var lblLooksNote = new Label
         {
-            Text = "The Big Screen and these pages use the crowd-screen look set on Themes \u2192 Looks.",
+            Text = "The Big Screen and these pages use the crowd-screen look set in the Looks card on Themes.",
             AutoSize = true,
         };
 
@@ -484,7 +484,7 @@ public sealed class WebServerControl : UserControl
         {
             Text = "All devices must be on the same Wi-Fi. The overlay URL is the same results page with a "
                  + "transparent background and no sponsor slides, so it composites cleanly over video in an OBS "
-                 + "Browser source. The check-in page has its own wall poster on the Entries page.",
+                 + "Browser source. The check-in page has its own wall poster: Self Check-In Poster on Race Day > Who's Racing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

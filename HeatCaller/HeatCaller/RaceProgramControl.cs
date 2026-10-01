@@ -935,17 +935,17 @@ public sealed class RaceProgramControl : UserControl
         return roster.ToList();
     }
 
-    /// <summary>How many drivers share a heat. The race day's number when it has one, otherwise the last one used.</summary>
+    /// <summary>How many drivers share a heat. The race day's number when it has one, otherwise the last race day's (RaceEventStore.HeatSizeFor).</summary>
     private int HeatSize()
     {
-        var wanted = ActiveDay?.DriversPerHeat ?? 0;
-
-        if (wanted <= 0)
+        if (_events is not null)
         {
-            wanted = _settings.LastHeatSize;
+            return _events.HeatSizeFor(ActiveDay);
         }
 
-        return Math.Clamp(wanted, 2, 20);
+        var wanted = ActiveDay?.DriversPerHeat ?? 0;
+
+        return Math.Clamp(wanted > 0 ? wanted : RaceEventStore.DefaultDriversPerHeat, 2, 20);
     }
 
     private int PlannedQualifyingRounds() => Math.Clamp(ActiveDay?.QualifyingRounds ?? 3, 1, 10);

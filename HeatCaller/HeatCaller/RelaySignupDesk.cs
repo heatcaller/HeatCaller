@@ -156,7 +156,7 @@ internal sealed class RelaySignupDesk
                 if (_announced.Add(item.Identity))
                 {
                     _log($"[signup] {item.Name} signed up online with an invite this laptop doesn't know - made on another laptop, "
-                        + "or lost from this one. It's waiting on Race Day → Entries → Online Sign-ups.");
+                        + "or lost from this one. It's waiting under Online Sign-ups on Race Day → Who's Racing.");
                 }
 
                 continue;
@@ -187,7 +187,7 @@ internal sealed class RelaySignupDesk
             if (_announced.Add(item.Identity))
             {
                 var what = item.ClassName.Length > 0 ? $" for {item.ClassName}" : string.Empty;
-                _log($"[signup] {item.Name} signed up online{what}. Approve them on Race Day → Entries → Online Sign-ups.");
+                _log($"[signup] {item.Name} signed up online{what}. Approve them under Online Sign-ups on Race Day → Who's Racing.");
             }
         }
 

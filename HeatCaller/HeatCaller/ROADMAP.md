@@ -263,15 +263,29 @@ day: the layout overhaul is finished before the beta rather than after it
    (Pace's best lap and fade were cut at 200% - measured before the grid had
    its face), chassis labels try either side when up and down are full, and
    the window report's Slowest line splits each time into building, sizing
-   and checking.
+   and checking. b70 measured (1 Oct): ready in 8.6s, "Pages built in 6.4s"
+   (Voice 1.8s the most), Ctrl +/- 0.2s. b71: the Setup Sheet is built with
+   its layout held (`LayoutFreeze.HoldWhileBuilding`, for any window built
+   of many pieces - it took 3.5-4.8s to build); the Big Screen grows and
+   shrinks with its window (`BigScreenForm.ApplyScale`: everything at its
+   1280x800 size times the lesser of the window's two ratios, 0.6-3x; not
+   the laptop's text size - Asher, 1 Oct); the splash stays as it is
+   (Asher: not worth reading settings early for it). `--dpi-aware` stays an
+   opt-in preview: on Asher's 200% laptop both modes looked right except
+   Add/Edit Ghost Car under `--dpi-aware` (page scrolls both ways, buttons
+   cut off) - cause not found yet; log the fit (client, least, body content,
+   frame, DeviceDpi) before guessing. Plus the message fixes from the 30 Sep
+   docs check (page names, Next race is: graying, Drivers per heat - one
+   rule now, `RaceEventStore.HeatSizeFor`: the day's, else the last race
+   day's, else 8; `AppSettings.LastHeatSize` is no longer read - the
+   soundscape Apply message, the keys-lost list).
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and
    startup walk over every page and tab is kept as `WarmPages` (it builds
    every page's handles ahead of time - since b69 at startup only); the tour sizes its own buttons and
    lines; every `LeaveAlone` call is gone; and the page test fails on a
-   finding on ANY page, converted or not. Left: the Big Screen and the
-   splash at larger text sizes (DPI only so far), a hardware spike for
+   finding on ANY page, converted or not. Left: a hardware spike for
    `PerMonitorV2`, then making `--dpi-aware` the default (SystemAware) once
    it has been used on a 150% laptop.
 5. **The installer** (Beta readiness 3), then **the beta tier and the

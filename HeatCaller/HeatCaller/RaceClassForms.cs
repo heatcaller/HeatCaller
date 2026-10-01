@@ -188,7 +188,7 @@ public sealed class RaceClassEditForm : Form
         AppTheme.StyleToolTip(warnTip);
         warnTip.SetToolTip(_chkWarnUninspected,
             "When a heat of this class is staged, Race Control's log lists anyone on its roster without a passing "
-            + "inspection in the Tech Log, and the Next Up bar counts them. A warning only - the heat still runs. "
+            + "inspection in the Scrutineering log, and the Next Up bar counts them. A warning only - the heat still runs. "
             + "Only applies once tech is being run for the class: it has a checklist, or someone has been inspected in it today.");
 
         var btnTechList = new Button { Text = "Tech Checklist..." };

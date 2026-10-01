@@ -167,7 +167,7 @@ public sealed partial class RaceControlControl
         catch (Exception ex)
         {
             // A warning must never be the reason a heat fails to start.
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [tech] Could not check the Tech Log for this heat: {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [tech] Could not check the Scrutineering log for this heat: {ex.Message}");
             return;
         }
 

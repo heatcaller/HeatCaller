@@ -1154,7 +1154,7 @@ public sealed partial class RaceControlControl
         {
             _race.SetReleaseSchedule(new Dictionary<string, long>());
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Staggered start has no grid to order by - "
-                + "select a round with an assigned roster on Race Day \u2192 Program, or run one race so the last "
+                + "select a round with an assigned roster on Race Day \u2192 Next Steps, or run one race so the last "
                 + "result can be used. Starting everyone together instead.");
             return;
         }

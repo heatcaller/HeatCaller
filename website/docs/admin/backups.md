@@ -164,6 +164,7 @@ If the password is wrong, the dialog says so and how many tries are left. You ge
 HeatCaller tells you, once, what needs entering again:
 
 - the relay token, for online results and check-in (**Club Website** page)
+- the voice relay's own token, if you gave the voice a relay of its own (**Voice → Voice Settings**, under **Voice relay:**)
 - the ElevenLabs key (**Voice → Voice Settings**)
 - the email app password for racer PINs (**Club Website** page)
 - the Local Screens remote, check-in and manager PINs (**Local Screens** page)

@@ -50,7 +50,7 @@ public sealed partial class RaceDayService
             // 0 means "whatever was used last" - the number the programme
             // will really build with is sent alongside it.
             driversPerHeat = day.DriversPerHeat,
-            driversPerHeatUsed = Math.Clamp(day.DriversPerHeat > 0 ? day.DriversPerHeat : _host.Settings.LastHeatSize, 2, 20),
+            driversPerHeatUsed = _host.Events.HeatSizeFor(day),
             checkedInOnly = day.CheckedInDriversOnly,
             classNames = day.ClassNames.ToList(),
             rounds = day.RoundIds.Count,
@@ -307,7 +307,7 @@ public sealed partial class RaceDayService
             {
                 throw new InvalidOperationException(
                     $"\"{live.DisplayName}\" has been used since it was started ({used}), and taking it away now would lose that. "
-                    + "Close it on the Race Day > Event tab if it isn't wanted. Nothing was changed.");
+                    + "Close it with Close Day on Race Day > Setup if it isn't wanted. Nothing was changed.");
             }
 
             if (JsonSerializer.Serialize(live) != asStarted)

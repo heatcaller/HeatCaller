@@ -538,6 +538,12 @@ public sealed class AppSettings
     /// pixel count decided here would be wrong at every text size but one.
     /// </summary>
     public int TodayProgrammeSplit { get; set; }
+    /// <summary>
+    /// No longer read (1 Oct 2026): nothing ever wrote it, so it was a fixed 6
+    /// that disagreed with the 8 the screens showed. A day with no heat size
+    /// of its own now takes the last race day's (RaceEventStore.HeatSizeFor).
+    /// Kept so settings files that carry it still load and save as they were.
+    /// </summary>
     public int LastHeatSize { get; set; } = 6;
     public string LastHeatTrackName { get; set; } = string.Empty;
     public bool LastCheckedInOnlyForHeats { get; set; }

@@ -76,6 +76,49 @@ internal static class LayoutFreeze
     public static void BeginBuilding() => _building ??= new HashSet<Control>();
 
     /// <summary>
+    /// For a window of its own being built: every layout piece made until
+    /// the result is disposed holds its layout (Adopt), and is let go then,
+    /// parents first - so the window is laid out once, not once for every
+    /// part added to it. Inside a building already under way (MainForm's,
+    /// or an outer hold) it does nothing: that one lets them go.
+    ///
+    /// Why: a window built of many pieces worked itself out again for every
+    /// part put in it, and again for every face the theme pass changed - the
+    /// Setup Sheet, forty lines of fields, took 3.5 to 4.8 seconds to build
+    /// (window report, 1 Oct).
+    /// </summary>
+    public static IDisposable HoldWhileBuilding() => _building is not null ? NoHold.Instance : new BuildingHold();
+
+    /// <summary>A hold begun by HoldWhileBuilding, ended when disposed.</summary>
+    private sealed class BuildingHold : IDisposable
+    {
+        private bool _ended;
+
+        public BuildingHold() => BeginBuilding();
+
+        public void Dispose()
+        {
+            if (_ended)
+            {
+                return;
+            }
+
+            _ended = true;
+            EndBuilding(Array.Empty<Control>(), shown: null);
+        }
+    }
+
+    /// <summary>HoldWhileBuilding inside a building already under way: nothing to end.</summary>
+    private sealed class NoHold : IDisposable
+    {
+        public static readonly NoHold Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>
     /// Called by every layout piece as it is made: while a window is being
     /// built, the piece holds its layout from the start - see the class
     /// notes. Otherwise nothing.

@@ -429,7 +429,7 @@ public sealed class EventsControl : UserControl
         {
             AppDialog.Show(this,
                 $"\"{raceEvent.DisplayName}\" has no rounds yet.\r\n\r\n"
-                + "Make it active, then generate heats or mains on the Race Program page.",
+                + "Make it active, then build its heats or mains in the program on Race Day > Next Steps.",
                 "No rounds", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }

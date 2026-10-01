@@ -9,7 +9,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 1. Connect the second screen or projector to the laptop and set Windows to extend the desktop onto it. <!-- TODO: confirm whether we want to document the Windows display settings step (Win+P > Extend) here or in getting-started -->
 2. Press **Open Big Screen**. The button is on the **Race Control** page (or press <kbd>B</kbd> there), and also on the **Practice** and **Local Screens** pages.
 3. The window opens in the middle of the laptop screen, titled "HeatCaller — Big Screen". Drag it onto the second screen.
-4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window.
+4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window. The banner, the clocks, the leaderboard and the ON DECK bar grow and shrink with the window, so full screen on a TV the writing fills the screen. It doesn't follow the text size you set for the laptop with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd>.
 5. Press <kbd>Esc</kbd> to close it.
 
 A small reminder of these two keys, "F11: toggle fullscreen     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.

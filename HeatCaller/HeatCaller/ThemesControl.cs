@@ -737,24 +737,39 @@ public sealed class ThemesControl : UserControl
                 : string.Empty);
 
         // The HeatCaller voice fixes the announcer's lines while it speaks,
-        // so a soundscape applied under it changes the sounds and the tuning
-        // and leaves the wording alone (see ThemeStore.Apply).
+        // so a soundscape applied under it changes the sounds and leaves the
+        // wording alone (see ThemeStore.Apply). Its tuning is saved too, but
+        // that voice is rendered by the relay in its own delivery - only the
+        // voice and the text go with a line (HeatCallerVoice) - so the
+        // message does not say the tuning applies (docs check, 30 Sep). The
+        // most announcements per lap does: the announcer counts them on
+        // every voice.
+        // The wireless speaker tick is hidden on Voice Settings (it changes
+        // nothing now), so it is not named either.
         var onHeatCaller = _voiceStore.Current.EffectiveEngine == VoiceEngine.HeatCaller;
 
         var notAffected = "Not affected: your ElevenLabs API key"
             + (hasVoice ? string.Empty : ", voice and model")
-            + ", the voice and sound volumes, the wireless speaker setting, the output format"
+            + ", the voice and sound volumes, the output format"
             + (hasLanguage ? string.Empty : ", the language")
             + ", and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."
             + (onHeatCaller
-                ? "\n\nThe HeatCaller voice speaks the standard announcer lines, so this soundscape's own lines are NOT applied. "
-                  + "Its sounds and delivery are. To use its lines, switch to your own ElevenLabs key or the free Windows voice on Voice Settings."
+                ? "\n\nThe HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines "
+                  + "are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another "
+                  + "voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own "
+                  + "ElevenLabs key or the free Windows voice on Voice Settings."
                 : string.Empty);
 
         var background = ThemeStore.DescribeBackground(theme, _musicStore);
 
+        // On the HeatCaller voice the lines stay as they are (above), so the
+        // question does not say they are replaced.
+        var replaces = onHeatCaller
+            ? "your sound effect settings"
+            : "your current announcer lines and sound effect settings";
+
         var confirm = AppDialog.Show(this,
-            $"Apply \"{theme.Name}\"? This replaces your current announcer lines and sound effect settings.\n\n"
+            $"Apply \"{theme.Name}\"? This replaces {replaces}.\n\n"
             + (switches.Length > 0 ? $"{switches}.\n\n" : string.Empty)
             + (background.Length > 0 ? $"{background}\n\n" : string.Empty)
             + notAffected,
