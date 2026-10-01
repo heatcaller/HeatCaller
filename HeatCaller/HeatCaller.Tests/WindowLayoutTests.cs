@@ -435,6 +435,14 @@ internal static class WindowSweep
                 Settle();
 
                 PartDone("putting away");
+
+                // A window that times its own opening (WhereTimeGoes) says
+                // where its building and sizing went, part by part.
+                if (WhereTimeGoes.Take() is { } opening)
+                {
+                    parts.Add(opening);
+                }
+
                 result.Timed.Add(($"{view.Name}: {name}", took.Elapsed, string.Join(", ", parts)));
                 _doing = string.Empty;
             }

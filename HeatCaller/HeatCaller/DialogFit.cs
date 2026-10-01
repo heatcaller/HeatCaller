@@ -145,6 +145,9 @@ internal static class DialogFit
             return;
         }
 
+        // The window's handles made, up to here (WhereTimeGoes).
+        WhereTimeGoes.Mark("handles");
+
         var area = WorkingArea(dialog);
         var frame = dialog.Size - dialog.ClientSize;
         var most = Most(area, frame);
@@ -200,8 +203,10 @@ internal static class DialogFit
         // the dialog opening.
         client.ClientSize = new Size(clientWidth, most.Height);
         client.PerformLayout();
+        WhereTimeGoes.Mark("first layout");
 
         var least = fitting.Page.LeastHeight(clientWidth - inset.Horizontal) + inset.Vertical;
+        WhereTimeGoes.Mark("least height");
 
         for (var again = 0; again < 3; again++)
         {
@@ -222,8 +227,10 @@ internal static class DialogFit
 
             client.ClientSize = new Size(clientWidth, clientHeight);
             client.PerformLayout();
+            WhereTimeGoes.Mark($"layout {again + 2}");
 
             least = fitting.Page.LeastHeight(clientWidth - inset.Horizontal) + inset.Vertical;
+            WhereTimeGoes.Mark($"least height {again + 2}");
         }
 
         return (clientWidth, least);

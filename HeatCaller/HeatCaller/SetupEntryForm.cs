@@ -99,6 +99,11 @@ public sealed class SetupEntryForm : Form
     public SetupEntryForm(SetupEntry? existing, ChassisTemplateStore templates,
         SessionHistoryStore history, ProfileStore profiles, TrackLayoutStore trackLayouts)
     {
+        // How the time goes while it opens, for the session log - see
+        // WhereTimeGoes. It took 4 to 5 seconds, and holding its layout
+        // while it was built did not change that.
+        WhereTimeGoes.Start("Setup Sheet");
+
         _templates = templates;
         _history = history;
 
@@ -129,6 +134,7 @@ public sealed class SetupEntryForm : Form
             var (who, sheet) = BuildHeader(profiles, trackLayouts);
             BuildCanvas();
             var footer = BuildButtons();
+            WhereTimeGoes.Mark("header");
 
             // The diagram down the left, the width it always was; the fields
             // beside it taking the rest, and never less than they can do with -
@@ -157,9 +163,13 @@ public sealed class SetupEntryForm : Form
 
             AppTheme.ApplyRecursively(this);
             _themed = true;
+            WhereTimeGoes.Mark("theme pass");
         }
 
+        WhereTimeGoes.Mark("letting go");
+
         DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
+        WhereTimeGoes.LogWhenShown(this);
     }
 
     /// <summary>
@@ -321,6 +331,7 @@ public sealed class SetupEntryForm : Form
 
         _canvas.Values = Result.Values;
         _canvas.SetTemplate(_template, _templates.ResolveImagePath(_template));
+        WhereTimeGoes.Mark("diagram");
 
         _editors.Clear();
         _lines.Clear();
@@ -371,12 +382,15 @@ public sealed class SetupEntryForm : Form
 
         _fieldsHost.Controls.Add(fields);
 
+        WhereTimeGoes.Mark($"{_lines.Count} fields");
+
         if (_themed)
         {
             AppTheme.ApplyRecursively(_fieldsHost);
         }
 
         SizeEditors();
+        WhereTimeGoes.Mark("sizing the fields");
     }
 
     /// <summary>

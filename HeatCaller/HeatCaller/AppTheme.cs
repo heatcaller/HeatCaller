@@ -3204,6 +3204,10 @@ public static class AppTheme
         // than showing up as a rendering glitch.
         foreach (Control child in root.Controls.Cast<Control>().ToArray())
         {
+            // While a slow window is timed (WhereTimeGoes), what styling each
+            // kind of control costs - not counting what is inside it.
+            var styling = WhereTimeGoes.Active ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+
             // A cut-off label keeps its "..." but loses the pale Windows
             // pop-up that repeated its own text (see QuietEllipsis).
             if (child is Label { AutoEllipsis: true } clipped)
@@ -3406,6 +3410,11 @@ public static class AppTheme
                         || radioButton.ForeColor == SystemColors.WindowText:
                     radioButton.ForeColor = TextDark;
                     break;
+            }
+
+            if (styling != 0L)
+            {
+                WhereTimeGoes.Styled(child.GetType(), System.Diagnostics.Stopwatch.GetElapsedTime(styling));
             }
 
             if (child.HasChildren && _leaveInside?.Contains(child) != true)
