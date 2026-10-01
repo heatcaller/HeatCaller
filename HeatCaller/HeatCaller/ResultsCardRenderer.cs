@@ -92,11 +92,23 @@ public static class ResultsCardRenderer
         var title = $"{session.SessionType}{labelPart}";
         var subtitle = $"{session.StartedAtUtc.ToLocalTime():dddd, MMMM d, yyyy}{trackPart}";
 
+        // A long title - the class's whole name, and the round's - came off
+        // the card's right-hand edge (layout pictures, 30 Sep). So it is made
+        // smaller until it fits, down to 18pt, and ended with "..." past
+        // that; the date and track line, and the names in the table, end
+        // with "..." where they would run on.
+        using var oneLine = new StringFormat(StringFormatFlags.NoWrap) { Trimming = StringTrimming.EllipsisCharacter };
+        var across = width - 64f;
+
         using (var titleBrush = new SolidBrush(textColor))
         using (var subtitleBrush = new SolidBrush(mutedColor))
+        using (var fitted = FitTitle(g, title, family, across))
         {
-            g.DrawString(title, titleFont, titleBrush, new PointF(32, 28));
-            g.DrawString(subtitle, subtitleFont, subtitleBrush, new PointF(32, 72));
+            // Kept on the line a 26pt title sits on, whatever size it is.
+            var drop = (titleFont.GetHeight(g) - fitted.GetHeight(g)) / 2f;
+
+            g.DrawString(title, fitted, titleBrush, new RectangleF(32, 28 + drop, across, fitted.GetHeight(g) + 2), oneLine);
+            g.DrawString(subtitle, subtitleFont, subtitleBrush, new RectangleF(32, 72, across, subtitleFont.GetHeight(g) + 2), oneLine);
         }
 
         // Column header row.
@@ -121,8 +133,8 @@ public static class ResultsCardRenderer
             var positionColor = result.Position switch
             {
                 1 => highlightColor,
-                2 => ColorTranslator.FromHtml("#C7CCD6"),
-                3 => ColorTranslator.FromHtml("#C98A4B"),
+                2 => p.Second,
+                3 => p.Third,
                 _ => textColor,
             };
 
@@ -133,13 +145,16 @@ public static class ResultsCardRenderer
 
             using (var nameBrush = new SolidBrush(textColor))
             {
+                // Up to the laps column, and no further.
+                var nameAcross = width - 260 - 110 - 16f;
+
                 var displayName = string.IsNullOrWhiteSpace(result.DriverName) ? result.Transponder : result.DriverName;
-                g.DrawString(displayName, driverFont, nameBrush, new PointF(110, y + 14));
+                g.DrawString(displayName, driverFont, nameBrush, new RectangleF(110, y + 14, nameAcross, driverFont.GetHeight(g) + 2), oneLine);
 
                 if (!string.IsNullOrWhiteSpace(result.CarModel))
                 {
                     using var carBrush = new SolidBrush(mutedColor);
-                    g.DrawString(result.CarModel, cellFont, carBrush, new PointF(110, y + 36));
+                    g.DrawString(result.CarModel, cellFont, carBrush, new RectangleF(110, y + 36, nameAcross, cellFont.GetHeight(g) + 2), oneLine);
                 }
             }
 
@@ -198,5 +213,27 @@ public static class ResultsCardRenderer
         }
 
         return bitmap;
+    }
+
+    /// <summary>
+    /// The title's face: 26pt bold, or smaller - a point at a time, down to
+    /// 18pt - until the title fits <paramref name="across"/>. The caller
+    /// disposes it.
+    /// </summary>
+    private static Font FitTitle(Graphics g, string title, FontFamily family, float across)
+    {
+        for (var size = 26f; size > 18f; size -= 1f)
+        {
+            var font = new Font(family, size, FontStyle.Bold);
+
+            if (g.MeasureString(title, font).Width <= across)
+            {
+                return font;
+            }
+
+            font.Dispose();
+        }
+
+        return new Font(family, 18f, FontStyle.Bold);
     }
 }

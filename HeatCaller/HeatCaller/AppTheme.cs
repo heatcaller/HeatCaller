@@ -3250,6 +3250,10 @@ public static class AppTheme
                     EnableDoubleBuffering(listBox);
                     InputOutline.Attach(listBox);
                     ThinScrollBar.Attach(listBox);
+
+                    // The picked item in the theme's colours, and a long one
+                    // ended with "..." - see PlainList.
+                    PlainList.Attach(listBox);
                     break;
                 case ListView listView:
                     StyleListView(listView);

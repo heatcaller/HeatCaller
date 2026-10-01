@@ -15,6 +15,19 @@ public sealed class ChartPalette
     public required Color Highlight { get; init; }
     public required Color[] Series { get; init; }
 
+    /// <summary>
+    /// Second and third place on a results card (ResultsCardRenderer):
+    /// silver and bronze, as dark or light as the background needs to be
+    /// read on. First place is the Highlight. Silver and bronze were fixed
+    /// colours on every style, and on the white ones second place was a
+    /// pale grey that all but disappeared, and on the monochrome one third
+    /// place was still bronze (layout pictures, 30 Sep).
+    /// </summary>
+    public Color Second { get; init; } = ColorTranslator.FromHtml("#C7CCD6");
+
+    /// <inheritdoc cref="Second"/>
+    public Color Third { get; init; } = ColorTranslator.FromHtml("#C98A4B");
+
     /// <summary>Matches the app's current theme - what's shown on screen.</summary>
     public static ChartPalette Screen() => new()
     {
@@ -24,6 +37,11 @@ public sealed class ChartPalette
         Grid = Color.FromArgb(60, AppTheme.TextMuted),
         Axis = AppTheme.Border,
         Highlight = AppTheme.Success,
+
+        // On a light look, the darker pair the print style uses: the pale
+        // silver all but vanished on a white card.
+        Second = Looks.Luminance(AppTheme.Surface) > 0.5 ? Color.FromArgb(84, 96, 112) : ColorTranslator.FromHtml("#C7CCD6"),
+        Third = Looks.Luminance(AppTheme.Surface) > 0.5 ? Color.FromArgb(150, 84, 30) : ColorTranslator.FromHtml("#C98A4B"),
         Series = new[]
         {
             ColorTranslator.FromHtml("#FF2E9A"),
@@ -51,6 +69,11 @@ public sealed class ChartPalette
         Grid = Color.FromArgb(225, 225, 225),
         Axis = Color.FromArgb(150, 150, 150),
         Highlight = Color.FromArgb(0, 130, 70),
+
+        // A slate silver and a dark bronze: each as dark as the body text's
+        // grey, so both read on white paper.
+        Second = Color.FromArgb(84, 96, 112),
+        Third = Color.FromArgb(150, 84, 30),
         Series = new[]
         {
             ColorTranslator.FromHtml("#C2185B"),
@@ -77,6 +100,11 @@ public sealed class ChartPalette
         Grid = Color.FromArgb(230, 230, 230),
         Axis = Color.FromArgb(120, 120, 120),
         Highlight = Color.Black,
+
+        // No colour at all on a mono printer: the podium is in the text's
+        // black, as first place is.
+        Second = Color.Black,
+        Third = Color.Black,
         Series = new[]
         {
             Color.FromArgb(20, 20, 20),

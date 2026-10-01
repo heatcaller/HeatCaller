@@ -1633,6 +1633,17 @@ public partial class MainForm
             }
         }
 
+        // Every page holds its layout from here (LayoutFreeze): the text
+        // size and the theme are pushed through the whole window below, and
+        // a page that is not held works itself out again for every control
+        // whose face changes. The page shown first is let go when RebuildNav
+        // shows it, and each of the others when WarmPages walks it once the
+        // window is up, or when it is opened - whichever comes first.
+        foreach (var item in _navItems)
+        {
+            LayoutFreeze.Freeze(item.Page);
+        }
+
         // Every page gets the same top edge, from here - one place, and the
         // title is the nav's own name for the page, so the two can never
         // disagree. PageHeader reserves its strip with the page's Padding,
@@ -1733,8 +1744,11 @@ public partial class MainForm
         };
 
         AppTheme.StyleToolTip(_footerTooltip);
-        AppTheme.ApplyRecursively(this);
-        RestyleSidebarChrome();
+
+        // The theme pass, once: ApplyFontScale runs it (with the sidebar's
+        // chrome put back after it), in the window's own face - which it
+        // sets first. It used to be run here as well, just before, which
+        // was the whole window themed twice at every start.
         ApplyFontScale();
 
         btnMuteToggle.Click += (_, _) => SetAllSoundMuted(!_announcer.Muted);
@@ -1757,6 +1771,12 @@ public partial class MainForm
 
         // After the window is actually up: the pages' handles are made in
         // the window's, which does not exist while it is still being built.
-        Shown += (_, _) => WarmPages();
+        // Timed for the session log.
+        Shown += (_, _) =>
+        {
+            var warming = System.Diagnostics.Stopwatch.StartNew();
+            WarmPages();
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s.");
+        };
     }
 }

@@ -147,7 +147,7 @@ internal sealed class CsvMappingForm : Form
         // text, which the cell's own padding comes out of. At 140px,
         // "Announcer name" was cut short at every text size.
         var widestChoice = captions.Max(caption => TextRenderer.MeasureText(caption, AppTheme.BoldFont).Width)
-                           + SystemInformation.VerticalScrollBarWidth + 24;
+                           + DropArrow.Room;
         var narrowest = Math.Max(UiLayout.AtTextSize(140), widestChoice);
         var widest = Math.Max(UiLayout.AtTextSize(260), narrowest);
 
@@ -219,6 +219,49 @@ internal sealed class CsvMappingForm : Form
         // A value the list doesn't hold can't happen here, but a grid that
         // throws a dialog of its own would be worse than ignoring it.
         _grid.DataError += (_, e) => e.ThrowException = false;
+
+        // The lists wear the app's chevron, at the text size in use
+        // (DropArrow), as every other drop-down does. The grid's own was a
+        // few pixels of dots that stayed that size at 200% (layout
+        // pictures, 30 Sep).
+        _grid.CellPainting += PaintListCell;
+
+        // One click on a list opens it, wherever on the cell it lands - its
+        // drawn arrow is wider than the button the grid itself answers to.
+        // After the click, once the grid has put the list in the cell.
+        _grid.CellClick += (_, e) =>
+        {
+            if (e.RowIndex != 0 || e.ColumnIndex < 0)
+            {
+                return;
+            }
+
+            BeginInvoke(new Action(() =>
+            {
+                if (!IsDisposed
+                    && _grid.CurrentCell is { RowIndex: 0 } current
+                    && current.ColumnIndex == e.ColumnIndex
+                    && _grid.EditingControl is ComboBox { DroppedDown: false } list)
+                {
+                    list.DroppedDown = true;
+                }
+            }));
+        };
+
+        // And the list itself, while it is in a cell being picked from, has
+        // the app's closed field and chevron (ComboBoxSkin) rather than the
+        // grid's. Only the skin: styling it the way AppTheme.StyleComboBox
+        // does changes its FlatStyle and DrawMode, and either makes Windows
+        // build its window again - which the grid, holding it in the cell
+        // as it shows it, is not expecting. The grid makes one list and
+        // uses it for every cell; the skin goes on it once.
+        _grid.EditingControlShowing += (_, e) =>
+        {
+            if (e.Control is ComboBox list)
+            {
+                ComboBoxSkin.Attach(list);
+            }
+        };
 
         var lblMatch = new Label
         {
@@ -295,6 +338,47 @@ internal sealed class CsvMappingForm : Form
         return page;
     }
 
+    /// <summary>
+    /// A list at the top of a column: the cell as the grid paints it, less
+    /// its own arrow and text, and then the pick and the app's chevron
+    /// (DropArrow) - the text kept clear of the chevron's zone.
+    /// </summary>
+    private void PaintListCell(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex != 0 || e.ColumnIndex < 0 || e.Graphics is null)
+        {
+            return;
+        }
+
+        e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
+
+        var bounds = e.CellBounds;
+        var style = e.CellStyle ?? _grid.DefaultCellStyle;
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        var ink = selected ? style.SelectionForeColor : style.ForeColor;
+        var zone = DropArrow.ZoneIn(bounds.Width, bounds.Height);
+
+        zone.Offset(bounds.Left, bounds.Top);
+
+        var text = new Rectangle(
+            bounds.Left + style.Padding.Left + UiLayout.AtDpi(4),
+            bounds.Top,
+            Math.Max(1, zone.Left - bounds.Left - style.Padding.Left - UiLayout.AtDpi(4)),
+            bounds.Height - 1);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            e.FormattedValue as string ?? string.Empty,
+            style.Font ?? _grid.Font,
+            text,
+            ink,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        DropArrow.Draw(e.Graphics, zone, AppTheme.TextMuted);
+
+        e.Handled = true;
+    }
+
     /// <summary>What is wrong when one kind of column is picked for two: "Transponder" is picked for more than one column...</summary>
     private static string PickedTwice(ImportColumn column) =>
         $"\"{DriverImport.Caption(column)}\" is picked for more than one column. Pick it for one, and set the others to (ignore).";
@@ -360,7 +444,11 @@ internal sealed class CsvMappingForm : Form
         }
 
         _cmbSeason.Enabled = points && _cmbSeason.Items.Count > 0;
-        _lblSeason.Enabled = points;
+
+        // The caption greyed with its drop-down, and only then: with points
+        // picked and no championship to put them in, it was black beside an
+        // empty, greyed drop-down (layout pictures, 30 Sep).
+        _lblSeason.Enabled = _cmbSeason.Enabled;
         _lblSeasonHint.Text = !points
             ? NoPointsHint
             : _seasons.Count == 0

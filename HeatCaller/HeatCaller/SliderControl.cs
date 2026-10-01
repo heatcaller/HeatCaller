@@ -27,12 +27,15 @@ public sealed class SliderControl : Control
     /// <summary>Raised when the user moves the value with the mouse, wheel or keyboard.</summary>
     public event EventHandler? Scroll;
 
-    // The handle and the track are at the screen's DPI, as the rest of the
-    // window is once the app is started --dpi-aware (the host sizes the
-    // slider itself). Exactly these sizes at 96 DPI.
-    private static int ThumbWidth => UiLayout.AtDpi(14);
-    private static int ThumbHeight => UiLayout.AtDpi(20);
-    private static int TrackHeight => UiLayout.AtDpi(5);
+    // The handle and the track are at the text size in use, and at the
+    // screen's DPI once the app is started --dpi-aware - exactly these sizes
+    // at the normal text size and 96 DPI. At 200% they stayed a 14x20 handle
+    // on a 5px track beside words twice their old size (Asher, 30 Sep). The
+    // host sizes the slider, with the text; the handle is never taller than
+    // it is given, and narrows with it.
+    private int ThumbHeight => Math.Clamp(UiLayout.AtTextSize(20), 1, Math.Max(1, Height));
+    private int ThumbWidth => Math.Max(1, ThumbHeight * 14 / 20);
+    private int TrackHeight => Math.Max(1, Math.Min(UiLayout.AtTextSize(5), ThumbHeight / 2));
 
     private int _minimum;
     private int _maximum = 100;

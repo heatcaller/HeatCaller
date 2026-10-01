@@ -77,7 +77,7 @@ public sealed class SeasonRulesForm : Form
 
         var bestWidth = Math.Max(
             UiLayout.AtTextSize(BestWidth),
-            TextRenderer.MeasureText("00", _numBest.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText("00", _numBest.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
         _numBest.Width = bestWidth;
 
         _lstEvents.Height = EventRows * _lstEvents.ItemHeight + 4;
@@ -163,6 +163,9 @@ public sealed class SeasonRulesForm : Form
         _chkAllEvents.AutoSize = true;
         _chkAllEvents.Font = AppTheme.BodyFont;
         _chkAllEvents.CheckedChanged += (_, _) => UpdateEnabled();
+
+        // With no race days on file, the list says so.
+        EmptyNote.For(_lstEvents, () => "No race days on file yet. A race day started on Race Day appears here.");
 
         _lstEvents.CheckOnClick = true;
         _lstEvents.BorderStyle = BorderStyle.None;

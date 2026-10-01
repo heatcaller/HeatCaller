@@ -72,6 +72,16 @@ public sealed class JoinPosterForm : Form
             Anchor = AnchorStyles.Left,
         };
 
+        // The app's buttons and faces, at the text size in use, on the
+        // poster's white: Windows' own grey buttons in its 9pt face were all
+        // that did not grow at 200% (layout pictures, 30 Sep). Only these -
+        // the window stays white, whatever look the app is wearing.
+        Font = AppTheme.BodyFont;
+        hint.Font = AppTheme.SmallFont;
+        AppTheme.StyleButton(btnPrint);
+        AppTheme.StyleButton(btnFullScreen);
+        AppTheme.StyleButton(btnClose, AppTheme.ButtonKind.Secondary);
+
         // Along the foot, in the order they always were, the note after
         // them - each button as wide as its caption needs.
         _bar = new ButtonBar().With(btnPrint, btnFullScreen, btnClose, hint);
@@ -113,7 +123,8 @@ public sealed class JoinPosterForm : Form
         };
 
         // Never given the theme pass, and still not: the poster is on white
-        // whatever the app is wearing, and so is the window round it.
+        // whatever the app is wearing, and so is the window round it. Its
+        // buttons are styled one by one, above.
         DialogFit.Keep(this, page, width: 760, height: 820);
 
         // A window of its own, shown beside the app rather than over it

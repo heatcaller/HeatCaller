@@ -97,7 +97,7 @@ public partial class MainForm
 
             if (step != 0f)
             {
-                NudgeFontScale(AppTheme.FontScale + step);
+                NudgeFontScale(TargetFontScale + step);
                 return true;
             }
 

@@ -126,10 +126,15 @@ public sealed class ChassisCanvas : Control
         get
         {
             var marginX = (int)(Width * 0.24f);
-            const int marginY = 16;
+
+            // Room above for "FRONT", and below for the hint in the editor,
+            // in the small face at the text size in use. A fixed 16px either
+            // side cut the hint off at 200% (layout pictures, 30 Sep).
+            var marginTop = Math.Max(16, Pieces.LineHeight(AppTheme.SmallFont) + 2);
+            var marginBottom = Math.Max(16, HintRoom);
 
             var availW = Math.Max(20, Width - marginX * 2);
-            var availH = Math.Max(20, Height - marginY * 2);
+            var availH = Math.Max(20, Height - marginTop - marginBottom);
 
             // Match the image's own shape when there is one, so photos and
             // drawings both come out undistorted.
@@ -147,11 +152,22 @@ public sealed class ChassisCanvas : Control
 
             return new Rectangle(
                 (Width - w) / 2,
-                marginY + (availH - h) / 2,
+                marginTop + (availH - h) / 2,
                 Math.Max(20, w),
                 Math.Max(20, h));
         }
     }
+
+    /// <summary>What the editor says under the diagram.</summary>
+    private const string Hint = "Drag a dot to move it. Drag its label to reposition the text.";
+
+    /// <summary>The flags the hint is measured and drawn with: wrapped to the width, should it come to that.</summary>
+    private const TextFormatFlags HintFlags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Bottom;
+
+    /// <summary>How tall the hint is at the bottom, in the small face at the text size in use - none outside the editor.</summary>
+    private int HintRoom => EditMode
+        ? TextRenderer.MeasureText(Hint, AppTheme.SmallFont, new Size(Math.Max(1, Width - 12), int.MaxValue), HintFlags).Height + 6
+        : 0;
 
     private PointF AnchorPixel(SetupField p)
     {
@@ -193,16 +209,30 @@ public sealed class ChassisCanvas : Control
             return;
         }
 
+        var boxes = LabelBoxes();
+
+        // The leaders first, then the labels and the dots over them, so a
+        // leader never crosses a label it does not belong to.
         foreach (var point in _template.DiagramFields)
         {
-            DrawCallout(g, point);
+            if (boxes.TryGetValue(point.Id ?? string.Empty, out var box))
+            {
+                DrawLeader(g, point, box);
+            }
+        }
+
+        foreach (var point in _template.DiagramFields)
+        {
+            if (boxes.TryGetValue(point.Id ?? string.Empty, out var box))
+            {
+                DrawCallout(g, point, box);
+            }
         }
 
         if (EditMode)
         {
-            using var hintBrush = new SolidBrush(AppTheme.TextMuted);
-            g.DrawString("Drag a dot to move it. Drag its label to reposition the text.",
-                AppTheme.SmallFont, hintBrush, 6, Height - 18);
+            var hint = new Rectangle(6, 0, Math.Max(1, Width - 12), Height - 3);
+            TextRenderer.DrawText(g, Hint, AppTheme.SmallFont, hint, AppTheme.TextMuted, HintFlags);
         }
     }
 
@@ -265,7 +295,7 @@ public sealed class ChassisCanvas : Control
 
         // Deck half-width, measured from the photo: the plastic is broad,
         // reaching almost out to the wheels.
-        const float deck = 0.33f;
+        const float deck = GenericDeck;
 
         // --- Main deck: a broad slab, slightly narrower at the nose ---
         var body = new[]
@@ -436,38 +466,199 @@ public sealed class ChassisCanvas : Control
         g.DrawLine(hairline, dimX, FY(FrontAxleY), dimX, FY(RearAxleY));
         g.DrawLine(hairline, dimX - 3, FY(FrontAxleY), dimX + 3, FY(FrontAxleY));
         g.DrawLine(hairline, dimX - 3, FY(RearAxleY), dimX + 3, FY(RearAxleY));
-        g.DrawString($"{WheelbaseMm:0}mm", AppTheme.SmallFont, labelBrush, dimX + 2, FY((FrontAxleY + RearAxleY) / 2f) - 8);
-
-        var f = TextRenderer.MeasureText("FRONT", AppTheme.SmallFont);
-        g.DrawString("FRONT", AppTheme.SmallFont, labelBrush, FX(0.5f) - f.Width / 2f, b.Top - 14);
+        foreach (var (text, at) in GenericCaptions(b))
+        {
+            g.DrawString(text, AppTheme.SmallFont, labelBrush, at.Location);
+        }
     }
 
-    private void DrawCallout(Graphics g, SetupField point)
+    /// <summary>The deck's half-width in the outline, as a share of its width (DrawGenericChassis).</summary>
+    private const float GenericDeck = 0.33f;
+
+    /// <summary>
+    /// The outline's two words and where they go - the wheelbase beside its
+    /// dimension line, and "FRONT" above the nose - placed from their own
+    /// size, which follows the text size: a fixed 8px and 14px put "FRONT"
+    /// on the deck at 200%. The labels keep off them (LabelBoxes).
+    /// </summary>
+    private static IEnumerable<(string Text, Rectangle At)> GenericCaptions(Rectangle b)
+    {
+        var wheelbase = $"{WheelbaseMm:0}mm";
+        var w = TextRenderer.MeasureText(wheelbase, AppTheme.SmallFont);
+        var dimX = b.Left + b.Width * (0.5f + GenericDeck + 0.055f);
+        var middle = b.Top + b.Height * ((FrontAxleY + RearAxleY) / 2f);
+
+        yield return (wheelbase, new Rectangle((int)(dimX + 2), (int)(middle - w.Height / 2f), w.Width, w.Height));
+
+        var f = TextRenderer.MeasureText("FRONT", AppTheme.SmallFont);
+
+        yield return ("FRONT", new Rectangle((int)(b.Left + b.Width * 0.5f - f.Width / 2f), b.Top - f.Height, f.Width, f.Height));
+    }
+
+    /// <summary>What a point's label says: its name, and its value when it has one.</summary>
+    private string CalloutText(SetupField point) =>
+        Values.TryGetValue(point.Id, out var value) && !string.IsNullOrWhiteSpace(value) ? $"{point.Label}: {value}" : point.Label;
+
+    /// <summary>A dot's size: 7px, or 9 for the one selected, at the text size in use.</summary>
+    private static float DotSize(bool selected) => UiLayout.AtTextSize(selected ? 9 : 7);
+
+    /// <summary>How near a dot a press still picks it: 8px, at the text size in use.</summary>
+    private static int DotReach => UiLayout.AtTextSize(8);
+
+    /// <summary>
+    /// Where each label is drawn, by point id - and so where it is picked.
+    ///
+    /// Each starts where its point puts it (LabelPixel), kept inside the
+    /// control and clear of the hint. Then, top to bottom, any that lands on
+    /// a label already placed, or on any dot - its own or another's - is
+    /// moved up or down off it, as little as it can be, and on in the same
+    /// direction past anything it meets next - whichever way is the shorter
+    /// move - and left where its point put it if there is no room either
+    /// way. A label being dragged is placed first and never moved. Where the
+    /// labels are kept is not changed - a drag still moves the label the
+    /// editor saves - only where they are shown.
+    ///
+    /// The labels grow with the text and the diagram does not: at 200%
+    /// "Rear tyre width" covered "Motor", and dots sat on the words of
+    /// "Upper suspension shaft" and "Suspension plate (T-bar)" (Chassis
+    /// Diagram, Setup Sheet, layout pictures, 30 Sep).
+    /// </summary>
+    private Dictionary<string, Rectangle> LabelBoxes()
+    {
+        var boxes = new Dictionary<string, Rectangle>(StringComparer.Ordinal);
+
+        if (_template is null)
+        {
+            return boxes;
+        }
+
+        var room = Rectangle.FromLTRB(2, 2, Math.Max(3, Width - 2), Math.Max(3, Height - 2 - HintRoom));
+        var gap = UiLayout.AtTextSize(3);
+
+        // Every dot, with a little room round it, is somewhere no label goes.
+        var dots = _template.DiagramFields
+            .Select(point =>
+            {
+                var anchor = AnchorPixel(point);
+                var reach = (int)Math.Ceiling(DotSize(selected: true) / 2f) + gap;
+
+                return new Rectangle((int)anchor.X - reach, (int)anchor.Y - reach, reach * 2, reach * 2);
+            })
+            .ToList();
+
+        // And the outline's own words, when it is the outline that is drawn.
+        if (_diagram is null)
+        {
+            dots.AddRange(GenericCaptions(DiagramBounds).Select(caption => caption.At));
+        }
+
+        var placed = new List<Rectangle>();
+
+        // A label being dragged goes exactly where it is dragged to, and the
+        // others make way for it - it does not jump aside under the mouse.
+        var dragged = _dragKind == DragKind.Label ? _dragPointId : null;
+
+        var order = _template.DiagramFields
+            .Where(p => p.Id is not null)
+            .OrderBy(p => string.Equals(p.Id, dragged, StringComparison.Ordinal) ? 0 : 1)
+            .ThenBy(p => LabelPixel(p).Y)
+            .ThenBy(p => LabelPixel(p).X);
+
+        foreach (var point in order)
+        {
+            var wanted = Keep(Wanted(point), room);
+            Rectangle box;
+
+            if (string.Equals(point.Id, dragged, StringComparison.Ordinal))
+            {
+                box = wanted;
+            }
+            else
+            {
+                // Whichever way is the shorter move.
+                var below = Clear(wanted, down: true);
+                var above = Clear(wanted, down: false);
+
+                box = below is { } b && (above is not { } a || b.Y - wanted.Y <= wanted.Y - a.Y) ? b
+                    : above ?? wanted;
+            }
+
+            boxes[point.Id] = box;
+            placed.Add(box);
+
+            // Moved one way only, so it cannot be bounced between two
+            // things for ever: null when it runs out of room that way.
+            Rectangle? Clear(Rectangle start, bool down)
+            {
+                var at = start;
+
+                for (var step = 0; step < 64; step++)
+                {
+                    var hit = placed.Concat(dots).Where(other => other.IntersectsWith(Inflated(at, gap))).ToList();
+
+                    if (hit.Count == 0)
+                    {
+                        return at;
+                    }
+
+                    var y = down ? hit.Max(other => other.Bottom) + gap : hit.Min(other => other.Top) - gap - at.Height;
+
+                    if (y < room.Top || y + at.Height > room.Bottom)
+                    {
+                        return null;
+                    }
+
+                    at.Y = y;
+                }
+
+                return null;
+            }
+        }
+
+        return boxes;
+
+        Rectangle Wanted(SetupField point)
+        {
+            var labelPos = LabelPixel(point);
+            var size = TextRenderer.MeasureText(CalloutText(point), AppTheme.SmallFont);
+
+            return new Rectangle((int)labelPos.X - size.Width / 2, (int)labelPos.Y - size.Height / 2 - 2, size.Width + 10, size.Height + 6);
+        }
+
+        // Kept inside the control rather than clipped off an edge.
+        static Rectangle Keep(Rectangle box, Rectangle room)
+        {
+            box.X = Math.Clamp(box.X, room.Left, Math.Max(room.Left, room.Right - box.Width));
+            box.Y = Math.Clamp(box.Y, room.Top, Math.Max(room.Top, room.Bottom - box.Height));
+            return box;
+        }
+
+        // Only what actually overlaps counts: a box touching another, edge
+        // to edge, is not on it.
+        static Rectangle Inflated(Rectangle box, int by) => Rectangle.Inflate(box, Math.Max(0, by - 1), Math.Max(0, by - 1));
+    }
+
+    /// <summary>The line from a point's dot to the nearest edge of its label.</summary>
+    private void DrawLeader(Graphics g, SetupField point, Rectangle box)
     {
         var anchor = AnchorPixel(point);
-        var labelPos = LabelPixel(point);
         var selected = point.Id == SelectedPointId;
 
-        var hasValue = Values.TryGetValue(point.Id, out var value) && !string.IsNullOrWhiteSpace(value);
-        var text = hasValue ? $"{point.Label}: {value}" : point.Label;
-
-        var size = TextRenderer.MeasureText(text, AppTheme.SmallFont);
-        var box = new Rectangle((int)labelPos.X - size.Width / 2, (int)labelPos.Y - size.Height / 2 - 2,
-            size.Width + 10, size.Height + 6);
-
-        // Keep the label inside the control rather than clipped off an edge.
-        box.X = Math.Clamp(box.X, 2, Math.Max(2, Width - box.Width - 2));
-        box.Y = Math.Clamp(box.Y, 2, Math.Max(2, Height - box.Height - 2));
-
-        // Leader line from the anchor to the nearest edge of the label box.
         var target = new PointF(
             Math.Clamp(anchor.X, box.Left, box.Right),
             Math.Clamp(anchor.Y, box.Top, box.Bottom));
 
-        using (var linePen = new Pen(selected ? AppTheme.Primary : AppTheme.Border, selected ? 1.8f : 1.2f))
-        {
-            g.DrawLine(linePen, anchor, target);
-        }
+        using var linePen = new Pen(selected ? AppTheme.Primary : AppTheme.Border, selected ? 1.8f : 1.2f);
+        g.DrawLine(linePen, anchor, target);
+    }
+
+    private void DrawCallout(Graphics g, SetupField point, Rectangle box)
+    {
+        var anchor = AnchorPixel(point);
+        var selected = point.Id == SelectedPointId;
+
+        var hasValue = Values.TryGetValue(point.Id, out var value) && !string.IsNullOrWhiteSpace(value);
+        var text = CalloutText(point);
 
         // Label chip. Filled when a value is present, outlined when empty -
         // so an unfilled point is obvious at a glance.
@@ -482,15 +673,28 @@ public sealed class ChassisCanvas : Control
 
         TextRenderer.DrawText(g, text, AppTheme.SmallFont, box,
             hasValue ? AppTheme.TextDark : AppTheme.TextMuted,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
         // Anchor dot.
-        var dotSize = selected ? 9f : 7f;
+        var dotSize = DotSize(selected);
         using var dotBrush = new SolidBrush(selected ? AppTheme.Primary : (hasValue ? AppTheme.Success : AppTheme.TextMuted));
         g.FillEllipse(dotBrush, anchor.X - dotSize / 2, anchor.Y - dotSize / 2, dotSize, dotSize);
 
         using var dotRing = new Pen(AppTheme.Surface, 1.5f);
         g.DrawEllipse(dotRing, anchor.X - dotSize / 2, anchor.Y - dotSize / 2, dotSize, dotSize);
+    }
+
+    /// <summary>Moves where <paramref name="point"/>'s label is kept to where <paramref name="box"/> shows it - the reverse of LabelBoxes' Wanted.</summary>
+    private void KeepLabelAt(SetupField point, Rectangle box)
+    {
+        var size = TextRenderer.MeasureText(CalloutText(point), AppTheme.SmallFont);
+        var b = DiagramBounds;
+
+        var x = box.X + size.Width / 2f;
+        var y = box.Y + size.Height / 2f + 2;
+
+        point.LabelOffsetX = Math.Clamp((x - b.Left) / Math.Max(1, b.Width) - point.X, -1f, 1f);
+        point.LabelOffsetY = Math.Clamp((y - b.Top) / Math.Max(1, b.Height) - point.Y, -1f, 1f);
     }
 
     private string? HitTestAnchor(Point location)
@@ -503,7 +707,7 @@ public sealed class ChassisCanvas : Control
         foreach (var p in _template.DiagramFields)
         {
             var a = AnchorPixel(p);
-            if (Math.Abs(a.X - location.X) <= 8 && Math.Abs(a.Y - location.Y) <= 8)
+            if (Math.Abs(a.X - location.X) <= DotReach && Math.Abs(a.Y - location.Y) <= DotReach)
             {
                 return p.Id;
             }
@@ -518,14 +722,13 @@ public sealed class ChassisCanvas : Control
             return null;
         }
 
+        // Where the labels are drawn, which is not always where their points
+        // put them (LabelBoxes) - so what is picked is what was pressed.
+        var boxes = LabelBoxes();
+
         foreach (var p in _template.DiagramFields)
         {
-            var l = LabelPixel(p);
-            var text = Values.TryGetValue(p.Id, out var v) && !string.IsNullOrWhiteSpace(v) ? $"{p.Label}: {v}" : p.Label;
-            var size = TextRenderer.MeasureText(text, AppTheme.SmallFont);
-
-            var box = new Rectangle((int)l.X - size.Width / 2, (int)l.Y - size.Height / 2 - 2, size.Width + 10, size.Height + 6);
-            if (box.Contains(location))
+            if (p.Id is not null && boxes.TryGetValue(p.Id, out var box) && box.Contains(location))
             {
                 return p.Id;
             }
@@ -550,6 +753,15 @@ public sealed class ChassisCanvas : Control
 
         if (EditMode && hit is not null)
         {
+            // A label shown moved aside (LabelBoxes) is taken up from where
+            // it is shown: kept where it is seen, it does not jump back to
+            // where its point puts it the moment it is pressed.
+            if (anchorHit is null && _template?.DiagramFields.FirstOrDefault(p => p.Id == hit) is { } point
+                && LabelBoxes().TryGetValue(hit, out var shown))
+            {
+                KeepLabelAt(point, shown);
+            }
+
             _dragKind = anchorHit is not null ? DragKind.Anchor : DragKind.Label;
             _dragPointId = hit;
         }

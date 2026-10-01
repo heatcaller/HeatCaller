@@ -1109,7 +1109,26 @@ public partial class MainForm : Form
         // looks its saved lines up under the right relay.
         VoiceLibrary.VoiceRelaySettings = _settings;
 
-        PopulateTabs();
+        // Every page built with its layout held, and every page but the one
+        // on screen still held afterwards - see LayoutFreeze. Let go in a
+        // finally: a page left holding its layout would stay blank. Timed
+        // for the session log, which is how a slow start gets found.
+        var building = System.Diagnostics.Stopwatch.StartNew();
+        LayoutFreeze.BeginBuilding();
+
+        try
+        {
+            PopulateTabs();
+        }
+        finally
+        {
+            LayoutFreeze.EndBuilding(
+                _navItems.Select(item => (Control)item.Page),
+                _navItems.FirstOrDefault(item => item.Name == _shownPage)?.Page);
+        }
+
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Pages built in {building.Elapsed.TotalSeconds:0.0}s.");
+
         WireRaceDayService();
 
         FillBaudRates();

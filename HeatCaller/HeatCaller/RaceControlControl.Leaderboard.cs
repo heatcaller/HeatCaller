@@ -1174,7 +1174,7 @@ public sealed partial class RaceControlControl
 
             _seconds.Width = Math.Max(
                 UiLayout.AtTextSize(SecondsWidth),
-                TextRenderer.MeasureText(widest, _seconds.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+                TextRenderer.MeasureText(widest, _seconds.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
             DialogFit.Keep(this, page, width: DialogWidth);
         }

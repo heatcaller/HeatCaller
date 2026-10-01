@@ -150,8 +150,26 @@ public sealed class TechInspectionControl : UserControl
             new DataGridViewTextBoxColumn { Name = "notes", HeaderText = "Notes", FillWeight = 90 }
         );
 
-        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+        // Every heading whole, at the text size in use, and the time, the
+        // result and the count of checks each kept wide enough for its
+        // widest - see Pieces.KeepHeadingsWhole. "Passed (note)" read
+        // "Passed (..." and "5 ok, 1 fail" read "5 ok, 1 ..." (layout
+        // pictures, 30 Sep).
+        //
+        // The result is in bold, set on the column rather than on each
+        // cell: measured in the face it is drawn in, and a new text size
+        // reaches the rows already listed - a face set on each cell stayed
+        // at the size the list was filled at.
+        _textSize.Keep(() =>
+        {
+            _grid.Columns["result"]!.DefaultCellStyle.Font = AppTheme.BoldFont;
+
+            Pieces.KeepHeadingsWhole(
+                _grid,
+                ("when", "88:88 PM"),
+                ("result", "Passed (note)"),
+                ("checks", "88 ok, 88 fail"));
+        });
 
         _grid.CellDoubleClick += (_, args) =>
         {
@@ -294,7 +312,6 @@ public sealed class TechInspectionControl : UserControl
                 TechResult.PassedWithNote => AppTheme.Accent,
                 _ => AppTheme.Success,
             };
-            _grid.Rows[rowIndex].Cells[4].Style.Font = AppTheme.BoldFont;
         }
 
         var failed = inspections.Count(i => !i.IsCleared);

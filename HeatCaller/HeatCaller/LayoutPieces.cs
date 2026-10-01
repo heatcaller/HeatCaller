@@ -67,6 +67,9 @@ internal sealed class PageStack : Panel
 
     public PageStack()
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         Dock = DockStyle.Fill;
         Padding = new Padding(UiLayout.PageLeft, UiLayout.PageTop, UiLayout.PageRight, UiLayout.PageTop);
         Tag = AppTheme.KeepBackColor;
@@ -203,6 +206,9 @@ internal sealed class PageStack : Panel
     {
         public StackColumn()
         {
+            // Held while the window is being built - see LayoutFreeze.
+            LayoutFreeze.Adopt(this);
+
             ColumnCount = 1;
             RowCount = 0;
             Margin = Padding.Empty;
@@ -316,6 +322,9 @@ internal sealed class FillPage : Panel
 
     public FillPage()
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         Dock = DockStyle.Fill;
         Padding = new Padding(UiLayout.PageLeft, UiLayout.PageTop, UiLayout.PageRight, UiLayout.PageTop);
         Tag = AppTheme.KeepBackColor;
@@ -556,6 +565,9 @@ internal sealed class FillPage : Panel
     {
         public FillRows()
         {
+            // Held while the window is being built - see LayoutFreeze.
+            LayoutFreeze.Adopt(this);
+
             ColumnCount = 1;
             RowCount = 0;
             Margin = Padding.Empty;
@@ -618,6 +630,9 @@ internal sealed class Section : TableLayoutPanel
 
     public Section(string caption = "")
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         ColumnCount = 1;
@@ -867,6 +882,9 @@ internal sealed class FieldGrid : TableLayoutPanel
 
     public FieldGrid()
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         ColumnCount = 2;
@@ -1392,6 +1410,9 @@ internal sealed class ButtonBar : FlowLayoutPanel
     /// </param>
     public ButtonBar(bool alignRight = false, bool tight = false, bool sameWidth = false)
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         _tight = tight;
         _sameWidth = sameWidth;
 
@@ -1602,6 +1623,9 @@ internal sealed class FieldRow : Panel
 
     public FieldRow()
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Margin = Padding.Empty;
@@ -1901,6 +1925,9 @@ internal sealed class Beside : Panel
     /// </param>
     public Beside(Func<int> sideLeastWidth)
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         _sideLeastWidth = sideLeastWidth;
 
         Margin = Padding.Empty;
@@ -1998,13 +2025,31 @@ internal sealed class Beside : Panel
     /// Buttons inside the card are the card's to size; make the column at
     /// least as wide as they need (the least width, as a Func).
     /// </summary>
-    public Section AddSideCard(Section card, int gapBelow = UiLayout.RowGap)
+    public Section AddSideCard(Section card, int gapBelow = UiLayout.RowGap) => AddSideMeasured(card, gapBelow);
+
+    /// <summary>
+    /// Adds a part to the column, under the last, as a card is added
+    /// (AddSideCard): given the column's width, as tall as it says it needs
+    /// to be at that width - asked whenever the column is placed - and the
+    /// column placed again whenever it lays itself out. For a part that is
+    /// not a card but must have exactly its own height: a field grid.
+    ///
+    /// Not AddSideFill, for one: the filling part is given all the height
+    /// the column has spare, and a table given more height than its rows
+    /// need hands all of it to its last row (WinForms' TableLayoutPanel).
+    /// The keyboard shortcuts' left-hand column was laid out that way: its
+    /// last shortcut was centred far down a row as tall as the window, out
+    /// of sight, and the grid - asked afterwards how tall it was - said
+    /// that tall, so the sheet scrolled on into blank space (layout
+    /// pictures, 30 Sep).
+    /// </summary>
+    public T AddSideMeasured<T>(T part, int gapBelow = UiLayout.RowGap) where T : Control
     {
-        Side(card, gapBelow, measured: true);
+        Side(part, gapBelow, measured: true);
 
-        card.Layout += (_, _) => PerformLayout();
+        part.Layout += (_, _) => PerformLayout();
 
-        return card;
+        return part;
     }
 
     /// <summary>
@@ -2310,6 +2355,9 @@ internal sealed class Beside : Panel
     {
         public MainColumn()
         {
+            // Held while the window is being built - see LayoutFreeze.
+            LayoutFreeze.Adopt(this);
+
             ColumnCount = 1;
             RowCount = 0;
             Margin = Padding.Empty;
@@ -2363,6 +2411,9 @@ internal sealed class SplitBar : Panel
 
     public SplitBar(ButtonBar left, ButtonBar right)
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         _left = left;
         _right = right;
 
@@ -2554,6 +2605,9 @@ internal sealed class StatusLine : Panel
 
     public StatusLine(Control light, Label text)
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         _light = light;
         _text = text;
 
@@ -2799,6 +2853,9 @@ internal sealed class TileCard : Panel
 {
     public TileCard()
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         BackColor = AppTheme.Surface;
         Tag = AppTheme.KeepBackColor;
         DoubleBuffered = true;
@@ -2828,6 +2885,9 @@ internal sealed class TileStrip : Panel
 
     public TileStrip(IReadOnlyList<StatTile> tiles)
     {
+        // Held while the window is being built - see LayoutFreeze.
+        LayoutFreeze.Adopt(this);
+
         _tiles = tiles;
 
         AutoSize = true;
@@ -3470,7 +3530,9 @@ internal static class Pieces
             widest = Math.Max(widest, TextRenderer.MeasureText(text, picker.Font).Width);
         }
 
-        var width = widest + SystemInformation.VerticalScrollBarWidth + 24;
+        // The arrow's zone grows with the text (DropArrow), and the room
+        // with it; at the normal text size it is the 41px it always was.
+        var width = widest + DropArrow.Room;
 
         kept = (picker.Font, picker.Items.Count, width);
         return width;

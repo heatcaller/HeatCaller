@@ -48,7 +48,11 @@ public sealed class HandicapEditForm : Form
                 _ => "Handicaps are OFF for this class. Values here are stored but won't affect results until a mode is chosen in the Mode box on the Handicaps page.",
             },
             AutoSize = true,
-            ForeColor = classMode == HandicapMode.None ? AppTheme.Accent : AppTheme.TextMuted,
+
+            // Off is a caution, in the theme's caution colour. It was in the
+            // accent, which in most looks is the blue of a link, and read as
+            // one (layout pictures, 30 Sep).
+            ForeColor = classMode == HandicapMode.None ? AppTheme.Warning : AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
 
@@ -172,7 +176,7 @@ public sealed class HandicapEditForm : Form
 
         return Math.Max(
             UiLayout.AtTextSize(CreditWidth),
-            TextRenderer.MeasureText(widest, number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(widest, number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 }
 
@@ -207,6 +211,9 @@ public sealed class HandicapSuggestForm : Form
     private readonly NumericUpDown _numSessions = new();
     private readonly NumericUpDown _numLaps = new();
     private readonly DataGridView _grid = new();
+
+    /// <summary>Apply Ticked - on only while something is ticked (UpdateApply).</summary>
+    private readonly Button _btnApply = new() { Text = "Apply Ticked" };
 
     /// <summary>What the suggestions come to - reworded whenever either number changes, and kept as tall as the longest thing it can say (see BuildLayout).</summary>
     private readonly SteadyLabel _lblSummary = new();
@@ -307,6 +314,7 @@ public sealed class HandicapSuggestForm : Form
         {
             var cell = _grid.Rows[rowIndex].Cells[0];
             cell.Value = cell.Value is not true;
+            UpdateApply();
         }
         _grid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 80, ReadOnly = true },
@@ -324,7 +332,7 @@ public sealed class HandicapSuggestForm : Form
         // moves the buttons under it.
         _lblSummary.Wordings = new[] { NothingToSuggest, SuggestedFor(Math.Max(2, _roster.Count)) };
 
-        var btnApply = new Button { Text = "Apply Ticked" };
+        var btnApply = _btnApply;
         btnApply.Click += (_, _) =>
         {
             Accepted = new List<HandicapStore.Suggestion>();
@@ -399,6 +407,30 @@ public sealed class HandicapSuggestForm : Form
         _lblSummary.Text = _suggestions.Count == 0
             ? NothingToSuggest
             : SuggestedFor(_suggestions.Count);
+
+        UpdateApply();
+    }
+
+    /// <summary>
+    /// Apply Ticked on while something is ticked, and off with nothing to
+    /// apply - no suggestions at all, or every one unticked. It was on with
+    /// an empty list, in the app's colour, and pressing it applied nothing
+    /// (layout pictures, 30 Sep).
+    /// </summary>
+    private void UpdateApply()
+    {
+        var any = false;
+
+        for (var i = 0; i < _grid.Rows.Count && i < _suggestions.Count; i++)
+        {
+            if (_grid.Rows[i].Cells[0].Value is true)
+            {
+                any = true;
+                break;
+            }
+        }
+
+        _btnApply.Enabled = any;
     }
 
     /// <summary>What the line under the list says with <paramref name="count"/> drivers to suggest for.</summary>
@@ -416,6 +448,6 @@ public sealed class HandicapSuggestForm : Form
 
         return Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 }

@@ -67,8 +67,32 @@ internal static partial class WindowCatalog
             g.FillRectangle(background, bounds);
         }
 
-        // Room down the left for the times, and along the bottom for the laps.
-        var plot = Rectangle.FromLTRB(bounds.Left + 52, bounds.Top + 12, bounds.Right - 12, bounds.Bottom - 30);
+        // With nothing to plot, what Lap Times' own chart says instead of
+        // drawing empty axes (LapChartControl.DrawChart) - so the picture is
+        // of the window as the app shows it.
+        if (drivers == 0)
+        {
+            const string nothing = "Tick a driver to plot their laps.";
+
+            using var say = new SolidBrush(palette.Muted);
+            var size = g.MeasureString(nothing, AppTheme.BodyFont);
+
+            g.DrawString(nothing, AppTheme.BodyFont, say, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - UiLayout.AtTextSize(10));
+            return;
+        }
+
+        // Room down the left for the times, and along the bottom for the
+        // laps - in the app's small face at the text size in use, as the
+        // app's own charts draw theirs (LapChartControl.DrawChart). In a
+        // fixed 8pt face, the times read as specks at 200% in the pictures,
+        // which said more about this sample than about the window.
+        var font = AppTheme.SmallFont;
+        var line = (int)Math.Ceiling(font.GetHeight(g));
+        var plot = Rectangle.FromLTRB(
+            bounds.Left + UiLayout.AtTextSize(52),
+            bounds.Top + UiLayout.AtTextSize(12),
+            bounds.Right - UiLayout.AtTextSize(12),
+            bounds.Bottom - line - UiLayout.AtTextSize(14));
 
         if (plot.Width < 20 || plot.Height < 20)
         {
@@ -82,19 +106,18 @@ internal static partial class WindowCatalog
         using var gridPen = new Pen(palette.Grid);
         using var axisPen = new Pen(palette.Axis);
         using var muted = new SolidBrush(palette.Muted);
-        using var font = new Font(FontFamily.GenericSansSerif, 8f);
 
         for (var step = 0; step <= 3; step++)
         {
             var y = plot.Bottom - plot.Height * step / 3;
 
             g.DrawLine(gridPen, plot.Left, y, plot.Right, y);
-            g.DrawString($"{fastest + (slowest - fastest) * step / 3:0.0}s", font, muted, bounds.Left + 6, y - 7);
+            g.DrawString($"{fastest + (slowest - fastest) * step / 3:0.0}s", font, muted, bounds.Left + UiLayout.AtTextSize(6), y - line / 2f);
         }
 
         g.DrawLine(axisPen, plot.Left, plot.Top, plot.Left, plot.Bottom);
         g.DrawLine(axisPen, plot.Left, plot.Bottom, plot.Right, plot.Bottom);
-        g.DrawString($"Laps 1 to {laps}", font, muted, plot.Left, plot.Bottom + 8);
+        g.DrawString($"Laps 1 to {laps}", font, muted, plot.Left, plot.Bottom + UiLayout.AtTextSize(6));
 
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 

@@ -341,7 +341,7 @@ public sealed class RelaySettingsControl : UserControl
         Fit(_txtSmtpHost, shortMail);
         Fit(_numSmtpPort, Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', PortDigits), _numSmtpPort.Font).Width + SystemInformation.VerticalScrollBarWidth + 12));
+            TextRenderer.MeasureText(new string('0', PortDigits), _numSmtpPort.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra));
         Fit(_txtSmtpUser, mail);
         Fit(_txtSmtpPassword, shortMail);
         Fit(_txtSmtpFromName, mail);

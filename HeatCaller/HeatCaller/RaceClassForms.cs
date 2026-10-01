@@ -374,7 +374,7 @@ public sealed class RaceClassEditForm : Form
 
             return Math.Max(
                 UiLayout.AtTextSize(UiLayout.NumericWidth),
-                TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+                TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
         });
 
         foreach (var number in numbers)

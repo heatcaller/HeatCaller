@@ -139,10 +139,62 @@ internal sealed class DateTimePickerSkin : NativeWindow
                 }
 
                 break;
+
+            // Drawn into a picture of the window as it is painted - see
+            // ComboBoxSkin's WndProc.
+            case WM_PRINT or WM_PRINTCLIENT when !_picker.IsDisposed && _picker.IsHandleCreated && m.WParam != IntPtr.Zero:
+                PrintTo(m.WParam);
+                m.Result = IntPtr.Zero;
+                return;
+
+            // A press on the drawn chevron opens the calendar, wherever on
+            // it it lands. The chevron grows with the text (DropArrow), and
+            // at the larger sizes it is wider than the button Windows
+            // answers to at the right-hand end - a press on the part beyond
+            // that would have picked the part of the date under it instead.
+            // So it is passed on as a press near the right-hand edge, which
+            // is always on Windows' button.
+            case WM_LBUTTONDOWN or WM_LBUTTONDBLCLK when !_picker.IsDisposed && !_picker.ShowUpDown:
+            {
+                var x = unchecked((short)(long)m.LParam);
+                var y = unchecked((short)((long)m.LParam >> 16));
+                var width = _picker.ClientSize.Width;
+
+                if (x >= DropArrow.ZoneIn(width, _picker.ClientSize.Height).Left && x < width - OnTheButton)
+                {
+                    m.LParam = (IntPtr)(((y & 0xFFFF) << 16) | ((width - OnTheButton) & 0xFFFF));
+                }
+
+                break;
+            }
         }
 
         base.WndProc(ref m);
     }
+
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_LBUTTONDBLCLK = 0x0203;
+    private const int WM_PRINT = 0x0317;
+    private const int WM_PRINTCLIENT = 0x0318;
+
+    /// <summary>The field drawn into a picture of the window - see WndProc.</summary>
+    private void PrintTo(IntPtr hdc)
+    {
+        var width = Math.Max(1, _picker.Width);
+        var height = Math.Max(1, _picker.Height);
+
+        using var buffer = new Bitmap(width, height);
+        using (var g = Graphics.FromImage(buffer))
+        {
+            Draw(g, width, height);
+        }
+
+        using var target = Graphics.FromHdc(hdc);
+        target.DrawImageUnscaled(buffer, 0, 0);
+    }
+
+    /// <summary>How far in from the right-hand edge a press is sure to land on Windows' own button: well inside its 17px at 96 DPI.</summary>
+    private static int OnTheButton => UiLayout.AtDpi(6);
 
     private bool OnPaint()
     {
@@ -205,27 +257,12 @@ internal sealed class DateTimePickerSkin : NativeWindow
             g.DrawPath(pen, path);
         }
 
-        // At the screen's DPI, as the rest of the window is once the app is
-        // started --dpi-aware. Exactly 26 at 96 DPI.
-        var arrowZone = UiLayout.AtDpi(26);
-        var cx = width - arrowZone / 2f - 2;
-        var cy = height / 2f - 1;
+        // The chevron every drop-down wears, at the text size in use - see
+        // DropArrow. Wider than the native button at the larger sizes, so a
+        // press anywhere on it is passed to the button (WndProc).
+        DropArrow.Draw(g, DropArrow.ZoneIn(width, height), !enabled ? AppTheme.TextMuted : active ? AppTheme.Primary : AppTheme.TextMuted);
 
-        using (var arrow = new Pen(!enabled ? AppTheme.TextMuted : active ? AppTheme.Primary : AppTheme.TextMuted, 1.8f))
-        {
-            arrow.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-            arrow.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-            arrow.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-
-            g.DrawLines(arrow, new[]
-            {
-                new PointF(cx - 4.5f, cy - 2f),
-                new PointF(cx, cy + 2.5f),
-                new PointF(cx + 4.5f, cy - 2f),
-            });
-        }
-
-        var textRect = new Rectangle(10, 0, Math.Max(4, width - arrowZone - 12), height);
+        var textRect = new Rectangle(DropArrow.TextLeft, 0, Math.Max(4, DropArrow.TextRight(width) - DropArrow.TextLeft), height);
 
         TextRenderer.DrawText(g, _picker.Text, _picker.Font, textRect,
             enabled ? AppTheme.TextDark : AppTheme.TextMuted,
@@ -1110,6 +1147,8 @@ internal sealed class UpDownButtonsSkin : NativeWindow
     private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_LBUTTONUP = 0x0202;
     private const int WM_CAPTURECHANGED = 0x0215;
+    private const int WM_PRINT = 0x0317;
+    private const int WM_PRINTCLIENT = 0x0318;
 
     private static readonly ConditionalWeakTable<Control, UpDownButtonsSkin> Attached = new();
 
@@ -1154,6 +1193,105 @@ internal sealed class UpDownButtonsSkin : NativeWindow
         }
 
         Attached.Add(buttons, new UpDownButtonsSkin(buttons));
+
+        // The arrows' strip as wide as the text size asks (Width) - see
+        // Widen. Again whenever the face changes, which is how a new text
+        // size reaches the box; and checked at each layout, since a new
+        // screen DPI puts Windows' own width back (UpDownBase
+        // .RescaleConstantsForDpi) and lays the box out.
+        spinner.FontChanged += (_, _) => Widen(spinner);
+        spinner.Layout += (_, _) => WidenAfterLayout(spinner);
+
+        Widen(spinner);
+    }
+
+    /// <summary>
+    /// Widen, for a layout that has just placed the arrows at another width:
+    /// the box is laid out again once this one is done - a layout asked for
+    /// during one is dropped.
+    /// </summary>
+    private static void WidenAfterLayout(NumericUpDown spinner)
+    {
+        if (spinner.IsDisposed || ButtonsWidthField is not { } field || field.GetValue(spinner) is not int now || now == Width)
+        {
+            return;
+        }
+
+        field.SetValue(spinner, Width);
+
+        if (spinner.IsHandleCreated)
+        {
+            spinner.BeginInvoke(new Action(() =>
+            {
+                if (!spinner.IsDisposed)
+                {
+                    spinner.PerformLayout();
+                }
+            }));
+        }
+    }
+
+    /// <summary>
+    /// How wide a number box's arrows are: Windows' 16px at the normal text
+    /// size, at the text size in use - so they grow with the number beside
+    /// them, as a drop-down's chevron does (DropArrow). At 200% they were a
+    /// 16px sliver beside a number twice its old size (Asher, 30 Sep).
+    /// Never narrower than Windows' own.
+    /// </summary>
+    public static int Width => Math.Max(UiLayout.AtTextSize(16), UiLayout.AtDpi(16));
+
+    /// <summary>
+    /// How much wider than Windows makes them that is - 0 at the normal text
+    /// size. A number box sized to fit its number keeps this much more
+    /// (MixerControl.NumberWidth and the others), and the layout check asks
+    /// for it (LayoutAudit.CheckNumber). 0 when the width cannot be set (see
+    /// ButtonsWidthField).
+    /// </summary>
+    public static int Extra => ButtonsWidthField is null ? 0 : Math.Max(0, Width - UiLayout.AtDpi(16));
+
+    /// <summary>
+    /// Where a number box keeps the width it gives its arrows - Windows' 16px,
+    /// at the screen's DPI - and places them, and the number beside them, by
+    /// (UpDownBase.PositionControls, every time it lays itself out or its
+    /// number box is resized). Not public, so reached by name: null if a
+    /// later .NET has renamed it, and the arrows keep Windows' width.
+    ///
+    /// Set here rather than the two parts moved after Windows has placed
+    /// them: the box puts both back whenever the number box is resized -
+    /// which moving it does - so moved parts never stayed moved.
+    /// </summary>
+    private static readonly System.Reflection.FieldInfo? ButtonsWidthField =
+        new[] { "_defaultButtonsWidth", "defaultButtonsWidth" }
+            .Select(name => typeof(UpDownBase).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+            .FirstOrDefault(field => field?.FieldType == typeof(int));
+
+    /// <summary>
+    /// Gives a number box's arrows their width (Width): the box's own idea
+    /// of how wide they are, which it lays them out by from then on - and
+    /// lays itself out now, if it changed (later, if its page is held -
+    /// see LayoutFreeze).
+    /// </summary>
+    private static void Widen(NumericUpDown spinner)
+    {
+        if (spinner.IsDisposed || ButtonsWidthField is not { } field)
+        {
+            return;
+        }
+
+        var width = Width;
+
+        if (field.GetValue(spinner) is int now && now == width)
+        {
+            return;
+        }
+
+        field.SetValue(spinner, width);
+        spinner.PerformLayout();
+
+        if (spinner.Controls.Count > 0)
+        {
+            spinner.Controls[0].Invalidate();
+        }
     }
 
     private void Bind()
@@ -1190,6 +1328,28 @@ internal sealed class UpDownButtonsSkin : NativeWindow
                 }
 
                 break;
+
+            // Drawn into a picture of the window as it is painted - see
+            // ComboBoxSkin's WndProc.
+            case WM_PRINT or WM_PRINTCLIENT when !_buttons.IsDisposed && _buttons.IsHandleCreated && m.WParam != IntPtr.Zero:
+            {
+                var width = Math.Max(1, _buttons.Width);
+                var height = Math.Max(1, _buttons.Height);
+
+                using (var buffer = new Bitmap(width, height))
+                {
+                    using (var g = Graphics.FromImage(buffer))
+                    {
+                        Draw(g, width, height);
+                    }
+
+                    using var target = Graphics.FromHdc(m.WParam);
+                    target.DrawImageUnscaled(buffer, 0, 0);
+                }
+
+                m.Result = IntPtr.Zero;
+                return;
+            }
 
             // These three note the press and then fall THROUGH to the real
             // handler below. Swallowing them would leave a spinner that
@@ -1292,7 +1452,11 @@ internal sealed class UpDownButtonsSkin : NativeWindow
             g.FillRectangle(press, half);
         }
 
-        using var pen = new Pen(AppTheme.TextMuted, 1.4f)
+        // At the text size in use, as the strip itself is (Width): 3.5px
+        // arms and a 1.4px line at the normal text size.
+        var scale = UiLayout.AtTextSize(1000) / 1000f;
+
+        using var pen = new Pen(AppTheme.TextMuted, 1.4f * scale)
         {
             StartCap = System.Drawing.Drawing2D.LineCap.Round,
             EndCap = System.Drawing.Drawing2D.LineCap.Round,
@@ -1301,7 +1465,7 @@ internal sealed class UpDownButtonsSkin : NativeWindow
 
         // The held arrow also brightens and thickens. The wash alone is easy
         // to miss on a control this small.
-        using var held = new Pen(AppTheme.Primary, 1.9f)
+        using var held = new Pen(AppTheme.Primary, 1.9f * scale)
         {
             StartCap = System.Drawing.Drawing2D.LineCap.Round,
             EndCap = System.Drawing.Drawing2D.LineCap.Round,
@@ -1309,7 +1473,7 @@ internal sealed class UpDownButtonsSkin : NativeWindow
         };
 
         var cx = width / 2f;
-        var arm = Math.Min(3.5f, width / 3f);
+        var arm = Math.Min(3.5f * scale, width / 3f);
 
         var upY = height / 4f;
         g.DrawLines(_pressed > 0 ? held : pen, new[]
@@ -2339,4 +2503,112 @@ internal sealed class TabStripSkin : NativeWindow
 
     [DllImport("user32.dll")]
     private static extern bool EndPaint(IntPtr hWnd, ref PAINTSTRUCT paint);
+}
+
+/// <summary>
+/// Draws a plain list - a ListBox whose page draws nothing of its own in it
+/// - in the app's colours: the picked item in the theme's pink with its
+/// text in the colour the look puts on it (the drop-downs' own list does
+/// the same), and in the pink's pale tint while the list is not the one
+/// being typed in; and an item too long for the list ended with "...".
+///
+/// Windows drew them: the picked item in its own bright blue on every
+/// look, and a long item simply cut off at the list's edge, mid-letter
+/// (Chassis Types, Photos, Which pack, the soundscapes, Edit Field's
+/// options - layout pictures, 30 Sep).
+///
+/// Each item is a line of the list's face, as Windows made it, and follows
+/// the text size: the height is put right again whenever the face changes.
+/// A list whose page draws its own items (DrawMode set before the theme
+/// pass) is left alone.
+/// </summary>
+internal static class PlainList
+{
+    private static readonly ConditionalWeakTable<ListBox, object> Drawn = new();
+
+    private static readonly object Mark = new();
+
+    public static void Attach(ListBox list)
+    {
+        if (list is CheckedListBox)
+        {
+            return;
+        }
+
+        if (Drawn.TryGetValue(list, out _))
+        {
+            SizeItems(list);
+            list.Invalidate();
+            return;
+        }
+
+        if (list.DrawMode != DrawMode.Normal)
+        {
+            return;
+        }
+
+        Drawn.Add(list, Mark);
+
+        list.DrawMode = DrawMode.OwnerDrawFixed;
+        SizeItems(list);
+
+        list.DrawItem += Draw;
+        list.FontChanged += (_, _) => SizeItems(list);
+
+        // The picked item's colour follows the focus.
+        list.GotFocus += (_, _) => list.Invalidate();
+        list.LostFocus += (_, _) => list.Invalidate();
+    }
+
+    /// <summary>A line of the list's face, as Windows spaces the lines of a list it draws itself (Pieces.LineHeight).</summary>
+    private static void SizeItems(ListBox list)
+    {
+        var height = Math.Clamp(Pieces.LineHeight(list.Font), 1, 255);
+
+        if (list.ItemHeight != height)
+        {
+            list.ItemHeight = height;
+        }
+    }
+
+    private static void Draw(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not ListBox list)
+        {
+            return;
+        }
+
+        var picked = (e.State & DrawItemState.Selected) != 0 && e.Index >= 0;
+        var focused = list.Focused;
+
+        var back = !picked ? list.BackColor
+            : focused ? AppTheme.Primary
+            : AppTheme.PrimaryTint;
+
+        var ink = !list.Enabled ? AppTheme.TextMuted
+            : picked && focused ? AppTheme.OnPrimary
+            : list.ForeColor;
+
+        using (var fill = new SolidBrush(back))
+        {
+            e.Graphics.FillRectangle(fill, e.Bounds);
+        }
+
+        if (e.Index < 0 || e.Index >= list.Items.Count)
+        {
+            return;
+        }
+
+        // In from the left as far as Windows put its text.
+        var inset = UiLayout.AtDpi(2);
+        var text = new Rectangle(e.Bounds.X + inset, e.Bounds.Y, Math.Max(1, e.Bounds.Width - inset * 2), e.Bounds.Height);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            list.GetItemText(list.Items[e.Index]),
+            list.Font,
+            text,
+            ink,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
 }

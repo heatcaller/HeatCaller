@@ -33,6 +33,8 @@ internal sealed class ComboBoxSkin : NativeWindow
 {
     private const int WM_PAINT = 0x000F;
     private const int WM_ERASEBKGND = 0x0014;
+    private const int WM_PRINT = 0x0317;
+    private const int WM_PRINTCLIENT = 0x0318;
 
     /// <summary>
     /// Keyed weakly so a skin never keeps a disposed page's combo alive, and
@@ -247,6 +249,18 @@ internal sealed class ComboBoxSkin : NativeWindow
                 }
 
                 break;
+
+            // A picture of the window (Control.DrawToBitmap - the layout
+            // test's pictures) asks each control to draw itself into the
+            // picture rather than to paint. Answered with this picture, not
+            // Windows' own field: the pictures showed the native grey arrow
+            // and a disabled list's text in black, neither of which anybody
+            // sees. A drop-down list only - an editable one's text is in a
+            // child window, which Windows draws into the picture itself.
+            case WM_PRINT or WM_PRINTCLIENT when Skinnable && _combo.DropDownStyle == ComboBoxStyle.DropDownList && m.WParam != IntPtr.Zero:
+                PrintTo(m.WParam);
+                m.Result = IntPtr.Zero;
+                return;
         }
 
         base.WndProc(ref m);
@@ -285,6 +299,22 @@ internal sealed class ComboBoxSkin : NativeWindow
         }
 
         return true;
+    }
+
+    /// <summary>The field drawn into a picture of the window - see WndProc. Composed off-screen, as a paint is, and put down at the control's place in it.</summary>
+    private void PrintTo(IntPtr hdc)
+    {
+        var width = Math.Max(1, _combo.Width);
+        var height = Math.Max(1, _combo.Height);
+
+        using var buffer = new Bitmap(width, height);
+        using (var g = Graphics.FromImage(buffer))
+        {
+            Draw(g, width, height);
+        }
+
+        using var target = Graphics.FromHdc(hdc);
+        target.DrawImageUnscaled(buffer, 0, 0);
     }
 
     private void Draw(Graphics g, int width, int height)
@@ -332,23 +362,23 @@ internal sealed class ComboBoxSkin : NativeWindow
         }
 
         // Chevron, in its own zone on the right. Drawn rather than glyphed
-        // so it scales with the control and picks up the accent when open.
-        const int arrowZone = 26;
-        var cx = width - arrowZone / 2f - 2;
-        var cy = height / 2f - 1;
+        // so it scales with the control and picks up the accent when open -
+        // and at the text size in use, as the words are (DropArrow).
+        //
+        // An editable combo keeps it inside the native arrow button: its
+        // text is a child edit window that ends where that button starts,
+        // and a child paints over its parent, so a chevron wider than the
+        // button would be cut off by the edit. A drop-down list has no child
+        // over it, and the whole field opens it, so it takes the full zone.
+        var ink = !enabled ? AppTheme.TextMuted : active ? AppTheme.Primary : AppTheme.TextMuted;
 
-        using (var arrow = new Pen(!enabled ? AppTheme.TextMuted : active ? AppTheme.Primary : AppTheme.TextMuted, 1.8f))
+        if (_combo.DropDownStyle != ComboBoxStyle.DropDownList && NativeButton() is { Width: > 0 } button)
         {
-            arrow.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-            arrow.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-            arrow.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-
-            g.DrawLines(arrow, new[]
-            {
-                new PointF(cx - 4.5f, cy - 2f),
-                new PointF(cx, cy + 2.5f),
-                new PointF(cx + 4.5f, cy - 2f),
-            });
+            DropArrow.Draw(g, button, ink);
+        }
+        else
+        {
+            DropArrow.Draw(g, DropArrow.ZoneIn(width, height), ink);
         }
 
         if (_combo.DropDownStyle != ComboBoxStyle.DropDownList)
@@ -365,10 +395,26 @@ internal sealed class ComboBoxSkin : NativeWindow
             return;
         }
 
-        var textRect = new Rectangle(10, 0, Math.Max(4, width - arrowZone - 12), height);
+        var textRect = new Rectangle(DropArrow.TextLeft, 0, Math.Max(4, DropArrow.TextRight(width) - DropArrow.TextLeft), height);
         TextRenderer.DrawText(g, text, _combo.Font, textRect,
             enabled ? AppTheme.TextDark : AppTheme.TextMuted,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    /// <summary>
+    /// Where the native control keeps its arrow button, in its own
+    /// coordinates - null when Windows does not say.
+    /// </summary>
+    private Rectangle? NativeButton()
+    {
+        var info = new COMBOBOXINFO { cbSize = Marshal.SizeOf<COMBOBOXINFO>() };
+
+        if (!_combo.IsHandleCreated || !GetComboBoxInfo(_combo.Handle, ref info))
+        {
+            return null;
+        }
+
+        return Rectangle.FromLTRB(info.rcButton.Left, info.rcButton.Top, info.rcButton.Right, info.rcButton.Bottom);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -379,6 +425,21 @@ internal sealed class ComboBoxSkin : NativeWindow
         public int Right;
         public int Bottom;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct COMBOBOXINFO
+    {
+        public int cbSize;
+        public RECT rcItem;
+        public RECT rcButton;
+        public int stateButton;
+        public IntPtr hwndCombo;
+        public IntPtr hwndItem;
+        public IntPtr hwndList;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetComboBoxInfo(IntPtr hWnd, ref COMBOBOXINFO info);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PAINTSTRUCT
@@ -404,4 +465,81 @@ internal sealed class ComboBoxSkin : NativeWindow
 
     [DllImport("user32.dll")]
     private static extern bool EndPaint(IntPtr hWnd, ref PAINTSTRUCT paint);
+}
+
+/// <summary>
+/// The chevron every drop-down in the app wears - a drop-down list, a date
+/// picker, a list at the top of a grid's column - drawn at the text size in
+/// use, in a zone of its own at the right-hand end.
+///
+/// At the normal text size it is what it always was: 9px across in a 26px
+/// zone, with the text 10px in and ending 12px short of the zone. It grows
+/// with the text, and the zone grows by as much as it does, so the room
+/// either side of it stays the same. Asher, 30 Sep: at 200% the words
+/// doubled and the arrows stayed a 9px sliver, and a number box's arrows
+/// and the sliders' handles with them.
+/// </summary>
+internal static class DropArrow
+{
+    /// <summary>The text size in use, and the screen's DPI once the app is started --dpi-aware - what a pixel at the normal text size comes to.</summary>
+    private static float Scale => UiLayout.AtTextSize(1000) / 1000f;
+
+    /// <summary>How far across the chevron is: 9px at the normal text size.</summary>
+    public static float Across => 9f * Scale;
+
+    /// <summary>The zone the chevron is drawn in at the right-hand end: 26px at the normal text size, and wider by as much as the chevron is.</summary>
+    public static int Zone => (int)Math.Round(Across) + UiLayout.AtDpi(17);
+
+    /// <summary>How far in a drop-down's text starts.</summary>
+    public static int TextLeft => UiLayout.AtDpi(10);
+
+    /// <summary>The zone's place in a drop-down <paramref name="width"/> across: at the right-hand end, 2px in from it.</summary>
+    public static Rectangle ZoneIn(int width, int height) => new(width - Zone - 2, 0, Zone, height);
+
+    /// <summary>Where a drop-down's text has to end: where the chevron's zone starts.</summary>
+    public static int TextRight(int width) => width - Zone - 2;
+
+    /// <summary>
+    /// What a drop-down needs across besides its longest text: the room
+    /// before the text, the chevron's zone and the few pixels past it, and
+    /// 3px spare - 41px at the normal text size, which is what every
+    /// drop-down in the app was sized with (Pieces.PickerWidth).
+    /// </summary>
+    public static int Room => TextLeft + Zone + 2 + UiLayout.AtDpi(3);
+
+    /// <summary>
+    /// Draws the chevron, pointing down, centred in <paramref name="zone"/> -
+    /// or as big as fits in it, for a zone narrower than the chevron wants.
+    /// </summary>
+    public static void Draw(Graphics g, Rectangle zone, Color ink)
+    {
+        var scale = Scale;
+
+        // 9 across and 4.5 deep, and room for the pen's round ends either
+        // side, at the text size - or less, to fit.
+        var fits = Math.Max(1f, (zone.Width - 4f * scale) / 9f);
+        var size = Math.Min(scale, fits);
+
+        var cx = zone.Left + zone.Width / 2f;
+        var cy = zone.Top + zone.Height / 2f - size;
+
+        var smoothing = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        using (var arrow = new Pen(ink, 1.8f * size))
+        {
+            arrow.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+            arrow.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+            arrow.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
+
+            g.DrawLines(arrow, new[]
+            {
+                new PointF(cx - 4.5f * size, cy - 2f * size),
+                new PointF(cx, cy + 2.5f * size),
+                new PointF(cx + 4.5f * size, cy - 2f * size),
+            });
+        }
+
+        g.SmoothingMode = smoothing;
+    }
 }

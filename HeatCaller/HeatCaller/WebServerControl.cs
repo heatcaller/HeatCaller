@@ -514,7 +514,7 @@ public sealed class WebServerControl : UserControl
         var digits = new string('0', ((int)_numPort.Maximum).ToString().Length);
         var port = Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(digits, Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(digits, Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         var pin = UiLayout.AtTextSize(PinBoxWidth);
         var url = UiLayout.AtTextSize(UrlBoxWidth);

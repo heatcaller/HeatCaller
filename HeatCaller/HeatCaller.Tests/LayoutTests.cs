@@ -61,7 +61,7 @@ public sealed partial class LayoutTests
             Directory.Delete(pictures, recursive: true);
         }
 
-        var sweep = LayoutSweep.Run(LayoutView.Standard, onlyPages, pictures);
+        var sweep = LayoutSweep.Run(LayoutView.ForPages, onlyPages, pictures);
 
         File.WriteAllText(Path.Combine(folder, "report.txt"), LayoutReport.Write(sweep, onlyPages, pictures));
         _output.WriteLine(LayoutReport.Summary(sweep));
@@ -114,7 +114,7 @@ public sealed partial class LayoutTests
         var looked = new List<string>();
 
         var sweep = LayoutSweep.Run(
-            LayoutView.Standard,
+            LayoutView.ForPages,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Race Day" },
             pictures: null,
             alsoCheck: (view, _, page) =>
@@ -126,8 +126,8 @@ public sealed partial class LayoutTests
                 looked.Add(view.Name);
             });
 
-        Assert.True(looked.Count == LayoutView.Standard.Count,
-            $"The Race Day page was only checked at {looked.Count} of {LayoutView.Standard.Count} sizes. "
+        Assert.True(looked.Count == LayoutView.ForPages.Count,
+            $"The Race Day page was only checked at {looked.Count} of {LayoutView.ForPages.Count} sizes. "
             + "Problems: " + string.Join("; ", sweep.Problems.Select(problem => $"{problem.FirstAt}: {problem.What}")));
 
         Assert.True(wrong.Count == 0,
@@ -208,6 +208,13 @@ public sealed partial class LayoutTests
 internal sealed record LayoutView(string Name, string Heading, string Folder, Size Screen, float TextScale)
 {
     /// <summary>
+    /// A text size to change to once the window is up, the way Ctrl + and -
+    /// do - null for a window built at its size and left there. See
+    /// TextSizeChangedWhileRunning.
+    /// </summary>
+    public float? ChangedTo { get; init; }
+
+    /// <summary>
     /// The sizes the test runs at.
     ///
     /// 1920x1080 at the three text sizes a director picks with Ctrl +/-.
@@ -225,6 +232,23 @@ internal sealed record LayoutView(string Name, string Heading, string Folder, Si
         new LayoutView("1366x768, text 100%", "1366 100%", "1366x768 text 100", new Size(1366, 768), 1.0f),
         new LayoutView("1280x720, text 100%", "1280 100%", "1280x720 text 100", new Size(1280, 720), 1.0f),
     };
+
+    /// <summary>
+    /// 1920x1080, built at the normal text size and changed to 200% with
+    /// the window up, as Ctrl + does.
+    ///
+    /// The other sizes are each a window built at its text size. This one
+    /// is here because a text size changed while the app runs takes another
+    /// way to the screen: every page but the one showing holds its layout
+    /// while the new size goes through the window, and is laid out when it
+    /// is next opened (LayoutFreeze) - so each page is checked as it comes
+    /// out of that, as well as built fresh.
+    /// </summary>
+    public static readonly LayoutView TextSizeChangedWhileRunning =
+        new("1920x1080, text 100% changed to 200%", "1920 +200%", "1920x1080 text 100 changed to 200", new Size(1920, 1080), 1.0f) { ChangedTo = 2.0f };
+
+    /// <summary>The sizes the pages are checked at: every one of Standard, and the text size changed while running.</summary>
+    public static readonly IReadOnlyList<LayoutView> ForPages = Standard.Append(TextSizeChangedWhileRunning).ToList();
 
     /// <summary>The Windows 11 taskbar at 96 dpi.</summary>
     public const int TaskbarHeight = 48;
@@ -281,6 +305,9 @@ internal sealed class SweepResult
     public int TimesFor(string what) => _problemCounts.TryGetValue(what, out var count) ? count : 1;
 
     public Dictionary<LayoutView, TimeSpan> Timings { get; } = new();
+
+    /// <summary>How long the text size change took, at a size that changes it with the window up (LayoutView.ChangedTo).</summary>
+    public Dictionary<LayoutView, TimeSpan> TextSizeChanges { get; } = new();
 
     public int Pictures { get; set; }
 }
@@ -377,6 +404,19 @@ internal static class LayoutSweep
 
             window.SizeContentForLayoutCheck(view.Client);
             Settle();
+
+            // Changed with the window up, as Ctrl + does - see
+            // LayoutView.TextSizeChangedWhileRunning. Timed for the report.
+            if (view.ChangedTo is { } changedTo)
+            {
+                _now = $"{view.Name}: changing the text size";
+
+                var changing = Stopwatch.StartNew();
+                window.ChangeTextSizeForLayoutCheck(changedTo);
+                result.TextSizeChanges[view] = changing.Elapsed;
+
+                Settle();
+            }
 
             var viewPictures = pictures is null ? null : Path.Combine(pictures, view.Folder);
 
@@ -523,6 +563,11 @@ internal static class LayoutReport
             + (LayoutAudit.ConvertedPages.Count == 0 ? "none yet." : string.Join(", ", LayoutAudit.ConvertedPages) + "."));
         text.AppendLine("Took: " + string.Join(", ", sweep.Timings.Select(t => $"{t.Key.Heading} {t.Value.TotalSeconds:0.0}s")) + ".");
 
+        foreach (var (view, took) in sweep.TextSizeChanges)
+        {
+            text.AppendLine($"{view.Heading}: built at {view.TextScale * 100:0}%, then changed to {view.ChangedTo * 100:0}% with the window up, as Ctrl + does - which took {took.TotalSeconds:0.00}s.");
+        }
+
         if (pictures is not null)
         {
             text.AppendLine($"Pictures: {sweep.Pictures}, in {pictures}");
@@ -548,7 +593,7 @@ internal static class LayoutReport
         text.AppendLine();
         text.AppendLine("DETAILS");
 
-        foreach (var view in LayoutView.Standard)
+        foreach (var view in LayoutView.ForPages)
         {
             var atThisSize = sweep.Findings.Where(found => found.View == view).ToList();
 
@@ -596,7 +641,7 @@ internal static class LayoutReport
     public static string Summary(SweepResult sweep)
     {
         var text = new StringBuilder();
-        var views = LayoutView.Standard;
+        var views = LayoutView.ForPages;
         var nameWidth = Math.Max(24, sweep.Pages.Select(page => page.Length).DefaultIfEmpty(0).Max() + 2);
 
         text.AppendLine("FOUND, BY PAGE AND SIZE");

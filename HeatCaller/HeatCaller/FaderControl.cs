@@ -37,12 +37,17 @@ public sealed class FaderControl : Control
     // The handle and the track are at the screen's DPI, as the rest of the
     // window is once the app is started --dpi-aware (the host sizes the
     // fader itself - see MixerControl). Exactly these sizes at 96 DPI.
-    private static int ThumbHeight => UiLayout.AtDpi(20);
-    private static int ThumbWidth => UiLayout.AtDpi(28);
-    private static int TrackWidth => UiLayout.AtDpi(6);
+    //
+    // And at the text size in use: at 200% they stayed a 28x20 handle on a
+    // 6px track beside words twice their old size (Asher, 30 Sep). The host
+    // gives the fader its width with the text (MixerControl.FaderWidth); the
+    // handle is never wider than that.
+    private int ThumbWidth => Math.Clamp(UiLayout.AtTextSize(28), 1, Math.Max(1, Width));
+    private int ThumbHeight => Math.Max(1, ThumbWidth * 20 / 28);
+    private int TrackWidth => Math.Max(1, Math.Min(UiLayout.AtTextSize(6), ThumbWidth / 2));
 
     /// <summary>How far either side of the handle still counts as grabbing it.</summary>
-    private static int GrabSlack => UiLayout.AtDpi(5);
+    private static int GrabSlack => UiLayout.AtTextSize(5);
 
     private int _percent = 100;
     private bool _dragging;

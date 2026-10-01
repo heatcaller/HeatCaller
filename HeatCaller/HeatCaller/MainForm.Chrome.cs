@@ -14,6 +14,51 @@ public partial class MainForm
 {
     private void NudgeFontScale(float scale)
     {
+        // The size asked for is kept and applied a moment after the last
+        // press, not at each one: holding Ctrl and pressing + three times
+        // made the window work out every page three times over, and it
+        // said "Not Responding" for half a minute (Asher, 30 Sep). Now the
+        // presses only move the size wanted (TargetFontScale), and it is
+        // applied once they stop.
+        var wanted = Math.Clamp((float)Math.Round(scale, 2), AppTheme.MinFontScale, AppTheme.MaxFontScale);
+
+        _pendingFontScale = Math.Abs(wanted - AppTheme.FontScale) < 0.001f ? null : wanted;
+
+        if (_fontScaleTimer is null)
+        {
+            _fontScaleTimer = new System.Windows.Forms.Timer { Interval = FontScaleSettleMs };
+            _fontScaleTimer.Tick += (_, _) => ApplyPendingFontScale();
+            Disposed += (_, _) => _fontScaleTimer?.Dispose();
+        }
+
+        // Started again at each press, so it runs once they have stopped.
+        _fontScaleTimer.Stop();
+        _fontScaleTimer.Start();
+    }
+
+    /// <summary>How long after the last Ctrl + or - press the new text size is applied - see NudgeFontScale.</summary>
+    private const int FontScaleSettleMs = 350;
+
+    /// <summary>The text size asked for by Ctrl + or - and not applied yet; null when there is none.</summary>
+    private float? _pendingFontScale;
+
+    /// <summary>Applies the text size asked for once the presses stop - see NudgeFontScale.</summary>
+    private System.Windows.Forms.Timer? _fontScaleTimer;
+
+    /// <summary>The text size the next Ctrl + or - press starts from: the one waiting to be applied, if any.</summary>
+    private float TargetFontScale => _pendingFontScale ?? AppTheme.FontScale;
+
+    private void ApplyPendingFontScale()
+    {
+        _fontScaleTimer?.Stop();
+
+        if (_pendingFontScale is not { } scale)
+        {
+            return;
+        }
+
+        _pendingFontScale = null;
+
         if (!AppTheme.SetFontScale(scale))
         {
             return;
@@ -22,9 +67,10 @@ public partial class MainForm
         _settings.FontScale = AppTheme.FontScale;
         _settings.Save();
 
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         ApplyFontScale();
 
-        OnClientRawMessage($"{AppTime.LogStampNow()}  [ui] Text size {AppTheme.FontScale * 100:0}% (Ctrl+0 resets).");
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [ui] Text size {AppTheme.FontScale * 100:0}% (Ctrl+0 resets) - {clock.Elapsed.TotalSeconds:0.0}s.");
     }
 
     /// <summary>The most the sidebar grows past its 220px with the text - see SidebarWidth.</summary>
@@ -73,48 +119,82 @@ public partial class MainForm
     /// </summary>
     private void ApplyFontScale()
     {
-        SuspendLayout();
+        // The page on screen holds its layout while every face in the window
+        // changes, and is laid out once at the end, rather than once for
+        // each control whose font changed. The pages that are not on screen
+        // are held already, and are laid out when they are next shown - see
+        // LayoutFreeze. Only a page held HERE is let go below: at startup
+        // this runs before any page is up, with every page held until it is
+        // shown (PopulateTabs), and none of them is let go early.
+        var shown = _navItems.FirstOrDefault(item => item.Name == _shownPage)?.Page;
+        var holding = shown is not null && !LayoutFreeze.IsFrozen(shown);
+
+        if (holding)
+        {
+            LayoutFreeze.Freeze(shown!);
+        }
+
+        NoRedraw.Begin(pnlContent);
 
         try
         {
-            Font = AppTheme.BodyFont;
+            SuspendLayout();
 
-            // Before the theme pass lays the window out again, so the page
-            // beside the sidebar is laid out once, at the width it keeps.
-            PlaceSidebar();
+            try
+            {
+                Font = AppTheme.BodyFont;
 
-            AppTheme.ApplyRecursively(this);
+                // Before the theme pass lays the window out again, so the page
+                // beside the sidebar is laid out once, at the width it keeps.
+                PlaceSidebar();
 
-            // The recursive pass paints the sidebar in the CONTENT theme's
-            // colours, and the sidebar is deliberately not in the content
-            // theme - it is dark chrome in every mode. So anything that runs
-            // that pass has to put the chrome back afterwards.
-            //
-            // This one was missing, and it is the one that runs last at
-            // startup: construction did ApplyRecursively, then
-            // RestyleSidebarChrome, then called this - which wiped it again
-            // with nothing following to restore it. In Dark and Synthwave
-            // the content colours are close enough to the chrome that
-            // nobody noticed. In Light Mode the sidebar came up light.
-            RestyleSidebarChrome();
+                AppTheme.ApplyRecursively(this);
+
+                // The recursive pass paints the sidebar in the CONTENT theme's
+                // colours, and the sidebar is deliberately not in the content
+                // theme - it is dark chrome in every mode. So anything that runs
+                // that pass has to put the chrome back afterwards.
+                //
+                // This one was missing, and it is the one that runs last at
+                // startup: construction did ApplyRecursively, then
+                // RestyleSidebarChrome, then called this - which wiped it again
+                // with nothing following to restore it. In Dark and Synthwave
+                // the content colours are close enough to the chrome that
+                // nobody noticed. In Light Mode the sidebar came up light.
+                RestyleSidebarChrome();
+            }
+            finally
+            {
+                ResumeLayout(true);
+            }
+
+            // The heading strip is measured from the micro font, which has just
+            // changed size - so it has to be re-reserved before the pages are
+            // laid out again below, or every page would be laid out against the
+            // old strip and the content would sit under or away from the rule.
+            foreach (var item in _navItems)
+            {
+                PageHeader.Reserve(item.Page);
+            }
         }
         finally
         {
-            ResumeLayout(true);
-        }
+            // The page on screen laid out at the new size, once. Every page
+            // and tab used to be walked through again here as well
+            // (WarmPages) - a second pass over the whole window, and each
+            // tab's refresh run again, at every press. The pages are built
+            // and refreshed already; the ones not on screen are laid out when
+            // they are next shown.
+            //
+            // In a finally, as in ShowPage: a page left held is never laid
+            // out again, and a panel left with its painting off never draws.
+            if (holding)
+            {
+                LayoutFreeze.Thaw(shown!);
+            }
 
-        // The heading strip is measured from the micro font, which has just
-        // changed size - so it has to be re-reserved before the pages are
-        // laid out again below, or every page would be laid out against the
-        // old strip and the content would sit under or away from the rule.
-        foreach (var item in _navItems)
-        {
-            PageHeader.Reserve(item.Page);
+            NoRedraw.End(pnlContent);
         }
-
-        // Every page and tab walked through once more at the new size, off
-        // screen, as the window's first showing does - see WarmPages.
-        WarmPages();
 
         Invalidate(true);
     }

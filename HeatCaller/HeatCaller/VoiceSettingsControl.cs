@@ -502,7 +502,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         return Math.Max(
             UiLayout.AtTextSize(normalWidth),
-            TextRenderer.MeasureText(noughts, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(noughts, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 
     /// <summary>

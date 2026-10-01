@@ -629,7 +629,7 @@ public sealed class MusicControl : UserControl
 
         return Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(new string('0', digits), Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 
     /// <summary>

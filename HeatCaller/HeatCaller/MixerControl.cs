@@ -745,7 +745,7 @@ public sealed class MixerControl : UserControl
     {
         var whole = new string('0', ((long)Math.Truncate(box.Maximum)).ToString(System.Globalization.CultureInfo.InvariantCulture).Length);
         var widest = box.DecimalPlaces > 0 ? whole + "." + new string('0', box.DecimalPlaces) : whole;
-        var needed = TextRenderer.MeasureText(widest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12;
+        var needed = TextRenderer.MeasureText(widest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra;
 
         return Math.Max(UiLayout.AtTextSize(UiLayout.NumericWidth), needed);
     }

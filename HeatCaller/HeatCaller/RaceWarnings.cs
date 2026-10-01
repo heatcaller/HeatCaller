@@ -301,7 +301,7 @@ public sealed class WarningLadderForm : Form
         var digits = ((int)_seconds[0].Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
         var secondsWidth = Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), _seconds[0].Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(new string('0', digits), _seconds[0].Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         for (var i = 0; i < MaxSteps; i++)
         {

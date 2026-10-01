@@ -35,6 +35,19 @@ public partial class MainForm
     internal void ShowPageForLayoutCheck(string name) => ShowPage(name);
 
     /// <summary>
+    /// Changes the text size the way Ctrl + and - do, with the window up -
+    /// applied now rather than once the presses stop (NudgeFontScale), so
+    /// the test need not wait. Every page but the one on screen is held
+    /// while it happens (LayoutFreeze) and laid out when it is next shown,
+    /// which is what the test then checks.
+    /// </summary>
+    internal void ChangeTextSizeForLayoutCheck(float scale)
+    {
+        NudgeFontScale(scale);
+        ApplyPendingFontScale();
+    }
+
+    /// <summary>
     /// Gives the pages the room they would have in a window with this much
     /// inside its frame.
     ///

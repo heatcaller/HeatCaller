@@ -598,7 +598,7 @@ public sealed class SoundEffectsControl : UserControl
     private static int NumberBoxWidth() =>
         Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', NumberDigits), AppTheme.BodyFont).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(new string('0', NumberDigits), AppTheme.BodyFont).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
     /// <summary>"Set every sound to:" - as wide as its longest choice ("Mixed - pick one"), and never narrower than a pack picker at the normal text size.</summary>
     private int SetAllPickerWidth() =>

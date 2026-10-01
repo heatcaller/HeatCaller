@@ -298,9 +298,12 @@ internal static class QuietEllipsis
         }
 
         // More than one line of room: wrap, and end the last line with "...".
+        // TextBoxControl is what makes Windows end the last whole line with
+        // it - without it, a line cut in half by the bottom edge was drawn,
+        // and no "..." at all.
         if (bounds.Height >= font.Height * 2)
         {
-            flags |= TextFormatFlags.WordBreak;
+            flags |= TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
         }
 
         // Only when it doesn't fit - otherwise the label's own drawing is

@@ -83,11 +83,13 @@ public sealed class AchievementDetailForm : Form
             Close();
         };
 
+        // With nobody to double-click, nothing: that nobody has it is said
+        // under "Who has it", where the list would be. Said here as well, and
+        // on the line above that, it was the same thing three times (layout
+        // pictures, 30 Sep).
         var hint = new Label
         {
-            Text = _holders.Count > 0
-                ? "Double-click somebody to see their badges."
-                : "Nobody has this one yet.",
+            Text = _holders.Count > 0 ? "Double-click somebody to see their badges." : string.Empty,
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -345,7 +347,10 @@ public sealed class AchievementDetailForm : Form
             var field = _owner.FieldSize();
             var holders = _owner._holders.Count;
 
-            var rarity = $"{RarityWord(holders, field)}   ·   {holders} of {field} driver{(field == 1 ? string.Empty : "s")}";
+            // With nobody holding it, the count alone: "Who has it" under
+            // this says that nobody does, and what that means.
+            var count = $"{holders} of {field} driver{(field == 1 ? string.Empty : "s")}";
+            var rarity = holders == 0 ? count : $"{RarityWord(holders, field)}   ·   {count}";
 
             if (_owner._holders.FirstOrDefault() is { } first)
             {
@@ -575,24 +580,26 @@ public sealed class AchievementDetailForm : Form
 
             var left = bounds.Left + Px(14);
 
-            // Whoever got there first gets to be marked as such, for as long
-            // as the club keeps records.
-            if (holder.IsFirst)
-            {
-                AppTheme.DrawPill(g, new RectangleF(left, bounds.Top + Px(11), Px(52), Px(20)),
-                    AppTheme.Warning, "FIRST", AppTheme.OnWarning);
-
-                left += Px(62);
-            }
-
-            var name = isMine ? holder.Name + "  (this driver)" : holder.Name;
-
             // Two lines on each side: the upper in a line of the bold or body
             // face, the lower in a line of the small face.
             float upperTop = bounds.Top + Px(4);
             float upperHeight = Px(20);
             float lowerTop = bounds.Top + Px(21);
             float lowerHeight = Px(18);
+
+            // Whoever got there first gets to be marked as such, for as long
+            // as the club keeps records - on the name's line, beside it. It
+            // was centred on the row, lower than the name it marks (layout
+            // pictures, 30 Sep).
+            if (holder.IsFirst)
+            {
+                AppTheme.DrawPill(g, new RectangleF(left, upperTop, Px(52), upperHeight),
+                    AppTheme.Warning, "FIRST", AppTheme.OnWarning);
+
+                left += Px(62);
+            }
+
+            var name = isMine ? holder.Name + "  (this driver)" : holder.Name;
 
             g.DrawString(name, AppTheme.BoldFont, nameBrush,
                 new RectangleF(left, upperTop, bounds.Width * 0.45f, upperHeight), near);

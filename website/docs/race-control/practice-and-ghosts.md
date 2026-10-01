@@ -205,7 +205,7 @@ The grid lists everyone in the class, with **Driver**, **Transponder**, **Time c
 2. HeatCaller averages each driver's best lap across those sessions. It gives each driver the gap to the quickest driver's average, multiplied by the typical race length. The quickest driver is scratch. The aim is for everyone to finish together.
 3. Tick the suggestions you want (the **Apply** column) and press **Apply Ticked**.
 
-Nothing is applied until you tick it. Drivers you've marked **Locked - leave this driver alone when suggesting** start unticked. At least two drivers in the class need a recorded best lap. Applied suggestions note how they were worked out in **Notes**.
+Nothing is applied until you tick it, and **Apply Ticked** is off while nothing is ticked. Drivers you've marked **Locked - leave this driver alone when suggesting** start unticked. At least two drivers in the class need a recorded best lap. Applied suggestions note how they were worked out in **Notes**.
 
 ### How time credits are scored
 

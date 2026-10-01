@@ -72,10 +72,13 @@ internal sealed class CarriedPointsForm : Form
         _grid.AllowUserToAddRows = true;
         _grid.AllowUserToDeleteRows = true;
         _grid.AllowUserToResizeRows = false;
-        _grid.RowHeadersVisible = true;
-        _grid.RowHeadersWidth = 28;
-        // Row headers select the row, so Delete removes it.
-        _grid.SelectionMode = DataGridViewSelectionMode.RowHeaderSelect;
+        // A click picks the whole row, so Delete removes it - which the row
+        // headers were there for. They were Windows' own grey stubs down
+        // the left, the one part of the window the theme never reached
+        // (layout pictures, 30 Sep); every other list in the app picks
+        // whole rows without them.
+        _grid.RowHeadersVisible = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
 

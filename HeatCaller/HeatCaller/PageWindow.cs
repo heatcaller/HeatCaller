@@ -82,19 +82,21 @@ internal sealed class PageWindow : Form
     /// <summary>
     /// The scrutineering log - every inspection on file - from Who's
     /// Racing's Scrutineering Log... button, a fresh page each time it is
-    /// opened. 1040x660 inside the frame, the size it always opened at.
+    /// opened. 1240x660 inside the frame: at the 1040 it used to open at,
+    /// six of its eight columns were cut short (layout pictures, 30 Sep).
     /// </summary>
     public static PageWindow ScrutineeringLog(TechInspectionControl log) =>
-        new("Scrutineering log", log, width: 1040, height: 660, leastHeight: log.LeastHeight);
+        new("Scrutineering log", log, width: 1240, height: 660, leastHeight: log.LeastHeight);
 
     /// <summary>
     /// The timetable from the program's footer: the one page MainForm keeps
     /// for it, lent to the window - so given back (<see cref="GiveBackPage"/>)
-    /// before the window is disposed, or it is disposed with it. 1040x700
-    /// inside the frame, the size it always opened at.
+    /// before the window is disposed, or it is disposed with it. 1200x700
+    /// inside the frame: it opened at 1040 wide, and its five columns beside
+    /// the reminder card cut the status short (layout pictures, 30 Sep).
     /// </summary>
     public static PageWindow Timetable(DayScheduleControl timetable) =>
-        new("Timetable", timetable, width: 1040, height: 700, leastHeight: timetable.LeastHeight);
+        new("Timetable", timetable, width: 1200, height: 700, leastHeight: timetable.LeastHeight);
 
     /// <summary>
     /// Takes the page back out of the window, for a page that outlives it:

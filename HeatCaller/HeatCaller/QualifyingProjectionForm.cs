@@ -246,10 +246,16 @@ public sealed class QualifyingProjectionForm : Form
                 line.DefaultCellStyle.ForeColor = AppTheme.TextMuted;
             }
 
-            line.Cells["change"].Style.ForeColor = row.IsNew ? AppTheme.Accent
+            var changeInk = row.IsNew ? AppTheme.Accent
                 : row.Change > 0 ? AppTheme.Success
                 : row.Change < 0 ? AppTheme.Danger
                 : AppTheme.TextMuted;
+
+            // Selected as well: a picked row's cells are drawn in the
+            // selection's colour, and the arrow in the picked row came out
+            // black - up and down looked alike (layout pictures, 30 Sep).
+            line.Cells["change"].Style.ForeColor = changeInk;
+            line.Cells["change"].Style.SelectionForeColor = changeInk;
         }
 
         // Put the view back where it was, so a list longer than the window

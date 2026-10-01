@@ -151,12 +151,14 @@ public sealed class SetupFieldEditorForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // The label running to the right-hand edge, the kind and the unit
-        // their own widths, and the tick in the field column under them, in
-        // from the captions as it always was.
+        // The label and the kind running to the right-hand edge, the unit its
+        // own width, and the tick in the field column under them, in from
+        // the captions as it always was. The kind ran to its own width, which
+        // at 200% stopped 49px short of the label's edge above it (layout
+        // pictures, 30 Sep); its width now is the least the column keeps.
         var fields = new FieldGrid();
         fields.AddRow("Label:", _txtLabel, stretch: true);
-        fields.AddRow("Filled in as:", _cmbKind);
+        fields.AddRow("Filled in as:", _cmbKind, stretch: true);
         fields.AddRow("Unit:", _txtUnit);
         fields.AddField(_chkOnDiagram);
 

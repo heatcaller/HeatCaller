@@ -137,7 +137,9 @@ public sealed class ShortcutSheetForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        columns.AddSideFill(left, columnWidth => left.GetPreferredSize(new Size(columnWidth, 0)).Height, gapBelow: 0);
+        // Exactly as tall as its shortcuts, not the column's height - see
+        // Beside.AddSideMeasured.
+        columns.AddSideMeasured(left, gapBelow: 0);
         columns.Add(right, gapBelow: 0);
 
         var footer = new Label

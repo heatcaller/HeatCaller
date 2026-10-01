@@ -252,7 +252,7 @@ public sealed class SponsorsControl : UserControl
     {
         var number = Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText("000", Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText("000", Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         foreach (var spinner in new[] { _numLeaderboardSeconds, _numSlideSeconds })
         {

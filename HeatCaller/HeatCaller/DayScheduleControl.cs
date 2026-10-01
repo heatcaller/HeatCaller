@@ -228,8 +228,16 @@ public sealed class DayScheduleControl : UserControl
             new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 42, ReadOnly = true }
         );
 
-        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+        // An empty timetable says where its lines come from.
+        EmptyNote.For(_grid, () => "Nothing on the timetable yet. The program's heats and finals appear here as they are made, and Add Entry puts in a line of your own.");
+
+        // Every heading whole, at the text size in use, and the status kept
+        // wide enough for a heat on track - see Pieces.KeepHeadingsWhole. It
+        // read "on track · started ..." and "done · started 20:..." at the
+        // normal text size, with the class and what beside it (layout
+        // pictures, 30 Sep). Whether it ran late or early can still be cut,
+        // in a narrow window; when it started never is.
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid, ("time", "88:88"), ("status", "on track · started 88:88")));
 
         // Left button only. CellClick fires for either, and the grid now has
         // a right-click menu - so right-clicking a line to reach it, with
@@ -388,7 +396,7 @@ public sealed class DayScheduleControl : UserControl
 
         var width = Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(new string('0', digits), _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         // Only when it changed: a new width lays the row out again.
         if (_numMinutes.Width != width)
@@ -484,8 +492,12 @@ public sealed class DayScheduleControl : UserControl
             _grid.CurrentCell = _grid.Rows[keepRow].Cells[0];
         }
 
+        // Says which of the two it is - nothing on the timetable, or all of it
+        // done - rather than "(schedule is empty or complete)".
         var nextUp = _schedule.NextUp;
-        _lblNextUp.Text = nextUp is null ? "Up Next: (schedule is empty or complete)" : $"Up Next: {DescribeEntry(nextUp)}";
+        _lblNextUp.Text = nextUp is not null ? $"Up Next: {DescribeEntry(nextUp)}"
+            : _schedule.All.Count == 0 ? "Up Next: nothing - the timetable is empty."
+            : "Up Next: nothing - every line is done.";
     }
 
     /// <summary>

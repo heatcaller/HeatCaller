@@ -431,6 +431,9 @@ public partial class MainForm
         SelectSearchedTab(toSelect);
     }
 
+    /// <summary>How long a page can take to open before the session log says so - see ShowPage.</summary>
+    private const int SlowPageMs = 500;
+
     private void ShowPage(string name)
     {
         var item = _navItems.FirstOrDefault(i => i.Name == name);
@@ -454,6 +457,10 @@ public partial class MainForm
         NoRedraw.Begin(pnlContent);
         pnlContent.SuspendLayout();
 
+        // Laid out again inside, before the page is let go (see there), so
+        // the finally must not do it again.
+        var resumed = false;
+
         try
         {
             // The wanted page first, and in front: with it already covering
@@ -475,9 +482,39 @@ public partial class MainForm
                 }
             }
 
+            // Every page not on screen holds its layout (LayoutFreeze), so
+            // what changes on it while it is away - a new text size, a list
+            // filled again - is laid out once, when it is next shown, rather
+            // than at each change.
+            foreach (var nav in _navItems)
+            {
+                if (nav != item)
+                {
+                    LayoutFreeze.Freeze(nav.Page);
+                }
+            }
+
+            // The content area laid out now, while painting is still off:
+            // it gives this page the room it is shown in - the page is held,
+            // so that only sizes it - and the page is then let go, laid out
+            // once, at that size and in the faces it has now. Before its
+            // refresh, so what the refresh reads is laid out. Timed: a page
+            // slow to open is written to the session log.
+            var opening = System.Diagnostics.Stopwatch.StartNew();
+
+            pnlContent.ResumeLayout(true);
+            resumed = true;
+
+            LayoutFreeze.Thaw(item.Page);
+
             if (_navRefreshHooks.TryGetValue(name, out var refresh))
             {
                 refresh();
+            }
+
+            if (opening.ElapsedMilliseconds >= SlowPageMs && !LayoutFreeze.Building)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [ui] {name} took {opening.Elapsed.TotalSeconds:0.0}s to open.");
             }
 
             // The "one yellow button per page" pass used to run here, on a
@@ -499,7 +536,18 @@ public partial class MainForm
         }
         finally
         {
-            pnlContent.ResumeLayout(true);
+            if (!resumed)
+            {
+                pnlContent.ResumeLayout(true);
+            }
+
+            // And the page let go, if something threw before it was: a page
+            // on screen and held is never laid out. Letting go of one that
+            // is not held does nothing.
+            if (_shownPage == name)
+            {
+                LayoutFreeze.Thaw(item.Page);
+            }
 
             // In a finally: a panel left with its painting switched off
             // never draws again, and the app would sit showing whatever
@@ -664,9 +712,8 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Builds every page, and every tab inside each one, once, off screen -
-    /// as soon as the window is up, and again after every text size change
-    /// (ApplyFontScale).
+    /// Builds every page, and every tab inside each one, once, off screen,
+    /// as soon as the window is up.
     ///
     /// Making a page visible creates its handle and its controls' handles,
     /// and selecting a tab raises the SelectedIndexChanged refreshes a first
@@ -674,6 +721,13 @@ public partial class MainForm
     /// built and refreshed the same as one they have: code that checks
     /// IsHandleCreated before posting work to itself, or counts on a tab's
     /// first refresh having run, finds the same on both.
+    ///
+    /// It lays out nothing but the page on screen's tabs. Every other page
+    /// holds its layout (LayoutFreeze) and is laid out when it is first
+    /// opened - one page, at the size it is shown at - rather than all
+    /// thirty here while the startup screen waits. It used to run again after every text size
+    /// change too, and lay every page out again each time; it does not now
+    /// (ApplyFontScale): the handles are made and the refreshes have run.
     ///
     /// This walk used to be the startup sweep of the layout repair pass,
     /// which put each page and tab on screen to measure it. The measuring
@@ -698,10 +752,8 @@ public partial class MainForm
         // finally must not do it again.
         var resumed = false;
 
-        // Same reasoning as ShowPage. At startup the window has not been
-        // revealed yet so there is nothing to see either way - but this
-        // walk runs again every time the text size changes, and then it is
-        // thirty pages flashing past on a visible window.
+        // Same reasoning as ShowPage: thirty pages flashing past on a
+        // window that is up are not something to show.
         NoRedraw.Begin(pnlContent);
         pnlContent.SuspendLayout();
 
@@ -719,13 +771,14 @@ public partial class MainForm
                 nav.Page.Visible = wasVisible;
             }
 
-            // Layout back on before pass two, and this is not optional.
-            //
-            // A TabPage is sized by its TabControl when it is selected, and
-            // a TabControl inside a suspended parent has no real size to
-            // give it - a never-opened tab selected that way is laid out at
-            // about 192px wide, a size it is never shown at. Nothing is
-            // painted either way; NoRedraw is still on.
+            // Layout back on before pass two, so each page is given the
+            // content area's size as it is made visible. (This used to be
+            // what kept a never-opened tab from being laid out at about
+            // 192px wide, the size a tab control in a suspended parent gives
+            // it. The pages are held now, and nothing in one is laid out
+            // until it is opened - see LayoutFreeze - but a page is still
+            // better given its real size.) Nothing is painted either way;
+            // NoRedraw is still on.
             pnlContent.ResumeLayout(true);
             resumed = true;
 

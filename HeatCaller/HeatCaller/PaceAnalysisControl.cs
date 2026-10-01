@@ -109,8 +109,16 @@ public sealed class PaceAnalysisControl : UserControl
     {
         BuildGrid();
 
-        // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
-        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
+        // Every heading whole, at the text size in use, and every column of
+        // figures kept wide enough for its widest figure - see
+        // Pieces.KeepHeadingsWhole. The best lap and the fade were cut to
+        // "11..." and "+..." at 200% while the driver's name gave way
+        // beside columns with room to spare (layout pictures, 30 Sep).
+        _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid, PaceWidest));
+
+        // An empty table says so under its headings; why it is empty is the
+        // line above it (Render).
+        EmptyNote.For(_grid, () => "No laps to read the pace from.");
 
         var page = new FillPage();
 
@@ -233,6 +241,26 @@ public sealed class PaceAnalysisControl : UserControl
         Fill(rows);
     }
 
+    /// <summary>
+    /// The widest figure each column of figures shows (Pieces
+    /// .KeepHeadingsWhole): a place, a lap count, a lap time
+    /// (PaceAnalysis.Time, under a minute), a gap (PaceAnalysis.Delta), a
+    /// spread and a time left on the table.
+    /// </summary>
+    private static readonly (string Column, string Widest)[] PaceWidest =
+    {
+        ("pos", "99"),
+        ("laps", "999"),
+        ("best", "99.999"),
+        ("run", "99.999"),
+        ("quick", "99.999"),
+        ("avg", "99.999"),
+        ("off", "+9.99s"),
+        ("cons", "99.9%"),
+        ("fade", "+9.99s"),
+        ("gain", "99.9s"),
+    };
+
     private void BuildGrid()
     {
         _grid.ReadOnly = true;
@@ -252,7 +280,7 @@ public sealed class PaceAnalysisControl : UserControl
         }
 
         Column("pos", "Fin", 30, "Where they finished the race.");
-        Column("driver", "Driver", 90, "Driver name.");
+        Column("driver", "Driver", 120, "Driver name.");
         Column("laps", "Laps", 32, "Counted laps, not including the run from the green to their first crossing.");
         Column("best", "Best", 46, "Their quickest single lap.");
         Column("run", "Best 3 in a row", 62, "Average of their quickest unbroken three laps - what they could actually sustain.");
@@ -262,7 +290,11 @@ public sealed class PaceAnalysisControl : UserControl
         Column("cons", "Consistency", 54, "Spread of their lap times. Lower is tidier - under about 1.5% is driving at a limit, over 4% is scrappy.");
         Column("fade", "Fade", 44, "Last third of the race against the first. Positive means they slowed down.");
         Column("gain", "Left on table", 58, "What repeating their own best lap every lap would have been worth over this race.");
-        Column("verdict", "Read", 150, "What the numbers add up to.");
+        // The verdict gives way before the name does: its whole wording is
+        // a sentence, cut short in any narrow window, and the name is what
+        // the row is about (it was 90 against this one's 150, and a long
+        // name read "Alexa..." at 200%).
+        Column("verdict", "Read", 120, "What the numbers add up to.");
     }
 
     private void Fill(List<PaceAnalysis.Row> rows)
@@ -299,15 +331,25 @@ public sealed class PaceAnalysisControl : UserControl
             // Colour only the two columns worth reacting to. Colouring every
             // number turns the table into wallpaper and none of it gets
             // read.
-            cells["cons"].Style.ForeColor = row.ConsistencyPercent <= 1.5
+            //
+            // In the picked row as well: its cells are drawn in the
+            // selection's colour otherwise, and the first row - picked as
+            // the table fills - lost its colours (layout pictures, 30 Sep).
+            var consistency = row.ConsistencyPercent <= 1.5
                 ? AppTheme.Success
                 : row.ConsistencyPercent >= 4.0
                     ? AppTheme.Danger
                     : AppTheme.TextDark;
 
+            cells["cons"].Style.ForeColor = consistency;
+            cells["cons"].Style.SelectionForeColor = consistency;
+
             if (row.FadeMs != 0)
             {
-                cells["fade"].Style.ForeColor = row.FadeMs > 0 ? AppTheme.Danger : AppTheme.Success;
+                var fade = row.FadeMs > 0 ? AppTheme.Danger : AppTheme.Success;
+
+                cells["fade"].Style.ForeColor = fade;
+                cells["fade"].Style.SelectionForeColor = fade;
             }
         }
     }

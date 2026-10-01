@@ -790,7 +790,9 @@ internal static class LayoutAudit
             }
         }
 
-        var room = combo.Width - SystemInformation.VerticalScrollBarWidth - 8;
+        // The arrow's zone grows with the text (DropArrow): 25px off at the
+        // normal text size, as it always was, and more as the arrow grows.
+        var room = combo.Width - (DropArrow.Room - 16);
 
         if (widest > room)
         {
@@ -833,7 +835,9 @@ internal static class LayoutAudit
             return;
         }
 
-        var needed = TextRenderer.MeasureText(text, number.Font).Width + SystemInformation.VerticalScrollBarWidth + 8;
+        // Its arrows are wider than Windows' at the larger text sizes
+        // (UpDownButtonsSkin.Width), and the number has that much less room.
+        var needed = TextRenderer.MeasureText(text, number.Font).Width + SystemInformation.VerticalScrollBarWidth + 8 + UpDownButtonsSkin.Extra;
 
         if (needed > number.Width)
         {

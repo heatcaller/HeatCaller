@@ -353,7 +353,7 @@ The timetable only follows the program of a real race day. With no race day open
 
 ### Reading the sheet
 
-**Up Next:** above the grid names the first line that isn't done, with its time, class and description, or says "(schedule is empty or complete)".
+**Up Next:** above the grid names the first line that isn't done, with its time, class and description. With nothing left it says which: "nothing - the timetable is empty." or "nothing - every line is done."
 
 The grid shows **Done**, **Time**, **Class**, **What** and **Status**. The **Status** column shows:
 

@@ -518,7 +518,7 @@ public sealed class BackupRestoreControl : UserControl
         Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
             TextRenderer.MeasureText(new string('0', ((int)box.Maximum).ToString().Length), Font).Width
-                + SystemInformation.VerticalScrollBarWidth + 12);
+                + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
     /// <summary>
     /// The folder box: as wide as the path in it, between 260px and 560px at

@@ -232,6 +232,10 @@ public sealed class AnnouncerControl : UserControl
         _textSize.ReserveLines(_lblOnDeck, 1);
 
         // --- Running order, kept short on purpose ---
+
+        // Empty between races: it says when it fills.
+        EmptyNote.For(_gridOrder, () => "Nothing running. The order shows here once a race starts.");
+
         _gridOrder.ReadOnly = true;
         _gridOrder.AllowUserToAddRows = false;
         _gridOrder.RowHeadersVisible = false;
@@ -265,6 +269,9 @@ public sealed class AnnouncerControl : UserControl
         // meant to read out loud, and it's also the longest.
         _lstTalkingPoints.DrawMode = DrawMode.OwnerDrawVariable;
         _lstTalkingPoints.MeasureItem += TalkingPoints_MeasureItem;
+
+        // Empty until there is something to say.
+        EmptyNote.For(_lstTalkingPoints, () => "Talking points come up here as a race goes on.");
         _lstTalkingPoints.DrawItem += TalkingPoints_DrawItem;
 
         // Variable-height rows are measured once, when added - so a resize
@@ -315,9 +322,9 @@ public sealed class AnnouncerControl : UserControl
         _cmbSpotlight.SelectedIndexChanged += (_, _) => RefreshSpotlight();
 
         _lblSpotlight.AutoSize = true;
+        _lblSpotlight.AutoEllipsis = true;
         _lblSpotlight.ForeColor = AppTheme.TextDark;
         _textSize.Wear(_lblSpotlight, () => AppTheme.BodyFont);
-        _textSize.ReserveLines(_lblSpotlight, SpotlightLines);
 
         // --- Last race summary ---
         //
@@ -336,9 +343,13 @@ public sealed class AnnouncerControl : UserControl
         SetSummaryCaption(SummaryCaption);
 
         _lblLastSummary.AutoSize = true;
+        _lblLastSummary.AutoEllipsis = true;
         _lblLastSummary.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblLastSummary, () => AppTheme.BodyFont);
-        _textSize.ReserveLines(_lblLastSummary, SummaryLines);
+
+        // The lines the two keep, and the most they show - see KeepLowerCards.
+        _textSize.Keep(KeepLowerCards);
+        _page.Resize += (_, _) => KeepLowerCards();
 
         _btnRepeat.Text = RepeatSummaryCaption;
         _btnRepeat.Enabled = false;
@@ -620,6 +631,89 @@ public sealed class AnnouncerControl : UserControl
             _lblClock.Font = _clockFont;
             old?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// The most of the page the spotlight and the last summary take with
+    /// their text, under the running order: about a third.
+    /// </summary>
+    private const float LowerShare = 0.3f;
+
+    /// <summary>
+    /// The spotlight's and the last summary's lines: each keeps its lines
+    /// (SpotlightLines, SummaryLines) whatever it says, so the cards do not
+    /// hop - and shows no more lines than fit in LowerShare of the page with
+    /// its card's caption and its picker or button, ending its last with
+    /// "..." past that. Never fewer than two.
+    ///
+    /// At the normal text size that is all of them, as it was. At 200% it is
+    /// three: the running order is what this window is for, and with five
+    /// lines under it - more for a long note on the driver - it had room for
+    /// four drivers (Asher, layout pictures, 30 Sep).
+    /// </summary>
+    private void KeepLowerCards()
+    {
+        var most = LowerCardLines();
+
+        Keep(_lblSpotlight, SpotlightLines);
+        Keep(_lblLastSummary, SummaryLines);
+
+        void Keep(Label label, int reserved)
+        {
+            var line = Pieces.LineHeight(label.Font);
+            var least = new Size(0, Math.Min(reserved, most) * line + label.Padding.Vertical);
+            var greatest = new Size(0, most * line + label.Padding.Vertical);
+
+            // In the order that never has the least above the most: WinForms
+            // moves one to meet the other when they cross.
+            if (greatest.Height >= label.MinimumSize.Height)
+            {
+                if (label.MaximumSize != greatest)
+                {
+                    label.MaximumSize = greatest;
+                }
+
+                if (label.MinimumSize != least)
+                {
+                    label.MinimumSize = least;
+                }
+            }
+            else
+            {
+                if (label.MinimumSize != least)
+                {
+                    label.MinimumSize = least;
+                }
+
+                if (label.MaximumSize != greatest)
+                {
+                    label.MaximumSize = greatest;
+                }
+            }
+        }
+    }
+
+    /// <summary>How many lines of text the spotlight and the last summary may show - see KeepLowerCards. Every one, while the page has no height yet.</summary>
+    private int LowerCardLines()
+    {
+        var height = _page.ClientSize.Height;
+        var line = Math.Max(1, Pieces.LineHeight(AppTheme.BodyFont));
+
+        if (height <= 0)
+        {
+            return 40;
+        }
+
+        // What the taller of the two cards has besides its text: its
+        // caption, the picker or the button under it, and the gaps and the
+        // card's edges round them.
+        var chrome = Pieces.LineHeight(AppTheme.MicroFont)
+            + UiLayout.HeadingGap
+            + Math.Max(_cmbSpotlight.Height, _btnRepeat.Height)
+            + UiLayout.RowGap
+            + Section.Inset.Vertical;
+
+        return Math.Clamp(((int)(height * LowerShare) - chrome) / line, 2, 40);
     }
 
     /// <summary>The least the running order can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>

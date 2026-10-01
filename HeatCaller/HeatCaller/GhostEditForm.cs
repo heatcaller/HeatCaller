@@ -299,7 +299,7 @@ public sealed class GhostEditForm : Form
             TextRenderer.MeasureText(
                 number.Maximum.ToString("F" + number.DecimalPlaces, System.Globalization.CultureInfo.CurrentCulture),
                 number.Font).Width
-            + SystemInformation.VerticalScrollBarWidth + 12;
+            + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra;
     }
 
     /// <summary>

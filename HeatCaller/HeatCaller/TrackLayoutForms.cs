@@ -337,7 +337,7 @@ public sealed class TrackLayoutEditForm : Form
 
         return Math.Max(
             UiLayout.AtTextSize(NumberWidth),
-            TextRenderer.MeasureText(largest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText(largest, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 
     private void BtnAttach_Click(object? sender, EventArgs e)

@@ -311,6 +311,22 @@ internal sealed class CarPhotosForm : Form
         _preview.SizeMode = PictureBoxSizeMode.Zoom;
         _preview.BackColor = AppTheme.Background;
 
+        // With no photos, the room the photo would take says so (it was a
+        // blank list beside a blank space - layout pictures, 30 Sep).
+        _preview.Paint += (_, e) =>
+        {
+            if (_list.Items.Count > 0)
+            {
+                return;
+            }
+
+            var margin = UiLayout.AtTextSize(16);
+            var room = Rectangle.Inflate(_preview.ClientRectangle, -margin, -margin);
+
+            TextRenderer.DrawText(e.Graphics, "No photos of this car yet. Add a Photo picks one from this PC.", AppTheme.BodyFont, room,
+                AppTheme.TextMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        };
+
         var btnAdd = new Button { Text = "Add a Photo..." };
         btnAdd.Click += (_, _) => AddPhoto();
 
@@ -398,6 +414,9 @@ internal sealed class CarPhotosForm : Form
         {
             ShowSelected();
         }
+
+        // The note in the preview comes and goes with the photos.
+        _preview.Invalidate();
 
         UpdateButtons();
     }
@@ -668,6 +687,7 @@ internal sealed class ChassisTypesForm : Form
     private readonly TextBox _txtName = new();
     private readonly TextBox _txtMaker = new();
     private readonly ComboBox _cmbSheet = new();
+    private readonly Button _btnSave = new();
     private readonly Button _btnRetire = new();
     private readonly Button _btnDelete = new();
 
@@ -707,6 +727,9 @@ internal sealed class ChassisTypesForm : Form
         _list.IntegralHeight = false;
         _list.SelectedIndexChanged += (_, _) => LoadSelected();
 
+        // With every one deleted, the list says so, and what makes one.
+        EmptyNote.For(_list, () => "No chassis types. Add makes one.");
+
         Label Caption(string text) => new()
         {
             Text = text,
@@ -726,8 +749,8 @@ internal sealed class ChassisTypesForm : Form
         var btnAdd = new Button { Text = "Add" };
         btnAdd.Click += (_, _) => AddType();
 
-        var btnSave = new Button { Text = "Save Changes" };
-        btnSave.Click += (_, _) => SaveSelected();
+        _btnSave.Text = "Save Changes";
+        _btnSave.Click += (_, _) => SaveSelected();
 
         _btnRetire.Text = "Retire";
         _btnRetire.Click += (_, _) => RetireSelected();
@@ -757,7 +780,7 @@ internal sealed class ChassisTypesForm : Form
         // What changes the list on the left, Close against the right-hand
         // edge, as they were.
         var buttons = new SplitBar(
-            new ButtonBar().With(btnAdd, btnSave, _btnRetire, _btnDelete),
+            new ButtonBar().With(btnAdd, _btnSave, _btnRetire, _btnDelete),
             new ButtonBar(alignRight: true).With(btnClose));
 
         var page = new FillPage();
@@ -870,6 +893,10 @@ internal sealed class ChassisTypesForm : Form
         _txtName.Enabled = have;
         _txtMaker.Enabled = have;
         _cmbSheet.Enabled = have;
+
+        // Nothing picked, nothing to save: it was in the app's colour and
+        // did nothing with no chassis left (layout pictures, 30 Sep).
+        _btnSave.Enabled = have;
         _btnDelete.Enabled = have;
         _btnRetire.Enabled = have;
         _btnRetire.Text = type is { Retired: true } ? "Put Back" : "Retire";
@@ -1003,6 +1030,17 @@ internal sealed class CarDetailForm : Form
     /// </summary>
     private const int PhotoHeight = 260;
 
+    /// <summary>
+    /// The photo's size, <paramref name="pixels"/> at the normal text size,
+    /// at the larger text sizes grown by half as much as the text: at 200%
+    /// one and a half times its size, not twice. It is a picture, not words
+    /// - grown with the text, it took half the window at 200% and left the
+    /// setups two rows under it (layout pictures, 30 Sep). The facts beside
+    /// it have the width it leaves.
+    /// </summary>
+    private static int PhotoAt(int pixels) =>
+        UiLayout.AtDpi((int)Math.Round(pixels * (1f + Math.Max(0f, AppTheme.FontScale - 1f) / 2f)));
+
     /// <summary>The setups show their headings and at least this many rows before the window scrolls instead.</summary>
     private const int LeastRows = 2;
 
@@ -1076,8 +1114,16 @@ internal sealed class CarDetailForm : Form
         // car is judged on its own colours, not the app's.
         _photo.BackColor = AppTheme.Background;
 
-        // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
-        Pieces.KeepHeadingsWhole(_setupGrid);
+        // Every heading whole, the date and the best lap kept wide enough
+        // for theirs, and the rest shared by weight - see
+        // Pieces.KeepHeadingsWhole. The date read "9/29/..." at 200%
+        // (layout pictures, 30 Sep). The widest date is a real one, written
+        // the way this PC writes dates.
+        Pieces.KeepHeadingsWhole(
+            _setupGrid,
+            ("date", AppTime.DateAndTime(new DateTime(2026, 12, 28, 22, 58, 0))),
+            ("bestlap", "99.999s"),
+            ("filled", "99"));
 
         RefreshAll();
 
@@ -1131,18 +1177,19 @@ internal sealed class CarDetailForm : Form
         _lblNotes.ForeColor = AppTheme.TextMuted;
         _lblNotes.Font = AppTheme.SmallFont;
 
-        // The photo down the left at the width it had, at the text size in
-        // use, and the heading, the facts and the notes beside it, each
+        // The photo down the left at the width it had - at the larger text
+        // sizes grown half as much as the text (PhotoAt) - and the heading,
+        // the facts and the notes beside it, each
         // wrapping to the width left - the two as tall as the taller needs,
         // the photo taking any height the words need past its own.
-        var band = new Beside(UiLayout.AtTextSize(PhotoWidth))
+        var band = new Beside(PhotoAt(PhotoWidth))
         {
             SideOnLeft = true,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        band.AddSideFill(_photo, _ => UiLayout.AtTextSize(PhotoHeight), gapBelow: 0);
+        band.AddSideFill(_photo, _ => PhotoAt(PhotoHeight), gapBelow: 0);
         band.Add(_lblHeading);
         band.Add(_lblFacts);
         band.Add(_lblNotes, gapBelow: 0);
@@ -1183,16 +1230,20 @@ internal sealed class CarDetailForm : Form
         _setupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _setupGrid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "date", HeaderText = "Date", FillWeight = 40 },
-            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 50 },
-            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 45 },
+            new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Driver", FillWeight = 55 },
+            new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 60 },
             new DataGridViewTextBoxColumn { Name = "sheet", HeaderText = "Chassis Sheet", FillWeight = 55 },
             new DataGridViewTextBoxColumn { Name = "filled", HeaderText = "Filled", FillWeight = 26 },
             new DataGridViewTextBoxColumn { Name = "bestlap", HeaderText = "Best Lap", FillWeight = 42 },
 
             // What this setup changed from the one before it, so a run of
             // setups reads as a run of changes (27 Sep 2026). See SetupDiff.
-            new DataGridViewTextBoxColumn { Name = "changed", HeaderText = "Changed Since Last", FillWeight = 130 },
-            new DataGridViewTextBoxColumn { Name = "summary", HeaderText = "Setup", FillWeight = 110 }
+            // It and the setup give way before the track and the driver do:
+            // theirs are sentences, cut short in any narrow window whatever
+            // they are given, and a name cut short says nothing at all (30
+            // Sep - the track read "Club C..." at 200% beside them).
+            new DataGridViewTextBoxColumn { Name = "changed", HeaderText = "Changed Since Last", FillWeight = 115 },
+            new DataGridViewTextBoxColumn { Name = "summary", HeaderText = "Setup", FillWeight = 95 }
         );
         _setupGrid.SelectionChanged += (_, _) => UpdateButtons();
         _setupGrid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) EditSetup(); };

@@ -644,7 +644,7 @@ public sealed class AmbienceControl : UserControl
         var largest = number.Maximum.ToString("F" + number.DecimalPlaces, System.Globalization.CultureInfo.CurrentCulture);
 
         var needed = TextRenderer.MeasureText(new string('0', largest.Length), number.Font).Width
-            + SystemInformation.VerticalScrollBarWidth + 12;
+            + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra;
 
         return Math.Max(UiLayout.AtTextSize(UiLayout.NumericWidth), needed);
     }

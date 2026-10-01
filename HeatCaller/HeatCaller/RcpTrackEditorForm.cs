@@ -87,6 +87,9 @@ public sealed class RcpTrackEditorForm : Form
     private readonly TextBox _txtName = new();
     private readonly CheckBox _chkClosedRoute = new ThemedCheckBox();
     private readonly CheckBox _chkUseAsPhoto = new ThemedCheckBox();
+
+    /// <summary>Save as PNG - kept to be given its colour after the theme pass (see the constructor).</summary>
+    private readonly Button _btnPng = new() { Text = "Save as PNG..." };
     private readonly Button _btnPlay = new();
     private readonly SliderControl _barBackdrop = new();
 
@@ -137,6 +140,12 @@ public sealed class RcpTrackEditorForm : Form
 
         AppTheme.StyleToolTip(_tips);
         AppTheme.ApplyRecursively(this);
+
+        // One button in the app's colour at the foot: Save Layout, which is
+        // what the window is for. The theme goes by the caption, and "Save
+        // as PNG" has a save in it too - two orange buttons side by side,
+        // neither saying which one keeps the track (layout pictures, 30 Sep).
+        AppTheme.StyleButton(_btnPng, AppTheme.ButtonKind.Secondary);
 
         _loading = false;
 
@@ -699,7 +708,7 @@ public sealed class RcpTrackEditorForm : Form
     {
         var btnSave = new Button { Text = "Save Layout" };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
-        var btnPng = new Button { Text = "Save as PNG..." };
+        var btnPng = _btnPng;
 
         btnSave.Click += (_, _) =>
         {

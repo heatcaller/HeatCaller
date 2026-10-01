@@ -91,11 +91,13 @@ public sealed class BatteryPackStore
             new JsonSerializerOptions { WriteIndented = true }));
     }
 
+    // By number, not character by character: "Pack 2" before "Pack 10"
+    // (NaturalOrder).
     public IReadOnlyList<BatteryPack> All =>
-        _packs.OrderBy(p => p.Retired).ThenBy(p => p.Label).ToList();
+        _packs.OrderBy(p => p.Retired).ThenBy(p => p.Label, NaturalOrder.Instance).ToList();
 
     public IReadOnlyList<BatteryPack> InRotation =>
-        _packs.Where(p => !p.Retired).OrderBy(p => p.Label).ToList();
+        _packs.Where(p => !p.Retired).OrderBy(p => p.Label, NaturalOrder.Instance).ToList();
 
     public BatteryPack? Get(string? id) => id is null ? null : _packs.FirstOrDefault(p => p.Id == id);
 

@@ -120,7 +120,7 @@ public sealed class FillTimesForm : Form
         // is anywhere else at this text size.
         _numMinutes.Width = Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText("000", _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12);
+            TextRenderer.MeasureText("000", _numMinutes.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }

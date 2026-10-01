@@ -232,11 +232,30 @@ day: the layout overhaul is finished before the beta rather than after it
    Track Designer's entries show two whole hint lines, FieldGrid keeps the
    ring under a box in its last row, a wrapped tick box caption has its box
    by the first line, and Delete race day's indents follow the tick box.
+   **Speed** (b69, Asher 30 Sep: the startup screen up for over a minute,
+   Ctrl +/- "Not Responding" for 30-50s - session logs at 200% DPI): every
+   page but the one on screen holds its layout (`LayoutFreeze`: suspended,
+   laid out once when shown; a tab not showing is a hold of its own, let go
+   on its VisibleChanged), the layout pieces hold themselves while the
+   window is built (`LayoutFreeze.Adopt`), Ctrl +/- is applied once 350ms
+   after the last press, `WarmPages` runs at startup only and lays nothing
+   out, and the theme pass runs once at startup. The console logs
+   "[startup] Pages built in", "[startup] Every page and tab made ready in",
+   "[ui] Text size N% - Xs" and "[ui] <page> took Xs to open" (500ms+) - read
+   them before guessing again. The page test has a sixth size, 100% changed
+   to 200% with the window up. Then the rest of the window pictures' list:
+   drop-down, date picker and number box arrows and the slider and fader
+   handles grow with the text (`DropArrow`, `UpDownButtonsSkin.Width` set in
+   UpDownBase's own field by reflection), plain lists draw their picked item
+   in the theme and end long items in "..." (`PlainList`), empty lists and
+   tables say why (`EmptyNote`), the skins draw into window pictures too
+   (WM_PRINT - the pictures used to show Windows' own field), chassis
+   callouts keep off each other and the dots, and a dozen smaller ones.
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and
-   Ctrl+/- walk over every page and tab is kept as `WarmPages` (it builds
-   every page's handles ahead of time); the tour sizes its own buttons and
+   startup walk over every page and tab is kept as `WarmPages` (it builds
+   every page's handles ahead of time - since b69 at startup only); the tour sizes its own buttons and
    lines; every `LeaveAlone` call is gone; and the page test fails on a
    finding on ANY page, converted or not. Left: the Big Screen and the
    splash at larger text sizes (DPI only so far), a hardware spike for
