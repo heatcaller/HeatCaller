@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace HeatCaller;
 
@@ -37,7 +38,18 @@ internal static class WhereTimeGoes
     /// a handle made early is made again whenever a style it was made with
     /// changes, which the theme pass does to every drop-down.
     /// </summary>
-    public static void Start(string name, Control? window = null) => _timing = new Clock(name, window);
+    public static void Start(string name, Control? window = null)
+    {
+        _timing?.StopWatchingWindows();
+        _timing = new Clock(name, window);
+    }
+
+    /// <summary>
+    /// The window being timed is built - its constructor is done. Windows
+    /// made from here on are the ones showing it makes; until here, any
+    /// made were made early (see Clock.WatchWindowsMade).
+    /// </summary>
+    public static void Built() => _timing?.StopWatchingWindows();
 
     /// <summary>Notes that the part called <paramref name="part"/> has just ended.</summary>
     public static void Mark(string part) => _timing?.Mark(part);
@@ -97,6 +109,7 @@ internal static class WhereTimeGoes
             }
 
             timing.Mark("showing");
+            timing.StopWatchingWindows();
 
             if (timing.Total.TotalSeconds >= SlowSeconds)
             {
@@ -113,6 +126,7 @@ internal static class WhereTimeGoes
         var timing = _timing;
         _timing = null;
 
+        timing?.StopWatchingWindows();
         return timing?.Describe();
     }
 
@@ -124,6 +138,9 @@ internal static class WhereTimeGoes
         private readonly List<(string Part, TimeSpan Took)> _parts = new();
         private readonly Dictionary<string, TimeSpan> _styled = new();
         private readonly Dictionary<string, (TimeSpan Took, int Calls)> _called = new();
+
+        /// <summary>The same as _called, for the part under way only - so a slow part says what its time went on.</summary>
+        private readonly Dictionary<string, (TimeSpan Took, int Calls)> _calledInPart = new();
         private readonly Control? _window;
 
         public Clock(string name, Control? window)
@@ -142,11 +159,105 @@ internal static class WhereTimeGoes
                 {
                     window.HandleCreated -= Made;
                     _madeBy = MadeBy();
+                    StopWatchingWindows();
                 }
 
                 window.HandleCreated += Made;
+                window.Disposed += (_, _) => StopWatchingWindows();
+
+                WatchWindowsMade();
             }
         }
+
+        /// <summary>
+        /// Watches for windows made on this thread while the window is being
+        /// built - before its own handle, and before its constructor is done
+        /// (Built) - and keeps who made the first few.
+        ///
+        /// Why: with the Setup Sheet's own handle no longer made early, its
+        /// 26 controls still had handles by the time its fields were added,
+        /// and the 330 controls added after got theirs as they went in (1
+        /// Oct) - made by something that ran before they were in the window,
+        /// so watching the window itself (Made, above) could not say what.
+        /// Windows says, as each window is made (a WH_CBT hook, this thread
+        /// only, for as long as the building lasts).
+        /// </summary>
+        private void WatchWindowsMade()
+        {
+            try
+            {
+                _onWindowMade = WindowMade;
+                _hook = SetWindowsHookEx(WhCbt, _onWindowMade, IntPtr.Zero, GetCurrentThreadId());
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+            {
+                // Not on Windows: nothing to watch.
+                _hook = IntPtr.Zero;
+            }
+        }
+
+        private IntPtr WindowMade(int code, IntPtr wParam, IntPtr lParam)
+        {
+            if (code == HcbtCreateWnd)
+            {
+                _windowsMadeEarly++;
+
+                if (_earlyMadeBy.Count < 3)
+                {
+                    try
+                    {
+                        var by = MadeBy();
+
+                        if (!_earlyMadeBy.Contains(by))
+                        {
+                            _earlyMadeBy.Add(by);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Only a note for the log; never worth breaking a
+                        // window being made.
+                    }
+                }
+            }
+
+            return CallNextHookEx(_hook, code, wParam, lParam);
+        }
+
+        /// <summary>Stops watching for windows made (WatchWindowsMade). Safe to call more than once.</summary>
+        public void StopWatchingWindows()
+        {
+            if (_hook != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hook);
+                _hook = IntPtr.Zero;
+            }
+        }
+
+        private IntPtr _hook;
+
+        /// <summary>Kept for as long as the hook is in: Windows calls it, and nothing else holds it.</summary>
+        private HookProc? _onWindowMade;
+
+        private int _windowsMadeEarly;
+        private readonly List<string> _earlyMadeBy = new();
+
+        private delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+        private const int WhCbt = 5;
+        private const int HcbtCreateWnd = 3;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
 
         /// <summary>The methods of this app that led to the window's handle being made, innermost first - null until it is.</summary>
         private string? _madeBy;
@@ -160,6 +271,7 @@ internal static class WhereTimeGoes
             var frames = new StackTrace(2, false).GetFrames();
             var names = new List<string>();
             var ours = 0;
+            var repeats = 1;
 
             foreach (var frame in frames)
             {
@@ -169,14 +281,27 @@ internal static class WhereTimeGoes
                     continue;
                 }
 
-                names.Add($"{type.Name}.{method.Name}");
+                var name = $"{type.Name}.{method.Name}";
+
+                // A control making its children's windows calls itself once
+                // for each level down: said once, with how many times.
+                if (names.Count > 0 && names[^1].StartsWith(name, StringComparison.Ordinal)
+                    && (names[^1].Length == name.Length || names[^1][name.Length] == ' '))
+                {
+                    names[^1] = $"{name} x{++repeats}";
+                }
+                else
+                {
+                    repeats = 1;
+                    names.Add(name);
+                }
 
                 if (type.Namespace?.StartsWith("HeatCaller", StringComparison.Ordinal) == true && ++ours == 3)
                 {
                     break;
                 }
 
-                if (names.Count == 30)
+                if (names.Count == 40)
                 {
                     break;
                 }
@@ -191,7 +316,17 @@ internal static class WhereTimeGoes
         {
             var took = _part.Elapsed;
 
-            _parts.Add((_window is null ? part : $"{part} ({Handles(_window)} handles)", took));
+            // What a slow part's time went on, among the layout pieces.
+            var spent = took.TotalSeconds < 0.1 || _calledInPart.Count == 0
+                ? string.Empty
+                : " [" + string.Join(", ", _calledInPart
+                    .OrderByDescending(what => what.Value.Took)
+                    .Take(4)
+                    .Select(what => $"{what.Key} {what.Value.Took.TotalSeconds:0.00} x{what.Value.Calls}")) + "]";
+
+            _calledInPart.Clear();
+
+            _parts.Add((_window is null ? $"{part}{spent}" : $"{part} ({Handles(_window)} handles){spent}", took));
 
             // Counting the handles is not this part's time.
             _part.Restart();
@@ -206,6 +341,10 @@ internal static class WhereTimeGoes
         {
             _called[what] = _called.TryGetValue(what, out var before)
                 ? (before.Took + elapsed, before.Calls + 1)
+                : (elapsed, 1);
+
+            _calledInPart[what] = _calledInPart.TryGetValue(what, out var inPart)
+                ? (inPart.Took + elapsed, inPart.Calls + 1)
                 : (elapsed, 1);
         }
 
@@ -241,7 +380,12 @@ internal static class WhereTimeGoes
 
             var made = _madeBy is null ? string.Empty : $"; the window's handle was made by: {_madeBy}";
 
-            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}{made}.";
+            var early = _windowsMadeEarly == 0
+                ? string.Empty
+                : $"; {_windowsMadeEarly} windows made while it was being built, before its own - "
+                    + string.Join("; and by: ", _earlyMadeBy.Select((by, i) => i == 0 ? $"the first by: {by}" : by));
+
+            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}{made}{early}.";
         }
     }
 }

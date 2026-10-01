@@ -2391,6 +2391,7 @@ internal sealed class Beside : Panel
                 // OnLayout.
                 if (beside.AutoSize && beside.Parent is not null && beside.Height != beside.LeastHeight(beside.Width))
                 {
+                    using var asked = WhereTimeGoes.Measure("Beside's column asks its parent");
                     beside.Parent.PerformLayout(beside, nameof(PreferredSize));
                 }
             }

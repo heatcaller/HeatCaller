@@ -295,6 +295,15 @@ day: the layout overhaul is finished before the beta rather than after it
    it was laid out 162 times and the lines measured 60k times, letting go
    parents first. Startup is unchanged by it: its pages are frozen and let
    go by Thaw, which still goes parents first (HiddenTab relies on it).
+   b76 measured (1 Oct): 3.0-3.2s - the window's own handle is now made
+   by ShowDialog, but its 26 other controls still had handles by the
+   diagram step (parked: made before they were in the window), so the
+   fields still got 359 as they went in; letting go no faster (Beside
+   layouts x662, column-for-Beside x216 - the explicit asks, x54, now
+   cost nothing). b77: `WhereTimeGoes` watches every window made on the
+   thread while the window is built (a WH_CBT hook, until `Built()` or its
+   own handle) and keeps who made the first few; each slow part lists
+   what its layout time went on; MainColumn's ask has a span of its own.
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and
@@ -304,17 +313,36 @@ day: the layout overhaul is finished before the beta rather than after it
    finding on ANY page, converted or not. Left: a hardware spike for
    `PerMonitorV2`, then making `--dpi-aware` the default (SystemAware) once
    it has been used on a 150% laptop.
-5. **The installer** (Beta readiness 3), then **the beta tier and the
+5. **Move to .NET 10 - before the installer** (Asher, 1 Oct). .NET 8
+   loses support on **10 Nov 2026** (no more security fixes); .NET 10 is
+   the long-term release, supported to Nov 2028. .NET 9 is no use - it
+   ends the same day as 8. It goes before the installer because the
+   self-contained build ships the runtime inside it: the first build a
+   club gets should carry a supported one. The change:
+   - `net8.0-windows` to `net10.0-windows` in `HeatCaller.csproj` and
+     `HeatCaller.Tests.csproj`;
+   - System.IO.Ports, System.Security.Cryptography.ProtectedData and
+     System.Speech from 8.0.0 to the matching 10.0.x (NAudio, HidSharp
+     and QRCoder stay);
+   - `dotnet-version: '10.0.x'` in `.github\workflows\check.yml`, and the
+     .NET 10 SDK on spectre;
+   - read Microsoft's breaking-change lists for WinForms in .NET 9 and 10
+     (BinaryFormatter is gone - matters only if the clipboard or
+     drag-and-drop carries our own types), then a green `check.cmd`;
+   - the "Where things stand" table says .NET 10, and a release note.
+   The serial and HID packages sit on the timing path, so the next
+   rehearsal counts as the check that it still reads the decoder.
+6. **The installer** (Beta readiness 3), then **the beta tier and the
    first-night guide** (Beta readiness 4). The installer before the relay
    work (Beta readiness 6): every beta club needs it, and only a club
    using online check-in, the phone manager or the website needs the
    relay - but re-mint the `horizon-test` token whenever it's convenient.
-6. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
+7. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
    was written before a unit was on the bench. A unit is set up now, and
    the bench work starts the weekend of 3 Oct (Asher, 30 Sep): read the
    raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn
    the capture into tests.
-7. **A capture from every rehearsal that shows something new.** The
+8. **A capture from every rehearsal that shows something new.** The
    EasyLap path is tested from rehearsal 3's (`EasyLapCaptureTests`): every
    HID report in `HeatCaller.Tests\Captures\easylap-rehearsal3.log` is
    played through `EasyLapFramer` (the read loop's framing, split out of
@@ -322,7 +350,7 @@ day: the layout overhaul is finished before the beta rather than after it
    it did on the night, and the A-Main's passes then go through
    `RaceControlSession` and must count the same laps. The session log keeps
    the decoder lines.
-8. **Split the two remaining giant methods.** `PopulateTabs`
+9. **Split the two remaining giant methods.** `PopulateTabs`
    (`MainForm.Pages.cs`, ~1,715 lines) and `BuildLayout`
    (`RaceControlControl.Layout.cs`, ~800 lines - mostly the flag actions
    now; the page itself is put together from the pieces at the end) each
@@ -363,7 +391,7 @@ read at all.
       Facebook. The questions, scoring guide, post and reply templates are in
       the project doc "HeatCaller beta club application".
 - [ ] Pick the first beta club, and find out which decoder it uses.
-- [ ] If it is I-Lap: bench-test `ILapClient` on a real unit first (Next, 3).
+- [ ] If it is I-Lap: bench-test `ILapClient` on a real unit first (Next, 7).
 - [ ] If it is MyLaps: MyLaps support becomes a beta requirement, and a job
       of its own - capture its output the way the EasyLap's was captured.
 
@@ -408,8 +436,9 @@ second project. Not WiX/MSI: too heavy.
 
 **Packaging**
 - [ ] **Self-contained build**: `dotnet publish -c Release -r win-x64
-      --self-contained true`, so a club installs nothing else. No trimming
-      (WinForms doesn't support it); ReadyToRun optional, for startup.
+      --self-contained true`, so a club installs nothing else. On .NET 10
+      first (Next, 5) - the runtime it bundles is the one the club gets.
+      No trimming (WinForms doesn't support it); ReadyToRun optional, for startup.
       Fonts, sound packs and music already copy beside the exe and are
       found through `AppContext.BaseDirectory` - no change needed.
 - [ ] **One version number.** `AppVersion.Number` is typed in by hand

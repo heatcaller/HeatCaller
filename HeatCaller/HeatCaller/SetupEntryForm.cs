@@ -170,6 +170,9 @@ public sealed class SetupEntryForm : Form
 
         DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
         WhereTimeGoes.LogWhenShown(this);
+
+        // Windows made from here are the ones showing it makes.
+        WhereTimeGoes.Built();
     }
 
     /// <summary>
