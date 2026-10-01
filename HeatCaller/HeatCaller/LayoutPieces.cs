@@ -259,6 +259,7 @@ internal sealed class PageStack : Panel
         protected override void OnLayout(LayoutEventArgs levent)
         {
             using var timed = WhereTimeGoes.Measure("PageStack column layout");
+            using var why = !WhereTimeGoes.Active ? default : WhereTimeGoes.Measure($"PageStack column layout for {levent.AffectedProperty ?? "nothing named"} of {levent.AffectedControl?.GetType().Name ?? "nothing"}");
 
             if (Parent is PageStack stack && Height != GetPreferredSize(new Size(Width, 0)).Height)
             {
@@ -2174,6 +2175,7 @@ internal sealed class Beside : Panel
         // dropped.
         if (AutoSize && Parent is not null && Height != LeastHeight(Width))
         {
+            using var asked = WhereTimeGoes.Measure("Beside asks its parent");
             Parent.PerformLayout(this, nameof(PreferredSize));
         }
 

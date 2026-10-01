@@ -153,40 +153,36 @@ internal static class WhereTimeGoes
 
         private static string MadeBy()
         {
+            // Every frame, Windows Forms' own included, from the one that
+            // asked for the handle out to this app's first: which call it was
+            // is in Windows Forms' frames, as often as not (1 Oct: the frames
+            // of this app alone said only "the constructor").
             var frames = new StackTrace(2, false).GetFrames();
-            var ours = new List<string>();
-            string? firstOutside = null;
+            var names = new List<string>();
+            var ours = 0;
 
             foreach (var frame in frames)
             {
-                if (frame.GetMethod() is not { DeclaringType: { } type } method)
+                if (frame.GetMethod() is not { DeclaringType: { } type } method
+                    || type == typeof(WhereTimeGoes) || type.DeclaringType == typeof(WhereTimeGoes))
                 {
                     continue;
                 }
 
-                var name = $"{type.Name}.{method.Name}";
+                names.Add($"{type.Name}.{method.Name}");
 
-                if (type.Namespace?.StartsWith("HeatCaller", StringComparison.Ordinal) == true)
+                if (type.Namespace?.StartsWith("HeatCaller", StringComparison.Ordinal) == true && ++ours == 3)
                 {
-                    if (type == typeof(WhereTimeGoes) || type.DeclaringType == typeof(WhereTimeGoes))
-                    {
-                        continue;
-                    }
-
-                    ours.Add(name);
-
-                    if (ours.Count == 8)
-                    {
-                        break;
-                    }
+                    break;
                 }
-                else if (ours.Count == 0 && firstOutside is null && !name.StartsWith("Control.", StringComparison.Ordinal) && !name.StartsWith("Form.", StringComparison.Ordinal))
+
+                if (names.Count == 30)
                 {
-                    firstOutside = name;
+                    break;
                 }
             }
 
-            return (firstOutside is null ? string.Empty : firstOutside + " <- ") + string.Join(" <- ", ours);
+            return string.Join(" <- ", names);
         }
 
         public TimeSpan Total => _total.Elapsed;
@@ -240,7 +236,7 @@ internal static class WhereTimeGoes
                 ? string.Empty
                 : "; layout by piece (time with what it called, calls): " + string.Join(", ", _called
                     .OrderByDescending(what => what.Value.Took)
-                    .Take(10)
+                    .Take(16)
                     .Select(what => $"{what.Key} {what.Value.Took.TotalSeconds:0.00} x{what.Value.Calls}"));
 
             var made = _madeBy is null ? string.Empty : $"; the window's handle was made by: {_madeBy}";

@@ -567,7 +567,13 @@ public sealed class SetupEntryForm : Form
             }
             else if (line.Editor is CheckBox check)
             {
-                var height = Math.Max(check.GetPreferredSize(Size.Empty).Height, Pieces.LineHeight(line.Text.Font));
+                // A line of the caption tall, its box in the middle. Not from
+                // the tick box's GetPreferredSize: Windows Forms measures a
+                // check box with its window, and asking made the window's
+                // handle while it was still being built - and every control
+                // added after that got its own at once (1 Oct). The box is
+                // never taller than a line (TickBox.Side) and has no caption.
+                var height = Math.Max(TickBox.Side + check.Padding.Vertical + 2, Pieces.LineHeight(line.Text.Font));
 
                 if (check.Height != height)
                 {
