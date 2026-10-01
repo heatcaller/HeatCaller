@@ -6,8 +6,10 @@ namespace HeatCaller.Tests;
 /// not showing stays held when its page is let go and is laid out the
 /// moment it is shown; and that the layout pieces made while the window is
 /// being built hold themselves until the building ends, or until the page
-/// they are in is let go - and not a moment longer; and that a window's
-/// own hold (HoldWhileBuilding) does the same, and nothing inside another.
+/// they are in is let go - and not a moment longer; that they are let go
+/// children first, so a container is laid out once however many of its
+/// parts ask it to be; and that a window's own hold (HoldWhileBuilding)
+/// does the same, and nothing inside another.
 ///
 /// Each is watched through a row of two buttons (Row): the second sits
 /// just past the first, so it moves when the row is laid out after the
@@ -248,6 +250,92 @@ public class LayoutFreezeTests
         first.Width = 80;
         Assert.Equal(80, second.Left);
     });
+
+    /// <summary>
+    /// Ten parts, each asking the container it is in to lay out again as
+    /// its own layout runs - as a line of the Setup Sheet that sizes itself
+    /// asks its column. Let go parents first, the container was laid out
+    /// again for each (eleven times); children first, each part asks while
+    /// the container is still held, and it is laid out once, when it is let
+    /// go (1 Oct).
+    /// </summary>
+    [Fact]
+    public void PiecesAreLetGoChildrenFirstSoTheirContainerIsLaidOutOnce() => Run(() =>
+    {
+        var container = new Counting();
+        var parts = new List<Asking>();
+        int containerBefore;
+        int[] partsBefore;
+
+        _now = "building";
+        LayoutFreeze.BeginBuilding();
+
+        try
+        {
+            LayoutFreeze.Adopt(container);
+            container.Size = new Size(400, 300);
+
+            for (var i = 0; i < 10; i++)
+            {
+                var part = new Asking();
+                LayoutFreeze.Adopt(part);
+                part.Size = new Size(100, 20);
+
+                // Something for the part to lay out when it is let go.
+                part.Controls.Add(new Button { Size = new Size(50, 20) });
+
+                container.Controls.Add(part);
+                parts.Add(part);
+            }
+
+            // Whatever was laid out as they were made - before they held.
+            containerBefore = container.Layouts;
+            partsBefore = parts.Select(part => part.Layouts).ToArray();
+        }
+        finally
+        {
+            _now = "letting go";
+            LayoutFreeze.EndBuilding(Array.Empty<Control>(), shown: null);
+        }
+
+        using (container)
+        {
+            Assert.False(LayoutFreeze.Building);
+
+            // Every part laid itself out as it was let go, and asked.
+            for (var i = 0; i < parts.Count; i++)
+            {
+                Assert.True(parts[i].Layouts > partsBefore[i], $"Part {i} was not laid out as it was let go.");
+            }
+
+            Assert.Equal(1, container.Layouts - containerBefore);
+        }
+    });
+
+    /// <summary>A panel that counts its layouts.</summary>
+    private sealed class Counting : Panel
+    {
+        public int Layouts { get; private set; }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            Layouts++;
+            base.OnLayout(levent);
+        }
+    }
+
+    /// <summary>A panel that asks the container it is in to lay out again whenever it lays itself out.</summary>
+    private sealed class Asking : Panel
+    {
+        public int Layouts { get; private set; }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            Layouts++;
+            base.OnLayout(levent);
+            Parent?.PerformLayout(this, nameof(PreferredSize));
+        }
+    }
 
     /// <summary>
     /// A row of two 50x20 buttons with no gaps, the second just past the

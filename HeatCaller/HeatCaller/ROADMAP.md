@@ -278,7 +278,23 @@ day: the layout overhaul is finished before the beta rather than after it
    docs check (page names, Next race is: graying, Drivers per heat - one
    rule now, `RaceEventStore.HeatSizeFor`: the day's, else the last race
    day's, else 8; `AppSettings.LastHeatSize` is no longer read - the
-   soundscape Apply message, the keys-lost list).
+   soundscape Apply message, the keys-lost list). b72-b75: the Setup
+   Sheet still took 4-5s with the hold, so it was timed (`WhereTimeGoes`:
+   each part of a slow window's opening, the theme pass by kind, the layout
+   pieces' own layouts and measuring, and who made the window's handle -
+   written to the session log at 0.5s or more, and on the window report's
+   Slowest line). Its drop-downs are made in the theme's dress (owner-drawn,
+   its colours), so the theme pass changes nothing on them: 5.5s -> 2.7s.
+   b76: the two causes the log showed next - (1) measuring a caption with
+   UseMnemonic on asks ShowKeyboardCues, which made the window's handle
+   mid-build, so all 360 controls got handles as they went in (every text
+   in the Setup Sheet now has UseMnemonic off); (2) the pieces made while
+   building are let go children first (as the designer does), so a line
+   that sizes itself asks its column while the column is still held, and
+   the column is laid out when it is let go rather than once per line -
+   it was laid out 162 times and the lines measured 60k times, letting go
+   parents first. Startup is unchanged by it: its pages are frozen and let
+   go by Thaw, which still goes parents first (HiddenTab relies on it).
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and

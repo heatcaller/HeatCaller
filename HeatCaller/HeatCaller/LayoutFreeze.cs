@@ -45,6 +45,18 @@ namespace HeatCaller;
 /// being held with their page, and the page on screen first is laid out
 /// when it is shown.
 ///
+/// The pieces made while building are let go children before parents, as
+/// the Windows Forms designer lets a window's containers go: each one lays
+/// itself out while the piece it is in, if that was made in the same
+/// building, is still held, so what it asks of it - to be measured again,
+/// as a line that sizes itself asks its column - is remembered rather than
+/// done, and the column lays out when it is let go, with every line in it,
+/// rather than once for each line that asked. Let go parents first, the
+/// column was laid out again for every line in it, each time measuring
+/// them all: the Setup Sheet's fifty-four lines asked it 162 times, and
+/// the lines were measured sixty thousand times, for most of a second of
+/// its opening (session log, 1 Oct).
+///
 /// Each container is held once, by one hold: a page held again takes the
 /// holds of its tabs back into its own.
 /// </summary>
@@ -78,9 +90,10 @@ internal static class LayoutFreeze
     /// <summary>
     /// For a window of its own being built: every layout piece made until
     /// the result is disposed holds its layout (Adopt), and is let go then,
-    /// parents first - so the window is laid out once, not once for every
-    /// part added to it. Inside a building already under way (MainForm's,
-    /// or an outer hold) it does nothing: that one lets them go.
+    /// children first (see the class notes) - so the window is laid out
+    /// once, not once for every part added to it. Inside a building already
+    /// under way (MainForm's, or an outer hold) it does nothing: that one
+    /// lets them go.
     ///
     /// Why: a window built of many pieces worked itself out again for every
     /// part put in it, and again for every face the theme pass changed - the
@@ -137,9 +150,10 @@ internal static class LayoutFreeze
     /// <summary>
     /// Ends the building. The page on screen, <paramref name="shown"/>, has
     /// the pieces made in it that are still holding themselves let go,
-    /// parents first; every other page in <paramref name="pages"/> is held
-    /// (Freeze) and takes over the pieces made in it; and every piece made
-    /// that is in none of them - part of a window of its own - is let go too.
+    /// children first (see the class notes); every other page in
+    /// <paramref name="pages"/> is held (Freeze) and takes over the pieces
+    /// made in it; and every piece made that is in none of them - part of a
+    /// window of its own - is let go too, children first likewise.
     /// </summary>
     public static void EndBuilding(IEnumerable<Control> pages, Control? shown)
     {
@@ -153,10 +167,11 @@ internal static class LayoutFreeze
 
         if (shown is not null)
         {
-            // Parents before children: the order a walk from the top meets
-            // them in.
+            // Children before parents: the reverse of the order a walk from
+            // the top meets them in.
             var inShown = new List<Control>();
             TakeAdopted(shown, inShown, adopted);
+            inShown.Reverse();
 
             foreach (var piece in inShown)
             {
@@ -180,8 +195,8 @@ internal static class LayoutFreeze
         }
 
         // What is left was made during the building but is not in a page:
-        // let go now, each parent before its children.
-        foreach (var piece in adopted.OrderBy(Depth).ToList())
+        // let go now, each child before its parent.
+        foreach (var piece in adopted.OrderByDescending(Depth).ToList())
         {
             if (!piece.IsDisposed)
             {
@@ -433,7 +448,7 @@ internal static class LayoutFreeze
         };
     }
 
-    /// <summary>How many parents a control has - so parents are let go before their children.</summary>
+    /// <summary>How many parents a control has - so the pieces made while building are let go children first.</summary>
     private static int Depth(Control control)
     {
         var depth = 0;

@@ -227,13 +227,13 @@ public sealed class SetupEntryForm : Form
         // The name typed on an existing entry counts too: a driver no longer
         // on file is not in the list, and would be cut short in the box.
         var who = new FieldRow();
-        who.Add(new Label { Text = "Driver:" }, _cmbDriver, Picker(_cmbDriver, DriverWidth, Result.DriverName));
-        who.Add(new Label { Text = "Track:" }, _cmbTrack, Picker(_cmbTrack, TrackWidth));
-        who.AddLast(new Label { Text = "Car:" }, _txtCar, () => UiLayout.AtTextSize(CarWidth));
+        who.Add(Caption("Driver:"), _cmbDriver, Picker(_cmbDriver, DriverWidth, Result.DriverName));
+        who.Add(Caption("Track:"), _cmbTrack, Picker(_cmbTrack, TrackWidth));
+        who.AddLast(Caption("Car:"), _txtCar, () => UiLayout.AtTextSize(CarWidth));
 
         var sheet = new FieldRow();
-        sheet.Add(new Label { Text = "Chassis sheet:" }, _cmbTemplate, Picker(_cmbTemplate, TemplateWidth));
-        sheet.AddLast(new Label { Text = "Ran in session:" }, _cmbSession, Picker(_cmbSession, SessionWidth));
+        sheet.Add(Caption("Chassis sheet:"), _cmbTemplate, Picker(_cmbTemplate, TemplateWidth));
+        sheet.AddLast(Caption("Ran in session:"), _cmbSession, Picker(_cmbSession, SessionWidth));
 
         return (who, sheet);
 
@@ -244,6 +244,23 @@ public sealed class SetupEntryForm : Form
             return () => Math.Max(UiLayout.AtTextSize(least), Pieces.PickerWidth(combo, ref measured, alsoFits));
         }
     }
+
+    /// <summary>
+    /// A caption with no shortcut letter (UseMnemonic off), as every text in
+    /// this window is made.
+    ///
+    /// Why: measuring a text that may have one asks whether the shortcut
+    /// letters are being shown (ShowKeyboardCues), and the first time a
+    /// control asks, Windows Forms asks the window it is in - making that
+    /// window's handle there and then, while it is still being built. With
+    /// the window's handle made, every control put in it after got a handle
+    /// of its own at once, and every style the theme pass changed made one
+    /// again: 360 handles made while the Setup Sheet was built, a second of
+    /// its opening (session log, 1 Oct - the window's handle "made by"
+    /// ShowKeyboardCues, from measuring a caption as the page went in).
+    /// Nothing here has a shortcut letter to show.
+    /// </summary>
+    private static Label Caption(string text) => new() { Text = text, UseMnemonic = false };
 
     private void BuildCanvas()
     {
@@ -263,14 +280,17 @@ public sealed class SetupEntryForm : Form
     /// </summary>
     private SplitBar BuildButtons()
     {
-        var btnSave = new Button { Text = "Save" };
+        // No shortcut letters, so measuring these makes no window handle -
+        // see Caption.
+        var btnSave = new Button { Text = "Save", UseMnemonic = false };
         btnSave.Click += BtnSave_Click;
 
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, UseMnemonic = false };
 
         var lblHint = new Label
         {
             Text = "Click a callout on the diagram to jump to its field. Filled callouts are highlighted.",
+            UseMnemonic = false,
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -486,6 +506,9 @@ public sealed class SetupEntryForm : Form
                 var check = new ThemedCheckBox
                 {
                     Checked = string.Equals(current, "true", StringComparison.OrdinalIgnoreCase),
+
+                    // Measured with no window handle made - see Caption.
+                    UseMnemonic = false,
                 };
                 check.CheckedChanged += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
                 editor = check;
