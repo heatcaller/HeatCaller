@@ -30,14 +30,52 @@ internal static class WhereTimeGoes
     /// <summary>True while a window is being timed on this thread.</summary>
     public static bool Active => _timing is not null;
 
-    /// <summary>Starts timing a window called <paramref name="name"/> - ending any before it.</summary>
-    public static void Start(string name) => _timing = new Clock(name);
+    /// <summary>
+    /// Starts timing a window called <paramref name="name"/> - ending any
+    /// before it. Each part then also says how many of
+    /// <paramref name="window"/>'s controls have a window handle by its end:
+    /// a handle made early is made again whenever a style it was made with
+    /// changes, which the theme pass does to every drop-down.
+    /// </summary>
+    public static void Start(string name, Control? window = null) => _timing = new Clock(name, window);
 
     /// <summary>Notes that the part called <paramref name="part"/> has just ended.</summary>
     public static void Mark(string part) => _timing?.Mark(part);
 
     /// <summary>Adds <paramref name="elapsed"/> to the theme pass's time for controls of <paramref name="kind"/> (AppTheme.ApplyRecursively).</summary>
-    public static void Styled(Type kind, TimeSpan elapsed) => _timing?.Styled(kind, elapsed);
+    public static void Styled(Type kind, TimeSpan elapsed) => _timing?.Styled(kind.Name, elapsed);
+
+    /// <summary>Adds <paramref name="elapsed"/> to the time noted under <paramref name="what"/> - a step inside styling one kind of control, say.</summary>
+    public static void Styled(string what, TimeSpan elapsed) => _timing?.Styled(what, elapsed);
+
+    /// <summary>
+    /// Times what runs until the result is disposed, and adds it, and one
+    /// call, under <paramref name="what"/> - for the layout pieces' own
+    /// layouts and measuring, which call one another, so each counts the
+    /// time of what it called too. Nothing while no window is being timed.
+    /// </summary>
+    public static Span Measure(string what) => _timing is null ? default : new Span(what, Stopwatch.GetTimestamp());
+
+    /// <summary>A stretch of time being measured - see Measure.</summary>
+    public readonly struct Span : IDisposable
+    {
+        private readonly string? _what;
+        private readonly long _started;
+
+        public Span(string what, long started)
+        {
+            _what = what;
+            _started = started;
+        }
+
+        public void Dispose()
+        {
+            if (_what is not null)
+            {
+                _timing?.Called(_what, Stopwatch.GetElapsedTime(_started));
+            }
+        }
+    }
 
     /// <summary>
     /// Writes the timing to the session log once <paramref name="window"/> is
@@ -85,20 +123,49 @@ internal static class WhereTimeGoes
         private readonly Stopwatch _part = Stopwatch.StartNew();
         private readonly List<(string Part, TimeSpan Took)> _parts = new();
         private readonly Dictionary<string, TimeSpan> _styled = new();
+        private readonly Dictionary<string, (TimeSpan Took, int Calls)> _called = new();
+        private readonly Control? _window;
 
-        public Clock(string name) => _name = name;
+        public Clock(string name, Control? window)
+        {
+            _name = name;
+            _window = window;
+        }
 
         public TimeSpan Total => _total.Elapsed;
 
         public void Mark(string part)
         {
-            _parts.Add((part, _part.Elapsed));
+            var took = _part.Elapsed;
+
+            _parts.Add((_window is null ? part : $"{part} ({Handles(_window)} handles)", took));
+
+            // Counting the handles is not this part's time.
             _part.Restart();
         }
 
-        public void Styled(Type kind, TimeSpan elapsed)
+        public void Styled(string what, TimeSpan elapsed)
         {
-            _styled[kind.Name] = _styled.TryGetValue(kind.Name, out var before) ? before + elapsed : elapsed;
+            _styled[what] = _styled.TryGetValue(what, out var before) ? before + elapsed : elapsed;
+        }
+
+        public void Called(string what, TimeSpan elapsed)
+        {
+            _called[what] = _called.TryGetValue(what, out var before)
+                ? (before.Took + elapsed, before.Calls + 1)
+                : (elapsed, 1);
+        }
+
+        private static int Handles(Control control)
+        {
+            var count = control.IsHandleCreated ? 1 : 0;
+
+            foreach (Control child in control.Controls)
+            {
+                count += Handles(child);
+            }
+
+            return count;
         }
 
         public string Describe()
@@ -109,10 +176,17 @@ internal static class WhereTimeGoes
                 ? string.Empty
                 : "; theme pass by kind: " + string.Join(", ", _styled
                     .OrderByDescending(kind => kind.Value)
-                    .Take(6)
+                    .Take(10)
                     .Select(kind => $"{kind.Key} {kind.Value.TotalSeconds:0.00}"));
 
-            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}.";
+            var called = _called.Count == 0
+                ? string.Empty
+                : "; layout by piece (time with what it called, calls): " + string.Join(", ", _called
+                    .OrderByDescending(what => what.Value.Took)
+                    .Take(10)
+                    .Select(what => $"{what.Key} {what.Value.Took.TotalSeconds:0.00} x{what.Value.Calls}"));
+
+            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}.";
         }
     }
 }

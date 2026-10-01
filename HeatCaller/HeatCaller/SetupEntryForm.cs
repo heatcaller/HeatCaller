@@ -102,7 +102,7 @@ public sealed class SetupEntryForm : Form
         // How the time goes while it opens, for the session log - see
         // WhereTimeGoes. It took 4 to 5 seconds, and holding its layout
         // while it was built did not change that.
-        WhereTimeGoes.Start("Setup Sheet");
+        WhereTimeGoes.Start("Setup Sheet", this);
 
         _templates = templates;
         _history = history;
@@ -418,9 +418,15 @@ public sealed class SetupEntryForm : Form
         {
             case SetupFieldKind.Choice:
             {
+                // Drawn by the theme (AppTheme.StyleComboBox) - owner-drawn
+                // from the start, so the theme pass need not change it later:
+                // a change of DrawMode on a drop-down that has its window
+                // makes that window again, items and all.
                 var combo = new ComboBox
                 {
                     DropDownStyle = ComboBoxStyle.DropDownList,
+                    DrawMode = DrawMode.OwnerDrawFixed,
+                    FlatStyle = FlatStyle.Standard,
                 };
                 combo.Items.Add(NotSet);
                 foreach (var option in field.Options)

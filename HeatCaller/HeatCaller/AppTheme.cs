@@ -1453,9 +1453,24 @@ public static class AppTheme
         // WM_PAINT for the closed field so no native frame is ever drawn.
         // The FlatStyle below therefore only matters for editable combos,
         // which the skin deliberately leaves alone.
+        // Each step timed while a slow window is (WhereTimeGoes): styling
+        // the drop-downs was most of the Setup Sheet's opening.
+        var step = WhereTimeGoes.Active ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+
+        void Stepped(string what)
+        {
+            if (step != 0L)
+            {
+                WhereTimeGoes.Styled("ComboBox: " + what, System.Diagnostics.Stopwatch.GetElapsedTime(step));
+                step = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+        }
+
         comboBox.FlatStyle = FlatStyle.Standard;
+        Stepped("flat style");
         comboBox.BackColor = Surface;
         comboBox.ForeColor = TextDark;
+        Stepped("colours");
 
         // Only non-editable combos need owner-drawing. An editable one has a
         // real text-entry field that owner-draw never touches, and which
@@ -1475,6 +1490,8 @@ public static class AppTheme
             comboBox.DrawItem += ComboBoxDrawItem;
         }
 
+        Stepped(comboBox.IsHandleCreated ? "draw mode (had a handle)" : "draw mode");
+
         // The closed-field skin now covers editable combos too. It was once
         // DropDownList-only, which left an editable combo (Venue, Track
         // layout on the event page) wearing the native white 3D frame next
@@ -1482,8 +1499,10 @@ public static class AppTheme
         // chevron for both kinds and leaves the editable one's text to its
         // own child edit window - see its remarks.
         ComboBoxSkin.Attach(comboBox);
+        Stepped("skin");
 
         EnableDoubleBuffering(comboBox);
+        Stepped("buffering");
     }
 
     private static void ComboBoxDrawItem(object? sender, DrawItemEventArgs e)

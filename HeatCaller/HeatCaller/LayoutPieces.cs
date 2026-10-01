@@ -129,6 +129,8 @@ internal sealed class PageStack : Panel
     /// </summary>
     protected override void OnLayout(LayoutEventArgs levent)
     {
+        using var timed = WhereTimeGoes.Measure("PageStack layout");
+
         // Laid out already while the constructor set the docking and the
         // margins, before the column was there to place.
         if (_column is null)
@@ -229,6 +231,8 @@ internal sealed class PageStack : Panel
         /// </summary>
         public override Size GetPreferredSize(Size proposedSize)
         {
+            using var timed = WhereTimeGoes.Measure("PageStack column measure");
+
             var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
             var total = 0;
 
@@ -254,6 +258,8 @@ internal sealed class PageStack : Panel
 
         protected override void OnLayout(LayoutEventArgs levent)
         {
+            using var timed = WhereTimeGoes.Measure("PageStack column layout");
+
             if (Parent is PageStack stack && Height != GetPreferredSize(new Size(Width, 0)).Height)
             {
                 stack.PerformLayout();
@@ -429,6 +435,8 @@ internal sealed class FillPage : Panel
     /// </summary>
     protected override void OnLayout(LayoutEventArgs levent)
     {
+        using var timed = WhereTimeGoes.Measure("FillPage layout");
+
         UpdateScrollRange();
 
         // The range was worked out at the width the panel had before this
@@ -2103,6 +2111,8 @@ internal sealed class Beside : Panel
     /// </summary>
     public int LeastHeight(int width)
     {
+        using var timed = WhereTimeGoes.Measure("Beside least height");
+
         var side = MeasureSide();
         var mainWidth = MainWidth(width, side);
         var main = 0;
@@ -2144,6 +2154,8 @@ internal sealed class Beside : Panel
 
     protected override void OnLayout(LayoutEventArgs levent)
     {
+        using var timed = WhereTimeGoes.Measure("Beside layout");
+
         // Laid out already while the constructor set the margins, before
         // the column on the left was there to place.
         if (_main is null)
@@ -2730,6 +2742,8 @@ internal sealed class StatusLine : Panel
     /// <summary>How tall the two come to at the width proposed. With none, the text on one line.</summary>
     public override Size GetPreferredSize(Size proposedSize)
     {
+        using var timed = WhereTimeGoes.Measure("StatusLine measure");
+
         // A label treats a width of 1 as none at all; so does this.
         var width = proposedSize.Width is > 1 and < int.MaxValue / 4
             ? proposedSize.Width
@@ -2742,6 +2756,8 @@ internal sealed class StatusLine : Panel
 
     protected override void OnLayout(LayoutEventArgs levent)
     {
+        using var timed = WhereTimeGoes.Measure("StatusLine layout");
+
         base.OnLayout(levent);
 
         Place();
