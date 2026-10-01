@@ -130,6 +130,63 @@ internal static class WhereTimeGoes
         {
             _name = name;
             _window = window;
+
+            // Who made the window's handle, when it is made before the
+            // window is shown: everything added to a window that has its
+            // handle gets one at once, and every style change after that
+            // makes it again - the Setup Sheet's 360 handles were all made
+            // while it was being built (1 Oct).
+            if (window is { IsHandleCreated: false })
+            {
+                void Made(object? sender, EventArgs e)
+                {
+                    window.HandleCreated -= Made;
+                    _madeBy = MadeBy();
+                }
+
+                window.HandleCreated += Made;
+            }
+        }
+
+        /// <summary>The methods of this app that led to the window's handle being made, innermost first - null until it is.</summary>
+        private string? _madeBy;
+
+        private static string MadeBy()
+        {
+            var frames = new StackTrace(2, false).GetFrames();
+            var ours = new List<string>();
+            string? firstOutside = null;
+
+            foreach (var frame in frames)
+            {
+                if (frame.GetMethod() is not { DeclaringType: { } type } method)
+                {
+                    continue;
+                }
+
+                var name = $"{type.Name}.{method.Name}";
+
+                if (type.Namespace?.StartsWith("HeatCaller", StringComparison.Ordinal) == true)
+                {
+                    if (type == typeof(WhereTimeGoes) || type.DeclaringType == typeof(WhereTimeGoes))
+                    {
+                        continue;
+                    }
+
+                    ours.Add(name);
+
+                    if (ours.Count == 8)
+                    {
+                        break;
+                    }
+                }
+                else if (ours.Count == 0 && firstOutside is null && !name.StartsWith("Control.", StringComparison.Ordinal) && !name.StartsWith("Form.", StringComparison.Ordinal))
+                {
+                    firstOutside = name;
+                }
+            }
+
+            return (firstOutside is null ? string.Empty : firstOutside + " <- ") + string.Join(" <- ", ours);
         }
 
         public TimeSpan Total => _total.Elapsed;
@@ -186,7 +243,9 @@ internal static class WhereTimeGoes
                     .Take(10)
                     .Select(what => $"{what.Key} {what.Value.Took.TotalSeconds:0.00} x{what.Value.Calls}"));
 
-            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}.";
+            var made = _madeBy is null ? string.Empty : $"; the window's handle was made by: {_madeBy}";
+
+            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}{made}.";
         }
     }
 }

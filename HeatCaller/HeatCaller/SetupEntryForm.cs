@@ -418,15 +418,18 @@ public sealed class SetupEntryForm : Form
         {
             case SetupFieldKind.Choice:
             {
-                // Drawn by the theme (AppTheme.StyleComboBox) - owner-drawn
-                // from the start, so the theme pass need not change it later:
-                // a change of DrawMode on a drop-down that has its window
-                // makes that window again, items and all.
+                // In the theme's dress (AppTheme.StyleComboBox) from the
+                // start - owner-drawn, and in its colours - so the theme pass
+                // finds nothing to change: a drop-down that already has its
+                // window made it again for each, items and all, and styling
+                // the sheet's forty took over two seconds (1 Oct).
                 var combo = new ComboBox
                 {
                     DropDownStyle = ComboBoxStyle.DropDownList,
                     DrawMode = DrawMode.OwnerDrawFixed,
                     FlatStyle = FlatStyle.Standard,
+                    BackColor = AppTheme.Surface,
+                    ForeColor = AppTheme.TextDark,
                 };
                 combo.Items.Add(NotSet);
                 foreach (var option in field.Options)
