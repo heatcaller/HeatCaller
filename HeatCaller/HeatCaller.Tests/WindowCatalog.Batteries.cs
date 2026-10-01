@@ -37,7 +37,8 @@ internal static partial class WindowCatalog
     };
 
     /// <summary>
-    /// Packs in rotation, in the order the store lists them (by label):
+    /// Packs in rotation, in the order the store lists them (by label, with
+    /// the numbers in it read as numbers - NaturalOrder):
     /// every third with a long label and a note long enough to run past the
     /// list's edge, and some others with a note of two lines - the box they
     /// are typed in takes several - so the picker's lines come in every
@@ -55,7 +56,7 @@ internal static partial class WindowCatalog
                         ? "Bought 2025\r\nNew connector fitted in March"
                         : string.Empty,
             })
-            .OrderBy(pack => pack.Label)
+            .OrderBy(pack => pack.Label, NaturalOrder.Instance)
             .ToList();
 
     /// <summary>

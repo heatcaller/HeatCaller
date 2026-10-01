@@ -251,6 +251,19 @@ day: the layout overhaul is finished before the beta rather than after it
    tables say why (`EmptyNote`), the skins draw into window pictures too
    (WM_PRINT - the pictures used to show Windows' own field), chassis
    callouts keep off each other and the dots, and a dozen smaller ones.
+   b69 measured (1 Oct, Asher's machine): startup screen 61s -> 16s, Ctrl +/-
+   32-36s frozen -> 5-6s, the page sweep 46s -> 24s a size. b70: the 5-6s was
+   the new face and the theme pass going through all thirty pages - so only
+   the page on screen takes a new text size, and each other page catches up
+   when it is opened (`MainForm.CatchUpTextSize`: each page keeps a face of
+   its own, which stops the window's at it; `AppTheme.ApplyRecursively(root,
+   leaveInside)`); at startup only the first page is themed. The startup
+   line now says how long each part of the building took. Also b70: a grid's
+   kept column widths are worked out again when its cells' face changes
+   (Pace's best lap and fade were cut at 200% - measured before the grid had
+   its face), chassis labels try either side when up and down are full, and
+   the window report's Slowest line splits each time into building, sizing
+   and checking.
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and

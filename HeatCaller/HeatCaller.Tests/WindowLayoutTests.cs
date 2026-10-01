@@ -261,8 +261,8 @@ internal sealed class WindowSweepResult
 
     public List<(string What, string FirstAt)> Problems => Sweep.Problems;
 
-    /// <summary>How long each window took at each size - its building, sizing, checking and putting away - for the report's slowest.</summary>
-    public List<(string Where, TimeSpan Took)> Timed { get; } = new();
+    /// <summary>How long each window took at each size - its building, sizing, checking and putting away - for the report's slowest, with how long each of those parts took.</summary>
+    public List<(string Where, TimeSpan Took, string Parts)> Timed { get; } = new();
 }
 
 /// <summary>Builds each window at each size, inside a screen-sized panel of an off-screen window, and measures it.</summary>
@@ -361,12 +361,26 @@ internal static class WindowSweep
             _doing = "building";
 
             var took = Stopwatch.StartNew();
+
+            // Each part of the turn, for the report's Slowest line: a window
+            // slow to build is slow in the app; one slow to check is only
+            // slow in this test.
+            var parts = new List<string>();
+            var part = Stopwatch.StartNew();
+
+            void PartDone(string what)
+            {
+                parts.Add($"{what} {part.Elapsed.TotalSeconds:0.0}");
+                part.Restart();
+            }
+
             Form? window = null;
             Panel? inside = null;
 
             try
             {
                 window = build();
+                PartDone("building");
                 _doing = "sizing";
 
                 // On screen when it is sized, as the window counts as shown
@@ -390,6 +404,7 @@ internal static class WindowSweep
 
                 var shown = inside;
 
+                PartDone("sizing");
                 _doing = "checking";
 
                 var found = LayoutAudit.Check(shown, name, Settle, where =>
@@ -404,6 +419,7 @@ internal static class WindowSweep
 
                 result.Findings.AddRange(found.Select(finding => new SweepFinding(view, name, finding)));
                 result.Measured++;
+                PartDone(viewPictures is null ? "checking" : "checking and pictures");
             }
             catch (Exception ex)
             {
@@ -418,7 +434,8 @@ internal static class WindowSweep
                 window?.Dispose();
                 Settle();
 
-                result.Timed.Add(($"{view.Name}: {name}", took.Elapsed));
+                PartDone("putting away");
+                result.Timed.Add(($"{view.Name}: {name}", took.Elapsed, string.Join(", ", parts)));
                 _doing = string.Empty;
             }
         }
@@ -501,7 +518,7 @@ internal static class WindowReport
             text.AppendLine("Slowest: " + string.Join(", ", sweep.Timed
                 .OrderByDescending(timed => timed.Took)
                 .Take(8)
-                .Select(timed => $"{timed.Where} {timed.Took.TotalSeconds:0.0}s")) + ".");
+                .Select(timed => $"{timed.Where} {timed.Took.TotalSeconds:0.0}s ({timed.Parts})")) + ".");
         }
 
         if (pictures is not null)

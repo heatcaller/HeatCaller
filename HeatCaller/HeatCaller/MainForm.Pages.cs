@@ -9,6 +9,29 @@ namespace HeatCaller;
 /// </summary>
 public partial class MainForm
 {
+    /// <summary>Times the window's building, part by part, for the session log's "[startup] Pages built in" line - null once it is built.</summary>
+    private System.Diagnostics.Stopwatch? _startupClock;
+
+    /// <summary>Each part of the building and how long it took - see StartupMark.</summary>
+    private readonly List<(string Part, double Seconds)> _startupMarks = new();
+
+    /// <summary>
+    /// Notes how long the part of the building that has just ended took,
+    /// for the session log - so a slow start says which part was slow
+    /// rather than leaving it to be guessed (Asher, 30 Sep: over a minute;
+    /// 1 Oct: 14s). Nothing once the window is built.
+    /// </summary>
+    private void StartupMark(string part)
+    {
+        if (_startupClock is not { } clock)
+        {
+            return;
+        }
+
+        _startupMarks.Add((part, clock.Elapsed.TotalSeconds));
+        clock.Restart();
+    }
+
     /// <summary>
     /// Creates one instance of each converted screen and docks it into its
     /// tab. Each used to be its own Form, opened fresh (and disposed) every
@@ -105,6 +128,8 @@ public partial class MainForm
         // edited from the dialog on Driver Profiles while this page sits in
         // the background.
         _navRefreshHooks["Classes"] = classes.RefreshAll;
+
+        StartupMark("Race Control, Driver Profiles and Classes");
 
         // --- Race Day and Championship ---
         //
@@ -393,6 +418,8 @@ public partial class MainForm
 
         pageSetupLog.Controls.Add(garage);
         _navRefreshHooks["Garage"] = garage.RefreshAll;
+
+        StartupMark("Race Day to Garage");
 
         // --- Race Analytics ---
         //
@@ -1032,6 +1059,8 @@ public partial class MainForm
 
         var pageGhosts = new Panel();
         ConfigurePage(pageGhosts);
+        StartupMark("Race Analytics, Championship and Next Steps");
+
         var ghostControl = new GhostControl(_ghostStore, _profiles, _sessionHistory, _undo) { Dock = DockStyle.Fill };
         pageGhosts.Controls.Add(ghostControl);
 
@@ -1134,6 +1163,8 @@ public partial class MainForm
 
             OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Running \"{round.RoundLabel}\" as a demo.");
         };
+
+        StartupMark("Practice, Ghost Cars and Demo Mode");
 
         // Voice Announcements hosts a small internal sub-nav: general
         // voice settings, and Rivalries (custom lines for specific driver
@@ -1256,6 +1287,8 @@ public partial class MainForm
 
         _navRefreshHooks["Voice"] = () => rivalries.RefreshDriverCombos();
 
+        StartupMark("Voice");
+
         // Sound Effects hosts the audio sub-nav: discrete effects, the
         // continuous ambience beds, and per-driver lap cues. Grouped because
         // all three are "what the app sounds like", and Lap Beeps never
@@ -1350,6 +1383,8 @@ public partial class MainForm
         // change while the page is out of sight - an undo, most often - so it
         // re-reads them each time it comes into view.
         _navRefreshHooks["Themes"] = () => _looksControl.RefreshAll();
+
+        StartupMark("Sounds and Themes");
 
         var sponsors = new SponsorsControl(_sponsors, _undo) { Dock = DockStyle.Fill };
         pageSponsors.Controls.Add(sponsors);
@@ -1745,11 +1780,15 @@ public partial class MainForm
 
         AppTheme.StyleToolTip(_footerTooltip);
 
+        StartupMark("the other pages");
+
         // The theme pass, once: ApplyFontScale runs it (with the sidebar's
         // chrome put back after it), in the window's own face - which it
         // sets first. It used to be run here as well, just before, which
         // was the whole window themed twice at every start.
         ApplyFontScale();
+
+        StartupMark("text size and theme");
 
         btnMuteToggle.Click += (_, _) => SetAllSoundMuted(!_announcer.Muted);
 
@@ -1768,6 +1807,8 @@ public partial class MainForm
         _navRaceNight = RaceNightWanted;
 
         RebuildNav();
+
+        StartupMark("first page");
 
         // After the window is actually up: the pages' handles are made in
         // the window's, which does not exist while it is still being built.

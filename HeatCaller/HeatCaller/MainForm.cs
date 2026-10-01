@@ -1114,6 +1114,7 @@ public partial class MainForm : Form
         // finally: a page left holding its layout would stay blank. Timed
         // for the session log, which is how a slow start gets found.
         var building = System.Diagnostics.Stopwatch.StartNew();
+        _startupClock = System.Diagnostics.Stopwatch.StartNew();
         LayoutFreeze.BeginBuilding();
 
         try
@@ -1127,7 +1128,13 @@ public partial class MainForm : Form
                 _navItems.FirstOrDefault(item => item.Name == _shownPage)?.Page);
         }
 
-        OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Pages built in {building.Elapsed.TotalSeconds:0.0}s.");
+        StartupMark("letting go");
+
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Pages built in {building.Elapsed.TotalSeconds:0.0}s"
+            + (_startupMarks.Count > 0 ? " - " + string.Join(", ", _startupMarks.Select(mark => $"{mark.Part} {mark.Seconds:0.0}s")) : string.Empty)
+            + ".");
+
+        _startupClock = null;
 
         WireRaceDayService();
 

@@ -134,6 +134,26 @@ public partial class MainForm
             LayoutFreeze.Freeze(shown!);
         }
 
+        // Only the page on screen takes the new size now; every other page
+        // keeps the face it has and catches up when it is next opened - see
+        // CatchUpTextSize. A page keeps a face of its own for that (a face
+        // set on a control stops the window's reaching the controls in it),
+        // set here to the one it already has, which changes nothing in it.
+        var behind = new HashSet<Control>();
+
+        foreach (var item in _navItems)
+        {
+            if (!ReferenceEquals(item.Page, shown))
+            {
+                if (_pagesWithOwnFace.Add(item.Page))
+                {
+                    item.Page.Font = item.Page.Font;
+                }
+
+                behind.Add(item.Page);
+            }
+        }
+
         NoRedraw.Begin(pnlContent);
 
         try
@@ -144,11 +164,27 @@ public partial class MainForm
             {
                 Font = AppTheme.BodyFont;
 
+                // The page on screen, which keeps a face of its own too once
+                // it has been away: given the window's.
+                if (shown is not null)
+                {
+                    shown.Font = Font;
+                    _pagesWithOwnFace.Add(shown);
+                }
+
                 // Before the theme pass lays the window out again, so the page
                 // beside the sidebar is laid out once, at the width it keeps.
                 PlaceSidebar();
 
-                AppTheme.ApplyRecursively(this);
+                // The sidebar, the header and footer and the page on screen.
+                // Not inside the other pages: each is themed at this size when
+                // it is next opened (CatchUpTextSize).
+                AppTheme.ApplyRecursively(this, leaveInside: behind);
+
+                if (shown is not null)
+                {
+                    _pageTextSize[shown] = AppTheme.FontScale;
+                }
 
                 // The recursive pass paints the sidebar in the CONTENT theme's
                 // colours, and the sidebar is deliberately not in the content
@@ -197,6 +233,46 @@ public partial class MainForm
         }
 
         Invalidate(true);
+    }
+
+    /// <summary>The pages given a face of their own, so the window's no longer reaches into them - see ApplyFontScale.</summary>
+    private readonly HashSet<Control> _pagesWithOwnFace = new();
+
+    /// <summary>The text size each page was last themed at - see CatchUpTextSize. A page not in here has never been.</summary>
+    private readonly Dictionary<Control, float> _pageTextSize = new();
+
+    /// <summary>
+    /// Brings a page about to be shown up to the text size in use: the
+    /// window's face, and the theme pass, which gives the controls that wear
+    /// a face of their own (buttons, lists, grids...) theirs at this size.
+    /// Nothing, for a page that has both already.
+    ///
+    /// Why: a text size change (Ctrl + and -) used to push the new face
+    /// through all thirty pages and theme every control in them, which left
+    /// the window "Not Responding" for 5 to 6 seconds at each change even
+    /// once nothing was laid out (the session log, 30 Sep: "Text size 155% -
+    /// 5.9s") - and the same pass, at startup, was a third of the time the
+    /// startup screen was up. Only the page on screen is seen; the others
+    /// now take their turn as they are opened. Called from ShowPage while
+    /// the page is still held (LayoutFreeze), so none of this lays anything
+    /// out until the page is let go, once.
+    /// </summary>
+    private void CatchUpTextSize(Control page)
+    {
+        // The window's face, as the page's own: every control in the page
+        // that does not wear a face of its own follows it when it is another
+        // - and when it is the same, nothing happens, but the page keeps it
+        // as its own, so the next change of size stops at it (ApplyFontScale).
+        page.Font = Font;
+        _pagesWithOwnFace.Add(page);
+
+        if (_pageTextSize.TryGetValue(page, out var themedAt) && Math.Abs(themedAt - AppTheme.FontScale) < 0.001f)
+        {
+            return;
+        }
+
+        AppTheme.ApplyRecursively(page);
+        _pageTextSize[page] = AppTheme.FontScale;
     }
 
     /// <summary>Set once the page search's handlers are wired, so a restyle doesn't add them again.</summary>

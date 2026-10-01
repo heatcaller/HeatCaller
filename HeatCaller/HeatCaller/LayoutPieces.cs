@@ -3075,11 +3075,29 @@ internal static class Pieces
     /// </summary>
     internal static void KeepHeadingsWhole(DataGridView grid, params (string Column, string Widest)[] widest)
     {
-        if (!Kept.TryGetValue(grid, out _))
+        if (!Kept.TryGetValue(grid, out var kept))
         {
-            Kept.Add(grid, new object());
+            kept = new KeptHeadings();
+            Kept.Add(grid, kept);
             grid.SizeChanged += (_, _) => KeepFillWeights(grid);
+
+            // Again when the face its cells are drawn in changes - see
+            // KeptHeadings.
+            void FaceMayHaveChanged(object? sender, EventArgs e)
+            {
+                if (!Equals(CellFace(grid), kept.Face) || grid.DefaultCellStyle.Padding != kept.Padding)
+                {
+                    KeepHeadingsWhole(grid, kept.Widest);
+                }
+            }
+
+            grid.FontChanged += FaceMayHaveChanged;
+            grid.DefaultCellStyleChanged += FaceMayHaveChanged;
         }
+
+        kept.Widest = widest;
+        kept.Face = CellFace(grid);
+        kept.Padding = grid.DefaultCellStyle.Padding;
 
         // The weight each column was built with, kept the first time it is
         // seen - see KeepFillWeights.
@@ -3134,8 +3152,34 @@ internal static class Pieces
         return least;
     }
 
-    /// <summary>The grids given KeepHeadingsWhole, each watched for a new size once.</summary>
-    private static readonly ConditionalWeakTable<DataGridView, object> Kept = new();
+    /// <summary>The grids given KeepHeadingsWhole, each watched for a new size and a new face once.</summary>
+    private static readonly ConditionalWeakTable<DataGridView, KeptHeadings> Kept = new();
+
+    /// <summary>
+    /// What a grid was last given KeepHeadingsWhole with, and the face its
+    /// cells were in then, and the room round their text.
+    ///
+    /// A column's widest value is measured in the face its cells are drawn
+    /// in, and a grid often has it only later: Pace kept its columns before
+    /// the grid was on its page (so in Windows' own small face, which an
+    /// unplaced control has) and before the theme pass gave its cells the
+    /// body face - and its best lap and fade were "11..." and "-..." at 200%
+    /// (Pace window, layout pictures, 1 Oct). So a grid is given it again
+    /// whenever that face changes - or the cells' padding, which the theme
+    /// pass sets after their face (AppTheme.StyleGrid), and which a widest
+    /// value is kept wide enough for too (ColumnLeast).
+    /// </summary>
+    private sealed class KeptHeadings
+    {
+        public (string Column, string Widest)[] Widest = Array.Empty<(string, string)>();
+
+        public Font? Face;
+
+        public Padding Padding;
+    }
+
+    /// <summary>The face a grid's cells are drawn in, unless a column has one of its own.</summary>
+    private static Font CellFace(DataGridView grid) => grid.DefaultCellStyle.Font ?? grid.Font;
 
     /// <summary>
     /// The fill weight each column of those grids was built with. Kept per

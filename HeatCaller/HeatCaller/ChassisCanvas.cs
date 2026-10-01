@@ -575,16 +575,103 @@ public sealed class ChassisCanvas : Control
             }
             else
             {
-                // Whichever way is the shorter move.
-                var below = Clear(wanted, down: true);
-                var above = Clear(wanted, down: false);
-
-                box = below is { } b && (above is not { } a || b.Y - wanted.Y <= wanted.Y - a.Y) ? b
-                    : above ?? wanted;
+                box = Settle(wanted);
             }
 
             boxes[point.Id] = box;
             placed.Add(box);
+
+            // The nearest place clear of every label placed and every dot:
+            // straight up or down from where it is wanted, or from a little
+            // to either side of it when a column of labels has no room left
+            // (a sheet with many long names, at a larger text size - layout
+            // pictures, 1 Oct, where up and down alone left labels on each
+            // other and on dots). A move sideways counts for a bit more than
+            // the same move up or down, so a label keeps to its own side.
+            // When nowhere is clear, LeastCovered.
+            Rectangle Settle(Rectangle want)
+            {
+                Rectangle? best = null;
+                var bestCost = int.MaxValue;
+
+                foreach (var dx in Sideways(want.Width))
+                {
+                    // Nothing this far across can beat what is found already.
+                    if (Math.Abs(dx) * 3 / 2 >= bestCost)
+                    {
+                        continue;
+                    }
+
+                    var start = Keep(new Rectangle(want.X + dx, want.Y, want.Width, want.Height), room);
+
+                    foreach (var down in new[] { true, false })
+                    {
+                        if (Clear(start, down) is { } found)
+                        {
+                            var cost = Math.Abs(found.X - want.X) * 3 / 2 + Math.Abs(found.Y - want.Y);
+
+                            if (cost < bestCost)
+                            {
+                                best = found;
+                                bestCost = cost;
+                            }
+                        }
+                    }
+
+                    // Where it is wanted, and clear: the usual case, and the
+                    // end of it (this runs at every paint and mouse move).
+                    if (bestCost == 0)
+                    {
+                        break;
+                    }
+                }
+
+                return best ?? LeastCovered(want);
+            }
+
+            // When nowhere near is clear: the place that best weighs how
+            // much of the others and the dots the label covers (with the
+            // same gap round it as Clear keeps) against how far it moves -
+            // a pixel moved counting as half a column of the label covered,
+            // so it does not cross the diagram to save a sliver.
+            Rectangle LeastCovered(Rectangle want)
+            {
+                var best = want;
+                var bestScore = long.MaxValue;
+                var step = Math.Max(4, want.Height / 2);
+                var perPixel = Math.Max(1, want.Height / 2);
+
+                foreach (var dx in Sideways(want.Width))
+                {
+                    for (var y = room.Top; y + want.Height <= room.Bottom; y += step)
+                    {
+                        var at = Keep(new Rectangle(want.X + dx, y, want.Width, want.Height), room);
+                        var near = Inflated(at, gap);
+                        long covered = 0;
+
+                        foreach (var other in placed.Concat(dots))
+                        {
+                            var overlap = Rectangle.Intersect(near, other);
+
+                            if (overlap.Width > 0 && overlap.Height > 0)
+                            {
+                                covered += (long)overlap.Width * overlap.Height;
+                            }
+                        }
+
+                        var moved = Math.Abs(at.X - want.X) * 3 / 2 + Math.Abs(at.Y - want.Y);
+                        var score = covered + (long)moved * perPixel;
+
+                        if (score < bestScore)
+                        {
+                            best = at;
+                            bestScore = score;
+                        }
+                    }
+                }
+
+                return best;
+            }
 
             // Moved one way only, so it cannot be bounced between two
             // things for ever: null when it runs out of room that way.
@@ -623,6 +710,20 @@ public sealed class ChassisCanvas : Control
             var size = TextRenderer.MeasureText(CalloutText(point), AppTheme.SmallFont);
 
             return new Rectangle((int)labelPos.X - size.Width / 2, (int)labelPos.Y - size.Height / 2 - 2, size.Width + 10, size.Height + 6);
+        }
+
+        // Where a label is tried, across from where it is wanted: there
+        // first, then half its width either way, then its whole width, then
+        // half as much again.
+        static IEnumerable<int> Sideways(int width)
+        {
+            yield return 0;
+
+            foreach (var share in new[] { 1, 2, 3 })
+            {
+                yield return -width * share / 2;
+                yield return width * share / 2;
+            }
         }
 
         // Kept inside the control rather than clipped off an edge.

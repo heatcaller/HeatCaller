@@ -3121,6 +3121,33 @@ public static class AppTheme
     }
 
     /// <summary>
+    /// ApplyRecursively over <paramref name="root"/>, but not inside the
+    /// controls in <paramref name="leaveInside"/>: each of those is styled
+    /// as a child of its parent, as ever, and what is in it is left as it
+    /// is. MainForm themes only the page on screen when the text size
+    /// changes, and each of the others when it is next opened
+    /// (MainForm.CatchUpTextSize).
+    /// </summary>
+    public static void ApplyRecursively(Control root, IReadOnlySet<Control> leaveInside)
+    {
+        var outer = _leaveInside;
+        _leaveInside = leaveInside;
+
+        try
+        {
+            ApplyRecursively(root);
+        }
+        finally
+        {
+            _leaveInside = outer;
+        }
+    }
+
+    /// <summary>The controls ApplyRecursively does not go inside, for the pass under way - see the overload that takes them.</summary>
+    [ThreadStatic]
+    private static IReadOnlySet<Control>? _leaveInside;
+
+    /// <summary>
     /// Walks a control tree and re-styles every Button, DataGridView, and
     /// GroupBox found, at any depth - the practical way to theme a dozen
     /// already-built screens without touching their layout code. Safe to
@@ -3381,7 +3408,7 @@ public static class AppTheme
                     break;
             }
 
-            if (child.HasChildren)
+            if (child.HasChildren && _leaveInside?.Contains(child) != true)
             {
                 ApplyRecursively(child);
             }

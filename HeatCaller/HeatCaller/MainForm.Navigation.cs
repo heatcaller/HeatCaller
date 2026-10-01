@@ -463,6 +463,17 @@ public partial class MainForm
 
         try
         {
+            // Timed from here: a page slow to open is written to the session
+            // log (below).
+            var opening = System.Diagnostics.Stopwatch.StartNew();
+
+            // At the text size in use, and themed at it: a page that was
+            // away when the size changed (or since startup) takes it now,
+            // while it is still hidden and held - so the skins are on before
+            // it is shown, as they were when the whole window was themed at
+            // once - see CatchUpTextSize.
+            CatchUpTextSize(item.Page);
+
             // The wanted page first, and in front: with it already covering
             // the area, nothing behind it is ever exposed to begin with.
             // This alone fixes the swap; the redraw suppression above is
@@ -498,10 +509,7 @@ public partial class MainForm
             // it gives this page the room it is shown in - the page is held,
             // so that only sizes it - and the page is then let go, laid out
             // once, at that size and in the faces it has now. Before its
-            // refresh, so what the refresh reads is laid out. Timed: a page
-            // slow to open is written to the session log.
-            var opening = System.Diagnostics.Stopwatch.StartNew();
-
+            // refresh, so what the refresh reads is laid out.
             pnlContent.ResumeLayout(true);
             resumed = true;
 
