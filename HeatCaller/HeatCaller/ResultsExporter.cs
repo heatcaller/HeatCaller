@@ -61,7 +61,12 @@ public static class ResultsExporter
         RoundDefinitionStore? rounds, ProfileStore profiles)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds");
+        // Status last, so a spreadsheet or importer already reading the
+        // columns before it by position keeps working. Without it a
+        // disqualified driver came out as an unexplained no-lap row at the
+        // bottom and a DNF as an ordinary finisher - the outcome Edit Result
+        // set (ResultEditor puts it in Status) was lost on the way out.
+        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status");
 
         foreach (var session in sessions.OrderBy(s => s.StartedAtUtc))
         {
@@ -85,6 +90,7 @@ public static class ResultsExporter
                     result.Laps.ToString(CultureInfo.InvariantCulture),
                     Seconds(result.ElapsedMs),
                     result.FastLapMs > 0 ? Seconds(result.FastLapMs) : string.Empty,
+                    Csv(result.Status),
                 }));
             }
         }
@@ -161,6 +167,13 @@ public static class ResultsExporter
                     totalTimeSeconds = r.ElapsedMs / 1000.0,
                     bestLapSeconds = r.FastLapMs > 0 ? r.FastLapMs / 1000.0 : (double?)null,
                     lapTimesSeconds = r.LapTimesMs.Select(l => l / 1000.0).ToList(),
+
+                    // What the race recorded ("active" for an ordinary run),
+                    // and the outcome a correction set - "DNF", "DQ", or
+                    // null for a finisher - so a tool can tell a
+                    // disqualification from a car that never started.
+                    status = r.Status,
+                    outcome = string.IsNullOrEmpty(r.Outcome) ? null : r.Outcome,
                 }),
             };
         });

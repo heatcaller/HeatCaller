@@ -229,7 +229,15 @@ public sealed class RaceFormatForm : Form
         Text = title;
         Font = AppTheme.BodyFont;
 
-        var seed = current?.Clone() ?? new RaceFormat();
+        // What the fields start from. When this is following the default
+        // (current is null), ticking "custom" shows these fields as they
+        // are - so they start from the format that applies now, the
+        // fallback, and changing one setting changes only that setting.
+        // They used to start from the built-in values (a 3000 ms minimum
+        // lap, 15 s staging, no limits), which quietly undid the club's own
+        // default for everything the director did not touch. The built-ins
+        // only when the caller has no fallback to give.
+        var seed = current?.Clone() ?? fallback?.Clone() ?? new RaceFormat();
 
         var (page, body) = BuildLayout(seed, current is not null);
         AppTheme.ApplyRecursively(this);

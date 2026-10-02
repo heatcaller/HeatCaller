@@ -236,11 +236,27 @@ public sealed class PersonalBestsControl : UserControl
         }
     }
 
-    private sealed record BestRecord(string Driver, string Track, long BestLapMs, string Car, DateTime SetAtUtc);
+    /// <summary>
+    /// One row of the page. A BestLapMs of zero is a driver and track whose
+    /// laps all fall before a reset - see ComputeBests.
+    /// </summary>
+    private sealed record BestRecord(string Driver, string Track, long BestLapMs, string Car, DateTime SetAtUtc)
+    {
+        public bool IsWaitingAfterReset => BestLapMs <= 0;
+    }
 
     private List<BestRecord> ComputeBests()
     {
         var bests = new Dictionary<(string Driver, string Track), BestRecord>();
+
+        // Drivers and tracks with laps that a reset is hiding. Without these
+        // a reset made every one of that driver's rows vanish until they
+        // raced there again - and with no row to select, Clear Reset could
+        // not be reached, so "Reset All Tracks" was permanent short of the
+        // undo button. Each one left with no best since its reset gets a
+        // row of its own (no lap, counting since the reset), so the driver
+        // stays in the list and the reset can be cleared from the page.
+        var hidden = new Dictionary<(string Driver, string Track), (string Driver, string Track)>();
 
         foreach (var session in _history.All)
         {
@@ -264,22 +280,31 @@ public sealed class PersonalBestsControl : UserControl
 
                 // A reset means "ignore everything before this point" for
                 // this driver, so skip sessions at or before the cutoff.
-                var cutoff = _resets.EffectiveCutoff(result.DriverName, session.TrackLayoutName);
-                if (cutoff is not null && session.StartedAtUtc <= cutoff)
-                {
-                    continue;
-                }
-
                 // Case-blind, like the driver list built from these. "Sam" in
                 // one session and "sam" in another are one driver on one
                 // track, and keyed as two they each kept a best - the list
                 // showed the driver once but the grid showed them twice,
                 // with the slower one presented as a personal best.
                 var key = (result.DriverName.ToUpperInvariant(), session.TrackLayoutName.ToUpperInvariant());
+
+                var cutoff = _resets.EffectiveCutoff(result.DriverName, session.TrackLayoutName);
+                if (cutoff is not null && session.StartedAtUtc <= cutoff)
+                {
+                    hidden.TryAdd(key, (result.DriverName, session.TrackLayoutName));
+                    continue;
+                }
                 if (!bests.TryGetValue(key, out var existing) || result.FastLapMs < existing.BestLapMs)
                 {
                     bests[key] = new BestRecord(result.DriverName, session.TrackLayoutName, result.FastLapMs, result.CarModel, session.StartedAtUtc);
                 }
+            }
+        }
+
+        foreach (var (key, names) in hidden)
+        {
+            if (!bests.ContainsKey(key))
+            {
+                bests[key] = new BestRecord(names.Driver, names.Track, 0, string.Empty, DateTime.MinValue);
             }
         }
 
@@ -319,17 +344,22 @@ public sealed class PersonalBestsControl : UserControl
         _grid.Rows.Clear();
         foreach (var b in bests)
         {
+            // A row kept only so its reset can be cleared: no lap since the
+            // reset, so no best, car or date to show.
             _grid.Rows.Add(
                 b.Driver,
                 b.Track,
-                $"{b.BestLapMs / 1000.0:0.000}s",
+                b.IsWaitingAfterReset ? "-" : $"{b.BestLapMs / 1000.0:0.000}s",
                 string.IsNullOrWhiteSpace(b.Car) ? "-" : b.Car,
-                b.SetAtUtc.ToLocalTime().ToString("d"),
+                b.IsWaitingAfterReset ? "-" : b.SetAtUtc.ToLocalTime().ToString("d"),
                 _resets.EffectiveCutoff(b.Driver, b.Track) is { } cut
                     ? cut.ToLocalTime().ToString("d")
                     : "all history");
         }
 
-        _lblSummary.Text = $"{bests.Count} personal best{(bests.Count == 1 ? "" : "s")} on record";
+        // Only real bests are counted - a row waiting for a lap after its
+        // reset is not a personal best on record.
+        var count = bests.Count(b => !b.IsWaitingAfterReset);
+        _lblSummary.Text = $"{count} personal best{(count == 1 ? "" : "s")} on record";
     }
 }

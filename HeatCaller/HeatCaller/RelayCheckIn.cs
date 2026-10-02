@@ -94,11 +94,27 @@ internal static class RelayCheckIn
     /// way to take ids back from a lost badge or from somebody who should
     /// no longer have them. The caller has the ids worked out again and the
     /// check-in list sent (RelaySettingsControl.BadgesReissued).
+    ///
+    /// Returns false, with the old key put back, when the new one could not
+    /// be saved. As in EnsureSecret: ids made from a key that is not on disk
+    /// work until the next restart and then stop, and the old key comes back
+    /// from settings.json with them - so every badge printed in between dies
+    /// and the lost badge the reissue was meant to revoke works again. Better
+    /// that the reissue plainly did not happen, and the caller says so.
     /// </summary>
-    public static void Reissue(AppSettings settings)
+    public static bool Reissue(AppSettings settings)
     {
+        var previous = settings.RelayCheckInSecret;
+
         settings.RelayCheckInSecret = NewSecret();
-        settings.Save();
+
+        if (!settings.Save())
+        {
+            settings.RelayCheckInSecret = previous;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>A new key: thirty-two random bytes, as hex. The one place a key is made - the first one and every reissue alike.</summary>

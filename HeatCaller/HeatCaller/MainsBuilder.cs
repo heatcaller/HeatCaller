@@ -157,8 +157,17 @@ public static class MainsBuilder
         // Position 0 is the app's "place unknown" (see PaceAnalysis and
         // RaceReplayForm, which sort it last too). Ordered as a plain number
         // it came FIRST, so a row with no place took the winner's bump-up.
+        // A driver disqualified in Edit Result is left out too. The editor
+        // keeps him in the results, sorted to the bottom but still numbered
+        // (a 3-car feeder with one DQ shows him as P3), so in a small feeder
+        // he used to be promoted into the main above. A DQ never earns a
+        // place - QualifyingCalculator skips it for the same reason - so the
+        // next eligible finisher moves up instead, or nobody does. A DNF
+        // still counts in its place: that is a club's call, not a penalty.
         foreach (var result in feederResults.Results
-                     .Where(r => !string.IsNullOrWhiteSpace(r.Transponder) && !GhostService.IsGhost(r.Transponder))
+                     .Where(r => !string.IsNullOrWhiteSpace(r.Transponder)
+                                 && !GhostService.IsGhost(r.Transponder)
+                                 && r.Outcome != ResultEditor.Dq)
                      .OrderBy(r => r.Position <= 0 ? int.MaxValue : r.Position))
         {
             if (top.Count >= target.BumpUpCount)

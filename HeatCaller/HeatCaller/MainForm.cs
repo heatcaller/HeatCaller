@@ -526,6 +526,7 @@ public partial class MainForm : Form
         // RaceClassStore.AppDefaultFormat). Hung on the store so both places
         // a class is edited get it.
         _raceClasses.AppDefaultFormat = () => RaceFormat.FromSettings(_settings);
+        _raceClasses.Handicaps = _handicaps;
         _rounds = RoundDefinitionStore.Load();
         _themeStore = ThemeStore.Load();
         _seasonStore = SeasonStore.Load();
@@ -970,6 +971,7 @@ public partial class MainForm : Form
         // matter how a practice session ends - including navigating away
         // without pressing Stop.
         _announcer.PracticeModeProvider = () => _race.IsPracticeMode;
+        _announcer.AnnounceGhostsProvider = () => _ghostStore.Current.AnnounceGhosts;
 
         // Qualifying calls (provisional pole, improvements) fire only when
         // the session was started as a qualifier - asked on demand, same as
@@ -1284,6 +1286,15 @@ public partial class MainForm : Form
         _autoBackupCheckTimer.Tick += (_, _) => CheckAutoBackup();
         _autoBackupCheckTimer.Start();
 
+        // The startup steps that may open a dialog, run in order once the
+        // window is up - see the Ready handler after the last of them.
+        var startupSteps = new List<Action>
+        {
+            // The re-enter-your-keys message, first: noted while the window
+            // was built (ShowDroppedSecrets), shown once it can be seen.
+            ShowDroppedSecrets,
+        };
+
         // Ready rather than Shown, and posted rather than run inline.
         //
         // The startup screen is still up at Shown, and it is TopMost - so a
@@ -1297,7 +1308,7 @@ public partial class MainForm : Form
         // the wizard so it runs first. A restart follows a recovery: every
         // page was built with the keys blank, and several save their boxes
         // back, which would blank the recovered values again.
-        Ready += (_, _) => BeginInvoke(new Action(() =>
+        startupSteps.Add(() =>
         {
             if (SecretRecovery.RunIfNeeded(this, _settings, _voiceStore))
             {
@@ -1305,10 +1316,31 @@ public partial class MainForm : Form
                 Application.Restart();
                 Environment.Exit(0);
             }
-        }));
+        });
 
-        Ready += (_, _) => BeginInvoke(new Action(() =>
+        startupSteps.Add(() =>
         {
+            // settings.json was there but could not be read, so these are
+            // the defaults and nothing will be saved this session - see
+            // AppSettings.LoadedUnreadable. The defaults have never been
+            // through the wizard, but this is not a first run: offering it
+            // would have the club set everything up again for nothing to be
+            // kept. Said plainly instead, since every page is showing the
+            // defaults rather than the club's own choices.
+            if (_settings.LoadedUnreadable)
+            {
+                AppDialog.Show(
+                    this,
+                    "HeatCaller couldn't read its settings file this time, so it has started with the standard settings "
+                    + "and won't save any changes to them. Your own settings and keys are still in the file - nothing has "
+                    + "been changed or lost.\r\n\r\nClose anything that might have it open (a backup or sync tool is the "
+                    + "usual cause), then restart HeatCaller.",
+                    "Settings couldn't be read",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             if (_settings.HasCompletedFirstRun)
             {
                 // The tour asked for at the end of setup, when the look
@@ -1395,7 +1427,7 @@ public partial class MainForm : Form
             {
                 StartTour();
             }
-        }));
+        });
 
         // A race that was running when the app last stopped is offered back
         // here.
@@ -1411,7 +1443,7 @@ public partial class MainForm : Form
         // Gate auto-start of practice is held until this has run - see
         // _recoveryDecided. Set in finally, so it is set when there was
         // nothing to offer too, and even if the offer failed.
-        Ready += (_, _) => BeginInvoke(new Action(() =>
+        startupSteps.Add(() =>
         {
             try
             {
@@ -1437,6 +1469,37 @@ public partial class MainForm : Form
             finally
             {
                 _recoveryDecided = true;
+            }
+        });
+
+        // All of the above as ONE posted call, run in order. Each step used
+        // to be posted on its own, but a modal dialog keeps pumping messages,
+        // so the next posted step ran INSIDE the dialog before it: the
+        // backup-password prompt, the wizard and the race-recovery offer
+        // could open on top of each other, and a key recovery's restart
+        // could cut off a message still on screen underneath it. One at a
+        // time, each step's dialogs close before the next begins.
+        //
+        // A step that throws is reported and the rest still run, as they did
+        // when each was posted separately - the race recovery step in
+        // particular must always run (see _recoveryDecided).
+        Ready += (_, _) => BeginInvoke(new Action(() =>
+        {
+            foreach (var step in startupSteps)
+            {
+                if (IsDisposed || Disposing)
+                {
+                    return;
+                }
+
+                try
+                {
+                    step();
+                }
+                catch (Exception ex)
+                {
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] A startup step failed: {ex.GetType().Name}: {ex.Message}");
+                }
             }
         }));
 
@@ -1506,7 +1569,9 @@ public partial class MainForm : Form
             // the journal flush below, which then has nothing to write.
             try
             {
-                _practiceControl?.StopForShutdown();
+                // Somebody closing the window is there to be told if the
+                // practice could not be saved; Windows shutting down is not.
+                _practiceControl?.StopForShutdown(personIsThere: e.CloseReason == CloseReason.UserClosing);
             }
             catch
             {
@@ -1524,7 +1589,13 @@ public partial class MainForm : Form
                 // Best effort - the journal from a moment ago still stands.
             }
 
-            _settings.StartMaximized = WindowState == FormWindowState.Maximized;
+            // Race Mode always has the window maximized and borderless, so
+            // closing from it (Alt+F4, the taskbar, Windows logging off)
+            // would record "maximized" for someone who actually runs the app
+            // in a window, and they would lose that choice next launch. The
+            // state they had before pressing F11 is the one that is theirs.
+            var windowState = _raceMode ? _preRaceModeState : WindowState;
+            _settings.StartMaximized = windowState == FormWindowState.Maximized;
             _settings.Save();
 
             // Application.Idle is static. A window closed before it ever
@@ -1569,6 +1640,37 @@ public partial class MainForm : Form
     /// rather than for Shown.
     /// </summary>
     public event EventHandler? Ready;
+
+    /// <summary>Plain-text keys found in settings.json and discarded, to tell the club about once the window is up - see ShowDroppedSecrets.</summary>
+    private List<string>? _droppedSecrets;
+
+    /// <summary>
+    /// The first startup step (see the Ready handler in the constructor):
+    /// says which keys were found in plain text and removed, so they are
+    /// typed in again. Shown here rather than where they were found, while
+    /// the window was still transparent and the TopMost startup screen was
+    /// up - the dialog sat underneath that screen and the app looked hung.
+    /// </summary>
+    private void ShowDroppedSecrets()
+    {
+        if (_droppedSecrets is not { Count: > 0 } dropped)
+        {
+            return;
+        }
+
+        _droppedSecrets = null;
+
+        AppDialog.Show(
+            this,
+            "This copy of settings.json held some keys in plain text, from a version before they were "
+            + "locked to this PC. They have been removed rather than used, because a settings file can "
+            + "come from anywhere.\r\n\r\nYou will need to type "
+            + (dropped.Count == 1 ? dropped[0] : string.Join(", ", dropped.Take(dropped.Count - 1)) + " and " + dropped[^1])
+            + " in again. Everything else is unaffected.",
+            "Re-enter your keys",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+    }
 
     private bool _readyRaised;
     private System.Windows.Forms.Timer? _readyFallback;
@@ -1804,23 +1906,20 @@ public partial class MainForm : Form
         // loud, and not only to the console: a club upgrading from before
         // sealing would otherwise find its relay quietly stopped working with
         // nothing anywhere saying why.
+        //
+        // Only noted here; the dialog itself waits until the window has been
+        // revealed and the startup screen has gone - see ShowDroppedSecrets. Shown
+        // from here, it opened while this window was still fully transparent
+        // and the TopMost startup screen was still up, so it sat underneath
+        // that screen and the app looked as if it had hung on startup.
+        List<string>? droppedSecrets = null;
+
         if (_settings.DroppedPlainTextSecrets.Count > 0)
         {
-            var dropped = _settings.DroppedPlainTextSecrets.Distinct(StringComparer.Ordinal).ToList();
+            droppedSecrets = _settings.DroppedPlainTextSecrets.Distinct(StringComparer.Ordinal).ToList();
             _settings.DroppedPlainTextSecrets.Clear();
 
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [secrets] Plain-text {string.Join(", ", dropped)} found in settings.json and discarded - re-enter and they will be sealed.");
-
-            AppDialog.Show(
-                this,
-                "This copy of settings.json held some keys in plain text, from a version before they were "
-                + "locked to this PC. They have been removed rather than used, because a settings file can "
-                + "come from anywhere.\r\n\r\nYou will need to type "
-                + (dropped.Count == 1 ? dropped[0] : string.Join(", ", dropped.Take(dropped.Count - 1)) + " and " + dropped[^1])
-                + " in again. Everything else is unaffected.",
-                "Re-enter your keys",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [secrets] Plain-text {string.Join(", ", droppedSecrets)} found in settings.json and discarded - re-enter and they will be sealed.");
         }
 
         OnClientRawMessage($"{AppTime.LogStampNow()}  [tip] F11 toggles Race Mode - full screen, no sidebar, just the race.");
@@ -1849,6 +1948,11 @@ public partial class MainForm : Form
         // HangWatchdog.
         HangWatchdog.Start(this, OnClientRawMessage);
 
+        // The re-enter-your-keys message noted above is shown by the first
+        // of the startup steps Ready runs (ShowDroppedSecrets), once this
+        // window is visible and the startup screen has gone.
+        _droppedSecrets = droppedSecrets;
+
         Ready?.Invoke(this, EventArgs.Empty);
     }
 
@@ -1863,7 +1967,17 @@ public partial class MainForm : Form
         // Not while keys from another PC are still to be recovered: that
         // backup would carry no keys, and pruning could then delete an
         // older one that did. The hourly check runs it afterwards.
-        if (!_settings.AutoBackupEnabled || SecretRecovery.Pending)
+        //
+        // Nor when settings.json was there but could not be read this
+        // launch (held by a sync or backup tool, say). The settings in use
+        // are then only the defaults - backups on, never made, the default
+        // folder, keep 14, no backup password - so the club's real choices
+        // were ignored: a backup it had switched off was made anyway, with
+        // no password-locked copy of the keys, and pruning to 14 deleted
+        // older backups the club meant to keep, some of them holding the
+        // keys. Nothing can be saved this session either, so the backup
+        // waits for a launch that reads the real settings.
+        if (!_settings.AutoBackupEnabled || SecretRecovery.Pending || _settings.LoadedUnreadable)
         {
             return;
         }

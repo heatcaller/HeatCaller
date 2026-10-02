@@ -21,7 +21,15 @@ public sealed class LocalLlmClient
 {
     // Its own HttpClient with no BaseAddress, since the endpoint is a user
     // setting rather than a fixed service.
-    private static readonly HttpClient Http = new();
+    //
+    // No timeout of its own. Every request here carries a token with its own
+    // CancelAfter budget, and HttpClient's default of 100 seconds would
+    // otherwise cut a between-races intro or recap short when "Give up
+    // after" asks for longer (that budget is three times the setting, up to
+    // 180 seconds). The console would then log "Timed out after 135s" for a
+    // request that was really stopped at 100. Every SendAsync below passes
+    // a token that has a deadline, so nothing can wait forever.
+    private static readonly HttpClient Http = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
 
     public required string Endpoint { get; init; }
     public required string Model { get; init; }

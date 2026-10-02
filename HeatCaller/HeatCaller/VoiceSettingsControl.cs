@@ -60,6 +60,17 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly TextBox _txtApiKey = new();
     private readonly CheckBox _chkShowApiKey = new ThemedCheckBox();
     private readonly ComboBox _cmbVoice = new();
+
+    /// <summary>
+    /// The entry Load Voices adds when the voice that was chosen is not in
+    /// the list the key's account sends back, and the voice's real name
+    /// without the "(not in this account)" note. Kept so the page goes on
+    /// showing the voice that is saved rather than a blank box, and so
+    /// BuildProfileFromControls saves the real name, not the note.
+    /// </summary>
+    private ElevenLabsClient.VoiceInfo? _voiceNotInAccount;
+    private string _voiceNotInAccountName = string.Empty;
+
     private readonly Button _btnLoadVoices = new();
     private readonly ComboBox _cmbModel = new();
 
@@ -1320,8 +1331,21 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // kept after the boxes were emptied.
                 missing = true;
 
+                // The entry carries the rev saved with this voice, so picking
+                // another voice and then this one again saves this voice with
+                // ITS rev. With no rev on it, the save fell back to whatever
+                // rev the store held by then - the other voice's - and every
+                // prepared line of this voice (keyed by voice and rev) missed.
+                // Only when the saved rev belongs to this voice: this method
+                // is handed the saved voice today, but a rev must never be
+                // paired with a voice it was not saved with. It also cannot
+                // trigger the re-tune save below: its rev IS the saved one.
+                var savedRev = string.Equals(_store.Current.HeatCallerVoice?.Trim(), saved, StringComparison.OrdinalIgnoreCase)
+                    ? _store.Current.HeatCallerRev ?? string.Empty
+                    : string.Empty;
+
                 selected = _cmbHeatCallerVoice.Items.Add(
-                    new HeatCallerVoiceChoice(saved, saved, "not offered by the relay any more", string.Empty));
+                    new HeatCallerVoiceChoice(saved, saved, "not offered by the relay any more", savedRev));
             }
 
             if (selected < 0 && _cmbHeatCallerVoice.Items.Count > 0)
@@ -1356,6 +1380,37 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
 
         return missing;
+    }
+
+    /// <summary>
+    /// The rev to save with the HeatCaller voice in the list. The chosen
+    /// entry's own rev when it has one. Otherwise (a "not offered by the
+    /// relay any more" entry for a voice saved before revs were kept, or
+    /// nothing chosen) the rev last SAVED - not the one the page opened
+    /// with, which could undo a rev saved since - but only if that saved rev
+    /// belongs to the same voice. A rev is part of a prepared line's key, so
+    /// pairing one voice with another voice's rev made every one of its
+    /// prepared lines miss; an empty rev is the honest answer instead.
+    /// </summary>
+    private string HeatCallerRevToSave()
+    {
+        if (_cmbHeatCallerVoice.SelectedItem is not HeatCallerVoiceChoice picked)
+        {
+            // Nothing chosen: the voice that will be saved is the opening
+            // one (see HeatCallerVoice in BuildProfileFromControls).
+            return string.Equals(_store.Current.HeatCallerVoice?.Trim(), _original.HeatCallerVoice?.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? _store.Current.HeatCallerRev ?? string.Empty
+                : _original.HeatCallerRev ?? string.Empty;
+        }
+
+        if (picked.Rev.Length > 0)
+        {
+            return picked.Rev;
+        }
+
+        return string.Equals(_store.Current.HeatCallerVoice?.Trim(), picked.Id?.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? _store.Current.HeatCallerRev ?? string.Empty
+            : string.Empty;
     }
 
     /// <summary>
@@ -2160,7 +2215,23 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(saved.ApiKey) || string.IsNullOrWhiteSpace(saved.VoiceId))
+        // Each engine needs something different before it can render. The
+        // HeatCaller voice is rendered by the relay with HeatCaller's own key,
+        // so it needs only a voice chosen from the relay's list - never the
+        // club's ElevenLabs key or voice, which a club on this voice usually
+        // doesn't have (and can't type in: the key box is locked while the
+        // HeatCaller voice is chosen). This is the same test
+        // PlanLinesToPrepare makes, so the two can't disagree about whether
+        // there is a voice to render with.
+        if (saved.EffectiveEngine == VoiceEngine.HeatCaller)
+        {
+            if (!saved.HeatCallerReady)
+            {
+                AppDialog.Show(this, "Choose a HeatCaller voice first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(saved.ApiKey) || string.IsNullOrWhiteSpace(saved.VoiceId))
         {
             AppDialog.Show(this, "Enter an API key and select a voice first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -2469,9 +2540,19 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             var voices = await _elevenLabs.GetVoicesAsync(apiKey);
             if (Gone) { return; }
-            var previouslySelected = (_cmbVoice.SelectedItem as ElevenLabsClient.VoiceInfo)?.VoiceId;
+            var previousItem = _cmbVoice.SelectedItem as ElevenLabsClient.VoiceInfo;
+            var previouslySelected = previousItem?.VoiceId;
+
+            // The real name, not the "(not in this account)" note, when the
+            // voice was already missing from the last list loaded.
+            var previousName = previousItem is null ? string.Empty
+                : ReferenceEquals(previousItem, _voiceNotInAccount) ? _voiceNotInAccountName
+                : previousItem.Name;
 
             _cmbVoice.Items.Clear();
+            _voiceNotInAccount = null;
+            _voiceNotInAccountName = string.Empty;
+
             foreach (var v in voices)
             {
                 _cmbVoice.Items.Add(v);
@@ -2479,13 +2560,36 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (previouslySelected is not null)
             {
+                var found = false;
                 for (var i = 0; i < _cmbVoice.Items.Count; i++)
                 {
                     if (((ElevenLabsClient.VoiceInfo)_cmbVoice.Items[i]!).VoiceId == previouslySelected)
                     {
                         _cmbVoice.SelectedIndex = i;
+                        found = true;
                         break;
                     }
+                }
+
+                if (!found)
+                {
+                    // The voice that was chosen is not in this account's list -
+                    // the usual way here is pasting another account's key. It
+                    // is kept, chosen, with a note, the way the HeatCaller
+                    // voice list keeps a voice the relay stopped offering.
+                    // Left blank, the box said "no voice" while every save
+                    // went on writing the old voice's id behind it, so races
+                    // asked the new account for a voice it does not have and
+                    // Test Voice got past its own "select a voice" check only
+                    // to fail. Dropping the voice instead would throw away a
+                    // choice that may still be wanted (a key pasted by
+                    // mistake, to be put back), so the page shows exactly
+                    // what is saved and the club picks again from the list.
+                    _voiceNotInAccountName = previousName;
+                    _voiceNotInAccount = new ElevenLabsClient.VoiceInfo(
+                        previouslySelected,
+                        $"{(string.IsNullOrWhiteSpace(previousName) ? previouslySelected : previousName)} (not in this account)");
+                    _cmbVoice.SelectedIndex = _cmbVoice.Items.Add(_voiceNotInAccount);
                 }
             }
             else if (_cmbVoice.Items.Count > 0)
@@ -2564,8 +2668,15 @@ public sealed partial class VoiceSettingsControl : UserControl
             TemplateVersion = VoiceSettingsStore.CurrentTemplateVersion,
 
             ApiKey = _txtApiKey.Text.Trim(),
-            VoiceId = selectedVoice?.VoiceId ?? _original.VoiceId,
-            VoiceName = selectedVoice?.Name ?? _original.VoiceName,
+            // With nothing chosen (the moment Load Voices empties the list
+            // to refill it), the voice last SAVED - not the one the page
+            // opened with, which would quietly undo a voice picked and saved
+            // since. The "not in this account" entry saves the voice's real
+            // name, not the note shown beside it.
+            VoiceId = selectedVoice?.VoiceId ?? _store.Current.VoiceId,
+            VoiceName = selectedVoice is null ? _store.Current.VoiceName
+                : ReferenceEquals(selectedVoice, _voiceNotInAccount) ? _voiceNotInAccountName
+                : selectedVoice.Name,
             ModelId = string.IsNullOrWhiteSpace(_cmbModel.Text) ? "eleven_multilingual_v2" : _cmbModel.Text.Trim(),
             Stability = (double)_numStability.Value,
             SimilarityBoost = (double)_numSimilarity.Value,
@@ -2595,9 +2706,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             // saved take that no longer matches.
             HeatCallerVoice = (_cmbHeatCallerVoice.SelectedItem as HeatCallerVoiceChoice)?.Id ?? _original.HeatCallerVoice,
             HeatCallerVoiceName = (_cmbHeatCallerVoice.SelectedItem as HeatCallerVoiceChoice)?.Name ?? _original.HeatCallerVoiceName,
-            HeatCallerRev = (_cmbHeatCallerVoice.SelectedItem as HeatCallerVoiceChoice) is { Rev.Length: > 0 } picked
-                ? picked.Rev
-                : _original.HeatCallerRev,
+            HeatCallerRev = HeatCallerRevToSave(),
         };
 
         foreach (var (type, (chkRace, chkPractice, txt)) in _eventRows)
@@ -3021,7 +3130,17 @@ public sealed partial class VoiceSettingsControl : UserControl
             var voiceBefore = _store.Current.HeatCallerVoice;
 
             var profile = BuildProfileFromControls();
-            _store.Save(profile);
+
+            // Save never throws. SafeFile reports a locked or unwritable file
+            // (antivirus, OneDrive, a full disk) by returning false, and it
+            // refuses every write after a restore until the app restarts.
+            // The profile is current for this run either way, so the
+            // announcer keeps using what was just typed. But the file still
+            // holds the old settings and they come back on the next launch,
+            // so "Saved automatically" would be untrue and the club would
+            // only find out on race night. The strip below says so instead,
+            // and the next change on the page tries the write again.
+            var saved = _store.Save(profile);
             _volumeShown = _numVolumePercent.Value;
 
             // A different HeatCaller voice: whatever the relay refused the
@@ -3031,6 +3150,17 @@ public sealed partial class VoiceSettingsControl : UserControl
             if (!string.Equals(voiceBefore, profile.HeatCallerVoice, StringComparison.OrdinalIgnoreCase))
             {
                 Announcer?.ResetHeatCallerVoiceState("a different HeatCaller voice was chosen");
+            }
+
+            if (!saved)
+            {
+                var reason = SafeFile.IsFrozen
+                    ? "saving is switched off until the app restarts after a restore"
+                    : "the settings file couldn't be written (the console says why)";
+                _lblSaveStatus.Text = $"Could not save at {DateTime.Now:HH:mm:ss}: {reason}. Changes last only until the app closes.";
+                _lblSaveStatus.ForeColor = AppTheme.Danger;
+                Status($"Settings NOT saved - {reason}.");
+                return;
             }
 
             _lblSaveStatus.Text = $"Saved automatically at {DateTime.Now:HH:mm:ss}.";

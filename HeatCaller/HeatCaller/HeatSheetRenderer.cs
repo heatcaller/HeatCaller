@@ -12,23 +12,186 @@ public static class HeatSheetRenderer
     // Letter paper at 150 DPI.
     private const int PageWidth = 1275;
     private const int PageHeight = 1650;
+    private const float PrintDpi = 150f;
     private const int Margin = 70;
 
+    // Where the first round starts on every page, below the class name, the
+    // date line and the rule under them (Margin + 40 + 28 + 20). Each page
+    // repeats that header, so every page starts its rounds at the same place.
+    private const int FirstRoundTop = Margin + 40 + 28 + 20;
+
+    /// <summary>
+    /// Renders a class's rounds onto as many pages as they need, one bitmap
+    /// per page, in order. The caller owns the bitmaps and disposes them.
+    ///
+    /// The sheet used to be a single page that stopped at the first round
+    /// that did not fit, with a note telling the club to "print one class at
+    /// a time" - which the program already does, so there was no way to get
+    /// the rest. A class of 16 in two heats of 8 over three qualifying
+    /// rounds is six rounds, and only four fit on a page, so the pit table
+    /// never saw a sheet for the last two. Every round now lands on a page.
+    /// </summary>
     /// <param name="accent">
-    /// The class's colour. Printed as a band across the head of the sheet
+    /// The class's color. Printed as a band across the head of each page
     /// and a chip beside every round, so four classes' worth of paper on a
     /// pit table can be sorted by eye from across it. Everything else stays
-    /// black on white - the colour is for finding the right sheet, not for
+    /// black on white - the color is for finding the right sheet, not for
     /// reading off.
     /// </param>
+    public static IReadOnlyList<Bitmap> RenderPages(
+        string className,
+        IReadOnlyList<RoundDefinition> rounds,
+        ProfileStore profiles,
+        Color accent)
+    {
+        var plan = PlanPages(rounds.Select(r => r.AssignedTransponders.Count).ToList());
+        var pages = new List<Bitmap>(plan.Count);
+
+        try
+        {
+            var first = 0;
+
+            for (var page = 0; page < plan.Count; page++)
+            {
+                var slice = rounds.Skip(first).Take(plan[page]).ToList();
+                var note = page < plan.Count - 1 ? $"(continued on page {page + 2} of {plan.Count})" : null;
+
+                pages.Add(RenderPage(className, slice, profiles, accent, page + 1, plan.Count, note));
+                first += plan[page];
+            }
+        }
+        catch
+        {
+            // A half-made set of pages is no use to the caller, and it could
+            // not dispose what it never received.
+            foreach (var made in pages)
+            {
+                made.Dispose();
+            }
+
+            throw;
+        }
+
+        return pages;
+    }
+
+    /// <summary>
+    /// The first page only - the shape the heat sheet export had before it
+    /// could make more than one page. Kept so a caller that saves a single
+    /// image still works; RenderPages is the one that prints every round.
+    /// When rounds are left over, the note at the foot says how many were
+    /// left off rather than pointing at a way to print them that does not
+    /// exist.
+    /// </summary>
     public static Bitmap Render(
         string className,
         IReadOnlyList<RoundDefinition> rounds,
         ProfileStore profiles,
         Color accent)
     {
+        var plan = PlanPages(rounds.Select(r => r.AssignedTransponders.Count).ToList());
+        var onFirst = plan[0];
+        var leftOver = rounds.Count - onFirst;
+
+        string? note = leftOver switch
+        {
+            <= 0 => null,
+            1 => "(1 more round did not fit and is not on this sheet)",
+            _ => $"({leftOver} more rounds did not fit and are not on this sheet)",
+        };
+
+        return RenderPage(className, rounds.Take(onFirst).ToList(), profiles, accent, 1, 1, note);
+    }
+
+    /// <summary>
+    /// How many rounds go on each page, given each round's number of drivers.
+    /// Always at least one page (an empty class still gets its header), and
+    /// always at least one round on a page, so a single round too tall for
+    /// any page - forty drivers in one heat - still prints, clipped at the
+    /// foot, instead of the paging never moving on.
+    /// </summary>
+    internal static IReadOnlyList<int> PlanPages(IReadOnlyList<int> driversPerRound)
+    {
+        var plan = new List<int>();
+        var onThisPage = 0;
+        var y = FirstRoundTop;
+
+        foreach (var drivers in driversPerRound)
+        {
+            if (onThisPage > 0 && y + RoundRoomNeeded(drivers) > PageHeight - Margin)
+            {
+                plan.Add(onThisPage);
+                onThisPage = 0;
+                y = FirstRoundTop;
+            }
+
+            y += RoundHeight(drivers);
+            onThisPage++;
+        }
+
+        if (onThisPage > 0 || plan.Count == 0)
+        {
+            plan.Add(onThisPage);
+        }
+
+        return plan;
+    }
+
+    // What a round takes on the page as RenderPage draws it: the label (28),
+    // the column headings (20), the rule (6), a 34 px line per driver - or
+    // one line for "(no drivers assigned)" - and 22 below.
+    private static int RoundHeight(int drivers) => 28 + 20 + 6 + Math.Max(1, drivers) * 34 + 22;
+
+    // The room asked for before a round is placed: the round itself plus a
+    // little over, so the "continued" note below the last round on a page
+    // has somewhere to sit above the footer rule. This is the old check's
+    // 60 + 34n + 30, kept, with the empty round counted as the line it draws.
+    private static int RoundRoomNeeded(int drivers) => 60 + Math.Max(1, drivers) * 34 + 30;
+
+    private static Bitmap RenderPage(
+        string className,
+        IReadOnlyList<RoundDefinition> rounds,
+        ProfileStore profiles,
+        Color accent,
+        int pageNumber,
+        int pageCount,
+        string? continuedNote)
+    {
         var bitmap = new Bitmap(PageWidth, PageHeight);
 
+        try
+        {
+            DrawPage(bitmap, className, rounds, profiles, accent, pageNumber, pageCount, continuedNote);
+
+            // The page is drawn at 96 DPI so the point-size fonts come out
+            // the right size, but the pixels are a Letter page at 150 DPI.
+            // The saved PNG carries whatever resolution the bitmap has, and
+            // left at 96 it described a 13.3 x 17.2 inch page, so anything
+            // that prints an image at its own size (Paint at 100%, for one)
+            // cut off the Laps and Time columns and the lower rounds, or
+            // spread the sheet over several pages. Setting it here, after
+            // drawing, changes only that label - not a pixel.
+            bitmap.SetResolution(PrintDpi, PrintDpi);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        return bitmap;
+    }
+
+    private static void DrawPage(
+        Bitmap bitmap,
+        string className,
+        IReadOnlyList<RoundDefinition> rounds,
+        ProfileStore profiles,
+        Color accent,
+        int pageNumber,
+        int pageCount,
+        string? continuedNote)
+    {
         // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
         bitmap.SetResolution(96, 96);
 
@@ -53,12 +216,17 @@ public static class HeatSheetRenderer
 
         // A solid band across the top. On a monochrome printer this comes
         // out as a grey bar, which still distinguishes the sheets - the
-        // colours are chosen at a lightness that separates when desaturated.
+        // colors are chosen at a lightness that separates when desaturated.
         g.FillRectangle(accentBrush, Margin, y - 22, PageWidth - Margin * 2, 10);
 
         g.DrawString(className, titleFont, black, Margin, y);
         y += 40;
-        g.DrawString($"Heat sheet  -  {DateTime.Now:dddd, MMM d yyyy}", footFont, grey, Margin, y);
+
+        // The page count goes on the date line, so a loose second page on
+        // the pit table says which class it belongs to and that a first
+        // page exists somewhere.
+        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
+        g.DrawString($"Heat sheet  -  {DateTime.Now:dddd, MMM d yyyy}{pagePart}", footFont, grey, Margin, y);
         y += 28;
         g.DrawLine(heavyPen, Margin, y, PageWidth - Margin, y);
         y += 20;
@@ -68,17 +236,10 @@ public static class HeatSheetRenderer
         int[] colX = { Margin, Margin + 70, Margin + 400, Margin + 660, Margin + 850, Margin + 1000 };
         string[] headers = { "#", "Driver", "Car", "Transponder", "Laps", "Time" };
 
+        // Which rounds go on this page was settled by PlanPages, so every
+        // round handed in here is drawn - the fitting is done there.
         foreach (var round in rounds)
         {
-            // Start a new page's worth of vertical space check - if this
-            // round won't fit, stop rather than overflowing off the page.
-            var neededHeight = 60 + round.AssignedTransponders.Count * 34 + 30;
-            if (y + neededHeight > PageHeight - Margin)
-            {
-                g.DrawString("(continued on additional sheets - print one class at a time for full listings)", footFont, grey, Margin, y);
-                break;
-            }
-
             var trackPart = string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "" : $"   -   {round.TrackLayoutName}";
 
             // A chip against each round, so a sheet stays identifiable
@@ -125,11 +286,14 @@ public static class HeatSheetRenderer
             y += 22;
         }
 
+        if (continuedNote is not null)
+        {
+            g.DrawString(continuedNote, footFont, grey, Margin, y);
+        }
+
         using var footerPen = new Pen(Color.FromArgb(200, 200, 200));
         g.DrawLine(footerPen, Margin, PageHeight - Margin, PageWidth - Margin, PageHeight - Margin);
         g.DrawString("HeatCaller", footFont, grey, Margin, PageHeight - Margin + 8);
-
-        return bitmap;
     }
 
     private static string Truncate(string text, int max) =>

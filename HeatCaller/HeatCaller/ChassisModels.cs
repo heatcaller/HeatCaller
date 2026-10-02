@@ -478,32 +478,34 @@ public sealed class ChassisTemplateStore
 
             // Prefixed with the template id so two chassis can use
             // similarly-named files without colliding.
-            var fileName = $"{template.Id[..8]}_{Path.GetFileName(sourcePath)}";
+            var fileName = StoredImageName(template.Id[..8], null, Path.GetFileName(sourcePath), extension);
 
-            // A name ResolveImagePath would turn away - a very long one - is
-            // stored under the template's id alone, or the diagram would be
-            // copied in and then never shown.
-            if (!PlainFileName.IsSafeLeaf(fileName))
+            // Never over a file that is already there. The diagram editor
+            // works on a copy with the SAME id as the sheet it edits, and
+            // picks the picture before Save - so a new picture with the same
+            // file name as the sheet's current one (a re-shot "mr03.png" from
+            // another folder) came out under the same stored name and was
+            // copied straight over the sheet's diagram. Cancel then left the
+            // sheet naming a file that held the picture it had just turned
+            // down, and an undo could only put the old NAME back, never the
+            // old picture. A name nothing uses yet is taken instead, and the
+            // old file is left where it is, so the sheet as saved - and any
+            // undo of it - still points at the picture it had. The fallbacks
+            // repeat the same name, so they need the same care.
+            for (var attempt = 0; File.Exists(Path.Combine(ImageFolder, fileName)); attempt++)
             {
-                fileName = $"{template.Id[..8]}{extension}";
-
-                // Checked AGAIN, because the fallback was never guaranteed
-                // safe on its own: it carries the SOURCE file's extension,
-                // and an unchecked one produced a name ResolveImagePath
-                // refuses just as firmly as the first did - leaving the
-                // diagram copied onto disk under a name nothing would ever
-                // load, which is the exact outcome the fallback exists to
-                // avoid. The allow-list above now keeps that extension short,
-                // so this is the belt to its braces rather than the fix; the
-                // two are independent and both cheap. Eight hex characters
-                // alone is safe by construction.
-                if (!PlainFileName.IsSafeLeaf(fileName))
+                if (attempt >= 20)
                 {
-                    fileName = template.Id[..8];
+                    return false;
                 }
+
+                fileName = StoredImageName(template.Id[..8], Guid.NewGuid().ToString("N")[..6], Path.GetFileName(sourcePath), extension);
             }
 
-            File.Copy(sourcePath, Path.Combine(ImageFolder, fileName), overwrite: true);
+            // overwrite: false - the name was just checked to be free, and
+            // if something took it in the moment since, failing the copy is
+            // better than writing over it.
+            File.Copy(sourcePath, Path.Combine(ImageFolder, fileName), overwrite: false);
 
             template.ImageFileName = fileName;
             Save();
@@ -513,6 +515,42 @@ public sealed class ChassisTemplateStore
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The name a picked diagram is stored under: the template's id, then
+    /// <paramref name="unique"/> when one is given (to step around a file
+    /// already there), then the source's own file name.
+    /// </summary>
+    private static string StoredImageName(string id8, string? unique, string sourceName, string extension)
+    {
+        var prefix = unique is null ? id8 : $"{id8}_{unique}";
+        var fileName = $"{prefix}_{sourceName}";
+
+        // A name ResolveImagePath would turn away - a very long one - is
+        // stored under the template's id alone, or the diagram would be
+        // copied in and then never shown.
+        if (!PlainFileName.IsSafeLeaf(fileName))
+        {
+            fileName = $"{prefix}{extension}";
+
+            // Checked AGAIN, because the fallback was never guaranteed safe
+            // on its own: it carries the SOURCE file's extension, and an
+            // unchecked one produced a name ResolveImagePath refuses just as
+            // firmly as the first did - leaving the diagram copied onto disk
+            // under a name nothing would ever load, which is the exact
+            // outcome the fallback exists to avoid. The allow-list in
+            // SetImage now keeps that extension short, so this is the belt
+            // to its braces rather than the fix; the two are independent and
+            // both cheap. Hex characters and an underscore alone are safe by
+            // construction.
+            if (!PlainFileName.IsSafeLeaf(fileName))
+            {
+                fileName = prefix;
+            }
+        }
+
+        return fileName;
     }
 
     public void ClearImage(ChassisTemplate template)

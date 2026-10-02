@@ -310,7 +310,9 @@ public sealed partial class RaceControlControl
         }
 
         var round = RoundForThisRace();
-        var typed = _txtSessionLabel.Text.Trim();
+
+        // The same name the race will be filed under - see TypedLabelFor.
+        var typed = TypedLabelFor(round);
 
         var title = typed.Length > 0
             ? round is not null
@@ -489,6 +491,17 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // Not while a session is under way. The heat on track is not
+        // recorded yet, so it counts as "not yet run" below - and rebuilding
+        // its roster mid-race would leave the Next Up bar, the tech
+        // warnings and the seeding reading a grid that is not the one
+        // racing. Start Next and Quick Race refuse the same way.
+        if (_race.State is not (RaceState.Idle or RaceState.Finished))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Redo Remaining Heats: a session is already under way - finish or reset it first.");
+            return;
+        }
+
         var pending = OrderedProgram()
             .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
             .ToList();
@@ -514,17 +527,80 @@ public sealed partial class RaceControlControl
         // the whole re-seed back rather than one heat of it.
         var before = pending.ToDictionary(r => r.Id, r => r.AssignedTransponders.ToList(), StringComparer.Ordinal);
 
-        _undo.Capture("Redo the remaining heats", () =>
+        // The rosters the re-seed hands out, filled in below as each heat
+        // is rebuilt, so the undo can tell whether a heat still holds what
+        // this re-seed gave it.
+        var after = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        // The undo works on the rounds as they are on file WHEN it runs,
+        // looked up by id - not on the instances captured here - and puts
+        // a roster back only onto a heat that has not been run since and
+        // still holds exactly the re-seed's roster. The undo is not cleared
+        // when a heat is filed, so "redo, run Q2 Heat 1, Ctrl+Z" used to
+        // hand Heat 1 its old roster after it had raced, and its roster no
+        // longer matched the drivers in its result (the marshal list and
+        // the published documents read those rosters). A heat edited by
+        // hand since is left alone too, as Edit Format's undo does, so
+        // undoing the re-seed does not quietly undo that edit as well.
+        RoundDefinitionStore rounds = _rounds;
+
+        Action? undoReseed = null;
+        undoReseed = () =>
         {
-            foreach (var round in pending)
+            // Not while cars are on track, as Redo itself is refused then: the
+            // heat being raced still holds the re-seed's roster, so it would
+            // be handed its old one mid-race, and the Next Up bar, the tech
+            // warnings and the seeding would read a grid that is not the one
+            // racing. Put back on the stack first, so it can still be undone
+            // once the race is over - as the venue's undo does.
+            if (_race.State is not (RaceState.Idle or RaceState.Finished))
             {
-                if (before.TryGetValue(round.Id, out var old))
-                {
-                    round.AssignedTransponders = old;
-                    _rounds.Update(round);
-                }
+                _undo.Capture("Redo the remaining heats", undoReseed!);
+                throw new InvalidOperationException("a session is under way - finish or reset it first, then undo again.");
             }
-        });
+
+            var restored = 0;
+            var kept = new List<string>();
+
+            foreach (var (id, given) in after)
+            {
+                if (!before.TryGetValue(id, out var old) || rounds.Get(id) is not { } current)
+                {
+                    continue;
+                }
+
+                if (current.IsRecorded || !current.AssignedTransponders.SequenceEqual(given, StringComparer.Ordinal))
+                {
+                    kept.Add(current.RoundLabel);
+                    continue;
+                }
+
+                current.AssignedTransponders = old.ToList();
+                rounds.Update(current);
+                restored++;
+            }
+
+            if (restored == 0 && kept.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "every re-seeded heat has been run or edited since, so there is nothing left to put back. Nothing was changed.");
+            }
+
+            if (kept.Count > 0)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Undo Redo Remaining Heats: put back {Plural.Of(restored, "heat")}; "
+                                      + $"left {string.Join(", ", kept)} as they are - run or edited since.");
+            }
+
+            // The undo can run from anywhere in the app, for as long as the
+            // undo stack keeps it - only touch the bar while it exists.
+            if (!IsDisposed)
+            {
+                UpdateNextUpBar();
+            }
+        };
+
+        _undo.Capture("Redo the remaining heats", undoReseed);
 
         var touched = 0;
         var skipped = new List<string>();
@@ -574,6 +650,7 @@ public sealed partial class RaceControlControl
                 {
                     heats[i].AssignedTransponders = buckets[i];
                     _rounds.Update(heats[i]);
+                    after[heats[i].Id] = buckets[i].ToList();
                     touched++;
                 }
 
@@ -594,8 +671,10 @@ public sealed partial class RaceControlControl
 
     /// <summary>
     /// Opens the editor on the format that is actually in force, at its
-    /// source: the round's override if that is what is running, else the
-    /// class's format, else the app default. Editing what you can see
+    /// source: the round's override if that is what is running, else (for a
+    /// qualifier) the class's qualifier format, else the class's format,
+    /// else the app default - the same order EffectiveFormat resolves them
+    /// in. Editing what you can see
     /// beats a menu asking which of three formats you meant.
     /// </summary>
     private void EditFormat()
@@ -638,6 +717,56 @@ public sealed partial class RaceControlControl
 
                 round.FormatOverride = newOverride;
                 _rounds.Update(round);
+                ApplyEffectiveFormat();
+            }
+
+            return;
+        }
+
+        // A qualifier under a class with its own qualifier format runs under
+        // that, exactly as EffectiveFormat resolves it - so that is the one
+        // to open. Falling through to the class branch below would open the
+        // MAIN format instead: the heat on screen would not change, and every
+        // main later that night would quietly run under the edited numbers.
+        // (And a class with a qualifier format but no main format would land
+        // on the app default, an edit that does nothing to this heat either.)
+        // "Use default" here means what it means in the class editor: drop
+        // back to the class's race format, else the app default.
+        if (round?.Kind == RoundKind.Qualifier && ClassFor(round) is { QualifierFormat: not null } qualClass)
+        {
+            using var qualForm = new RaceFormatForm(
+                qualClass.QualifierFormat, $"Qualifier Format - {qualClass.Name}", allowUseDefault: true,
+                fallback: qualClass.Format ?? RaceFormat.FromSettings(_settings));
+
+            if (qualForm.ShowDialog(FindForm()) == DialogResult.OK)
+            {
+                // As for the class format below: only the qualifier format
+                // goes back, onto the class as it is on file then.
+                var classes = _raceClasses;
+                var classId = qualClass.Id;
+                var oldQualFormat = qualClass.QualifierFormat?.Clone();
+                var newQualFormat = qualForm.Result;
+
+                _undo.Capture($"Edit qualifier format for {qualClass.Name}", () =>
+                {
+                    if (classes.Get(classId) is not { } current)
+                    {
+                        throw new InvalidOperationException("that class has been deleted since. Nothing was changed.");
+                    }
+
+                    if (!ReferenceEquals(current.QualifierFormat, newQualFormat))
+                    {
+                        throw new InvalidOperationException(
+                            $"{current.Name}'s qualifier format has been changed again since, and undoing this now would undo that too. Nothing was changed.");
+                    }
+
+                    current.QualifierFormat = oldQualFormat;
+                    classes.Upsert(current);
+                    ReapplyFormatAfterUndo();
+                });
+
+                qualClass.QualifierFormat = newQualFormat;
+                _raceClasses.Upsert(qualClass);
                 ApplyEffectiveFormat();
             }
 
@@ -764,7 +893,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private string BuildSessionLabel(RoundDefinition? round)
     {
-        var typed = _txtSessionLabel.Text.Trim();
+        var typed = TypedLabelFor(round);
 
         var baseLabel = !string.IsNullOrWhiteSpace(typed)
             ? typed
@@ -773,6 +902,83 @@ public sealed partial class RaceControlControl
                 : "Race";
 
         return _currentRaceIsDemo ? $"{SessionRecord.DemoLabelPrefix} {baseLabel}" : baseLabel;
+    }
+
+    /// <summary>
+    /// The race name typed in (or set) for this race, with leftovers from an
+    /// earlier race dropped when the race is tied to a round. Empty when
+    /// there is nothing worth keeping, so the caller falls back to the
+    /// round's own name.
+    ///
+    /// The hidden name box here is only a copy of MainForm's Name box, and
+    /// it only changes when that box raises TextChanged (plus Quick Race,
+    /// a crash-journal restore and Reset). Two things leave a stale name in
+    /// it (2 Oct 2026):
+    ///
+    /// - Once a heat is recorded it drops out of the Round box, but the
+    ///   "Class - Heat 1" name MainForm derived for it stays in the box. The
+    ///   next race, auto-advanced onto Heat 2, was then filed, read out and
+    ///   published as Heat 1 a second time.
+    /// - Quick Race writes its "Quick Race 19:05" stamp only into this copy.
+    ///   Starting Heat 2 afterwards writes the same "Club - Heat 2" text
+    ///   MainForm's box already held, so no TextChanged reaches here, and
+    ///   Heat 2 was filed as the Quick Race - with nothing on screen to say
+    ///   so, since the Name box is hidden while a round is chosen.
+    ///
+    /// So when the race is tied to a round, a name that is MainForm's
+    /// derived name for a different round, or a Quick Race stamp, is not
+    /// this race's name and is ignored. The fallback is that round's own
+    /// derived name, the same "Class - Round" a race picked from the Round
+    /// box is filed under. A Quick Race itself is never tied to a round
+    /// unless the director picks one for it, in which case the round's name
+    /// is the right one anyway. Anything else the director typed is kept,
+    /// as before, and a race with no round is left exactly as it was.
+    /// UI thread.
+    /// </summary>
+    private string TypedLabelFor(RoundDefinition? round)
+    {
+        var typed = _txtSessionLabel.Text.Trim();
+
+        if (round is null || typed.Length == 0)
+        {
+            return typed;
+        }
+
+        var own = DerivedRoundName(round);
+
+        if (string.Equals(typed, own, StringComparison.OrdinalIgnoreCase))
+        {
+            return typed;
+        }
+
+        var staleRoundName = _rounds is not null
+            && _rounds.All.Any(r =>
+                !string.Equals(r.Id, round.Id, StringComparison.Ordinal)
+                && string.Equals(typed, DerivedRoundName(r), StringComparison.OrdinalIgnoreCase));
+
+        return staleRoundName || IsQuickRaceStamp(typed) ? own : typed;
+    }
+
+    /// <summary>
+    /// The name MainForm puts in the Name box for a round picked in the Round
+    /// box (ApplyRoundToSessionSetup). Kept in step with that by hand.
+    /// </summary>
+    private static string DerivedRoundName(RoundDefinition round) =>
+        $"{round.ClassName} - {round.RoundLabel}".Trim();
+
+    /// <summary>
+    /// Whether a name is the "Quick Race HH:mm" stamp Quick Race writes. The
+    /// time is read in the current culture, as it was written, since the
+    /// ":" in a format string is the culture's time separator.
+    /// </summary>
+    private static bool IsQuickRaceStamp(string label)
+    {
+        const string prefix = "Quick Race ";
+
+        return label.StartsWith(prefix, StringComparison.Ordinal)
+            && DateTime.TryParseExact(label[prefix.Length..], "HH:mm",
+                System.Globalization.CultureInfo.CurrentCulture,
+                System.Globalization.DateTimeStyles.None, out _);
     }
 
     /// <summary>

@@ -178,6 +178,11 @@ public sealed partial class RaceDayService
         // and settings changed since went back to what they had been.
         var dayId = day.Id;
         var previousId = _host.Events.Active?.Id;
+
+        // Whether that day was still open then. A closed day can be current
+        // (being looked at), and going back to it is putting it back as it
+        // was, not reopening it - so only a day closed SINCE is refused.
+        var previousWasOpen = _host.Events.Active?.IsOpen ?? false;
         var reopening = !day.IsOpen;
         var closedAtUtc = day.FinishedUtc;
 
@@ -191,7 +196,8 @@ public sealed partial class RaceDayService
                     "it isn't the current race day any more - another has been made current since, or it has been closed or deleted. Nothing was changed.");
             }
 
-            if (previousId is not null && _host.Events.Get(previousId) is not { IsOpen: true })
+            if (previousId is not null
+                && !(_host.Events.Get(previousId) is { } dayBefore && (dayBefore.IsOpen || !previousWasOpen)))
             {
                 throw new InvalidOperationException(
                     "the race day that was current before has been closed or deleted since, so it can't be made current again. Nothing was changed.");
@@ -293,6 +299,10 @@ public sealed partial class RaceDayService
         // check-ins, programme and run sheet left behind under a day nobody
         // could see any more.
         var previousId = _host.Events.Active?.Id;
+
+        // See DayOpen: a day that was already closed when it was current can
+        // be current again; one closed since cannot.
+        var previousWasOpen = _host.Events.Active?.IsOpen ?? false;
         RaceEvent? started = null;
         var asStarted = string.Empty;
 
@@ -322,7 +332,8 @@ public sealed partial class RaceDayService
 
             // Back to the day that was current before - if this one still was,
             // and that one can still take rounds.
-            if (wasCurrent && (previousId is null || _host.Events.Get(previousId) is { IsOpen: true }))
+            if (wasCurrent && (previousId is null
+                || _host.Events.Get(previousId) is { } dayBefore && (dayBefore.IsOpen || !previousWasOpen)))
             {
                 _host.Events.SetActive(previousId);
             }

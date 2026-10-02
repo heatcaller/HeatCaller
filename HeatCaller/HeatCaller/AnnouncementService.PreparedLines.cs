@@ -398,7 +398,10 @@ public sealed partial class AnnouncementService
                         return new PrepareOutcome(rendered, alreadySaved, failed, "the HeatCaller relay isn't set up");
                     }
 
-                    var audio = await SpeakThroughRelayAsync(client, line.Profile, line.Text, cancel);
+                    // Split into pieces when it is over the relay's length
+                    // limit, the same as a live line - or a long line could
+                    // never be prepared here at all.
+                    var audio = await SpeakWholeLineThroughRelayAsync(client, line.Profile, line.Text, cancel);
                     VoiceLibrary.Shared.Save(line.Profile, line.Text, audio);
                 }
                 else
@@ -510,14 +513,14 @@ public sealed partial class AnnouncementService
             _flagLines.Remove(type);
         }
 
-        AnnouncementTextReady?.Invoke(prepared.Text);
+        RaiseAnnouncementText(prepared.Text);
         var generation = ClearTheDecksFor(type);
 
         // The finish call holds the voice queue until it has spoken - taken
         // here, synchronously, so NotifyRaceCompleted can see it was.
         var finishHold = ClaimFinishCallHold(type);
 
-        var volume = Math.Clamp(profile.Volume * (VoiceBoostProvider?.Invoke() ?? 1f), 0.0, 1.0);
+        var volume = AnnouncementGain(profile.Volume);
 
         _ = Task.Run(async () =>
         {

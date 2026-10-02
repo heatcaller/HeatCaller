@@ -219,7 +219,13 @@ internal static class MenuTips
         }
 
         var tip = new ToolTip();
-        AppTheme.StyleToolTip(tip);
+
+        // Kept, because getting this far means the menu asked for its item
+        // notes (ShowItemToolTips was on) - the Undo list's "also undoes the
+        // newer steps" note is one. A tip styled without keep is switched off
+        // for good and ShowToolTip refuses it, and the menu's own Windows
+        // tips were just turned off above, so the notes would show nowhere.
+        AppTheme.StyleToolTip(tip, keep: true);
         Attached.Add(menu, tip);
 
         foreach (ToolStripItem item in menu.Items)

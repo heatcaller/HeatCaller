@@ -266,6 +266,18 @@ internal static class RacerPins
         EnsurePins(settings, profiles);
     }
 
+    /// <summary>
+    /// The set exactly as captured, and nothing more - for taking back PINs
+    /// that could not be saved. Unlike RestoreSet it does not run EnsurePins
+    /// afterwards, which would only hand out the same unsaved PINs again.
+    /// </summary>
+    public static void PutBackExactly(AppSettings settings, PinSet set)
+    {
+        settings.RacerPins = new Dictionary<string, string>(set.Pins, StringComparer.OrdinalIgnoreCase);
+        settings.RacerPinsIssuedUtc = set.IssuedUtc;
+        settings.RacerPinsEmailed = set.Emailed.ToList();
+    }
+
     /// <summary>A brand-new set now, whatever the rotation says - the "New PINs now" button. Returns how many were made.</summary>
     public static int RegenerateAll(AppSettings settings, ProfileStore profiles) =>
         IssueNewSet(settings, profiles, DateTime.UtcNow);

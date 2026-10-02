@@ -315,7 +315,11 @@ public sealed partial class AnnouncementService
 
         try
         {
-            await AudioBus.PlayAsync(rawReader.ToSampleProvider(), (float)Math.Clamp(volume, 0.0, 1.0), stop.Token);
+            // Up to AudioBus.MaxBoost: the announcer's level times the
+            // "boost voice over loud ambience" gain (AnnouncementGain), which
+            // a 0..1 clamp here used to cancel. The bus soft-limits a boosted
+            // line so it bends rather than clips.
+            await AudioBus.PlayAsync(rawReader.ToSampleProvider(), (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true);
         }
         finally
         {

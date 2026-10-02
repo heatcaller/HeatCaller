@@ -214,8 +214,10 @@ public static class ResultEditor
     /// Applies the adjustments to the record itself, re-orders it, renumbers
     /// the positions and logs every change in its Edits list. Returns how
     /// many drivers' results changed; zero means the record was left exactly
-    /// as it was. The caller saves it (SessionHistoryStore.SaveEdited) and
-    /// captures the undo BEFORE calling this.
+    /// as it was. The caller takes the Snapshot BEFORE calling this, saves
+    /// the record (SessionHistoryStore.SaveEdited), and captures the undo
+    /// only once that save has worked - an undo captured for a save that
+    /// failed would undo a correction that never happened.
     /// </summary>
     public static int Apply(SessionRecord record, IReadOnlyList<ResultAdjustment> adjustments, string reason, string source)
     {
@@ -437,7 +439,7 @@ public static class ResultEditor
         return (times, raced.FastLapMs > 0 ? Math.Max(raced.FastLapMs, rebuilt) : 0);
     }
 
-    /// <summary>The engine's order - most laps, then least time - with DNFs and then DQs underneath. Positions renumbered 1..N.</summary>
+    /// <summary>The engine's order - most laps, then least time - with DNFs (and no-lap rows) and then DQs underneath. Positions renumbered 1..N.</summary>
     private static List<SessionResultEntry> Reordered(IEnumerable<SessionResultEntry> results)
     {
         var ordered = results
@@ -457,9 +459,23 @@ public static class ResultEditor
         return ordered;
     }
 
+    /// <summary>
+    /// Finishers 0, DNFs 1, DQs 2 - and a row with no laps at all and no
+    /// outcome goes in with the DNFs. A car on the entry list that never
+    /// crossed the line (every grid car is on the board from a hand-released
+    /// green) is a non-finisher too, and sorted with the finishers it came
+    /// out ABOVE a DNF who had done laps. The championship counts a no-lap
+    /// row as a place (SeasonStore.ComputeStandings, on the promise that
+    /// such rows always sit at the bottom), so marking someone DNF cost
+    /// them a place's points to a car that never turned a lap. In the DNF
+    /// group the laps decide, so the DNF with laps stays ahead of it. With
+    /// no DNF in the race this changes nothing: a no-lap row already sorted
+    /// after every finisher and before every DQ.
+    /// </summary>
     private static int Group(SessionResultEntry entry) =>
         entry.Outcome == Dq ? 2
         : entry.Outcome == Dnf ? 1
+        : entry.Laps <= 0 ? 1
         : 0;
 
     /// <summary>A deep copy, through the same serializer the history file uses - so no field is ever forgotten.</summary>

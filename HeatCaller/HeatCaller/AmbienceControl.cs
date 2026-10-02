@@ -198,8 +198,10 @@ public sealed class AmbienceControl : UserControl
 
         if (ambience.IsRunning)
         {
-            ambience.Stop();
-            ambience.Start(ignoreEnabledSetting: true);
+            // Restart rather than Stop and Start, so an undo pressed while
+            // the crowd is fading out at the end of a session doesn't bring
+            // it back with nothing left to stop it (see Restart).
+            ambience.Restart(ignoreEnabledSetting: true);
         }
 
         store.NotifyRestored();
@@ -250,7 +252,21 @@ public sealed class AmbienceControl : UserControl
 
             _store.Current.Enabled = _chkEnabled.Checked;
             _store.Save();
-            ApplyRunState(startIfEnabled: _chkEnabled.Checked);
+
+            // Switching the master switch off is the one place the page
+            // stops the crowd outright, whatever started it - that is what
+            // the operator just asked for. Every other edit only refreshes a
+            // bed that is already playing. See ApplyRunState.
+            if (_chkEnabled.Checked)
+            {
+                ApplyRunState(startIfEnabled: true);
+            }
+            else
+            {
+                _ambience.Settings = _store.Current;
+                _ambience.Stop();
+            }
+
             UpdateEnabledState();
         };
 
@@ -1346,7 +1362,7 @@ public sealed class AmbienceControl : UserControl
         }
     }
 
-    /// <summary>Starts or stops the service to match the enabled setting.</summary>
+    /// <summary>Hands the player the edited settings, restarting it if it is playing, and starts it if asked and ambience is enabled.</summary>
     /// <param name="startIfEnabled">
     /// Whether this should actually begin playback, or only refresh a
     /// session that's already running.
@@ -1355,23 +1371,30 @@ public sealed class AmbienceControl : UserControl
     /// volume while nothing is playing doesn't expect sound to begin. But
     /// if it IS playing, the change needs picking up, since mixer inputs
     /// are built at Start.
+    ///
+    /// A bed that is already playing is restarted past the master switch,
+    /// the way AfterUndo and the layer editor's preview restart it: whatever
+    /// let it play before still applies. This used to stop the ambience
+    /// outright whenever the switch was off - but session auto-start brings
+    /// the crowd up past that switch on purpose (StartSessionAudio, and the
+    /// switch is off by default), so saving a layer, deleting one or picking
+    /// another Source mid-race silenced the crowd for the rest of the race.
+    /// Turning the switch itself off is handled where the switch is, and
+    /// still stops it.
     /// </param>
     private void ApplyRunState(bool startIfEnabled = false)
     {
         _ambience.Settings = _store.Current;
 
-        if (!_store.Current.Enabled)
+        if (_ambience.IsRunning)
         {
-            _ambience.Stop();
-            return;
+            // Restart so newly added or edited layers are picked up. Restart
+            // rather than Stop and Start, so an edit made while the crowd is
+            // fading out at the end of a session keeps that fade going.
+            _ambience.Restart(ignoreEnabledSetting: true);
         }
-
-        var wasRunning = _ambience.IsRunning;
-
-        if (wasRunning || startIfEnabled)
+        else if (startIfEnabled && _store.Current.Enabled)
         {
-            // Restart so newly added or edited layers are picked up.
-            _ambience.Stop();
             _ambience.Start();
         }
     }
@@ -1882,15 +1905,17 @@ public sealed class AmbienceLayerForm : Form
             // loaded a layer (or a file) that isn't in the saved settings,
             // and only rebuilding the mix takes that back out. Started past
             // the enabled setting because it WAS playing - whatever let it
-            // play before the dialog still applies.
-            _ambience.Stop();
-
+            // play before the dialog still applies. Restart rather than Stop
+            // and Start, so closing the dialog while the crowd is fading out
+            // at the end of a session keeps that fade going. The saved
+            // settings are handed over first - Restart reopens the layers
+            // from whatever settings it has.
             if (_store is not null)
             {
                 _ambience.Settings = _store.Current;
             }
 
-            _ambience.Start(ignoreEnabledSetting: true);
+            _ambience.Restart(ignoreEnabledSetting: true);
         }
 
         _previewStartedAmbience = false;

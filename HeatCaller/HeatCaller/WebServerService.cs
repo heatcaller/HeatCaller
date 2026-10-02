@@ -3253,8 +3253,18 @@ public sealed class WebServerService
           }
           try { d = await r.json(); } catch(e) {}
           if (!d) { show(press, 'No answer this page can read.', 'Check the laptop to see whether ' + name + ' went.', 'bad'); return; }
-          // A race is running: ask, and send it again on a yes.
-          if (!d.ok && d.confirm && !force) {
+          // A race is running: ask, and send it again on a yes. A yes that
+          // comes back with the question again is asked again only when the
+          // question is about a different race from the one just agreed to -
+          // a new race went green while the first question was open - so the
+          // marshal gets to say yes or no about the race now on track. The
+          // same race again can't happen from the laptop, but if it did,
+          // asking again would only loop, so that falls through to the error
+          // below. A question with no race number is never re-sent forced,
+          // since a forced press with no number would abandon whatever race
+          // is on track without anyone being asked about it.
+          const askedAgain = force && typeof d.raceGeneration === 'number' && d.raceGeneration !== race;
+          if (!d.ok && d.confirm && (!force || askedAgain)) {
             if (confirm((d.error || 'A race is running.') + ' Carry on?')) { go(a, true, d.raceGeneration); }
             else { show(press, name + ' cancelled.', 'Nothing was changed.', 'busy'); }
             return;

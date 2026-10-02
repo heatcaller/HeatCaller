@@ -77,7 +77,7 @@ public sealed class GhostService : IDisposable
     /// event instead, which arrives on the UI thread.
     /// </summary>
     private readonly object _paceLock = new();
-    private Dictionary<string, (long BestMs, long AverageMs)> _pace = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, (long BestMs, IReadOnlyList<long> PaceLaps)> _pace = new(StringComparer.OrdinalIgnoreCase);
     private string? _leadingRealCar;
 
     private Action<RacerStanding, bool, bool>? _lapHandler;
@@ -85,7 +85,7 @@ public sealed class GhostService : IDisposable
     private void RefreshPaceSnapshot()
     {
         var standings = _race.GetOrderedStandings();
-        var pace = new Dictionary<string, (long, long)>(StringComparer.OrdinalIgnoreCase);
+        var pace = new Dictionary<string, (long, IReadOnlyList<long>)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var standing in standings)
         {
@@ -93,9 +93,17 @@ public sealed class GhostService : IDisposable
             // the line and is not a lap time - and none that ran through a
             // crash recovery, which spans the whole stoppage and would drag
             // a live-pace ghost's average far off the driver's real pace.
-            var laps = RaceGaps.PaceLaps(standing);
-            var average = laps.Count > 0 ? (long)laps.TakeLast(20).Average() : 0;
-            pace[standing.TransponderId] = (standing.FastestLapMs, average);
+            //
+            // The laps themselves are kept rather than one average. The
+            // window a "recent average" ghost averages over is the ghost's
+            // own setting (GhostCar.LiveAverageLaps), so two ghosts following
+            // the same driver can want different windows. A single average
+            // over the last 20 laps used to be worked out here for everyone,
+            // and the ghost's setting (5 by default) was never read - so the
+            // ghost took about four times as long as it should to catch up
+            // when the driver found pace. PaceLaps hands back a fresh list,
+            // so the pool thread can read it without touching the standings.
+            pace[standing.TransponderId] = (standing.FastestLapMs, RaceGaps.PaceLaps(standing));
         }
 
         lock (_paceLock)
@@ -428,7 +436,16 @@ public sealed class GhostService : IDisposable
         // session as it develops rather than being fixed at the green.
         if (runner.Car.IsLivePace)
         {
-            var live = ResolveLivePaceMs(runner.Car) ?? runner.FallbackLapMs;
+            // The live number is the driver's raw pace, so the ghost's pace
+            // adjustment has to be applied to it here too. It used to be
+            // applied only once, at the green, which meant a "2% quicker
+            // than me" ghost dropped to exactly the driver's pace as soon as
+            // they set a lap - it never stayed ahead, and a ghost set to
+            // trail fell straight onto their tail. The fallback was adjusted
+            // when the ghost started, so it is used as it is.
+            var live = ResolveLivePaceMs(runner.Car) is { } liveMs
+                ? ApplyPaceAdjustment(liveMs, runner.Car.PacePercent)
+                : runner.FallbackLapMs;
             runner.BaseLapMs = Math.Max(500, live);
 
             // Only reported when it has actually moved, and only past a
@@ -471,14 +488,17 @@ public sealed class GhostService : IDisposable
             GhostPaceSource.PersonalBestInRange => BestLapFor(ghost.SourceTransponder, trackLayoutName, ghost.RangeFromUtc, ghost.RangeToUtc),
 
             // A live ghost still needs something to run at until the session
-            // has laps to read. Their own best on this track is the closest
-            // stand-in; a fixed time set on the ghost is the backstop.
+            // has laps to read. The edit form shows the lap time for these
+            // sources as "Until laps come in:", so a time typed there comes
+            // first - the driver's best used to come first, which ignored a
+            // gentle 8-second warm-up time for any driver with a saved best.
+            // But the form always saves that box, and it starts at the model's
+            // 7.000s default, so "a time is set" is true for every ghost. See
+            // LiveStartLapMs for how the untouched default is told apart.
             GhostPaceSource.LiveOwnPace => ResolveLivePaceMs(ghost)
-                                           ?? BestLapFor(ghost.SourceTransponder, trackLayoutName)
-                                           ?? (ghost.FixedLapMs > 0 ? ghost.FixedLapMs : null),
+                                           ?? LiveStartLapMs(ghost.FixedLapMs, BestLapFor(ghost.SourceTransponder, trackLayoutName)),
             GhostPaceSource.LiveLeaderPace => ResolveLivePaceMs(ghost)
-                                              ?? BestLapFor(ghost.SourceTransponder, trackLayoutName)
-                                              ?? (ghost.FixedLapMs > 0 ? ghost.FixedLapMs : null),
+                                              ?? LiveStartLapMs(ghost.FixedLapMs, BestLapFor(ghost.SourceTransponder, trackLayoutName)),
             _ => null,
         };
 
@@ -488,7 +508,58 @@ public sealed class GhostService : IDisposable
         }
 
         // Pace adjustment last, so it applies whatever the source was.
-        var adjusted = (int)(baseMs * Math.Clamp(ghost.PacePercent, 50, 200) / 100.0);
+        return ApplyPaceAdjustment(baseMs, ghost.PacePercent);
+    }
+
+    /// <summary>The lap time a brand-new ghost starts with (GhostCar.FixedLapMs's default).</summary>
+    private static readonly int DefaultFixedLapMs = new GhostCar().FixedLapMs;
+
+    /// <summary>
+    /// What a live ghost runs at before the session has laps to read.
+    ///
+    /// The lap-time box can't say "nothing typed": every ghost carries the
+    /// model's 7.000s default, a settings file without the field gets it
+    /// too, and the edit form writes the box back for every source. So a
+    /// plain "is a time set" check is always true and the driver's best
+    /// could never be used. That silently moved live ghosts saved before the
+    /// typed time came first: one left on the default used to start at the
+    /// driver's PB (say 10s on a big track) and now went out at 7s, three
+    /// seconds up the road before the live pace ever arrived.
+    ///
+    /// So the untouched default counts as "no time chosen": the driver's
+    /// best wins over it, and the default is only the last resort when
+    /// there is no best (a new driver, or a leader-pace ghost with no
+    /// driver). Any other time is a deliberate choice and comes first. The
+    /// cost is that someone who types exactly 7.000 on purpose gets the
+    /// best instead; telling those apart needs the form to record whether
+    /// the box was touched, which this can't see.
+    /// </summary>
+    internal static int? LiveStartLapMs(int fixedLapMs, int? bestLapMs)
+    {
+        if (fixedLapMs > 0 && fixedLapMs != DefaultFixedLapMs)
+        {
+            return fixedLapMs;
+        }
+
+        if (bestLapMs is > 0)
+        {
+            return bestLapMs;
+        }
+
+        return fixedLapMs > 0 ? fixedLapMs : null;
+    }
+
+    /// <summary>
+    /// A lap time with a ghost's pace adjustment applied: 98% is 2% quicker,
+    /// 110% is 10% slower. One place for it, because the start of a run and
+    /// a live ghost's lap-by-lap re-pace both need it, and the two drifting
+    /// apart is how a live ghost lost its adjustment after the first lap.
+    /// Clamped to the same 50-200% the edit form allows, and never under
+    /// half a second, so a bad setting can't produce an impossible lap.
+    /// </summary>
+    internal static int ApplyPaceAdjustment(int lapMs, int pacePercent)
+    {
+        var adjusted = (int)(lapMs * Math.Clamp(pacePercent, 50, 200) / 100.0);
         return Math.Max(500, adjusted);
     }
 
@@ -561,7 +632,7 @@ public sealed class GhostService : IDisposable
     /// </summary>
     private int? ResolveLivePaceMs(GhostCar ghost)
     {
-        (long BestMs, long AverageMs) entry;
+        (long BestMs, IReadOnlyList<long> PaceLaps) entry;
 
         lock (_paceLock)
         {
@@ -580,9 +651,26 @@ public sealed class GhostService : IDisposable
         var useAverage = ghost.PaceSource == GhostPaceSource.LiveOwnPace
                          && ghost.LiveBasis == GhostLiveBasis.RecentAverage;
 
-        var chosen = useAverage ? entry.AverageMs : entry.BestMs;
+        var chosen = useAverage ? RecentAverageMs(entry.PaceLaps, ghost.LiveAverageLaps) : entry.BestMs;
 
         return chosen > 0 ? (int)chosen : null;
+    }
+
+    /// <summary>
+    /// The mean of the last <paramref name="window"/> laps, or 0 when there
+    /// are none. A window under one (a hand-edited or very old settings
+    /// file) is treated as one, so the ghost follows the latest lap rather
+    /// than dividing by nothing. A window longer than the laps run so far
+    /// simply averages all of them.
+    /// </summary>
+    internal static long RecentAverageMs(IReadOnlyList<long> laps, int window)
+    {
+        if (laps.Count == 0)
+        {
+            return 0;
+        }
+
+        return (long)laps.TakeLast(Math.Max(1, window)).Average();
     }
 
     /// <summary>Plain-language account of where a started ghost's pace came from, for the log.</summary>

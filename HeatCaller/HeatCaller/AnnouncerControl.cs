@@ -23,12 +23,27 @@ public sealed class AnnouncerControl : UserControl
     /// <summary>Latest LLM-suggested line, shown at the top of the list. Null until one arrives.</summary>
     private string? _suggestedLine;
 
+    /// <summary>
+    /// The race (RaceControlSession.SessionGeneration) the suggested line was
+    /// written about. A suggestion talks about particular cars and gaps, so
+    /// it is only true for the race it came from - see DropStaleSuggestion.
+    /// </summary>
+    private int _suggestedLineGeneration;
+
     /// <summary>Guards against stacking requests - the refresh runs twice a second and a model call takes seconds.</summary>
     private bool _suggestionInFlight;
 
     private DateTime _lastSuggestionUtc = DateTime.MinValue;
 
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 500 };
+
+    /// <summary>
+    /// The UI thread's context and id, taken in the constructor - see
+    /// RunOnUiThread for why InvokeRequired cannot be trusted here.
+    /// </summary>
+    private readonly SynchronizationContext? _uiContext;
+
+    private readonly int _uiThreadId;
 
     /// <summary>The race's state, as tall and as wide as the longest thing it can say - so the clock beside it never moves as it changes.</summary>
     private readonly SteadyLabel _lblState = new();
@@ -120,6 +135,12 @@ public sealed class AnnouncerControl : UserControl
         SessionHistoryStore history, DayScheduleStore schedule, AnnouncementService announcer,
         CommentaryService? commentary = null, AppSettings? settings = null, UndoService? undo = null)
     {
+        // Taken first, on the thread building the page - which is the UI
+        // thread, and which WinForms has already given its own context by
+        // the time any control's constructor body runs.
+        _uiContext = SynchronizationContext.Current;
+        _uiThreadId = Environment.CurrentManagedThreadId;
+
         _undo = undo;
         _commentary = commentary;
         _settings = settings;
@@ -149,9 +170,12 @@ public sealed class AnnouncerControl : UserControl
         // with a second set of rules that could disagree.
         announcer.AnnouncementTextReady += OnAnnouncementText;
 
+        // Raised from inside the lap handler, which is the decoder's thread
+        // rather than the UI's - so it goes through the same marshaling as
+        // the announcer's lines.
         _race.JumpStartDetected += (transponder, penaltyMs) =>
-            AddFeedLine($"JUMP START - {NameFor(transponder)}"
-                        + (penaltyMs > 0 ? $" (+{penaltyMs / 1000.0:0.0}s)" : " (flagged)"));
+            RunOnUiThread(() => AddFeedLine($"JUMP START - {NameFor(transponder)}"
+                        + (penaltyMs > 0 ? $" (+{penaltyMs / 1000.0:0.0}s)" : " (flagged)")));
 
         _refresh.Tick += (_, _) => RefreshLive();
         _refresh.Start();
@@ -278,11 +302,25 @@ public sealed class AnnouncerControl : UserControl
         // would otherwise leave every existing row at its old height and
         // re-truncate the text at the new width. Re-running the refresh
         // re-adds the items, which re-measures them.
-        _lstTalkingPoints.Resize += (_, _) => RefreshTalkingPoints();
+        // Forced, because the text itself has not changed - only the width
+        // it has to wrap into - so the usual "nothing new, leave it alone"
+        // shortcut would skip exactly the re-measure this is here for.
+        _lstTalkingPoints.Resize += (_, _) => RefreshTalkingPoints(force: true);
 
         var btnClear = new Button { Text = ClearPointsCaption };
         btnClear.Click += (_, _) =>
         {
+            // The suggested line sits at the top of the same list, so "Clear
+            // Points" has to take it too - before, it stayed put, and when the
+            // feed was empty the button did nothing at all while a quote was
+            // plainly showing. It is not part of the undo: it is a passing
+            // suggestion the next request replaces, not a record of the race.
+            if (_suggestedLine is not null)
+            {
+                _suggestedLine = null;
+                RefreshTalkingPoints();
+            }
+
             if (_feed.Count == 0)
             {
                 return;
@@ -754,18 +792,51 @@ public sealed class AnnouncerControl : UserControl
         RefreshLive();
     }
 
-    private void OnAnnouncementText(string text)
+    private void OnAnnouncementText(string text) => RunOnUiThread(() => AddFeedLine(text));
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on the UI thread: at once when already
+    /// on it, otherwise posted there.
+    /// </summary>
+    /// <remarks>
+    /// NOT InvokeRequired. This page is built at startup but has no window,
+    /// and so no handle, until the announcer's screen is first opened - and
+    /// without a handle InvokeRequired answers false on every thread. The
+    /// talking points used to be added straight from whatever thread spoke
+    /// them (the race recap and some flag calls speak from Task.Run) while
+    /// the refresh timer was rebuilding the same list on the UI thread, which
+    /// could throw "Collection was modified" mid-race or tear the list. The
+    /// UI thread's own context needs no handle of ours, so lines spoken
+    /// before the window is ever opened are still there when it is.
+    ///
+    /// A line that cannot be posted - the app shutting down - is dropped, as
+    /// it always was once the page had no handle to post through.
+    /// </remarks>
+    private void RunOnUiThread(Action action)
     {
-        if (InvokeRequired)
+        if (Environment.CurrentManagedThreadId == _uiThreadId || _uiContext is null)
         {
-            if (IsHandleCreated && !IsDisposed)
+            if (!IsDisposed)
             {
-                BeginInvoke(() => AddFeedLine(text));
+                action();
             }
             return;
         }
 
-        AddFeedLine(text);
+        try
+        {
+            _uiContext.Post(_ =>
+            {
+                if (!IsDisposed && !Disposing)
+                {
+                    action();
+                }
+            }, null);
+        }
+        catch (InvalidOperationException)
+        {
+            // The UI thread's marshaling window is gone - shutdown.
+        }
     }
 
     private void AddFeedLine(string text)
@@ -841,10 +912,24 @@ public sealed class AnnouncerControl : UserControl
         e.DrawFocusRectangle();
     }
 
-    private void RefreshTalkingPoints()
+    /// <summary>
+    /// Rebuilds the talking-points list from the suggested line, the current
+    /// observations and the feed.
+    ///
+    /// This runs on every tick of the half-second refresh timer, so it only
+    /// touches the ListBox when the rows have actually changed. Clearing a
+    /// ListBox resets its scroll position to the top and drops the selected
+    /// row, and the feed holds far more lines than the card shows - so an
+    /// unconditional rebuild snapped the list back to the top twice a
+    /// second, and an announcer scrolling down to an older line (a
+    /// jump-start note, say) could never keep it on screen. When a rebuild
+    /// is needed the scroll position and selected row are carried across it.
+    /// <paramref name="force"/> rebuilds even when the text is unchanged,
+    /// which the resize handler needs to re-measure the wrapped rows.
+    /// </summary>
+    private void RefreshTalkingPoints(bool force = false)
     {
-        _lstTalkingPoints.BeginUpdate();
-        _lstTalkingPoints.Items.Clear();
+        var rows = new List<string>();
 
         // The LLM's suggested phrasing goes first when there is one - it's
         // the thing most likely to be read out verbatim. Marked distinctly
@@ -852,22 +937,75 @@ public sealed class AnnouncerControl : UserControl
         // are measured, this one is written.
         if (!string.IsNullOrWhiteSpace(_suggestedLine))
         {
-            _lstTalkingPoints.Items.Add($"\u201C{_suggestedLine}\u201D");
+            rows.Add($"\u201C{_suggestedLine}\u201D");
         }
 
         // Generated observations first - they're the ones that need saying
         // NOW, where the feed below is a record of what already happened.
         foreach (var point in GenerateObservations())
         {
-            _lstTalkingPoints.Items.Add($"* {point}");
+            rows.Add($"* {point}");
         }
 
-        foreach (var line in _feed)
+        rows.AddRange(_feed);
+
+        var items = _lstTalkingPoints.Items;
+        if (!force && items.Count == rows.Count)
         {
-            _lstTalkingPoints.Items.Add(line);
+            var same = true;
+            for (var i = 0; i < rows.Count; i++)
+            {
+                if (!string.Equals(items[i]?.ToString(), rows[i], StringComparison.Ordinal))
+                {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same)
+            {
+                return;
+            }
         }
 
-        _lstTalkingPoints.EndUpdate();
+        // Kept by index for the scroll position, which is what the eye is
+        // holding on to, but by text for the selection, so a new feed line
+        // arriving at the top doesn't move the highlight onto a different
+        // row. A row that has gone simply ends up unselected.
+        var topIndex = _lstTalkingPoints.TopIndex;
+        var selectedText = _lstTalkingPoints.SelectedIndex >= 0
+            ? _lstTalkingPoints.SelectedItem?.ToString()
+            : null;
+
+        _lstTalkingPoints.BeginUpdate();
+        try
+        {
+            items.Clear();
+            foreach (var row in rows)
+            {
+                items.Add(row);
+            }
+
+            if (selectedText is not null)
+            {
+                var index = rows.IndexOf(selectedText);
+                if (index >= 0)
+                {
+                    _lstTalkingPoints.SelectedIndex = index;
+                }
+            }
+
+            // Set after the selection, because selecting a row can scroll it
+            // into view, and the place the announcer had scrolled to wins.
+            if (rows.Count > 0 && topIndex > 0)
+            {
+                _lstTalkingPoints.TopIndex = Math.Min(topIndex, rows.Count - 1);
+            }
+        }
+        finally
+        {
+            _lstTalkingPoints.EndUpdate();
+        }
     }
 
     /// <summary>
@@ -931,7 +1069,16 @@ public sealed class AnnouncerControl : UserControl
 
     private void RefreshLive()
     {
-        if (IsDisposed || Disposing || !Visible)
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        // Ahead of the visibility check, so a page opened during the break
+        // never flashes the last race's quote for a tick before it goes.
+        DropStaleSuggestion();
+
+        if (!Visible)
         {
             return;
         }
@@ -1006,6 +1153,33 @@ public sealed class AnnouncerControl : UserControl
     }
 
     /// <summary>
+    /// Forgets the suggested line once the race it was about is over.
+    ///
+    /// A suggestion names cars and gaps ("Smith is hunting Jones, 0.4s
+    /// behind!"), and it sits first in the list, quoted, as the line most
+    /// likely to be read out word for word. A new one is only asked for
+    /// while racing, at most every 20 seconds and only once there is
+    /// something to say, so without this the last race's quote stayed on
+    /// top through the break, staging, the countdown and the opening laps
+    /// of the next race - about drivers who might not even be in it.
+    /// Leaving Racing (finished, reset, back to staging) or a new session
+    /// starting both end it. A red flag does not: the state stays Racing,
+    /// and the line is still about the race on track.
+    /// </summary>
+    private void DropStaleSuggestion()
+    {
+        if (_suggestedLine is null)
+        {
+            return;
+        }
+
+        if (_race.State != RaceState.Racing || _race.SessionGeneration != _suggestedLineGeneration)
+        {
+            _suggestedLine = null;
+        }
+    }
+
+    /// <summary>
     /// Asks the model for a suggested line, at most every 20 seconds and
     /// never while one is already in flight.
     ///
@@ -1016,7 +1190,12 @@ public sealed class AnnouncerControl : UserControl
     /// </summary>
     private void MaybeRequestSuggestion()
     {
-        if (_commentary is null
+        // Not until the announcer's screen has been opened: before then
+        // there is nobody to read a suggestion, and the answer was thrown
+        // away on arrival anyway (it is handed back through BeginInvoke,
+        // which needs a handle) - so every request was a wasted model call.
+        if (!IsHandleCreated
+            || _commentary is null
             || !_commentary.IsAvailable
             || _settings?.CommentaryTalkingPoints != true
             || _race.State != RaceState.Racing
@@ -1035,6 +1214,10 @@ public sealed class AnnouncerControl : UserControl
         _suggestionInFlight = true;
         _lastSuggestionUtc = DateTime.UtcNow;
 
+        // Read here, on the UI thread, so the answer can be checked against
+        // the race it was asked about when it lands.
+        var generationAsked = _race.SessionGeneration;
+
         _ = Task.Run(async () =>
         {
             try
@@ -1045,7 +1228,19 @@ public sealed class AnnouncerControl : UserControl
                 {
                     BeginInvoke(() =>
                     {
+                        // A model call takes seconds, and the race can finish
+                        // or be reset in that time. An answer about a race
+                        // that is no longer running is thrown away rather
+                        // than put at the top of the list for the next one.
+                        if (IsDisposed
+                            || _race.State != RaceState.Racing
+                            || _race.SessionGeneration != generationAsked)
+                        {
+                            return;
+                        }
+
                         _suggestedLine = line;
+                        _suggestedLineGeneration = generationAsked;
                         RefreshTalkingPoints();
                     });
                 }

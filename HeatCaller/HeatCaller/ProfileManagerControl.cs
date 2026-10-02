@@ -2169,10 +2169,16 @@ public sealed class ProfileManagerControl : UserControl
             return;
         }
 
-        List<string> lines;
+        // Read as bytes and decoded by CsvHelper.DecodeText, not
+        // File.ReadAllLines: that assumes UTF-8, and Excel's plain "CSV"
+        // save is in the Windows code page, which turned every accented
+        // name into replacement characters. Each line keeps its number in
+        // the file so the summary's "Row 12" is still line 12 when blank
+        // lines above it have been dropped.
+        List<(string Text, int LineNumber)> lines;
         try
         {
-            lines = File.ReadAllLines(dialog.FileName).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+            lines = CsvHelper.NonBlankLines(CsvHelper.DecodeText(File.ReadAllBytes(dialog.FileName)));
         }
         catch (Exception ex)
         {
@@ -2190,9 +2196,10 @@ public sealed class ProfileManagerControl : UserControl
 
         // Comma, semicolon or tab, whichever the file uses - and the first
         // row taken as the headings, which is what every export writes.
-        var delimiter = DriverImport.DetectDelimiter(lines[0]);
-        var headers = DriverImport.ParseLine(lines[0], delimiter);
-        var rows = lines.Skip(1).Select(line => DriverImport.ParseLine(line, delimiter)).ToList();
+        var delimiter = DriverImport.DetectDelimiter(lines[0].Text);
+        var headers = DriverImport.ParseLine(lines[0].Text, delimiter);
+        var rows = lines.Skip(1).Select(line => DriverImport.ParseLine(line.Text, delimiter)).ToList();
+        var rowLineNumbers = lines.Skip(1).Select(line => line.LineNumber).ToList();
 
         var seasonStore = _sources?.Seasons;
         var seasons = seasonStore?.All ?? Array.Empty<Season>();
@@ -2240,7 +2247,11 @@ public sealed class ProfileManagerControl : UserControl
         // For the undo: copies of the profiles the sheet is about to change
         // (the merge below edits them in place), and the drivers it adds.
         var beforeImport = new List<DriverProfile>();
-        var addedByImport = new List<string>();
+
+        // The drivers the import adds, as the profiles it stores: its undo
+        // removes each only while that same driver is still on file, not
+        // whoever holds the transponder by then (ProfileStore.PutBack).
+        var addedProfilesByImport = new List<DriverProfile>();
 
         // Points so far, by championship and then by driver name - the name
         // the standings go by. A later row for the same driver wins.
@@ -2251,7 +2262,7 @@ public sealed class ProfileManagerControl : UserControl
         for (var r = 0; r < rows.Count; r++)
         {
             var fields = rows[r];
-            var line = r + 2;
+            var line = rowLineNumbers[r];
             var sheetName = SheetName(fields);
             DriverProfile? profile = null;
 
@@ -2304,7 +2315,7 @@ public sealed class ProfileManagerControl : UserControl
                 if (existing is null)
                 {
                     added++;
-                    addedByImport.Add(transponder);
+                    addedProfilesByImport.Add(profile);
                 }
                 else if (!batch.ContainsKey(transponder))
                 {
@@ -2428,7 +2439,7 @@ public sealed class ProfileManagerControl : UserControl
             // to the points they carried before.
             _undo.Capture($"Import {Plural.Of(Math.Max(batch.Count, carried.Values.Sum(s => s.Count)), "driver")} from CSV", () =>
             {
-                var putBack = batch.Count > 0 ? store.PutBack(beforeImport, addedByImport) : 0;
+                var putBack = batch.Count > 0 ? store.PutBack(beforeImport, addedProfilesByImport) : 0;
                 var seasonsPutBack = 0;
 
                 foreach (var (seasonId, entries) in carriedBefore)

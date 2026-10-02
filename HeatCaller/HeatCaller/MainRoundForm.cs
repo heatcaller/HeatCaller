@@ -58,7 +58,21 @@ public sealed class MainRoundForm : Form
         btnSelectTopN.Click += (_, _) =>
         {
             var n = (int)_numTopN.Value;
-            var order = rankedTransponders.Count > 0 ? rankedTransponders : classRoster.Select(d => d.Transponder).ToList();
+
+            // The qualifying ranking holds everyone who ran a qualifier in the
+            // class today, which is not always the same set as the drivers in
+            // this list: on a checked-in-only day a driver who went home and was
+            // un-checked-in is still ranked, and so is a rental transponder with
+            // no profile or a driver whose class has changed since. Taking N
+            // from the whole ranking let each of those use up a place without
+            // ticking anyone, so "Top 6" could tick five and leave out the next
+            // qualifier. Only the ranked drivers who are in the list count
+            // toward N. Drivers in the list with no qualifying result are still
+            // not ticked, as before.
+            var inList = classRoster.Select(d => d.Transponder).ToHashSet();
+            var order = rankedTransponders.Count > 0
+                ? rankedTransponders.Where(inList.Contains).ToList()
+                : classRoster.Select(d => d.Transponder).ToList();
             var top = order.Take(n).ToHashSet();
             for (var i = 0; i < _clbDrivers.Items.Count; i++)
             {
@@ -161,6 +175,10 @@ public sealed class MainRoundForm : Form
                 // Inferred from the label so a hand-added "B-Main" can take
                 // part in bump-ups. Without this it defaults to -1 (untiered)
                 // and silently sits outside the whole bump-up mechanism.
+                // The tier alone is not enough: a main also needs a
+                // BumpUpCount to receive anyone. That is the class's
+                // setting, which this form is not given, so the caller
+                // (RaceProgramControl.AddMainByHand) sets it from the class.
                 MainTier = TierFromLabel(label),
                 TrackLayoutName = _cmbTrack.SelectedItem as string == "(none)" ? string.Empty : (string)(_cmbTrack.SelectedItem ?? string.Empty),
                 AssignedTransponders = selected,

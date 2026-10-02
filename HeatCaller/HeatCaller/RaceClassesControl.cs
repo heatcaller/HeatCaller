@@ -25,6 +25,12 @@ public sealed class RaceClassesControl : UserControl
     private readonly RaceClassStore _store;
     private readonly UndoService? _undo;
 
+    // Where each class's handicap mode is kept, by class name. Only here so
+    // a delete can forget the deleted class's mode (DeleteSelected). Null
+    // where the caller has none to give, and then a delete leaves the mode
+    // as it always did.
+    private readonly HandicapStore? _handicaps;
+
     private readonly DataGridView _grid = new();
     private readonly Label _lblSummary = new();
 
@@ -39,10 +45,11 @@ public sealed class RaceClassesControl : UserControl
     /// <summary>The page the rest is laid out on - see LeastHeight.</summary>
     private readonly FillPage _page = new();
 
-    public RaceClassesControl(RaceClassStore store, UndoService? undo = null)
+    public RaceClassesControl(RaceClassStore store, UndoService? undo = null, HandicapStore? handicaps = null)
     {
         _store = store;
         _undo = undo;
+        _handicaps = handicaps ?? store.Handicaps;
 
         Dock = DockStyle.Fill;
 
@@ -490,6 +497,16 @@ public sealed class RaceClassesControl : UserControl
         }
 
         var classes = _store;
+        var handicaps = _handicaps;
+
+        // The handicap mode is kept by class name, not on the class, so
+        // deleting the class used to leave it behind - and a class added
+        // later under the same name was scored with time credits (or
+        // whatever the old one had) from its first race, without anyone
+        // choosing that. Forgotten just after the delete below, and handed
+        // back by the undo: the undo reads this variable when it runs, so it
+        // puts back exactly what this delete removed.
+        var removedMode = HandicapMode.None;
 
         _undo?.Capture($"Delete class '{doomed.Name}'", () =>
         {
@@ -508,6 +525,13 @@ public sealed class RaceClassesControl : UserControl
 
             classes.Upsert(doomed);
 
+            // Only when the delete actually removed one: RestoreClassMode
+            // with None would clear a mode, and there is none to clear.
+            if (removedMode != HandicapMode.None)
+            {
+                handicaps?.RestoreClassMode(doomed.Name, removedMode);
+            }
+
             if (!IsDisposed && !Disposing)
             {
                 RefreshAll();
@@ -515,6 +539,7 @@ public sealed class RaceClassesControl : UserControl
         });
 
         _store.Delete(doomed.Id);
+        removedMode = handicaps?.RemoveClassMode(doomed.Name) ?? HandicapMode.None;
         RefreshAll();
     }
 }

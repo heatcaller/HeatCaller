@@ -68,14 +68,30 @@ internal static class AudioBus
     /// cut short, and completed straight away, if the token is cancelled.
     /// Throws InvalidOperationException when there is no usable output.
     /// </summary>
-    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default)
+    ///
+    /// With <paramref name="allowBoost"/> the gain may go above unity, up to
+    /// <see cref="MaxBoost"/>, and the clip is passed through a soft limiter
+    /// (SoftLimiter) so the boosted peaks bend rather than hard-clip in the
+    /// 16-bit output. Only the announcer asks for it - the "boost voice over
+    /// loud ambience" setting, which a 0..1 clamp here silently cancelled at
+    /// the default 100% announcer level. Everything else stays at or below
+    /// unity, exactly as before.
+    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false)
     {
         if (cancellationToken.IsCancellationRequested)
         {
             return Task.CompletedTask;
         }
 
-        var clip = new Clip(new VolumeSampleProvider(ToMixFormat(source)) { Volume = Math.Clamp(volume, 0f, 1f) });
+        var gain = float.IsNaN(volume) ? 0f : Math.Clamp(volume, 0f, allowBoost ? MaxBoost : 1f);
+        ISampleProvider gained = new VolumeSampleProvider(ToMixFormat(source)) { Volume = gain };
+
+        if (gain > 1f)
+        {
+            gained = new SoftLimiter(gained);
+        }
+
+        var clip = new Clip(gained);
 
         MixingSampleProvider mixer;
 
@@ -209,6 +225,47 @@ internal static class AudioBus
     }
 
     /// <summary>One sound in the mix. Finishes when its source runs out, or when it is cut off.</summary>
+    /// <summary>The most a boosted clip is raised by - see PlayAsync.</summary>
+    public const float MaxBoost = 2f;
+
+    /// <summary>
+    /// Leaves a sample alone up to the knee, and bends anything above it
+    /// smoothly towards full scale (a tanh curve), so a boosted voice line
+    /// never exceeds 1.0 - and so never hard-clips when the mixer's floats
+    /// are turned into 16-bit samples. ElevenLabs lines already peak near
+    /// full scale, so without this a 1.3x boost crackled.
+    /// </summary>
+    private sealed class SoftLimiter : ISampleProvider
+    {
+        private const float Knee = 0.9f;
+        private const float Room = 1f - Knee;
+
+        private readonly ISampleProvider _source;
+
+        public SoftLimiter(ISampleProvider source) => _source = source;
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            var read = _source.Read(buffer, offset, count);
+
+            for (var i = offset; i < offset + read; i++)
+            {
+                var sample = buffer[i];
+                var size = Math.Abs(sample);
+
+                if (size > Knee)
+                {
+                    var bent = Knee + Room * (float)Math.Tanh((size - Knee) / Room);
+                    buffer[i] = sample < 0 ? -bent : bent;
+                }
+            }
+
+            return read;
+        }
+    }
+
     private sealed class Clip : ISampleProvider
     {
         private readonly ISampleProvider _source;

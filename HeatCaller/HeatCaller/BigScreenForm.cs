@@ -45,6 +45,14 @@ public sealed class BigScreenForm : Form
     /// </summary>
     private readonly QualifyingProjector? _projector;
 
+    // Where the Badges column gets its counts. A function rather than a
+    // store because Race Control swaps its store for a freshly loaded one
+    // whenever someone unlocks a badge - holding the instance it had when
+    // this window opened would leave the Big Screen a race behind the
+    // announcement. Null (and the column shows "-") only if a caller has
+    // nothing to offer.
+    private readonly Func<AchievementStore?>? _achievements;
+
     private readonly RaceControlSession _race;
     private readonly AnnouncementService _announcer;
     private readonly ProfileStore _profiles;
@@ -108,9 +116,10 @@ public sealed class BigScreenForm : Form
 
     public BigScreenForm(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles,
         DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null,
-        QualifyingProjector? projector = null)
+        QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null)
     {
         _projector = projector;
+        _achievements = achievements;
         _race = race;
         _announcer = announcer;
         _profiles = profiles;
@@ -846,6 +855,11 @@ public sealed class BigScreenForm : Form
             // so putting the Qual column on both boards is one calculation,
             // not two.
             Projection = _projector?.Current()?.Slots,
+
+            // Without this the Badges column - which the Big Screen column
+            // picker offers like any other - showed "-" for every driver
+            // while Race Control and the web board showed real counts.
+            Achievements = _achievements?.Invoke(),
         };
 
         for (var i = 0; i < ordered.Count; i++)

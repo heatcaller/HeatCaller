@@ -165,7 +165,14 @@ internal sealed class CarCard : Control
         var photoHeight = PhotoHeight;
         var photoArea = new Rectangle(0, 0, Width - 1, photoHeight);
 
-        var clip = g.Clip;
+        // Reading g.Clip hands back a fresh GDI+ Region on every call, and
+        // assigning it back below copies it rather than taking it over, so
+        // the one read here has to be disposed or every repaint (hover in,
+        // hover out, selection, scroll) leaves a native Region for the
+        // finalizer. DriverPhotos.DrawAvatar avoids the same thing with
+        // Save()/Restore(); a using is the smaller change here because the
+        // saved clip is put back three times over the paint.
+        using var clip = g.Clip;
         g.SetClip(shape);
 
         if (Photo() is { } photo)

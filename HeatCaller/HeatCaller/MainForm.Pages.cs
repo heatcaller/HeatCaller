@@ -185,6 +185,10 @@ public partial class MainForm
         // finished race is still waiting for its result to be saved.
         raceProgram.RoundOnTrackId = () => _race.State == RaceState.Idle ? null : _activeRound?.Id;
 
+        // The same heat, so deleting its race day - from The Day or the
+        // Calendar - does not take it from under the race.
+        RaceDayDeleter.RoundOnTrackId = () => _race.State == RaceState.Idle ? null : _activeRound?.Id;
+
         raceProgram.RoundStartRequested += round =>
         {
             // Checked before the round is set up or its grid call spoken -
@@ -1067,7 +1071,22 @@ public partial class MainForm
         var ghostControl = new GhostControl(_ghostStore, _profiles, _sessionHistory, _undo) { Dock = DockStyle.Fill };
         pageGhosts.Controls.Add(ghostControl);
 
-        var practice = new PracticeModeControl(_race, _profiles, _sessionHistory, _trackLayouts, _settings, _ghostStore, _announcer, _daySchedule, _sponsors, undo: _undo) { Dock = DockStyle.Fill };
+        // Re-read each time the page opens: the Practice page switches ghosts
+        // on and off in the same store (its "Race ghost cars" box and the
+        // tick beside each ghost), and its "Manage..." button brings the
+        // club straight here, so without this the page showed the states
+        // from when it was built. OnGhostStoreSaved runs every hook after
+        // each ghost save as well, this page's own saves included; that is
+        // harmless, because RefreshAll copies the stored values onto boxes
+        // that already hold them (no change event) and redraws the grid the
+        // page was about to redraw anyway.
+        _navRefreshHooks["Ghost Cars"] = ghostControl.RefreshAll;
+
+        var practice = new PracticeModeControl(_race, _profiles, _sessionHistory, _trackLayouts, _settings, _ghostStore, _announcer, _daySchedule, _sponsors, undo: _undo,
+            // The Race page's projection and badges, so a Big Screen opened
+            // from Practice keeps up with the races run since. Read through
+            // the property each time: the badge store is replaced on unlock.
+            projector: raceControl.Projector, achievements: () => raceControl.Achievements) { Dock = DockStyle.Fill };
         // Ghost profiles kept in step as ghosts are added, edited and
         // deleted - so a new ghost is immediately pickable everywhere.
         _ghostStore.Saved += _ => OnGhostStoreSaved();
@@ -1078,14 +1097,25 @@ public partial class MainForm
 
         raceControl.DeepDuckRequested += deep =>
         {
+            // The release is always honored. The setting only decides
+            // whether a recap gets the deeper duck in the first place: it
+            // used to gate both ends, so unticking it on the Commentary page
+            // while a recap was playing dropped the release, and the recap's
+            // depth stayed on for every announcement until the app restarted.
+            // Clearing an override that was never set is harmless.
+            if (!deep)
+            {
+                _ambience.SetDuckDepthOverride(null);
+                _music.SetDuckDepthOverride(null);
+                return;
+            }
+
             if (!_settings.SummaryDeepDuck)
             {
                 return;
             }
 
-            var fraction = deep
-                ? Math.Clamp(_settings.SummaryDuckPercent, 2, 100) / 100f
-                : (float?)null;
+            var fraction = Math.Clamp(_settings.SummaryDuckPercent, 2, 100) / 100f;
 
             _ambience.SetDuckDepthOverride(fraction);
             _music.SetDuckDepthOverride(fraction);
@@ -1463,11 +1493,36 @@ public partial class MainForm
         // What the page did, in the console, like every other page's.
         online.StatusMessage += OnClientRawMessage;
 
+        // Email PINs... waits while the new PINs' hashes are still being made
+        // in the background: until that batch ends and the check-in list
+        // goes, the relay holds the old PINs and would refuse a racer who
+        // tapped the one just emailed. Read from the UI thread, like the
+        // flag's other readers.
+        online.CheckInListBeingPrepared = () => _racerPinHashesWarming;
+
+        // An Email PINs... send counts as one of this window's own until its
+        // result is recorded, so a sign-up racer held back meanwhile is not
+        // emailed a second time in the moment between the sending ending and
+        // the page marking them emailed; and once it is recorded, they are
+        // tried again. See EmailSignedUpPinsHeldForWarm.
+        online.PinEmailStarted += () => Interlocked.Increment(ref _pinMailsUnrecorded);
+        online.PinEmailFinished += () =>
+        {
+            Interlocked.Decrement(ref _pinMailsUnrecorded);
+            EmailSignedUpPinsHeldForWarm();
+        };
+
         // Refreshed on entry: the boxes have to show what settings hold,
         // not what they held when the page was built.
         _navRefreshHooks["Club Website"] = online.RefreshAll;
 
         var venues = new VenuesControl(_venueStore, _trackLayouts, _themeStore, _undo) { Dock = DockStyle.Fill };
+
+        // Applying a venue switches the decoder and the track layout, which
+        // would cut timing to a running heat and re-file it - the page
+        // refuses while this says a race or practice is on, the same states
+        // the venue's undo below refuses in.
+        venues.IsRaceUnderWay = () => _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
         venues.VenueApplied += venue =>
         {
             // Everything below is taken first, so Undo can put the decoder,

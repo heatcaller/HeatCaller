@@ -84,6 +84,33 @@ public sealed class WebServerControl : UserControl
         _textSize.Wear(this, () => AppTheme.BodyFont);
 
         BuildLayout();
+
+        // The three PIN boxes are saved as soon as somebody is done with
+        // them, not only when Start Server is pressed. The Manager PIN in
+        // particular is read straight from the settings by the relay - the
+        // Club Website page's "Set Manager PIN..." sends people here to set
+        // it - and a club that only reaches the manager through the relay
+        // has no reason ever to start the LAN server, so a PIN that waited
+        // for Start was never stored, never published, and gone after a
+        // restart. Leave covers clicking or tabbing away; Validated covers
+        // the window closing while the caret is still in a box, which
+        // validates the focused control without moving focus off it.
+        foreach (var box in new[] { _txtPin, _txtCheckInPin, _txtManagerPin })
+        {
+            box.Leave += (_, _) => SavePins();
+            box.Validated += (_, _) => SavePins();
+        }
+
+        // And when the page goes out of sight - another page picked in the
+        // sidebar - in case focus never left the box on the way.
+        VisibleChanged += (_, _) =>
+        {
+            if (!Visible)
+            {
+                SavePins();
+            }
+        };
+
         UpdateUi();
         RefreshRelayLine();
         RefreshLastAction();
@@ -549,15 +576,60 @@ public sealed class WebServerControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Copies the three PIN boxes, trimmed, into the settings and saves
+    /// them - but only when one of them actually differs, so tabbing
+    /// through the page does not rewrite settings.json each time. A changed
+    /// Manager PIN is also handed to the relay publisher at once: the relay
+    /// manager checks every request against it, and a PIN changed to clear
+    /// a relay lockout should not wait for the next pass to be published.
+    ///
+    /// Does nothing while the server is running: the boxes are read-only
+    /// then, and the PINs saved are the ones it started with.
+    /// </summary>
+    private void SavePins()
+    {
+        if (_server.IsRunning)
+        {
+            return;
+        }
+
+        var pin = _txtPin.Text.Trim();
+        var checkInPin = _txtCheckInPin.Text.Trim();
+        var managerPin = _txtManagerPin.Text.Trim();
+
+        var managerChanged = !string.Equals(_settings.ManagerPin, managerPin, StringComparison.Ordinal);
+
+        if (!managerChanged
+            && string.Equals(_settings.WebServerPin, pin, StringComparison.Ordinal)
+            && string.Equals(_settings.WebServerCheckInPin, checkInPin, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _settings.WebServerPin = pin;
+        _settings.WebServerCheckInPin = checkInPin;
+        _settings.ManagerPin = managerPin;
+        _settings.Save();
+
+        if (managerChanged)
+        {
+            _relay.SettingsChanged();
+        }
+    }
+
     private void StartServer(bool silent)
     {
-        _server.Pin = _txtPin.Text.Trim();
-        _server.CheckInPin = _txtCheckInPin.Text.Trim();
-        _server.ManagerPin = _txtManagerPin.Text.Trim();
+        // Normally already saved as the boxes were left (pressing Start
+        // moves focus off them), but an auto-start or a keyboard shortcut
+        // may not have moved it, so saved here too before the server reads
+        // them.
+        SavePins();
+
+        _server.Pin = _settings.WebServerPin;
+        _server.CheckInPin = _settings.WebServerCheckInPin;
+        _server.ManagerPin = _settings.ManagerPin;
         _settings.WebServerPort = (int)_numPort.Value;
-        _settings.WebServerPin = _server.Pin;
-        _settings.WebServerCheckInPin = _server.CheckInPin;
-        _settings.ManagerPin = _server.ManagerPin;
         _settings.Save();
 
         if (!_server.Start((int)_numPort.Value, out var error))
@@ -618,15 +690,21 @@ public sealed class WebServerControl : UserControl
 
         _btnStart.Enabled = !running;
         _btnStop.Enabled = running;
-        _numPort.ReadOnly = running;
+        // Enabled, not ReadOnly, for the port: on a NumericUpDown ReadOnly
+        // only stops typing, and the spin buttons, the arrow keys and the
+        // mouse wheel still change the value. A stray wheel over the box
+        // mid-meeting left it showing a port the server was not on, and the
+        // next Stop and Start moved the server there - and every QR poster,
+        // OBS source and bookmarked phone with it.
+        _numPort.Enabled = !running;
         _txtPin.ReadOnly = running;
         _txtCheckInPin.ReadOnly = running;
         _txtManagerPin.ReadOnly = running;
 
         if (running)
         {
-            // Says what to do about it, not just what is true. The port and
-            // the three PIN boxes go read-only while the server is running -
+            // Says what to do about it, not just what is true. The port goes
+            // gray and the three PIN boxes read-only while the server is running -
             // they are read as it starts - and a box that silently will not
             // take a keystroke reads as a broken page rather than as a
             // setting that is locked on purpose.

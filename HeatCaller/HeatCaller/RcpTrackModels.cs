@@ -261,8 +261,18 @@ public sealed class RcpTrackDesign
     [JsonIgnore]
     public IEnumerable<RcpTile> Driveable => Tiles.Where(t => t.Kind != RcpTileKind.Infield);
 
-    /// <summary>The plan's extent in tiles, taking in the floor, the rails and the line.</summary>
-    public RectangleF BoundsInTiles()
+    /// <summary>
+    /// The plan's extent in tiles, taking in the floor, the rails, the
+    /// markings and the line.
+    ///
+    /// The markings and the line used to be left out, although both are
+    /// drawn and neither has to sit on the floor - so a racing line or a
+    /// marking past the edge of the floor was cut off in the PNG export, the
+    /// track's thumbnail and Fit. includeRoute is false for a picture that
+    /// leaves the line out, so the plan isn't framed round something that
+    /// isn't drawn.
+    /// </summary>
+    public RectangleF BoundsInTiles(bool includeRoute = true)
     {
         var minCol = float.MaxValue;
         var minRow = float.MaxValue;
@@ -293,6 +303,20 @@ public sealed class RcpTrackDesign
         {
             Take(curve.Col - curve.Radius, curve.Row - curve.Radius);
             Take(curve.Col + curve.Radius, curve.Row + curve.Radius);
+        }
+
+        foreach (var decal in Decals)
+        {
+            Take(decal.Col, decal.Row);
+            Take(decal.Col + 1, decal.Row + 1);
+        }
+
+        if (includeRoute)
+        {
+            foreach (var point in Route)
+            {
+                Take(point.X, point.Y);
+            }
         }
 
         if (minCol > maxCol)
@@ -528,7 +552,16 @@ public static class RcpPlan
             return null;
         }
 
-        var cells = floor.ToDictionary(t => (t.Col, t.Row));
+        // First tile wins at a cell, as it does in At(). The editor never
+        // puts two tiles in one cell, but track-layouts.json can come back
+        // from a restored backup or a hand edit with two, and ToDictionary
+        // threw on the second - Trace route then failed with an error box.
+        var cells = new Dictionary<(int Col, int Row), RcpTile>();
+
+        foreach (var tile in floor)
+        {
+            cells.TryAdd((tile.Col, tile.Row), tile);
+        }
 
         List<(int Col, int Row)> Open(int col, int row) =>
             Enum.GetValues<RcpEdge>()

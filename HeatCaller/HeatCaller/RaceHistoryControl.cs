@@ -571,29 +571,119 @@ public sealed class RaceHistoryControl : UserControl
         {
             // By id, so a session already back (restored from a backup or
             // an export since) is not put in twice.
+            var unsaved = new List<SessionRecord>();
+
             foreach (var session in removed)
             {
-                if (history.Get(session.Id) is null)
+                if (history.Get(session.Id) is null && !history.Add(session))
                 {
-                    history.Add(session);
+                    unsaved.Add(session);
                 }
             }
 
             // Only for a session that really is back - re-pointing a round
             // at one that is not would put back the exact fault the delete
-            // path now avoids.
+            // path now avoids. "Back" means saved, not just listed: a
+            // session whose Add failed is still in the store's memory (Get
+            // finds it) but is held out of race-history.json, while
+            // MarkRecorded writes the rounds file at once. Linking to it
+            // would leave the round, after a restart, claiming a result
+            // that is not there - shown as run, never offered again, and
+            // counted by qualifying with nothing to score. Those rounds
+            // stay unrun for now, which is the state the delete left them
+            // in and one a heat can recover from by being run again.
+            //
+            // And only for a round that is still unlinked. The delete made
+            // the heat unrun precisely so it could be run again; if it has
+            // been since, the round now points at that newer race, and
+            // filing a race takes no undo step of its own, so this undo
+            // can easily be the next one pressed. Writing the old link
+            // over the new one would quietly make qualifying score the
+            // result that was thrown away and orphan the one that
+            // replaced it. Bringing the old session back is all this undo
+            // promised; the newer link is left alone and the director is
+            // told.
+            var rerun = new List<string>();
+
+            // The same goes for a heat being run again right now: it has no
+            // link yet, but filing it will link the new result, so linking
+            // the old one here would only show the heat as run while it is
+            // on track and then be written over without a word.
+            var onTrack = RaceDayDeleter.RoundOnTrackId?.Invoke();
+
             foreach (var (roundId, sessionId) in relink)
             {
-                if (history.Get(sessionId) is not null)
+                if (history.Get(sessionId) is null
+                    || unsaved.Any(s => string.Equals(s.Id, sessionId, StringComparison.Ordinal)))
                 {
-                    rounds?.MarkRecorded(roundId, sessionId);
+                    continue;
                 }
+
+                if (rounds?.Get(roundId) is not { } round)
+                {
+                    continue;
+                }
+
+                if (string.Equals(roundId, onTrack, StringComparison.Ordinal)
+                    || (!string.IsNullOrEmpty(round.LinkedSessionId)
+                        && !string.Equals(round.LinkedSessionId, sessionId, StringComparison.Ordinal)))
+                {
+                    rerun.Add($"{round.ClassName} {round.RoundLabel}".Trim());
+                    continue;
+                }
+
+                rounds.MarkRecorded(roundId, sessionId);
             }
 
             if (!IsDisposed)
             {
                 RefreshList();
             }
+
+            if (rerun.Count > 0)
+            {
+                // Before KeepRetryForUnsaved, which throws to report a failed
+                // save and would otherwise stop this from being said.
+                var which = rerun.Count == 1
+                    ? $"'{rerun[0]}' has"
+                    : $"{string.Join(", ", rerun.Select(n => $"'{n}'"))} have";
+
+                AppDialog.Show(IsDisposed ? null : this,
+                    $"The deleted session is back in Race History, but {which} been run again since it was deleted (or is on track now), "
+                    + "so the newer result stays the one that counts. The restored session is kept in Race History without being linked to a round.",
+                    "Session restored", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+
+            // Last, so everything above is done either way. The rounds held
+            // back above for a session that did not save are linked when a
+            // retry does save it - otherwise the session would be back in
+            // Race History while its heat still read as unrun. Again only
+            // while the round is unlinked: a heat run again in the meantime
+            // keeps its newer result, for the reason given above.
+            history.KeepRetryForUnsaved(_undo, unsaved, saved =>
+            {
+                foreach (var (roundId, sessionId) in relink)
+                {
+                    if (!string.Equals(sessionId, saved.Id, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (rounds?.Get(roundId) is not { } round
+                        || !string.IsNullOrEmpty(round.LinkedSessionId)
+                        || string.Equals(roundId, RaceDayDeleter.RoundOnTrackId?.Invoke(), StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    rounds.MarkRecorded(roundId, sessionId);
+                }
+
+                if (!IsDisposed)
+                {
+                    RefreshList();
+                }
+            });
         });
 
         foreach (var session in removed)
@@ -674,29 +764,15 @@ public sealed class RaceHistoryControl : UserControl
             return;
         }
 
-        // Snapshot and capture the undo BEFORE applying - see ResultEditor.Apply.
+        // Snapshot BEFORE applying - see ResultEditor.Apply. The undo that
+        // puts it back is captured only once the correction has been saved,
+        // below: captured first, a failed save left an undo step for a
+        // correction that never happened, and the next Undo press was spent
+        // on that instead of on whatever the director actually meant to undo.
         var snapshot = ResultEditor.Snapshot(session);
         var sessionId = session.Id;
 
         var history = _history;
-
-        _undo.Capture($"Correct the result of '{session.Label}'", () =>
-        {
-            // SaveEdited quietly ignores a session no longer in the store,
-            // so the undo would have looked done while nothing was saved.
-            if (!ReferenceEquals(history.Get(sessionId), session))
-            {
-                throw new InvalidOperationException($"'{session.Label}' has been deleted since. Nothing was changed.");
-            }
-
-            ResultEditor.Restore(session, snapshot);
-            history.SaveEdited(session);
-
-            if (!IsDisposed)
-            {
-                RefreshListAndSelect(sessionId);
-            }
-        });
 
         ResultEditor.Apply(session, form.Adjustments, form.Reason, "Laptop");
 
@@ -714,7 +790,55 @@ public sealed class RaceHistoryControl : UserControl
                 + "this PC has the file open, or the disk is full.\r\n\r\nNothing has been changed. Close anything "
                 + "that might be reading the HeatCaller folder and try again.",
                 "Correction not saved", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+            RefreshListAndSelect(sessionId);
+            return;
         }
+
+        _undo.Capture($"Correct the result of '{session.Label}'", () =>
+        {
+            // SaveEdited quietly ignores a session no longer in the store,
+            // so the undo would have looked done while nothing was saved.
+            if (!ReferenceEquals(history.Get(sessionId), session))
+            {
+                throw new InvalidOperationException($"'{session.Label}' has been deleted since. Nothing was changed.");
+            }
+
+            // The same rule the correction itself follows above: a write that
+            // fails puts things back rather than leaving memory and disk
+            // disagreeing. Restored but unsaved, qualifying, the mains builder
+            // and the live standings would all read the uncorrected order
+            // while the file - and the results page, archive index and
+            // standings, which only hear about a SAVED edit - still held the
+            // correction, and the next launch quietly brought it back. So
+            // keep the corrected state as it is now, and if the undo cannot
+            // be written, return to it and throw so UndoService reports the
+            // failure instead of the undo looking done. (UndoService has
+            // already taken the step off the stack by then, which is why the
+            // message says to put the result back by hand.)
+            var corrected = ResultEditor.Snapshot(session);
+            ResultEditor.Restore(session, snapshot);
+
+            if (!history.SaveEdited(session))
+            {
+                ResultEditor.Restore(session, corrected);
+
+                if (!IsDisposed)
+                {
+                    RefreshListAndSelect(sessionId);
+                }
+
+                throw new InvalidOperationException(
+                    $"Undoing the correction to \"{session.Label}\" could not be written to the race history - something "
+                    + "else on this PC has the file open, or the disk is full. The corrected result is still in place; "
+                    + "close anything that might be reading the HeatCaller folder and edit the result back by hand.");
+            }
+
+            if (!IsDisposed)
+            {
+                RefreshListAndSelect(sessionId);
+            }
+        });
 
         RefreshListAndSelect(sessionId);
     }

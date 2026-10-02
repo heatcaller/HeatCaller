@@ -11,12 +11,140 @@ public static class RunSheetRenderer
     // Letter paper at 150 DPI, matching HeatSheetRenderer.
     private const int PageWidth = 1275;
     private const int PageHeight = 1650;
+    private const float PrintDpi = 150f;
     private const int Margin = 70;
 
+    // Where the first line starts on every page: below the title (40), the
+    // date line (28), the rule (16), the column headings (26) and their rule
+    // (8). Each page repeats all of that, so every page starts at the same y.
+    private const int FirstRowTop = Margin + 40 + 28 + 16 + 26 + 8;
+
+    // A line's box and text, then the rule under it and the gap after.
+    private const int RowHeight = 40;
+    private const int RowStep = RowHeight + 2;
+
+    /// <summary>
+    /// How many lines of the running order fit on one page: as many as can
+    /// start at FirstRowTop, a RowStep apart, and still end above the bottom
+    /// margin. Worked out from the same numbers the drawing uses, so the two
+    /// cannot drift apart.
+    /// </summary>
+    internal static int RowsPerPage { get; } = CountRowsPerPage();
+
+    private static int CountRowsPerPage()
+    {
+        var rows = 0;
+
+        for (var y = FirstRowTop; y + RowHeight <= PageHeight - Margin; y += RowStep)
+        {
+            rows++;
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Renders the whole running order onto as many pages as it needs, one
+    /// bitmap per page, in order. The caller owns the bitmaps and disposes
+    /// them.
+    ///
+    /// The run sheet used to be one page that stopped after about 33 lines
+    /// with a "continued" note, and nothing printed the rest - a full day
+    /// of four classes with practice, qualifiers and mains runs past that,
+    /// so the drivers' stand lost the end of the day. Every line now lands
+    /// on a page.
+    /// </summary>
+    public static IReadOnlyList<Bitmap> RenderPages(string title, IReadOnlyList<ScheduleEntry> entries)
+    {
+        // Always at least one page, so an empty day still prints its header.
+        var pageCount = Math.Max(1, (entries.Count + RowsPerPage - 1) / RowsPerPage);
+        var pages = new List<Bitmap>(pageCount);
+
+        try
+        {
+            for (var page = 0; page < pageCount; page++)
+            {
+                var slice = entries.Skip(page * RowsPerPage).Take(RowsPerPage).ToList();
+                var note = page < pageCount - 1 ? $"(continued on page {page + 2} of {pageCount})" : null;
+
+                pages.Add(RenderPage(title, slice, page + 1, pageCount, note));
+            }
+        }
+        catch
+        {
+            // A half-made set of pages is no use to the caller, and it could
+            // not dispose what it never received.
+            foreach (var made in pages)
+            {
+                made.Dispose();
+            }
+
+            throw;
+        }
+
+        return pages;
+    }
+
+    /// <summary>
+    /// The first page only - the shape the run sheet export had before it
+    /// could make more than one page. Kept so a caller that saves a single
+    /// image still works; RenderPages is the one that prints every line.
+    /// When lines are left over, the note at the foot says how many were
+    /// left off, rather than "continued" when no continuation is printed.
+    /// </summary>
     public static Bitmap Render(string title, IReadOnlyList<ScheduleEntry> entries)
+    {
+        var leftOver = entries.Count - RowsPerPage;
+
+        string? note = leftOver switch
+        {
+            <= 0 => null,
+            1 => "(1 more line did not fit and is not on this sheet)",
+            _ => $"({leftOver} more lines did not fit and are not on this sheet)",
+        };
+
+        return RenderPage(title, entries.Take(RowsPerPage).ToList(), 1, 1, note);
+    }
+
+    private static Bitmap RenderPage(
+        string title,
+        IReadOnlyList<ScheduleEntry> entries,
+        int pageNumber,
+        int pageCount,
+        string? continuedNote)
     {
         var bitmap = new Bitmap(PageWidth, PageHeight);
 
+        try
+        {
+            DrawPage(bitmap, title, entries, pageNumber, pageCount, continuedNote);
+
+            // The page is drawn at 96 DPI so the point-size fonts come out
+            // the right size, but the pixels are a Letter page at 150 DPI.
+            // The saved PNG carries whatever resolution the bitmap has, and
+            // left at 96 it described a 13.3 x 17.2 inch page, so anything
+            // that prints an image at its own size (Paint at 100%, for one)
+            // cropped the sheet or spread it over several pages. Setting it
+            // here, after drawing, changes only that label - not a pixel.
+            bitmap.SetResolution(PrintDpi, PrintDpi);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        return bitmap;
+    }
+
+    private static void DrawPage(
+        Bitmap bitmap,
+        string title,
+        IReadOnlyList<ScheduleEntry> entries,
+        int pageNumber,
+        int pageCount,
+        string? continuedNote)
+    {
         // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
         bitmap.SetResolution(96, 96);
 
@@ -39,7 +167,11 @@ public static class RunSheetRenderer
 
         g.DrawString(title, titleFont, black, Margin, y);
         y += 40;
-        g.DrawString($"Run sheet  -  {DateTime.Now:dddd, MMM d yyyy}", footFont, grey, Margin, y);
+
+        // The page count goes on the date line, so a loose second page at
+        // the drivers' stand says that a first page exists somewhere.
+        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
+        g.DrawString($"Run sheet  -  {DateTime.Now:dddd, MMM d yyyy}{pagePart}", footFont, grey, Margin, y);
         y += 28;
         g.DrawLine(heavyPen, Margin, y, PageWidth - Margin, y);
         y += 16;
@@ -58,16 +190,10 @@ public static class RunSheetRenderer
         g.DrawLine(linePen, Margin, y, PageWidth - Margin, y);
         y += 8;
 
+        // Which lines go on this page was settled by the caller against
+        // RowsPerPage, so every line handed in here is drawn.
         foreach (var entry in entries)
         {
-            const int rowHeight = 40;
-
-            if (y + rowHeight > PageHeight - Margin)
-            {
-                g.DrawString("(continued - the rest of the day did not fit this page)", footFont, grey, Margin, y + 6);
-                break;
-            }
-
             // The tick box - pre-filled for lines already done, blank for
             // the pen at the stand otherwise.
             var box = new Rectangle(colX[0] + 6, y + 8, 20, 20);
@@ -89,18 +215,24 @@ public static class RunSheetRenderer
 
             if (entry.ActualStartUtc is { } started)
             {
-                what += $"   (started {started.ToLocalTime():HH:mm})";
+                // Through AppTime like the Time column beside it, so a club on
+                // 12-hour time does not get "2:35 PM ... (started 14:41)" on
+                // one row.
+                what += $"   (started {AppTime.TimeOfDay(started.ToLocalTime())})";
             }
 
             g.DrawString(what, font, ink, colX[3], y + 6);
 
-            y += rowHeight;
+            y += RowHeight;
             g.DrawLine(linePen, Margin, y, PageWidth - Margin, y);
-            y += 2;
+            y += RowStep - RowHeight;
+        }
+
+        if (continuedNote is not null)
+        {
+            g.DrawString(continuedNote, footFont, grey, Margin, y + 6);
         }
 
         g.DrawString("HeatCaller", footFont, grey, PageWidth - Margin - 90, PageHeight - Margin + 20);
-
-        return bitmap;
     }
 }

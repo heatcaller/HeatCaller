@@ -341,7 +341,7 @@ internal sealed class RaceDaySetupWizard : Form
         _lblProgress.Anchor = AnchorStyles.Left;
 
         _btnSkipAll.Text = "Skip setup";
-        _btnSkipAll.Click += (_, _) => Finish();
+        _btnSkipAll.Click += (_, _) => SkipSetup();
 
         _btnBack.Text = "Back";
         _btnBack.Click += (_, _) =>
@@ -1655,6 +1655,37 @@ internal sealed class RaceDaySetupWizard : Form
         Close();
     }
 
+    /// <summary>
+    /// Skip setup: keeps the step on screen, then closes.
+    ///
+    /// It used to go straight to Finish, so whatever was picked on the step
+    /// being looked at was thrown away - the sound chosen on The day and
+    /// "Don't ask about the sound again", the classes racing tonight, the
+    /// "only build from checked-in drivers" tick. Skipping the rest is not
+    /// throwing this step away, which is what FirstRunWizard's SkipEverything
+    /// already does, and what the note on this class says this wizard does.
+    ///
+    /// One exception, on purpose: The day with no day open. Leaving that
+    /// step starts a race day, and Skip setup is the button a club presses
+    /// when it did not want this wizard at all - often straight away, on a
+    /// wizard it was offered unprompted. Starting a day there would be a
+    /// race day nobody asked for, with its own Undo entry. So only the sound
+    /// is kept, which is the club's and not the day's (see SaveDay).
+    /// </summary>
+    private void SkipSetup()
+    {
+        if (_step == StepDay && OpenDay is null)
+        {
+            _sound?.Save();
+        }
+        else
+        {
+            SaveCurrentStep();
+        }
+
+        Finish();
+    }
+
     // --- Loading and saving each step ------------------------------------
 
     private void SaveCurrentStep()
@@ -1792,11 +1823,42 @@ internal sealed class RaceDaySetupWizard : Form
             _cmbVenue.Text = day.VenueName;
             _cmbTrack.Text = day.TrackLayoutName;
         }
-        else if (_txtDayName.Text.Length == 0)
+        else
         {
-            _txtDayName.Text = EventSpine.DefaultDayName(
-                DateTime.Now,
-                _cmbShape.SelectedIndex == 1 ? RaceDayShape.ClubNight : RaceDayShape.RaceDay);
+            if (_txtDayName.Text.Length == 0)
+            {
+                _txtDayName.Text = EventSpine.DefaultDayName(
+                    DateTime.Now,
+                    _cmbShape.SelectedIndex == 1 ? RaceDayShape.ClubNight : RaceDayShape.RaceDay);
+            }
+
+            // The venue and the track from the last real day, shown here
+            // before the day is started. Leaving this step starts the day
+            // through The Day's StartNewDayFromWizard, which carries both
+            // forward from that same day (StartDayFrom) - and SaveDay then
+            // writes these two boxes over them. Left empty, as Items.Clear
+            // leaves them, the carry-forward was undone in the same step and
+            // nobody saw the values go: the night had no track, so Race
+            // Control stayed on the last layout used and records were filed
+            // under that or none. Shown here, a club that races the same
+            // place every week presses Next, and one that is somewhere else
+            // tonight sees what to change. The same day StartDayFrom copies
+            // from: the most recently started real one. Only into a box that
+            // is empty, so nothing typed is ever replaced.
+            var previous = _events.Real.OrderByDescending(e => e.StartedUtc).FirstOrDefault();
+
+            if (previous is not null)
+            {
+                if (_cmbVenue.Text.Length == 0)
+                {
+                    _cmbVenue.Text = previous.VenueName;
+                }
+
+                if (_cmbTrack.Text.Length == 0)
+                {
+                    _cmbTrack.Text = previous.TrackLayoutName;
+                }
+            }
         }
 
         _lblDayState.Text = day is null

@@ -232,10 +232,6 @@ public sealed partial class AnnouncementService
             displayText = (displayText + suffix).Trim();
         }
 
-        // Screens get the numeral form; the voice engine gets the
-        // spelled-out one.
-        AnnouncementTextReady?.Invoke(displayText.Length > 0 ? displayText : text);
-
         // At this announcement's own Speed. The Voice Settings page offers
         // one per announcement and its Test button plays at it, but every
         // line through here used to go out at the profile's speed - so a
@@ -244,7 +240,11 @@ public sealed partial class AnnouncementService
         // PrimeFlagLineAsync), so either one's saved copy serves both.
         var speed = config.SpeedFor(profile.Speed);
 
-        EnqueueVoiceWork(type, transponder, () => SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed));
+        // Screens get the numeral form; the voice engine gets the
+        // spelled-out one. Shown only if the line is accepted - see
+        // EnqueueVoiceWork.
+        EnqueueVoiceWork(type, transponder, () => SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed),
+            displayText: displayText.Length > 0 ? displayText : text);
     }
 
     /// <summary>
@@ -398,12 +398,13 @@ public sealed partial class AnnouncementService
             // Boosted only when something else is actually playing loudly -
             // supplied by the ambience service, which knows its own current
             // level. A blanket boost would just make every announcement
-            // louder, including over silence.
-            var volume = currentProfile.Volume * (VoiceBoostProvider?.Invoke() ?? 1f);
+            // louder, including over silence. Not clamped to 1.0 here - see
+            // AnnouncementGain for why that clamp made the boost do nothing.
+            var volume = AnnouncementGain(currentProfile.Volume);
 
             try
             {
-                await PlayAsync(audio, Math.Clamp(volume, 0f, 1f), DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
+                await PlayAsync(audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {
@@ -597,7 +598,16 @@ public sealed partial class AnnouncementService
     private static bool IsWorthWaitingFor(AnnouncementEventType type) => type is
         AnnouncementEventType.LastLap or
         AnnouncementEventType.FinalMinute or
-        AnnouncementEventType.TrackRecord;
+        AnnouncementEventType.TrackRecord or
+
+        // The running order. It rations itself to once every N leader laps
+        // and uses up that interval the moment it is built, so dropping it
+        // because a driver's lap call was still playing meant waiting N more
+        // laps for a chance that was likely to be dropped the same way - on
+        // a full field the order could go a whole race without being read.
+        // A newer report replaces one still waiting (see EnqueueVoiceWork),
+        // so it cannot build a backlog either.
+        AnnouncementEventType.PositionReport;
 
     /// <summary>
     /// Whether a newer line about a driver REPLACES an older one still
@@ -634,9 +644,29 @@ public sealed partial class AnnouncementService
     /// Priority (race-control) announcements are exempt from the
     /// drop-while-speaking rule and clear routine items out of the queue -
     /// see IsPriorityAnnouncement.
+    ///
+    /// Pass the line's screen text as displayText rather than raising it
+    /// before the call. The screens, the Announcer page's feed and the
+    /// crowd ambience all take AnnouncementTextReady as "this was just
+    /// said", and the lines raised it first and only then came here - where
+    /// a busy announcer, the post-race quiet or a muted ghost then dropped
+    /// the line. So the Big Screen showed, and the crowd surged for, calls
+    /// nobody heard. Raised here, only once the line is actually accepted.
+    ///
+    /// Returns whether the line was accepted (queued, or spoken at once for
+    /// a flag call), for a caller that has to remember it was said - see
+    /// CheckCloseBattles. Accepted is not a promise it is heard: a flag can
+    /// still clear it from the queue, as it always could.
     /// </summary>
-    private void EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work)
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null)
     {
+        // A line about a ghost - its lap, its streak, the lead it took -
+        // while ghosts are not announced (AnnounceGhostsProvider).
+        if (MutedGhost(transponder))
+        {
+            return false;
+        }
+
         // Checked before the priority rules, not after: a track record or a
         // personal best set on a lap completed after the flag is still a
         // line about a race that is already over, and "priority" only ever
@@ -644,7 +674,7 @@ public sealed partial class AnnouncementService
         if (_postRaceQuiet && !IsAllowedAfterRaceOver(type))
         {
             StatusMessage?.Invoke($"[voice] Dropped {type} - the race is over; only the wrap-up speaks now.");
-            return;
+            return false;
         }
 
         var isPriority = IsPriorityAnnouncement(type);
@@ -652,13 +682,20 @@ public sealed partial class AnnouncementService
         if (_isVoiceSpeaking && !isPriority && !IsWorthWaitingFor(type))
         {
             StatusMessage?.Invoke($"[voice] Dropped {type} announcement - still speaking the previous one.");
-            return;
+            return false;
+        }
+
+        // Past every rule that drops a line, so the screens show only what
+        // is going to be said - see the summary.
+        if (displayText is not null)
+        {
+            RaiseAnnouncementText(displayText, transponder);
         }
 
         if (IsInterruptingAnnouncement(type))
         {
             SpeakInterrupting(type, work);
-            return;
+            return true;
         }
 
         lock (_voiceQueueLock)
@@ -666,6 +703,16 @@ public sealed partial class AnnouncementService
             if (transponder is not null && SupersedesPerDriver(type))
             {
                 _voiceQueue.RemoveAll(item => item.Type == type && item.Transponder == transponder);
+            }
+
+            // A running order is about the whole field, not the driver it is
+            // queued under, so a newer one replaces any still waiting even
+            // when the lead has changed hands in between - two orders read
+            // back to back, the first already out of date, is the backlog
+            // the per-driver rule above exists to prevent.
+            if (type == AnnouncementEventType.PositionReport)
+            {
+                _voiceQueue.RemoveAll(item => item.Type == AnnouncementEventType.PositionReport);
             }
 
             if (isPriority)
@@ -719,6 +766,7 @@ public sealed partial class AnnouncementService
         }
 
         _voiceQueueSignal.Release();
+        return true;
     }
 
     /// <summary>

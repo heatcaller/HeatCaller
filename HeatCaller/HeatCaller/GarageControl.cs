@@ -574,14 +574,23 @@ public sealed class GarageControl : UserControl
 
         var saved = form.Result;
 
+        // Adding the car can also name it on the driver's profile (see
+        // SyncActiveCarString), so undoing the add has to take that back
+        // too - otherwise the car leaves the Garage while the driver is
+        // still announced in it. The undo is captured before anything is
+        // written, as everywhere else, so the profile half is filled in
+        // once we know whether the profile was touched at all.
+        Action? undoProfile = null;
+
         _undo.Capture($"Add {saved.DisplayName} to the garage", () =>
         {
             _cars.Delete(saved.Id);
+            undoProfile?.Invoke();
             RefreshAll();
         });
 
         _cars.Upsert(saved);
-        SyncActiveCarString(saved);
+        undoProfile = SyncActiveCarString(saved);
         RefreshAll();
     }
 
@@ -594,23 +603,59 @@ public sealed class GarageControl : UserControl
     /// names no car gets this one, and a car already named there is left
     /// exactly as it is. Nothing silently changes what a driver is
     /// announced as.
+    ///
+    /// Returns what puts the profile back, or null when it was not changed,
+    /// for AddCar's undo. The reversal only acts while the profile still
+    /// names this car: if somebody has picked a different car for the
+    /// driver since, that choice is theirs and Undo leaves it alone. It
+    /// also only takes the name off the driver's car list when this call
+    /// put it there - a name they already had stays.
     /// </summary>
-    private void SyncActiveCarString(Car car)
+    private Action? SyncActiveCarString(Car car)
     {
         if (car.IsClubCar || car.Retired || _profiles.Get(car.OwnerTransponder) is not { } profile)
         {
-            return;
+            return null;
         }
 
         if (!string.IsNullOrWhiteSpace(profile.CarModel))
         {
-            return;
+            return null;
         }
 
-        if (profile.SetActiveCar(car.DisplayName))
+        var previousModel = profile.CarModel;
+        var name = car.DisplayName.Trim();
+        var hadName = profile.Cars.Any(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+
+        if (!profile.SetActiveCar(car.DisplayName))
         {
-            _profiles.Upsert(profile);
+            return null;
         }
+
+        _profiles.Upsert(profile);
+
+        // Keyed on the profile's own main transponder rather than the car's
+        // owner field, which may be an alternate - and looked up again at
+        // undo time, because the store may hold a different object by then.
+        var transponder = profile.Transponder;
+
+        return () =>
+        {
+            if (_profiles.Get(transponder) is not { } current
+                || !string.Equals(current.CarModel, name, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            current.CarModel = previousModel;
+
+            if (!hadName)
+            {
+                current.Cars.RemoveAll(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _profiles.Upsert(current);
+        };
     }
 
     // ------------------------------------------------------- the lists

@@ -15,6 +15,13 @@ public sealed class GhostControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly Label _lblStatus = new();
 
+    /// <summary>
+    /// Set while RefreshAll copies the stored switches back onto the two
+    /// boxes, so their CheckedChanged handlers do not take that for the
+    /// club's own click and save the store again for nothing.
+    /// </summary>
+    private bool _syncingSwitches;
+
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -86,6 +93,12 @@ public sealed class GhostControl : UserControl
         _chkEnabled.Checked = _store.Current.Enabled;
         _chkEnabled.CheckedChanged += (_, _) =>
         {
+            if (_syncingSwitches)
+            {
+                UpdateEnabledState();
+                return;
+            }
+
             _store.Current.Enabled = _chkEnabled.Checked;
             _store.Save();
             UpdateEnabledState();
@@ -96,6 +109,11 @@ public sealed class GhostControl : UserControl
         _chkAnnounce.Checked = _store.Current.AnnounceGhosts;
         _chkAnnounce.CheckedChanged += (_, _) =>
         {
+            if (_syncingSwitches)
+            {
+                return;
+            }
+
             _store.Current.AnnounceGhosts = _chkAnnounce.Checked;
             _store.Save();
         };
@@ -178,7 +196,34 @@ public sealed class GhostControl : UserControl
         UpdateEnabledState();
     }
 
-    public void RefreshAll() => RefreshGrid();
+    /// <summary>
+    /// Re-reads everything the page shows from the store. Called each time
+    /// the page is opened (MainForm's nav refresh hooks), because the
+    /// Practice page edits the same GhostStore - its "Race ghost cars" box
+    /// and the tick beside each ghost - and this page only used to redraw
+    /// after its own actions. Without this, "Manage..." on Practice opened a
+    /// page still showing ghosts as on that had just been switched off, the
+    /// old "N of M will run" count, and "Enable ghost cars" still ticked;
+    /// clicking that stale box then only wrote the value already stored, so
+    /// turning ghosts back on took two clicks.
+    /// </summary>
+    public void RefreshAll()
+    {
+        _syncingSwitches = true;
+
+        try
+        {
+            _chkEnabled.Checked = _store.Current.Enabled;
+            _chkAnnounce.Checked = _store.Current.AnnounceGhosts;
+        }
+        finally
+        {
+            _syncingSwitches = false;
+        }
+
+        UpdateEnabledState();
+        RefreshGrid();
+    }
 
     private void UpdateEnabledState()
     {

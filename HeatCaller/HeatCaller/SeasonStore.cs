@@ -287,6 +287,23 @@ public sealed class SeasonStore
 
                 entry.RawPoints += points;
                 entry.SessionsCounted++;
+
+                // A driver the race director marked DNF (or DQ) in Edit
+                // Result can still have laps - ResultEditor keeps a DNF's
+                // laps, and its place keeps that place's points on purpose
+                // (see ResultEditor.Group). So the points above stand. But
+                // the official word is "did not finish", so the DNF column
+                // counts it and it is not a win or a podium: a DNF in P3
+                // used to show 0 DNFs and one more podium. Same rule as
+                // DriverStats.IsFinish.
+                if (ResultEditor.NormaliseOutcome(result.Outcome) is ResultEditor.Dnf or ResultEditor.Dq)
+                {
+                    entry.Dnfs++;
+                    continue;
+                }
+
+                // After the check, so a DNF is not a best finish either -
+                // the driver card (DriverStats.IsFinish) leaves it out too.
                 entry.BestFinish = Math.Min(entry.BestFinish, position);
 
                 if (position == 1)

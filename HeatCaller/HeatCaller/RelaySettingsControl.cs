@@ -186,6 +186,27 @@ public sealed class RelaySettingsControl : UserControl
     /// </summary>
     public event Action? VoiceRelayChanged;
 
+    /// <summary>
+    /// Asked by Email PINs... before it sends: true while the host (MainForm)
+    /// is still making the new PINs' hashes and has not yet sent the
+    /// check-in list that carries them. Until it has, the relay holds the
+    /// old PINs, so a racer emailed now could tap their new PIN at once and
+    /// be refused. Null (nothing wired) means never.
+    /// </summary>
+    public Func<bool>? CheckInListBeingPrepared { get; set; }
+
+    /// <summary>
+    /// Raised on the UI thread just before Email PINs... starts sending, and
+    /// PinEmailFinished once what it sent has been recorded (RacerPinsEmailed)
+    /// - or the page has gone. Between the two the host does not email any
+    /// PIN of its own: in the moment after the sending ends and before this
+    /// page has recorded it, a racer it emailed still looks unemailed.
+    /// </summary>
+    public event Action? PinEmailStarted;
+
+    /// <summary>See PinEmailStarted. Raised exactly once for each PinEmailStarted.</summary>
+    public event Action? PinEmailFinished;
+
     public RelaySettingsControl(RelayPublisher publisher, AppSettings settings, ProfileStore profiles, UndoService? undo = null)
     {
         _publisher = publisher;
@@ -1007,7 +1028,9 @@ public sealed class RelaySettingsControl : UserControl
         // ids are worked out again and the check-in list sent.
         // Held sealed (DPAPI), as settings keep it on disk, rather than as
         // plain text in memory for as long as the step is on the list - a
-        // reissue is often done because the old key got out.
+        // reissue is often done because the old key got out. Sealed here,
+        // before Reissue replaces the key: this is the "before" Undo puts
+        // back.
         string? sealedOldSecret = null;
         try
         {
@@ -1018,17 +1041,59 @@ public sealed class RelaySettingsControl : UserControl
             // Can't seal it: no undo, rather than one holding it in the clear.
         }
 
-        if (sealedOldSecret is not null)
+        // The new key could not be written to settings.json, so Reissue has
+        // put the old one back: nothing changed, and nothing here may say it
+        // did. No undo step (there is nothing to undo), no BadgesReissued
+        // (every id is the same), no "Reissued" in the console, and above
+        // all no "print new QR check-ins" - those would carry the same key,
+        // and the lost badge the reissue was meant to stop would still work.
+        if (!RelayCheckIn.Reissue(_settings))
         {
-            _undo?.Capture("Reissue all QR check-ins", () =>
-            {
-                _settings.RelayCheckInSecret = SecretBox.Open(sealedOldSecret);
-                _settings.Save();
-                BadgesReissued?.Invoke();
-            });
+            RefreshCheckInState();
+
+            AppDialog.Show(
+                this,
+                "The new QR check-in key couldn't be saved to settings.json, so nothing was reissued. The QR check-ins "
+                + "already handed out still work.\n\nClose anything that might have settings.json open and try again.",
+                "Not reissued",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
         }
 
-        RelayCheckIn.Reissue(_settings);
+        // Pushed only now the new key is on disk - an undo step for a
+        // reissue that never happened would "put back" the key already in
+        // use. Pushing it after the change rather than before is safe: the
+        // old key was sealed above, before Reissue touched it.
+        if (sealedOldSecret is not null)
+        {
+            const string undoName = "Reissue all QR check-ins";
+            Action? undoReissue = null;
+
+            undoReissue = () =>
+            {
+                var newer = _settings.RelayCheckInSecret;
+                _settings.RelayCheckInSecret = SecretBox.Open(sealedOldSecret);
+
+                // The old key back only in memory would make the old badges
+                // work tonight and stop again at the next start, when the
+                // new key loads from disk - while the undo said it was done.
+                // So, unsaved, the new key stays, the step goes back on the
+                // list to try again, and the director is told.
+                if (!_settings.Save())
+                {
+                    _settings.RelayCheckInSecret = newer;
+                    _undo?.Capture(undoName, undoReissue!);
+                    throw new InvalidOperationException(
+                        "The old QR check-in key couldn't be saved to settings.json, so the reissue was not undone - "
+                        + "the QR check-ins printed since still work. Close anything that might have settings.json open and press Undo again.");
+                }
+
+                BadgesReissued?.Invoke();
+            };
+
+            _undo?.Capture(undoName, undoReissue);
+        }
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [relay] Reissued all QR check-ins: a new QR check-in key was made, so every QR check-in and link handed out before now has stopped working.");
 
@@ -1285,23 +1350,92 @@ public sealed class RelaySettingsControl : UserControl
         // makes those PINs work again. It can't take back an email: anybody
         // already sent a new PIN has one that stops working again.
         var oldPins = RacerPins.CaptureSet(_settings);
-        _undo?.Capture("New PINs for every racer (emailed PINs can't be recalled)", () =>
-        {
-            RacerPins.RestoreSet(_settings, _profiles, oldPins);
-            _settings.Save();
-            RacerPinsChanged?.Invoke();
-        });
+        bool saved;
 
         try
         {
             RacerPins.RegenerateAll(_settings, _profiles);
-            _settings.Save();
+            saved = _settings.Save();
         }
         catch (Exception ex)
         {
+            // Back to the old set in memory too, so nothing later - the
+            // ten-minute pass, an automatic email - picks up a set that
+            // never reached disk. Exactly as it was: RestoreSet would also
+            // hand out PINs to anyone added since, and those would not be on
+            // disk either (KeepRacerPinsInStep gives them theirs once it can
+            // save).
+            RacerPins.PutBackExactly(_settings, oldPins);
+            RefreshPinsState();
             AppDialog.Show(this, $"Couldn't make new PINs: {ex.Message}", "New PINs", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
+
+        // Save doesn't throw when settings.json can't be written (locked by
+        // another program, a read-only folder, a full disk): it reports the
+        // failure and returns false. The PINs live nowhere but settings.json,
+        // so a set that wasn't written must not be published or emailed -
+        // RacerPinsChanged would do both, and after the next restart the old
+        // set would load from disk and every PIN just emailed would stop
+        // working. So the old set goes back in memory, which is still what
+        // is on disk and on the relay, and nobody is told anything new.
+        if (!saved)
+        {
+            RacerPins.PutBackExactly(_settings, oldPins);
+            RefreshPinsState();
+            AppDialog.Show(
+                this,
+                "The new PINs couldn't be saved, so they haven't been sent anywhere and nobody was emailed. "
+                + "Every racer's PIN is unchanged.\n\nClose anything that might have settings.json open and try again.",
+                "New PINs",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return;
+        }
+
+        // Captured only once the new set is safely on disk: a step put on
+        // the list before a write that then failed would "undo" a change
+        // that never happened, and UndoService has no way to take one back
+        // off. oldPins was taken before RegenerateAll, so it is still the
+        // set to go back to.
+        const string undoName = "New PINs for every racer (emailed PINs can't be recalled)";
+
+        Action? undoNewPins = null;
+        undoNewPins = () =>
+        {
+            var newer = RacerPins.CaptureSet(_settings);
+            RacerPins.RestoreSet(_settings, _profiles, oldPins);
+
+            // The old set back only once it is on disk too - otherwise it
+            // would be published and emailed from memory, and the next
+            // restart would bring the new set back from settings.json. The
+            // step goes back on the list first, so Undo can be pressed again
+            // once the file can be written (UndoService has already taken it
+            // off).
+            if (!_settings.Save())
+            {
+                RacerPins.PutBackExactly(_settings, newer);
+
+                if (!IsDisposed)
+                {
+                    RefreshPinsState();
+                }
+
+                _undo?.Capture(undoName, undoNewPins!);
+                throw new InvalidOperationException(
+                    "the old PINs couldn't be saved to settings.json, so the new PINs are still in use. "
+                    + "Close anything that might have settings.json open and press Undo again.");
+            }
+
+            if (!IsDisposed)
+            {
+                RefreshPinsState();
+            }
+
+            RacerPinsChanged?.Invoke();
+        };
+
+        _undo?.Capture(undoName, undoNewPins);
 
         RefreshPinsState();
         RacerPinsChanged?.Invoke();
@@ -1348,6 +1482,21 @@ public sealed class RelaySettingsControl : UserControl
             return;
         }
 
+        // Asked after the question, not before: "New PINs now" a moment ago
+        // means the host is still making their hashes in the background, and
+        // the relay holds the old PINs until it has sent the list that
+        // carries the new ones. Emailed now, a racer could open the email,
+        // tap their new PIN straight away and be refused. It takes seconds,
+        // so the director is simply asked to wait.
+        if (CheckInListBeingPrepared?.Invoke() == true)
+        {
+            AppDialog.Show(this,
+                "The new PINs are still being sent to the club website. Try again in a few seconds, so nobody is "
+                + "emailed a PIN the website doesn't know yet.",
+                "Not ready yet", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         _pinProgress = "Starting to email PINs...";
         RefreshPinsState();
 
@@ -1363,28 +1512,43 @@ public sealed class RelaySettingsControl : UserControl
 
         MailResult result;
 
+        // Raised here, on the UI thread, and matched by exactly one
+        // PinEmailFinished below - every path from here on reaches it.
+        PinEmailStarted?.Invoke();
+
         try
         {
-            result = await PinMailer.SendPinsAsync(_settings, _profiles, null, progress, _mailCancel.Token);
-        }
-        catch (Exception ex)
-        {
-            result = new MailResult { Ok = false, Message = ex.Message };
+            try
+            {
+                result = await PinMailer.SendPinsAsync(_settings, _profiles, null, progress, _mailCancel.Token);
+            }
+            catch (Exception ex)
+            {
+                result = new MailResult { Ok = false, Message = ex.Message };
+            }
+            finally
+            {
+                _pinProgress = null;
+            }
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            // Back on the UI thread: the only place settings are changed.
+            if (RacerPins.MarkEmailed(_settings, result.Sent) > 0)
+            {
+                _settings.Save();
+            }
         }
         finally
         {
-            _pinProgress = null;
-        }
-
-        if (IsDisposed)
-        {
-            return;
-        }
-
-        // Back on the UI thread: the only place settings are changed.
-        if (RacerPins.MarkEmailed(_settings, result.Sent) > 0)
-        {
-            _settings.Save();
+            // Before the result dialog, not after it: a racer approved from
+            // an online sign-up while this ran is waiting on this send to end
+            // for their own PIN email, and should not also wait for the
+            // director to dismiss a dialog.
+            PinEmailFinished?.Invoke();
         }
 
         RefreshPinsState();

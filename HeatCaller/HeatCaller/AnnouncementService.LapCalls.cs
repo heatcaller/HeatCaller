@@ -96,6 +96,41 @@ public sealed partial class AnnouncementService
     private static readonly TimeSpan PerLapBatchWindow = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
+    /// Whether a per-lap voice candidate could actually be spoken right now:
+    /// it has a configuration entry, it is switched on for this kind of
+    /// session, and no flag is holding it.
+    ///
+    /// Checked BEFORE a candidate goes into the per-lap batch, not only when
+    /// the batch is spoken. The batch keeps the highest-weight candidates up
+    /// to the per-lap limit and drops the rest, and the switched-off check
+    /// used to happen only afterwards, in EnqueueVoice. So a switched-off
+    /// event still won a slot by its weight and then said nothing, and the
+    /// line that WAS switched on lost out to it. "Lap times only" is the
+    /// plain case: it leaves "Lap completed" (40), "Fastest lap" (90) and
+    /// "Lead change" (100) in the settings but off, and "Lap time" (30) on,
+    /// so the lap time went unspoken on every fast lap and lead change - and
+    /// on every lap at all with the limit set to one.
+    ///
+    /// EnqueueVoice still makes the same checks when the batch is spoken,
+    /// because a flag can come out during the batch window.
+    /// </summary>
+    private bool VoiceCandidateCanSpeak(AnnouncementEventType type, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] AnnouncementEventConfig? config) =>
+        config is not null
+        && config.IsEnabledFor(IsPracticeMode)
+        && !HeldByCaution(type, config);
+
+    /// <summary>
+    /// The sound-effect side of VoiceCandidateCanSpeak, for the same reason:
+    /// a switched-off effect (Personal best is off by default, at weight 60)
+    /// used to take a slot from one that is on (Good lap, 40). Mirrors the
+    /// checks PlaySound makes, which still runs them again at play time.
+    /// </summary>
+    private bool SoundCandidateCanPlay(SoundEffectKind kind, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] SoundEffectConfig? config) =>
+        config is not null
+        && config.IsEnabledFor(IsPracticeMode)
+        && !(IsUnderCaution && SoundEffectsProfile.PerLapKinds.Contains(kind) && !config.AllowUnderCaution);
+
+    /// <summary>
     /// Queues a per-lap CANDIDATE action (a voice line or a sound effect)
     /// rather than performing it immediately. All candidates raised under
     /// the same batchNamespace ("voice" or "sound") for the same
@@ -103,9 +138,18 @@ public sealed partial class AnnouncementService
     /// window closes, only the highest-Weight ones (up to maxPerLap) are
     /// actually performed, and the rest are silently dropped. See the
     /// class-level remarks on _pendingPerLapBatches for why.
+    ///
+    /// Only offer a candidate here that could actually be heard - see
+    /// VoiceCandidateCanSpeak and SoundCandidateCanPlay.
     /// </summary>
     private void ConsiderPerLapAction(string batchNamespace, string? transponder, int weight, int maxPerLap, Action action)
     {
+        // A ghost's lap sounds and calls, while ghosts are not announced.
+        if (MutedGhost(transponder))
+        {
+            return;
+        }
+
         if (transponder is null)
         {
             action();
@@ -236,6 +280,26 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // With ghosts not announced, the report is about the real field
+        // only. A pace ghost is still ranked in the standings (so gaps and
+        // leader changes between real drivers stay right), but it used to
+        // be read out by name, and when it LED the whole report was queued
+        // under the ghost's transponder - which EnqueueVoiceWork refuses
+        // for a muted ghost - so every real driver in it went unheard while
+        // the screens still showed it. The first real car leads the report
+        // and sets its cadence, so "Sam leads" is read as Sam crosses.
+        if (AnnounceGhostsProvider?.Invoke() == false)
+        {
+            ordered = ordered.Where(standing => !MutedGhost(standing.Transponder)).ToList();
+
+            if (ordered.FirstOrDefault() is not { } firstReal)
+            {
+                return;
+            }
+
+            leader = firstReal;
+        }
+
         var everyLaps = Math.Max(1, config.PositionReportEveryLaps);
 
         // Needs at least a full interval of racing before the first report,
@@ -346,14 +410,17 @@ public sealed partial class AnnouncementService
         //
         // It already rations itself by only firing every N leader laps,
         // which is the right control for this announcement.
-        AnnouncementTextReady?.Invoke(text);
+        //
         // Read at this event's own pace. A running order is the longest
         // line the announcer says, and the profile speed that suits a
         // two-word lap call rattles straight through it.
         var reportSpeed = config.SpeedFor(_voiceStore.Current.Speed);
 
+        // The text goes up only if the report is accepted - see
+        // EnqueueVoiceWork.
         EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
-            () => SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed));
+            () => SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed),
+            displayText: text);
     }
 
     /// <summary>Leader lap the last report was read on, so it fires once per interval rather than once per car.</summary>
@@ -412,13 +479,20 @@ public sealed partial class AnnouncementService
 
         if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
         {
+            // Only offered when they could be heard - see VoiceCandidateCanSpeak.
             var soundCfg = _soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.LeaderChange));
-            ConsiderPerLapAction("sound", leader.Transponder, soundCfg?.Weight ?? 100, Math.Max(1, _soundStore.Current.MaxEffectsPerLap),
-                () => PlaySound(SoundEffectKind.LeaderChange, ToneGenerator.PlayLeaderChangeAsync, "leader change sound"));
+            if (SoundCandidateCanPlay(SoundEffectKind.LeaderChange, soundCfg))
+            {
+                ConsiderPerLapAction("sound", leader.Transponder, soundCfg.Weight, Math.Max(1, _soundStore.Current.MaxEffectsPerLap),
+                    () => PlaySound(SoundEffectKind.LeaderChange, ToneGenerator.PlayLeaderChangeAsync, "leader change sound"));
+            }
 
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
-            ConsiderPerLapAction("voice", leader.Transponder, voiceCfg?.Weight ?? 100, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
-                () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null));
+            if (VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
+            {
+                ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
+                    () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null));
+            }
         }
 
         _currentLeaderTransponder = leader.Transponder;
@@ -478,6 +552,31 @@ public sealed partial class AnnouncementService
         EnqueueVoiceWork(AnnouncementEventType.Streak, transponder, async () =>
         {
             var profile = _voiceStore.Current;
+
+            // Checked again now it is about to be spoken: the line can wait
+            // several laps behind other calls, and a flag can come out - or
+            // Streak be switched off - in that time. The flag's own clear-out
+            // only empties what was queued at that moment. Read from the
+            // live profile, since the settings may have been replaced since
+            // the crossing.
+            var live = profile.Events.GetValueOrDefault(nameof(AnnouncementEventType.Streak));
+            if (live is null || !live.IsEnabledFor(IsPracticeMode))
+            {
+                StatusMessage?.Invoke($"[voice] Streak call for {DisplayNameFor(transponder)} dropped - switched off before it could be spoken.");
+                return;
+            }
+
+            if (HeldByCaution(AnnouncementEventType.Streak, live))
+            {
+                StatusMessage?.Invoke($"[voice] Streak call for {DisplayNameFor(transponder)} dropped - a flag came out before it could be spoken.");
+                return;
+            }
+
+            if (config.EffectiveTemplates.Count == 0)
+            {
+                return;
+            }
+
             var threshold = _soundStore.Current.StreakThresholdFor(IsPracticeMode);
             var streak = CurrentStreakOf(transponder);
 
@@ -527,7 +626,7 @@ public sealed partial class AnnouncementService
                 }
             }
 
-            AnnouncementTextReady?.Invoke(text);
+            RaiseAnnouncementText(text, transponder);
             StatusMessage?.Invoke($"[voice] Streak ({streak} for {driver}): \"{text}\"");
 
             await SynthesizeAndPlayAsync(profile.SanitiseForModel(text), "[voice] Announcing",
@@ -573,6 +672,33 @@ public sealed partial class AnnouncementService
         {
             _streakLeaderCount = streakCount;
             return;
+        }
+
+        // A holder who has stopped crossing the line no longer holds a run
+        // in progress. Their count was only ever refreshed or cleared on
+        // THEIR OWN crossings, so a car that pulled off with a dead battery
+        // on 12 kept 12 as the bar everyone else had to beat - a driver on a
+        // clean 7, 8, 9 wasn't called until 13, and never if their run ended
+        // first. The runner-up count (BestStreakOtherThan) already leaves a
+        // run untouched for StreakStaleAfter out for exactly this reason;
+        // the stored holder now follows the same rule. A holder still
+        // lapping is in chaserCount anyway, so nothing changes for them.
+        //
+        // Read, tested and cleared all inside the lock. ResetSession nulls
+        // the holder under the same lock from another thread, and testing
+        // it for null outside and reading it again inside could hand
+        // TryGetValue a null key - which throws.
+        var cutoff = DateTime.UtcNow - StreakStaleAfter;
+        lock (_streakLock)
+        {
+            var holder = _streakLeader;
+
+            if (holder is not null
+                && !(_currentStreaks.TryGetValue(holder, out var held) && held.AtUtc >= cutoff))
+            {
+                _streakLeader = null;
+                _streakLeaderCount = 0;
+            }
         }
 
         // A takeover means passing the field, not merely matching it - on
@@ -621,13 +747,18 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        AnnouncementTextReady?.Invoke(text);
-
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
+        // The text goes up from inside the per-lap action, and only once
+        // the line is accepted - not here, when it is merely offered. It
+        // used to be raised first, so a takeover that lost its slot to a
+        // fast lap and a lead change, or was dropped for the announcer being
+        // busy, was still put on the Big Screen and still made the crowd
+        // ambience surge for a call nobody heard. See EnqueueVoiceWork.
         ConsiderPerLapAction("voice", transponder, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
             () => EnqueueVoiceWork(AnnouncementEventType.StreakLead, transponder,
-                () => SynthesizeAndPlayAsync(text, "[voice] Longest streak", speedOverride: speed)));
+                () => SynthesizeAndPlayAsync(text, "[voice] Longest streak", speedOverride: speed),
+                displayText: text));
     }
 
     /// <summary>
@@ -664,6 +795,41 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// How long a close battle offered to the per-lap batch counts as
+    /// pending before it may be offered again.
+    ///
+    /// A batch normally settles within PerLapBatchWindow, and a settled line
+    /// clears its own pending mark. But a line the per-lap cap drops, or one
+    /// a flag clears out of the batch, never runs at all - so without a
+    /// limit that pair would stay pending, and uncalled, for the rest of the
+    /// race. Well past the batch window, so a line still waiting in its
+    /// batch isn't offered a second time.
+    /// </summary>
+    private static readonly TimeSpan BattleOfferExpiresAfter = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// One close-battle line on offer: the pair's key in _battlesAnnounced,
+    /// when it was offered (its mark in _battlesPending), and the
+    /// _battlesGeneration it belongs to.
+    /// </summary>
+    private readonly record struct BattleOffer(string Key, DateTime OfferedAt, int Generation);
+
+    /// <summary>
+    /// Takes this offer's pending mark away, if it is still this offer's.
+    /// A newer offer of the same pair - after this one expired - keeps its
+    /// own. Call only while holding _battlesLock.
+    /// </summary>
+    private void ForgetBattleOfferLocked(BattleOffer offer)
+    {
+        if (offer.Generation == _battlesGeneration
+            && _battlesPending.TryGetValue(offer.Key, out var offeredAt)
+            && offeredAt == offer.OfferedAt)
+        {
+            _battlesPending.Remove(offer.Key);
+        }
+    }
+
+    /// <summary>
     /// Announces two cars on the same lap running within a second of each
     /// other - once per pair per race, as the event's own description says.
     ///
@@ -675,10 +841,51 @@ public sealed partial class AnnouncementService
     {
         const long closeMs = 1000;
 
+        // Not offered at all while it couldn't be heard - switched off, or
+        // held by a flag. This runs on every standings update, so under a
+        // yellow every close pair used to be offered, and logged as "held -
+        // a flag is out", on every single crossing. Nothing is marked, so
+        // the pair is still there to call once it's green.
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.CloseBattle));
+
+        if (Muted || !VoiceCandidateCanSpeak(AnnouncementEventType.CloseBattle, config))
+        {
+            return;
+        }
+
+        // Nor once the race is over: EnqueueVoiceWork would only drop it,
+        // and the pair would be offered and dropped again every few seconds
+        // until the next race.
+        if (_postRaceQuiet && !IsAllowedAfterRaceOver(AnnouncementEventType.CloseBattle))
+        {
+            return;
+        }
+
+        // Nor while the announcer is mid-line. EnqueueVoiceWork drops a
+        // routine line that arrives then, so the offer only came back as
+        // "Dropped CloseBattle" - and, not being used up, it was offered and
+        // dropped again on the next crossing, and the next. The same test
+        // EnqueueVoiceWork makes; the pair is simply offered on a later
+        // update, once the announcer is free.
+        if (_isVoiceSpeaking
+            && !IsPriorityAnnouncement(AnnouncementEventType.CloseBattle)
+            && !IsWorthWaitingFor(AnnouncementEventType.CloseBattle))
+        {
+            return;
+        }
+
         for (var i = 0; i < ordered.Count - 1; i++)
         {
             var front = ordered[i];
             var chaser = ordered[i + 1];
+
+            // A muted ghost's batch drops its lines before they run, so the
+            // pair would never be settled and would be offered again and
+            // again.
+            if (MutedGhost(front.Transponder))
+            {
+                continue;
+            }
 
             // Not on lap one: everyone is within a second of everyone at
             // the start, which is a start, not a battle.
@@ -692,13 +899,42 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
+            // Only CHECKED here; the pair is recorded as called by
+            // FirePairLine once the line is actually accepted to be spoken.
+            // It used to be recorded first, and the line could then say
+            // nothing at all - held by a yellow, out-weighed in the per-lap
+            // cap by a fast lap or a lead change, or dropped for the
+            // announcer still speaking. Being once per pair per race, that
+            // pair was then never called again: a field bunched up under a
+            // caution used up every battle before the green.
+            //
+            // A pair already on offer is skipped too (see _battlesPending),
+            // or every standings update before its batch settles added
+            // another copy to the front car's batch.
             var key = $"{front.Transponder}|{chaser.Transponder}";
-            if (!_battlesAnnounced.Add(key))
+            var now = DateTime.UtcNow;
+            BattleOffer offer;
+
+            lock (_battlesLock)
             {
-                continue;
+                if (_battlesAnnounced.Contains(key)
+                    || (_battlesPending.TryGetValue(key, out var offeredAt) && now - offeredAt < BattleOfferExpiresAfter))
+                {
+                    continue;
+                }
+
+                _battlesPending[key] = now;
+                offer = new BattleOffer(key, now, _battlesGeneration);
             }
 
-            FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder);
+            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer))
+            {
+                // Never reached the batch, so nothing would ever settle it.
+                lock (_battlesLock)
+                {
+                    ForgetBattleOfferLocked(offer);
+                }
+            }
         }
     }
 
@@ -707,25 +943,35 @@ public sealed partial class AnnouncementService
     /// the template system's single-driver substitution can't express.
     /// Shares the ghost-pass wording rules: announcer names, and the pass
     /// is dropped silently when the event is off or has no lines.
+    ///
+    /// Returns whether the line was handed to the per-lap batch. False means
+    /// it never will be spoken, so a caller holding something for it can
+    /// let go - see CheckCloseBattles.
     /// </summary>
-    private void FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder)
+    /// <param name="battle">
+    /// For a close battle, the pair on offer. The pair is added to
+    /// _battlesAnnounced only when the line is accepted to be spoken, so a
+    /// line that never got heard doesn't use up the pair - see
+    /// CheckCloseBattles. Null for a line that isn't once per pair.
+    /// </param>
+    private bool FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder, BattleOffer? battle = null)
     {
         if (Muted)
         {
-            return;
+            return false;
         }
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(type.ToString());
 
         if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
         {
-            return;
+            return false;
         }
 
         if (HeldByCaution(type, config))
         {
             StatusMessage?.Invoke($"[voice] {type} held - a flag is out.");
-            return;
+            return false;
         }
 
         var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
@@ -739,17 +985,67 @@ public sealed partial class AnnouncementService
 
         if (text.Length == 0)
         {
-            return;
+            return false;
         }
-
-        AnnouncementTextReady?.Invoke(text);
 
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
         // Through the per-lap cap like the other reactions to a crossing, so
         // a lapping doesn't stack on top of a fast lap and a leader change.
-        ConsiderPerLapAction("voice", driverTransponder, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
-            () => EnqueueVoiceWork(type, driverTransponder, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed)));
+        //
+        // The text goes up only once the line wins its slot and is accepted
+        // (see EnqueueVoiceWork), not when it is offered - or a lapping the
+        // cap dropped was still shown on the Big Screen and in the feed.
+        ConsiderPerLapAction("voice", driverTransponder, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap), () =>
+        {
+            // This runs on a thread-pool thread, and the batches for
+            // different cars can run at the same time - so the pair is
+            // checked and claimed as one step under _battlesLock. Claimed
+            // BEFORE it is queued, so two copies can't both be said; the
+            // claim is handed back below if the line is dropped.
+            if (battle is { } offer)
+            {
+                lock (_battlesLock)
+                {
+                    // Offered in a race that has since been reset - its
+                    // batch was already past its delay when the reset came.
+                    // Saying it, or marking the pair, would carry the old
+                    // race into the new one.
+                    if (offer.Generation != _battlesGeneration)
+                    {
+                        return;
+                    }
+
+                    // Settled now, whatever happens next.
+                    ForgetBattleOfferLocked(offer);
+
+                    // Already called - by another copy of the same pair.
+                    if (!_battlesAnnounced.Add(offer.Key))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            var accepted = EnqueueVoiceWork(type, driverTransponder,
+                () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
+                displayText: text);
+
+            if (!accepted && battle is { } dropped)
+            {
+                // Never said, so it doesn't use the pair up - unless a reset
+                // has already wiped the slate, when there is nothing to undo.
+                lock (_battlesLock)
+                {
+                    if (dropped.Generation == _battlesGeneration)
+                    {
+                        _battlesAnnounced.Remove(dropped.Key);
+                    }
+                }
+            }
+        });
+
+        return true;
     }
 
     /// <summary>
@@ -847,9 +1143,11 @@ public sealed partial class AnnouncementService
         // EnqueueVoiceWork needs - rivalries don't have their own
         // AnnouncementEventType since they're not a generic per-event
         // setting, just an implementation detail invisible to the user.
-        AnnouncementTextReady?.Invoke(text);
+        //
+        // Shown only if accepted - see EnqueueVoiceWork.
         EnqueueVoiceWork(AnnouncementEventType.LeaderChange, overtakerTransponder, () => SynthesizeAndPlayAsync(text, "[voice] Rivalry announcement",
-            "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."));
+            "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."),
+            displayText: text);
     }
 
     private void HandleGatePassed(GatePassEvent gate)
@@ -875,17 +1173,26 @@ public sealed partial class AnnouncementService
         var maxVoicePerLap = Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap);
         var transponder = gate.Transponder;
 
+        // Every candidate below is offered only when it could be heard, so a
+        // switched-off one can't take a slot from one that is on - see
+        // VoiceCandidateCanSpeak.
         if (gate.Valid)
         {
             var cfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.GoodLap));
-            ConsiderPerLapAction("sound", transponder, cfg?.Weight ?? 40, maxSoundsPerLap,
-                () => PlaySound(SoundEffectKind.GoodLap, ToneGenerator.PlayGoodLapAsync, "good lap chime"));
+            if (SoundCandidateCanPlay(SoundEffectKind.GoodLap, cfg))
+            {
+                ConsiderPerLapAction("sound", transponder, cfg.Weight, maxSoundsPerLap,
+                    () => PlaySound(SoundEffectKind.GoodLap, ToneGenerator.PlayGoodLapAsync, "good lap chime"));
+            }
         }
         else
         {
             var cfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.InvalidLap));
-            ConsiderPerLapAction("sound", transponder, cfg?.Weight ?? 40, maxSoundsPerLap,
-                () => PlaySound(SoundEffectKind.InvalidLap, ToneGenerator.PlayInvalidLapAsync, "invalid lap buzzer"));
+            if (SoundCandidateCanPlay(SoundEffectKind.InvalidLap, cfg))
+            {
+                ConsiderPerLapAction("sound", transponder, cfg.Weight, maxSoundsPerLap,
+                    () => PlaySound(SoundEffectKind.InvalidLap, ToneGenerator.PlayInvalidLapAsync, "invalid lap buzzer"));
+            }
         }
 
         // --- Consistency streak tracking ---
@@ -926,8 +1233,11 @@ public sealed partial class AnnouncementService
         if (streakCount >= sounds.StreakThresholdFor(IsPracticeMode))
         {
             var streakSoundCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.Streak));
-            ConsiderPerLapAction("sound", transponder, streakSoundCfg?.Weight ?? 70, maxSoundsPerLap,
-                () => PlaySound(SoundEffectKind.Streak, (v, ct) => ToneGenerator.PlayStreakAsync(streakCount, v, ct), $"streak sound (streak of {streakCount})", streakCount: streakCount));
+            if (SoundCandidateCanPlay(SoundEffectKind.Streak, streakSoundCfg))
+            {
+                ConsiderPerLapAction("sound", transponder, streakSoundCfg.Weight, maxSoundsPerLap,
+                    () => PlaySound(SoundEffectKind.Streak, (v, ct) => ToneGenerator.PlayStreakAsync(streakCount, v, ct), $"streak sound (streak of {streakCount})", streakCount: streakCount));
+            }
 
             var streakVoiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.Streak));
             var everyN = streakVoiceCfg?.StreakAnnounceEveryNFor(IsPracticeMode) ?? 1;
@@ -949,11 +1259,33 @@ public sealed partial class AnnouncementService
             var leadsTheField = streakCount >= chaserCount;
             var suppressed = streakVoiceCfg?.OnlyLongestStreak == true && !leadsTheField;
 
-            if (suppressed)
+            // The same checks every other per-lap line makes before it is
+            // offered (see VoiceCandidateCanSpeak). This one goes straight
+            // to EnqueueVoiceWork rather than through EnqueueVoice, so it
+            // skipped them entirely: switching Streak off - or off for
+            // practice - didn't stop it, and a streak reached under a yellow
+            // was called over the caution while its sound was rightly held.
+            // A Streak entry with no lines at all would also have thrown when
+            // the line came to pick one.
+            if (!VoiceCandidateCanSpeak(AnnouncementEventType.Streak, streakVoiceCfg)
+                || streakVoiceCfg.EffectiveTemplates.Count == 0)
+            {
+                if (streakVoiceCfg is not null && due)
+                {
+                    var reason = !streakVoiceCfg.IsEnabledFor(IsPracticeMode)
+                        ? $"switched off for {(IsPracticeMode ? "practice" : "races")}"
+                        : streakVoiceCfg.EffectiveTemplates.Count == 0
+                            ? "no lines configured"
+                            : "a flag is out";
+
+                    StatusMessage?.Invoke($"[voice] Streak for {DisplayNameFor(transponder)} not announced - {reason}.");
+                }
+            }
+            else if (suppressed)
             {
                 StatusMessage?.Invoke($"[voice] Streak for {DisplayNameFor(transponder)} not announced - {DisplayNameFor(chaser ?? string.Empty)} is on a longer run ({chaserCount}).");
             }
-            else if (due && streakVoiceCfg is not null)
+            else if (due)
             {
                 // The number, the runner-up and the only-longest check are
                 // all resolved when the line is actually spoken - see
@@ -963,7 +1295,7 @@ public sealed partial class AnnouncementService
                 ConsiderPerLapAction("voice", transponder, streakVoiceCfg.Weight, maxVoicePerLap,
                     () => EnqueueStreakAnnouncement(transponder, streakVoiceCfg, lapNumber));
             }
-            else if (streakVoiceCfg is not null)
+            else
             {
                 StatusMessage?.Invoke($"[voice] Streak for {DisplayNameFor(transponder)} not announced - {streakCount} in a row, called every {everyN} from {sounds.StreakThresholdFor(IsPracticeMode)}.");
             }
@@ -989,9 +1321,10 @@ public sealed partial class AnnouncementService
 
         var lapVoiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LapCompleted));
         var restrictedToBestLap = lapVoiceCfg?.OnlyBestLap == true;
-        if (gate.Valid && (!restrictedToBestLap || gate.Fast))
+        if (gate.Valid && (!restrictedToBestLap || gate.Fast)
+            && VoiceCandidateCanSpeak(AnnouncementEventType.LapCompleted, lapVoiceCfg))
         {
-            ConsiderPerLapAction("voice", transponder, lapVoiceCfg?.Weight ?? 40, maxVoicePerLap,
+            ConsiderPerLapAction("voice", transponder, lapVoiceCfg.Weight, maxVoicePerLap,
                 () => EnqueueVoice(AnnouncementEventType.LapCompleted, standing, gate, lapTimeMs));
         }
 
@@ -1014,21 +1347,28 @@ public sealed partial class AnnouncementService
 
         // No time, no call - the template would otherwise be spoken with
         // the time blanked out.
-        if (lapTimeMs is > 0 && ShouldAnnounceLapTime(transponder, lapTimeCfg))
+        if (lapTimeMs is > 0 && ShouldAnnounceLapTime(transponder, lapTimeCfg)
+            && VoiceCandidateCanSpeak(AnnouncementEventType.LapTime, lapTimeCfg))
         {
-            ConsiderPerLapAction("voice", transponder, lapTimeCfg?.Weight ?? 30, maxVoicePerLap,
+            ConsiderPerLapAction("voice", transponder, lapTimeCfg.Weight, maxVoicePerLap,
                 () => EnqueueVoice(AnnouncementEventType.LapTime, standing, gate, lapTimeMs));
         }
 
         if (gate.Fast)
         {
             var fastLapSoundCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.FastLap));
-            ConsiderPerLapAction("sound", transponder, fastLapSoundCfg?.Weight ?? 90, maxSoundsPerLap,
-                () => PlaySound(SoundEffectKind.FastLap, ToneGenerator.PlayFastLapAsync, "fast lap chime"));
+            if (SoundCandidateCanPlay(SoundEffectKind.FastLap, fastLapSoundCfg))
+            {
+                ConsiderPerLapAction("sound", transponder, fastLapSoundCfg.Weight, maxSoundsPerLap,
+                    () => PlaySound(SoundEffectKind.FastLap, ToneGenerator.PlayFastLapAsync, "fast lap chime"));
+            }
 
             var fastLapVoiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.FastLap));
-            ConsiderPerLapAction("voice", transponder, fastLapVoiceCfg?.Weight ?? 90, maxVoicePerLap,
-                () => EnqueueVoice(AnnouncementEventType.FastLap, standing, gate));
+            if (VoiceCandidateCanSpeak(AnnouncementEventType.FastLap, fastLapVoiceCfg))
+            {
+                ConsiderPerLapAction("voice", transponder, fastLapVoiceCfg.Weight, maxVoicePerLap,
+                    () => EnqueueVoice(AnnouncementEventType.FastLap, standing, gate));
+            }
 
             // In a qualifier the race's fastest lap is also the top of the
             // order - and for a driver's first flying lap it is the ONLY

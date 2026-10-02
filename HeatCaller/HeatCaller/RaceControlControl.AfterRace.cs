@@ -46,6 +46,15 @@ public sealed partial class RaceControlControl
     private const int MaxSpokenAchievements = 3;
 
     /// <summary>
+    /// True from a Quick Race press (_actQuickRace) until that race is saved,
+    /// staged over or reset. A Quick Race is filed on its own, never against
+    /// the next heat by auto-advance - see SaveCompletedSessionToHistory.
+    /// Nothing else about the race says it was one: the Round box is simply
+    /// freeform, as it is for any race nobody picked a round for.
+    /// </summary>
+    private bool _currentRaceIsQuick;
+
+    /// <summary>
     /// Works out what the race just earned everyone and says the best of it.
     ///
     /// Deliberately after the result is saved and before the wrap-up: the
@@ -64,8 +73,20 @@ public sealed partial class RaceControlControl
             // worth widening the constructor for.
             var store = AchievementStore.Load();
 
+            // A file that could not be read this time loads as no badges at
+            // all, and every driver would be told over the PA they had just
+            // won their First Race badge again. Nothing is lost by skipping:
+            // the store will not save while it is held (LoadedUnreadable).
+            if (store.LoadedUnreadable)
+            {
+                StatusMessage?.Invoke("[badges] achievements.json could not be read just now, so badges were not worked out for this race.");
+                return;
+            }
+
+            // The profiles too, so a guest marked "Exclude from records", a
+            // rental or a ghost does not take the Track Record badge.
             var unlocks = AchievementEvaluator.EvaluateFinishedRace(
-                record, _sessionHistory.All, store, RivalryStore.Load());
+                record, _sessionHistory.All, store, RivalryStore.Load(), _profiles);
 
             if (unlocks.Count == 0)
             {
@@ -239,6 +260,21 @@ public sealed partial class RaceControlControl
             // holding the local model after it is over.
             using var followOnWork = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
 
+            // Whether this sequence raised the recap's deep duck and has yet
+            // to release it: 0 never raised, 1 raised, 2 released. Released
+            // only if it was raised, and only once - so a sequence ending
+            // late never clears a deep duck the NEXT race's recap has just
+            // raised.
+            var deepDuck = 0;
+
+            void ReleaseDeepDuck()
+            {
+                if (Interlocked.CompareExchange(ref deepDuck, 2, 1) == 1)
+                {
+                    DeepDuckRequested?.Invoke(false);
+                }
+            }
+
             try
             {
                 var sequenceStarted = DateTime.UtcNow;
@@ -334,16 +370,31 @@ public sealed partial class RaceControlControl
                 {
                     var prepared = teaserRender is null ? null : await teaserRender;
 
-                    if (prepared is not null)
+                    // Not once the next race has been called to the grid -
+                    // see QueueUnlessNextRaceCalledAsync. A slow render, or
+                    // a long pause, could otherwise put "stand by for the
+                    // recap" over the next heat's staging call. Nothing of
+                    // this race's sequence is wanted after that, so the
+                    // recap goes too.
+                    var teaserQueued = await QueueUnlessNextRaceCalledAsync(() =>
                     {
-                        _announcer.SpeakPrepared(prepared);
-                    }
-                    else
+                        if (prepared is not null)
+                        {
+                            _announcer.SpeakPrepared(prepared);
+                        }
+                        else
+                        {
+                            // Voice not configured, muted, or the render failed -
+                            // the teaser still speaks, just with the round trip
+                            // in front of it.
+                            _announcer.SpeakReminder(teaser);
+                        }
+                    }, nextRace.Token);
+
+                    if (!teaserQueued)
                     {
-                        // Voice not configured, muted, or the render failed -
-                        // the teaser still speaks, just with the round trip
-                        // in front of it.
-                        _announcer.SpeakReminder(teaser);
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Teaser and recap dropped - the next race was called to the grid.");
+                        return;
                     }
 
                     StatusMessage?.Invoke(
@@ -404,22 +455,48 @@ public sealed partial class RaceControlControl
 
                 await gap;
 
-                // Deep duck for the recap. Raised BEFORE it's queued and
-                // released after the voice queue falls quiet, so it covers
-                // the whole segment rather than flapping per sentence.
-                DeepDuckRequested?.Invoke(true);
+                // Not once the next race has been called to the grid. The
+                // model can take a minute or more, and the heats can turn
+                // round faster than that: the recap of Heat 3 then went out
+                // over Heat 4's countdown or opening laps, its text on the
+                // Announcer feed and the Big Screen, and the lap calls under
+                // it dropped while it spoke. Staging clears no reminders,
+                // and the countdown cut only catches lines dequeued before
+                // the countdown began, so this is the one place it can be
+                // stopped. Checked and queued in one step on the UI thread -
+                // see QueueUnlessNextRaceCalledAsync - so a Stage cannot land
+                // between the two.
+                var recapQueued = await QueueUnlessNextRaceCalledAsync(() =>
+                {
+                    // Deep duck for the recap. Raised BEFORE it's queued and
+                    // released after the voice queue falls quiet, so it covers
+                    // the whole segment rather than flapping per sentence.
+                    // In here, so a dropped recap does not duck the next
+                    // race's music. Noted first, so the release below can
+                    // never miss it.
+                    Volatile.Write(ref deepDuck, 1);
+                    DeepDuckRequested?.Invoke(true);
 
-                if (recap.Audio is not null)
+                    if (recap.Audio is not null)
+                    {
+                        // Long tail: this is the longest line of the night and
+                        // its last words were being clipped.
+                        _announcer.SpeakPrepared(recap.Audio, AnnouncementService.SpeechTail.Long);
+                    }
+                    else
+                    {
+                        // Render failed, or voice isn't configured - the recap
+                        // still speaks, just with the round trip in front of it.
+                        _announcer.SpeakReminder(recap.Spoken, delivery);
+                    }
+                }, nextRace.Token);
+
+                if (!recapQueued)
                 {
-                    // Long tail: this is the longest line of the night and
-                    // its last words were being clipped.
-                    _announcer.SpeakPrepared(recap.Audio, AnnouncementService.SpeechTail.Long);
-                }
-                else
-                {
-                    // Render failed, or voice isn't configured - the recap
-                    // still speaks, just with the round trip in front of it.
-                    _announcer.SpeakReminder(recap.Spoken, delivery);
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [commentary] Recap dropped - the next race was called to the grid before it was ready "
+                        + $"(it took {tookSeconds:0.0}s to write and render).");
+                    return;
                 }
 
                 StatusMessage?.Invoke(
@@ -465,13 +542,13 @@ public sealed partial class RaceControlControl
                     // The next race was called while the broadcast finished.
                 }
 
-                DeepDuckRequested?.Invoke(false);
+                ReleaseDeepDuck();
             }
             catch
             {
                 // Released here as well: a synthesis failure mid-recap would
                 // otherwise leave the bed ducked for the rest of the night.
-                DeepDuckRequested?.Invoke(false);
+                ReleaseDeepDuck();
 
                 // Colour commentary is decoration - never let it surface as
                 // an error on a page that just finished a race.
@@ -486,6 +563,19 @@ public sealed partial class RaceControlControl
                 // second fade or stop landing on the next race's music.
                 // First, so nothing below can keep it from being raised.
                 RaiseSessionAudioFinished();
+
+                // And here, for any way out of the sequence that raised the
+                // deep duck but skipped the release above - an early return
+                // added later, say. Does nothing if it was never raised or
+                // has already been released.
+                try
+                {
+                    ReleaseDeepDuck();
+                }
+                catch
+                {
+                    // A failing handler must not stop the clean-up below.
+                }
 
                 _race.StateChanged -= onNextRace;
 
@@ -853,6 +943,111 @@ public sealed partial class RaceControlControl
         return !nextRace.IsCancellationRequested;
     }
 
+    /// <summary>
+    /// The longest the recap sequence waits for the UI thread to queue one of
+    /// its lines. Reached when the page is going away and the posted work
+    /// never runs, or when the UI thread is held up that long - without a
+    /// limit the sequence would wait forever and never raise
+    /// SessionAudioFinished. Once it gives up, the posted work does nothing
+    /// if it runs later (see QueueUnlessNextRaceCalledAsync).
+    /// </summary>
+    private static readonly TimeSpan QueueOnUiThreadLimit = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Runs <paramref name="queue"/> - which queues a line of the recap
+    /// sequence - unless the next race has been called to the grid. True
+    /// when it ran.
+    ///
+    /// The test and the queueing happen together on the UI thread, as the
+    /// round intro's do, because that is where staging happens: tested in
+    /// the background and queued a moment later, a Stage pressed in between
+    /// still let the line go out over the staging call. The race's state is
+    /// read there as well as the token, since the session can raise the
+    /// state change that cancels the token from another thread.
+    ///
+    /// Before the page has a window handle there is no UI thread to post to,
+    /// so the token alone decides, as it did before.
+    /// </summary>
+    /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
+    private async Task<bool> QueueUnlessNextRaceCalledAsync(Action queue, CancellationToken nextRace)
+    {
+        if (nextRace.IsCancellationRequested || IsDisposed || Disposing)
+        {
+            return false;
+        }
+
+        if (!IsHandleCreated)
+        {
+            queue();
+            return true;
+        }
+
+        var queued = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Who gets the last word: the posted work (it goes on to decide) or
+        // the wait below (it has given up). Whichever claims it first wins,
+        // and the other side then does nothing of its own. Without this,
+        // giving up was not final - a UI thread that was merely busy for ten
+        // seconds still ran the posted work later, queuing a line the
+        // sequence had already abandoned. For the recap that also raised the
+        // deep duck with nothing left to release it, and the music stayed
+        // deep-ducked for the rest of the night.
+        const int Open = 0, Claimed = 1, GaveUp = 2;
+        var claim = Open;
+
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (Interlocked.CompareExchange(ref claim, Claimed, Open) != Open)
+                {
+                    // The sequence stopped waiting before this got its turn
+                    // and has moved on. Too late to queue anything.
+                    return;
+                }
+
+                try
+                {
+                    if (IsDisposed || Disposing
+                        || nextRace.IsCancellationRequested
+                        || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+                    {
+                        queued.TrySetResult(false);
+                        return;
+                    }
+
+                    queue();
+                    queued.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    // Into the sequence's own catch, as a failure queued from
+                    // the background always went.
+                    queued.TrySetException(ex);
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            // The handle went between the test above and the post.
+            return false;
+        }
+
+        if (await Task.WhenAny(queued.Task, Task.Delay(QueueOnUiThreadLimit)) != queued.Task
+            && Interlocked.CompareExchange(ref claim, GaveUp, Open) == Open)
+        {
+            // Out of time, and the posted work has not started: it never
+            // will now, so nothing is queued behind the sequence's back.
+            return false;
+        }
+
+        // Either it finished in time, or it claimed its turn just as the
+        // limit ran out and is running on the UI thread now. Its answer -
+        // queued, not queued, or the failure it hit - is the real one, and
+        // it comes moments later.
+        return await queued.Task;
+    }
+
     /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
     private void Say(SpokenLine line, AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal)
     {
@@ -1090,6 +1285,11 @@ public sealed partial class RaceControlControl
 
     private void SaveCompletedSessionToHistory()
     {
+        // Read once and let go on every way out, so whatever runs next is
+        // filed (or auto-advanced) as usual - see the auto-advance below.
+        var wasQuickRace = _currentRaceIsQuick;
+        _currentRaceIsQuick = false;
+
         if (_race.IsPracticeMode)
         {
             StatusMessage?.Invoke("[session] Practice session - not auto-saved (use Save Practice Session).");
@@ -1097,7 +1297,15 @@ public sealed partial class RaceControlControl
             // Every way out of here clears the journal: the race is over
             // either way, and one left behind is offered back for recovery
             // on the next launch as if it had never finished.
-            _journal.Clear();
+            //
+            // Unless an earlier race is still waiting to be filed: practice
+            // is never journaled, so what is in the journal is that race,
+            // and its only copy on disk. See _unfiledRaces.
+            if (_unfiledRaces.Count == 0)
+            {
+                _journal.Clear();
+            }
+
             return;
         }
 
@@ -1117,7 +1325,14 @@ public sealed partial class RaceControlControl
             // of the broadcast - so it is signalled here, or music set to
             // fade after the recap would play on after every unsaved demo.
             SignalSessionAudioFinishedAfterFinishCall();
-            _journal.Clear();
+
+            // As practice above: a demo is never journaled, so with an
+            // earlier race still unfiled the journal is that race's.
+            if (_unfiledRaces.Count == 0)
+            {
+                _journal.Clear();
+            }
+
             return;
         }
 
@@ -1182,11 +1397,25 @@ public sealed partial class RaceControlControl
         //
         // Never for a demo: it would mark a real heat as run with invented
         // results, and seeding and the mains would then be built from them.
+        //
+        // Never for a Quick Race either. It drops the Round box to freeform
+        // precisely so it is not filed against a heat, and without this the
+        // fallback filed it against the next one anyway: a shakedown with
+        // the Heat 1 drivers, run under the app's default format, became
+        // Heat 1 - marked as run, gone from Next Up, and counted in
+        // qualifying and on the club's website. A round picked by hand
+        // after pressing Quick Race still counts; only the guess is skipped.
         var autoAdvanced = false;
-        if (round is null && _rounds is not null && AutoAdvanceWanted && !_currentRaceIsDemo)
+        if (round is null && _rounds is not null && AutoAdvanceWanted && !_currentRaceIsDemo && !wasQuickRace)
         {
             round = PickNextRound(racers);
             autoAdvanced = round is not null;
+        }
+        else if (round is null && wasQuickRace && !_currentRaceIsDemo)
+        {
+            StatusMessage?.Invoke(
+                "[session] Quick Race - kept in Race History on its own. A Quick Race is never filed against a heat "
+                + "by itself; pick the round in the Round box first if one is meant to count.");
         }
 
         var record = new SessionRecord
@@ -1269,6 +1498,19 @@ public sealed partial class RaceControlControl
             // whatever the disk did.
             _sessionStartedAtUtc = null;
 
+            // Kept, to be filed again - see _unfiledRaces. The store holds the
+            // record back from every other save, so without this nothing
+            // ever wrote it once the next race had taken over the journal.
+            _unfiledRaces.Add(new UnfiledRace(record, round, autoAdvanced));
+
+            // Commit stopped before afterSaved, so the recap never runs - and
+            // the recap is what normally signals the end of the broadcast.
+            // Without this, music set to fade or stop after the summary
+            // played on through the dialog and into the gap between races,
+            // as it once did after every unsaved demo (see above). Before
+            // the dialog, which holds this thread until it is closed.
+            SignalSessionAudioFinishedAfterFinishCall();
+
             AppDialog.Show(
                 this,
                 $"\"{record.Label}\" could not be written to the race history - something else on this PC has the "
@@ -1276,20 +1518,164 @@ public sealed partial class RaceControlControl
                 + "is not being written over).\r\n\r\nThe race has NOT been lost: it is still in the crash "
                 + "journal, and HeatCaller will offer it back the next time it starts. Close anything that might be "
                 + "reading the HeatCaller folder (a backup or sync tool is the usual cause) and restart HeatCaller "
-                + "before running the next race.",
+                + "before running the next race.\r\n\r\nIf you carry on instead, HeatCaller tries to save it again "
+                + "as the next race starts and after each race - but until it is saved, closing HeatCaller or a "
+                + "crash during the next race loses it.",
                 "Race not saved",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+        else
+        {
+            // The journal has just been let go, so an earlier race that
+            // could not be filed can be tried again without touching this
+            // one's safety net - and the pages are refreshed for it.
+            FileUnfiledRaces(refreshPages: true);
+        }
+    }
+
+    /// <summary>
+    /// A finished race whose history write failed (RaceFiling.Outcome.NotSaved),
+    /// with the round it was to be filed against.
+    /// </summary>
+    private sealed record UnfiledRace(SessionRecord Record, RoundDefinition? Round, bool AutoAdvanced);
+
+    /// <summary>
+    /// Races Add could not write, still waiting to be filed.
+    ///
+    /// SessionHistoryStore keeps such a record out of every later save (see
+    /// its _unsaved) so it cannot ride along on an unrelated write and come
+    /// back as a duplicate from its crash journal. That makes Add the only
+    /// way it ever reaches disk - and nothing called Add again. The dialog
+    /// says to restart before the next race, but nothing enforces it: a
+    /// director who clicked OK and staged the next heat had the journal
+    /// overwritten by that heat, which then filed fine and cleared it, and
+    /// the failed A-main was in neither the history nor the journal at the
+    /// next launch. So each one is kept here and handed to RaceFiling.Commit
+    /// again - the same object, which Add treats as a retry - as the next
+    /// race starts (before its journal replaces this one's) and after each
+    /// race that files.
+    ///
+    /// UI thread only, like everything else in the filing.
+    /// </summary>
+    private readonly List<UnfiledRace> _unfiledRaces = new();
+
+    /// <summary>The session generation FileUnfiledRaces was last tried for from WriteJournal - once per race is enough.</summary>
+    private int _unfiledRetryGeneration = -1;
+
+    /// <summary>
+    /// Tries again to file every race in _unfiledRaces, through the same
+    /// RaceFiling.Commit, so the round is linked and the journal let go only
+    /// once the write has landed. Only called when the crash journal holds
+    /// nothing newer than those races - before the next race's first journal
+    /// write, or just after a race has been filed and its journal cleared -
+    /// since Commit clears the journal on success.
+    ///
+    /// Quiet about the result card, the badges and the spoken summary: by now
+    /// another race is on the board, and announcing or carding the earlier
+    /// one would put it over the race the room is watching.
+    /// </summary>
+    /// <param name="refreshPages">
+    /// False while the next race is starting: SessionSaved rebuilds the Round
+    /// box, which must not move under a race being staged. The race's own
+    /// filing raises it afterwards anyway.
+    /// </param>
+    private void FileUnfiledRaces(bool refreshPages)
+    {
+        if (_unfiledRaces.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var unfiled in _unfiledRaces.ToList())
+        {
+            var record = unfiled.Record;
+
+            // Deleted from Race History meanwhile (Delete forgets it in the
+            // store too): filing it now would bring back a race the director
+            // threw away.
+            if (!ReferenceEquals(_sessionHistory.Get(record.Id), record))
+            {
+                _unfiledRaces.Remove(unfiled);
+                continue;
+            }
+
+            // The round only if it is still waiting for a result. Another
+            // race may have been filed against it since - a rerun, or
+            // auto-advance picking the same heat, since this one never marked
+            // it as run - and linking it again would take that race's result
+            // off the heat.
+            var round = unfiled.Round is { } wanted && _rounds?.Get(wanted.Id) is { IsRecorded: false } current
+                ? current
+                : null;
+
+            if (unfiled.Round is not null && round is null)
+            {
+                StatusMessage?.Invoke(
+                    $"[session] \"{record.Label}\" is being saved now, but not against \"{unfiled.Round.RoundLabel}\" - "
+                    + "that heat has been filed by another race (or removed) since. Link it in Race History if it belongs there.");
+            }
+
+            var outcome = RaceFiling.Commit(
+                record,
+                round,
+                unfiled.AutoAdvanced && round is not null,
+                AutoAdvanceWanted,
+                _sessionHistory,
+                _rounds,
+                _journal,
+                afterSaved: () => { },
+                beforeJournalCleared: () =>
+                {
+                    if (refreshPages)
+                    {
+                        SessionSaved?.Invoke();
+                    }
+                },
+                log: message => StatusMessage?.Invoke(message),
+                raceDayOpen: RoundPicker.RaceDayOpen(_events));
+
+            if (outcome == RaceFiling.Outcome.Saved)
+            {
+                _unfiledRaces.Remove(unfiled);
+                StatusMessage?.Invoke(
+                    $"[session] \"{record.Label}\", which could not be saved earlier, is now in the race history. "
+                    + "Its badges and personal bests were not worked out and its summary was not spoken.");
+            }
         }
     }
 
     /// <summary>
     /// Writes the crash journal, with the round and the typed race name the
     /// race is being run under, so a restore can put those back too.
+    ///
+    /// At a new race's first write, an earlier race that could not be filed
+    /// is tried again first: the journal still holds that race, and the
+    /// write below is what replaces it. Once per race, not on every lap -
+    /// each try writes the whole history file.
     /// </summary>
-    private void WriteJournal(bool force = false) =>
+    private void WriteJournal(bool force = false)
+    {
+        if (_unfiledRaces.Count > 0
+            && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing
+            && _unfiledRetryGeneration != _race.SessionGeneration)
+        {
+            _unfiledRetryGeneration = _race.SessionGeneration;
+            FileUnfiledRaces(refreshPages: false);
+
+            if (_unfiledRaces.Count > 0 && !_race.IsDemoMode && !_race.IsPracticeMode)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [session] WARNING: {Plural.Of(_unfiledRaces.Count, "earlier race")} still could "
+                    + "not be saved to race-history.json, and this race's crash journal is about to replace it. It is "
+                    + "kept in memory and tried again after this race - do not close HeatCaller until the log says it "
+                    + "is in the race history.");
+            }
+        }
+
         _journal.Record(_race, _sessionStartedAtUtc, SelectedTrackName(), force,
             RoundForThisRace()?.Id, _txtSessionLabel.Text);
+    }
 
     /// <summary>
     /// The round a race brought back from the crash journal was being run

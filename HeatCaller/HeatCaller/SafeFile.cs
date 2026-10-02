@@ -392,6 +392,36 @@ public static class SafeFile
         return hold;
     }
 
+    /// <summary>
+    /// Keeps a copy of settings.json when it loaded fine but its keys were
+    /// sealed on another PC or Windows account - the usual result of
+    /// restoring a backup onto a new laptop.
+    ///
+    /// AppSettings.Load used to call PreserveUnreadable for this, only for
+    /// the copy. But that one's message says the file couldn't be read and
+    /// the app "started with defaults", when in fact every setting loaded
+    /// and only the keys are locked (SecretRecovery deals with those). On
+    /// the startup console after a restore, that told the operator the
+    /// club's whole setup was gone while the pages plainly showed it, and
+    /// left them guessing whether to restore again or re-enter everything.
+    /// Same copy, true words. Never throws.
+    /// </summary>
+    public static void PreserveSealedSecrets(string path)
+    {
+        var name = Path.GetFileName(path);
+        var (copyName, copyError) = KeepCopy(path);
+
+        var copyNote = copyError is not null
+            ? $" A copy of the file as it came couldn't be kept ({copyError})."
+            : copyName is not null
+                ? $" A copy of the file as it came was kept as \"{copyName}\", so the keys can still be had back on the PC that sealed them."
+                : string.Empty;
+
+        Notify($"[storage] \"{name}\" loaded, but its keys and PINs were sealed on another PC or Windows account, so they "
+            + "can't be opened here. Every other setting is in place. If the backup carried its keys (a backup password "
+            + "was set), you'll be asked for that password to get them back." + copyNote);
+    }
+
     private static string ReasonFor(Exception? ex) =>
         ex is null ? "unknown error" : $"{ex.GetType().Name}: {ex.Message}";
 

@@ -76,9 +76,9 @@ The card saved automatically at the end of a race uses the app's own on-screen s
 **Export Results** opens the **Export Results** dialog:
 
 1. Choose a **Format:**:
-    - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds.
+    - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status. **Status** is the driver's result status, for example DNF or DQ after a correction.
     - **Lap CSV - one row per lap**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, LapNumber, LapSeconds, CumulativeSeconds. Lap 1 is the start lap, which runs from the green to the car's first crossing.
-    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races.
+    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races. Each result has a `status`, and an `outcome` of `DNF` or `DQ` when a correction set one (`null` otherwise).
 2. Under **Sessions**, choose **Selected only** or **All recorded sessions**.
 3. Press **Export** and choose where to save the file.
 

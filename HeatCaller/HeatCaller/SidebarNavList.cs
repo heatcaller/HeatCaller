@@ -18,6 +18,9 @@ public sealed class SidebarNavList : Panel, IMessageFilter
 {
     private const int WM_MOUSEWHEEL = 0x020A;
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point point);
+
     /// <summary>
     /// A page's row, at the text size in use. The names are drawn in the nav
     /// face, which grows with the text size; a row that stayed 44px had them
@@ -225,7 +228,21 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             return false;
         }
 
-        if (!RectangleToScreen(ClientRectangle).Contains(Cursor.Position))
+        if (!IsHandleCreated || !RectangleToScreen(ClientRectangle).Contains(Cursor.Position))
+        {
+            return false;
+        }
+
+        // Being under the cursor's coordinates is not the same as being the
+        // window under the cursor. Message filters run for the whole UI
+        // thread, including inside a modal dialog's own message loop, and
+        // this list stays Visible behind a dialog. A wide page drawer (the
+        // Timetable or the Scrutineering Log) centered on a small screen
+        // lies over the sidebar, and without this check a wheel turn over
+        // that part of the dialog was swallowed here and scrolled the
+        // hidden list instead of the dialog's own. Only take the wheel when
+        // Windows says the top window at that point really is this list.
+        if (WindowFromPoint(Cursor.Position) != Handle)
         {
             return false;
         }
@@ -632,6 +649,19 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         }
     }
 
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        // A plain click (no drag) used to leave the clicked row's index
+        // behind, and OnDragDrop would later act on it: dropping a file from
+        // Explorer onto the sidebar moved whichever page was last clicked
+        // and saved that as the club's order. A drag of our own never gets
+        // here before its drop - DoDragDrop runs the whole drag, drop
+        // included, inside OnMouseMove - so clearing it now is safe.
+        _dragSourceIndex = -1;
+    }
+
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
@@ -642,16 +672,29 @@ public sealed class SidebarNavList : Panel, IMessageFilter
     protected override void OnDragOver(DragEventArgs drgevent)
     {
         base.OnDragOver(drgevent);
-        drgevent.Effect = DragDropEffects.Move;
+
+        // Only a reorder started in this list is accepted. Anything else
+        // (a file or text dragged in from another program) gets the "no
+        // drop" cursor, rather than being let through to OnDragDrop.
+        drgevent.Effect = IsOwnDrag(drgevent) ? DragDropEffects.Move : DragDropEffects.None;
     }
+
+    /// <summary>
+    /// True for the drag this list starts itself in OnMouseMove, which
+    /// carries the source row's index as a boxed int and is only ever in
+    /// flight while _dragSourceIndex is set.
+    /// </summary>
+    private bool IsOwnDrag(DragEventArgs drgevent) =>
+        _dragSourceIndex >= 0 && drgevent.Data?.GetDataPresent(typeof(int)) == true;
 
     protected override void OnDragDrop(DragEventArgs drgevent)
     {
         base.OnDragDrop(drgevent);
 
+        var ownDrag = IsOwnDrag(drgevent);
         var sourceIndex = _dragSourceIndex;
         _dragSourceIndex = -1;
-        if (sourceIndex < 0 || sourceIndex >= _items.Count)
+        if (!ownDrag || sourceIndex < 0 || sourceIndex >= _items.Count)
         {
             return;
         }

@@ -539,7 +539,6 @@ public sealed class SeasonsControl : UserControl
             var points = int.TryParse(row.Cells["points"].Value?.ToString(), out var p) ? p : 0;
             scheme.Add(new PointsSchemeEntry { Position = position, Points = points });
         }
-        season.PointsScheme = scheme;
 
         // A tick means "this race counts". WHY it counts decides where it
         // is recorded: if the rule already takes it, ticking is simply
@@ -570,6 +569,61 @@ public sealed class SeasonsControl : UserControl
             }
         }
 
+        // One undo step per change, like every other edit on this page.
+        // Without it a mistaken tick took no step, so Ctrl+Z straight
+        // afterward undid whatever was captured before it - a rename, or
+        // carried points on another championship - and left the tick as it
+        // was. The step is only taken when something really changed: the
+        // points grid ends an edit even when the value was typed back the
+        // same, and an empty step would make the next Undo seem to do
+        // nothing. The scheme is compared in position order, the order the
+        // grid shows it in, and the override lists as sets, since the order
+        // they are written in carries no meaning.
+        var schemeChanged = !season.PointsScheme
+            .OrderBy(p => p.Position)
+            .Select(p => (p.Position, p.Points))
+            .SequenceEqual(scheme.OrderBy(p => p.Position).Select(p => (p.Position, p.Points)));
+        var racesChanged = !season.IncludedSessionIds.ToHashSet().SetEquals(forcedIn)
+            || !season.ExcludedSessionIds.ToHashSet().SetEquals(forcedOut);
+
+        if (schemeChanged || racesChanged)
+        {
+            // Copies of what is on file now, taken before it is replaced,
+            // so later edits to the season cannot reach what Undo restores.
+            var seasons = _seasons;
+            var seasonId = season.Id;
+            var oldScheme = season.PointsScheme
+                .Select(p => new PointsSchemeEntry { Position = p.Position, Points = p.Points })
+                .ToList();
+            var oldIncluded = season.IncludedSessionIds.ToList();
+            var oldExcluded = season.ExcludedSessionIds.ToList();
+
+            // Named for what the director did: a tick never touches the
+            // scheme, while a points edit can also drop an override for a
+            // race no longer in the list, which is not what they changed.
+            var what = schemeChanged ? "Points" : "Races counted";
+
+            _undo.Capture($"{what} for '{season.Name}'", () =>
+            {
+                // Onto the championship as it is on file now, by id - one
+                // deleted since stays deleted rather than being written back.
+                if (seasons.Get(seasonId) is not { } current)
+                {
+                    throw new InvalidOperationException("that championship has been deleted since. Nothing was changed.");
+                }
+
+                current.PointsScheme = oldScheme
+                    .Select(p => new PointsSchemeEntry { Position = p.Position, Points = p.Points })
+                    .ToList();
+                current.IncludedSessionIds = oldIncluded.ToList();
+                current.ExcludedSessionIds = oldExcluded.ToList();
+
+                seasons.Upsert(current);
+                RefreshAfterUndo();
+            });
+        }
+
+        season.PointsScheme = scheme;
         season.IncludedSessionIds = forcedIn;
         season.ExcludedSessionIds = forcedOut;
 

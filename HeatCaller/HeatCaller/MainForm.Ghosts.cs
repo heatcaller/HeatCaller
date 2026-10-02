@@ -33,7 +33,20 @@ public partial class MainForm
                 ? _demoControl?.SelectedGhosts ?? Array.Empty<string>()
                 : null;
 
-            _ghosts.Start(cmbTrackLayout.SelectedItem as string, onlyThese);
+            // The track of whatever is actually running. Practice and a
+            // demo each pick their own track on their own page, and the
+            // practice is saved under the Practice page's one - so giving
+            // their ghosts Race Control's track (often another layout, or
+            // "(none)") paced a PB or track-record ghost from the wrong
+            // track's laps, or skipped it as having no PB there. Practice
+            // is checked first: it is the one most ghosts run in.
+            var trackName = _race.IsPracticeMode && _practiceControl is not null
+                ? _practiceControl.SelectedTrackName
+                : _race.IsDemoMode && _demoControl is not null
+                    ? _demoControl.SelectedTrackName
+                    : cmbTrackLayout.SelectedItem as string;
+
+            _ghosts.Start(trackName, onlyThese);
         }
         else if (state is RaceState.Idle or RaceState.Finished or RaceState.Staging or RaceState.Countdown)
         {

@@ -80,18 +80,15 @@ public sealed partial class RaceControlControl
         _cmbTrackLayout.Visible = false;
         _cmbTrackLayout.Width = 200;
         _cmbTrackLayout.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbTrackLayout.SelectedIndexChanged += (_, _) =>
-        {
-            var selected = _cmbTrackLayout.SelectedItem as string;
 
-            if (selected is not null)
-            {
-                TrackLayoutChanged?.Invoke(selected);
-            }
-
-            _settings.LastTrackLayoutName = selected ?? string.Empty;
-            _settings.Save();
-        };
+        // Its SelectedIndexChanged handler is wired in the constructor, after
+        // the first RefreshTrackLayoutCombo - not here. There used to be one
+        // here as well, so every change raised TrackLayoutChanged and saved
+        // the settings twice, and this one stored the "(none)" placeholder
+        // itself as the last track. Being wired before the first fill, it
+        // did so at every start: on a fresh install the first-run wizard
+        // then offered "(none)" as the track's name, and accepting it made
+        // a layout that every race save reads as "no track".
 
         _txtSessionLabel.Visible = false;
         _txtSessionLabel.Width = 220;
@@ -177,9 +174,27 @@ public sealed partial class RaceControlControl
         {
             // Pressed again during its own warm-up: skip the rest of it and
             // go straight on to the start.
-            if (SkipWarmUpIfRunning())
+            //
+            // Only its OWN. A warm-up Stage opened ends in Stage's
+            // continuation, and skipping it from here staged the heat in
+            // the Round box under its own format - no freeform setup, no
+            // Quick Race label, no start sequence - so the race was filed
+            // against that heat. That warm-up is closed instead, and the
+            // Quick Race asked for goes ahead below, straight to its start:
+            // the cars have just had their free laps.
+            var stageWarmUpClosed = false;
+
+            if (_warmUpCts is not null && _race.IsWarmingUp)
             {
-                return;
+                if (_warmUpOpenedByQuickRace)
+                {
+                    SkipWarmUpIfRunning();
+                    return;
+                }
+
+                CancelWarmUp();
+                stageWarmUpClosed = true;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Quick Race pressed during the heat's warm-up - warm-up closed, running a Quick Race instead.");
             }
 
             if (_race.State is not (RaceState.Idle or RaceState.Finished))
@@ -193,6 +208,10 @@ public sealed partial class RaceControlControl
             // records itself against that round.
             QuickRaceSetupRequested?.Invoke();
 
+            // Never filed against a heat by auto-advance - see the filing
+            // in AfterRace. Cleared by any other start and by Reset.
+            _currentRaceIsQuick = true;
+
             _txtSessionLabel.Text = $"Quick Race {DateTime.Now:HH:mm}";
 
             ApplyEffectiveFormat();
@@ -200,12 +219,13 @@ public sealed partial class RaceControlControl
 
             // A warm-up in the app default format runs first. The format is
             // applied again at the end of it, in case anything moved on.
-            if (TryBeginWarmUp(() =>
+            if (!stageWarmUpClosed
+                && TryBeginWarmUp(() =>
                 {
                     ApplyEffectiveFormat();
                     ApplyJumpStartRules();
                     _ = RunAutoStartSequenceAsync();
-                }))
+                }, forQuickRace: true))
             {
                 return;
             }
@@ -248,7 +268,11 @@ public sealed partial class RaceControlControl
         // button did nothing and TriggerOpenBigScreen - used by the remote
         // and the day schedule - silently no-opped. The compiler only
         // warned about the unassigned field, not the missing behaviour.
-        _actBigScreen = () => new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector).Show();
+        // The badge store is read through a lambda, not passed as-is, because
+        // AwardAchievements replaces _achievements after every unlock and the
+        // Big Screen should show the new count as soon as it is announced.
+        _actBigScreen = () => new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector,
+            () => _achievements).Show();
         _btnBigScreen.Click += (_, _) => _actBigScreen();
 
         // --- The flags ---
@@ -316,6 +340,10 @@ public sealed partial class RaceControlControl
             // practice - see ApplyEffectiveFormat.
             ApplyEffectiveFormat(startingNewRace: true);
             ApplyJumpStartRules();
+
+            // A race staged here is never a Quick Race (that starts through
+            // RunAutoStartSequenceAsync), whatever ran before it.
+            _currentRaceIsQuick = false;
             _race.Stage();
             generationAfterStage = _race.SessionGeneration;
 
@@ -525,17 +553,71 @@ public sealed partial class RaceControlControl
             if (!tookOverDemo && (_race.GetOrderedStandings().Count > 0 || _race.State != RaceState.Idle))
             {
                 var snapshot = _race.CreateSnapshot();
+
+                // When the race stopped counting, so the undo can leave the
+                // time it was gone off the race clock - see
+                // RestoreSnapshotAfterGap.
+                var snapshotTakenUtc = DateTime.UtcNow;
                 var sessionStart = _sessionStartedAtUtc;
                 var prompted = _promptedTransponders.ToList();
+
+                // The rules the reset race was running under. The snapshot
+                // does not carry them, and the undo stays good for as long
+                // as the session sits at Idle - where the format IS written
+                // to the session, by picking another round, editing a
+                // format or changing the venue settings. Put back without
+                // them, the race finished and was saved under the next
+                // heat's lap or time limit (or none at all). Putting the old
+                // round back in the box is not enough either: it writes the
+                // round's format as it stands NOW, which may have been
+                // edited since, so these are written after it and win.
+                var restoreRules = CaptureRaceRulesForUndo();
 
                 _undo.Capture("Reset race", () =>
                 {
                     RefuseStaleResetUndo(generationAfterReset);
 
+                    // The round and the name FIRST, while the session is
+                    // still Idle - as the abandoned-race undo does, and for
+                    // the same reason. RestoreSnapshot below raises Racing
+                    // for a race that was running, and what listens for it
+                    // reads the host's setup there and then: the run sheet
+                    // stamps the round in the box as started (and keeps the
+                    // first stamp), and the ghosts start on its track. Put
+                    // back afterwards, a round picked by hand after the
+                    // reset - one that never ran - was stamped as started,
+                    // and the timetable's drift figures went wrong with it.
+                    //
+                    // Before restoreRules too: at Idle, picking the round
+                    // writes that round's format to the session, and the
+                    // rules the reset race was really running under have to
+                    // be the last word. In a try, so the race still comes
+                    // back if this goes wrong.
+                    if (restoreBinding is not null)
+                    {
+                        try
+                        {
+                            restoreBinding();
+                        }
+                        catch (Exception ex)
+                        {
+                            StatusMessage?.Invoke(
+                                $"{AppTime.LogStampNow()}  [race] The race is being put back, but its round and name could not be: {ex.Message} "
+                                + "Check the Round box before the race finishes.");
+                        }
+                    }
+
+                    // Before the snapshot, as the abandoned-race undo does:
+                    // the session is still Idle here, and RestoreSnapshot
+                    // reads the limits when it works out where the warning
+                    // ladder had got to.
+                    restoreRules();
+
+                    bool heldUnderRed;
                     _suppressFlagAnnouncements = true;
                     try
                     {
-                        _race.RestoreSnapshot(snapshot);
+                        heldUnderRed = _race.RestoreSnapshotAfterGap(snapshot, snapshotTakenUtc);
                     }
                     finally
                     {
@@ -557,9 +639,21 @@ public sealed partial class RaceControlControl
                     RenderLeaderboard();
                     UpdateClockDisplay();
 
-                    // Last, so the round and the name come back with the
-                    // race rather than as a separate press of Undo.
-                    restoreBinding?.Invoke();
+                    // Held under red if it was running - see
+                    // RestoreSnapshotAfterGap - so the director is told why,
+                    // and what to press.
+                    if (heldUnderRed)
+                    {
+                        StatusMessage?.Invoke(
+                            $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
+                            + "Green when the cars are ready to go again.");
+                    }
+
+                    // The format line (and the auto-advance setting read
+                    // from it) back in step with the round now in the box.
+                    // Racing, so this writes nothing to the session - the
+                    // rules put back above stand.
+                    ApplyEffectiveFormat();
                 });
             }
             else if (restoreBinding is not null)
@@ -577,13 +671,21 @@ public sealed partial class RaceControlControl
             // Reset is a decision, not an accident - there is nothing left
             // to recover, and leaving the journal behind would offer the
             // race back on the next launch.
-            _journal.Clear();
+            //
+            // Not while an earlier race is still waiting to be saved: the
+            // journal is then the only copy of it on disk (see
+            // FileUnfiledRaces).
+            if (_unfiledRaces.Count == 0)
+            {
+                _journal.Clear();
+            }
 
             _toldAboutRecordPace.Clear();
             _promptedTransponders.Clear();
             _unnamedTransponders.Clear();
             _previousFlag = FlagState.None;
             _currentRaceIsDemo = false;
+            _currentRaceIsQuick = false;
 
             // The reset race's start goes with it (Undo puts it back). Left
             // here, a start that does not stamp its own - a demo's green -
@@ -932,5 +1034,56 @@ public sealed partial class RaceControlControl
         }
         var idx = previous is not null ? _cmbTrackLayout.Items.IndexOf(previous) : -1;
         _cmbTrackLayout.SelectedIndex = idx >= 0 ? idx : 0;
+    }
+
+    /// <summary>
+    /// Takes down the rules the race in the session is running under - its
+    /// format, its jump-start rules and its warning ladder - and returns
+    /// what writes them back, for an undo that puts that race back.
+    ///
+    /// The session snapshot carries the standings and the clock but not
+    /// these, and between the capture and the undo something may have
+    /// written the next race's format over them (at Idle, picking another
+    /// round is enough). A race put back without its own rules finished
+    /// and was saved under the next heat's lap or time limit. The same
+    /// fields the abandoned-race undo (CaptureAbandonedRaceUndo) keeps,
+    /// for the same reason; the handicap-start override goes with them,
+    /// since a format written at Idle clears it.
+    ///
+    /// Call the returned action BEFORE RestoreSnapshot: the snapshot reads
+    /// the limits when it works out where the warning ladder had got to.
+    /// </summary>
+    private Action CaptureRaceRulesForUndo()
+    {
+        var lapLimit = _race.LapLimit;
+        var timeLimit = _race.TimeLimit;
+        var minLapTimeMs = _race.MinLapTimeMs;
+        var streakWindowPercent = _race.StreakWindowPercent;
+        var streakFasterLapBreaks = _race.StreakFasterLapBreaks;
+        var startType = _race.StartType;
+        var staggerClockMode = _race.StaggerClockMode;
+        var finishOnNextCrossing = _race.FinishOnNextCrossing;
+        var clockBeforeHandicapOverride = _clockBeforeHandicapOverride;
+        var detectJumpStarts = _race.DetectJumpStarts;
+        var jumpStartPenaltyMs = _race.JumpStartPenaltyMs;
+        var jumpStartCostsTheLap = _race.JumpStartCostsTheLap;
+        var warningLadder = _race.WarningLadder;
+
+        return () =>
+        {
+            _race.LapLimit = lapLimit;
+            _race.TimeLimit = timeLimit;
+            _race.MinLapTimeMs = minLapTimeMs;
+            _race.StreakWindowPercent = streakWindowPercent;
+            _race.StreakFasterLapBreaks = streakFasterLapBreaks;
+            _race.StartType = startType;
+            _race.StaggerClockMode = staggerClockMode;
+            _race.FinishOnNextCrossing = finishOnNextCrossing;
+            _clockBeforeHandicapOverride = clockBeforeHandicapOverride;
+            _race.DetectJumpStarts = detectJumpStarts;
+            _race.JumpStartPenaltyMs = jumpStartPenaltyMs;
+            _race.JumpStartCostsTheLap = jumpStartCostsTheLap;
+            _race.WarningLadder = warningLadder;
+        };
     }
 }

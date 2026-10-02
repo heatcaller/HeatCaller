@@ -119,8 +119,42 @@ public sealed partial class AnnouncementService
     /// <summary>How many laps down each driver has already been announced as being, so "lapped" is called once per lap lost rather than on every update.</summary>
     private readonly Dictionary<string, int> _lappedAnnounced = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Pairs already called as a close battle this race - a scrap lasts many laps and shouldn't be announced on every one of them.</summary>
+    /// <summary>Pairs already called as a close battle this race - a scrap lasts many laps and shouldn't be announced on every one of them. Only touched under _battlesLock.</summary>
     private readonly HashSet<string> _battlesAnnounced = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Pairs offered as a close battle and not yet settled one way or the
+    /// other, with when they were offered. Only touched under _battlesLock.
+    ///
+    /// Without this a pair waiting in the per-lap batch was offered again on
+    /// every standings update, and each copy went into the front car's batch
+    /// at weight 65 - crowding out that car's own lap time and lap call
+    /// under the per-lap limit. A pair leaves here when its line is settled
+    /// (said, or dropped by EnqueueVoiceWork), at a reset, or once it has
+    /// been waiting longer than BattleOfferExpiresAfter - which is how a
+    /// line the per-lap cap dropped, or a flag cleared out of the batch,
+    /// gets offered again rather than being stuck as pending all race.
+    /// </summary>
+    private readonly Dictionary<string, DateTime> _battlesPending = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Guards _battlesAnnounced, _battlesPending and _battlesGeneration.
+    ///
+    /// Needed because the pairs are checked on the decoder thread (from
+    /// CheckCloseBattles), settled from inside the per-lap action - which
+    /// runs on thread-pool threads, and for different cars at the same
+    /// time - and cleared by ResetSession. Nothing else is ever taken while
+    /// holding it, so it can't be part of a deadlock.
+    /// </summary>
+    private readonly object _battlesLock = new();
+
+    /// <summary>
+    /// Bumped by every ResetSession. A close-battle line captures it when it
+    /// is offered and checks it when its batch runs, so a line from the race
+    /// just reset - its batch already past its delay - can't mark the same
+    /// pair as called in the next race.
+    /// </summary>
+    private int _battlesGeneration;
 
     /// <summary>
     /// Every driver's CURRENT clean run and when it was last updated, so a
@@ -180,6 +214,19 @@ public sealed partial class AnnouncementService
     /// practice" when nothing is wired up.
     /// </summary>
     public Func<bool>? PracticeModeProvider { get; set; }
+
+    /// <summary>
+    /// Whether ghost cars are called like real drivers (the Ghost Cars
+    /// page's "Announce ghosts like real drivers"). Set by MainForm; none
+    /// means yes. Off, nothing is said or played FOR a ghost - its laps,
+    /// streaks, a lead it takes - while its standing is still tracked, so
+    /// the real drivers' positions and gaps stay right (MutedGhost).
+    /// </summary>
+    public Func<bool>? AnnounceGhostsProvider { get; set; }
+
+    /// <summary>True for a ghost car's transponder while ghosts are not to be announced - see AnnounceGhostsProvider.</summary>
+    private bool MutedGhost(string? transponder) =>
+        transponder is not null && GhostService.IsGhost(transponder) && AnnounceGhostsProvider?.Invoke() == false;
 
     /// <summary>
     /// Whether the current session is a qualifier - so provisional-pole and
@@ -467,6 +514,45 @@ public sealed partial class AnnouncementService
     public event Action<string>? AnnouncementTextReady;
 
     /// <summary>
+    /// Raises AnnouncementTextReady with the line as a screen should show
+    /// it. Every line this service builds for display goes through here
+    /// rather than raising the event directly, for two reasons.
+    ///
+    /// The [audio tags] come out first. Nearly every built-in phrasing opens
+    /// with one ("[shouting] {driver} sets the fastest lap of the race!"),
+    /// and they are directions for the voice, not words - but the Big Screen
+    /// and the Announcer page's feed put the text up exactly as given, so the
+    /// crowd was reading "[shouting]" in front of almost every call. They are
+    /// taken out here, once, rather than in each subscriber, so every display
+    /// gets clean text whichever voice model is chosen. The spoken copy is
+    /// not touched: it keeps its tags for a model that can perform them.
+    ///
+    /// And a line about a ghost while ghosts are not announced is not shown
+    /// at all. EnqueueVoiceWork already refuses to SAY it (MutedGhost), but
+    /// the text was raised before the line ever reached the queue, so the
+    /// screens still showed a ghost's personal best or badge that nobody
+    /// heard. Pass the transponder the line is about, or null for a line
+    /// that is about no one driver.
+    /// </summary>
+    private void RaiseAnnouncementText(string text, string? transponder = null)
+    {
+        if (MutedGhost(transponder))
+        {
+            return;
+        }
+
+        var clean = VoiceProfile.StripAudioTags(text);
+
+        // A line that was nothing but tags has nothing to show.
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            return;
+        }
+
+        AnnouncementTextReady?.Invoke(clean);
+    }
+
+    /// <summary>
     /// Raised true when spoken playback starts and false when the LAST line
     /// speaking ends, so background audio can duck underneath it. Covers the
     /// voice queue and the flag calls that play outside it.
@@ -532,6 +618,39 @@ public sealed partial class AnnouncementService
     /// Returns 1.0 (no change) when nothing is wired up.
     /// </summary>
     public Func<float>? VoiceBoostProvider { get; set; }
+
+    /// <summary>
+    /// The most the ambience boost may lift a line by. Matches the top of the
+    /// Ambience settings' multiplier range, so a hand-edited settings file
+    /// can't turn the announcer into a fog horn.
+    /// </summary>
+    private const float MaxVoiceBoost = 2f;
+
+    /// <summary>
+    /// The gain to play an announcement at: the announcer's own level, then
+    /// the ambience boost on top of it.
+    ///
+    /// The two are clamped separately on purpose. Every caller used to clamp
+    /// the PRODUCT to 1.0, and the announcer's default level is 100% - so the
+    /// boost the Ambience settings describe ("extra gain while ambience is
+    /// playing loudly") was cut straight back to 1.0 and did nothing at all
+    /// in the default setup, and only part of its job at 80%. The base level
+    /// is still a 0-100% slider and stays within it; the boost is make-up
+    /// gain above that and is allowed past unity.
+    ///
+    /// The result can be above 1.0, so whatever plays it has to accept a
+    /// gain above unity and keep the peaks from clipping.
+    /// </summary>
+    private float AnnouncementGain(double baseVolume)
+    {
+        var boost = VoiceBoostProvider?.Invoke() ?? 1f;
+        if (float.IsNaN(boost))
+        {
+            boost = 1f;
+        }
+
+        return (float)Math.Clamp(baseVolume, 0.0, 1.0) * Math.Clamp(boost, 1f, MaxVoiceBoost);
+    }
 
     /// <summary>
     /// The profile's current expression settings, so a caller can amplify
@@ -802,11 +921,11 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var volume = Math.Clamp(_voiceStore.Current.Volume * (VoiceBoostProvider?.Invoke() ?? 1f), 0.0, 1.0);
+        var volume = AnnouncementGain(_voiceStore.Current.Volume);
         var trailing = TailSecondsFor(tail);
 
-        AnnouncementTextReady?.Invoke(prepared.Text);
-
+        // The text goes up only if the line is accepted - see
+        // EnqueueVoiceWork, which raises it once nothing will drop it.
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null, async () =>
         {
             StatusMessage?.Invoke($"[voice] Reminder (prepared): \"{prepared.Text}\"");
@@ -814,6 +933,28 @@ public sealed partial class AnnouncementService
             await _audioPlaybackLock.WaitAsync();
             try
             {
+                // The same checks SynthesizeAndPlayAsync makes after the
+                // playback lock. This line was taken off the queue before it
+                // waited for the speaker, so neither a flag's queue purge nor
+                // the countdown's could reach it - and when the cut stops
+                // the sound holding the lock, this line would get the
+                // speaker first and play a whole recap over (or ahead of)
+                // the countdown sounds queued behind it. The voice loop
+                // stamped both generations when it dequeued this work, and
+                // they flow in here, so a change since then means it has
+                // been overtaken.
+                if (IsSupersededByInterrupt())
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - a flag call interrupted while it waited for the speaker.");
+                    return;
+                }
+
+                if (IsCutByCountdown())
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the countdown started while it waited for the speaker.");
+                    return;
+                }
+
                 // Muted while it waited for the speaker.
                 if (Muted)
                 {
@@ -827,7 +968,7 @@ public sealed partial class AnnouncementService
             {
                 _audioPlaybackLock.Release();
             }
-        });
+        }, displayText: prepared.Text);
     }
 
     /// <summary>
@@ -1073,7 +1214,14 @@ public sealed partial class AnnouncementService
             _streakCounts.Clear();
             _rivalryLastAhead.Clear();
             _lappedAnnounced.Clear();
-            _battlesAnnounced.Clear();
+
+            // Under its own lock - see _battlesLock and _battlesGeneration.
+            lock (_battlesLock)
+            {
+                _battlesAnnounced.Clear();
+                _battlesPending.Clear();
+                _battlesGeneration++;
+            }
 
             // Learned per track, and the next session may be a different one.
             _typicalLapMs = 0;

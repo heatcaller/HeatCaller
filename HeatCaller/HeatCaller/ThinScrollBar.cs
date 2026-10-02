@@ -23,7 +23,9 @@ namespace HeatCaller;
 /// Driving it goes through the scrollbar API rather than any one control's
 /// members, so the same code scrolls a multiline text box, a list box, a
 /// checked list, a list view and an auto-scrolling panel without knowing or
-/// caring which it is.
+/// caring which it is - with one exception: dragging the thumb. Panels and
+/// list views do not take a thumb position from the message, so those two
+/// are moved directly (see Send).
 /// </summary>
 internal sealed class ThinScrollBar : Control
 {
@@ -748,6 +750,32 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
+        // The two thumb codes cannot go to every control as a message. Only
+        // the edit and list box controls (text boxes, rich text, list boxes,
+        // checked lists) read the position from the message's high word. A
+        // WinForms panel or page (ScrollableControl) and the Windows list
+        // view both ignore it and ask GetScrollInfo for the native bar's
+        // TRACKING position instead - and the native bar is under this one,
+        // never dragged, so that is simply where it already is. Dragging the
+        // thumb moved the thumb and nothing else, and the next sync tick
+        // snapped it back to the top. Those two are moved directly; the line
+        // and page codes (wheel, track clicks) work as messages for all of
+        // them and still go that way.
+        if (code is SB_THUMBTRACK or SB_THUMBPOSITION)
+        {
+            if (_target is ScrollableControl scrollable)
+            {
+                ScrollPanelTo(scrollable, position);
+                return;
+            }
+
+            if (_target is ListView list)
+            {
+                ScrollListViewTo(list, position);
+                return;
+            }
+        }
+
         // The high word carries the position for the two thumb codes and is
         // ignored for the rest.
         var wParam = (IntPtr)((position << 16) | (code & 0xFFFF));
@@ -798,6 +826,94 @@ internal sealed class ThinScrollBar : Control
             // assignment - a refresh on another thread's callback, say.
             // Losing one scroll step is not worth taking the app down for.
         }
+    }
+
+    /// <summary>
+    /// Moves a panel or page to a thumb position. Its native bar counts in
+    /// pixels of content (WinForms keeps nPos equal to the scroll offset), so
+    /// the position is the offset as it stands. AutoScrollPosition is read
+    /// back negative and written positive, and the axis this bar does not
+    /// drive keeps its current offset. The setter clamps to the content.
+    ///
+    /// No Scroll event comes of this, but ScrollRepaint's Paint catch-all
+    /// notices the move on the strip Windows repaints and asks for the rest.
+    /// </summary>
+    private void ScrollPanelTo(ScrollableControl scrollable, int position)
+    {
+        var current = scrollable.AutoScrollPosition;
+
+        var wanted = _horizontal
+            ? new Point(position, -current.Y)
+            : new Point(-current.X, position);
+
+        if (wanted == new Point(-current.X, -current.Y))
+        {
+            return;
+        }
+
+        scrollable.AutoScrollPosition = wanted;
+    }
+
+    private const int LVM_SCROLL = 0x1000 + 20;
+
+    /// <summary>
+    /// Moves a list view to a thumb position with LVM_SCROLL, which scrolls
+    /// by a distance in pixels rather than to a place - so the distance is
+    /// worked out from where its native bar says it is now.
+    ///
+    /// Setting the native bar's position first and then sending the thumb
+    /// message does NOT do it for a list view: it compares the position it
+    /// reads against the tracking position to decide how far to move, finds
+    /// them equal, and moves nothing.
+    ///
+    /// The units differ by view. In Details (every list view in the app) the
+    /// vertical bar counts ROWS, so rows are turned into pixels by the row
+    /// height; the horizontal bar there, and both bars in the icon views,
+    /// count pixels already. List view's horizontal bar counts columns, which
+    /// are as wide as an item.
+    /// </summary>
+    private void ScrollListViewTo(ListView list, int position)
+    {
+        var info = new SCROLLINFO
+        {
+            cbSize = Marshal.SizeOf<SCROLLINFO>(),
+            fMask = SIF_POS,
+        };
+
+        if (!GetScrollInfo(list.Handle, _horizontal ? SB_HORZ : SB_VERT, ref info))
+        {
+            return;
+        }
+
+        var delta = position - info.nPos;
+
+        if (delta == 0)
+        {
+            return;
+        }
+
+        var unit = 1;
+        var rowsOrColumns = _horizontal ? list.View == View.List : list.View == View.Details;
+
+        if (rowsOrColumns)
+        {
+            if (list.Items.Count == 0)
+            {
+                return;
+            }
+
+            var first = list.GetItemRect(0);
+            unit = Math.Max(1, _horizontal ? first.Width : first.Height);
+        }
+
+        var pixels = (long)delta * unit;
+        var clamped = (int)Math.Clamp(pixels, int.MinValue, int.MaxValue);
+
+        SendMessage(
+            list.Handle,
+            LVM_SCROLL,
+            (IntPtr)(_horizontal ? clamped : 0),
+            (IntPtr)(_horizontal ? 0 : clamped));
     }
 
     private void TargetMoved(object? sender, EventArgs e) => Reposition();

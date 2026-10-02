@@ -118,6 +118,22 @@ public sealed class AmbienceService : IDisposable
     /// <summary>How long the current fade-out-and-stop takes.</summary>
     private double _fadeOutSeconds = 4;
 
+    /// <summary>
+    /// When the current fade-out-and-stop should reach silence, on the
+    /// Environment.TickCount64 clock. Only meaningful while _fadingOut.
+    ///
+    /// The fade-out is steered toward this moment rather than run as a
+    /// fixed-length ramp from wherever it starts. A restart in the middle of
+    /// the fade (a soundscape applied, a layer edited - see Restart) opens a
+    /// new bed and starts each layer's ramp again from the level it had
+    /// reached; spread over the full fade time, that left the crowd about
+    /// half up when FadeOutAndStopAsync stopped it at the original time, and
+    /// it was heard cut off. Aimed at the deadline, it arrives at silence on
+    /// time however the fade was interrupted. It also absorbs a fade timer
+    /// that ticks late, which would otherwise run the ramp past the stop.
+    /// </summary>
+    private long _fadeOutDeadlineMs;
+
     /// <summary>Below this the remaining difference is inaudible, so it's snapped rather than chased forever.</summary>
     /// <summary>
     /// How close counts as arrived. Dropped from 0.005 - that final snap
@@ -421,6 +437,67 @@ public sealed class AmbienceService : IDisposable
             return;
         }
 
+        StartBeds(ignoreEnabledSetting, keepFade: null);
+    }
+
+    /// <summary>
+    /// Stops the beds and opens them again, to pick up new settings - a
+    /// soundscape applied, a layer edited, an undo. Layers are opened when
+    /// the crowd starts, so a change to them needs this.
+    ///
+    /// Not simply Stop() then Start(), because of the fade at the end of a
+    /// session. Stop() clears the fade-out, Start() then opened a fresh bed
+    /// at the full mood, and when FadeOutAndStopAsync woke it found no fade
+    /// in progress and left the crowd alone - so a setting changed in the
+    /// last seconds of a session's fade brought the crowd back at idle with
+    /// nothing left to stop it, and it played on through the gap between
+    /// heats. Here a fade that was running carries on in the new bed, from
+    /// the level each layer had reached, still aimed at silence by the same
+    /// moment (_fadeOutDeadlineMs, which the restart leaves alone), and the
+    /// pending fade still stops it when it is due.
+    ///
+    /// With no fade running this is exactly Stop() then Start(), and on a
+    /// bed that isn't playing it is just Start().
+    ///
+    /// The whole thing runs under the lock (it is re-entrant, and Stop and
+    /// StartBeds take it themselves). Otherwise the pending fade's wait
+    /// could end in the gap between the stop and the new bed opening - it
+    /// would find no fade, leave things alone, and the fade put back a
+    /// moment later would then have nothing to stop it.
+    /// </summary>
+    /// <param name="ignoreEnabledSetting">As for Start.</param>
+    public void Restart(bool ignoreEnabledSetting = false)
+    {
+        lock (_lock)
+        {
+            (int Generation, Dictionary<string, float> Levels)? keepFade = null;
+
+            if (_fadingOut)
+            {
+                keepFade = (_fadeOutGeneration, _layers.ToDictionary(kv => kv.Key, kv => kv.Value.Volume, StringComparer.OrdinalIgnoreCase));
+            }
+
+            Stop();
+
+            if (keepFade is null)
+            {
+                Start(ignoreEnabledSetting);
+                return;
+            }
+
+            StartBeds(ignoreEnabledSetting, keepFade);
+        }
+    }
+
+    /// <summary>
+    /// Opens the beds and starts playing. With <paramref name="keepFade"/>,
+    /// the new bed carries on a fade-out the old one was in the middle of
+    /// (see Restart) rather than coming up at the mood's level.
+    /// </summary>
+    private void StartBeds(bool ignoreEnabledSetting, (int Generation, Dictionary<string, float> Levels)? keepFade)
+    {
+        var fadeKept = false;
+
         lock (_lock)
         {
             if (_running || (!Settings.Enabled && !ignoreEnabledSetting))
@@ -490,6 +567,34 @@ public sealed class AmbienceService : IDisposable
                 _output = new WaveOutEvent { DesiredLatency = MusicPlayer.BedLatencyMs, NumberOfBuffers = MusicPlayer.BedBuffers };
                 _duckGain = new SmoothGainSampleProvider(_mixer, DuckFactor, DuckDownSeconds, DuckUpSeconds);
                 _output.Init(_duckGain);
+
+                // Watched like AudioBus and MusicPlayer watch theirs. Without
+                // it, a device that went away (a Bluetooth speaker switched
+                // off, a USB interface unplugged, a driver reset) or a layer
+                // whose file could no longer be read stopped the output while
+                // this went on reporting itself running - so the next race's
+                // auto-start skipped it and the crowd stayed silent for good.
+                _output.PlaybackStopped += OnOutputStopped;
+
+                // A restart in the middle of a fade-out: the fade is put back,
+                // under the generation the pending FadeOutAndStopAsync is
+                // waiting with, so it still stops the crowd when it is due.
+                // Each layer starts where the old one had faded to - not at
+                // the mood's level, which would bring the crowd back up, and
+                // not at silence, which would cut it off. A layer that wasn't
+                // playing before stays at zero. Only if nothing has called
+                // the fade off since (that moves the generation on).
+                if (keepFade is { } fade && fade.Generation == _fadeOutGeneration)
+                {
+                    _fadingOut = true;
+                    fadeKept = true;
+
+                    foreach (var (key, volume) in _layers)
+                    {
+                        volume.Volume = fade.Levels.TryGetValue(key, out var level) ? level : 0f;
+                    }
+                }
+
                 _output.Play();
                 _running = true;
 
@@ -499,7 +604,16 @@ public sealed class AmbienceService : IDisposable
             {
                 StatusMessage?.Invoke($"[ambience] Couldn't start: {ex.GetType().Name}: {ex.Message}");
                 DisposeAudioLocked();
+                fadeKept = false;
             }
+        }
+
+        if (fadeKept)
+        {
+            // Targets go to zero (ApplyIntensity does that while fading out)
+            // and the ticker carries the layers down from where they are.
+            ApplyIntensity(EffectiveIntensity, force: false);
+            return;
         }
 
         ApplyIntensity(_current, force: true);
@@ -531,6 +645,7 @@ public sealed class AmbienceService : IDisposable
     public async Task FadeOutAndStopAsync(double seconds)
     {
         int generation;
+        double fadeSeconds;
 
         lock (_lock)
         {
@@ -542,15 +657,22 @@ public sealed class AmbienceService : IDisposable
             generation = ++_fadeOutGeneration;
             _fadingOut = true;
             _fadeOutSeconds = Math.Clamp(seconds, 0.2, 30);
+            fadeSeconds = _fadeOutSeconds;
+
+            // The moment the crowd should be silent - the fade ticker aims
+            // every layer at it (see _fadeOutDeadlineMs).
+            _fadeOutDeadlineMs = Environment.TickCount64 + (long)(fadeSeconds * 1000);
         }
 
         ApplyIntensity(EffectiveIntensity, force: false);
-        StatusMessage?.Invoke($"[ambience] Fading out over {_fadeOutSeconds:0.#}s.");
+        StatusMessage?.Invoke($"[ambience] Fading out over {fadeSeconds:0.#}s.");
 
         try
         {
             // The fade, plus a moment for the last of it to leave the buffer.
-            await Task.Delay(TimeSpan.FromSeconds(_fadeOutSeconds + 0.5));
+            // Kept in a local: another fade-out starting meanwhile changes
+            // _fadeOutSeconds, and this one's wait should not move with it.
+            await Task.Delay(TimeSpan.FromSeconds(fadeSeconds + 0.5));
         }
         catch
         {
@@ -848,6 +970,27 @@ public sealed class AmbienceService : IDisposable
 
                 allSettled = false;
 
+                // Fading out to stop: each step covers this tick's share of
+                // what is left before the deadline, so every layer is a
+                // straight line from wherever it is now to silence at the
+                // moment FadeOutAndStopAsync stops the output - even a layer
+                // whose ramp was started again partway through by a restart
+                // (see _fadeOutDeadlineMs). Within the last tick it is
+                // simply put at the target. Spans aren't used for this, so
+                // any left over are dropped and the next ordinary fade
+                // starts its own.
+                if (_fadingOut)
+                {
+                    _fadeSpans.Remove(key);
+                    _fadeSpanTargets.Remove(key);
+
+                    var remainingMs = _fadeOutDeadlineMs - Environment.TickCount64;
+                    provider.Volume = remainingMs <= FadeIntervalMs
+                        ? target
+                        : Math.Clamp(current + delta * (FadeIntervalMs / (float)remainingMs), 0f, 1f);
+                    continue;
+                }
+
                 // Fades DOWN slower than up. A crowd swelling is quick; a
                 // crowd settling takes a moment, and matching that makes
                 // the transition read as natural rather than mechanical.
@@ -859,9 +1002,8 @@ public sealed class AmbienceService : IDisposable
                 // the finish included. A surge used to rise in a fixed 0.18s
                 // whatever Fade up was set to, so the ramp set on the
                 // Ambience tab never applied to the moments it is heard on.
-                var seconds = _fadingOut
-                    ? _fadeOutSeconds
-                    : delta > 0 ? Settings.FadeUpSeconds : Settings.FadeDownSeconds;
+                // (A fade-out to stop is handled above, against its deadline.)
+                var seconds = delta > 0 ? Settings.FadeUpSeconds : Settings.FadeDownSeconds;
                 // A LINEAR step toward the target, not a proportional one.
                 //
                 // The old version moved a fraction of the REMAINING distance
@@ -914,10 +1056,71 @@ public sealed class AmbienceService : IDisposable
         _fadeTimer = null;
     }
 
+    /// <summary>
+    /// The output stopped without being asked to - the device went away, or
+    /// reading one of the layers threw on the playback thread. Everything is
+    /// torn down so the service honestly reports itself stopped: the Mixer
+    /// stops saying "Playing", and the next Start - the auto-start when the
+    /// next race stages, or the club pressing Start - opens whatever output
+    /// there is now.
+    ///
+    /// It deliberately does not reopen straight away. A file that has
+    /// become unreadable (on a USB stick or network share that dropped out)
+    /// would fail again at once, and an immediate restart would loop on it;
+    /// waiting for the next Start costs at most the rest of one race.
+    /// </summary>
+    private void OnOutputStopped(object? sender, StoppedEventArgs e)
+    {
+        IWavePlayer? dead;
+
+        lock (_lock)
+        {
+            // Only the output currently in use. An earlier one's event can
+            // arrive late (it is posted to the UI thread when Start ran
+            // there), after a Stop and Start have already opened a new one.
+            if (_output is null || !ReferenceEquals(sender, _output))
+            {
+                return;
+            }
+
+            dead = _output;
+            dead.PlaybackStopped -= OnOutputStopped;
+
+            // Taken out before the teardown so DisposeAudioLocked doesn't
+            // stop and dispose the device from inside its own event - that
+            // is done on another thread below, as AudioBus does.
+            _output = null;
+            DisposeAudioLocked();
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                dead?.Dispose();
+            }
+            catch
+            {
+                // Disposing a device that's already gone is not worth reporting.
+            }
+        });
+
+        StatusMessage?.Invoke(e.Exception is { } ex
+            ? $"[ambience] Playback stopped: {ex.GetType().Name}: {ex.Message} - it will start again with the next race, or press Start."
+            : "[ambience] Playback stopped unexpectedly - it will start again with the next race, or press Start.");
+    }
+
     private void DisposeAudioLocked()
     {
         try
         {
+            // Unhooked first: this is a stop we asked for, and its
+            // PlaybackStopped must not be read as the device going away.
+            if (_output is not null)
+            {
+                _output.PlaybackStopped -= OnOutputStopped;
+            }
+
             _output?.Stop();
             _output?.Dispose();
         }

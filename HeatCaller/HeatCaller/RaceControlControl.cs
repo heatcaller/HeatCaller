@@ -221,6 +221,16 @@ public sealed partial class RaceControlControl : UserControl
     private CancellationTokenSource? _warmUpCts;
     private Action? _afterWarmUp;
 
+    /// <summary>
+    /// True when the warm-up now open was opened by Quick Race, false when
+    /// Stage opened it. Set each time one opens, and only read while one is
+    /// open. Quick Race pressed during its OWN warm-up skips the rest of it;
+    /// pressed during Stage's, it used to skip that one too - which ran
+    /// Stage's continuation and staged the heat in the Round box under its
+    /// own format, the opposite of the freeform race that was asked for.
+    /// </summary>
+    private bool _warmUpOpenedByQuickRace;
+
     /// <summary>True only while the warm-up's own continuation is running, so the Stage it calls doesn't open a second warm-up.</summary>
     private bool _warmUpJustFinished;
     private readonly FlagButton _btnYellow = new() { FlagColour = Color.FromArgb(240, 200, 40), FlagText = Color.Black };
@@ -238,6 +248,16 @@ public sealed partial class RaceControlControl : UserControl
     /// the same tick costs one calculation between them.
     /// </summary>
     private QualifyingProjector? _projector;
+
+    /// <summary>The qualifying projection, shared with Practice so a Big Screen opened there shows the Qual column too.</summary>
+    internal QualifyingProjector? Projector => _projector;
+
+    /// <summary>
+    /// The badges as they are now. AwardAchievements replaces the store after
+    /// every unlock, so a page that shows them reads this each time rather
+    /// than keeping the store it was given.
+    /// </summary>
+    internal AchievementStore Achievements => _achievements;
 
     /// <summary>The projection window, when it is open. One at a time.</summary>
     private QualifyingProjectionForm? _projectionWindow;
@@ -381,6 +401,15 @@ public sealed partial class RaceControlControl : UserControl
             // release call, and it can't leak a timer into the next race.
             _race.PollReleases();
 
+            // A crossing the journal's throttle held back is written here, at
+            // most a tick late, rather than waiting for the next crossing or
+            // flag - the last laps before a crash were lost that way. Not
+            // forced: Record keeps its own throttle. See RaceJournal.IsBehind.
+            if (_journal.IsBehind)
+            {
+                WriteJournal();
+            }
+
             // The Next Up bar rides the same tick, throttled to once a
             // second - what it says changes on the scale of minutes.
             if (DateTime.UtcNow >= _nextUpDueUtc)
@@ -391,6 +420,17 @@ public sealed partial class RaceControlControl : UserControl
         };
         _clockRefreshTimer.Start();
 
+        // The one handler for the hidden track list (BuildLayout used to wire
+        // a second). Wired after the first fill on purpose, so filling the
+        // list at start-up does not write over the remembered tracks before
+        // Session Setup has read its own.
+        //
+        // "(none)" is the list's placeholder, never a track name, so it is
+        // stored as empty - as Session Setup's picker stores it. Both last-
+        // track settings are kept, as the two handlers kept them: this page
+        // reads its own back when the list is refilled, and
+        // LastTrackLayoutName is what Session Setup and the first-run wizard
+        // start from.
         RefreshTrackLayoutCombo();
         _cmbTrackLayout.SelectedIndexChanged += (_, _) =>
         {
@@ -401,7 +441,9 @@ public sealed partial class RaceControlControl : UserControl
                 TrackLayoutChanged?.Invoke(selected);
             }
 
-            _settings.LastRaceControlTrackName = selected is null or "(none)" ? string.Empty : selected;
+            var trackName = selected is null or "(none)" ? string.Empty : selected;
+            _settings.LastRaceControlTrackName = trackName;
+            _settings.LastTrackLayoutName = trackName;
             _settings.Save();
         };
     }
@@ -565,8 +607,18 @@ public sealed partial class RaceControlControl : UserControl
                 return RemoteCommandOutcome.Refused(refusal);
             }
 
+            // Read from what the command left behind, not assumed from the
+            // button pressed: between races, a format with a warm-up makes
+            // Stage open the warm-up and stage only when it runs out (or on
+            // a second Stage). The phone used to be told "Staged." then,
+            // while the laptop sat in free laps for up to several minutes,
+            // and an operator going by the phone believed the grid had been
+            // called. A Stage pressed DURING a warm-up skips it and stages
+            // straight away, so the warm-up is over by the time this is read
+            // and that press is still answered "Staged.".
             return RemoteCommandOutcome.Done(action switch
             {
+                "stage" when _race.IsWarmingUp => "Warm-up open - free laps first. Press Stage again to skip it and stage now.",
                 "stage" => "Staged.",
                 "countdown" => "Countdown started.",
                 // A resume on the last lap puts the checkered back out, not a
@@ -625,9 +677,17 @@ public sealed partial class RaceControlControl : UserControl
         var tookOverDemo = EndDemoForTakeover("reset");
 
         var snapshot = _race.CreateSnapshot();
+
+        // When the race stopped counting, so the undo can leave the time it
+        // was gone off the race clock - see RestoreSnapshotAfterGap.
+        var snapshotTakenUtc = DateTime.UtcNow;
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
-        var previousFlag = _previousFlag;
+
+        // The rules the race ran under, as the Reset button takes them (see
+        // CaptureRaceRulesForUndo): a format written while the session sat
+        // idle must not be what the restored race finishes under.
+        var restoreRules = CaptureRaceRulesForUndo();
 
         CancelAutoStart();
         _race.Reset();
@@ -637,12 +697,18 @@ public sealed partial class RaceControlControl : UserControl
 
         // As the Reset button does. Left behind, the journal offered the
         // reset race back at the next launch, as though it had been lost.
-        _journal.Clear();
+        // Not while an earlier race is still waiting to be saved - see
+        // FileUnfiledRaces.
+        if (_unfiledRaces.Count == 0)
+        {
+            _journal.Clear();
+        }
 
         _promptedTransponders.Clear();
         _unnamedTransponders.Clear();
         _previousFlag = FlagState.None;
         _currentRaceIsDemo = false;
+        _currentRaceIsQuick = false;
 
         // As the Reset button does - see there. The undo below puts it back.
         _sessionStartedAtUtc = null;
@@ -662,12 +728,16 @@ public sealed partial class RaceControlControl : UserControl
         {
             RefuseStaleResetUndo(generationAfterReset);
 
+            // At Idle, before the snapshot raises Racing again.
+            restoreRules();
+
             // Flag announcements suppressed while restoring, or undoing a
             // reset would re-announce the flags it passes back through.
+            bool heldUnderRed;
             _suppressFlagAnnouncements = true;
             try
             {
-                _race.RestoreSnapshot(snapshot);
+                heldUnderRed = _race.RestoreSnapshotAfterGap(snapshot, snapshotTakenUtc);
             }
             finally
             {
@@ -681,7 +751,11 @@ public sealed partial class RaceControlControl : UserControl
                 _promptedTransponders.Add(t);
             }
 
-            _previousFlag = previousFlag;
+            // The flag the race came back under, not the one it had before
+            // the reset: a running race comes back under red, and the green
+            // that restarts it has to be heard as a restart - which is
+            // decided from this. The other two undo paths do the same.
+            _previousFlag = _race.Flag;
 
             // The race is back, so its safety net is too - written now
             // rather than at its next crossing. Record itself skips an idle
@@ -690,6 +764,15 @@ public sealed partial class RaceControlControl : UserControl
 
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
+
+            // Held under red if it was running - see RestoreSnapshotAfterGap
+            // - so the director is told why, and what to press.
+            if (heldUnderRed)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
+                    + "Green when the cars are ready to go again.");
+            }
         };
     }
 

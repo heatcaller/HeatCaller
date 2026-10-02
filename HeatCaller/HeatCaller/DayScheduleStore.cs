@@ -39,6 +39,8 @@ public sealed class DayScheduleStore
 
     public static DayScheduleStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -63,15 +65,38 @@ public sealed class DayScheduleStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new DayScheduleStore(new List<ScheduleEntry>());
+        return new DayScheduleStore(new List<ScheduleEntry>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every race day's
+    /// run sheet, with its typed times, ticks and actual start stamps:
+    /// nothing anybody could type back in. It used to be loaded as empty and
+    /// then written over whole at the first change - a program edit, or
+    /// simply the first race started - so a backup or sync tool holding it
+    /// open for a moment at launch was enough to lose every other day's
+    /// sheet. Tonight's sheet still works in memory for the rest of the
+    /// session; it is just not saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     private void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's lines would replace every other day's. The console
+        // has already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var json = JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
 
         // Through SafeFile like every other store: a bare WriteAllText
@@ -335,6 +360,54 @@ public sealed class DayScheduleStore
         {
             Save();
         }
+    }
+
+    /// <summary>One line's time before and after a pass that stamped it - what undoing that pass needs.</summary>
+    public readonly record struct TimeChange(string Id, string Was, string Now);
+
+    /// <summary>
+    /// Puts back the times a pass down the sheet wrote, writing the file
+    /// once. Returns how many lines were put back.
+    ///
+    /// Exists because Snapshot and Restore cannot undo a change made to a
+    /// line in place. A snapshot holds the very same line objects the sheet
+    /// does, so by the time an undo runs it already carries the new times,
+    /// and Restore deliberately keeps a line still on the sheet as it is
+    /// now. Undoing "Fill in the times" through them put the race day's
+    /// start time back and left every line restamped, while saying it had
+    /// worked. The old value has to be written down as text before the pass,
+    /// which is what a TimeChange is.
+    ///
+    /// A line whose time has been changed again since - typed over by hand
+    /// after the fill - is left alone, the same rule Restore keeps: an undo
+    /// takes back the one thing it names, not an edit made after it. A line
+    /// deleted since is simply skipped. Lines are found by id across every
+    /// event, so an undo made after switching race days still reaches the
+    /// day it was made on.
+    /// </summary>
+    public int RestoreTimes(IEnumerable<TimeChange> changes)
+    {
+        var restored = 0;
+
+        foreach (var change in changes)
+        {
+            var line = _entries.FirstOrDefault(e => string.Equals(e.Id, change.Id, StringComparison.Ordinal));
+
+            if (line is null || !string.Equals(line.ScheduledTime, change.Now, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            line.ScheduledTime = change.Was;
+            restored++;
+        }
+
+        if (restored > 0)
+        {
+            Save();
+        }
+
+        return restored;
     }
 
     public void Delete(string id)

@@ -218,7 +218,19 @@ public sealed class JoinPosterForm : Form
                 // Rendered at print resolution rather than scaling up the
                 // screen copy - an enlarged 700px bitmap is exactly the
                 // fuzzy-edged code that phones struggle with.
-                using var poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, Math.Min(2000, side));
+                //
+                // MarginBounds is in hundredths of an inch, not printer
+                // dots, so "side" alone (about 650 on Letter) gave a bitmap
+                // no bigger than the on-screen one, stretched to ~100 DPI.
+                // Converting through the printer's own DPI gets the real
+                // dot count; the 2000px ceiling (about 300 DPI over 6.5in,
+                // plenty for text and a QR code) keeps a 1200 DPI printer
+                // from spooling a huge bitmap. A Graphics that reports no
+                // sensible DPI falls back to 300, the common print default.
+                var dpi = e.Graphics is { DpiX: > 0f } printerGraphics ? printerGraphics.DpiX : 300f;
+                var pixels = (int)Math.Min(2000f, side * dpi / 100f);
+
+                using var poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, pixels, forPrint: true);
 
                 e.Graphics?.DrawImage(
                     poster,

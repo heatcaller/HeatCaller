@@ -176,6 +176,7 @@ public sealed class SetupLogControl : UserControl
         var previouslySelected = _grid.CurrentRow?.Tag as string;
 
         _grid.Rows.Clear();
+        DataGridViewRow? restoredRow = null;
         foreach (var entry in entries)
         {
             var template = _chassisTemplates.Get(entry.ChassisTemplateId);
@@ -193,8 +194,23 @@ public sealed class SetupLogControl : UserControl
 
             if (entry.Id == previouslySelected)
             {
-                _grid.Rows[rowIndex].Selected = true;
+                restoredRow = _grid.Rows[rowIndex];
             }
+        }
+
+        // Adding rows to an empty grid makes the first row current and selected, and
+        // MultiSelect is on, so only marking the old row Selected used to leave two rows
+        // highlighted while CurrentRow stayed on row 0. Edit and Duplicate read CurrentRow
+        // and Delete reads SelectedRows, so after editing the third setup, Edit opened the
+        // first one and Delete offered to remove two. Clearing the selection and moving the
+        // current cell onto the restored row makes what is highlighted and what the buttons
+        // act on the same single row (and scrolls it into view). If the entry is gone or
+        // filtered out, the grid keeps its usual first-row default.
+        if (restoredRow is not null)
+        {
+            _grid.ClearSelection();
+            _grid.CurrentCell = restoredRow.Cells[0];
+            restoredRow.Selected = true;
         }
 
         _lblSummary.Text = $"{entries.Count} setup{(entries.Count == 1 ? "" : "s")} logged";
@@ -223,9 +239,35 @@ public sealed class SetupLogControl : UserControl
         using var form = new SetupEntryForm(null, _chassisTemplates, _history, _profiles, _trackLayouts);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
-            _store.Upsert(form.Result);
+            SaveNewEntry(form.Result);
             RefreshAll();
         }
+    }
+
+    /// <summary>
+    /// Adds a brand-new entry (Log a Setup, or Duplicate) with its own undo
+    /// step. Without one, the next Ctrl+Z reached past the new entry and took
+    /// back whatever came before it - a delete or an edit - and the new entry
+    /// stayed. The Garage logs a setup the same way, so the two pages agree.
+    /// </summary>
+    private void SaveNewEntry(SetupEntry entry)
+    {
+        var store = _store;
+        var id = entry.Id;
+        var label = $"Log a setup ({entry.DriverName}, {entry.RecordedAtUtc.ToLocalTime():d})";
+
+        _undo.Capture(label, () =>
+        {
+            // A null "before" tells the store the entry was new, so undoing it
+            // removes it. Said out loud when it has been deleted since, as the
+            // edit's undo does, rather than reporting an undo that did nothing.
+            if (!store.UndoUpsert(id, null))
+            {
+                throw new InvalidOperationException("that setup entry has been deleted since, so there is nothing to take back.");
+            }
+        });
+
+        _store.Upsert(entry);
     }
 
     private void EditSelected()
@@ -275,7 +317,7 @@ public sealed class SetupLogControl : UserControl
         using var form = new SetupEntryForm(copy, _chassisTemplates, _history, _profiles, _trackLayouts);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
-            _store.Upsert(form.Result);
+            SaveNewEntry(form.Result);
             RefreshGrid();
         }
     }

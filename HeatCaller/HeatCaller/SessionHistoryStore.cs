@@ -7,6 +7,27 @@ public sealed class SessionHistoryStore
 {
     private readonly List<SessionRecord> _sessions;
 
+    /// <summary>
+    /// Records Add was handed but could not write. They stay in _sessions so
+    /// the evening carries on - Race History still lists them, qualifying
+    /// still counts them - but Save leaves them out of the file.
+    ///
+    /// Without this, a race whose filing failed rode along on the next
+    /// unrelated save that did work: a note typed in Race History, a delete,
+    /// a result correction. That put it in race-history.json with no round
+    /// linked, never published, and with its crash journal still on disk -
+    /// and the next launch, told by the journal that the race "never reached
+    /// the race history", offered it back. Restoring and finishing it filed
+    /// it again under a new id, so the club had the same A-main twice, both
+    /// counting toward qualifying, personal bests and achievements. A failed
+    /// race now reaches the file only through Add, the one path that is
+    /// followed by linking its round and clearing its journal.
+    ///
+    /// By reference, not by Id: it is these exact objects that were never
+    /// written, and SessionRecord has no equality of its own anyway.
+    /// </summary>
+    private readonly HashSet<SessionRecord> _unsaved = new(ReferenceEqualityComparer.Instance);
+
     private static string FilePath => Path.Combine(
         AppPaths.Root,
         "race-history.json");
@@ -96,11 +117,38 @@ public sealed class SessionHistoryStore
             return false;
         }
 
-        var json = JsonSerializer.Serialize(_sessions, new JsonSerializerOptions { WriteIndented = true });
+        // Everything except what Add failed to file - see _unsaved.
+        var toWrite = _unsaved.Count == 0 ? _sessions : _sessions.Where(s => !_unsaved.Contains(s)).ToList();
+        var json = JsonSerializer.Serialize(toWrite, new JsonSerializerOptions { WriteIndented = true });
         return SafeFile.WriteAllText(FilePath, json);
     }
 
     public IReadOnlyList<SessionRecord> All => _sessions.OrderByDescending(s => s.StartedAtUtc).ToList();
+
+    /// <summary>
+    /// As All, less the records Add could not write (see _unsaved) - what a
+    /// restart would load. For anything that publishes: All still lists a
+    /// race whose filing failed, so the evening carries on around it, and the
+    /// relay's periodic passes read All - the results index went out listing
+    /// a race whose result document was never sent, and the standings with
+    /// its points, all of which changed back after a restart. SessionAdded is
+    /// held back for exactly that reason; this is the same rule for code that
+    /// reads the whole history rather than waiting for the event.
+    /// </summary>
+    public IReadOnlyList<SessionRecord> Saved => _unsaved.Count == 0
+        ? All
+        : _sessions.Where(s => !_unsaved.Contains(s)).OrderByDescending(s => s.StartedAtUtc).ToList();
+
+    /// <summary>
+    /// A read-only store over Saved, for code that takes a whole store
+    /// (EventSpine.SessionsFor, RelayDocuments.Tracks) and is publishing.
+    /// This store itself when nothing is held back, so the usual case costs
+    /// nothing; callers only read from it either way.
+    /// </summary>
+    public SessionHistoryStore SavedView() => _unsaved.Count == 0 ? this : FromSessions(Saved);
+
+    /// <summary>True for a record Add was handed but could not write - see _unsaved.</summary>
+    public bool IsUnsaved(SessionRecord record) => _unsaved.Contains(record);
 
     public SessionRecord? Get(string id) => _sessions.FirstOrDefault(s => s.Id == id);
 
@@ -133,13 +181,92 @@ public sealed class SessionHistoryStore
     /// SessionAdded is not raised in that case: every listener publishes the
     /// result somewhere, and publishing a race that is not on disk is how the
     /// club ends up with a result on its website that the laptop forgets.
+    ///
+    /// Nor does a failed record reach disk by any other save later on - it
+    /// is held back (see _unsaved) until Add itself files it. Handing the
+    /// same object to Add again is a retry: it is not listed a second time.
     /// </summary>
+    /// <summary>
+    /// For an undo that put deleted sessions back: when any of them could not
+    /// be written (Add returned false), they are listed for this run only and
+    /// no later save writes them (see _unsaved), and these have no crash
+    /// journal to come back from. So rather than look restored and vanish
+    /// at the next restart, a step that tries Add again is left on the Undo
+    /// list, and the undo reports the failure (UndoService shows it). Does
+    /// nothing when <paramref name="failed"/> is empty.
+    ///
+    /// <paramref name="onSaved"/> runs for each record the retry does get
+    /// onto disk, and is handed on to any retry after that. It is how the
+    /// caller finishes what the first undo had to hold back: an undo that
+    /// failed to save a session also left its round unlinked (a link to a
+    /// session that is not on disk would outlive it), and without this
+    /// nothing put the link back once the retry did save it - the session
+    /// was in Race History but its heat still read as unrun.
+    /// </summary>
+    public void KeepRetryForUnsaved(UndoService undo, IReadOnlyList<SessionRecord> failed, Action<SessionRecord>? onSaved = null)
+    {
+        if (failed.Count == 0)
+        {
+            return;
+        }
+
+        var what = failed.Count == 1 ? "the restored session" : $"{failed.Count} restored sessions";
+
+        undo.Capture($"Save {what} to Race History", () =>
+        {
+            var saved = new List<SessionRecord>();
+            var stillFailed = new List<SessionRecord>();
+
+            foreach (var record in failed)
+            {
+                (Add(record) ? saved : stillFailed).Add(record);
+            }
+
+            // Each on its own, so one that throws does not stop the rest,
+            // and none of them stops the retry below from being put back on
+            // the Undo list for whatever is still unsaved - losing that
+            // would lose those sessions at the next restart.
+            Exception? onSavedFailed = null;
+
+            foreach (var record in saved)
+            {
+                try
+                {
+                    onSaved?.Invoke(record);
+                }
+                catch (Exception ex)
+                {
+                    onSavedFailed ??= ex;
+                }
+            }
+
+            KeepRetryForUnsaved(undo, stillFailed, onSaved);
+
+            // Only reached when everything else did save, so this is the
+            // one problem left to report.
+            if (onSavedFailed is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Race History now has {what}, but finishing the restore failed: {onSavedFailed.Message}", onSavedFailed);
+            }
+        });
+
+        throw new InvalidOperationException(
+            $"{what} couldn't be written to the race history file - something may have it open, or the disk may be full. "
+            + "They're listed until HeatCaller closes. Press Undo again to save them once the file can be written.");
+    }
+
     public bool Add(SessionRecord record)
     {
-        _sessions.Add(record);
+        // A retry of one that failed is already in the list.
+        if (!_unsaved.Remove(record))
+        {
+            _sessions.Add(record);
+        }
 
         if (!Save())
         {
+            _unsaved.Add(record);
             return false;
         }
 
@@ -185,6 +312,7 @@ public sealed class SessionHistoryStore
     public bool Delete(string id)
     {
         _sessions.RemoveAll(s => s.Id == id);
+        _unsaved.RemoveWhere(s => s.Id == id);
         return Save();
     }
 
@@ -213,6 +341,15 @@ public sealed class SessionHistoryStore
     public bool SaveEdited(SessionRecord record)
     {
         if (!_sessions.Contains(record))
+        {
+            return false;
+        }
+
+        // A race Add could not file is not on disk, so neither is a
+        // correction to it - and announcing one would publish a result the
+        // laptop does not have. Correcting it does not file it either: that
+        // stays Add's job, for the reasons on _unsaved.
+        if (_unsaved.Contains(record))
         {
             return false;
         }

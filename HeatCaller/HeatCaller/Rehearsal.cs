@@ -127,14 +127,43 @@ internal static class Rehearsal
             return false;
         }
 
-        Directory.CreateDirectory(copy);
+        // The copy is built in a sibling folder ("Data.partial") and only
+        // renamed to the real name once it is whole and publishing is off in
+        // it. WHY: a non-empty Data folder is taken, above, to be the copy an
+        // earlier rehearsal made and is used as it stands. Copied straight
+        // into Data, a copy that failed part-way - a full disk while copying
+        // the photos, a file antivirus was holding, a path too long - left
+        // settings.json behind (top-level files go first) with publishing
+        // still ON, because switching it off came last. The next --rehearsal
+        // launch then ran on that half copy and published it to the club's
+        // real website. Built aside, a failure leaves Data empty or absent,
+        // so the next launch simply copies again; the half-made folder is
+        // thrown away first. The same goes for a settings.json that cannot
+        // be read: TurnPublishingOff throws before the rename, never after.
+        var building = Path.TrimEndingDirectorySeparator(copy) + ".partial";
+
+        if (Directory.Exists(building))
+        {
+            Directory.Delete(building, recursive: true);
+        }
+
+        Directory.CreateDirectory(building);
 
         if (Directory.Exists(realData))
         {
-            CopyFolder(realData, copy);
+            CopyFolder(realData, building);
         }
 
-        TurnPublishingOff(Path.Combine(copy, "settings.json"));
+        TurnPublishingOff(Path.Combine(building, "settings.json"));
+
+        // An empty Data folder (made by hand, or left by an earlier version)
+        // is in the way of the rename; it holds nothing to lose.
+        if (Directory.Exists(copy))
+        {
+            Directory.Delete(copy, recursive: false);
+        }
+
+        Directory.Move(building, copy);
 
         return true;
     }

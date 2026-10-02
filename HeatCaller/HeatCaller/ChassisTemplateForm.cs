@@ -101,6 +101,13 @@ public sealed class ChassisTemplateForm : Form
         {
             _store.ClearImage(_template);
             _canvas.SetTemplate(_template, null);
+
+            // SetTemplate lets go of the selected point without saying so
+            // (it raises no SelectionChanged), so the card is brought back in
+            // step here - see SyncSelection. Left alone, it went on showing
+            // the old point with its Label box still enabled, typing there
+            // reached nothing, and Edit Field... said nothing was selected.
+            SyncSelection();
         };
 
         // --- Canvas ---
@@ -152,7 +159,20 @@ public sealed class ChassisTemplateForm : Form
             using var editor = new SetupFieldEditorForm(field);
             if (editor.ShowDialog(this) == DialogResult.OK)
             {
-                _store.Upsert(_template);
+                // The field editor changes the field on this window's working
+                // copy, and that is all. It used to write the copy to the
+                // store here, which saved every other unsaved change with it
+                // (dragged and deleted points, renamed extras) and left the
+                // store holding the very object this window goes on editing
+                // - so Cancel no longer threw anything away. The copy is
+                // written by Save alone.
+
+                // The editor can take the field off the diagram, which makes
+                // it an extra field. The extras list is rebuilt so it shows
+                // what its buttons act on: left as it was, every row past the
+                // moved field pointed at the field after it, and Remove,
+                // Rename and Edit Field... there hit the wrong one.
+                RefreshExtras();
                 SyncSelection();
                 _canvas.Invalidate();
             }
@@ -164,6 +184,9 @@ public sealed class ChassisTemplateForm : Form
             // Lands in the middle; the user drags it where it belongs.
             DiagramSection().Fields.Add(new SetupField { Label = "New point", OnDiagram = true });
             _canvas.SetTemplate(_template, _store.ResolveImagePath(_template));
+
+            // The selection went with SetTemplate - as Use Built-in Outline above.
+            SyncSelection();
         };
 
         var pointFields = new FieldGrid();
@@ -235,7 +258,8 @@ public sealed class ChassisTemplateForm : Form
             using var editor = new SetupFieldEditorForm(target);
             if (editor.ShowDialog(this) == DialogResult.OK)
             {
-                _store.Upsert(_template);
+                // Only the working copy changes; Save writes it, Cancel
+                // drops it - as with Edit Field... on a point above.
                 RefreshExtras();
                 _canvas.Invalidate();
             }
@@ -439,12 +463,17 @@ public sealed class ChassisTemplateForm : Form
         if (_store.SetImage(_template, dialog.FileName))
         {
             // Told to forget the old picture first. A new picture with the
-            // same file name as the last one is copied in under the same
-            // stored name, and the canvas only reloads when the path
+            // same file name as the last one used to be copied in under the
+            // same stored name, and the canvas only reloads when the path
             // changes - so it went on showing the old picture until the
-            // editor was closed and opened again.
+            // editor was closed and opened again. SetImage now always picks
+            // a name nothing uses yet, but forgetting first costs nothing
+            // and keeps this right whatever name it hands back.
             _canvas.SetTemplate(_template, null);
             _canvas.SetTemplate(_template, _store.ResolveImagePath(_template));
+
+            // The selection went with SetTemplate - as Use Built-in Outline.
+            SyncSelection();
         }
         else
         {
@@ -515,9 +544,12 @@ internal sealed class ChassisSheetsForm : Form
         {
             if (Selected() is not { } t) { return; }
 
-            // The editor saves as it goes (a field edit is written straight
-            // away), so the undo is captured once it closes, if anything
-            // actually changed - whichever button closed it.
+            // The undo is captured once the editor closes, if the stored
+            // sheet actually changed - whichever button closed it. The
+            // editor works on a copy and writes it only on Save, so after
+            // Cancel the comparison finds nothing and no undo is recorded;
+            // comparing rather than trusting the button keeps that true
+            // however the editor came to write.
             var before = ChassisTemplateStore.CopyOf(t);
             var beforeJson = System.Text.Json.JsonSerializer.Serialize(before);
 
@@ -546,10 +578,22 @@ internal sealed class ChassisSheetsForm : Form
         {
             var created = ChassisTemplate.CreateKyoshoDefault();
             created.Name = "New chassis sheet";
-            _templates.Upsert(created);
 
+            // Not stored until the editor's Save stores it. It used to be
+            // written to the store before the editor opened, so Cancel - which
+            // only throws away the editor's own copy - left a "New chassis
+            // sheet" behind in the list and in every Setup Sheet's drop-down.
+            // The editor works on a copy with this sheet's id and Upserts it
+            // on Save, so this sheet is in the store exactly when Save was
+            // pressed.
             using var editor = new ChassisTemplateForm(_templates, created);
             editor.ShowDialog(this);
+
+            if (_templates.Get(created.Id) is { } added)
+            {
+                CaptureAddUndo($"New chassis sheet '{added.Name}'", added.Id, added.Name);
+            }
+
             Reload();
         };
 
@@ -558,7 +602,13 @@ internal sealed class ChassisSheetsForm : Form
         {
             if (Selected() is not { } t) { return; }
 
-            _templates.Upsert(t.Clone());
+            var copy = t.Clone();
+            _templates.Upsert(copy);
+
+            // Undoable like Edit and Delete - it used to record nothing, so
+            // Ctrl+Z after a Duplicate reversed whatever came before it.
+            CaptureAddUndo($"Duplicate chassis sheet '{t.Name}'", copy.Id, copy.Name);
+
             Reload();
         };
 
@@ -630,6 +680,36 @@ internal sealed class ChassisSheetsForm : Form
         // list the 300px it had. The height it had. It can be made bigger,
         // for a club with many sheets.
         DialogFit.Keep(this, page, width: 490, height: 340);
+    }
+
+    /// <summary>
+    /// The undo for a sheet New... or Duplicate added: the sheet comes out
+    /// again. Not when a setup entry has been saved against it since - taking
+    /// it away then would turn that entry into a legacy one, which is more
+    /// than undoing an add should do - and not when it has been deleted
+    /// already. Either way the undo says so rather than quietly doing
+    /// nothing. The stores, not this window, in the undo: the window is long
+    /// gone by then.
+    /// </summary>
+    private void CaptureAddUndo(string description, string id, string name)
+    {
+        var templates = _templates;
+        var entries = _setups;
+
+        _undo.Capture(description, () =>
+        {
+            if (templates.IndexOf(id) < 0)
+            {
+                throw new InvalidOperationException($"the chassis sheet '{name}' has been deleted since, so there is nothing to take away.");
+            }
+
+            if (entries.UsesTemplate(id))
+            {
+                throw new InvalidOperationException($"a setup has been saved on the chassis sheet '{name}' since, so it is kept. Delete it from Chassis Sheets if it is not wanted.");
+            }
+
+            templates.Delete(id);
+        });
     }
 
     /// <summary>Fills the list from the store, and selects the first sheet when there is one.</summary>

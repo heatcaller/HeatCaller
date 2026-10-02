@@ -233,6 +233,29 @@ public sealed class SeasonRulesForm : Form
         var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // Enter presses Save too (AcceptButton), and goes through this same
+        // Click, so both meet the check below.
+        btnOk.Click += (_, _) =>
+        {
+            if (!WouldSaveNoRaceDays())
+            {
+                return;
+            }
+
+            AppDialog.Show(
+                this,
+                "Tick the race days this championship counts, or tick \"Count every race day\".\n\n"
+                + "A championship can't be saved with no race day ticked: that is stored the same way as "
+                + "\"every race day\", so it would count races from every meeting. "
+                + "To count only the days marked \u2713, tick those days.",
+                "No race days ticked",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            // Set to OK by the button before this ran; None keeps the window open.
+            DialogResult = DialogResult.None;
+        };
+
         // --- Layout ---
         //
         // Every setting in the body: at a larger text size, or on a small
@@ -356,6 +379,42 @@ public sealed class SeasonRulesForm : Form
                 .Concat(unlisted)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
+    }
+
+    /// <summary>
+    /// True when Save would write an empty race-day list without "Count
+    /// every race day" being ticked.
+    ///
+    /// An empty list is how a season says "every race day" (see
+    /// EventSpine.RuleAccepts), and there is no separate switch for "only
+    /// the days chosen". So unticking "Count every race day" and ticking
+    /// nothing saved exactly what the tick meant: every meeting's races
+    /// counted, and the dialog came back with the tick on again. The case a
+    /// club meets is a championship whose days are tagged on Race Day >
+    /// Setup and marked with a check here: unticking "every race day" to count
+    /// only those widened it to all of them instead. Refused rather than
+    /// guessed at - writing the tagged days into the list would tie them in
+    /// twice, which the note on the list is there to avoid.
+    ///
+    /// Only while the rule is on. With it off the race-day choices are
+    /// greyed out and decide nothing, and a dialog that refused to save
+    /// over a setting nobody can change would be a trap.
+    /// </summary>
+    private bool WouldSaveNoRaceDays()
+    {
+        if (!_chkAuto.Checked || _chkAllEvents.Checked || _lstEvents.CheckedItems.Count > 0)
+        {
+            return false;
+        }
+
+        // Days the season names that are not in the list are kept by
+        // ApplyTo, so with one of those the list is not empty after all.
+        var listed = _lstEvents.Items
+            .OfType<EventChoice>()
+            .Select(c => c.Event.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return !_season.IncludedEventIds.Any(id => !listed.Contains(id));
     }
 
     /// <summary>

@@ -49,6 +49,19 @@ public sealed class VenuesControl : UserControl
     /// <summary>Raised when "Apply This Venue" is clicked, so the host (MainForm) can push the settings into the Connection page, apply the theme, and update Race Control's defaults.</summary>
     public event Action<VenueProfile>? VenueApplied;
 
+    /// <summary>
+    /// Asked before a venue is applied: true while a race or practice is
+    /// under way. Set by the host (MainForm), which knows the race state;
+    /// null means "never", which is what this page assumed before.
+    ///
+    /// Applying a venue switches the decoder, which disconnects the one
+    /// timing the race, and changes the track layout, which would file the
+    /// race under a layout it was not run on. The undo for this same step
+    /// already refuses during a race for those reasons; the apply has to as
+    /// well, or it does the harm the undo was guarding against.
+    /// </summary>
+    public Func<bool>? IsRaceUnderWay { get; set; }
+
     public VenuesControl(VenueStore venues, TrackLayoutStore trackLayouts, ThemeStore themes, UndoService undo)
     {
         _venues = venues;
@@ -565,6 +578,11 @@ public sealed class VenuesControl : UserControl
             return;
         }
 
+        if (RefuseWhileRaceUnderWay())
+        {
+            return;
+        }
+
         var confirm = AppDialog.Show(this,
             $"Apply \"{venue.Name}\"? This sets its decoder on the Connection page, applies its preferred soundscape, and on Race Control selects its preferred track and updates the race defaults.",
             "Confirm apply venue", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
@@ -574,8 +592,33 @@ public sealed class VenuesControl : UserControl
             return;
         }
 
+        // Asked again: the confirmation is modal but the race is not paused
+        // by it, so a heat can be staged (from a phone, or the program
+        // running on) while the question sits on screen.
+        if (RefuseWhileRaceUnderWay())
+        {
+            return;
+        }
+
         VenueApplied?.Invoke(venue);
         _lblStatus.Text = $"Applied \"{venue.Name}\".";
+    }
+
+    /// <summary>
+    /// Says why and returns true when a race or practice is running, so the
+    /// venue is not applied (see <see cref="IsRaceUnderWay"/>).
+    /// </summary>
+    private bool RefuseWhileRaceUnderWay()
+    {
+        if (IsRaceUnderWay?.Invoke() != true)
+        {
+            return false;
+        }
+
+        AppDialog.Show(this,
+            "A race or practice is running. Apply the venue once it has finished - switching the decoder would disconnect the one timing the race, and the track change would file the race under another layout.",
+            "Race running", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return true;
     }
 
     /// <summary>A saved name that isn't in a picker's list - see SelectStoredName.</summary>

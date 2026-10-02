@@ -715,7 +715,103 @@ internal static class RelayDocuments
             return null;
         }
 
-        return RelayCheckIn.RacerPinHash(club, racerPin, salt);
+        // Ready-made by WarmRacerPinHashes when MainForm has done its job;
+        // worked out here only when it has not (a caller that does not warm,
+        // or a warm that failed) - correct either way, only slower.
+        return RacerPinHashes.TryGetValue(RacerPinHashKey(club, salt, racerPin), out var ready)
+            ? ready
+            : RelayCheckIn.RacerPinHash(club, racerPin, salt);
+    }
+
+    /// <summary>
+    /// Racer PIN hashes already worked out, by RacerPinHashKey, so that
+    /// building the check-in list on the UI thread never has to make one.
+    ///
+    /// Each hash is a 100,000-round PBKDF2 (PinKdf) - about a tenth of a
+    /// second. CheckIn used to make them in place, one per racer, on the UI
+    /// thread: at start-up, after "New PINs now" and after every daily
+    /// rotation that was a hundred racers' worth at once, and race control,
+    /// the Entries page and every check-in tap from the relay froze for
+    /// several seconds. Now MainForm asks RacerPinHashesMissing first, has
+    /// WarmRacerPinHashes make the missing ones on a background thread, and
+    /// only builds the list once they are all here.
+    ///
+    /// Written from the background, read and pruned on the UI thread, hence
+    /// concurrent. Pruned to the racers in the current list by
+    /// RacerPinHashesMissing, so it never holds more than one hash per
+    /// racer plus whatever a warm in progress is about to add.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> RacerPinHashes =
+        new(StringComparer.Ordinal);
+
+    /// <summary>One racer PIN hash still to be made: the club and salt exactly as CheckIn passes them, and the PIN.</summary>
+    internal readonly record struct RacerPinHashJob(string Club, string Salt, string Pin);
+
+    private static string RacerPinHashKey(string club, string salt, string pin) => string.Join("\n", club, salt, pin);
+
+    /// <summary>
+    /// The racer PIN hashes the next CheckIn would have to make on the spot,
+    /// or none. UI thread only: it reads the settings, may make the salt
+    /// (as CheckIn would), and forgets hashes for PINs nobody holds any
+    /// more - a rotated set, a racer deleted.
+    ///
+    /// Mirrors CheckIn's own tests, so an empty answer means CheckIn will
+    /// not hash anything: check-in or personal PINs switched off, ghosts,
+    /// a racer with no PIN or one that is not fit to publish.
+    /// </summary>
+    internal static IReadOnlyList<RacerPinHashJob> RacerPinHashesMissing(
+        IReadOnlyList<WebServerService.CheckInEntry> roster,
+        AppSettings settings)
+    {
+        if (!settings.RelayCheckInEnabled || !settings.RelayRacerPinsEnabled)
+        {
+            return Array.Empty<RacerPinHashJob>();
+        }
+
+        var club = settings.RelayClub.Trim().ToLowerInvariant();
+        var salt = PinKdf.EnsureSalt(settings);
+        var wanted = new HashSet<string>(StringComparer.Ordinal);
+        var missing = new List<RacerPinHashJob>();
+
+        foreach (var entry in roster)
+        {
+            if (GhostService.IsGhost(entry.Transponder)
+                || !settings.RacerPins.TryGetValue(entry.Transponder, out var racerPin)
+                || !RacerPins.IsFit(racerPin))
+            {
+                continue;
+            }
+
+            var key = RacerPinHashKey(club, salt, racerPin);
+
+            if (wanted.Add(key) && !RacerPinHashes.ContainsKey(key))
+            {
+                missing.Add(new RacerPinHashJob(club, salt, racerPin));
+            }
+        }
+
+        foreach (var stale in RacerPinHashes.Keys.Where(k => !wanted.Contains(k)).ToList())
+        {
+            RacerPinHashes.TryRemove(stale, out _);
+        }
+
+        return missing;
+    }
+
+    /// <summary>
+    /// Makes the hashes RacerPinHashesMissing listed. Slow - a tenth of a
+    /// second each - and touches no settings or stores, so it is meant for
+    /// a background thread.
+    /// </summary>
+    internal static void WarmRacerPinHashes(IReadOnlyList<RacerPinHashJob> jobs, CancellationToken cancel)
+    {
+        foreach (var job in jobs)
+        {
+            cancel.ThrowIfCancellationRequested();
+
+            RacerPinHashes[RacerPinHashKey(job.Club, job.Salt, job.Pin)] =
+                RelayCheckIn.RacerPinHash(job.Club, job.Pin, job.Salt);
+        }
     }
 
     /// <summary>

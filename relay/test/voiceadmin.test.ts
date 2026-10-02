@@ -195,13 +195,15 @@ describe("metering the HeatCaller voice", () => {
       assert.equal((await run("voice-topup", ["acme-rc", "50", "60"])).code, 1);
     });
 
-    it("is forgotten with the club", async () => {
+    it("outlives the club's delete", async () => {
       const voice = service();
       await run("voice-topup", ["acme-rc", "50"]);
       await voice.forget("acme-rc");
 
-      assert.equal((await voice.catalogue("acme-rc", PLAN)).usage.allowance, 100);
-      await assert.rejects(readFile(voiceTopUpPath(folder, "acme-rc"), "utf8"));
+      // A delete and a fresh start must not hand a club a new month's
+      // allowance, nor lose a top-up it paid for.
+      assert.equal((await voice.catalogue("acme-rc", PLAN)).usage.allowance, 150);
+      await readFile(voiceTopUpPath(folder, "acme-rc"), "utf8");
     });
 
     it("says so when the club does not have the voice switched on", async () => {

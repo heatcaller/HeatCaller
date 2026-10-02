@@ -176,6 +176,14 @@ public static class Looks
     // its own threads.
     private static volatile IReadOnlyList<Look> _custom = Array.Empty<Look>();
 
+    // True when looks.json was there at startup but could not be read, and
+    // SafeFile.HoldWritesAfterUnreadable said nothing may be saved over it
+    // this session. The in-memory list is then empty only because the read
+    // failed, not because the club has no looks, so the first Save would
+    // have replaced every look they made with just the new one. Set only by
+    // LoadCustom, under Gate; read by Commit, also under Gate.
+    private static bool _holdWrites;
+
     private static string FilePath => Path.Combine(
         AppPaths.Root,
         "looks.json");
@@ -318,9 +326,14 @@ public static class Looks
     /// <summary>
     /// Reads looks.json. Called once at startup, before anything is drawn.
     ///
-    /// A file that won't read is kept aside (SafeFile.PreserveUnreadable)
-    /// and the app carries on with no custom looks - and does not save
-    /// over it, so nothing the club made is lost to a bad read.
+    /// A file that won't read is kept aside and the app carries on with no
+    /// custom looks. When it could not be read at all (held open by a backup
+    /// or sync tool at launch, the usual case) or no copy of it could be
+    /// kept, nothing is saved over it until the app restarts and can read it
+    /// (SafeFile.HoldWritesAfterUnreadable), so nothing the club made is lost
+    /// to a bad read. It used to call PreserveUnreadable, which only tries the
+    /// copy: when that failed too, the next look saved replaced the whole
+    /// file with that one look.
     /// </summary>
     public static void LoadCustom()
     {
@@ -328,6 +341,7 @@ public static class Looks
         {
             var path = FilePath;
             var loaded = new List<Look>();
+            _holdWrites = false;
 
             try
             {
@@ -349,7 +363,7 @@ public static class Looks
             }
             catch (Exception ex)
             {
-                SafeFile.PreserveUnreadable(path, ex);
+                _holdWrites = SafeFile.HoldWritesAfterUnreadable(path, ex);
                 loaded.Clear();
             }
 
@@ -403,6 +417,16 @@ public static class Looks
 
     private static bool Commit(List<Look> list)
     {
+        if (_holdWrites)
+        {
+            // looks.json could not be read at startup (see LoadCustom). What
+            // is in memory is not the club's list, so writing it would wipe
+            // their real looks. Saying "not saved" lets every caller show its
+            // usual "the look could not be saved" message instead; the
+            // storage log already said why and to restart.
+            return false;
+        }
+
         var sorted = Sorted(list);
         var json = JsonSerializer.Serialize(sorted, new JsonSerializerOptions { WriteIndented = true });
 

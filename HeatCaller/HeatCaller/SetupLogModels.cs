@@ -62,34 +62,94 @@ public sealed class SetupEntry
     /// Folds the old fixed fields into the template's fields, matching on
     /// label. Called once when an old entry is first opened under the new
     /// model, so nothing recorded before templates existed is stranded.
+    ///
+    /// A field whose whole label is the old field's name wins over one that
+    /// merely contains it. Taking the first label that contained the name
+    /// put the old Motor value into the Kyosho sheet's "Motor mount", which
+    /// comes before "Motor", and left "Motor" empty.
+    ///
+    /// An old value with no field to go to - the Kyosho sheet has nothing
+    /// called ride height - is added to the end of the sheet's notes, with
+    /// its old name in front ("Ride height: 3mm"). Left out, it stayed only
+    /// in the old properties, which nothing reads once the entry is saved
+    /// against a sheet, so it vanished from the log, the Garage and the
+    /// comparison. It is added after the old notes themselves, so those
+    /// still come first.
     /// </summary>
     public void MigrateLegacyFields(ChassisTemplate template)
     {
-        var legacy = new (string Value, string[] Aliases)[]
+        var legacy = new (string Value, string Caption, string[] Aliases)[]
         {
-            (Tires, new[] { "tyre", "tire" }),
-            (Gearing, new[] { "pinion", "gear" }),
-            (Springs, new[] { "spring" }),
-            (RideHeight, new[] { "ride height" }),
-            (Motor, new[] { "motor" }),
-            (Notes, new[] { "note" }),
+            (Tires, "Tires", new[] { "tyre", "tire" }),
+            (Gearing, "Gearing", new[] { "pinion", "gear" }),
+            (Springs, "Springs", new[] { "spring" }),
+            (RideHeight, "Ride height", new[] { "ride height" }),
+            (Motor, "Motor", new[] { "motor" }),
         };
 
-        foreach (var (value, aliases) in legacy)
+        var leftovers = new List<string>();
+
+        foreach (var (value, caption, aliases) in legacy)
         {
             if (string.IsNullOrWhiteSpace(value))
             {
                 continue;
             }
 
-            var match = template.AllFields.FirstOrDefault(f =>
-                aliases.Any(a => f.Label.Contains(a, StringComparison.OrdinalIgnoreCase)));
+            var match = FindLegacyField(template, aliases);
 
             if (match is not null && !Values.ContainsKey(match.Id))
             {
                 Values[match.Id] = value;
             }
+            else
+            {
+                leftovers.Add($"{caption}: {value.Trim()}");
+            }
         }
+
+        // Only a free-text field takes the notes: one called "Notes" first,
+        // then any whose label mentions a note. A choice or tick field would
+        // show the text as a stray option, or not at all.
+        var notesField = FindLegacyField(template, new[] { "notes", "note" }, SetupFieldKind.Text);
+
+        if (notesField is null)
+        {
+            // No notes field on this sheet: the old values stay in the old
+            // properties, as before, and nothing is placed where it does not belong.
+            return;
+        }
+
+        var notes = Values.TryGetValue(notesField.Id, out var already) && !string.IsNullOrWhiteSpace(already)
+            ? already.Trim()
+            : Notes.Trim();
+
+        // Joined on one line: the notes box on the setup sheet is a
+        // single-line box, which would show a line break as nothing at all.
+        var parts = new List<string>();
+        if (notes.Length > 0) { parts.Add(notes); }
+        parts.AddRange(leftovers);
+
+        if (parts.Count > 0)
+        {
+            Values[notesField.Id] = string.Join("; ", parts);
+        }
+    }
+
+    /// <summary>
+    /// The field an old fixed field belongs in: one whose whole label is an
+    /// alias (or its plural) first, then the first whose label contains
+    /// one. Fields of another kind than <paramref name="kind"/> are passed
+    /// over when a kind is given. Null when nothing fits.
+    /// </summary>
+    private static SetupField? FindLegacyField(ChassisTemplate template, string[] aliases, SetupFieldKind? kind = null)
+    {
+        var fields = template.AllFields.Where(f => kind is null || f.Kind == kind).ToList();
+
+        return fields.FirstOrDefault(f => aliases.Any(a =>
+                   string.Equals(f.Label.Trim(), a, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(f.Label.Trim(), a + "s", StringComparison.OrdinalIgnoreCase)))
+               ?? fields.FirstOrDefault(f => aliases.Any(a => f.Label.Contains(a, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>Short one-line summary of the filled values, for the log list.</summary>
@@ -146,6 +206,8 @@ public sealed class SetupLogStore
 
     public static SetupLogStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -159,15 +221,36 @@ public sealed class SetupLogStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new SetupLogStore(new List<SetupEntry>());
+        return new SetupLogStore(new List<SetupEntry>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every setup the
+    /// club's drivers have logged, nothing anybody could type back in. It
+    /// used to be loaded as empty and then written over whole at the first
+    /// setup logged, so a backup or sync tool holding it open for a moment
+    /// at launch was enough to lose all of it. What this store holds is then
+    /// only what was logged this session, and none of it is saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     private void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's near-empty log would replace it. The console has
+        // already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         // SafeFile, like the other stores. A bare WriteAllText threw out of
         // every setup edit on a locked or full disk, and a crash partway
         // through left a truncated log behind.

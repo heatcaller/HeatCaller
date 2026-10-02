@@ -690,6 +690,44 @@ public sealed class RaceControlSession
     /// </summary>
     public int SessionGeneration { get; private set; }
 
+    /// <summary>
+    /// Earlier values of SessionGeneration that name the race now on the
+    /// board, because an undo put that race back.
+    ///
+    /// Reset, and a Stage that abandons a race, move SessionGeneration on;
+    /// undoing them puts the old race back but leaves the generation where
+    /// it is, since everything else that watches it (the reset undo's own
+    /// staleness check, the demo, the after-race guards) counts on it only
+    /// ever going forward. So a correction made to that race before the
+    /// reset still carried the old number, and undoing it was refused as
+    /// "that race has been reset or replaced" with the race and the driver
+    /// right there on the board again. A correction whose generation is in
+    /// this set belongs to the race on the board, and UndoStandingEdit takes
+    /// it. Emptied whenever the generation moves on, because from then on
+    /// the board holds a different race; refilled from the snapshot a
+    /// restore puts back.
+    /// </summary>
+    private readonly HashSet<int> _restoredGenerations = new();
+
+    /// <summary>
+    /// Whether a generation names the race now on the board: the current
+    /// one, or one an undo brought back (see _restoredGenerations). Public
+    /// so anything else keyed on SessionGeneration - the Best Streak and PBs
+    /// history - can tell a race put back from a new one.
+    /// </summary>
+    public bool IsSameRace(int generation) =>
+        generation == SessionGeneration || _restoredGenerations.Contains(generation);
+
+    /// <summary>
+    /// Moves SessionGeneration on for a new race, forgetting which earlier
+    /// generations the old board answered to - they are not this race.
+    /// </summary>
+    private void StartNewGeneration()
+    {
+        SessionGeneration++;
+        _restoredGenerations.Clear();
+    }
+
     public event Action? RaceCompleted;
 
     /// <summary>The leader has crossed onto the final lap of a lap-limited race. Fires once per race.</summary>
@@ -1152,7 +1190,7 @@ public sealed class RaceControlSession
     /// </summary>
     public void UndoStandingEdit(StandingEdit edit)
     {
-        if (edit.Generation != SessionGeneration || !_standings.TryGetValue(edit.TransponderId, out var standing))
+        if (!IsSameRace(edit.Generation) || !_standings.TryGetValue(edit.TransponderId, out var standing))
         {
             throw new InvalidOperationException(
                 "that race has been reset or replaced since, so the correction is no longer on the board. Nothing was changed.");
@@ -1435,7 +1473,7 @@ public sealed class RaceControlSession
     {
         _standings.Clear();
         ClearAlternateDecisions();
-        SessionGeneration++;
+        StartNewGeneration();
 
         // The jump-start window OPENS here.
         //
@@ -1460,12 +1498,22 @@ public sealed class RaceControlSession
     /// Stage, a countdown that did not come through Stage, a green with no
     /// countdown at all - so nothing flagged in one race reaches the next.
     /// </summary>
+    /// <remarks>
+    /// The run of sightings each car has on the loop is deliberately NOT
+    /// forgotten here. It is not something flagged in a race, it is what the
+    /// decoder has been seeing, and a car left sitting on the loop is still
+    /// sitting there when the next start begins. Clearing it made every
+    /// parked car start again at a run of one the moment a countdown was
+    /// started without Stage (or after a Stage of only a few seconds), so its
+    /// first countdown pass was called as a jump start. An old entry cannot
+    /// mark a newly arrived car as parked: a run only continues from a pass
+    /// at most ParkedRepeatGapMs earlier on the same clock.
+    /// </remarks>
     private void ClearJumpStartWindow()
     {
         _jumpStarters.Clear();
         _pendingJumpStartPenalties.Clear();
         _jumpStartCrossingMs.Clear();
-        _sightingsBeforeGreen.Clear();
         _parkedOnLoopLogged.Clear();
     }
 
@@ -1589,13 +1637,17 @@ public sealed class RaceControlSession
             // Stage and Reset both move SessionGeneration on. The state is
             // checked too, for what moves the race along without that - a
             // countdown pressed meanwhile, or an undo putting another race
-            // back. A red only changes the flag, so it is checked on its own;
-            // a red that was already out when the green was asked for is the
-            // one this green is meant to clear, so it does not count.
+            // back. A red or a yellow only changes the flag, so each is
+            // checked on its own; one that was already out when the green was
+            // asked for is the one this green is meant to clear, so it does
+            // not count. A yellow thrown while the countdown call finished
+            // used to be overruled by the green that followed it - the same
+            // rule AutoStartMayContinue keeps for the automatic start.
             var overruledBy =
                 SessionGeneration != generationAtRequest ? "the session was reset or re-staged"
                 : State != stateAtRequest ? $"the race moved to {State}"
                 : Flag == FlagState.Red && flagAtRequest != FlagState.Red ? "a red flag came out"
+                : Flag == FlagState.Yellow && flagAtRequest != FlagState.Yellow ? "a yellow flag came out"
                 : null;
 
             if (overruledBy is not null)
@@ -1740,7 +1792,7 @@ public sealed class RaceControlSession
             Log($"Hand-released start - {Plural.Of(_grid.Count, "car")} held at the line.");
         }
 
-        SessionGeneration++;
+        StartNewGeneration();
         _raceStartDeviceTimeMs = currentDeviceTimeMs;
 
         // Anyone already past the line when the green dropped starts the
@@ -1801,6 +1853,27 @@ public sealed class RaceControlSession
                 jumper.ElapsedMs = 0;
                 jumper.LapTimesMs.Clear();
                 jumper.LapTimesMs.Add(0);
+
+                // The start lap is the first lap of their run, exactly as it
+                // is for everybody whose start lap comes through
+                // ProcessLapEvent: a run of one, with one StreakAtLap entry
+                // to sit beside the zero above, and no yardstick yet (a start
+                // lap is never the lap the next one is judged against).
+                //
+                // These were left alone, so a credited jumper's run was
+                // always one lap behind a clean starter's after the same
+                // laps - their streak was called a lap late - and StreakAtLap
+                // was one entry short of LapTimesMs for the whole race. Every
+                // run marker on the lap strip and in the lap popup sat one
+                // lap early, and removing a lap by hand kept the removed
+                // lap's run value, because the trim there only fires when
+                // StreakAtLap is the LONGER of the two.
+                jumper.StreakAtLap.Clear();
+                jumper.StreakAtLap.Add(1);
+                jumper.ConsecutiveValidLaps = 1;
+                jumper.StreakLapTimeSumMs = 0;
+                jumper.StreakLapCount = 0;
+                jumper.StreakBaselineLapMs = 0;
 
                 // Measured from where they actually crossed, so their
                 // first real lap comes out a full lap long rather than
@@ -1987,7 +2060,15 @@ public sealed class RaceControlSession
         // Without it an undo putting back an earlier finished race showed
         // the clock of whichever race finished last. Null - the journal -
         // leaves a finished race's clock worked out live, as it always was.
-        TimeSpan? ElapsedAtFinish = null);
+        TimeSpan? ElapsedAtFinish = null,
+
+        // Every SessionGeneration the race went by when the snapshot was
+        // taken - the one then current, and any it had answered to since an
+        // earlier undo - so that once it is put back, the corrections made
+        // to it before the reset can still be undone. See
+        // _restoredGenerations. Null - the journal, whose generations meant
+        // nothing to the app that is now running - answers to none.
+        IReadOnlyList<int>? Generations = null);
 
     public SessionSnapshot CreateSnapshot()
     {
@@ -2045,7 +2126,8 @@ public sealed class RaceControlSession
             _heardThisRace.ToList(),
             _lastLapAnnounced,
             _finalMinuteAnnounced,
-            _elapsedAtFinish);
+            _elapsedAtFinish,
+            _restoredGenerations.Append(SessionGeneration).ToList());
     }
 
     /// <summary>Replaces a live collection's contents with a snapshot's, or leaves it alone when the snapshot didn't carry it.</summary>
@@ -2131,6 +2213,23 @@ public sealed class RaceControlSession
 
         RestoreAlternateDecisions(snapshot);
 
+        // The race put back answers to the generations it went by, while
+        // SessionGeneration itself stays where it is - see
+        // _restoredGenerations. Whatever the board answered to before is
+        // dropped first: that race is no longer on it.
+        _restoredGenerations.Clear();
+
+        if (snapshot.Generations is not null)
+        {
+            foreach (var generation in snapshot.Generations)
+            {
+                if (generation != SessionGeneration)
+                {
+                    _restoredGenerations.Add(generation);
+                }
+            }
+        }
+
         RaceStartUtc = snapshot.RaceStartUtc;
         _elapsedAtFinish = snapshot.ElapsedAtFinish;
         _raceStartDeviceTimeMs = snapshot.RaceStartDeviceTimeMs;
@@ -2189,6 +2288,82 @@ public sealed class RaceControlSession
     }
 
     /// <summary>
+    /// Puts back a race an undo is bringing back - after Reset, or after
+    /// Stage or Countdown abandoned it - with the clock where it stood when
+    /// the snapshot was taken, and a race that was running held under red.
+    ///
+    /// RestoreSnapshot alone put the start time back exactly as it was, so
+    /// every second between the reset and the undo was charged to the race
+    /// clock, though no lap could be counted in it. A 5:00 race reset at 4:10
+    /// and undone a minute later came back at 5:10 under green: the next tick
+    /// threw the checkered with 50 seconds never run, and a race reset on its
+    /// last lap was called on the spot. The crash restore in RaceJournal has
+    /// the same problem with the time the app was down, and this answers it
+    /// the same way:
+    ///
+    /// The start moves forward by the gap, so the clock picks up where it
+    /// stopped. A red that was already out at the snapshot has its time up
+    /// to then banked into the red total, because the red is restarted now
+    /// and its old start would otherwise take that time off twice - see
+    /// RaceJournal.Restore for the arithmetic. And the race comes back
+    /// stopped, under red from this moment, because the cars have been
+    /// driving all this time with nothing counted: the director gets them
+    /// back in order and goes green, and green after red is called as a
+    /// restart. A race on its last lap keeps its checkered; the wait for
+    /// stragglers starts again at that green (see EndRedFlagPeriod).
+    ///
+    /// Anything but a running race - finished, idle, staging - has no clock
+    /// running, and is put back exactly as it was.
+    /// </summary>
+    /// <param name="snapshot">What CreateSnapshot took.</param>
+    /// <param name="takenUtc">When it was taken - the moment of the reset or abandon.</param>
+    /// <returns>True when a running race came back held under red.</returns>
+    public bool RestoreSnapshotAfterGap(SessionSnapshot snapshot, DateTime takenUtc)
+    {
+        if (snapshot.State != RaceState.Racing || snapshot.RaceStartUtc is not { } start)
+        {
+            RestoreSnapshot(snapshot);
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+
+        // Floored at zero, for a clock that moved backwards in between - a
+        // time sync, say. Shifting by a negative gap would wind the race
+        // clock forward instead.
+        var gap = now - takenUtc;
+
+        if (gap < TimeSpan.Zero)
+        {
+            gap = TimeSpan.Zero;
+        }
+
+        var redBeforeSnapshot = TimeSpan.Zero;
+
+        if (snapshot.RedFlagStartedUtc is { } redStartedUtc)
+        {
+            redBeforeSnapshot = takenUtc - redStartedUtc;
+
+            if (redBeforeSnapshot < TimeSpan.Zero)
+            {
+                redBeforeSnapshot = TimeSpan.Zero;
+            }
+        }
+
+        RestoreSnapshot(snapshot with
+        {
+            Flag = FlagState.Red,
+            RaceStartUtc = start + gap,
+            AccumulatedRedTime = snapshot.AccumulatedRedTime + redBeforeSnapshot,
+            RedFlagStartedUtc = now,
+            FinishingSinceUtc = snapshot.FinishingSinceUtc is { } finishingSince ? finishingSince + gap : null,
+        });
+
+        Log("Race put back under a red flag - laps count again from the green.");
+        return true;
+    }
+
+    /// <summary>
     /// Puts back which alternate transponders were being merged into their
     /// owner's row, after the decisions were cleared for a restore.
     ///
@@ -2234,7 +2409,7 @@ public sealed class RaceControlSession
     {
         _standings.Clear();
         ClearAlternateDecisions();
-        SessionGeneration++;
+        StartNewGeneration();
         _raceFastestLapMs = 0;
         _raceFastestLapTransponder = string.Empty;
         _jumpStarters.Clear();
@@ -2433,7 +2608,7 @@ public sealed class RaceControlSession
     /// <summary>How many such passes in a row mean the car is sitting on the loop.</summary>
     private const int ParkedSightingsInARow = 3;
 
-    /// <summary>Each car's last pass before the green, and how many passes in a row have come within ParkedRepeatGapMs of the one before.</summary>
+    /// <summary>Each car's last pass outside its own racing (between races, before the green, or before its release), and how many passes in a row have come within ParkedRepeatGapMs of the one before. Kept across starts - see ClearJumpStartWindow.</summary>
     private readonly Dictionary<string, (long LastMs, int InARow)> _sightingsBeforeGreen = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Cars already logged as sitting on the loop this start, so it is said once.</summary>
@@ -2458,6 +2633,12 @@ public sealed class RaceControlSession
     /// seen at least twice just before, a couple of seconds apart, is taken
     /// to be sitting there. A car moved ONTO the loop during the countdown
     /// is flagged at its first pass, as before.
+    ///
+    /// Also asked after the green, for a car whose staggered or hand release
+    /// has not come yet - it is still before ITS green. The run carries on
+    /// from the countdown's (and from passes between races, which are
+    /// counted by <see cref="CountSightingInARow"/>), so a car that has sat
+    /// on the loop all along is recognised however the start was begun.
     /// </remarks>
     private bool NoteSightingBeforeGreen(string transponderId, long deviceTimeMs)
     {
@@ -2466,14 +2647,7 @@ public sealed class RaceControlSession
             return false;
         }
 
-        // A clock that went backwards (a reconnect) starts the run again.
-        var inARow = _sightingsBeforeGreen.TryGetValue(transponderId, out var seen)
-                     && deviceTimeMs > seen.LastMs
-                     && deviceTimeMs - seen.LastMs <= ParkedRepeatGapMs
-            ? seen.InARow + 1
-            : 1;
-
-        _sightingsBeforeGreen[transponderId] = (deviceTimeMs, inARow);
+        var inARow = CountSightingInARow(transponderId, deviceTimeMs);
 
         if (inARow < ParkedSightingsInARow)
         {
@@ -2488,6 +2662,32 @@ public sealed class RaceControlSession
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Records a pass in the car's run of sightings and returns how long the
+    /// run now is. Says nothing and flags nothing - used on its own between
+    /// races, and by <see cref="NoteSightingBeforeGreen"/> before a start.
+    /// </summary>
+    private int CountSightingInARow(string transponderId, long deviceTimeMs)
+    {
+        if (string.IsNullOrWhiteSpace(transponderId))
+        {
+            return 0;
+        }
+
+        // A clock that went backwards (a reconnect) starts the run again, and
+        // so does any gap longer than a parked car's repeat - which is also
+        // why an entry left over from long ago can never count towards a
+        // run now.
+        var inARow = _sightingsBeforeGreen.TryGetValue(transponderId, out var seen)
+                     && deviceTimeMs > seen.LastMs
+                     && deviceTimeMs - seen.LastMs <= ParkedRepeatGapMs
+            ? seen.InARow + 1
+            : 1;
+
+        _sightingsBeforeGreen[transponderId] = (deviceTimeMs, inARow);
+        return inARow;
     }
 
     // ---------------------------------------------------------------
@@ -2644,12 +2844,21 @@ public sealed class RaceControlSession
     /// <summary>
     /// Whether this driver is under way yet.
     ///
-    /// A hand-released start is the one case where an unknown driver is NOT
-    /// released: with no schedule entry there is nothing saying they were let
-    /// go, and treating silence as "released" would make the whole mode do
-    /// nothing. Every other start type releases anyone it has no entry for,
-    /// so a car that was never on the grid still races rather than being
-    /// silently ignored.
+    /// A hand-released start is the one case where a driver with no schedule
+    /// entry is NOT released: nothing says they were let go yet, and treating
+    /// silence as "released" would make the whole mode do nothing. Every
+    /// other start type releases anyone it has no entry for, so a car that
+    /// was never on the grid still races rather than being silently ignored.
+    ///
+    /// Only a car ON the grid is held, though. A car that is not - someone
+    /// who did not run in the race the grid was taken from, with no round
+    /// picked - was held as well, and nothing could ever let it go: it got
+    /// no row on the board to release it from, and Release All only goes
+    /// through the rows there. Its first crossing was called as a jump start
+    /// with the class penalty, and every crossing after it was dropped, so
+    /// the driver ran the whole race and was missing from the result. Such a
+    /// car is timed from the green instead, the same as in every other start
+    /// type.
     /// </summary>
     public bool IsReleased(string transponderId)
     {
@@ -2658,7 +2867,9 @@ public sealed class RaceControlSession
             return false;
         }
 
-        if (HandReleaseArmed && !_releaseOffsetsMs.ContainsKey(transponderId))
+        if (HandReleaseArmed
+            && !_releaseOffsetsMs.ContainsKey(transponderId)
+            && _grid.Contains(transponderId, StringComparer.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -2869,6 +3080,22 @@ public sealed class RaceControlSession
             return;
         }
 
+        // Between races the pass means nothing, but it is still counted
+        // towards the car's run of sightings - silently, nothing is said or
+        // flagged. A countdown can be started straight from here without
+        // Stage, and a car left on the loop since the last race used to
+        // arrive at that countdown with no history at all: its first pass
+        // was a run of one, it was called as a jump start and handed the
+        // class penalty - the very Rehearsal 3 call the parked check exists
+        // to stop. Counted here, its run is already long when the lights
+        // begin. See NoteSightingBeforeGreen for why an old entry cannot
+        // mark a car that has only just arrived.
+        if ((State is RaceState.Idle or RaceState.Finished) && !lap.IsSynthetic)
+        {
+            CountSightingInARow(lap.TransponderId, lap.DeviceTimeMs);
+            return;
+        }
+
         if (State != RaceState.Racing || Flag == FlagState.Red || _raceStartDeviceTimeMs is null)
         {
             return; // not actively racing - ignore passes
@@ -2878,9 +3105,23 @@ public sealed class RaceControlSession
         // one crossing before the green has. Ghosts run to their own clock
         // and are never held. Standard starts never reach the body of this:
         // with no schedule, IsReleased is true for everyone from the green.
+        //
+        // That includes the parked-on-the-loop check. A car waiting for its
+        // staggered (or hand) release sits on its grid slot for seconds
+        // after the green, and if that slot is on the loop the decoder goes
+        // on reporting it every two seconds. Its first report after the
+        // green used to be booked as a jump - call, red row, class penalty -
+        // even though the countdown had just logged it as parked and let it
+        // be. Its run of sightings carries on from the countdown's, so a car
+        // already parked stays parked, and one that arrives on the loop now
+        // is flagged at its first pass exactly as it would have been in the
+        // countdown. No crossing time is passed: the green has already
+        // credited whatever start laps it was going to, and held starts
+        // never get one.
         if (!lap.IsSynthetic && !IsReleased(lap.TransponderId))
         {
-            RegisterJumpStart(lap.TransponderId);
+            var parkedOnTheLoop = NoteSightingBeforeGreen(lap.TransponderId, lap.DeviceTimeMs);
+            RegisterJumpStart(lap.TransponderId, parkedOnTheLoop: parkedOnTheLoop);
             return;
         }
 
@@ -2932,6 +3173,15 @@ public sealed class RaceControlSession
                 StartPosition = StartPositionOf(lap.TransponderId),
             };
             _standings[lap.TransponderId] = standing;
+
+            // Every car on a hand-released grid has had a row since the
+            // green, so a new row here is a car that was not on it. Said in
+            // the log, so the director knows why it was never held - see
+            // IsReleased.
+            if (HandReleaseArmed && !lap.IsSynthetic)
+            {
+                Log($"{lap.TransponderId} was not on the hand-released grid - timed from the green.");
+            }
         }
 
         // Where this driver's own race began.

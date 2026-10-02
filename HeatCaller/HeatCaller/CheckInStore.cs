@@ -105,8 +105,11 @@ public sealed class CheckInStore
         }
         catch (Exception ex)
         {
-            SafeFile.PreserveUnreadable(FilePath, ex);
-            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal));
+            // Could not be read at all: start empty rather than refusing to
+            // open, but never save over it this session (see
+            // LoadedUnreadable).
+            var hold = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
+            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)) { LoadedUnreadable = hold };
         }
 
         // Current format first, recognised by the Events object rather than
@@ -140,6 +143,7 @@ public sealed class CheckInStore
         // Both land in the legacy event, which is where everything that
         // pre-dates events belongs.
         var legacy = new Sheet();
+        var unreadable = false;
 
         try
         {
@@ -170,19 +174,45 @@ public sealed class CheckInStore
             catch (Exception ex)
             {
                 // Unreadable in every shape: start empty rather than
-                // refusing to open.
-                SafeFile.PreserveUnreadable(FilePath, ex);
+                // refusing to open - but, when no copy of it could be kept,
+                // never save over it this session (see LoadedUnreadable).
+                unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
             }
         }
 
         return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)
         {
             [RaceEventStore.LegacyEventId] = legacy,
-        });
+        })
+        {
+            LoadedUnreadable = unreadable,
+        };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read, or was
+    /// damaged and no copy of it could be kept - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every race day's
+    /// check-in sheet, which "Race days attended" and who raced at which
+    /// round are counted from: nothing anybody could type back in. It used
+    /// to be loaded as empty and then written over whole at the first
+    /// check-in at the desk, so a backup or sync tool holding it open for a
+    /// moment at launch was enough to lose every earlier event's attendance.
+    /// Tonight's check-ins still work in memory for the rest of the session;
+    /// they are just not saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's sheets would replace every other event's. The
+        // console has already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var file = new CheckInFile();
 
         foreach (var (eventId, sheet) in _sheets)
@@ -271,9 +301,25 @@ public sealed class CheckInStore
     /// <summary>Who was checked in at a given event. The question the old global list could not answer.</summary>
     public IReadOnlyList<string> CheckedInAt(string eventId) => SheetFor(eventId).CheckedIn.ToList();
 
-    /// <summary>How many events this driver has been checked in at - attendance, for standings and awards.</summary>
-    public int EventsAttended(string transponder) =>
-        _sheets.Count(pair => pair.Value.CheckedIn.Contains(transponder));
+    /// <summary>
+    /// How many events this driver has been checked in at - attendance, for
+    /// standings and awards.
+    ///
+    /// eventExists says which sheets still belong to a race day. A deleted
+    /// day's sheet is deliberately kept here (see AdoptOrphans) so that
+    /// undoing the delete brings its check-ins back, but until then the day
+    /// is gone as far as the club is concerned. Counting every sheet made a
+    /// test day that was created, filled and deleted still add one to
+    /// "Race days attended" on each of its drivers' profiles. The store
+    /// cannot answer the question itself - it does not know the event store
+    /// and should not have to know its load order - so the caller passes the
+    /// check in. Leaving it out keeps the old count-everything behavior for
+    /// callers that have no event store to hand.
+    /// </summary>
+    public int EventsAttended(string transponder, Func<string, bool>? eventExists = null) =>
+        _sheets.Count(pair =>
+            (eventExists is null || eventExists(pair.Key))
+            && pair.Value.CheckedIn.Contains(transponder));
 
     /// <summary>
     /// Moves every sheet that has no event onto the legacy one.
@@ -288,8 +334,9 @@ public sealed class CheckInStore
     /// runs on every launch, deleting an event (or undoing its creation)
     /// poured its check-ins into the legacy sheet the next time
     /// the app opened. A sheet whose event has gone is left where it is:
-    /// nothing shows it, and it comes back with the event if the delete is
-    /// undone.
+    /// nothing shows it (EventsAttended skips it when the caller passes the
+    /// event store's answer), and it comes back with the event if the delete
+    /// is undone.
     /// </summary>
     public void AdoptOrphans()
     {

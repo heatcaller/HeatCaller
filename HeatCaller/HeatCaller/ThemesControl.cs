@@ -769,10 +769,18 @@ public sealed class ThemesControl : UserControl
 
         _previewCts.Cancel();
 
-        // A line already handed to the voice queue would otherwise play on
-        // after Stop. Race-priority lines are kept - nothing here queued any.
-        Announcer?.StopAllPendingAudio();
-
+        // The announcer's queue is deliberately left alone. This used to call
+        // StopAllPendingAudio, to stop a preview line already handed to the
+        // voice queue from playing on after Stop. It never did that: the
+        // preview speaks through SpeakReminder, and Reminder is one of the
+        // priority types StopAllPendingAudio keeps. What it DID clear was the
+        // live race's - the countdown ticks, every queued lap time and fast
+        // lap, and the pending lap batches - so stopping a preview, or
+        // Apply / Edit / Delete while one played, during a heat silently
+        // dropped calls for the drivers on track. The preview's own sounds
+        // stop with the token above, and it queues at most one line at a
+        // time (it waits for each to be spoken), so at worst that one line
+        // finishes.
         if (_previewButton is { IsDisposed: false })
         {
             _previewButton.Text = "Preview";
@@ -947,7 +955,16 @@ public sealed class ThemesControl : UserControl
               + (edited.Id == _themeStore.ActiveThemeId ? " Apply it again to use the changes." : string.Empty);
     }
 
-    private void StopPreviewFromEditor() => Announcer?.StopAllPendingAudio();
+    /// <summary>
+    /// The editor's "stop the voice" hook when its preview stops. Nothing to
+    /// do: it used to clear the announcer's queue, which never removed the
+    /// preview's own line (a Reminder, which is kept) but did throw away a
+    /// live race's countdown ticks and lap calls - see StopPreview. The
+    /// editor cancels its own preview token, which stops the sounds.
+    /// </summary>
+    private void StopPreviewFromEditor()
+    {
+    }
 
     // ------------------------------------------------------------ voice lines
 

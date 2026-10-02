@@ -332,12 +332,36 @@ public sealed class EventsControl : UserControl
         // "Start a Race Day" under it. Nothing can join a closed day
         // wherever it is current, because every build refuses it by name.
         var previousActiveId = _events.Active?.Id;
+
+        // Whether the day being left was open at the moment of the switch.
+        // The undo below must tell "closed since the switch" apart from
+        // "already closed when it was current": the second is the very
+        // case the comment above supports (a closed day switched to so its
+        // results can be looked at), and refusing to go back to it would
+        // spend the undo while leaving the new day current.
+        var previousWasOpen = _events.Active?.IsOpen ?? false;
         _undo.Capture("Switch to another race day", () =>
         {
             // SetActive, not a restore, so check-in, tech and the run sheet
             // follow. A race day deleted since cannot be made current
-            // again; one closed since is left closed.
-            if (previousActiveId is null || _events.Get(previousActiveId) is { IsOpen: true })
+            // again; one closed since the switch is left alone rather than
+            // pointed back at. One that was closed already when it was
+            // current goes back to being current and closed, exactly as it
+            // was - making it current never reopens it.
+            //
+            // And only while the day switched to is still the current one.
+            // If another day has been made current since (tonight's new day
+            // started from the Calendar, or a day opened from the phone),
+            // that later choice stands: undoing this older switch must not
+            // take the club off tonight's day and send its check-ins and
+            // new rounds to the day before. A later undo that refused (and
+            // was spent) can leave this entry next on the stack, which is
+            // exactly how it would be reached. The Setup picker's undo and
+            // the phone's day-open check the same thing.
+            var stillOnSwitchedDay = _events.Active?.Id == raceEvent.Id;
+            if (stillOnSwitchedDay
+                && (previousActiveId is null
+                    || _events.Get(previousActiveId) is { } previous && (previous.IsOpen || !previousWasOpen)))
             {
                 _events.SetActive(previousActiveId);
             }
@@ -397,12 +421,31 @@ public sealed class EventsControl : UserControl
         {
             var closedAtUtc = raceEvent.FinishedUtc;
 
+            // A closed day can be the current one (MakeActive switches to
+            // closed days on purpose), and reopening it leaves it current.
+            // Close, below, clears "current" whenever the day it closes is
+            // current, so without remembering this the undo would put the
+            // day back to closed AND drop check-in, tech and the run sheet
+            // onto the legacy holder - not the state before the reopen.
+            var wasActive = _events.Active?.Id == eventId;
+
             _undo.Capture($"Reopen {raceEvent.DisplayName}", () =>
             {
                 // Close rather than setting the date, so that an event made
                 // active since it was reopened stops being active - and
                 // with the time it was really closed, not now.
                 _events.Close(eventId, closedAtUtc);
+
+                // Current again only if it was current before the reopen
+                // and nothing else has been made current in the meantime -
+                // the same rule as the undo of Close above. Close has just
+                // cleared "current", so Active is null exactly when this
+                // day was still the current one.
+                if (wasActive && _events.Active is null && _events.Get(eventId) is not null)
+                {
+                    _events.SetActive(eventId);
+                }
+
                 RefreshGrid();
             });
 
@@ -539,6 +582,13 @@ public sealed class EventEditForm : Form
         _txtName.PlaceholderText = "Spring Regional, Club Night 12 Sept...";
 
         _txtNotes.Multiline = true;
+
+        // Enter starts a new line here, as in every other notes box in the
+        // app. Without it the form's AcceptButton takes Enter, so Save
+        // fired and the dialog closed on a half-typed note, and a line
+        // break could never be typed at all. Enter in the name box still
+        // saves.
+        _txtNotes.AcceptsReturn = true;
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
 

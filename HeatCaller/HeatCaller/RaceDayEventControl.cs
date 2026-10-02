@@ -202,6 +202,12 @@ public sealed class RaceDayEventControl : UserControl
     /// <summary>Set while the picker is being rebuilt, so that does not count as a choice.</summary>
     private bool _loading;
 
+    /// <summary>
+    /// The current day as of the last RefreshAll, so the next one can tell
+    /// whether the current day has changed in between. See RefreshAll.
+    /// </summary>
+    private string? _lastSeenCurrentId;
+
     /// <summary>One event in the picker, rendered the way it reads in a list.</summary>
     private sealed record Choice(RaceEvent Event)
     {
@@ -745,17 +751,53 @@ public sealed class RaceDayEventControl : UserControl
 
         _editBaseline = null;
 
-        if (Selected is not { IsLegacy: false } raceEvent)
+        if (Selected is not { IsLegacy: false } selected)
         {
             return;
         }
 
-        if (!WriteFieldsTo(raceEvent))
+        // Write onto the store's own copy of the day where there is one, so
+        // a change made to it by something else (the phone, mostly) is the
+        // starting point rather than whatever copy the picker happens to
+        // hold. A day deleted since falls back to the picker's copy, as
+        // before.
+        var raceEvent = _events.Get(selected.Id) ?? selected;
+        var liveBefore = System.Text.Json.JsonSerializer.Serialize(raceEvent);
+
+        // Only the fields the person actually changed since the run began
+        // are written, not every field on the page. The page's controls
+        // still show the day as it was when the run began, so copying all
+        // of them would quietly put back anything changed underneath in
+        // the meantime: a marshal's phone adding a class or changing the
+        // heat size while the director types a note was told "Saved." and
+        // then reverted by the note's save, with nothing on the laptop to
+        // say so. So the controls are written onto a copy of the baseline,
+        // and only what differs between the two is carried onto the day.
+        var baseline = System.Text.Json.JsonSerializer.Deserialize<RaceEvent>(before);
+        var onScreen = System.Text.Json.JsonSerializer.Deserialize<RaceEvent>(before);
+
+        if (baseline is null || onScreen is null)
+        {
+            // Cannot happen for a baseline this class serialized itself,
+            // but if it ever did, the old whole-page write is the fallback.
+            WriteFieldsTo(raceEvent);
+        }
+        else
+        {
+            WriteFieldsTo(onScreen);
+            MergeChangedFields(raceEvent, baseline, onScreen);
+        }
+
+        if (System.Text.Json.JsonSerializer.Serialize(raceEvent) == liveBefore)
         {
             return;
         }
 
-        CaptureUndo(raceEvent, before);
+        // The undo puts back the day as it was just before THIS write, not
+        // the baseline: nothing from this page writes between the two, so
+        // they only differ when something else changed the day meanwhile,
+        // and undoing the note must not undo the phone's change with it.
+        CaptureUndo(raceEvent, liveBefore);
 
         _events.Upsert(raceEvent);
 
@@ -764,6 +806,106 @@ public sealed class RaceDayEventControl : UserControl
         // typed in. Only the parts that report the day are redrawn.
         RefreshStatus();
         ShowSavedNote();
+    }
+
+    /// <summary>
+    /// Carries onto <paramref name="target"/> each field this tab writes
+    /// whose value in <paramref name="onScreen"/> differs from
+    /// <paramref name="baseline"/> - that is, each field the person changed
+    /// since the edit run began. Every other field keeps the value
+    /// <paramref name="target"/> has now, so a change made to the day by
+    /// something else in the meantime survives the save.
+    ///
+    /// The field list matches WriteFieldsTo and SameSettings; a field added
+    /// to those belongs here too.
+    /// </summary>
+    internal static void MergeChangedFields(RaceEvent target, RaceEvent baseline, RaceEvent onScreen)
+    {
+        if (onScreen.Name != baseline.Name)
+        {
+            target.Name = onScreen.Name;
+        }
+
+        if (onScreen.Notes != baseline.Notes)
+        {
+            target.Notes = onScreen.Notes;
+        }
+
+        if (onScreen.VenueName != baseline.VenueName)
+        {
+            target.VenueName = onScreen.VenueName;
+        }
+
+        if (onScreen.TrackLayoutName != baseline.TrackLayoutName)
+        {
+            target.TrackLayoutName = onScreen.TrackLayoutName;
+        }
+
+        if (onScreen.Shape != baseline.Shape)
+        {
+            target.Shape = onScreen.Shape;
+        }
+
+        if (onScreen.QualifyingRounds != baseline.QualifyingRounds)
+        {
+            target.QualifyingRounds = onScreen.QualifyingRounds;
+        }
+
+        if (onScreen.FirstRaceLocalTime != baseline.FirstRaceLocalTime)
+        {
+            target.FirstRaceLocalTime = onScreen.FirstRaceLocalTime;
+        }
+
+        // 0 means the day never set its own heat size; the page then shows
+        // the one it would build with (RaceEventStore.HeatSizeFor) without
+        // writing it. As with AutoAdvanceRounds below: that displayed value
+        // is written as the day takes ownership of it, but never over a size
+        // something else (the phone) has written onto the day since.
+        if (onScreen.DriversPerHeat != baseline.DriversPerHeat
+            && (baseline.DriversPerHeat != 0 || target.DriversPerHeat == 0))
+        {
+            target.DriversPerHeat = onScreen.DriversPerHeat;
+        }
+
+        if (onScreen.CheckedInDriversOnly != baseline.CheckedInDriversOnly)
+        {
+            target.CheckedInDriversOnly = onScreen.CheckedInDriversOnly;
+        }
+
+        // A day that had never set this (null, following the club-wide
+        // setting) reads as the club default on the page, so every save
+        // used to write that default onto it. That still happens - it is
+        // how the day comes to own the setting - but not over a choice
+        // something else has written onto the day since: an explicit on or
+        // off outranks a default the page merely displayed.
+        if (onScreen.AutoAdvanceRounds != baseline.AutoAdvanceRounds
+            && (baseline.AutoAdvanceRounds is not null || target.AutoAdvanceRounds is null))
+        {
+            target.AutoAdvanceRounds = onScreen.AutoAdvanceRounds;
+        }
+
+        // Scope and class go together: they are one choice in one list.
+        if (onScreen.AutoAdvanceScope != baseline.AutoAdvanceScope
+            || onScreen.AutoAdvanceClassName != baseline.AutoAdvanceClassName)
+        {
+            target.AutoAdvanceScope = onScreen.AutoAdvanceScope;
+            target.AutoAdvanceClassName = onScreen.AutoAdvanceClassName;
+        }
+
+        // As a set, ignoring case: the page lists the ticks in the club's
+        // class order, so a day whose classes were saved in another order
+        // (from the phone) read as changed on every save and reverted any
+        // class change made meanwhile.
+        if (!(onScreen.ClassNames ?? new List<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals(baseline.ClassNames ?? new List<string>()))
+        {
+            target.ClassNames = (onScreen.ClassNames ?? new List<string>()).ToList();
+        }
+
+        if (onScreen.ChampionshipId != baseline.ChampionshipId)
+        {
+            target.ChampionshipId = onScreen.ChampionshipId;
+        }
     }
 
     /// <summary>Flushes a pending edit before something reloads the fields underneath it.</summary>
@@ -808,7 +950,27 @@ public sealed class RaceDayEventControl : UserControl
         // overwritten by the value it was about to replace.
         FlushPendingEdits();
 
-        var keep = Selected?.Id ?? _events.CurrentId;
+        // Which day to show after the rebuild. Normally the one already on
+        // show, so a refresh never yanks the picker off a day the person
+        // chose to look at. But when the CURRENT day has changed since the
+        // last refresh - New Race Day here, a new day from the wizard or the
+        // phone, Make Current, or an undo of any of those - the page follows
+        // it. Otherwise the picker stayed on last week's day while the rest
+        // of the app had moved on, and New Race Day then put the caret in
+        // the OLD day's name box, so typing tonight's name renamed last
+        // week's day instead.
+        //
+        // Only a real day is followed. Closing or deleting the current day
+        // leaves none current, which reads as the legacy holder, and that is
+        // never something to jump to (see the picker order below).
+        var currentId = _events.CurrentId;
+        var currentChanged = _lastSeenCurrentId is not null
+            && !string.Equals(currentId, _lastSeenCurrentId, StringComparison.Ordinal)
+            && !string.Equals(currentId, RaceEventStore.LegacyEventId, StringComparison.Ordinal);
+
+        _lastSeenCurrentId = currentId;
+
+        var keep = currentChanged ? currentId : Selected?.Id ?? currentId;
 
         _loading = true;
 
@@ -1259,6 +1421,15 @@ public sealed class RaceDayEventControl : UserControl
         var checkIns = _checkIns;
         var schedule = _schedule;
         var previousId = events.Active?.Id;
+
+        // Whether that day was open at the moment the new one was started.
+        // A closed day being current is a normal state - it is how its
+        // results are looked at, from the picker above or the Calendar - so
+        // the undo must tell "closed since" apart from "already closed when
+        // it was current". Only the first is refused; the second goes back
+        // to being current and closed, exactly as it was, the way the Race
+        // Days page's Switch undo does.
+        var previousWasOpen = events.Active?.IsOpen ?? false;
         RaceEvent? started = null;
 
         _undo?.Capture($"New race day {DateTime.Now:d MMM yyyy}", () =>
@@ -1282,7 +1453,9 @@ public sealed class RaceDayEventControl : UserControl
 
             events.Delete(live.Id);
 
-            if (wasCurrent && (previousId is null || events.Get(previousId) is { IsOpen: true }))
+            if (wasCurrent
+                && (previousId is null
+                    || events.Get(previousId) is { } dayBefore && (dayBefore.IsOpen || !previousWasOpen)))
             {
                 events.SetActive(previousId);
             }
@@ -1407,6 +1580,15 @@ public sealed class RaceDayEventControl : UserControl
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
                     current.ClassNames = (old.ClassNames ?? new List<string>()).ToList();
                     current.ChampionshipId = old.ChampionshipId;
+
+                    // WriteFieldsTo writes these three too, so an undo that
+                    // left them out would "succeed" after a change to "Start
+                    // the next race automatically" and change nothing. The
+                    // null is put back as well: a day that was following the
+                    // club-wide setting before this save follows it again.
+                    current.AutoAdvanceRounds = old.AutoAdvanceRounds;
+                    current.AutoAdvanceScope = old.AutoAdvanceScope;
+                    current.AutoAdvanceClassName = old.AutoAdvanceClassName;
                     events.Upsert(current);
                 }
 
@@ -1427,7 +1609,10 @@ public sealed class RaceDayEventControl : UserControl
         && a.DriversPerHeat == b.DriversPerHeat
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly
         && (a.ClassNames ?? new List<string>()).SequenceEqual(b.ClassNames ?? new List<string>(), StringComparer.Ordinal)
-        && a.ChampionshipId == b.ChampionshipId;
+        && a.ChampionshipId == b.ChampionshipId
+        && a.AutoAdvanceRounds == b.AutoAdvanceRounds
+        && a.AutoAdvanceScope == b.AutoAdvanceScope
+        && a.AutoAdvanceClassName == b.AutoAdvanceClassName;
 
     /// <summary>Redraws after an undo, if this tab is still there - the undo itself works on the store.</summary>
     private void RefreshAfterUndo()
@@ -1446,6 +1631,14 @@ public sealed class RaceDayEventControl : UserControl
             var previousId = events.Active?.Id;
             var newId = raceEvent.IsLegacy ? null : raceEvent.Id;
 
+            // Whether the day being left was open at the moment of the
+            // switch. The picker lists closed days too, and picking one is
+            // how its results are looked at, so the day being left may well
+            // have been closed already. The undo goes back to such a day;
+            // without this it skipped it, yet the entry was still spent and
+            // reported as undone while the new day stayed current.
+            var previousWasOpen = events.Active?.IsOpen ?? false;
+
             if (previousId != newId)
             {
                 _undo?.Capture($"Make '{raceEvent.DisplayName}' the current race day", () =>
@@ -1453,9 +1646,12 @@ public sealed class RaceDayEventControl : UserControl
                     // SetActive, so check-in, tech and the run sheet follow.
                     // Not onto a day closed or deleted since, and not once
                     // another day has been made current since - that later
-                    // choice stands.
+                    // choice stands. A day that was closed already when it
+                    // was current goes back to being current and closed;
+                    // making it current never reopens it.
                     if (events.Active?.Id == newId
-                        && (previousId is null || events.Get(previousId) is { IsOpen: true }))
+                        && (previousId is null
+                            || events.Get(previousId) is { } dayBefore && (dayBefore.IsOpen || !previousWasOpen)))
                     {
                         events.SetActive(previousId);
                     }
@@ -1528,10 +1724,30 @@ public sealed class RaceDayEventControl : UserControl
         {
             var closedAtUtc = raceEvent.FinishedUtc;
 
+            // A closed day can already be current here: picking any day in
+            // "Working on" makes it current, open or not. Close clears
+            // "current" whenever the day it closes is current, so an undo
+            // that only closed the day again would leave no day current at
+            // all - check-in, tech and the run sheet would drop onto the
+            // legacy holder - rather than putting things back the way they
+            // were before the reopen. The same rule as EventsControl.
+            var wasActive = string.Equals(events.Active?.Id, dayId, StringComparison.Ordinal);
+
             _undo?.Capture($"Reopen race day '{raceEvent.DisplayName}'", () =>
             {
                 // Close, with the time it was really closed.
                 events.Close(dayId, closedAtUtc);
+
+                // Current again only if it was current before the reopen
+                // and nothing else has been made current in the meantime -
+                // that later choice is not this undo's to take back. Close
+                // has just cleared "current" if this day held it, so Active
+                // is null exactly when nothing else has taken it since.
+                if (wasActive && events.Active is null && events.Get(dayId) is not null)
+                {
+                    events.SetActive(dayId);
+                }
+
                 RefreshAfterUndo();
             });
 

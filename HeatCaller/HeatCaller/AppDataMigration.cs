@@ -28,10 +28,11 @@ namespace HeatCaller;
 /// Backup zips in the backup folders get today's name prefix, so the
 /// Backups page keeps listing - and pruning - them.
 ///
-/// Nothing here is allowed to stop the app starting, with one exception:
-/// an older copy that is still running. Its files are open and it would go
-/// on writing to the old folder after the move, so the app says so and
-/// exits instead.
+/// Nothing here is allowed to stop the app starting, with two exceptions:
+/// an older copy that is still running - its files are open and it would go
+/// on writing to the old folder after the move - and a file that could not
+/// be moved out of the old data folder (see Run). In both the app says so
+/// and exits instead.
 /// </summary>
 internal static class AppDataMigration
 {
@@ -51,8 +52,9 @@ internal static class AppDataMigration
     public static string DataDirectory => Path.Combine(AppData, DataFolderName);
 
     /// <summary>
-    /// Does the whole job. False only when an older copy of the app is
-    /// still running - the caller should exit.
+    /// Does the whole job. False when an older copy of the app is still
+    /// running, or when some of the old data folder could not be moved -
+    /// the caller should exit.
     /// </summary>
     public static bool Run()
     {
@@ -69,9 +71,50 @@ internal static class AppDataMigration
 
         var problems = new List<string>();
 
-        MoveFolder(Path.Combine(AppData, LegacyNames.DataFolder), DataDirectory, problems);
+        var oldDataFolder = Path.Combine(AppData, LegacyNames.DataFolder);
+
+        MoveFolder(oldDataFolder, DataDirectory, problems);
         MoveFolder(Path.Combine(Documents, LegacyNames.ResultsFolder), Path.Combine(Documents, ResultsFolderName), problems);
         MoveFolder(Path.Combine(Documents, LegacyNames.BackupsFolder), Path.Combine(Documents, BackupsFolderName), problems);
+
+        // A file still in the old DATA folder - held open by a sync tool,
+        // antivirus or an Explorer preview through both the folder move and
+        // the file-by-file move after it - stops the app starting, rather
+        // than starting without it.
+        //
+        // Starting without it was not the harmless "tries again next time"
+        // it looked like. The app found no settings.json (or drivers, or
+        // history) in its new folder, started from defaults and saved them
+        // there - the first-run wizard does at once. The next start then
+        // found the file in both folders, kept the NEW folder's copy in use,
+        // as a merge must, and put the club's real one aside as "(older
+        // copy)": its settings, sealed keys and badge key quietly replaced
+        // by defaults for good. Exiting here means nothing is ever made in
+        // the new folder in that file's place, so the next start simply
+        // moves the rest across.
+        //
+        // The results and backups folders are not held to this: the app
+        // reads nothing from them at startup and makes nothing there under
+        // an old file's name.
+        //
+        // Also before UpdateSavedFiles: it marks the data folder done once
+        // every JSON file there is up to date, and a settings.json still to
+        // arrive would then never have its paths brought across.
+        if (StillHoldsFiles(oldDataFolder))
+        {
+            Log(problems);
+
+            AppDialog.Show(
+                "HeatCaller couldn't move all of your data into its own folder, so it hasn't started - starting "
+                + "without these files would mean starting with blank settings, drivers or results in their place:\r\n\r\n"
+                + string.Join("\r\n", problems.Take(8).Select(p => "- " + p))
+                + (problems.Count > 8 ? $"\r\n- ...and {problems.Count - 8} more (see crash.log)" : string.Empty)
+                + "\r\n\r\nSomething has them open - a sync or backup tool, antivirus, or a File Explorer window "
+                + "showing that folder. Close it (restarting the PC also works), then start HeatCaller again. "
+                + "Nothing has been deleted.",
+                "HeatCaller", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
 
         UpdateSavedFiles(problems);
 
@@ -94,6 +137,24 @@ internal static class AppDataMigration
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// True when the folder still has a file in it after the move - or
+    /// cannot even be looked into, which is no better: whatever is there
+    /// has not reached the new folder either.
+    /// </summary>
+    private static bool StillHoldsFiles(string folder)
+    {
+        try
+        {
+            return Directory.Exists(folder)
+                && Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Any();
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private static bool OlderCopyRunning()

@@ -24,7 +24,8 @@ internal enum CloudService
 ///
 /// Copies go into a "HeatCaller Backups" folder at the top of that storage.
 /// Automatic backups there are pruned to the same count as the local
-/// folder; manual ones are never deleted, the same rule as locally.
+/// folder; manual ones are never deleted, the same rule as locally. The
+/// rehearsal copy (see Rehearsal) never copies anything there.
 /// </summary>
 internal static class CloudBackup
 {
@@ -122,11 +123,41 @@ internal static class CloudBackup
     /// backup itself failed.
     /// </summary>
     public static IReadOnlyList<string> CopyToTargets(string backupPath, IReadOnlyList<Target> targets, int keepAutomatic)
+        => CopyToTargets(backupPath, targets, keepAutomatic, AppPaths.IsRehearsal);
+
+    /// <summary>
+    /// CopyToTargets with whether this run is the rehearsal copy passed in,
+    /// so a test can ask for either without switching the whole process
+    /// into a rehearsal.
+    /// </summary>
+    internal static IReadOnlyList<string> CopyToTargets(string backupPath, IReadOnlyList<Target> targets, int keepAutomatic, bool isRehearsal)
     {
         var results = new List<string>();
 
         foreach (var target in targets)
         {
+            // A rehearsal copy never touches the club's cloud storage.
+            //
+            // The rehearsal copies settings.json as it is, so the cloud
+            // switches the club turned on are on in the copy too - and the
+            // sync folders are found from this Windows user's profile, which
+            // is the same for a rehearsal as for the real app. Without this,
+            // a rehearsal's practice backup would be copied into the club's
+            // real "HeatCaller Backups" folder (and uploaded, where it would
+            // look like the club's newest backup), and the pruning below,
+            // which keeps only the newest few automatic backups, would delete
+            // the club's oldest real cloud backup to make room for it. That
+            // is the same harm BackupService.SafeBackupFolder keeps away from
+            // the local backup folder. Checked here, at the moment of
+            // copying, rather than by switching the settings off when the
+            // rehearsal is made, so a rehearsal folder made by an earlier
+            // version - with the switches still on - is covered as well.
+            if (isRehearsal)
+            {
+                results.Add($"Not copied to {target.Name}: this is the rehearsal copy of HeatCaller, whose backups stay in its own folder.");
+                continue;
+            }
+
             if (target.Folder is null)
             {
                 results.Add($"Not copied to {target.Name}: {AppNameOf(target.Service)} isn't installed or signed in on this PC.");

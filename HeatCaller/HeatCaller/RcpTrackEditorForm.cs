@@ -133,7 +133,7 @@ public sealed class RcpTrackEditorForm : Form
 
         _canvas.Design = existing?.Clone() ?? new RcpTrackDesign();
         _canvas.LapSeconds = averageLapSeconds is > 0 ? averageLapSeconds.Value : 12;
-        _canvas.DesignChanged += RefreshReadouts;
+        _canvas.DesignChanged += OnDesignChanged;
         _canvas.StatusChanged += message => _lblStatus.Text = message;
 
         var page = BuildLayout();
@@ -551,6 +551,15 @@ public sealed class RcpTrackEditorForm : Form
         _barBackdrop.Value = Math.Clamp(Result.BackdropOpacity, 5, 100);
         _barBackdrop.ValueChanged += (_, _) =>
         {
+            // Not while the panel is being brought back into line with the
+            // plan after an Undo or Redo (SyncSidePanel): the slider only
+            // goes from 5 to 100, so writing its value back would quietly
+            // change a plan whose opacity was saved outside that range.
+            if (_loading)
+            {
+                return;
+            }
+
             Result.BackdropOpacity = _barBackdrop.Value;
             _canvas.Invalidate();
         };
@@ -722,7 +731,13 @@ public sealed class RcpTrackEditorForm : Form
                 return;
             }
 
-            Result.RouteClosed = _chkClosedRoute.Checked;
+            // The plan's own lap setting is what is saved. This used to copy
+            // the checkbox into it here, and the checkbox could be behind the
+            // plan: Trace route closes the lap in the plan, and Undo or Redo
+            // bring back whatever the lap was then, so unticking the box and
+            // pressing Trace route drew a closed lap and saved an open one.
+            // The box now follows the plan (SyncSidePanel), and ticking it
+            // writes straight into the plan, so there is nothing to copy.
             DialogResult = DialogResult.OK;
             Close();
         };
@@ -846,7 +861,11 @@ public sealed class RcpTrackEditorForm : Form
 
     private void ClearAll()
     {
-        if (Result.IsEmpty)
+        // Markings and the line count as something to clear. IsEmpty is
+        // about whether there is a plan to show (floor and rails), so a
+        // plan holding only a line or markings is "empty" by it - and the
+        // Clear button used to do nothing at all for one.
+        if (Result.IsEmpty && Result.Decals.Count == 0 && Result.Route.Count == 0)
         {
             return;
         }
@@ -890,6 +909,83 @@ public sealed class RcpTrackEditorForm : Form
 
     private static string Sanitise(string name) =>
         string.Join("_", name.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// Whenever the canvas says the plan has changed: the side panel is put
+    /// back in line with the plan, then the readouts are worked out again.
+    /// </summary>
+    private void OnDesignChanged()
+    {
+        SyncSidePanel();
+        RefreshReadouts();
+    }
+
+    /// <summary>
+    /// Shows on the side panel what the plan being drawn actually holds for
+    /// the tile size, the photo's opacity, the lap and the kit. The canvas
+    /// changes those itself: Undo and Redo swap in a whole copy of the plan
+    /// taken earlier, with the size, kit, opacity and lap it had then, and
+    /// Trace route closes the lap. The panel used to go on showing what was
+    /// last picked on it - after laying a tile, choosing 30 cm and pressing
+    /// Ctrl+Z, the box said 300 while the plan, its readouts and the saved
+    /// file went by 500. Done with _loading set, so the controls' own
+    /// handlers leave the plan alone while they are moved, and each control
+    /// is only touched when it is wrong, so nothing flickers on an ordinary
+    /// stroke. Runs on the UI thread, as the canvas raises DesignChanged
+    /// from its own mouse, key and button handling.
+    /// </summary>
+    private void SyncSidePanel()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            var tileSize = (decimal)Math.Clamp(Result.TileSizeMm, 100, 2000);
+
+            if (_numTileSize.Value != tileSize)
+            {
+                _numTileSize.Value = tileSize;
+            }
+
+            var opacity = Math.Clamp(Result.BackdropOpacity, _barBackdrop.Minimum, _barBackdrop.Maximum);
+
+            if (_barBackdrop.Value != opacity)
+            {
+                _barBackdrop.Value = opacity;
+            }
+
+            if (_chkClosedRoute.Checked != Result.RouteClosed)
+            {
+                _chkClosedRoute.Checked = Result.RouteClosed;
+            }
+
+            // A kit the list doesn't know (no kit, or one saved by another
+            // version) shows as "Don't check", as it does when the window
+            // opens; the plan keeps the name it has either way.
+            var kitIndex = string.IsNullOrWhiteSpace(Result.KitName) ? 0 : _cmbKit.Items.IndexOf(Result.KitName);
+
+            if (kitIndex < 0)
+            {
+                kitIndex = 0;
+            }
+
+            if (_cmbKit.SelectedIndex != kitIndex)
+            {
+                _cmbKit.SelectedIndex = kitIndex;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        HighlightTileSize();
+    }
 
     private void RefreshReadouts()
     {

@@ -2097,7 +2097,17 @@ export class Relay {
       let mine = others.reduce((sum, item) => sum + item.bytes, 0) + bytes;
       const mineVictims: string[] = [];
 
-      for (const item of others) {
+      // Oldest by id, not by when it was written. The only such channel is
+      // resultsindex, keyed by calendar year, and its promise is that the
+      // oldest YEAR makes way. `at` is the file's last write, and the
+      // laptop republishes an old year whenever one of its sessions is
+      // edited or deleted - so ordering by it made 2019 the newest the
+      // moment a stray 2019 heat was deleted, and the next overflow took
+      // 2021 instead, a season the laptop never knew to send again.
+      // Four-digit years sort as text the way they do as numbers.
+      const byAge = [...others].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.at - b.at));
+
+      for (const item of byAge) {
         if (mine <= spec.ownBudget) {
           break;
         }
@@ -2989,12 +2999,13 @@ export class Relay {
       // pass from before the delete opens anything.
       this.passKeys.delete(club);
 
-      // And the voice's lines for this club - drivers' names, spoken - and
-      // its count for the month, which the voice keeps in a folder of its
-      // own rather than the club's, so the wipe above never touched them.
-      // A club asking to be forgotten means all of it. The month's count
-      // going too is no gift: the same token that could delete could have
-      // spent it, and the club gets its plan's allowance and no more.
+      // And the voice's lines for this club - drivers' names, spoken -
+      // which the voice keeps in a folder of its own rather than the
+      // club's, so the wipe above never touched them. The month's count,
+      // its history and any top-up stay: they hold no names, and the
+      // tenant is in the relay's config, so the same token works again at
+      // once. Wiping the count would give the club a fresh allowance on
+      // every delete and erase what it is billed by.
       await this.voice?.forget(club);
       this.forgetClubListings(club);
       this.forgetCheckin(club);
@@ -3373,8 +3384,43 @@ export class Relay {
     this.checkins.delete(club);
   }
 
+  /**
+   * One of the relay's own queue documents - INBOX, MANAGE_QUEUE or
+   * SIGNUP_BOX - as getSnapshot reads it, except that one which will never
+   * parse reads as empty.
+   *
+   * WHY. Every route that writes these documents reads them first, under
+   * the lock, and a corrupt file (left short by a power cut before it
+   * reached the disk - FileStore does not fsync - or by a hand edit) threw
+   * on that read every time. listen() answered 503 "try again", but
+   * nothing ever wrote a good file over the bad one, so check-in taps, the
+   * race-day manager or sign-ups stayed broken on every race night after,
+   * until someone deleted the file on the server. Starting empty lets the
+   * next write replace it, as PinGuard and loadPassKey already do for
+   * theirs. What the bad file held is lost either way: taps a phone made
+   * are made again, and the laptop tells taps apart by their time as well
+   * as their number, so numbering from 1 again cannot be mistaken for
+   * taps it has applied.
+   *
+   * Only corruption. A file that could not be read this time (EIO, EMFILE,
+   * a permission) still throws, because it may read next time and writing
+   * an empty queue over it would throw away what it holds.
+   */
+  private async queueSnapshotOf(club: string, name: string): Promise<StoredDocument | undefined> {
+    try {
+      return await this.store.getSnapshot(club, name);
+    } catch (error) {
+      if (error instanceof StoreReadError && error.corrupt) {
+        this.log(`[relay] "${club}": its ${name} document is not readable JSON; starting it again empty.`);
+        return undefined;
+      }
+
+      throw error;
+    }
+  }
+
   private async inboxOf(club: string): Promise<Inbox> {
-    const doc = await this.store.getSnapshot(club, INBOX);
+    const doc = await this.queueSnapshotOf(club, INBOX);
     const body = isPlainObject(doc?.body) ? doc.body : undefined;
     const next = body?.["next"];
     const items = body?.["items"];
@@ -3471,7 +3517,7 @@ export class Relay {
 
   /** The club's manage tunnel - requests waiting for the laptop, answers waiting for a phone - cleaned the same way inboxOf cleans the check-in inbox. */
   private async manageQueueOf(club: string): Promise<ManageQueue> {
-    const doc = await this.store.getSnapshot(club, MANAGE_QUEUE);
+    const doc = await this.queueSnapshotOf(club, MANAGE_QUEUE);
     const body = isPlainObject(doc?.body) ? doc.body : undefined;
     const pending = body?.["pending"];
     const answers = body?.["answers"];
@@ -3874,7 +3920,7 @@ export class Relay {
    * sign-up is forgotten on time even when nothing is written for weeks.
    */
   private async signupBoxOf(club: string): Promise<SignupItem[]> {
-    const doc = await this.store.getSnapshot(club, SIGNUP_BOX);
+    const doc = await this.queueSnapshotOf(club, SIGNUP_BOX);
     const body = isPlainObject(doc?.body) ? doc.body : undefined;
     const items = body?.["items"];
     const now = this.now().getTime();
@@ -3882,6 +3928,22 @@ export class Relay {
     return (Array.isArray(items) ? items : [])
       .map(signupItemFrom)
       .filter((item): item is SignupItem => item !== undefined && now - signupItemAge(item) < SIGNUP_KEEP_MS);
+  }
+
+  /**
+   * The pass key for sign-in and the status poll - but only when there is a
+   * signup document or a held sign-up to make passes for, as checkinOf and
+   * currentManage do for theirs. Both routes answer anyone, with no
+   * credentials, and making the key writes passkey.json: before this, a
+   * club that had just deleted everything got its folder back from the
+   * first stranger to POST {} at either one, and every configured club that
+   * had never used sign-up grew a file the same way. With neither a
+   * document nor a held sign-up, signupByPass has no hash to compare a
+   * pass against, so the empty key is never used to make or check one -
+   * both routes go on to answer "not open" exactly as before.
+   */
+  private async signupKeyOf(club: string, view: SignupView | undefined, box: readonly SignupItem[]): Promise<Buffer> {
+    return view !== undefined || box.length > 0 ? await this.passKeyOf(club) : Buffer.alloc(0);
   }
 
   /**
@@ -3964,20 +4026,81 @@ export class Relay {
       return;
     }
 
-    const [view, box, key] = await Promise.all([this.currentSignup(club), this.signupBoxOf(club), this.passKeyOf(club)]);
+    const [view, box] = await Promise.all([this.currentSignup(club), this.signupBoxOf(club)]);
+    const key = await this.signupKeyOf(club, view, box);
     const now = this.now().getTime();
     const pass = typeof body["pass"] === "string" ? (body["pass"] as string) : "";
     const offered = normaliseInviteCode(typeof body["pin"] === "string" ? (body["pin"] as string) : "");
 
+    // Six digits or eight: the laptop's invites are eight, shown as
+    // "1234 5678", and normaliseInviteCode has already taken out the space.
+    // Anything else is answered and counted further down exactly as a wrong
+    // code, the same treatment check-in gives a badly-shaped PIN - and is
+    // never hashed, since it cannot be any invite's code.
+    const wellFormed = /^[0-9]{6,8}$/.test(offered);
+
+    // The typed code's hash, worked out at most once per request. Once the
+    // laptop has published a salt it is a 100,000-round PBKDF2 - about a
+    // tenth of a second with the whole relay waiting on it - so it must
+    // only ever be paid for a request the PIN limits below can see and
+    // count, or for a phone holding a pass this relay really issued.
+    // Nothing else may reach it: before this was so, any made-up pass with
+    // any code beside it cost a hash ahead of every limit, 300 a minute
+    // per address per club, and a single connection could stall every
+    // club's live timing.
+    let typedHash: string | undefined;
+
+    // Set when the pass branch hashed the typed code and it was NOT the
+    // pass's own - the only case the club-lock branch below counts.
+    let passMismatch = false;
+    const hashOfTyped = (): string => (typedHash ??= inviteHashFor(club, offered, view, box));
+
     if (PASS.test(pass)) {
+      // The pass alone first: a few HMACs, nothing slow. Only a pass that
+      // opens something here is worth comparing with the code at all.
+      const byPass = this.signupByPass(club, key, view, box, pass);
+
       // With a code beside it, the pass counts only if it is that code's
       // own. A phone still holding the pass from an earlier invite - a
       // driver signing up a second child with a second invite - must be
-      // taken to the new one, not shown the old one's answer again.
-      const mine = offered === "" ? undefined : inviteHashFor(club, offered, view, box);
-      const h = mine === undefined
-        ? this.signupByPass(club, key, view, box, pass)
-        : sameHash(pass, keyedPass(key, "signup", club, mine)) ? mine : undefined;
+      // taken to the new one, not shown the old one's answer again. So the
+      // code is hashed here, but only for a real pass (which takes having
+      // signed in with a real code once) and only for a code that could be
+      // one. Not held back for a connection shut out for wrong codes: at a
+      // track a whole paddock shares one address, and a phone that has
+      // signed in carries on through a block somebody else's guessing
+      // caused. A code that is not the pass's own is judged further down,
+      // guarded and counted as ever, reusing this same hash.
+      let h: string | undefined;
+
+      if (offered === "") {
+        h = byPass;
+      } else if (byPass !== undefined && wellFormed) {
+        // But never while this connection is shut out for wrong codes or
+        // the club's sign-up is locked. A code that is not the pass's own
+        // would only be refused with a 429 further down, and once this
+        // address is blocked that refusal counts nothing - so a pass holder
+        // looping wrong codes paid a slow hash every time for free, 300 a
+        // minute per address, and a couple of addresses could hold the
+        // event loop for every club. While shut out the pass is simply
+        // taken at its word, as if no code were beside it: a phone
+        // reopening its own invite link still gets its answer, which is
+        // the paddock case the paragraph above protects, and nothing is
+        // hashed. The one thing given up is the second-child case, which
+        // shows the first sign-up again until the block lifts - better
+        // than a stalled relay, and the code is judged properly then.
+        // ready() is awaited here, and nothing awaits between these
+        // checks and the hash, so a burst is judged against the count as
+        // it stands.
+        await this.signupPinGuard.ready(club);
+
+        if (this.signupPinFailures.blocked(who) || this.signupPinGuard.lockedUntilNow(club) > 0) {
+          h = byPass;
+        } else {
+          h = hashOfTyped() === byPass ? byPass : undefined;
+          passMismatch = h === undefined;
+        }
+      }
 
       // A pass is good for a sign-up held, or an invite still usable. One
       // for an invite that has since expired is simply not used, and the
@@ -4016,6 +4139,19 @@ export class Relay {
       const minutes = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
       const wait = minutes <= 90 ? `${minutes} minute${minutes === 1 ? "" : "s"}` : `${Math.round(minutes / 60)} hours`;
 
+      // The pass branch above does not hash while the club is locked, so
+      // this is only reached with a hash paid when the lock came on in the
+      // moment between (a guess from elsewhere landing during the await).
+      // A pass holder whose code was hashed above and turned out not to be
+      // the pass's own still cost a slow hash, and the club lock means it
+      // is not judged or counted below. Count it against this connection
+      // alone (not the club, whose lock is already on).
+      // A pass's own code that simply arrived after its invite expired is
+      // right, not a guess, and is not counted - as it is not without a lock.
+      if (passMismatch) {
+        this.signupPinFailures.hit(who);
+      }
+
       sendJson(response, 429, {
         ok: false,
         error:
@@ -4025,12 +4161,10 @@ export class Relay {
       return;
     }
 
-    // Six digits or eight: the laptop's invites are eight, shown as
-    // "1234 5678", and normaliseInviteCode has already taken out the space.
-    // Anything else is answered and counted exactly as a wrong code, the
-    // same treatment check-in gives a badly-shaped PIN.
-    const wellFormed = /^[0-9]{6,8}$/.test(offered);
-    const h = wellFormed ? inviteHashFor(club, offered, view, box) : "";
+    // wellFormed is worked out at the top. A badly-shaped code is answered
+    // and counted exactly as a wrong one; a well-formed one is hashed now -
+    // or not again, if the pass above already did.
+    const h = wellFormed ? hashOfTyped() : "";
 
     // A lookup by hash, as a racer PIN is found: the hash is what the
     // laptop published, not the code, and how much of one a guess matched
@@ -4075,7 +4209,8 @@ export class Relay {
       return;
     }
 
-    const [view, box, key] = await Promise.all([this.currentSignup(club), this.signupBoxOf(club), this.passKeyOf(club)]);
+    const [view, box] = await Promise.all([this.currentSignup(club), this.signupBoxOf(club)]);
+    const key = await this.signupKeyOf(club, view, box);
     const pass = typeof body["pass"] === "string" ? (body["pass"] as string) : "";
     const h = PASS.test(pass) ? this.signupByPass(club, key, view, box, pass) : undefined;
     const held = h !== undefined && box.some((item) => item.h === h);

@@ -224,7 +224,8 @@ public sealed class SplashForm : Form
         var travel = trackWidth + lightWidth;
         var lightLeft = trackLeft - lightWidth + travel * _sweep;
 
-        var clip = g.Clip;
+        // g.Clip hands back a new Region each time - disposed, as DriverPhotos.Draw does.
+        using var clip = g.Clip;
         g.SetClip(new RectangleF(trackLeft, trackY, trackWidth, trackHeight));
 
         using (var light = new LinearGradientBrush(

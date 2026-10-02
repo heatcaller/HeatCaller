@@ -49,6 +49,26 @@ internal sealed class EasyLapFramer
     // growing for the rest of the session.
     private const int MaxBufferBytes = 4096;
 
+    // How many message boundaries in a row have to line up - each message
+    // followed straight away by another length byte - before the framer
+    // counts itself in step again and stops checking passes. See ProcessBuffer.
+    private const int BoundariesToBeInStep = 2;
+
+    /// <summary>
+    /// How many message boundaries have lined up since the framer last lost
+    /// step, up to <see cref="BoundariesToBeInStep"/>. Zero for a new framer:
+    /// a new connection can start in the middle of a message, since a message
+    /// is split across reports and the decoder does not wait for us.
+    /// </summary>
+    private int _boundariesInStep;
+
+    /// <summary>
+    /// Whether the last thing taken from the buffer was a message accepted
+    /// while out of step, so the byte after it - the next message's length,
+    /// if the framing is right - is still to be checked.
+    /// </summary>
+    private bool _boundaryToCheck;
+
     private readonly List<byte> _buffer = new();
     private readonly Action<string> _log;
     private readonly Action<DirectLapEvent> _lap;
@@ -90,14 +110,24 @@ internal sealed class EasyLapFramer
     }
 
     /// <summary>Throws away any partial message - after a report that could not be handled.</summary>
-    public void Clear() => _buffer.Clear();
+    public void Clear()
+    {
+        _buffer.Clear();
+
+        // Whatever comes next starts part-way through a message, as far as
+        // anyone knows - so the next frames are checked as after any skip.
+        _boundariesInStep = 0;
+        _boundaryToCheck = false;
+    }
+
+    private bool InStep => _boundariesInStep >= BoundariesToBeInStep;
 
     private void ProcessBuffer(CancellationToken ct)
     {
         if (_buffer.Count > MaxBufferBytes)
         {
             _log($"[framing] Buffer reached {_buffer.Count} bytes without a valid message - discarding it.");
-            _buffer.Clear();
+            Clear();
             return;
         }
 
@@ -110,9 +140,21 @@ internal sealed class EasyLapFramer
                 // Not the start of any message we know - we are out of step
                 // (a dropped/garbled byte upstream). Slide forward one byte
                 // and try again rather than trusting it as a length.
-                _buffer.RemoveAt(0);
+                LoseStep();
                 skipped++;
                 continue;
+            }
+
+            // The message accepted before this one was followed by a length
+            // byte, so that boundary lined up.
+            if (_boundaryToCheck)
+            {
+                _boundaryToCheck = false;
+
+                if (!InStep)
+                {
+                    _boundariesInStep++;
+                }
             }
 
             if (_buffer.Count < msgLen)
@@ -120,8 +162,30 @@ internal sealed class EasyLapFramer
                 break;
             }
 
+            // Out of step - a new connection, or just after a skip or a
+            // Clear - the first 0x0D or 0x0B found is as likely to be a byte
+            // inside a message as the start of one: the sequence byte, a
+            // clock byte, the hit count. Taken on trust, the 13 bytes from
+            // there were the end of one message and the start of the next,
+            // read as a pass from a transponder that does not exist - and
+            // Race Control gives any released transponder a row, so a phantom
+            // car joined the race and its saved result. So until the framing
+            // has proved itself, a candidate is checked first, and on a
+            // failure one byte is dropped and the scan goes on.
+            if (!InStep && !LooksLikeAMessage(msgLen))
+            {
+                LoseStep();
+                skipped++;
+                continue;
+            }
+
             var message = _buffer.GetRange(0, msgLen).ToArray();
             _buffer.RemoveRange(0, msgLen);
+
+            if (!InStep)
+            {
+                _boundaryToCheck = true;
+            }
 
             HandleMessage(message);
         }
@@ -130,6 +194,58 @@ internal sealed class EasyLapFramer
         {
             _log($"[framing] Skipped {skipped} byte(s) to resynchronise with the decoder stream.");
         }
+    }
+
+    /// <summary>Drops the byte at the front of the buffer, and with it any claim to be in step.</summary>
+    private void LoseStep()
+    {
+        _buffer.RemoveAt(0);
+        _boundariesInStep = 0;
+        _boundaryToCheck = false;
+    }
+
+    /// <summary>
+    /// Whether the whole message at the front of the buffer, of the given
+    /// length, can be taken as one while the framer is out of step.
+    /// </summary>
+    /// <remarks>
+    /// Two checks, both from rehearsal 3's capture:
+    ///
+    ///  - A pass has 00 00 in bytes 5 and 6, between the transponder and the
+    ///    clock - all 155 passes in the capture do. A frame taken from the
+    ///    middle of the stream almost never has: replaying the capture from
+    ///    every byte offset, this alone stopped every phantom pass.
+    ///  - If the byte after the message has arrived, it starts the next
+    ///    message, so it is 0x0D or 0x0B. It may not have arrived yet - a
+    ///    message often ends at the end of a report - and the message is not
+    ///    held back waiting for it, which would delay the call of a lap.
+    ///
+    /// A heartbeat has nothing in it to check. One taken wrongly costs
+    /// nothing - only its arrival is used, never the clock in it - and the
+    /// framer stays out of step, so the passes after it are still checked.
+    ///
+    /// Only applied while out of step. In step, every message is taken as
+    /// it comes, as it always was - a decoder whose passes use bytes 5 and 6
+    /// would otherwise lose laps for good, where out of step it only waits
+    /// for two boundaries to line up (a second or two of heartbeats).
+    /// </remarks>
+    private bool LooksLikeAMessage(int msgLen)
+    {
+        if (msgLen == LapMessageLength && (_buffer[5] != 0 || _buffer[6] != 0))
+        {
+            return false;
+        }
+
+        if (_buffer.Count > msgLen)
+        {
+            var next = _buffer[msgLen];
+            if (next != LapMessageLength && next != HeartbeatMessageLength)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void HandleMessage(byte[] message)

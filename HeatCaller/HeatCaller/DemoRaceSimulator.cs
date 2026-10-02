@@ -24,6 +24,15 @@ public sealed class DemoRaceSimulator : IDisposable
     private readonly List<DemoRacer> _racers = new();
 
     private long _deviceTimeMs;
+
+    /// <summary>
+    /// Real time since the demo's green, which the simulated decoder clock
+    /// (_deviceTimeMs) follows - see Tick. Restarted at each green.
+    /// </summary>
+    private readonly System.Diagnostics.Stopwatch _sinceGreen = new();
+
+    /// <summary>What _deviceTimeMs read at the green, so the clock can be rebuilt from the stopwatch each tick.</summary>
+    private long _deviceTimeAtGreenMs;
     private CancellationTokenSource? _sequenceCts;
 
     public bool IsRunning { get; private set; }
@@ -345,6 +354,10 @@ public sealed class DemoRaceSimulator : IDisposable
                 racer.NextLapDueAtMs = racer.BaseLapSeconds * 1000 * (0.5 + _random.NextDouble() * 0.5);
             }
 
+            // The simulated clock runs on real time from here - see Tick.
+            _deviceTimeAtGreenMs = _deviceTimeMs;
+            _sinceGreen.Restart();
+
             _tickTimer.Start();
         }
         catch (OperationCanceledException)
@@ -385,21 +398,62 @@ public sealed class DemoRaceSimulator : IDisposable
             return;
         }
 
-        // Flags are authoritative even in a demo. Previously this ticked on
-        // regardless: under red the session discarded every pass while the
-        // racers' schedules kept advancing, so the flag appeared to do
-        // nothing and then the whole field fired a lap at once on green.
-        if (_race.State != RaceState.Racing || _race.Flag == FlagState.Red)
+        if (_race.State != RaceState.Racing)
         {
             return;
         }
 
-        // Under caution the field slows rather than stopping, which is what
-        // a yellow actually means - laps still count, just more slowly.
-        // _deviceTimeMs is a long, so the scaled advance is rounded rather
-        // than truncated - truncating a 55% tick would drift the clock slow.
-        var pace = _race.Flag == FlagState.Yellow ? 0.55 : 1.0;
-        _deviceTimeMs += (long)Math.Round(_tickTimer.Interval * pace);
+        // The simulated decoder clock follows REAL time since the green, as
+        // a real decoder's does. It used to add a fixed 100ms per timer tick
+        // (55ms under yellow, nothing under red). A WinForms timer never
+        // fires sooner than its interval - on Windows about every 109ms, and
+        // later whenever the UI thread is busy - so the demo's clock ran
+        // slower than real time. Ghosts picked for a demo are timed by real
+        // time since the green (GhostService.NowMs), so a ghost with the
+        // same pace as a demo car pulled away from it steadily, and under a
+        // yellow by a lap or so, with nothing in either car's lap times to
+        // show why. Read fresh from the stopwatch each tick, the clock can't
+        // drift whatever the timer does.
+        var nowMs = _deviceTimeAtGreenMs + _sinceGreen.ElapsedMilliseconds;
+        var elapsedMs = Math.Max(0, nowMs - _deviceTimeMs);
+        _deviceTimeMs = nowMs;
+
+        // Flags slow or stop the CARS rather than the clock - again what
+        // happens with real cars on a real decoder. Under caution the field
+        // slows rather than stopping, which is what a yellow actually means:
+        // laps still count, just more slowly, and now their times show it.
+        // Under red every car is held where it is. Each racer's next
+        // crossing is pushed back by the part of this tick it did not
+        // cover: all of it under red, 45% of it under yellow.
+        //
+        // The red has to hold the cars, not just skip the tick. Under red
+        // the session discards every pass, and the demo once ticked on
+        // regardless - the racers' schedules kept advancing, so the flag
+        // appeared to do nothing and then the whole field fired a lap at
+        // once on green. Holding each car's next crossing back by the time
+        // spent under red keeps the field where the red found it; the lap
+        // that spans the stoppage comes out long, as a real car's does.
+        var pace = _race.Flag switch
+        {
+            FlagState.Red => 0.0,
+            FlagState.Yellow => 0.55,
+            _ => 1.0,
+        };
+
+        if (pace < 1.0)
+        {
+            var heldBackMs = elapsedMs * (1.0 - pace);
+
+            foreach (var racer in _racers)
+            {
+                racer.NextLapDueAtMs += heldBackMs;
+            }
+        }
+
+        if (_race.Flag == FlagState.Red)
+        {
+            return;
+        }
 
         foreach (var racer in _racers)
         {
@@ -432,8 +486,8 @@ public sealed class DemoRaceSimulator : IDisposable
         }
 
         // Stamp the crossing at the moment the lap was actually DUE, not at
-        // the current tick. The simulated clock only advances in 100ms
-        // steps, so using it directly quantised every lap to a multiple of
+        // the current tick. The simulated clock only moves on when the
+        // timer ticks, about every 100ms, so using it directly quantised every lap to a multiple of
         // 100ms - producing times like 7.100s and 6.500s that looked like a
         // display rounding bug, when really the demo just couldn't generate
         // anything finer. Real decoder hardware reports true millisecond

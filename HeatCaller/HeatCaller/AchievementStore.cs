@@ -28,6 +28,8 @@ public sealed class AchievementStore
 
     public static AchievementStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -45,15 +47,38 @@ public sealed class AchievementStore
         {
             // Corrupt or unreadable: start fresh rather than refusing to
             // open the app. Badges are decoration - never let them be the
-            // reason a club night can't start.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // reason a club night can't start. But, when it could not be
+            // read at all or no copy of it could be kept, never save over it
+            // from this store (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new AchievementStore(new List<DriverAchievements>());
+        return new AchievementStore(new List<DriverAchievements>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. Badges are decoration, but the
+    /// file also holds every driver's running race, lap, win and podium
+    /// totals, and nothing rebuilds those. This store is loaded afresh
+    /// after every race, so one locked read (a backup or sync tool holding
+    /// the file as a main finishes) used to hand the evaluator an empty
+    /// store, and its save then wrote just that race's drivers over
+    /// everyone else's. Held per load rather than for the session: the
+    /// next race's fresh load reads the real file again and saves as usual.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this near-empty store would replace it. The console has already
+        // said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var json = JsonSerializer.Serialize(_drivers, new JsonSerializerOptions { WriteIndented = true });
         SafeFile.WriteAllText(FilePath, json);
     }

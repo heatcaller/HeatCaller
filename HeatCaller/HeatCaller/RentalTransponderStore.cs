@@ -70,6 +70,8 @@ public sealed class RentalTransponderStore
 
     public static RentalTransponderStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -83,15 +85,36 @@ public sealed class RentalTransponderStore
         }
         catch (Exception ex)
         {
-            // Unreadable file: start empty rather than refusing to open.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new RentalTransponderStore(new List<RentalTransponder>());
+        return new RentalTransponderStore(new List<RentalTransponder>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds the club's
+    /// rental units, who has each one out, the deposit taken and every past loan: nothing anybody could type back in. It
+    /// used to be loaded as empty and then written over whole at the first
+    /// change, so a backup or antivirus tool holding it open for a moment
+    /// at launch was enough to lose all of it. What this store holds is
+    /// then only what was added this session, and none of it is saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's near-empty list would replace it. The console
+        // has already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(_units, new JsonSerializerOptions { WriteIndented = true }));
     }
 

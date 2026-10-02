@@ -96,6 +96,26 @@ internal static class SecretRecovery
         _settingsLockedAtStart = false;
         _voiceLockedAtStart = false;
 
+        // settings.json could not be read this launch, so the settings here
+        // are defaults that only LOOK unlocked, and nothing can be saved to
+        // the file anyway - see AppSettings.LoadedUnreadable. Everything
+        // below would act on that guess: delete secrets.hgk as no longer
+        // needed, or tell the club its keys are gone. Left for the next
+        // launch that can read the file.
+        //
+        // The same goes for voice-settings.json (VoiceSettingsStore.
+        // LoadedUnreadable): its defaults carry no locked ElevenLabs key, so
+        // this went on to recover only the app's keys - or, with
+        // settings.json readable and unlocked, found nothing locked at all -
+        // and then deleted secrets.hgk, the only copy of the ElevenLabs key
+        // this PC could ever open. Nothing is lost by waiting: settings that
+        // are still locked keep their sealed text on every save, and the
+        // file is asked about again on the next launch.
+        if (settings.LoadedUnreadable || voice.LoadedUnreadable)
+        {
+            return false;
+        }
+
         if (!settingsLocked && !voiceLocked)
         {
             // Restored onto the PC that made the backup: everything opened
@@ -115,15 +135,36 @@ internal static class SecretRecovery
             return false;
         }
 
+        // Read with retries, and a read that still fails is NOT a reason to
+        // give up. This runs on the launch straight after a restore, seconds
+        // after the restore wrote the file - just when an antivirus scan or
+        // a sync tool may have it open. It used to go to GiveUp on the first
+        // failed read, which deleted secrets.hgk, cleared the settings' lock
+        // and saved them without their sealed keys, and told the club every
+        // key, PIN and the QR check-in key needed entering again - all over
+        // a lock that would have gone a moment later.
+        //
+        // So the file and the locked state are both left exactly as they
+        // are, and the next launch asks again. Nothing is lost by waiting:
+        // settings that are still locked keep their sealed text on every
+        // save (the same reasoning as LoadedUnreadable above).
+        // RunIfNeeded's finally still marks recovery as resolved for this
+        // session, so anything waiting on Pending is not held up.
         string envelope;
         try
         {
-            envelope = File.ReadAllText(path);
+            envelope = SafeFile.ReadAllTextWithRetry(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            GiveUp(owner, settings, voice, settingsLocked, voiceLocked,
-                $"The backup's locked copy of the keys couldn't be read ({ex.Message}).");
+            AppDialog.Show(owner,
+                $"The backup's locked copy of the keys couldn't be opened just now ({ex.Message}).\n\n"
+                + "Nothing has been lost: it has been left where it is, and HeatCaller will ask for the backup password "
+                + "again the next time it starts. Until then the keys, tokens and PINs from the backup are not in use - leave them "
+                + "blank rather than typing new ones in, or HeatCaller will take that as starting afresh and delete the backup's copy.\n\n"
+                + "If this keeps happening, close anything that might have the HeatCaller data folder open (a backup or "
+                + "sync tool is the usual cause) and restart HeatCaller.",
+                "Keys not recovered yet", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
 
@@ -217,6 +258,8 @@ internal static class SecretRecovery
             settings.BackupPassword = typedPassword;
         }
 
+        var voiceSaved = true;
+
         if (voiceLocked)
         {
             var profile = voice.Current;
@@ -234,10 +277,41 @@ internal static class SecretRecovery
                 profile.ForgetApiKey();
             }
 
-            voice.Save(profile);
+            voiceSaved = voice.Save(profile);
         }
 
-        settings.Save();
+        // secrets.hgk is the only other copy of what was just put back, so
+        // it goes only once settings.json actually holds the keys again.
+        // Save reports a failed write (a sync or antivirus tool holding the
+        // file, a full disk) as false rather than throwing, and this used to
+        // delete the file regardless: the caller then restarts, the restarted
+        // app finds settings.json still sealed to the old PC and no
+        // secrets.hgk, and tells the club the keys cannot be recovered. A
+        // brief lock is the usual cause, so it is tried again a few times
+        // first.
+        //
+        // The voice key counts the same way: when only the voice key was
+        // locked, the settings could save while the voice file did not, and
+        // deleting secrets.hgk then lost the ElevenLabs key for good.
+        if (!voiceSaved || !SaveWithRetry(settings))
+        {
+            // Kept, so the next launch asks for the password again. Still
+            // true, so the caller restarts: every page was built with the
+            // keys blank, and carrying on here would let them save those
+            // blanks back once the file could be written - leaving
+            // settings.json unsealed but empty, after which secrets.hgk is
+            // thrown away as no longer needed.
+            AppDialog.Show(
+                owner,
+                "The backup password was right, but the keys couldn't be saved to this PC - something may have the "
+                + "settings file open, or the disk may be full.\n\nNothing has been lost: the backup's locked copy of the "
+                + "keys has been kept. HeatCaller will now restart and ask for the backup password again.",
+                "Keys not saved yet",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return true;
+        }
+
         TryDelete(path);
 
         var message = "The keys, tokens and PINs from the backup are back, locked to this PC.\n\nHeatCaller will now restart to load them.";
@@ -332,6 +406,32 @@ internal static class SecretRecovery
         {
             settings.ApplySecrets(new AppSettings.SecretFields(), includeBackupPassword: true);
         }
+    }
+
+    /// <summary>
+    /// Saves the settings, trying again a few times over about a second when
+    /// the write fails - a file held for a moment by a backup, sync or
+    /// antivirus tool is the usual cause, and it is usually let go quickly.
+    /// True once a save reached the disk.
+    /// </summary>
+    private static bool SaveWithRetry(AppSettings settings)
+    {
+        const int attempts = 4;
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            if (settings.Save())
+            {
+                return true;
+            }
+
+            if (attempt < attempts)
+            {
+                Thread.Sleep(300);
+            }
+        }
+
+        return false;
     }
 
     private static void TryDelete(string path)

@@ -253,6 +253,8 @@ public sealed class HandicapStore
 
     public static HandicapStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -289,15 +291,36 @@ public sealed class HandicapStore
         }
         catch (Exception ex)
         {
-            // Unreadable file: start empty rather than refusing to open.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new HandicapStore(new List<DriverHandicap>());
+        return new HandicapStore(new List<DriverHandicap>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds the club's
+    /// per-driver handicaps and class modes: nothing anybody could type back in. It
+    /// used to be loaded as empty and then written over whole at the first
+    /// change, so a backup or antivirus tool holding it open for a moment
+    /// at launch was enough to lose all of it. What this store holds is
+    /// then only what was added this session, and none of it is saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's near-empty list would replace it. The console
+        // has already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var file = new HandicapFile
         {
             Handicaps = _handicaps,
@@ -541,8 +564,26 @@ public static class HandicapCalculator
                 EffectiveMs = r.ElapsedMs,
             };
         })
-        // Same rule as an unhandicapped result: most laps, then lowest time.
-        .OrderByDescending(x => x.EffectiveLaps)
+        // Finishers first, then DNFs, then DQs - the grouping the result
+        // editor gave them - and only within a group the same rule as an
+        // unhandicapped result: most laps, then lowest time. A DNF keeps
+        // the laps it drove, so ranking on laps alone let a driver who
+        // retired a lap down with two laps of credit be scored ahead of
+        // everyone who finished, and the event report named them the class
+        // winner. A credit makes up for pace; it cannot finish a race for
+        // somebody who did not.
+        //
+        // For the same reason a car that never turned a lap stays behind
+        // every car in its group that did, as the time-credit ranking below
+        // already keeps it. A grid car that never crossed the line lands in
+        // the DNF group, and with its lap credit added it would otherwise
+        // count as having covered that many laps in no time at all - level
+        // on laps with a DNF who drove them, and ahead of them on the 0 ms
+        // time. The result editor ranks the DNF who drove laps first, and
+        // the handicapped order must agree with it.
+        .OrderBy(x => OutcomeGroup(x.Result))
+        .ThenByDescending(x => x.Result.Laps > 0)
+        .ThenByDescending(x => x.EffectiveLaps)
         .ThenBy(x => x.EffectiveMs)
         .ToList();
 
@@ -608,8 +649,15 @@ public static class HandicapCalculator
             // running means timed within a couple of their own laps of the
             // end of the racing; anybody else is ranked behind every
             // finisher, on distance and then time as before.
+            //
+            // A driver marked DNF or DQ was not, whatever the clock says: a
+            // DNF on the last lap is timed close enough to the end to pass
+            // the test below, and would be projected to the full distance
+            // and credited as if they had finished it.
             var averageLapMs = hasLaps ? m.DrivenMs / (double)r.Laps : 0;
-            var runningAtEnd = hasLaps && m.DrivenMs + (2 * averageLapMs) >= raceSpanMs;
+            var runningAtEnd = hasLaps
+                && OutcomeGroup(r) == 0
+                && m.DrivenMs + (2 * averageLapMs) >= raceSpanMs;
 
             var effectiveMs = runningAtEnd
                 ? (long)Math.Round(m.DrivenMs * (double)leaderLaps / r.Laps) + m.PenaltyMs - creditMs
@@ -619,13 +667,17 @@ public static class HandicapCalculator
             {
                 Result = r,
                 m.RawPosition,
+                Group = OutcomeGroup(r),
                 CreditSeconds = creditMs / 1000.0,
                 HasLaps = hasLaps,
                 RunningAtEnd = runningAtEnd,
                 EffectiveMs = effectiveMs,
             };
         })
-        .OrderByDescending(x => x.HasLaps)
+        // Finishers, then DNFs, then DQs, as the result editor grouped them
+        // - a credit re-ranks drivers within a group, never across one.
+        .OrderBy(x => x.Group)
+        .ThenByDescending(x => x.HasLaps)
         .ThenByDescending(x => x.RunningAtEnd)
 
         // Retired drivers keep the old order among themselves: distance first.
@@ -641,4 +693,16 @@ public static class HandicapCalculator
         return scored.Select((x, i) => new Adjusted(
             x.Result, x.RawPosition, i + 1, x.CreditSeconds, 0)).ToList();
     }
+
+    /// <summary>
+    /// 0 for a finisher, 1 for a DNF or a car that never turned a lap, 2 for
+    /// a DQ - the same groups, in the same order, that ResultEditor puts a
+    /// corrected result in (see ResultEditor.Group). A handicap only moves
+    /// drivers within their group.
+    /// </summary>
+    private static int OutcomeGroup(SessionResultEntry entry) =>
+        entry.Outcome == ResultEditor.Dq ? 2
+        : entry.Outcome == ResultEditor.Dnf ? 1
+        : entry.Laps <= 0 ? 1
+        : 0;
 }

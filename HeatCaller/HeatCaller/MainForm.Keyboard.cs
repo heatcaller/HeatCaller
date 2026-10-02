@@ -88,6 +88,18 @@ public partial class MainForm
                 }
             }
 
+            // Not with Alt held as well. AltGr arrives as Ctrl+Alt, so on
+            // French, German and other European keyboards AltGr+0 ('@' or
+            // '}') and AltGr on the '+' key ('~') matched here: the
+            // character never reached the text box being typed in, and the
+            // whole app's text size changed or snapped back to 100% instead.
+            // Shift is still allowed, so Ctrl+Shift+'=' (which reads as
+            // Ctrl++ on many keyboards) keeps growing the text as before.
+            if ((keyData & Keys.Alt) == Keys.Alt)
+            {
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
+
             var step = key switch
             {
                 Keys.Oemplus or Keys.Add => 0.1f,

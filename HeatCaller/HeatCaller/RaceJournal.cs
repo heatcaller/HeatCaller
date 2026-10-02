@@ -37,7 +37,23 @@ public sealed class RaceJournal
     /// <summary>Where a journal goes when it cannot be deleted after the race is saved - anywhere but the name that means "unfinished".</summary>
     private static string ClearedPath => FilePath.Replace(".json", "-cleared.json");
 
-    private DateTime _lastWrite = DateTime.MinValue;
+    /// <summary>
+    /// When the last write landed, as <see cref="Environment.TickCount64"/>,
+    /// or null when nothing has been written yet this race.
+    ///
+    /// This and <see cref="_lastFailedAttemptTicks"/> used to be
+    /// DateTime.UtcNow, which is the wall clock - and the wall clock can be
+    /// set backwards. Windows time sync correcting a laptop that runs fast,
+    /// or somebody fixing the clock mid-evening, made "now minus the last
+    /// write" negative, which is always under the throttle, so every
+    /// crossing was held back until the wall clock caught up with where it
+    /// had been. For a 90-second correction that is 90 seconds of laps a
+    /// crash would lose, with nothing saying so. The tick count only ever
+    /// goes forward, so it is what spacing is measured with here - the same
+    /// reason the timing watch in MainForm uses it. The wall clock is still
+    /// the right thing for SavedUtc and for the durations told to the user.
+    /// </summary>
+    private long? _lastWriteTicks;
 
     /// <summary>
     /// When writing started failing, or null while it is working.
@@ -50,8 +66,12 @@ public sealed class RaceJournal
     /// </summary>
     private DateTime? _failingSinceUtc;
 
-    /// <summary>When the last failed attempt was, to space the retries out.</summary>
-    private DateTime _lastFailedAttemptUtc = DateTime.MinValue;
+    /// <summary>
+    /// When the last failed attempt was, as <see cref="Environment.TickCount64"/>,
+    /// to space the retries out - see <see cref="_lastWriteTicks"/> for why
+    /// it is not the wall clock. Null when no attempt has failed.
+    /// </summary>
+    private long? _lastFailedAttemptTicks;
 
     /// <summary>How long to wait between attempts while writes are failing.</summary>
     private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(5);
@@ -72,6 +92,27 @@ public sealed class RaceJournal
     /// loss worth spending disk writes on all evening.
     /// </summary>
     private static readonly TimeSpan Throttle = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>
+    /// Whether a write was asked for and has not landed yet - see
+    /// <see cref="IsBehind"/>.
+    /// </summary>
+    private bool _writePending;
+
+    /// <summary>
+    /// True when the file is behind the race: a write was asked for and was
+    /// held back - by <see cref="Throttle"/>, or while writes are failing -
+    /// or was tried and failed.
+    ///
+    /// A held-back write used to be simply dropped. Nothing wrote the file
+    /// again until the next crossing or flag, so the second of two cars
+    /// crossing 300ms apart stayed out of it for a whole lap, not the fifth
+    /// of a second the throttle allows for - and a crash in that lap brought
+    /// the race back without it. Whatever drives the race clock should call
+    /// Record again (not forced) while this is true; Record writes as soon as
+    /// the throttle allows, and does nothing before then.
+    /// </summary>
+    public bool IsBehind => _writePending;
 
     /// <summary>How old a journal can be and still be offered back - see Unfinished.</summary>
     private static readonly TimeSpan MaxRestorableAge = TimeSpan.FromHours(24);
@@ -270,6 +311,9 @@ public sealed class RaceJournal
         // until the app was restarted. Practice has its own save.
         if (race.IsDemoMode || race.IsPracticeMode || race.State is RaceState.Idle or RaceState.Finished)
         {
+            // Nothing owed either - a write held back before the race
+            // finished has nothing left to protect.
+            _writePending = false;
             return;
         }
 
@@ -280,13 +324,16 @@ public sealed class RaceJournal
         // night. So while it is failing this tries again only every few
         // seconds, and quietly: one complaint when it starts, one line when
         // it recovers.
-        if (_failingSinceUtc.HasValue && DateTime.UtcNow - _lastFailedAttemptUtc < RetryInterval)
+        if (_failingSinceUtc.HasValue && IsWithin(_lastFailedAttemptTicks, RetryInterval))
         {
+            _writePending = true;
             return;
         }
 
-        if (!force && DateTime.UtcNow - _lastWrite < Throttle)
+        if (!force && IsWithin(_lastWriteTicks, Throttle))
         {
+            // Held back, not dropped - see IsBehind.
+            _writePending = true;
             return;
         }
 
@@ -386,9 +433,21 @@ public sealed class RaceJournal
         }
     }
 
+    /// <summary>
+    /// Whether less than <paramref name="span"/> has passed since
+    /// <paramref name="sinceTicks"/> (an <see cref="Environment.TickCount64"/>
+    /// reading). Null - nothing has happened yet - is never "within", so the
+    /// first write of a race and the first retry go straight through, as
+    /// DateTime.MinValue used to make them.
+    /// </summary>
+    private static bool IsWithin(long? sinceTicks, TimeSpan span) =>
+        sinceTicks is { } since
+        && Environment.TickCount64 - since < (long)span.TotalMilliseconds;
+
     private void NoteWriteSucceeded()
     {
-        _lastWrite = DateTime.UtcNow;
+        _lastWriteTicks = Environment.TickCount64;
+        _writePending = false;
 
         if (_failingSinceUtc is { } since)
         {
@@ -399,7 +458,11 @@ public sealed class RaceJournal
 
     private void NoteWriteFailed()
     {
-        _lastFailedAttemptUtc = DateTime.UtcNow;
+        _lastFailedAttemptTicks = Environment.TickCount64;
+
+        // Still owed: the file holds less than the race, and the next try
+        // should not have to wait for the next crossing.
+        _writePending = true;
 
         if (!_failingSinceUtc.HasValue)
         {
@@ -517,12 +580,13 @@ public sealed class RaceJournal
     /// <summary>The race is safely in the history - there is nothing left to recover.</summary>
     public void Clear()
     {
-        _lastWrite = DateTime.MinValue;
+        _lastWriteTicks = null;
+        _writePending = false;
 
         // A new race deserves a fresh try - whatever was in the way may
         // not be any more.
         _failingSinceUtc = null;
-        _lastFailedAttemptUtc = DateTime.MinValue;
+        _lastFailedAttemptTicks = null;
 
         try
         {

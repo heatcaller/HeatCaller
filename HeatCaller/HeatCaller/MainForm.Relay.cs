@@ -72,11 +72,158 @@ public partial class MainForm
             return;
         }
 
+        if (!_racerPinHashesInPlace)
+        {
+            try
+            {
+                var missing = RelayDocuments.RacerPinHashesMissing(roster, _settings);
+
+                if (missing.Count > 0)
+                {
+                    WarmRacerPinHashesThenPublish(missing);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Nothing expected - it reads settings and may make the salt,
+                // as CheckIn itself would - but if it ever throws, the list
+                // must still go out, so the old in-place way takes over.
+                _racerPinHashesInPlace = true;
+                OnClientRawMessage($"[pins] Could not prepare the check-in PINs in the background, so they are prepared as the list is sent: {ex.Message}");
+            }
+        }
+
         var current = _raceEvents.Current;
         var eventName = current.Id == RaceEventStore.LegacyEventId ? string.Empty : current.Name;
 
         SendToRelayIfChanged(RelayChannel.CheckIn, "the check-in list", () => RelayDocuments.CheckIn(
             roster, _profiles, _settings, eventName, _relayCheckInPhotos));
+    }
+
+    /// <summary>
+    /// True while racer PIN hashes are being made in the background, so a
+    /// second roster tick does not start a second batch of the same work.
+    /// Set on the UI thread; cleared from the background only when the
+    /// window cannot take the post that would clear it, hence volatile.
+    /// </summary>
+    private volatile bool _racerPinHashesWarming;
+
+    /// <summary>An automatic PIN email held back until the check-in list with the new PINs has been sent - see EmailPinsAutomatically. UI thread.</summary>
+    private bool _emailPinsAfterWarm;
+
+    /// <summary>
+    /// Racers approved from an online sign-up whose PIN email is held back
+    /// until the check-in list carrying their PIN has been sent - see
+    /// GiveSignedUpRacerTheirPin and EmailSignedUpPinsHeldForWarm. By
+    /// transponder. UI thread only.
+    /// </summary>
+    private readonly HashSet<string> _signupPinsAfterWarm = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// PIN emails started - here (EmailPinsInBackgroundAsync) or by Email
+    /// PINs... on the Club Website page - whose results have not yet been
+    /// recorded in RacerPinsEmailed. PinMailer.IsSending alone is not enough
+    /// to know nobody is mid-send: it goes false the moment the sending
+    /// ends, on a background thread, and the result is only recorded later,
+    /// in a post to the UI thread. In between, a racer just emailed still
+    /// looks unemailed, and EmailSignedUpPinsHeldForWarm would email them
+    /// again. Interlocked, because a run that cannot post its result back
+    /// has to be counted off from the background.
+    /// </summary>
+    private int _pinMailsUnrecorded;
+
+    /// <summary>
+    /// Set if making the hashes in the background ever fails: from then on
+    /// CheckIn makes any it needs in place, as it always used to - slower,
+    /// but the list still goes out.
+    /// </summary>
+    private bool _racerPinHashesInPlace;
+
+    /// <summary>
+    /// Makes the racer PIN hashes the check-in list needs on a background
+    /// thread, then sends the list. Until then the relay keeps the list it
+    /// already has, which after a restart carries the same hashes anyway.
+    ///
+    /// Each hash is a 100,000-round PBKDF2 (see RelayDocuments.RacerPinHashes),
+    /// and building the list here on the UI thread used to make them all in
+    /// place - at start-up, after "New PINs now", after a daily rotation -
+    /// freezing race control and every check-in tap for several seconds.
+    /// </summary>
+    private void WarmRacerPinHashesThenPublish(IReadOnlyList<RelayDocuments.RacerPinHashJob> missing)
+    {
+        if (_racerPinHashesWarming)
+        {
+            // The batch already running ends by publishing again, and that
+            // publish asks for whatever is still missing - this included.
+            return;
+        }
+
+        _racerPinHashesWarming = true;
+
+        // The same token that stops an automatic PIN email when the window
+        // closes: canceled as the window closes and never disposed, so it is
+        // safe to read from the background for as long as this runs.
+        var cancel = _pinMailCancel.Token;
+
+        _ = Task.Run(() =>
+        {
+            Exception? failed = null;
+
+            try
+            {
+                RelayDocuments.WarmRacerPinHashes(missing, cancel);
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                // Closing down: nothing left to publish to.
+                _racerPinHashesWarming = false;
+                return;
+            }
+            catch (Exception ex)
+            {
+                failed = ex;
+            }
+
+            var posted = TryPost(() =>
+            {
+                _racerPinHashesWarming = false;
+
+                if (failed is not null)
+                {
+                    _racerPinHashesInPlace = true;
+                    OnClientRawMessage($"[pins] Could not prepare the check-in PINs in the background, so they are prepared as the list is sent: {failed.Message}");
+                }
+
+                if (!_closingDown && _settings.RelayEnabled)
+                {
+                    PublishCheckInRoster();
+                }
+
+                // The email held back while the list was prepared, now the
+                // relay has been sent the PINs it would carry.
+                if (_emailPinsAfterWarm && !_closingDown)
+                {
+                    _emailPinsAfterWarm = false;
+                    EmailPinsAutomatically();
+                }
+
+                // Likewise the PIN of any racer approved from an online
+                // sign-up while this batch ran - see GiveSignedUpRacerTheirPin.
+                if (!_closingDown)
+                {
+                    EmailSignedUpPinsHeldForWarm();
+                }
+            });
+
+            if (!posted)
+            {
+                // No window to post to yet (or any more). Cleared here so the
+                // next roster tick, once there is one, can try again - the
+                // hashes made so far are kept, so it has less to do.
+                _racerPinHashesWarming = false;
+            }
+        });
     }
 
     /// <summary>
@@ -102,6 +249,13 @@ public partial class MainForm
     /// </summary>
     private void KeepRacerPinsInStep()
     {
+        // A sign-up racer's PIN email held back while another email ran -
+        // see EmailSignedUpPinsHeldForWarm. The sends started here and on the
+        // Club Website page retry it themselves when they end; this catches
+        // the ones that say nothing when they do (an invite or test email).
+        // Cheap when nobody is held: a count check.
+        EmailSignedUpPinsHeldForWarm();
+
         if (SecretRecovery.Pending || !_settings.RelayCheckInEnabled || !_settings.RelayRacerPinsEnabled)
         {
             return;
@@ -109,9 +263,21 @@ public partial class MainForm
 
         try
         {
-            if (RacerPins.EnsurePins(_settings, _profiles))
+            var before = RacerPins.CaptureSet(_settings);
+
+            // A PIN that only exists in memory must not be published or
+            // emailed: after a restart it is made afresh, and the one the
+            // racer was sent stops working. So a PIN that could not be saved
+            // is taken back, and handed out again once settings.json can be
+            // written (this runs every two seconds).
+            if (RacerPins.EnsurePins(_settings, _profiles) && !_settings.Save())
             {
-                _settings.Save();
+                RacerPins.PutBackExactly(_settings, before);
+
+                if (_relayBuildErrors.Add("pins|not saved"))
+                {
+                    OnClientRawMessage("[pins] New racers' check-in PINs couldn't be saved to settings.json, so none were given out yet - they will be once it can be written.");
+                }
             }
         }
         catch (Exception ex)
@@ -164,6 +330,11 @@ public partial class MainForm
                 .Select(s => s.EndedAtUtc > s.StartedAtUtc ? s.EndedAtUtc : s.StartedAtUtc)
                 .DefaultIfEmpty(DateTime.MinValue)
                 .Max();
+
+            // Taken before either step touches the PINs, so a set that then
+            // can't be saved is put back exactly as it was - see below.
+            var before = RacerPins.CaptureSet(_settings);
+
             var rotated = !raceLive && RacerPins.RotateIfDue(
                 _settings, _profiles, DateTime.UtcNow, lastSessionEndUtc == DateTime.MinValue ? (DateTime?)null : lastSessionEndUtc);
             var ensured = RacerPins.EnsurePins(_settings, _profiles);
@@ -179,6 +350,17 @@ public partial class MainForm
                 // as the only clue.
                 if (!_settings.Save())
                 {
+                    // And taken back out of memory, as KeepRacerPinsInStep
+                    // does. Left there, the unsaved set would go out anyway
+                    // by the back door: the roster's two-second tick
+                    // publishes whatever RacerPins holds (its own EnsurePins
+                    // finds nobody missing, so it never reaches a save
+                    // check), and the next pass here, seeing nothing to
+                    // rotate, would email it. The old set is still what is
+                    // on disk and on the relay, so it is the one to keep
+                    // using; the next pass tries the rotation again.
+                    RacerPins.PutBackExactly(_settings, before);
+
                     OnClientRawMessage(
                         $"{AppTime.LogStampNow()}  [pins] New racer PINs could NOT be saved, so they have not been "
                         + "published or emailed. The PINs already in use are unchanged. Close anything that might "
@@ -218,6 +400,16 @@ public partial class MainForm
     /// </summary>
     private void EmailPinsAutomatically()
     {
+        // The new PINs' check-in list is still being prepared in the
+        // background (WarmRacerPinHashesThenPublish), so the relay still
+        // holds the old ones: a racer emailed now would try a PIN the relay
+        // refuses. Sent once that list has gone - see there.
+        if (_racerPinHashesWarming)
+        {
+            _emailPinsAfterWarm = true;
+            return;
+        }
+
         if (!_settings.RacerPinsEmailAutomatically
             || !PinMailer.IsConfigured(_settings)
             || PinMailer.IsSending
@@ -240,21 +432,55 @@ public partial class MainForm
 
     private async Task EmailPinsInBackgroundAsync(IReadOnlyList<string> transponders)
     {
+        // Counted until the result is recorded - see _pinMailsUnrecorded.
+        // Every path below counts it off exactly once.
+        Interlocked.Increment(ref _pinMailsUnrecorded);
+
+        MailResult? result = null;
+
         try
         {
             // Called on the UI thread, and SendPinsAsync reads settings and
             // profiles before its first await - so all of that happens here,
             // on this thread. Only the sending happens elsewhere.
-            var result = await PinMailer.SendPinsAsync(_settings, _profiles, transponders, null, _pinMailCancel.Token)
+            result = await PinMailer.SendPinsAsync(_settings, _profiles, transponders, null, _pinMailCancel.Token)
                 .ConfigureAwait(false);
-
-            // Settings are changed on the UI thread and nowhere else.
-            TryPost(() => ApplyAutomaticPinMail(result));
         }
         catch (Exception ex)
         {
             // Fire and forget, so nothing else would ever see this.
             OnClientRawMessage($"[pins] Could not email check-in PINs: {ex.Message}");
+        }
+
+        var finished = result;
+
+        // Settings are changed on the UI thread and nowhere else.
+        var posted = TryPost(() =>
+        {
+            try
+            {
+                if (finished is not null)
+                {
+                    ApplyAutomaticPinMail(finished);
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _pinMailsUnrecorded);
+            }
+
+            // Any racer approved from an online sign-up who was held back
+            // because this send was running, now it has ended and what it
+            // sent is recorded - so a racer it already emailed is not
+            // emailed again.
+            EmailSignedUpPinsHeldForWarm();
+        });
+
+        if (!posted)
+        {
+            // No window to take it - closing down, or not shown yet. Counted
+            // off here, or nothing held back would ever be sent again.
+            Interlocked.Decrement(ref _pinMailsUnrecorded);
         }
     }
 
@@ -376,9 +602,15 @@ public partial class MainForm
 
         try
         {
-            if (RacerPins.EnsurePins(_settings, _profiles))
+            var before = RacerPins.CaptureSet(_settings);
+
+            // As KeepRacerPinsInStep: a PIN that could not be saved is taken
+            // back rather than published and emailed - see there. Without it
+            // the racer is not emailed below either.
+            if (RacerPins.EnsurePins(_settings, _profiles) && !_settings.Save())
             {
-                _settings.Save();
+                RacerPins.PutBackExactly(_settings, before);
+                OnClientRawMessage("[signup] The new racer's check-in PIN couldn't be saved to settings.json, so it wasn't sent. It will be given out once the file can be written.");
             }
         }
         catch (Exception ex)
@@ -388,11 +620,30 @@ public partial class MainForm
 
         RepublishCheckInNow();
 
+        // CanSendPinsNow, not just IsConfigured: true here becomes "your PIN
+        // is on its way by email" on the racer's phone, so it must only be
+        // said when SendPinsAsync will really send - not with publishing
+        // switched off (no check-in page to link to) or in a rehearsal.
         if (!_settings.RacerPins.ContainsKey(transponder)
             || RacerPins.EmailFor(_profiles.Get(transponder)) is null
-            || !PinMailer.IsConfigured(_settings))
+            || !PinMailer.CanSendPinsNow(_settings))
         {
             return false;
+        }
+
+        // The list just asked for may not have gone yet: the racer PIN hashes
+        // it needs are made in the background first (see
+        // WarmRacerPinHashesThenPublish), and until that batch ends the relay
+        // holds the list from before this racer had a PIN. Emailed now, they
+        // could tap their PIN straight away and be refused. So, as
+        // EmailPinsAutomatically does, the email waits for that batch and is
+        // sent from its end - still true here, since it will go: if another
+        // PIN email is running by then, it is held until that one ends
+        // rather than dropped (see EmailSignedUpPinsHeldForWarm).
+        if (_racerPinHashesWarming)
+        {
+            _signupPinsAfterWarm.Add(transponder);
+            return true;
         }
 
         if (PinMailer.IsSending)
@@ -403,6 +654,77 @@ public partial class MainForm
 
         _ = EmailPinsInBackgroundAsync(new[] { transponder });
         return true;
+    }
+
+    /// <summary>
+    /// Emails the PINs of racers approved from an online sign-up while the
+    /// check-in list was being prepared, once it has been sent. UI thread.
+    ///
+    /// Called at the end of each background batch. If that end started
+    /// another batch - a racer approved during the first one is not in it,
+    /// so the publish it ends with finds their hash still missing - they
+    /// wait for that one too.
+    ///
+    /// And held, not dropped, while any PIN email is running. That is the
+    /// usual case, not a rare one: the batch's end starts the held-back
+    /// automatic email (_emailPinsAfterWarm) just before calling this, and
+    /// PinMailer takes its one-at-a-time lock before returning. The phone
+    /// has already been told "your PIN is on its way", so they are tried
+    /// again when that send ends and its result is recorded
+    /// (EmailPinsInBackgroundAsync, and PinEmailFinished from the Club
+    /// Website page), and on the roster's two-second tick for any other
+    /// send - an invite or test email - that says nothing when it ends.
+    ///
+    /// It cannot email anybody twice: a racer that send reached is marked
+    /// emailed before this runs and is left out below, and the set is
+    /// emptied the moment anybody in it is sent to. Nor can it go round in a
+    /// loop: each call either waits for something outside it to happen, or
+    /// empties the set.
+    /// </summary>
+    private void EmailSignedUpPinsHeldForWarm()
+    {
+        if (_closingDown || _signupPinsAfterWarm.Count == 0 || _racerPinHashesWarming)
+        {
+            return;
+        }
+
+        if (PinMailer.IsSending || Volatile.Read(ref _pinMailsUnrecorded) > 0)
+        {
+            // Kept, and tried again when that send has ended - see above.
+            return;
+        }
+
+        // Asked again now rather than trusting the moment of approval: the
+        // racer may have been deleted, PINs switched off, or the mailbox
+        // changed while the list was prepared. And left out when a send that
+        // ran meanwhile already reached them (the automatic one takes every
+        // racer awaiting their PIN, and Email PINs... takes everybody), or
+        // already tried and failed with this same PIN - that failure has
+        // been reported, and the director resends by hand.
+        var due = _signupPinsAfterWarm
+            .Where(t => _settings.RacerPins.TryGetValue(t, out var pin)
+                        && !RacerPins.IsEmailed(_settings, t)
+                        && !_pinMailFailed.Contains($"{t}|{pin}")
+                        && RacerPins.EmailFor(_profiles.Get(t)) is not null)
+            .ToList();
+
+        _signupPinsAfterWarm.Clear();
+
+        if (due.Count == 0)
+        {
+            return;
+        }
+
+        if (!PinMailer.CanSendPinsNow(_settings))
+        {
+            // Their phones were told the PIN was on its way, so the director
+            // is told it isn't - quietly forgetting them would leave racers
+            // waiting for an email that never comes.
+            OnClientRawMessage($"[signup] The PIN email for {Plural.Of(due.Count, "newly approved racer")} couldn't be sent - the email or online check-in settings changed meanwhile. Use Email PINs... on the Club Website page once they're set up again.");
+            return;
+        }
+
+        _ = EmailPinsInBackgroundAsync(due);
     }
 
     /// <summary>
@@ -620,60 +942,76 @@ public partial class MainForm
 
         try
         {
-            var abbreviate = _settings.RelayAbbreviateNames;
+            var document = BuildStandingsDocument();
 
-            // Standings are keyed by name, and a car nobody named raced
-            // under its transponder number - so any "name" that is one of
-            // those numbers is replaced before it goes out.
-            var transponderNames = TransponderNamesInHistory();
-
-            var document = JsonSerializer.Serialize(new
-            {
-                seasons = _seasonStore.All.Select(season =>
-                {
-                    var table = SeasonStore.ComputeStandings(
-                        season,
-                        EventSpine.SessionsFor(season, _raceEvents, _rounds, _sessionHistory),
-                        _profiles);
-
-                    // Per season, because a season is the list a reader
-                    // compares within - and shortened together, so two
-                    // drivers never share a name in the same table.
-                    var names = RelayPublisher.DisplayNames(
-                        table.Select(entry => transponderNames.Contains((entry.DriverName ?? string.Empty).Trim())
-                            ? RelayDocuments.UnnamedDriver
-                            : entry.DriverName ?? string.Empty).ToList(),
-                        abbreviate);
-
-                    return new
-                    {
-                        id = season.Id,
-                        name = season.Name,
-                        standings = table.Select((entry, index) => new
-                        {
-                            pos = index + 1,
-                            name = names[index],
-                            points = entry.TotalPoints,
-                            counted = entry.SessionsCounted,
-                            wins = entry.Wins,
-                            podiums = entry.Podiums,
-
-                            // BestFinish starts at int.MaxValue to mean
-                            // "no finish yet". Sent as null rather than as
-                            // a two-billionth place.
-                            best = entry.BestFinish == int.MaxValue ? (int?)null : entry.BestFinish,
-                            dropped = entry.DroppedRounds,
-                        }).ToList(),
-                    };
-                }).ToList(),
-            });
-
+            // Remembered as sent, so the thirty-second check in
+            // PublishExtrasToRelay does not send the same table again.
+            _lastRelayDocuments[RelayChannel.Standings] = document;
             _relayPublisher.PublishSnapshot(RelayChannel.Standings, document);
         }
         catch (Exception ex)
         {
             OnClientRawMessage($"[relay] Could not build standings: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The standings document PublishStandingsToRelay sends. Split out so
+    /// PublishExtrasToRelay can rebuild it on its thirty-second pass and
+    /// send it only when it has changed.
+    /// </summary>
+    private string BuildStandingsDocument()
+    {
+        var abbreviate = _settings.RelayAbbreviateNames;
+
+        // Standings are keyed by name, and a car nobody named raced
+        // under its transponder number - so any "name" that is one of
+        // those numbers is replaced before it goes out.
+        var transponderNames = TransponderNamesInHistory();
+
+        var document = JsonSerializer.Serialize(new
+        {
+            seasons = _seasonStore.All.Select(season =>
+            {
+                var table = SeasonStore.ComputeStandings(
+                    season,
+                    // Only what is on disk - see SessionHistoryStore.Saved.
+                    EventSpine.SessionsFor(season, _raceEvents, _rounds, _sessionHistory.SavedView()),
+                    _profiles);
+
+                // Per season, because a season is the list a reader
+                // compares within - and shortened together, so two
+                // drivers never share a name in the same table.
+                var names = RelayPublisher.DisplayNames(
+                    table.Select(entry => transponderNames.Contains((entry.DriverName ?? string.Empty).Trim())
+                        ? RelayDocuments.UnnamedDriver
+                        : entry.DriverName ?? string.Empty).ToList(),
+                    abbreviate);
+
+                return new
+                {
+                    id = season.Id,
+                    name = season.Name,
+                    standings = table.Select((entry, index) => new
+                    {
+                        pos = index + 1,
+                        name = names[index],
+                        points = entry.TotalPoints,
+                        counted = entry.SessionsCounted,
+                        wins = entry.Wins,
+                        podiums = entry.Podiums,
+
+                        // BestFinish starts at int.MaxValue to mean
+                        // "no finish yet". Sent as null rather than as
+                        // a two-billionth place.
+                        best = entry.BestFinish == int.MaxValue ? (int?)null : entry.BestFinish,
+                        dropped = entry.DroppedRounds,
+                    }).ToList(),
+                };
+            }).ToList(),
+        });
+
+        return document;
     }
 
     /// <summary>
@@ -797,8 +1135,23 @@ public partial class MainForm
         SendToRelayIfChanged(RelayChannel.Achievements, "badges earned", () => RelayDocuments.Achievements(
             RelayAchievements(), _profiles, abbreviate));
 
+        // Standings and the results index otherwise only go when a session
+        // is saved or a result corrected. Plenty else changes them without
+        // either: a session deleted in Race History (and SessionHistoryStore
+        // raises nothing for a delete), a whole race day deleted, and every
+        // edit on the Championship page - the points scheme, races ticked
+        // or unticked, Scoring Rules, points carried in, a championship
+        // renamed or deleted. The laptop's own Standings grid recomputes at
+        // once, so the public page went on showing a table, and listing a
+        // session, that the laptop no longer had - until the next race was
+        // saved, which between meetings can be weeks. Checking here, rather
+        // than hooking each of those places, catches the ones nobody has
+        // thought of yet too, the same reasoning as KeepRacerPinsInStep.
+        SendToRelayIfChanged(RelayChannel.Standings, "standings", BuildStandingsDocument);
+        RepublishChangedResultsIndexYears();
+
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
-            _trackLayouts, _sessionHistory, _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));
+            _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));
 
         // The catalogue is fixed while the app runs, and it carries every
         // badge's artwork - so it is drawn and sent once, not twice a minute.
@@ -849,7 +1202,9 @@ public partial class MainForm
         {
             var since = DateTime.UtcNow - TimeSpan.FromHours(36);
 
-            var sent = _sessionHistory.All
+            // Saved, not All: a race whose filing failed was never sent by
+            // SessionAdded, and is not to be sent this way either.
+            var sent = _sessionHistory.Saved
                 .Where(s => (s.EndedAtUtc > s.StartedAtUtc ? s.EndedAtUtc : s.StartedAtUtc) >= since)
 
                 // Oldest first, so they land in the order they were raced.
@@ -914,6 +1269,76 @@ public partial class MainForm
         return text.Equals("active", StringComparison.OrdinalIgnoreCase) ? string.Empty : text;
     }
 
+    /// <summary>
+    /// The non-demo session ids in each year of history, as last seen by
+    /// RepublishChangedResultsIndexYears. Cheap to work out every thirty
+    /// seconds, unlike the index itself, so a year's index is only rebuilt
+    /// when the sessions in it have changed.
+    /// </summary>
+    private readonly Dictionary<string, string> _relayIndexSessionsSeen = new(StringComparer.Ordinal);
+
+    /// <summary>The last index document sent for each year, so one rebuilt to the same bytes is not sent again.</summary>
+    private readonly Dictionary<string, string> _relayIndexSent = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Republishes the results index for every year whose sessions have
+    /// changed since the last pass - in practice, a session deleted, which
+    /// raises no event. See PublishExtrasToRelay.
+    ///
+    /// The first time a year is seen it is only noted, not sent: nothing
+    /// is known yet about what the relay was given before this run, and
+    /// sending every year of history at startup is what
+    /// RepublishRecentResults was written to avoid. A year whose last
+    /// session has been deleted is still checked, so its index goes out
+    /// empty rather than going on listing that session.
+    /// </summary>
+    private void RepublishChangedResultsIndexYears()
+    {
+        try
+        {
+            // Saved, not All: a race Add could not write would otherwise
+            // change the year's ids and send an index listing a result the
+            // relay was never given - see SessionHistoryStore.Saved.
+            var now = _sessionHistory.Saved
+                .Where(s => !s.IsDemoSession())
+                .GroupBy(s => RelayResultsIndex.YearOf(s), StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => string.Join("|", g.Select(s => s.Id).OrderBy(id => id, StringComparer.Ordinal)),
+                    StringComparer.Ordinal);
+
+            foreach (var year in now.Keys.Union(_relayIndexSessionsSeen.Keys, StringComparer.Ordinal).ToList())
+            {
+                var current = now.TryGetValue(year, out var ids) ? ids : string.Empty;
+
+                if (!_relayIndexSessionsSeen.TryGetValue(year, out var seen))
+                {
+                    _relayIndexSessionsSeen[year] = current;
+                    continue;
+                }
+
+                if (seen == current)
+                {
+                    continue;
+                }
+
+                _relayIndexSessionsSeen[year] = current;
+
+                // A session added already sent its year's index from
+                // SessionAdded, and that was remembered; the rebuild here
+                // then matches it and nothing goes twice.
+                PublishResultsIndexForYear(year, onlyIfChanged: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_relayBuildErrors.Add($"resultsindex|{ex.Message}"))
+            {
+                OnClientRawMessage($"[relay] Could not check the results index: {ex.Message}");
+            }
+        }
+    }
+
     /// <summary>Republishes the index for the year one session belongs to. A demo race is not in it, so it changes nothing.</summary>
     private void PublishResultsIndexFor(SessionRecord session)
     {
@@ -936,13 +1361,15 @@ public partial class MainForm
     /// cannot hand back. A year of a busy club is a few hundred sessions,
     /// so building it costs nothing worth saving.
     /// </summary>
-    private void PublishResultsIndexForYear(string year)
+    private void PublishResultsIndexForYear(string year, bool onlyIfChanged = false)
     {
         try
         {
             var json = RelayResultsIndex.Build(
                 year,
-                _sessionHistory.All,
+
+                // Only what is on disk - see SessionHistoryStore.Saved.
+                _sessionHistory.Saved,
 
                 // A round belongs to a meeting, and a meeting usually to a
                 // championship. The championship's name is what makes a
@@ -953,6 +1380,12 @@ public partial class MainForm
                 _settings.RelayAbbreviateNames,
                 _settings.RelayResultsFromUtc);
 
+            if (onlyIfChanged && _relayIndexSent.TryGetValue(year, out var last) && last == json)
+            {
+                return;
+            }
+
+            _relayIndexSent[year] = json;
             _relayPublisher.PublishResultsIndex(year, json);
         }
         catch (Exception ex)

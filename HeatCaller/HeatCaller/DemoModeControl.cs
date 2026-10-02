@@ -479,6 +479,18 @@ public sealed class DemoModeControl : UserControl
     /// </summary>
     public IReadOnlyCollection<string> SelectedGhosts => _simulator.SelectedGhosts;
 
+    /// <summary>
+    /// The track the demo is run on - the layout picked on this page, or
+    /// null for the generic made-up pace. The host hands it to the ghost
+    /// cars at the green, so a PB or track-record ghost in a demo is paced
+    /// from the same track as the simulated cars. It used to be given Race
+    /// Control's track, which has nothing to do with the demo. The picker
+    /// is locked while a demo runs, so this cannot change under one.
+    ///
+    /// UI thread only, as the picker is.
+    /// </summary>
+    public string? SelectedTrackName => SelectedTrack()?.Name;
+
     private RoundDefinition? ChosenRound() => (_cmbRound.SelectedItem as RoundChoice)?.Round;
 
     /// <summary>

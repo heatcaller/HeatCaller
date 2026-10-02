@@ -1152,9 +1152,19 @@ public sealed class CommentaryService
               + (ReferenceEquals(fastestOfRace, winner) ? " - the fastest lap of the race" : string.Empty) + "\n"
             : string.Empty;
 
+        // A line too long for the facts is left out whole, never cut:
+        // Field's hard cut lands inside a value ("Motor 13." for "Motor
+        // 13.5T"), and the prompt below tells the model to say the changes
+        // exactly as written and that every number in the facts is exact,
+        // so a cut value goes out over the PA as a wrong setting. Leaving
+        // one change out is the smaller harm. MechanicBrief builds its
+        // first-setup line to fit (whole items only), so in practice this
+        // only drops a single change whose typed values are very long.
+        // Cleaning first, with no limit, so the length checked is the
+        // length the model would see.
         var setupLines = setupFacts
-            .Select(line => Field(line, MaxObservationChars))
-            .Where(line => line.Length > 0)
+            .Select(line => Field(line, int.MaxValue))
+            .Where(line => line.Length > 0 && line.Length <= MechanicBrief.MaxLineChars)
             .ToList();
 
         var facts =

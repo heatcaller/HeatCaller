@@ -18,6 +18,8 @@ public sealed class TrackLayoutStore
 
     public static TrackLayoutStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -43,12 +45,27 @@ public sealed class TrackLayoutStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new TrackLayoutStore(new Dictionary<string, TrackLayout>());
+        return new TrackLayoutStore(new Dictionary<string, TrackLayout>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every track plan,
+    /// its attachment, marshal posts, all-time lap record and Demo pace:
+    /// nothing anybody could type back in. It used to be loaded as empty and
+    /// then written over whole at the first change - adding tonight's track,
+    /// or even a new lap record set mid-race - so a backup or sync tool
+    /// holding it open for a moment at launch was enough to lose all of it.
+    /// What this store holds is then only what was added this session, and
+    /// none of it is saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>
     /// Puts back what a hand-edited or restored file left as null. The model
@@ -104,8 +121,16 @@ public sealed class TrackLayoutStore
 
     public void Save()
     {
-        var json = JsonSerializer.Serialize(_layouts.Values.ToList(), new JsonSerializerOptions { WriteIndented = true });
-        SafeFile.WriteAllText(FilePath, json);
+        // Not written while LoadedUnreadable: the real file is almost
+        // certainly fine, and saving this session's near-empty set would
+        // replace it. The console has already told the operator why and
+        // asked for a restart. Changed is still raised, so a layout added
+        // this session shows up in the pickers like any other until then.
+        if (!LoadedUnreadable)
+        {
+            var json = JsonSerializer.Serialize(_layouts.Values.ToList(), new JsonSerializerOptions { WriteIndented = true });
+            SafeFile.WriteAllText(FilePath, json);
+        }
 
         Changed?.Invoke();
     }
@@ -113,6 +138,35 @@ public sealed class TrackLayoutStore
     public IReadOnlyList<TrackLayout> All => _layouts.Values.OrderBy(t => t.Name).ToList();
 
     public TrackLayout? Get(string id) => _layouts.TryGetValue(id, out var t) ? t : null;
+
+    /// <summary>
+    /// True when a layout other than the one with <paramref name="exceptId"/>
+    /// already goes by <paramref name="name"/> - compared trimmed and without
+    /// regard to case. Pass null for a layout that isn't saved yet.
+    /// </summary>
+    /// <remarks>
+    /// Everything downstream finds a layout by its name alone: the Race
+    /// Control track picker lists names, and the all-time record and the
+    /// Demo pace are looked up with the first layout whose name matches. Two
+    /// layouts called "Club Oval" therefore showed up twice in the picker,
+    /// and either entry read and wrote the record of whichever one sorted
+    /// first - the other's record was never set, and the first one's could
+    /// be overwritten by laps driven on a different layout. Case is ignored
+    /// too, because "Club Oval" and "club oval" side by side in a list are
+    /// the same track to anyone picking from it.
+    /// </remarks>
+    public bool IsNameTaken(string name, string? exceptId)
+    {
+        var wanted = (name ?? string.Empty).Trim();
+        if (wanted.Length == 0)
+        {
+            return false;
+        }
+
+        return _layouts.Values.Any(t =>
+            t.Id != exceptId
+            && string.Equals((t.Name ?? string.Empty).Trim(), wanted, StringComparison.OrdinalIgnoreCase));
+    }
 
     public void Upsert(TrackLayout layout)
     {

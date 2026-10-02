@@ -196,14 +196,20 @@ public sealed class RaceClassEditForm : Form
 
         // The class's race format - limits, start procedure, streak rules.
         // Opens the shared editor; "untick custom" hands the class back to
-        // the app default rather than freezing a copy of it.
+        // the app default rather than freezing a copy of it. The app
+        // default goes in as the fallback, so the editor can say what
+        // following it means and, when custom is ticked, start the fields
+        // from the club's default rather than the built-in values. Null
+        // when this editor was opened without the store (the editor then
+        // falls back to the built-ins, as it always did).
         var btnFormat = new Button { Text = "Race Format..." };
         btnFormat.Click += (_, _) =>
         {
             using var form = new RaceFormatForm(
                 Result.Format,
                 $"Race Format - {(string.IsNullOrWhiteSpace(_txtName.Text) ? "this class" : _txtName.Text)}",
-                allowUseDefault: true);
+                allowUseDefault: true,
+                fallback: _store?.AppDefaultFormat?.Invoke());
 
             if (form.ShowDialog(this) == DialogResult.OK)
             {
@@ -214,6 +220,11 @@ public sealed class RaceClassEditForm : Form
         // Qualifiers get their own, falling back to the race format above.
         // Five-minute quals and eight-minute mains is the commonest club
         // shape there is, and it should not take a per-round override.
+        // The fallback is the class's race format, or the app default when
+        // the class follows that - the same chain qualifiers are run under
+        // (QualifierFormat, else Format, else the app default). Without the
+        // second step a class on the default left the editor no fallback,
+        // and ticking custom started from the built-in values.
         var btnQualFormat = new Button { Text = "Qualifier Format..." };
         btnQualFormat.Click += (_, _) =>
         {
@@ -221,7 +232,7 @@ public sealed class RaceClassEditForm : Form
                 Result.QualifierFormat,
                 $"Qualifier Format - {(string.IsNullOrWhiteSpace(_txtName.Text) ? "this class" : _txtName.Text)}",
                 allowUseDefault: true,
-                fallback: Result.Format);
+                fallback: Result.Format ?? _store?.AppDefaultFormat?.Invoke());
 
             if (form.ShowDialog(this) == DialogResult.OK)
             {
@@ -802,13 +813,15 @@ public sealed class RaceClassEditForm : Form
 /// </summary>
 public sealed class RaceClassManagerForm : Form
 {
-    public RaceClassManagerForm(RaceClassStore store, UndoService? undo = null)
+    // handicaps: passed on to the Classes page so a delete here forgets the
+    // deleted class's handicap mode, as it does on the page itself.
+    public RaceClassManagerForm(RaceClassStore store, UndoService? undo = null, HandicapStore? handicaps = null)
     {
         Text = "Race Classes";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var classes = new RaceClassesControl(store, undo);
+        var classes = new RaceClassesControl(store, undo, handicaps);
 
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK, Font = AppTheme.BodyFont };
 

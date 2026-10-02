@@ -421,6 +421,18 @@ public partial class MainForm
     /// </summary>
     private void StopSessionAudio()
     {
+        // The session's crowd was already silenced by the mute button when
+        // the race ended. Nothing below schedules an end for a bed that is
+        // not running, so without this the unmute would bring the crowd back
+        // at an empty track and leave it playing between heats.
+        if (_settings.AudioStopAmbienceAfterSession
+            && !_ambience.IsRunning
+            && _announcer.Muted
+            && _ambienceStoppedByMute)
+        {
+            _ambienceStoppedByMute = false;
+        }
+
         if (_settings.AudioStopAmbienceAfterSession && _ambience.IsRunning)
         {
             // After the finish celebration, which runs from RaceCompleted
@@ -433,6 +445,13 @@ public partial class MainForm
                 ? Math.Clamp(_ambienceStore.Current.FinishCelebrationSeconds, 0, 300)
                 : 0;
             var fade = Math.Clamp(_ambienceStore.Current.FadeDownSeconds, 0.5, 30);
+
+            // Recorded so the mute button knows the crowd is on its way out
+            // (see SetAllSoundMuted). All three are touched on the UI thread
+            // only: the task below hands its result back through TryPost.
+            var endGeneration = ++_ambienceEndGeneration;
+            _ambienceEnding = true;
+            _ambienceFadeStartsAtUtc = DateTime.UtcNow.AddSeconds(celebration);
 
             _ = Task.Run(async () =>
             {
@@ -456,6 +475,10 @@ public partial class MainForm
                 {
                     // Ambience is decoration - never surface a failure.
                 }
+                finally
+                {
+                    TryPost(() => FinishAmbienceEnding(endGeneration));
+                }
             });
 
             OnClientRawMessage(celebration > 0
@@ -475,9 +498,50 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Closes the record of a session's crowd ending, once the delayed fade
+    /// in StopSessionAudio has run its course. UI thread only.
+    /// </summary>
+    private void FinishAmbienceEnding(int generation)
+    {
+        // A newer session (or a newer ending) owns the record now.
+        if (generation != _ambienceEndGeneration)
+        {
+            return;
+        }
+
+        _ambienceEnding = false;
+
+        // Muted while the crowd was ending: the mute's Stop also called off
+        // the fade (or left the delayed task nothing running to fade), so
+        // nothing would ever stop the bed the unmute brings back. The crowd
+        // this mute silenced was the one the session was ending anyway, so
+        // it is no longer the mute's to restore.
+        if (_announcer.Muted && _ambienceStoppedByMute && !_ambience.IsRunning)
+        {
+            _ambienceStoppedByMute = false;
+        }
+    }
+
     /// <summary>Starts whichever sources the auto-start settings name.</summary>
     private void StartSessionAudio()
     {
+        // A new session calls off the last one's crowd ending - the delayed
+        // task already leaves the bed alone once _sessionAudioStarted is set,
+        // so the mute button must stop treating it as ending too.
+        _ambienceEndGeneration++;
+        _ambienceEnding = false;
+
+        // The mute button means silence (see SetAllSoundMuted), and the
+        // session only lifts it when "Unmute the announcer" is ticked under
+        // "bring up". With that unticked, a session that starts while muted
+        // stays muted - and the beds it brings up used to play through the
+        // mute anyway, the crowd the mute itself had stopped included, while
+        // the button still read Muted. So they are readied instead, and put
+        // on the mute's own record, so the unmute brings them up with the
+        // rest of the sound.
+        var staysMuted = _announcer.Muted && !_settings.AudioUnmuteAnnouncer;
+
         // Ticking a source under "bring up" is the more specific
         // instruction, so it overrides that source's own master switch.
         // Requiring BOTH meant a disabled source silently refused to start
@@ -501,13 +565,35 @@ public partial class MainForm
                 _music.Settings = _musicStore.Current;
                 _music.Play();
 
-                OnClientRawMessage(_music.IsPlaying
-                    ? $"{AppTime.LogStampNow()}  [audio] Music started for the new session."
-                    : $"{AppTime.LogStampNow()}  [audio] Music couldn't start - no enabled track has a readable file.");
+                if (staysMuted && _music.IsPlaying)
+                {
+                    // Started and paused at once, so the new session's queue
+                    // is ready and the unmute's Resume plays it. Play loads
+                    // the first track synchronously, so the pause lands before
+                    // the output has anything to sound.
+                    _music.Pause();
+                    _musicPausedByMute = true;
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Music ready for the new session - held paused until the sound is unmuted.");
+                }
+                else
+                {
+                    OnClientRawMessage(_music.IsPlaying
+                        ? $"{AppTime.LogStampNow()}  [audio] Music started for the new session."
+                        : $"{AppTime.LogStampNow()}  [audio] Music couldn't start - no enabled track has a readable file.");
+                }
             }
         }
 
-        if (_settings.AudioStartAmbience && !_ambience.IsRunning)
+        if (_settings.AudioStartAmbience && !_ambience.IsRunning && staysMuted)
+        {
+            // Not started: the unmute starts whatever the mute's record
+            // holds, with the settings set here. A crowd the session later
+            // ends (StopSessionAudio) is taken off the record again there.
+            _ambience.Settings = _ambienceStore.Current;
+            _ambienceStoppedByMute = true;
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Ambience held for the new session - it starts when the sound is unmuted.");
+        }
+        else if (_settings.AudioStartAmbience && !_ambience.IsRunning)
         {
             _ambience.Settings = _ambienceStore.Current;
 
@@ -532,6 +618,19 @@ public partial class MainForm
     /// <summary>Which beds the MUTE button itself silenced, so unmuting brings back exactly those and nothing it didn't stop.</summary>
     private bool _ambienceStoppedByMute;
     private bool _musicPausedByMute;
+
+    /// <summary>
+    /// The session's crowd is on its way out: StopSessionAudio has scheduled
+    /// its finish celebration and fade, and that has not yet finished. From
+    /// _ambienceFadeStartsAtUtc the fade is under way (or was due to start),
+    /// and a mute's Stop calls it off - so an unmute after that point must
+    /// not restart the bed, or nothing would ever stop it again.
+    /// _ambienceEndGeneration ties a delayed task's report back to the
+    /// ending it belongs to. All UI thread only.
+    /// </summary>
+    private bool _ambienceEnding;
+    private DateTime _ambienceFadeStartsAtUtc;
+    private int _ambienceEndGeneration;
 
     /// <summary>
     /// The sidebar mute button means SILENCE, not "no announcer over the
@@ -576,9 +675,21 @@ public partial class MainForm
         }
         else
         {
-            if (_ambienceStoppedByMute)
+            // Unless the crowd the mute stopped was already being ended by
+            // the session (see _ambienceEnding). During the finish
+            // celebration it comes back - the delayed task still finds it
+            // running and fades it as planned. Once the fade is due, the
+            // mute has called it off, and a restarted bed would play on
+            // through the gap between heats with nothing left to stop it.
+            var crowdWasEnding = _ambienceEnding && DateTime.UtcNow >= _ambienceFadeStartsAtUtc;
+
+            if (_ambienceStoppedByMute && !crowdWasEnding)
             {
                 _ambience.Start(ignoreEnabledSetting: true);
+            }
+            else if (_ambienceStoppedByMute)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Ambience left off - the session had ended and the crowd was fading out.");
             }
 
             if (_musicPausedByMute)
@@ -612,9 +723,12 @@ public partial class MainForm
         _ambience.Settings = _ambienceStore.Current;
         if (_ambience.IsRunning)
         {
-            // Layers are opened when ambience starts, so a new bed needs a restart.
-            _ambience.Stop();
-            _ambience.Start(ignoreEnabledSetting: true);
+            // Layers are opened when ambience starts, so a new bed needs a
+            // restart. Restart rather than Stop and Start: a soundscape
+            // applied while the session's crowd is fading out keeps that
+            // fade, so the crowd still stops when it is due instead of
+            // coming back at idle with nothing left to stop it.
+            _ambience.Restart(ignoreEnabledSetting: true);
         }
 
         _music.Settings = _musicStore.Current;
@@ -626,8 +740,23 @@ public partial class MainForm
         if (_music.IsPlaying && _musicStore.Current.PlayThemeMusic == true)
         {
             // The queue is built when play starts; restarting plays the new soundscape's tracks.
+            //
+            // IsPlaying counts paused music as playing, so music paused by
+            // the mute button or on the Music page came through here too -
+            // and the restart started the new tracks unpaused, playing
+            // through a mute the sidebar still showed. Paused music is
+            // paused again straight after, on the new queue: the unmute's
+            // Resume (the mute's record is left as it was) or resuming on
+            // the Music page then brings up the new soundscape's music.
+            var wasPaused = _music.IsPaused;
+
             _music.Stop();
             _music.Play();
+
+            if (wasPaused && _music.IsPlaying)
+            {
+                _music.Pause();
+            }
         }
 
         _ambienceControl?.RefreshAll();

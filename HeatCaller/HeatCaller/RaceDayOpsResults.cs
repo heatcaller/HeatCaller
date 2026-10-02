@@ -229,13 +229,6 @@ public sealed partial class RaceDayService
 
         var snapshot = ResultEditor.Snapshot(session);
 
-        _host.Undo.Capture($"Phone: Correct the result of '{session.Label}'", () =>
-        {
-            ResultEditor.Restore(session, snapshot);
-            _host.History.SaveEdited(session);
-            _host.RefreshDesk();
-        });
-
         var count = ResultEditor.Apply(session, adjustments, reason, "Phone");
 
         // The answer below tells the driver this correction is what the
@@ -251,6 +244,38 @@ public sealed partial class RaceDayService
                 "That correction could not be saved - something on the race laptop has race-history.json open, "
                 + "or its disk is full. Nothing has been changed. Try again in a moment.");
         }
+
+        // Only once the correction is on disk: an undo step left behind by a
+        // save that failed would spend the laptop's next Undo on a change
+        // that never happened (see ResultEditor.Apply).
+        var correctedId = session.Id;
+
+        _host.Undo.Capture($"Phone: Correct the result of '{session.Label}'", () =>
+        {
+            // As the laptop's own correction undo (RaceHistoryControl): not
+            // onto a race deleted since, and not reported as done when the
+            // old result could not be written - memory and disk would then
+            // disagree until the next restart quietly brought the correction
+            // back.
+            if (!ReferenceEquals(_host.History.Get(correctedId), session))
+            {
+                throw new InvalidOperationException($"\"{session.Label}\" has been deleted since. Nothing was changed.");
+            }
+
+            var corrected = ResultEditor.Snapshot(session);
+            ResultEditor.Restore(session, snapshot);
+
+            if (!_host.History.SaveEdited(session))
+            {
+                ResultEditor.Restore(session, corrected);
+                _host.RefreshDesk();
+                throw new InvalidOperationException(
+                    $"undoing the correction to \"{session.Label}\" could not be written to the race history - something else "
+                    + "on this PC has the file open, or the disk is full. The corrected result is still in place.");
+            }
+
+            _host.RefreshDesk();
+        });
 
         return OpResult.Done(
             $"Corrected \"{session.Label}\" ({Plural.Of(count, "driver")}): {reason}",

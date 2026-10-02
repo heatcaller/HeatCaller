@@ -23,6 +23,13 @@ internal static class MechanicBrief
     /// <summary>How long before the race ended a logged setup still counts as this race day's.</summary>
     internal static readonly TimeSpan RaceDay = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// The longest line the interview's facts take from here. Longer ones
+    /// are left out there, not cut - see BuildMechanicInterviewAsync - so the
+    /// first-setup line is built to fit it.
+    /// </summary>
+    internal const int MaxLineChars = 200;
+
     /// <param name="transponder">The winner's transponder.</param>
     /// <param name="driverName">The winner's name as their profile has it - what an entry from before the Garage was logged under.</param>
     /// <param name="className">The race's class, or null for a race that isn't a round.</param>
@@ -94,9 +101,38 @@ internal static class MechanicBrief
             var filled = SetupDiff.Filled(latest, templateFor);
             var first = previous is null ? "the first one logged for this car" : "the first on a setup sheet for this car";
 
-            return filled.Count == 0
-                ? new[] { "A setup was logged for this race day, but nothing on it was filled in." }
-                : new[] { $"Setup logged for this race day, {first}, so there is nothing to compare it with: " + string.Join(", ", filled) };
+            if (filled.Count == 0)
+            {
+                return new[] { "A setup was logged for this race day, but nothing on it was filled in." };
+            }
+
+            // Whole items only, up to MaxLineChars. The interview drops a
+            // line longer than that rather than cut it (see
+            // CommentaryService.BuildMechanicInterviewAsync), because a cut
+            // lands inside a value - "Motor 13." for "Motor 13.5T" - and the
+            // model is told every number in the facts is exact. Long
+            // free-text values on the first four fields easily pass the
+            // limit once the sentence in front of them is counted, so the
+            // items that don't fit are left off here, whole, instead.
+            var line = $"Setup logged for this race day, {first}, so there is nothing to compare it with: ";
+            var kept = new List<string>();
+
+            foreach (var item in filled)
+            {
+                var candidate = line + string.Join(", ", kept.Append(item));
+                if (candidate.Length > MaxLineChars)
+                {
+                    break;
+                }
+
+                kept.Add(item);
+            }
+
+            // Even the first item is too long to say whole: say the setup
+            // is there without reading out any of it, rather than half of it.
+            return kept.Count == 0
+                ? new[] { $"Setup logged for this race day, {first}; its settings are too long to read out here." }
+                : new[] { line + string.Join(", ", kept) };
         }
 
         // Only values on the sheet - see SetupDiff.Change.OnSheet.
@@ -107,12 +143,26 @@ internal static class MechanicBrief
             return new[] { "Setup logged for this race day: no changes from the setup before it." };
         }
 
-        var lines = new List<string> { "Setup changes logged for this race day:" };
-        lines.AddRange(SetupDiff.Spoken(changes).Select(change => "- " + change));
+        // A change too long to say whole (typed values running past
+        // MaxLineChars) is left out here and counted with the rest not
+        // listed, rather than dropped later by the interview, which left the
+        // heading over too few changes - or none - and an "and N more" that
+        // undercounted. See CommentaryService.BuildMechanicInterviewAsync.
+        var spoken = SetupDiff.Spoken(changes).Select(change => "- " + change).ToList();
+        var listed = spoken.Where(line => line.Length <= MaxLineChars).ToList();
+        var notListed = changes.Count - listed.Count;
 
-        if (changes.Count > SetupDiff.SpokenMax)
+        if (listed.Count == 0)
         {
-            lines.Add($"- and {Plural.Of(changes.Count - SetupDiff.SpokenMax, "more change")} besides");
+            return new[] { $"Setup logged for this race day: {Plural.Of(changes.Count, "change")} from the setup before it, too long to read out here." };
+        }
+
+        var lines = new List<string> { "Setup changes logged for this race day:" };
+        lines.AddRange(listed);
+
+        if (notListed > 0)
+        {
+            lines.Add($"- and {Plural.Of(notListed, "more change")} besides");
         }
 
         return lines;

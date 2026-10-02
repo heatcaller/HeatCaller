@@ -121,6 +121,16 @@ public sealed class LapDetailPopup : ToolStripDropDown
         private long[] _lapMs = Array.Empty<long>();
         private int[] _streakAtLap = Array.Empty<int>();
 
+        // Indexes into _lapMs of laps that ran through a crash recovery (see
+        // RacerStanding.RecoveryLapIndexes). Such a lap spans the whole
+        // stoppage, so it is still listed - it is part of the driver's race
+        // time - but it is left out of the Average tile and the pace-bar
+        // scale, the same way RaceGaps.PaceLaps leaves it out of the
+        // leaderboard's figures. Without that, the popup's Average disagreed
+        // with the board's for the same driver, and one lap minutes long
+        // squashed every other bar down to the stub.
+        private HashSet<int> _recoveryLaps = new();
+
         private bool _present;
         private int _position;
         private int _laps;
@@ -173,6 +183,7 @@ public sealed class LapDetailPopup : ToolStripDropDown
             {
                 _lapMs = Array.Empty<long>();
                 _streakAtLap = Array.Empty<int>();
+                _recoveryLaps = new HashSet<int>();
                 _laps = 0;
                 _bestMs = 0;
                 _penaltyMs = 0;
@@ -185,10 +196,20 @@ public sealed class LapDetailPopup : ToolStripDropDown
                 // one thread while it is walked on another either throws or
                 // hands back nonsense - neither of which is worth risking to
                 // save copying a dozen longs.
+                //
+                // All three are copied into locals first and only then
+                // assigned, so a copy that throws part-way leaves the previous
+                // set intact as a whole rather than lap times from this lap
+                // paired with recovery indexes from the last one.
                 try
                 {
-                    _lapMs = standing.LapTimesMs.ToArray();
-                    _streakAtLap = standing.StreakAtLap.ToArray();
+                    var lapMs = standing.LapTimesMs.ToArray();
+                    var streakAtLap = standing.StreakAtLap.ToArray();
+                    var recoveryLaps = new HashSet<int>(standing.RecoveryLapIndexes.ToArray());
+
+                    _lapMs = lapMs;
+                    _streakAtLap = streakAtLap;
+                    _recoveryLaps = recoveryLaps;
                 }
                 catch
                 {
@@ -293,22 +314,28 @@ public sealed class LapDetailPopup : ToolStripDropDown
         /// is not a lap and is typically a second or more slower than one.
         /// Including it drags the average down by exactly the amount that
         /// makes a driver's numbers look wrong to them.
+        ///
+        /// Laps that ran through a crash recovery are left out too, matching
+        /// RaceGaps.PaceLaps, so this reads the same as the leaderboard's
+        /// Average column for the same driver.
         /// </summary>
         private double AverageFlyingMs()
         {
-            if (_lapMs.Length < 2)
-            {
-                return 0;
-            }
-
             long total = 0;
+            var count = 0;
 
             for (var i = 1; i < _lapMs.Length; i++)
             {
+                if (_recoveryLaps.Contains(i))
+                {
+                    continue;
+                }
+
                 total += _lapMs[i];
+                count++;
             }
 
-            return total / (double)(_lapMs.Length - 1);
+            return count > 0 ? total / (double)count : 0;
         }
 
         /// <summary>The app's stat tile, sized down and with the value measured to fit.</summary>
@@ -395,12 +422,20 @@ public sealed class LapDetailPopup : ToolStripDropDown
             // The pace bars are scaled across the laps actually on screen,
             // and across flying laps only: the green-to-line pass is not a
             // lap time and would otherwise set the scale single-handedly,
-            // squashing every real lap into the same short bar.
+            // squashing every real lap into the same short bar. A lap that
+            // ran through a crash recovery is left out of the scale for the
+            // same reason - it spans the whole stoppage - and simply draws as
+            // a full-width bar, since the bar width is clamped.
             long fastest = 0;
             long slowest = 0;
 
             for (var i = Math.Max(first, 1); i < _lapMs.Length; i++)
             {
+                if (_recoveryLaps.Contains(i))
+                {
+                    continue;
+                }
+
                 var ms = _lapMs[i];
 
                 if (fastest == 0 || ms < fastest)

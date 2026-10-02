@@ -404,11 +404,17 @@ internal sealed class HeatCallerVoiceClient
             throw new HeatCallerVoiceException(HeatCallerRefusal.Text, "There was nothing to say.");
         }
 
-        // Measured on the words that will actually be spoken. Audio tags
-        // are sent as written - the relay knows which of its voices can use
-        // them and takes them out for the ones that can't - so counting
-        // them here refused a line for characters nobody was ever going to
-        // say or be charged for.
+        // Audio tags are sent as written - the relay knows which of its
+        // voices can use them and takes them out for the ones that can't.
+        // So this counts the line WITHOUT them: the least the relay could
+        // count, for a voice that can't use tags. It is only a quick no for
+        // a line no voice could take. For a v3 voice the relay keeps the
+        // tags and counts them too, so a tagged line can pass here and still
+        // be refused there; that is why the announcer cuts a long line into
+        // pieces measured WITH the tags before it ever reaches this method
+        // (AnnouncementService.SplitForHeatCaller), and a piece that fits
+        // that way fits on either kind of voice. Counting the tags here
+        // instead would refuse lines a non-v3 voice speaks perfectly well.
         if (VoiceProfile.StripAudioTags(text).Length > MaxCharacters)
         {
             throw new HeatCallerVoiceException(

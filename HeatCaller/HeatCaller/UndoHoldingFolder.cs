@@ -244,6 +244,17 @@ internal static class UndoHoldingFolder
                         }
                         else
                         {
+                            // A read-only file has to lose the flag first.
+                            // A move keeps a file's attributes, and a track
+                            // imported off a CD or a read-only share keeps
+                            // its ReadOnly flag (File.Copy carries it over),
+                            // so such a file arrives here read-only. Windows
+                            // refuses to delete it, .NET does not clear the
+                            // flag for us, and the whole held action would
+                            // fail the same way at every Prune - never
+                            // cleared, however old.
+                            ClearReadOnly(folder);
+
                             // .NET removes a link met inside without going
                             // into it.
                             Directory.Delete(folder, recursive: true);
@@ -264,6 +275,74 @@ internal static class UndoHoldingFolder
 
     private static bool IsReparsePoint(string path) =>
         (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+
+    /// <summary>
+    /// Takes the ReadOnly flag off everything inside a held action's folder,
+    /// so the recursive delete in Prune can remove it.
+    ///
+    /// A junction or link met inside is never gone into, and its own
+    /// attributes are left alone too: setting attributes on a link can reach
+    /// through to what it points at, and that is somewhere this class must
+    /// never change. The delete removes the link itself without going in.
+    ///
+    /// Each entry on its own try: one that can't be changed (locked, or
+    /// gone already) must not stop the rest. The delete then fails on that
+    /// one as before, and the folder waits for the next Prune.
+    /// </summary>
+    internal static void ClearReadOnly(string folder)
+    {
+        // Every entry, hidden and system ones included - the enumeration's
+        // default would skip those, and a hidden read-only file blocks the
+        // delete just as well.
+        var options = new EnumerationOptions
+        {
+            AttributesToSkip = 0,
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = false,
+        };
+
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(new DirectoryInfo(folder));
+
+        while (pending.Count > 0)
+        {
+            IEnumerable<FileSystemInfo> entries;
+            try
+            {
+                entries = pending.Pop().EnumerateFileSystemInfos("*", options).ToList();
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var entry in entries)
+            {
+                try
+                {
+                    var attributes = entry.Attributes;
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    {
+                        continue;
+                    }
+
+                    if ((attributes & FileAttributes.ReadOnly) != 0)
+                    {
+                        entry.Attributes = attributes & ~FileAttributes.ReadOnly;
+                    }
+
+                    if (entry is DirectoryInfo directory)
+                    {
+                        pending.Push(directory);
+                    }
+                }
+                catch
+                {
+                    // Left as it is; see above.
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// The UTC time in a NewFolder name - "yyyyMMdd-HHmmss-" then 32 hex

@@ -1567,25 +1567,49 @@ public sealed class RaceProgramControl : UserControl
         var heatSize = HeatSize();
         var track = DayTrack();
 
+        // The rounds still to build for each class: the planned ones that
+        // have no recorded heat today. See QualifyingRoundsAlreadyRun - a
+        // rebuild used to make every round again, so a late check-in fitted
+        // in after Q1 put a second Q1 on the program beside the recorded one.
         var plan = classes
-            .Select(c => (c.Name, c.RosterCount, Heats: (int)Math.Ceiling(c.RosterCount / (double)heatSize)))
+            .Select(c =>
+            {
+                var run = QualifyingRoundsAlreadyRun(DayRoundsForClass(c.Name));
+                var toBuild = Enumerable.Range(1, roundCount).Count(n => !run.Contains(n));
+                return (c.Name, c.RosterCount, Heats: (int)Math.Ceiling(c.RosterCount / (double)heatSize), ToBuild: toBuild, Run: run);
+            })
             .ToList();
 
-        var total = plan.Sum(p => p.Heats) * roundCount;
+        var total = plan.Sum(p => p.Heats * p.ToBuild);
+
+        if (total == 0)
+        {
+            // Every planned round has been run in every class. Building
+            // again could only repeat a round that already counts, so it
+            // is refused, and the director is pointed at the tool that does
+            // fit a late driver into what is left.
+            return new ProgramAnswer(false, QualifyingAlreadyRunTitle,
+                $"Every {(DayIsClubNight ? "race" : "qualifying round")} planned for today has already been run, so there is nothing left to build. "
+                + "To fit a driver into a heat that has not been run yet, use Move Drivers Between Heats.");
+        }
 
         // "Stock: 3 x 2 heats (14 drivers)" on a race day. On a club night a
         // single group is just "Stock: 3 races (3 drivers)" - "3 x 1 race"
-        // is arithmetic where a sentence will do.
+        // is arithmetic where a sentence will do. A round already run is
+        // named on the end, so the count is the count of what will really
+        // be made and the director can see why it is short.
         var summary = string.Join("\r\n", plan.Select(p =>
-            DayIsClubNight && p.Heats == 1
-                ? $"   {p.Name}: {Plural.Of(roundCount, "race")}  ({Plural.Of(p.RosterCount, "driver")})"
-                : $"   {p.Name}: {roundCount} x {Plural.Of(p.Heats, RoundWord)}  ({Plural.Of(p.RosterCount, "driver")})"));
+            (p.ToBuild == 0
+                ? $"   {p.Name}: nothing to build"
+                : DayIsClubNight && p.Heats == 1
+                    ? $"   {p.Name}: {Plural.Of(p.ToBuild, "race")}  ({Plural.Of(p.RosterCount, "driver")})"
+                    : $"   {p.Name}: {p.ToBuild} x {Plural.Of(p.Heats, RoundWord)}  ({Plural.Of(p.RosterCount, "driver")})")
+            + RunRoundsNote(p.Run, roundCount)));
 
         // Today's rounds only - see BuildQualifying, which works from the
         // same set so the count and the delete can never disagree.
         var replaceable = classes
-            .SelectMany(c => DayRoundsForClass(c.Name))
-            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .SelectMany(c => ReplaceableQualifiers(DayRoundsForClass(c.Name)))
             .ToList();
 
         // The heat out on track is unrecorded, so the build would delete it
@@ -1604,6 +1628,14 @@ public sealed class RaceProgramControl : UserControl
         var note = replacing > 0
             ? $"\r\n\r\n{Plural.Of(replacing, DayIsClubNight ? "race" : "qualifier")} that {(replacing == 1 ? "has" : "have")} not been run will be replaced. Recorded rounds are untouched."
             : string.Empty;
+
+        // Said outright when some rounds are skipped: "Recorded rounds are
+        // untouched" alone read as if the whole set would be built again
+        // around them, which is exactly what used to happen.
+        if (plan.Any(p => RunRoundsNote(p.Run, roundCount).Length > 0))
+        {
+            note += "\r\n\r\nRounds that already have a recorded heat are not built again, and any of their heats still to run stay as they are.";
+        }
 
         // Titled with the same words as the button that opened it: a
         // confirmation whose heading renames the thing you just pressed reads
@@ -1653,19 +1685,25 @@ public sealed class RaceProgramControl : UserControl
         var heatSize = HeatSize();
         var track = DayTrack();
 
-        // Today's rounds only. This used to read every round each class
-        // has ever had, so an unrun heat left over from an earlier race day
-        // was counted here and then deleted below - the build reached back
-        // into another day's programme. The count, the delete and the undo
-        // all work from this one set so they can never disagree.
-        var dayRoundIds = classes
-            .SelectMany(c => DayRoundsForClass(c.Name))
-            .Select(r => r.Id)
-            .ToHashSet(StringComparer.Ordinal);
+        // Which rounds each class has already run today, worked out before
+        // anything is deleted. Those rounds are not built again, and their
+        // heats still to run are not replaced either: rebuilding "Q1 Heat 2"
+        // after "Q1 Heat 1" was recorded would mean building Q1 again, which
+        // is the duplicate this is here to prevent.
+        var runByClass = classes.ToDictionary(
+            c => c.Name,
+            c => QualifyingRoundsAlreadyRun(DayRoundsForClass(c.Name)),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Every planned round already run everywhere: nothing to build, and
+        // nothing is touched. Refused with the same words the plan gives.
+        if (classes.All(c => Enumerable.Range(1, roundCount).All(runByClass[c.Name].Contains)))
+        {
+            return PlanQualifyingBuild();
+        }
 
         var replaced = classes
-            .SelectMany(c => DayRoundsForClass(c.Name))
-            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .SelectMany(c => ReplaceableQualifiers(DayRoundsForClass(c.Name)))
             .ToList();
 
         // Started while the question was open: refused, for the reason
@@ -1674,6 +1712,15 @@ public sealed class RaceProgramControl : UserControl
         {
             return PlanQualifyingBuild();
         }
+
+        // Today's rounds only. This used to read every round each class
+        // has ever had, so an unrun heat left over from an earlier race day
+        // was counted here and then deleted below - the build reached back
+        // into another day's programme. The count, the delete and the undo
+        // all work from this one set so they can never disagree. It is now
+        // narrowed further to exactly the heats being replaced, so the unrun
+        // heats of a round already under way stay on the program too.
+        var replacedIds = replaced.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
 
         var owners = replaced.ToDictionary(
             r => r.Id,
@@ -1699,13 +1746,33 @@ public sealed class RaceProgramControl : UserControl
 
         foreach (var raceClass in classes)
         {
-            _rounds.ClearUnrecordedQualifiers(raceClass.Name, dayRoundIds);
+            _rounds.ClearUnrecordedQualifiers(raceClass.Name, replacedIds);
+        }
+
+        // The deleted heats come off the race day as well, the way the
+        // finals build and every other delete here does it. Clearing them
+        // from the round store alone left their ids on the day for good, so
+        // each rebuild added another set to the day's round count - six heats
+        // rebuilt once read as twelve on Setup, the Championship Calendar and
+        // the phone's Today summary. `replaced` is exactly what the clear
+        // above removed (today's unrecorded qualifiers of these classes), and
+        // the undo puts them back on their day through `owners`.
+        foreach (var gone in replaced)
+        {
+            _events?.RemoveRound(gone.Id);
         }
 
         for (var round = 0; round < roundCount; round++)
         {
             foreach (var raceClass in classes)
             {
+                // A round this class has already run is left alone - see
+                // runByClass above.
+                if (runByClass[raceClass.Name].Contains(round + 1))
+                {
+                    continue;
+                }
+
                 var roster = RosterFor(raceClass.Name);
 
                 if (roster.Count == 0)
@@ -1713,17 +1780,7 @@ public sealed class RaceProgramControl : UserControl
                     continue;
                 }
 
-                var heatCount = Math.Max(1, (int)Math.Ceiling(roster.Count / (double)heatSize));
-                var shift = round * heatSize % roster.Count;
-
-                var rotated = roster.Skip(shift).Concat(roster.Take(shift)).ToList();
-
-                var heats = Enumerable.Range(0, heatCount).Select(_ => new List<string>()).ToList();
-
-                for (var i = 0; i < rotated.Count; i++)
-                {
-                    heats[i % heatCount].Add(rotated[i].Transponder);
-                }
+                var heats = DealQualifyingHeats(roster.Select(d => d.Transponder).ToList(), heatSize, round);
 
                 for (var heat = 0; heat < heats.Count; heat++)
                 {
@@ -1772,6 +1829,199 @@ public sealed class RaceProgramControl : UserControl
         RefreshAll();
 
         return new ProgramAnswer(true, DayIsClubNight ? "Tonight's races built" : "Tonight's heats built", done);
+    }
+
+    /// <summary>
+    /// The title PlanQualifyingBuild gives when every planned qualifying
+    /// round has already been run - kept apart from NothingToBuildTitle so
+    /// the set-up wizard does not send anyone to the Drivers step for it.
+    /// </summary>
+    public const string QualifyingAlreadyRunTitle = "Qualifying already run";
+
+    /// <summary>
+    /// The qualifying round (1, 2, 3 ...) a heat belongs to, read from its
+    /// label the same way Move Drivers Between Heats reads it ("Q2 Heat 1",
+    /// "Race 2 Heat 1", "Round 2"), or null for anything that is not a
+    /// qualifier or belongs to no particular round.
+    ///
+    /// An unnumbered qualifier ("Heat 3") is round 1 when every qualifier
+    /// the class has today is unnumbered - that is what a one-round night
+    /// builds. Beside numbered rounds it is a heat added by hand and counts
+    /// towards none of them (HeatBalanceForm.RoundKeyFor says the same).
+    /// </summary>
+    public static int? QualifyingRoundNumber(RoundDefinition round, IReadOnlyList<RoundDefinition> classDayRounds)
+    {
+        var key = HeatBalanceForm.RoundKeyFor(round, classDayRounds);
+
+        if (key is null)
+        {
+            return null;
+        }
+
+        if (key.Length == 0)
+        {
+            return 1;
+        }
+
+        return int.TryParse(key.AsSpan(1), out var number) ? number : null;
+    }
+
+    /// <summary>
+    /// The qualifying rounds a class has already run today: every round
+    /// with at least one recorded heat. <paramref name="classDayRounds"/>
+    /// is the class's rounds on today's program.
+    ///
+    /// Building qualifying used to delete the unrun heats and then build
+    /// every planned round again from Q1, so pressing Build after Q1 was
+    /// recorded - to fit in a late check-in, say - put a second Q1 on the
+    /// program. Each of those heats has its own round, so a driver who ran
+    /// both was scored for one heat more than the night planned, and under
+    /// best-N scoring could drop one more bad result than everyone else.
+    /// Rounds in this set are not built again.
+    /// </summary>
+    public static HashSet<int> QualifyingRoundsAlreadyRun(IReadOnlyList<RoundDefinition> classDayRounds) =>
+        classDayRounds
+            .Where(r => r.Kind == RoundKind.Qualifier && r.IsRecorded)
+            .Select(r => BuildRoundOf(r, classDayRounds))
+            .OfType<int>()
+            .ToHashSet();
+
+    /// <summary>
+    /// The round a build counts a qualifier towards - QualifyingRoundNumber,
+    /// with one addition. A night that started with one qualifying round
+    /// built unnumbered heats ("Heat 1"); when the round count is then raised
+    /// and Build pressed, numbered Q2 and Q3 heats land beside them, and
+    /// from then on QualifyingRoundNumber counts the unnumbered ones as
+    /// hand-added heats belonging to no round. The next Build then saw no
+    /// round run, deleted the unrun "Heat 2" and built Q1 again beside the
+    /// recorded "Heat 1" - a second Q1. So while the class has no numbered
+    /// first round ("Q1" or "Race 1"), an unnumbered qualifier is still
+    /// round 1 for the build.
+    /// </summary>
+    private static int? BuildRoundOf(RoundDefinition round, IReadOnlyList<RoundDefinition> classDayRounds)
+    {
+        if (QualifyingRoundNumber(round, classDayRounds) is { } number)
+        {
+            return number;
+        }
+
+        if (round.Kind != RoundKind.Qualifier || !IsUnnumberedQualifier(round))
+        {
+            return null;
+        }
+
+        var hasNumberedFirstRound = classDayRounds.Any(r =>
+            r.Kind == RoundKind.Qualifier
+            && !IsUnnumberedQualifier(r)
+            && QualifyingRoundNumber(r, classDayRounds) == 1);
+
+        return hasNumberedFirstRound ? null : 1;
+    }
+
+    /// <summary>True for a qualifier whose label names no round ("Heat 3") - what a one-round build makes.</summary>
+    private static bool IsUnnumberedQualifier(RoundDefinition round) =>
+        HeatBalanceForm.RoundKeyFor(round, new[] { round }) is { Length: 0 };
+
+    /// <summary>
+    /// The heats a qualifying build replaces for one class: its unrun
+    /// qualifiers today, except those in a round that already has a
+    /// recorded heat. Those stay - their round is not built again (see
+    /// QualifyingRoundsAlreadyRun), so deleting them would take the round
+    /// away from the drivers who have not raced it yet.
+    /// </summary>
+    public static List<RoundDefinition> ReplaceableQualifiers(IReadOnlyList<RoundDefinition> classDayRounds)
+    {
+        var run = QualifyingRoundsAlreadyRun(classDayRounds);
+
+        return classDayRounds
+            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .Where(r => BuildRoundOf(r, classDayRounds) is not { } number || !run.Contains(number))
+            .ToList();
+    }
+
+    /// <summary>
+    /// " - Q1 already run" for the build question's summary line, naming
+    /// the planned rounds a class will skip; empty when it skips none.
+    /// </summary>
+    private string RunRoundsNote(IReadOnlySet<int> run, int roundCount)
+    {
+        var skipped = run.Where(n => n >= 1 && n <= roundCount).OrderBy(n => n).ToList();
+
+        if (skipped.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var names = string.Join(", ", skipped.Select(n => roundCount == 1
+            ? "the heats"
+            : DayIsClubNight ? $"Race {n}" : $"Q{n}"));
+
+        return $"  - {names} already run";
+    }
+
+    /// <summary>
+    /// Splits one class's roster into the heats of one qualifying round,
+    /// as transponders in grid order. Pure, so the tests can hold it to
+    /// what it promises without a race day.
+    ///
+    /// The deal is round-robin across the heats, which keeps them level -
+    /// never more than one driver apart - and each round starts one heat's
+    /// worth further round the roster, so the grid order changes too.
+    ///
+    /// That rotation on its own is not enough, though. When the number of
+    /// heats divides the class size - every even class split into two
+    /// heats, which is the commonest night there is - a round-robin deal
+    /// puts a driver in heat (place - shift) mod heats, and the groups
+    /// are just the roster's places taken every other one (or every
+    /// third, and so on). Rotating can only change which of those same
+    /// groups is called Heat 1, and with an even shift it does not even
+    /// do that. So a class of 16 at 8 a heat ran the same eight drivers
+    /// together, first out on a green track, in Q1, Q2 and Q3.
+    ///
+    /// So in that case, from Q2 on, each row of the deal (one driver per
+    /// heat) is also moved along by one heat every `round` rows: Q2 moves
+    /// every row, Q3 every second row, Q4 every third. Each row still
+    /// gives every heat exactly one driver, so the heats stay level, and
+    /// every round's groups differ from every other round's as long as
+    /// the class has more rows than the round number - a class of 4 at 2
+    /// a heat only has two rows, so its Q3 matches Q1 again, which is the
+    /// best two rows can do. The other case - heats that do not divide
+    /// the class - is left exactly as it was, because there the rotation
+    /// already moves drivers between heats.
+    /// </summary>
+    internal static List<List<string>> DealQualifyingHeats(IReadOnlyList<string> roster, int heatSize, int round)
+    {
+        var heatCount = roster.Count == 0
+            ? 1
+            : Math.Max(1, (int)Math.Ceiling(roster.Count / (double)Math.Max(1, heatSize)));
+
+        var heats = Enumerable.Range(0, heatCount).Select(_ => new List<string>()).ToList();
+
+        if (roster.Count == 0)
+        {
+            return heats;
+        }
+
+        var shift = round * heatSize % roster.Count;
+
+        var rotated = roster.Skip(shift).Concat(roster.Take(shift)).ToList();
+
+        var regroup = heatCount > 1 && round > 0 && roster.Count % heatCount == 0;
+
+        for (var i = 0; i < rotated.Count; i++)
+        {
+            var heat = i % heatCount;
+
+            if (regroup)
+            {
+                var row = i / heatCount;
+                heat = (heat + row / round) % heatCount;
+            }
+
+            heats[heat].Add(rotated[i]);
+        }
+
+        return heats;
     }
 
     /// <summary>The one of these rounds that is on track right now, or null.</summary>
@@ -2119,8 +2369,40 @@ public sealed class RaceProgramControl : UserControl
 
         if (form.ShowDialog(this) == DialogResult.OK && form.Result is not null)
         {
-            _rounds.Add(form.Result);
-            _events?.AddRoundsToActive(new[] { form.Result.Id });
+            var added = form.Result;
+
+            // A tiered main ("A-Main", "B-Main") takes the class's bump-up
+            // count, the way a main built from qualifying does (see
+            // MainsBuilder.BuildRounds). The form left it at 0, so a main
+            // added by hand - which is what the "No tiered mains" answer in
+            // PlanBumpUps tells the director to do - was refused every
+            // bump-up as "not set up to receive" them, and nothing on screen
+            // could change that. It is set on every tier, the lowest
+            // included: which main ends up lowest is not known until the
+            // director has finished adding them, and on the lowest one the
+            // count is never read, because the blocker check stops first at
+            // "no main below this one".
+            if (added.MainTier >= 0)
+            {
+                added.BumpUpCount = Math.Max(0, ClassByName(className)?.BumpUpCount ?? 0);
+            }
+
+            // An undo entry like every other change to the program. Without
+            // one, Undo straight after adding a main reversed whatever came
+            // before it - seeding the finals, say - and left the main that
+            // was added by mistake in place. Taken out the same way a build
+            // is undone, so a main that has been run (or is on track) since
+            // stays, with its result.
+            _undo.Capture($"Add {added.RoundLabel} ({className})", () =>
+            {
+                var kept = RemoveUnrunRounds(new[] { added });
+
+                RefreshAll();
+                ReportKeptRounds(kept, "main", string.Empty);
+            });
+
+            _rounds.Add(added);
+            _events?.AddRoundsToActive(new[] { added.Id });
             RefreshAll();
         }
     }
@@ -2231,25 +2513,38 @@ public sealed class RaceProgramControl : UserControl
             return;
         }
 
-        var before = round.AssignedTransponders.ToList();
+        // By id, onto the round as it is on file now - a round deleted since
+        // stays deleted - and only if it has not been run since and still
+        // holds the drivers this edit gave it (see CheckRosterRestore): the
+        // undo is still on the stack after the heat has raced, and putting
+        // the old drivers back then made its roster disagree with its
+        // result. A round that had already run when it was edited (the
+        // question above allows that) can still be put back.
+        var restore = new RosterRestore(round.Id, round.LinkedSessionId, form.Result.ToList(), round.AssignedTransponders.ToList());
+        var label = $"Edit drivers in {round.RoundLabel}";
 
-        var roundId = round.Id;
-
-        _undo.Capture($"Edit drivers in {round.RoundLabel}", () =>
+        Action? undoEdit = null;
+        undoEdit = () =>
         {
-            // By id, onto the round as it is on file now - a round deleted
-            // since stays deleted.
-            if (_rounds.Get(roundId) is { } current)
+            RefuseRosterUndoWhileOnTrack(label, undoEdit!, new[] { restore.RoundId });
+
+            var verdict = CheckRosterUndo(new[] { restore }, _rounds.Get);
+
+            if (verdict.Blocked.Count > 0)
             {
-                current.AssignedTransponders = before.ToList();
-                _rounds.Update(current);
+                throw new InvalidOperationException(
+                    $"{verdict.Blocked[0]} has been run or had its drivers changed since, so its old drivers were not put back. Nothing was changed.");
             }
+
+            WriteRosters(new[] { restore });
 
             if (!IsDisposed)
             {
                 RefreshGrid();
             }
-        });
+        };
+
+        _undo.Capture(label, undoEdit);
 
         round.AssignedTransponders = form.Result;
         _rounds.Update(round);
@@ -2647,6 +2942,194 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
+    /// One round's roster as an undo of a roster change wants to put it
+    /// back: the session the round was filed under when the change was
+    /// made (null when it had not been run), the drivers the change gave
+    /// it, and the drivers it had before.
+    /// </summary>
+    internal sealed record RosterRestore(string RoundId, string? SessionThen, List<string> Given, List<string> Old);
+
+    /// <summary>Why an undo would leave a round's roster alone - or None when it may put the old one back.</summary>
+    internal enum RosterRestoreBlock
+    {
+        None,
+
+        /// <summary>The round has been run (or run again) since the change: its roster is what raced.</summary>
+        RunSince,
+
+        /// <summary>The round's drivers have been changed again since, by hand or by another command.</summary>
+        EditedSince,
+    }
+
+    /// <summary>
+    /// Whether an undo of a roster change may put <paramref name="restore"/>'s
+    /// old drivers back onto <paramref name="current"/>, the round as it is
+    /// on file now.
+    ///
+    /// Not if it has been run since: filing a heat adds nothing to the undo
+    /// stack, so a roster undo can still be reached after the heat has
+    /// raced, and handing a run heat its old drivers made its roster
+    /// disagree with its result (the marshal list, the published program
+    /// and the event report read the roster) and put a driver who had
+    /// already raced back into an unrun heat. "Since" is judged by the
+    /// session it is filed under, not by IsRecorded alone, so a round that
+    /// had already run when its drivers were changed (Edit Drivers asks
+    /// first and allows it; a bump-up always changes the main below, which
+    /// has run) can still be put back as long as it has not been run again.
+    ///
+    /// Not if its drivers have changed again since either: undoing this
+    /// change must not quietly undo that later one as well.
+    /// </summary>
+    internal static RosterRestoreBlock CheckRosterRestore(RoundDefinition current, RosterRestore restore)
+    {
+        if (!string.Equals(current.LinkedSessionId ?? string.Empty, restore.SessionThen ?? string.Empty, StringComparison.Ordinal))
+        {
+            return RosterRestoreBlock.RunSince;
+        }
+
+        return current.AssignedTransponders.SequenceEqual(restore.Given, StringComparer.Ordinal)
+            ? RosterRestoreBlock.None
+            : RosterRestoreBlock.EditedSince;
+    }
+
+    /// <summary>
+    /// The guard every roster undo runs first: not while one of the rounds
+    /// it would change is on track. That race is running against the
+    /// roster it started with, and the forward commands refuse to change it
+    /// for the same reason; the undo used to change it mid-race. The entry
+    /// goes back on the stack before refusing (the stack pops it before
+    /// running it), so it can still be undone once the race is saved - as
+    /// Redo Remaining Heats' undo does.
+    /// </summary>
+    private void RefuseRosterUndoWhileOnTrack(string label, Action undo, IEnumerable<string> roundIds)
+    {
+        if (RoundOnTrackId?.Invoke() is not { } onTrackId
+            || !roundIds.Contains(onTrackId, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        var name = _rounds.Get(onTrackId)?.RoundLabel ?? "a heat it changed";
+
+        _undo.Capture(label, undo);
+
+        throw new InvalidOperationException(
+            $"{name} is on track - finish and save its race, then undo again. Nothing was changed.");
+    }
+
+    /// <summary>
+    /// What a roster undo found when it checked every round it would
+    /// change: the labels of those it may not put back (run or edited
+    /// since - see CheckRosterRestore), and the drivers that putting the
+    /// rest back would leave in no round at all because the round they
+    /// would go back into has been deleted since. Only when both are empty
+    /// may the undo go ahead.
+    /// </summary>
+    internal sealed record RosterUndoVerdict(List<string> Blocked, List<string> Stranded)
+    {
+        public bool CanRestore => Blocked.Count == 0 && Stranded.Count == 0;
+    }
+
+    /// <summary>
+    /// Checks an undo that changes several rounds' rosters as one unit -
+    /// a move between heats, or a bump-up (the main and its feeder) -
+    /// before anything is written.
+    ///
+    /// Those rounds swapped drivers with each other, so they only go back
+    /// together. The undo used to put back each round on its own and skip
+    /// the ones that had run since, and that split the move in half: move
+    /// X from Heat 1 to Heat 2, run Heat 2, undo, and Heat 2 kept X (it
+    /// had raced) while Heat 1 got X back, so X was called to race the
+    /// round twice. The other way round - the source run, the destination
+    /// not - X came out of Heat 2 and went into no heat at all. So one
+    /// blocked round now blocks them all.
+    ///
+    /// A round deleted since is skipped, since there is nothing to put
+    /// back into it - unless one of the rounds that is still there would
+    /// hand back a driver who was going back into the deleted one. Then
+    /// that driver would end up in no round at all, so that refuses too.
+    /// <paramref name="currentOf"/> looks a round up by id as it is on
+    /// file now (null when it has been deleted).
+    /// </summary>
+    internal static RosterUndoVerdict CheckRosterUndo(IReadOnlyList<RosterRestore> restores, Func<string, RoundDefinition?> currentOf)
+    {
+        var blocked = new List<string>();
+        var deletedOld = new HashSet<string>(StringComparer.Ordinal);
+        var takenOut = new List<string>();
+        var putIn = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var restore in restores)
+        {
+            if (currentOf(restore.RoundId) is not { } current)
+            {
+                deletedOld.UnionWith(restore.Old);
+                continue;
+            }
+
+            if (CheckRosterRestore(current, restore) != RosterRestoreBlock.None)
+            {
+                blocked.Add(current.RoundLabel);
+            }
+
+            // Who putting this round back would take out of it, and who it
+            // would put back in.
+            takenOut.AddRange(restore.Given.Except(restore.Old, StringComparer.Ordinal));
+            putIn.UnionWith(restore.Old.Except(restore.Given, StringComparer.Ordinal));
+        }
+
+        // A driver taken out of a round that is still there, put back into
+        // none of the others that are still there, and whose way home was
+        // a round that has gone.
+        var stranded = takenOut
+            .Where(t => !putIn.Contains(t) && deletedOld.Contains(t))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return new RosterUndoVerdict(blocked, stranded);
+    }
+
+    /// <summary>
+    /// Says why a roster undo was refused whole, for the exception the undo
+    /// throws (UndoService reports it). <paramref name="unit"/> names what
+    /// goes back together - "a move" or "bump-ups" - and
+    /// <paramref name="noun"/> what it changed - "heat" or "main".
+    /// </summary>
+    private static string DescribeRosterUndoRefusal(RosterUndoVerdict verdict, string unit, string noun)
+    {
+        if (verdict.Blocked.Count > 0)
+        {
+            var one = verdict.Blocked.Count == 1;
+
+            return $"{string.Join(" and ", verdict.Blocked)} {(one ? "has" : "have")} been run or had "
+                   + $"{(one ? "its" : "their")} drivers changed since. The {noun}s in {unit} only go back together - "
+                   + $"putting the others back on their own would leave a driver in two {noun}s or in none - "
+                   + "so none were put back. Nothing was changed.";
+        }
+
+        return $"a {noun} changed by {unit} has been deleted since, so putting the others back would leave "
+               + $"{Plural.Of(verdict.Stranded.Count, "driver")} in no {noun} at all. Nothing was changed.";
+    }
+
+    /// <summary>
+    /// Puts back the old roster of every round in <paramref name="restores"/>
+    /// that is still on file, looked up by id; a round deleted since stays
+    /// deleted. Only call this once CheckRosterUndo has said yes.
+    /// </summary>
+    private void WriteRosters(IEnumerable<RosterRestore> restores)
+    {
+        foreach (var restore in restores)
+        {
+            if (_rounds.Get(restore.RoundId) is not { } current)
+            {
+                continue;
+            }
+
+            current.AssignedTransponders = restore.Old.ToList();
+            _rounds.Update(current);
+        }
+    }
+
+    /// <summary>
     /// Writes a set of heat roster changes as ONE change with ONE undo entry
     /// (labelled with <paramref name="undoPrefix"/> in front). The desk's
     /// Move Drivers Between Heats and the phone's "move a driver" both end
@@ -2662,19 +3145,45 @@ public sealed class RaceProgramControl : UserControl
 
         // Captured before the change is made, the way every other undoable
         // command on this page does it.
-        _undo.Capture($"{undoPrefix}Move drivers between heats in {className}", () =>
+        //
+        // The undo puts a heat's old drivers back only onto a heat that has
+        // not been run since and still holds exactly what this move gave it
+        // - the same rules as Redo Remaining Heats' undo, and for the same
+        // reason: filing a heat adds nothing to the undo stack, so "move X
+        // from Heat 1 to Heat 2, run Heat 2, Ctrl+Z" used to take X out of
+        // a heat X had just raced in and put X back into unrun Heat 1, so X
+        // was called to the grid to race the same round twice. Which
+        // session each heat was filed under is noted now, so a heat that
+        // had already run when the move was made can still be put back,
+        // while one run SINCE cannot. The heats go back together or not at
+        // all (CheckRosterUndo): putting back only the ones still allowed
+        // split the move and left X in two heats, or in none.
+        var label = $"{undoPrefix}Move drivers between heats in {className}";
+        var restores = changes
+            .Select(c => new RosterRestore(c.RoundId, _rounds.Get(c.RoundId)?.LinkedSessionId, c.After.ToList(), c.Before.ToList()))
+            .ToList();
+
+        Action? undoMove = null;
+        undoMove = () =>
         {
-            foreach (var change in changes)
+            RefuseRosterUndoWhileOnTrack(label, undoMove!, restores.Select(r => r.RoundId));
+
+            // Every heat is checked before any is written, and one that may
+            // not go back stops them all (see CheckRosterUndo). Not put back
+            // on the stack: a heat run or edited since stays that way, so
+            // trying again would only refuse again - as Edit Drivers' undo.
+            var verdict = CheckRosterUndo(restores, _rounds.Get);
+
+            if (!verdict.CanRestore)
             {
-                if (_rounds.Get(change.RoundId) is { } round)
-                {
-                    round.AssignedTransponders = change.Before.ToList();
-                    _rounds.Update(round);
-                }
+                throw new InvalidOperationException(DescribeRosterUndoRefusal(verdict, "a move", "heat"));
             }
 
+            WriteRosters(restores);
             RefreshAll();
-        });
+        };
+
+        _undo.Capture(label, undoMove);
 
         foreach (var change in changes)
         {
@@ -2724,7 +3233,11 @@ public sealed class RaceProgramControl : UserControl
                 return;
             }
 
-            _rounds.MoveBefore(new[] { round.Id }, shown[at - 1]);
+            // Through MoveWithUndo, like a drag and the phone. Calling the
+            // store directly left no undo entry, so Undo after a mistaken
+            // Move Down skipped the move and reversed whatever came before
+            // it - often the whole Build Qualifying.
+            MoveWithUndo(new[] { round.Id }, shown[at - 1]);
         }
         else
         {
@@ -2735,7 +3248,7 @@ public sealed class RaceProgramControl : UserControl
 
             // In front of the round AFTER the next one - which is what
             // "down one place" means once it is expressed as an anchor.
-            _rounds.MoveBefore(new[] { round.Id }, AnchorFor(shown, at + 2));
+            MoveWithUndo(new[] { round.Id }, AnchorFor(shown, at + 2));
         }
 
         RefreshGrid();
@@ -2791,7 +3304,8 @@ public sealed class RaceProgramControl : UserControl
                 return false;
             }
 
-            _rounds.MoveBefore(new[] { roundId }, order[at - 1]);
+            // Undoable, the same as Move Up on this page - see MoveWithUndo.
+            MoveWithUndo(new[] { roundId }, order[at - 1]);
         }
         else
         {
@@ -2804,7 +3318,7 @@ public sealed class RaceProgramControl : UserControl
             // one place" means once it is expressed as an anchor. AnchorFor
             // handles the end of the day, where what follows may belong to
             // another event entirely.
-            _rounds.MoveBefore(new[] { roundId }, AnchorFor(order, at + 2));
+            MoveWithUndo(new[] { roundId }, AnchorFor(order, at + 2));
         }
 
         // Which raises ProgrammeChanged through the stamp, and that is what
@@ -3202,20 +3716,65 @@ public sealed class RaceProgramControl : UserControl
         var targetBefore = target.AssignedTransponders.ToList();
         var feederBefore = feeder.AssignedTransponders.ToList();
 
-        _undo.Capture($"{undoPrefix}Bump-ups into {target.RoundLabel}", () =>
+        // What the bump-up gives each main, filled in once it has been
+        // applied below, so the undo can tell whether each still holds it.
+        RosterRestore? targetRestore = null;
+        RosterRestore? feederRestore = null;
+
+        var label = $"{undoPrefix}Bump-ups into {target.RoundLabel}";
+
+        // The undo works on the mains as they are on file when it runs,
+        // looked up by id, and under the same rules as the other roster
+        // undos (CheckRosterRestore). It used to write the old rosters back
+        // and re-open the bump-ups unconditionally - so undoing after the
+        // A-main had run took the promoted drivers out of a main they had
+        // just raced in (its marshal list, published program and event
+        // report read that roster) and offered its bump-ups again. Once the
+        // target has been run, or its drivers changed by hand, there is
+        // nothing this undo can honestly put back, so it refuses whole and
+        // leaves the bump-ups marked as done. The feeder has always run by
+        // now; it goes back with the main, and if it has been run again or
+        // edited since, the main stays as it is too (CheckRosterUndo).
+        Action? undoBumpUps = null;
+        undoBumpUps = () =>
         {
-            target.AssignedTransponders = targetBefore;
-            feeder.AssignedTransponders = feederBefore;
-            target.BumpUpsApplied = false;
-            _rounds.Update(target);
-            _rounds.Update(feeder);
+            RefuseRosterUndoWhileOnTrack(label, undoBumpUps!, new[] { target.Id, feeder.Id });
+
+            if (targetRestore is null || feederRestore is null || _rounds.Get(target.Id) is not { } currentTarget)
+            {
+                // The bump-up never got as far as being applied, or the main
+                // has been deleted since: nothing to put back.
+                return;
+            }
+
+            // Both mains are checked before either is written: putting the
+            // main back while the feeder stayed as it is took the promoted
+            // drivers out of the main and into no race at all.
+            var verdict = CheckRosterUndo(new[] { targetRestore, feederRestore }, _rounds.Get);
+
+            if (!verdict.CanRestore)
+            {
+                throw new InvalidOperationException(DescribeRosterUndoRefusal(verdict, "bump-ups", "main"));
+            }
+
+            currentTarget.AssignedTransponders = targetRestore.Old.ToList();
+            currentTarget.BumpUpsApplied = false;
+            _rounds.Update(currentTarget);
+
+            WriteRosters(new[] { feederRestore });
             RefreshAll();
-        });
+        };
+
+        _undo.Capture(label, undoBumpUps);
 
         var result = MainsBuilder.ApplyBumpUp(target, feeder, feederResults, _profiles);
 
         _rounds.Update(target);
         _rounds.Update(feeder);
+
+        targetRestore = new RosterRestore(target.Id, target.LinkedSessionId, target.AssignedTransponders.ToList(), targetBefore);
+        feederRestore = new RosterRestore(feeder.Id, feeder.LinkedSessionId, feeder.AssignedTransponders.ToList(), feederBefore);
+
         RefreshAll();
 
         return new ProgramAnswer(true, "Bump-ups applied",
@@ -3303,14 +3862,20 @@ public sealed class RaceProgramControl : UserControl
 
         try
         {
-            using var bitmap = HeatSheetRenderer.Render(
+            // Every round, over as many pages as it takes - one image used to
+            // hold what fit on a page and leave the rest off without a word.
+            var pages = HeatSheetRenderer.RenderPages(
                 className,
                 rounds,
                 _profiles,
                 ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
-            bitmap.Save(dialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
 
-            AppDialog.Show(this, $"Saved to:\n{dialog.FileName}\n\nOpen and print it at full page size.",
+            if (PageFiles.SavePages(this, pages, dialog.FileName) is not { } written)
+            {
+                return;
+            }
+
+            AppDialog.Show(this, $"{PageFiles.Describe(written)}\n\nOpen and print {(written.Count == 1 ? "it" : "each")} at full page size.",
                 "Heat sheet saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)

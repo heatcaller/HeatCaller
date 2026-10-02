@@ -215,6 +215,56 @@ public sealed class RcpTrackCanvas : Control
         _redo.Clear();
     }
 
+    /// <summary>
+    /// The undo step for sizing the photo with the wheel.
+    ///
+    /// The wheel has no press and release to open and close a stroke with,
+    /// and every notch is its own event - so a turn of the wheel is taken to
+    /// be one gesture for as long as the notches keep coming and nothing
+    /// else has been remembered, undone or redone in between. That is told
+    /// by the snapshot this took still being the newest one on the undo
+    /// list (Undo removes it, any other change puts a newer one on top, and
+    /// Redo puts a fresh copy on top). Sizing used to take no undo step at
+    /// all, so Ctrl+Z after sizing a photo took back whatever came before as
+    /// well - usually the loading of the photo itself.
+    /// </summary>
+    private void RememberWheelResize()
+    {
+        var now = Environment.TickCount64;
+        var sameGesture = _wheelResizeSnapshot is not null
+                          && _undo.Count > 0
+                          && ReferenceEquals(_undo[^1], _wheelResizeSnapshot)
+                          && now - _wheelResizeAt < WheelResizeGapMs;
+
+        _wheelResizeAt = now;
+
+        if (sameGesture)
+        {
+            return;
+        }
+
+        // Mid-drag (the photo being dragged and the wheel turned at once)
+        // the stroke already owns the undo step, so this is left to it.
+        if (_strokeOpen)
+        {
+            Remember();
+            _wheelResizeSnapshot = null;
+            return;
+        }
+
+        Remember();
+        _wheelResizeSnapshot = _undo.Count > 0 ? _undo[^1] : null;
+    }
+
+    /// <summary>How long a pause between wheel notches ends one sizing gesture, in milliseconds.</summary>
+    private const long WheelResizeGapMs = 1000;
+
+    /// <summary>The snapshot the current wheel-sizing gesture took, while it is still the newest.</summary>
+    private RcpTrackDesign? _wheelResizeSnapshot;
+
+    /// <summary>When the wheel last sized the photo (Environment.TickCount64).</summary>
+    private long _wheelResizeAt;
+
     /// <summary>Opens a drag, so everything it changes becomes one undo step.</summary>
     private void BeginStroke()
     {
@@ -379,6 +429,14 @@ public sealed class RcpTrackCanvas : Control
 
     public void ToggleBackdrop()
     {
+        // Hiding or showing the photo is its own undo step, like loading or
+        // clearing it. Whether the photo is hidden is part of the plan, and
+        // every undo snapshot carries it, so without a step of its own the
+        // newest snapshot was the one taken before the last stroke. Ctrl+Z
+        // after Hide then showed the photo again and also took back the
+        // rail just laid.
+        Remember();
+
         _design.BackdropHidden = !_design.BackdropHidden;
         RaiseChanged();
     }
@@ -1187,11 +1245,21 @@ public sealed class RcpTrackCanvas : Control
         Remember();
 
         _design.Route = route.Select(p => new RcpRoutePoint { X = p.X, Y = p.Y }).ToList();
-        _design.RouteClosed = true;
 
-        StatusChanged?.Invoke(string.IsNullOrEmpty(problem)
+        // A lap only when the walk came back round to where it started -
+        // which is the one case RcpPlan.AutoRoute reports no problem for.
+        // When the corridor dead-ends or doubles back it hands back the part
+        // it managed, and calling that closed drew a leg straight across the
+        // rails from its end to its start and counted that leg in the lap
+        // length, the speed readout and the pace car. The side panel's "The
+        // line closes into a lap" box follows this (SyncSidePanel).
+        var closed = string.IsNullOrEmpty(problem);
+
+        _design.RouteClosed = closed;
+
+        StatusChanged?.Invoke(closed
             ? $"Route traced through {route.Count} tiles."
-            : problem);
+            : $"{problem} The line is left open.");
 
         RaiseChanged();
     }
@@ -1377,6 +1445,11 @@ public sealed class RcpTrackCanvas : Control
             case RcpTool.Backdrop:
                 _panning = false;
                 _painting = true;
+
+                // One drag of the photo is one undo step, however far it
+                // goes: the move's first change remembers the plan and the
+                // rest of the drag adds nothing (see OnMouseMove).
+                BeginStroke();
                 _panFrom = e.Location;
                 _backdropFrom = new PointF(_design.BackdropX, _design.BackdropY);
                 break;
@@ -1387,6 +1460,16 @@ public sealed class RcpTrackCanvas : Control
                 if (_draggingRoutePoint < 0)
                 {
                     AddRoutePoint(e.Location);
+                }
+                else
+                {
+                    // Dragging a point that is already there is an edit of
+                    // its own, so it gets an undo step of its own: one for
+                    // the whole drag, taken when the point first moves. It
+                    // used to take none, so Ctrl+Z after adding a point and
+                    // then moving it took the point away altogether rather
+                    // than putting it back where it was.
+                    BeginStroke();
                 }
 
                 break;
@@ -1404,10 +1487,30 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
-        if (_painting && Tool == RcpTool.Backdrop && e.Button == MouseButtons.Left)
+        // Not while Ctrl is erasing. Ctrl+drag erases with any tool, the
+        // Photo tool included, and the press that started it never got as
+        // far as the Photo tool's own setup - so the anchor this would move
+        // the photo from was whatever an earlier drag or pan left behind.
+        // The photo used to leap there and follow the mouse, and nothing
+        // past the first point was erased.
+        if (_painting && !_ctrlErasing && Tool == RcpTool.Backdrop && e.Button == MouseButtons.Left)
         {
-            _design.BackdropX = _backdropFrom.X + (e.X - _panFrom.X) / _scale;
-            _design.BackdropY = _backdropFrom.Y + (e.Y - _panFrom.Y) / _scale;
+            var x = _backdropFrom.X + (e.X - _panFrom.X) / _scale;
+            var y = _backdropFrom.Y + (e.Y - _panFrom.Y) / _scale;
+
+            // The move is its own undo step, taken the first time the photo
+            // actually goes anywhere (once per drag - the stroke opened on
+            // the press sees to that), so a click that leaves it where it
+            // was adds nothing to undo. Without it, Ctrl+Z after placing a
+            // photo took back whatever came before as well - usually the
+            // loading of the photo, so it vanished instead of moving back.
+            if (x != _design.BackdropX || y != _design.BackdropY)
+            {
+                Remember();
+            }
+
+            _design.BackdropX = x;
+            _design.BackdropY = y;
             Invalidate();
             return;
         }
@@ -1435,9 +1538,20 @@ public sealed class RcpTrackCanvas : Control
         if (_draggingRoutePoint >= 0 && _draggingRoutePoint < _design.Route.Count)
         {
             var tile = ToTile(e.Location);
+            var point = _design.Route[_draggingRoutePoint];
+            var x = MathF.Round(tile.X * 2f) / 2f;
+            var y = MathF.Round(tile.Y * 2f) / 2f;
 
-            _design.Route[_draggingRoutePoint].X = MathF.Round(tile.X * 2f) / 2f;
-            _design.Route[_draggingRoutePoint].Y = MathF.Round(tile.Y * 2f) / 2f;
+            // Only a real move is remembered (once per drag - the stroke
+            // opened on the press sees to that), so a click on a point that
+            // leaves it in place adds nothing to undo.
+            if (x != point.X || y != point.Y)
+            {
+                Remember();
+            }
+
+            point.X = x;
+            point.Y = y;
 
             RaiseChanged();
             return;
@@ -1554,7 +1668,9 @@ public sealed class RcpTrackCanvas : Control
     {
         base.OnMouseCaptureChanged(e);
 
-        if (Capture || !_painting)
+        // A route point being dragged counts too: that drag opens a stroke
+        // of its own for its undo step, without setting _painting.
+        if (Capture || (!_painting && _draggingRoutePoint < 0))
         {
             return;
         }
@@ -1579,7 +1695,14 @@ public sealed class RcpTrackCanvas : Control
         {
             // The wheel sizes the photo rather than the view, so it can be
             // matched to the grid without the grid moving underneath it.
-            _design.BackdropWidth = Math.Clamp(_design.BackdropWidth * (e.Delta > 0 ? 1.04f : 1 / 1.04f), 1f, 200f);
+            var width = Math.Clamp(_design.BackdropWidth * (e.Delta > 0 ? 1.04f : 1 / 1.04f), 1f, 200f);
+
+            if (width != _design.BackdropWidth)
+            {
+                RememberWheelResize();
+            }
+
+            _design.BackdropWidth = width;
             RaiseChanged();
             return;
         }

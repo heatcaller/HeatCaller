@@ -259,7 +259,7 @@ public sealed class ProfileForm : Form
             FitPicker(_cmbClass, keepToRow: true);
         };
 
-        RefreshClassCombo(Result.ClassName);
+        RefreshClassCombo(Result.ClassName, keepIfUnlisted: true);
         captions.Add(fields.AddRow("Class:", ButtonsBeside(_cmbClass, btnManageClasses)));
 
         _txtSetupConfiguration.Multiline = true;
@@ -586,8 +586,37 @@ public sealed class ProfileForm : Form
     private static int LinesHigh(TextBox box, int lines) =>
         lines * Pieces.LineHeight(box.Font) + UiLayout.HintGap * 2;
 
-    private void RefreshClassCombo(string? preferredSelection)
+    /// <summary>
+    /// The class this profile was saved with when the form opened, when it
+    /// matches none of the classes in the class store - or empty. See
+    /// RefreshClassCombo.
+    /// </summary>
+    private string _unlistedClass = string.Empty;
+
+    /// <summary>
+    /// Fills the class drop-down and selects <paramref name="preferredSelection"/>.
+    ///
+    /// The selection is matched ignoring case and surrounding spaces, the
+    /// way every other part of the app matches class names (a class rename,
+    /// the class rosters, the CSV import's championship lookup). It used to
+    /// be an exact match, and anything it missed showed as "(none)" - which
+    /// Save then wrote, so a driver imported from a sheet as "stock buggy"
+    /// lost their "Stock Buggy" class the first time anybody opened them to
+    /// change a race number, and dropped out of that class's heats and
+    /// standings without a word.
+    ///
+    /// For the same reason a class the profile already has that is not in
+    /// the class store at all (a sheet can name a class nobody has set up
+    /// yet) is kept as an item of its own and selected, rather than being
+    /// swapped for "(none)". Only the profile's own class is kept like that;
+    /// any other name that matches nothing still falls back to "(none)", as
+    /// before. Once a class of that name is added to the store the extra
+    /// item goes, and the store's spelling is the one selected.
+    /// </summary>
+    private void RefreshClassCombo(string? preferredSelection, bool keepIfUnlisted = false)
     {
+        var wanted = preferredSelection?.Trim() ?? string.Empty;
+
         _cmbClass.Items.Clear();
         _cmbClass.Items.Add("(none)");
         foreach (var c in _classStore.All)
@@ -595,8 +624,33 @@ public sealed class ProfileForm : Form
             _cmbClass.Items.Add(c.Name);
         }
 
-        var idx = !string.IsNullOrWhiteSpace(preferredSelection) ? _cmbClass.Items.IndexOf(preferredSelection) : -1;
+        if (keepIfUnlisted && wanted.Length > 0 && IndexOfClass(wanted) < 0)
+        {
+            _unlistedClass = wanted;
+        }
+
+        if (_unlistedClass.Length > 0 && IndexOfClass(_unlistedClass) < 0)
+        {
+            _cmbClass.Items.Add(_unlistedClass);
+        }
+
+        var idx = wanted.Length > 0 ? IndexOfClass(wanted) : -1;
         _cmbClass.SelectedIndex = idx >= 0 ? idx : 0;
+    }
+
+    /// <summary>Where a class of this name is in the drop-down, ignoring case and spaces, or -1. "(none)" is never a match.</summary>
+    private int IndexOfClass(string name)
+    {
+        for (var i = 1; i < _cmbClass.Items.Count; i++)
+        {
+            if (_cmbClass.Items[i] is string item
+                && string.Equals(item.Trim(), name, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>A caption and its text box, filled in, the box running to the grid's right-hand edge. Returns the caption.</summary>
@@ -647,8 +701,18 @@ public sealed class ProfileForm : Form
             Sponsors = _txtSponsors.Text.Trim(),
 
             // Preserved on edit, stamped on create - so "new this season"
-            // reporting has something to work from.
-            FirstSeenUtc = Result.FirstSeenUtc ?? DateTime.UtcNow,
+            // reporting has something to work from. An edit keeps exactly
+            // what the profile had, even when that is nothing: a driver saved
+            // before this date was recorded has none, and ProfileStore
+            // deliberately leaves it that way rather than back-dating a
+            // long-time regular to today (see StampFirstSeen). Filling it in
+            // here would undo that on the first edit, and would also make an
+            // unchanged Save look like a change, recording a needless
+            // "Edit driver" undo entry. _editingTransponder is set only when
+            // the form was opened on an existing profile.
+            FirstSeenUtc = _editingTransponder is null
+                ? Result.FirstSeenUtc ?? DateTime.UtcNow
+                : Result.FirstSeenUtc,
         };
 
         // Checked here, with the dialog still open, so the fix is one edit

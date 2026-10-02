@@ -94,6 +94,14 @@ public sealed class SetupEntryForm : Form
 
     private ChassisTemplate _template;
 
+    /// <summary>
+    /// The field ids of every sheet the user switched away from while this
+    /// window was open. Their values stay in Result.Values on purpose, so
+    /// switching sheets and switching back keeps what was typed; Save drops
+    /// the ones the sheet it is saved on doesn't have - see BtnSave_Click.
+    /// </summary>
+    private readonly HashSet<string> _abandonedFieldIds = new();
+
     public SetupEntry Result { get; }
 
     /// <summary>
@@ -215,6 +223,16 @@ public sealed class SetupEntryForm : Form
         {
             _cmbTrack.Items.Add(t.Name);
         }
+
+        // A track the entry was recorded at that is no longer a layout - one
+        // renamed or deleted since - is kept as a choice of its own, the way
+        // the sheet's own fields keep a value no longer in their list. Left
+        // out, the box fell back to "(none)" and saving the entry for any
+        // other reason (a typo in the notes) wiped the track it ran at.
+        if (!string.IsNullOrWhiteSpace(Result.TrackLayoutName) && !_cmbTrack.Items.Contains(Result.TrackLayoutName))
+        {
+            _cmbTrack.Items.Add(Result.TrackLayoutName);
+        }
         _cmbTrack.SelectedItem = string.IsNullOrWhiteSpace(Result.TrackLayoutName) ? "(none)" : Result.TrackLayoutName;
         if (_cmbTrack.SelectedIndex < 0) { _cmbTrack.SelectedIndex = 0; }
 
@@ -230,6 +248,7 @@ public sealed class SetupEntryForm : Form
                 // Capture what's on screen before swapping, so switching
                 // sheets and switching back doesn't lose anything typed.
                 ReadEditorsIntoResult();
+                _abandonedFieldIds.UnionWith(_template.AllFields.Select(field => field.Id));
                 _template = item.Template;
                 LoadTemplateIntoUi();
             }
@@ -240,6 +259,20 @@ public sealed class SetupEntryForm : Form
         foreach (var s in _history.All.Take(60))
         {
             _cmbSession.Items.Add(new SessionItem(s));
+        }
+
+        // Only the newest sessions are offered, so an entry linked to an older
+        // one (or to one since deleted from the history) would not find it
+        // there, fall back to "not linked", and lose the link - and the best
+        // lap it brings - when saved for any other reason. Its session is
+        // added as a choice of its own; one no longer in the history keeps
+        // just its id, so the link stays as it was unless the user changes it.
+        if (!string.IsNullOrEmpty(Result.LinkedSessionId)
+            && !_cmbSession.Items.OfType<SessionItem>().Any(i => i.Id == Result.LinkedSessionId))
+        {
+            _cmbSession.Items.Add(_history.Get(Result.LinkedSessionId) is { } older
+                ? new SessionItem(older)
+                : SessionItem.Missing(Result.LinkedSessionId));
         }
         SelectSession(Result.LinkedSessionId);
 
@@ -768,7 +801,7 @@ public sealed class SetupEntryForm : Form
         {
             for (var i = 0; i < _cmbSession.Items.Count; i++)
             {
-                if (_cmbSession.Items[i] is SessionItem item && item.Session?.Id == sessionId)
+                if (_cmbSession.Items[i] is SessionItem item && item.Id == sessionId)
                 {
                     _cmbSession.SelectedIndex = i;
                     return;
@@ -788,12 +821,27 @@ public sealed class SetupEntryForm : Form
 
         ReadEditorsIntoResult();
 
+        // A sheet switched away from left its values in the entry (kept so
+        // switching back loses nothing). Saved, they belonged to fields the
+        // entry's own sheet doesn't have: never shown, but counted in the
+        // Filled column, listed in Changed Since Last, and - when the setup
+        // before it used that sheet - told to the mechanic as a change that
+        // never happened. Only the abandoned sheets' fields are dropped, so
+        // a value for a field since removed from this entry's own sheet is
+        // kept as it was, the way the rest of the window keeps what it
+        // can't show rather than wiping it.
+        var onSheet = _template.AllFields.Select(field => field.Id).ToHashSet();
+        foreach (var id in _abandonedFieldIds.Where(id => !onSheet.Contains(id)))
+        {
+            Result.Values.Remove(id);
+        }
+
         Result.DriverName = _cmbDriver.Text.Trim();
         var track = _cmbTrack.SelectedItem as string;
         Result.TrackLayoutName = track is null or "(none)" ? string.Empty : track;
         Result.CarModel = _txtCar.Text.Trim();
         Result.ChassisTemplateId = _template.Id;
-        Result.LinkedSessionId = (_cmbSession.SelectedItem as SessionItem)?.Session?.Id;
+        Result.LinkedSessionId = (_cmbSession.SelectedItem as SessionItem)?.Id;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -853,15 +901,25 @@ public sealed class SetupEntryForm : Form
         public override string ToString() => Template.Name;
     }
 
-    private sealed record SessionItem(SessionRecord? Session)
+    /// <summary>
+    /// A session in the drop-down. MissingId is set only for a linked session
+    /// no longer in the history: there is nothing to show of it but the
+    /// fact, and the id is what keeps the link when the entry is saved.
+    /// </summary>
+    private sealed record SessionItem(SessionRecord? Session, string? MissingId = null)
     {
         public static readonly SessionItem None = new((SessionRecord?)null);
+
+        public static SessionItem Missing(string id) => new(null, id);
+
+        /// <summary>The session id saved for this choice - null for "not linked".</summary>
+        public string? Id => Session?.Id ?? MissingId;
 
         public override string ToString()
         {
             if (Session is null)
             {
-                return "(not linked to a session)";
+                return MissingId is null ? "(not linked to a session)" : "(a session no longer in the history)";
             }
 
             var track = string.IsNullOrWhiteSpace(Session.TrackLayoutName) ? "" : $" - {Session.TrackLayoutName}";

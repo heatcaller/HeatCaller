@@ -46,10 +46,10 @@ public sealed partial class AnnouncementService
         // second of synthesis is a second of a car sitting still.
         if (TakePreparedRelease(transponderId, config) is { } prepared)
         {
-            var volume = Math.Clamp(_voiceStore.Current.Volume * (VoiceBoostProvider?.Invoke() ?? 1f), 0.0, 1.0);
+            var volume = AnnouncementGain(_voiceStore.Current.Volume);
 
-            AnnouncementTextReady?.Invoke(prepared.Text);
-
+            // The text goes up only once the line is accepted - see
+            // EnqueueVoiceWork - not before, or a dropped call still showed.
             EnqueueVoiceWork(type, transponderId, async () =>
             {
                 StatusMessage?.Invoke($"[voice] {type} (prepared): \"{prepared.Text}\"");
@@ -70,7 +70,7 @@ public sealed partial class AnnouncementService
                 {
                     _audioPlaybackLock.Release();
                 }
-            });
+            }, displayText: prepared.Text);
 
             return;
         }
@@ -84,13 +84,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        AnnouncementTextReady?.Invoke(text);
-
         // The same speed PrimeReleaseLines renders at, so this is the same
         // request - and a line saved by either is found by the other.
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
-        EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed));
+        // Screen text raised by EnqueueVoiceWork, once the line is accepted.
+        EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
+            displayText: text);
     }
 
     /// <summary>The spoken words for one driver's release call.</summary>

@@ -370,9 +370,15 @@ internal sealed class RelaySignupDesk
     // --------------------------------------------------------------- undo
     //
     // What the phone was told can't be taken back: an answer goes to the
-    // relay within seconds, and the relay then forgets the sign-up. So each
-    // undo here puts things back on THIS laptop - the invite open again, so
-    // its code works again - and says in the console what the phone was told.
+    // relay within seconds, and the relay keeps it against that invite's
+    // code (for as long as it keeps any sign-up, two weeks) and refuses any
+    // new sign-up made with the code - "The timing desk has already
+    // answered this sign-up." There is no way to withdraw an answer from
+    // the relay. So each undo here puts things back on THIS laptop, and an
+    // invite whose sign-up was answered is opened again under a NEW code
+    // (see Reopen): reopening it under the old one used to tell the desk
+    // the code worked again when the relay would never take it. The console
+    // says what the phone was told, and that the new code has to reach them.
 
     /// <summary>What one approval did, for UndoApprove.</summary>
     public sealed record ApprovalReceipt(
@@ -450,13 +456,13 @@ internal sealed class RelaySignupDesk
             }
         }
 
-        Reopen(invite);
+        Reopen(invite, newCode: true);
 
         _log($"[signup] Undid approving {receipt.Name}. Their phone was already told they're in"
-            + " - that can't be taken back, so let them know in person. Their invite code works again.");
+            + " - that can't be taken back, so let them know in person. " + NewCodeNote);
     }
 
-    /// <summary>Undoes turning a sign-up down, here: the invite is open again. The phone has been told no, and the relay has let the sign-up go - they sign up again with the same code.</summary>
+    /// <summary>Undoes turning a sign-up down, here: the invite is open again, under a new code. The phone has been told no, and the relay keeps that answer against the old code, so they sign up again with the new one.</summary>
     public void UndoReject(string inviteId, string name)
     {
         if (Store.Get(inviteId) is not { State: SignupInviteState.Rejected } invite)
@@ -464,13 +470,18 @@ internal sealed class RelaySignupDesk
             throw new InvalidOperationException($"{name}'s invite has changed since, so it was left as it is.");
         }
 
-        Reopen(invite);
+        Reopen(invite, newCode: true);
 
-        _log($"[signup] Undid turning down {name}. Their phone was already told no - that can't be taken back. "
-            + "Their invite code works again, so they can sign up again with it.");
+        _log($"[signup] Undid turning down {name}. Their phone was already told no - that can't be taken back. " + NewCodeNote);
     }
 
-    /// <summary>Undoes cancelling an invite, here: its code works again. A sign-up already turned down by the cancel has to be made again.</summary>
+    /// <summary>
+    /// Undoes cancelling an invite, here: it is open again. With no sign-up
+    /// made with it yet, the relay has no answer for its code and the same
+    /// code works again. A sign-up already turned down by the cancel has to
+    /// be made again, and under a new code - the relay keeps that "no"
+    /// against the old one.
+    /// </summary>
     public void UndoCancel(string inviteId, bool signupWasTurnedDown)
     {
         if (Store.Get(inviteId) is not { State: SignupInviteState.Cancelled } invite)
@@ -478,15 +489,41 @@ internal sealed class RelaySignupDesk
             throw new InvalidOperationException("that invite has changed since, so it was left as it is.");
         }
 
-        Reopen(invite);
+        // Always under a new code. Besides the sign-up the cancel itself
+        // turned down, one that reached the relay just before the cancel -
+        // or before the republished document dropped the code - is answered
+        // "That invite was cancelled" when it is collected (Collected), and
+        // the relay then refuses the old code for good. The desk can't
+        // always know that happened, so the old code is never promised to
+        // work again.
+        Reopen(invite, newCode: true);
 
-        _log($"[signup] Undid cancelling the invite for {invite.ForText}. Its code works again."
-            + (signupWasTurnedDown ? " The sign-up already made with it was told it was cancelled - that can't be taken back, so they need to sign up again." : string.Empty));
+        _log($"[signup] Undid cancelling the invite for {invite.ForText}."
+            + (signupWasTurnedDown
+                ? " The sign-up already made with it was told it was cancelled - that can't be taken back, so they need to sign up again. "
+                : " ")
+            + NewCodeNote);
     }
 
-    /// <summary>An invite back to unanswered, saved, and republished with the next sign-up document.</summary>
-    private void Reopen(SignupInvite invite)
+    /// <summary>What the console says after an undo that gave the invite a new code. The code itself is not logged: the log goes into support bundles.</summary>
+    private const string NewCodeNote =
+        "Their old invite code can't be used again (the club website keeps the answer it was given), so the invite has a new code: "
+        + "send it to them with Email Again, or read it out with Show Code, under Online Sign-ups.";
+
+    /// <summary>
+    /// An invite back to unanswered, saved, and republished with the next
+    /// sign-up document. With newCode, under a fresh code (SignupStore.NewCode)
+    /// - for an invite whose sign-up the relay has had an answer for, since
+    /// the relay refuses the old code from then on and only the new hash in
+    /// the next document is open to a sign-up.
+    /// </summary>
+    private void Reopen(SignupInvite invite, bool newCode)
     {
+        if (newCode)
+        {
+            Store.NewCode(invite, _settings);
+        }
+
         invite.State = SignupInviteState.Open;
         invite.AnsweredUtc = null;
         invite.Transponder = string.Empty;

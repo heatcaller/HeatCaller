@@ -1963,7 +1963,8 @@ public static class AppTheme
         using var path = new System.Drawing.Drawing2D.GraphicsPath();
         path.AddEllipse(sunRect);
 
-        var oldClip = g.Clip;
+        // g.Clip hands back a new Region each time - disposed, as DriverPhotos.Draw does.
+        using var oldClip = g.Clip;
         g.SetClip(path);
 
         using (var sunBrush = new System.Drawing.Drawing2D.LinearGradientBrush(

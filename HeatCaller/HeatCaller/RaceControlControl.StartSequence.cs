@@ -317,6 +317,10 @@ public sealed partial class RaceControlControl
     private void CaptureAbandonedRaceUndo(string description, Func<int> generationAfter, Action? restoreHostOnUndo = null)
     {
         var snapshot = _race.CreateSnapshot();
+
+        // When the race stopped counting, so the undo can leave the time it
+        // was gone off the race clock - see RestoreSnapshotAfterGap.
+        var snapshotTakenUtc = DateTime.UtcNow;
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
 
@@ -393,10 +397,11 @@ public sealed partial class RaceControlControl
             _race.JumpStartCostsTheLap = jumpStartCostsTheLap;
             _race.WarningLadder = warningLadder;
 
+            bool heldUnderRed;
             _suppressFlagAnnouncements = true;
             try
             {
-                _race.RestoreSnapshot(snapshot);
+                heldUnderRed = _race.RestoreSnapshotAfterGap(snapshot, snapshotTakenUtc);
             }
             finally
             {
@@ -420,6 +425,15 @@ public sealed partial class RaceControlControl
             WriteJournal(force: true);
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
+
+            // Held under red if it was running - see RestoreSnapshotAfterGap
+            // - so the director is told why, and what to press.
+            if (heldUnderRed)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [race] The race is back, held under a red flag - no laps were counted while it was gone. "
+                    + "Green when the cars are ready to go again.");
+            }
         });
     }
 
@@ -558,7 +572,8 @@ public sealed partial class RaceControlControl
     /// the format has none, practice is on, or a race is already staged,
     /// counting down or running.
     /// </summary>
-    private bool TryBeginWarmUp(Action then)
+    /// <param name="forQuickRace">True when Quick Race is opening it - see _warmUpOpenedByQuickRace.</param>
+    private bool TryBeginWarmUp(Action then, bool forQuickRace = false)
     {
         if (_race.IsPracticeMode || _race.State is not (RaceState.Idle or RaceState.Finished))
         {
@@ -585,6 +600,7 @@ public sealed partial class RaceControlControl
         var cts = new CancellationTokenSource();
         _warmUpCts = cts;
         _afterWarmUp = then;
+        _warmUpOpenedByQuickRace = forQuickRace;
 
         var described = RaceFormat.DescribeWarmUp(seconds);
         _announcer.SpeakReminder($"Warm-up is open. {SpokenWarmUpLength(seconds)} of free laps before the race.");

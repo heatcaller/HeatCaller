@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace HeatCaller;
@@ -22,6 +23,54 @@ public sealed class ProfileStore
     /// </summary>
     private volatile Dictionary<string, string> _alternateOwners = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Main transponder -> the cars that driver had as of the last time the
+    /// store was saved (or loaded). What CarsAdded compares a save with.
+    ///
+    /// It used to compare with the profile object being replaced. But
+    /// several places change the stored profile itself and then save it
+    /// (the CSV import merges a sheet's columns into it), so "before" and
+    /// "after" were the very same object, there was nothing to compare,
+    /// and a car the import gave an existing driver never reached the
+    /// Garage. A copy of the names taken at every save does not move when
+    /// somebody edits the profile in place.
+    ///
+    /// Rebuilt whole and swapped in by reference, like _alternateOwners.
+    /// </summary>
+    private volatile Dictionary<string, string[]> _savedCars = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Which driver a profile object is a version of - see PutBack.
+    ///
+    /// Held beside the objects rather than on DriverProfile, so it is never
+    /// written to profiles.json: it only has to last as long as the undo
+    /// list does, which is this session. Weak, so a version nothing else
+    /// holds any more is let go with its entry.
+    /// </summary>
+    private static readonly ConditionalWeakTable<DriverProfile, Lineage> Lineages = new();
+
+    /// <summary>One driver's identity, shared by every version of their profile. Compared by reference only.</summary>
+    private sealed class Lineage
+    {
+    }
+
+    /// <summary>The driver this object is a version of - a new one the first time an object is asked about.</summary>
+    private static Lineage LineageOf(DriverProfile profile) =>
+        Lineages.GetValue(profile, _ => new Lineage());
+
+    /// <summary>
+    /// Marks <paramref name="profile"/> as a later version of the driver
+    /// <paramref name="before"/> was - for a save that replaces the stored
+    /// object with a new one (the edit form builds a fresh profile).
+    /// </summary>
+    private static void ContinueLineage(DriverProfile profile, DriverProfile? before)
+    {
+        if (before is not null && !ReferenceEquals(before, profile))
+        {
+            Lineages.AddOrUpdate(profile, LineageOf(before));
+        }
+    }
+
     private static string FilePath => Path.Combine(
         AppPaths.Root,
         "profiles.json");
@@ -30,6 +79,7 @@ public sealed class ProfileStore
     {
         _profiles = profiles;
         RebuildAlternateIndex();
+        RememberSavedCars();
     }
 
     public static ProfileStore Load()
@@ -67,6 +117,7 @@ public sealed class ProfileStore
                             continue;
                         }
 
+                        FillMissingFields(p);
                         profiles[p.Transponder] = p;
                     }
                     return new ProfileStore(profiles);
@@ -83,6 +134,47 @@ public sealed class ProfileStore
     }
 
     /// <summary>
+    /// Puts back the defaults a hand-edited, restored or externally written
+    /// profiles.json can have nulled out, e.g. "Cars": null or
+    /// "DriverName": null.
+    ///
+    /// The serializer honors an explicit null by calling the setter, so the
+    /// "= new()" and "= string.Empty" initializers in DriverProfile do not
+    /// protect against it. Every reader in the app takes these as never
+    /// null - AllCars calls Cars.Where, which the constructor reaches
+    /// through RememberSavedCars - so one null used to throw inside Load's
+    /// try. That counted as an unreadable file: the store started empty
+    /// with writes allowed, and the next save replaced the whole roster
+    /// with whoever was added afterwards. Repairing the one entry here
+    /// means a bad field costs nothing instead of costing every driver in
+    /// the file, which is what the per-entry loop above is there for.
+    /// </summary>
+    private static void FillMissingFields(DriverProfile profile)
+    {
+        // Null entries inside the list are dropped too: AllCars skips them,
+        // but other code walks Cars directly and trims each name.
+        profile.Cars = (profile.Cars ?? new List<string>())
+            .Where(car => car is not null)
+            .ToList();
+
+        profile.DriverName ??= string.Empty;
+        profile.CarModel ??= string.Empty;
+        profile.ClassName ??= string.Empty;
+        profile.SetupConfiguration ??= string.Empty;
+        profile.Notes ??= string.Empty;
+        profile.AnnouncerName ??= string.Empty;
+        profile.RaceNumber ??= string.Empty;
+        profile.HomeTrack ??= string.Empty;
+        profile.SkillLevel ??= string.Empty;
+        profile.Contact ??= string.Empty;
+        profile.Email ??= string.Empty;
+        profile.AlternateTransponder ??= string.Empty;
+        profile.PhotoFileName ??= string.Empty;
+        profile.Sponsors ??= string.Empty;
+        profile.Team ??= string.Empty;
+    }
+
+    /// <summary>
     /// True when the file was there at startup but could not be read - see
     /// SafeFile.HoldWritesAfterUnreadable. What this store holds is then a
     /// guess, and nothing it does this session is saved over the club's
@@ -92,6 +184,11 @@ public sealed class ProfileStore
 
     public void Save()
     {
+        // Before the check below: even a store that is not writing its file
+        // has to know what it last "saved", or every later save would look
+        // like it added every car again.
+        RememberSavedCars();
+
         if (LoadedUnreadable)
         {
             // See LoadedUnreadable: the club's real file stays as it is.
@@ -277,7 +374,7 @@ public sealed class ProfileStore
         Save();
 
         // A new driver: every car on them is new.
-        RaiseCarsAdded(profile, before: null);
+        RaiseCarsAdded(profile, Array.Empty<string>());
         return true;
     }
 
@@ -316,38 +413,42 @@ public sealed class ProfileStore
     /// </summary>
     public void Upsert(DriverProfile profile)
     {
-        // Read before it is replaced - it is the only record of which cars
-        // this driver already had.
+        // Read before the save below replaces it - the cars this driver had
+        // as last saved (see _savedCars).
+        var had = CarsAsSaved(profile.Transponder);
+
         _profiles.TryGetValue(profile.Transponder, out var before);
+        ContinueLineage(profile, before);
 
         StampFirstSeen(profile);
         _profiles[profile.Transponder] = profile;
         RebuildAlternateIndex();
         Save();
 
-        RaiseCarsAdded(profile, before);
+        RaiseCarsAdded(profile, had);
     }
 
     /// <summary>Adds or replaces several profiles, writing the file once rather than once per profile.</summary>
     public void UpsertMany(IEnumerable<DriverProfile> profiles)
     {
-        var saved = new List<(DriverProfile Profile, DriverProfile? Before)>();
+        var saved = new List<(DriverProfile Profile, IReadOnlyList<string> Had)>();
 
         foreach (var profile in profiles)
         {
             _profiles.TryGetValue(profile.Transponder, out var before);
+            ContinueLineage(profile, before);
 
             StampFirstSeen(profile);
             _profiles[profile.Transponder] = profile;
-            saved.Add((profile, before));
+            saved.Add((profile, CarsAsSaved(profile.Transponder)));
         }
 
         RebuildAlternateIndex();
         Save();
 
-        foreach (var (profile, before) in saved)
+        foreach (var (profile, had) in saved)
         {
-            RaiseCarsAdded(profile, before);
+            RaiseCarsAdded(profile, had);
         }
     }
 
@@ -367,22 +468,17 @@ public sealed class ProfileStore
     /// </remarks>
     public event Action<DriverProfile, IReadOnlyList<string>>? CarsAdded;
 
-    private void RaiseCarsAdded(DriverProfile profile, DriverProfile? before)
+    /// <summary>
+    /// <paramref name="had"/> is the cars this driver had as last saved
+    /// (see _savedCars) - not read off the profile object being replaced,
+    /// which may be this very object, changed in place before the save.
+    /// </summary>
+    private void RaiseCarsAdded(DriverProfile profile, IReadOnlyList<string> had)
     {
         if (CarsAdded is null)
         {
             return;
         }
-
-        // Saved over itself - a change made to the stored object in place,
-        // then written. There is no earlier copy to compare with, and the
-        // in-place edits in this app (photo, class rename) never touch cars.
-        if (ReferenceEquals(before, profile))
-        {
-            return;
-        }
-
-        var had = before?.AllCars ?? Array.Empty<string>();
 
         var added = profile.AllCars
             .Where(car => !had.Any(old => string.Equals(old, car, StringComparison.OrdinalIgnoreCase)))
@@ -392,6 +488,23 @@ public sealed class ProfileStore
         {
             CarsAdded?.Invoke(profile, added);
         }
+    }
+
+    /// <summary>The cars the driver on this main transponder had when the store was last saved, or none.</summary>
+    private IReadOnlyList<string> CarsAsSaved(string transponder) =>
+        _savedCars.TryGetValue(transponder, out var cars) ? cars : Array.Empty<string>();
+
+    /// <summary>Takes the copy of every driver's cars that CarsAdded compares the next save with.</summary>
+    private void RememberSavedCars()
+    {
+        var cars = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (transponder, profile) in _profiles)
+        {
+            cars[transponder] = profile.AllCars.ToArray();
+        }
+
+        _savedCars = cars;
     }
 
     public void Delete(string transponder)
@@ -467,9 +580,17 @@ public sealed class ProfileStore
     /// nothing done to the live profile afterwards - several places edit
     /// one in place (a CSV import, a quick photo change, a class rename) -
     /// reaches the copy.
+    ///
+    /// The copy is marked as a version of the same driver as the original,
+    /// which is how PutBack tells that driver apart from somebody given the
+    /// same transponder later.
     /// </summary>
-    public static DriverProfile Snapshot(DriverProfile profile) =>
-        JsonSerializer.Deserialize<DriverProfile>(JsonSerializer.Serialize(profile))!;
+    public static DriverProfile Snapshot(DriverProfile profile)
+    {
+        var copy = JsonSerializer.Deserialize<DriverProfile>(JsonSerializer.Serialize(profile))!;
+        Lineages.AddOrUpdate(copy, LineageOf(profile));
+        return copy;
+    }
 
     /// <summary>
     /// The undo half of an edit or an import, in one save: each profile in
@@ -481,23 +602,55 @@ public sealed class ProfileStore
     /// stays deleted - that delete has an undo of its own - rather than
     /// being brought back half-way by this one. Returns how many profiles
     /// were changed.
+    ///
+    /// "Still there" means the same DRIVER, not just something stored under
+    /// the same transponder. This used to check only the transponder, so
+    /// after edit Sam, delete Sam, add Alex on Sam's transponder, the edit's
+    /// undo wrote Sam's old details over Alex - name, photo and all - with
+    /// no undo to bring him back. Each copy in <paramref name="before"/>
+    /// came from Snapshot, which marks it as a version of the driver it was
+    /// taken from; it only goes back over a later version of that same
+    /// driver (the record the edit saved, or one changed in place since, or
+    /// one put back by an undo). Anybody else on that transponder is left
+    /// alone, as if the driver had simply been deleted - which they were.
+    ///
+    /// <paramref name="added"/> is only transponders, so it cannot tell a
+    /// driver the import added from one added by hand on the same
+    /// transponder after that driver was deleted. Use the overload that
+    /// takes the added profiles themselves wherever they are known.
     /// </summary>
-    public int PutBack(IReadOnlyCollection<DriverProfile> before, IReadOnlyCollection<string> added)
+    public int PutBack(IReadOnlyCollection<DriverProfile> before, IReadOnlyCollection<string> added) =>
+        PutBack(before, added.Select(transponder => (transponder, (DriverProfile?)null)).ToList());
+
+    /// <summary>
+    /// PutBack, with the drivers the change added given as the profiles it
+    /// stored rather than as transponders: each is removed only while the
+    /// record under its transponder is still that driver (see the other
+    /// overload). A driver added by hand on the same transponder after the
+    /// imported one was deleted stays, rather than being deleted by an
+    /// undo that was never about them.
+    /// </summary>
+    public int PutBack(IReadOnlyCollection<DriverProfile> before, IReadOnlyCollection<DriverProfile> added) =>
+        PutBack(before, added.Select(profile => (profile.Transponder, (DriverProfile?)profile)).ToList());
+
+    private int PutBack(IReadOnlyCollection<DriverProfile> before, IReadOnlyList<(string Transponder, DriverProfile? Profile)> added)
     {
         var changed = 0;
 
         foreach (var profile in before)
         {
-            if (_profiles.ContainsKey(profile.Transponder))
+            if (_profiles.TryGetValue(profile.Transponder, out var present) && IsSameDriver(present, profile))
             {
                 _profiles[profile.Transponder] = profile;
                 changed++;
             }
         }
 
-        foreach (var transponder in added)
+        foreach (var (transponder, profile) in added)
         {
-            if (_profiles.Remove(transponder))
+            if (_profiles.TryGetValue(transponder, out var present)
+                && (profile is null || IsSameDriver(present, profile))
+                && _profiles.Remove(transponder))
             {
                 changed++;
             }
@@ -511,6 +664,12 @@ public sealed class ProfileStore
 
         return changed;
     }
+
+    /// <summary>
+    /// Whether two profile objects are versions of one driver - see PutBack.
+    /// </summary>
+    private static bool IsSameDriver(DriverProfile a, DriverProfile b) =>
+        ReferenceEquals(a, b) || ReferenceEquals(LineageOf(a), LineageOf(b));
 
     /// <summary>
     /// Which of a deleted profile's transponders somebody else holds now,

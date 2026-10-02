@@ -662,7 +662,7 @@ describe("the voice's folder, which no club id can name", () => {
     }
   });
 
-  it("forgets a club's own lines and its count when the club deletes everything, and keeps the shared ones", async () => {
+  it("forgets a club's own lines when the club deletes everything, and keeps its count and the shared ones", async () => {
     const dir = await mkdtemp(join(tmpdir(), "relay-review-"));
     const registry = voiceTenants(["acme-rc"]);
     const voice = new VoiceService({
@@ -681,7 +681,7 @@ describe("the voice's folder, which no club id can name", () => {
       assert.equal(deleted.status, 200);
 
       assert.equal(await exists(join(dir, VOICE_DIR, "clubs", "acme-rc")), false, "a driver's name, spoken, was left on disk");
-      assert.equal(await exists(join(dir, VOICE_DIR, "usage", "acme-rc.json")), false);
+      assert.equal(await exists(join(dir, VOICE_DIR, "usage", "acme-rc.json")), true, "a delete must not reset the club's allowance");
       assert.equal((await readdir(join(dir, VOICE_DIR, "shared"))).length, 1);
     } finally {
       await harness.close();

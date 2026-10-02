@@ -1119,6 +1119,14 @@ public sealed class FirstRunWizard : Form
     {
         var className = _cmbDriverClass.SelectedItem as string ?? string.Empty;
 
+        // Counted afresh on every pass. This runs each time the step is left
+        // (Back, Next or a click on the rail), and a skipped row is left
+        // filled in on purpose - so a running total counted the same row
+        // again on every pass, and kept warning about it after it was fixed
+        // and saved. Every row still unsaved is on screen, so this pass sees
+        // them all: the count is the rows that are still not saved now.
+        _skippedDrivers = 0;
+
         for (var i = 0; i < DriverRows; i++)
         {
             var name = _txtDriverNames[i].Text.Trim();

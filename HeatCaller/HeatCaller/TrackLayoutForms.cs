@@ -53,6 +53,15 @@ public sealed class TrackLayoutEditForm : Form
     private string? _pendingAttachPath;
     private bool _pendingRemove;
 
+    // Asks whether another layout already has a name (see
+    // TrackLayoutStore.IsNameTaken), and the name the layout had when the
+    // dialog opened. Save refuses a name another layout uses, because a
+    // layout is found everywhere else by its name alone - but a name left as
+    // it was is let through, so a club whose file already has two tracks of
+    // one name can still edit either of them (renaming one is the way out).
+    private readonly Func<string, bool>? _isNameTaken;
+    private readonly string _originalName;
+
     /// <summary>
     /// How wide the window is inside its frame at the normal text size, at
     /// the least: the 440px column it had and its margins. That column was
@@ -76,9 +85,11 @@ public sealed class TrackLayoutEditForm : Form
     /// <summary>Lines kept for the file's name beside the preview - see the constructor.</summary>
     private const int NameLines = 2;
 
-    public TrackLayoutEditForm(TrackLayout? existing)
+    public TrackLayoutEditForm(TrackLayout? existing, Func<string, bool>? isNameTaken = null)
     {
         Result = existing ?? new TrackLayout();
+        _isNameTaken = isNameTaken;
+        _originalName = existing?.Name ?? string.Empty;
 
         Text = existing is null ? "Add Track Layout" : "Edit Track Layout";
         Font = AppTheme.BodyFont;
@@ -446,6 +457,18 @@ public sealed class TrackLayoutEditForm : Form
             return;
         }
 
+        // Checked before the photo below, so a refused name leaves nothing
+        // on disk changed and the dialog open to pick another.
+        if (!string.Equals(name, _originalName.Trim(), StringComparison.Ordinal) && _isNameTaken?.Invoke(name) == true)
+        {
+            AppDialog.Show(this,
+                $"There's already a track layout called '{name}'. Give this one a different name - the track picker, records and Demo pace tell layouts apart by name.",
+                "Name already used", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _txtName.Focus();
+            _txtName.SelectAll();
+            return;
+        }
+
         // The photo first: it's the one part of saving that can fail, and a
         // failure leaves the dialog open with the track as it was.
         try
@@ -718,11 +741,11 @@ public sealed class TrackLayoutManagerControl : UserControl
 
     private void AddNew()
     {
-        using var form = new TrackLayoutEditForm(null);
+        var store = _store;
+        using var form = new TrackLayoutEditForm(null, name => store.IsNameTaken(name, null));
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             var newId = form.Result.Id;
-            var store = _store;
             _undo.Capture($"Add track layout '{form.Result.Name}'", () =>
             {
                 if (store.Get(newId) is not null)
@@ -764,7 +787,7 @@ public sealed class TrackLayoutManagerControl : UserControl
             existing.PreferPlanImage,
             existing.AttachmentFileName);
 
-        using var form = new TrackLayoutEditForm(existing);
+        using var form = new TrackLayoutEditForm(existing, name => _store.IsNameTaken(name, trackId));
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             // Only the fields the dialog edits go back, so a record set in a
@@ -828,14 +851,48 @@ public sealed class TrackLayoutManagerControl : UserControl
             ? _store.Get((string)_list.SelectedItems[0].Tag!)
             : null;
 
-        using var form = new RcpTrackEditorForm(
-            existing?.Design,
-            existing?.Name ?? string.Empty,
-            existing?.AverageLapSeconds);
-
-        if (form.ShowDialog(this) != DialogResult.OK)
+        // The designer's Save only checks that a name was typed; whether
+        // another layout already has it is checked here, where the store is.
+        // A layout is found everywhere else by its name alone (the Race
+        // Control picker, the all-time record, the Demo pace), so a second
+        // "Club Oval" would share - and overwrite - the first one's record.
+        // A taken name opens the designer again on what was just drawn,
+        // under the name typed, rather than throwing the drawing away. A
+        // name left as it was is let through, so a track that already shares
+        // its name in an older file can still have its plan redrawn.
+        var designToOpen = existing?.Design;
+        var nameToOpen = existing?.Name ?? string.Empty;
+        RcpTrackDesign chosenDesign;
+        string chosenName;
+        bool useAsPhoto;
+        while (true)
         {
-            return;
+            using var form = new RcpTrackEditorForm(
+                designToOpen,
+                nameToOpen,
+                existing?.AverageLapSeconds);
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var unchanged = existing is not null && string.Equals(form.TrackName, existing.Name.Trim(), StringComparison.Ordinal);
+            if (!unchanged && _store.IsNameTaken(form.TrackName, existing?.Id))
+            {
+                AppDialog.Show(this,
+                    $"There's already a track layout called '{form.TrackName}'. Give this one a different name - the track picker, records and Demo pace tell layouts apart by name.",
+                    "Name already used", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                designToOpen = form.Result;
+                nameToOpen = form.TrackName;
+                continue;
+            }
+
+            chosenDesign = form.Result;
+            chosenName = form.TrackName;
+            useAsPhoto = form.UseAsPhoto;
+            break;
         }
 
         var track = existing ?? new TrackLayout();
@@ -852,7 +909,7 @@ public sealed class TrackLayoutManagerControl : UserControl
         // after an undo, so the undo never reaches into a page that may have
         // gone.
         var store = _store;
-        _undo.Capture(isNew ? $"Add track '{form.TrackName}'" : $"Track plan for '{track.Name}'", () =>
+        _undo.Capture(isNew ? $"Add track '{chosenName}'" : $"Track plan for '{track.Name}'", () =>
         {
             if (isNew)
             {
@@ -870,12 +927,12 @@ public sealed class TrackLayoutManagerControl : UserControl
             }
         });
 
-        track.Name = form.TrackName;
-        track.Design = form.Result;
+        track.Name = chosenName;
+        track.Design = chosenDesign;
 
         // A preference, not a replacement: whatever photo was attached is
         // still attached, and can be switched back to at any time.
-        track.PreferPlanImage = form.UseAsPhoto && !form.Result.IsEmpty;
+        track.PreferPlanImage = useAsPhoto && !chosenDesign.IsEmpty;
 
         _store.Upsert(track);
 

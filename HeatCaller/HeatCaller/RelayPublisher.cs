@@ -663,6 +663,34 @@ public sealed class RelayPublisher : IDisposable
     private long _manageAnsweredOrder;
 
     /// <summary>
+    /// Every manager request this laptop has run, by reqId, with the time
+    /// (this laptop's clock) until which it must be remembered. Guarded by
+    /// _manageGate.
+    ///
+    /// Separate from _manageAnswered on purpose. That cache exists so a
+    /// request whose answer was not confirmed is not run twice, and it is
+    /// emptied as soon as the answer is posted or the relay stops listing
+    /// the request - which is right for an honest relay, but left nothing
+    /// that remembered a request had ever run. A relay that put the same
+    /// signed request back in the inbox a minute later found no cached
+    /// answer, the signature and timestamp still checked out (same bytes,
+    /// still inside MaxAge), and the request ran again: a check-in put
+    /// back, a driver moved back to where the manager had just moved them
+    /// from. The signature is there so the laptop does not have to trust
+    /// the relay, so a replay has to be refused here, not left to the relay.
+    ///
+    /// Kept for twice RelayManagerDevices.MaxAge from the moment it ran: a
+    /// request may carry a sentAt up to MaxAge ahead of this laptop's clock
+    /// and stays acceptable until MaxAge after that, so nothing older can
+    /// pass VerifyPinSigned again and there is no need to remember it.
+    /// Keyed by reqId because the reqId is inside the signature - a relay
+    /// cannot change it without the request failing verification. Not
+    /// forgotten with the answers when the relay, club or published data
+    /// changes: remembering a few extra ids for ten minutes costs nothing.
+    /// </summary>
+    private readonly Dictionary<string, DateTime> _manageRunUntil = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The most answers _manageAnswered holds. A ceiling, not a working
     /// limit, like MaxQueuedResults: it only ever holds answers to requests
     /// the relay listed as waiting at the last look, and the relay holds at
@@ -2297,6 +2325,23 @@ public sealed class RelayPublisher : IDisposable
                 // not be judged - or run - a second time.
                 string? bodyJson = null;
 
+                if (answerJson is null && AlreadyRan(reqId))
+                {
+                    // Run once already and its answer posted, yet listed
+                    // again: an honest relay never does that while it still
+                    // holds the answer, so this is a replay. Refused rather
+                    // than skipped, and cached like any refusal, so the
+                    // phone (if anyone is waiting) is told and it is judged
+                    // once rather than at every poll.
+                    answerJson = JsonSerializer.Serialize(new
+                    {
+                        ok = false,
+                        error = "That request has already been run once, so it has not been run again. Reload to see where things stand.",
+                    });
+                    Log?.Invoke("[manage] A request that had already been run was offered again and refused.");
+                    RememberManageAnswer(reqId, answerJson);
+                }
+
                 if (answerJson is null)
                 {
                     bodyJson = RunnableBody(waiting, target.Club, out var refusal);
@@ -2346,6 +2391,11 @@ public sealed class RelayPublisher : IDisposable
                         continue;
                     }
 
+                    // Recorded only once the handler has come back with an
+                    // answer, the same point the answer cache is filled: a
+                    // request stopped by cancellation, or left because the
+                    // handler went away, is still run next time, as before.
+                    RememberManageRun(reqId);
                     RememberManageAnswer(reqId, answerJson);
                 }
 
@@ -2511,6 +2561,37 @@ public sealed class RelayPublisher : IDisposable
             }
 
             _manageAnswered[reqId] = (++_manageAnsweredOrder, answerJson);
+        }
+    }
+
+    /// <summary>Whether a request with this reqId has been run within the last 2 x MaxAge. See _manageRunUntil.</summary>
+    private bool AlreadyRan(string reqId)
+    {
+        lock (_manageGate)
+        {
+            return _manageRunUntil.TryGetValue(reqId, out var until) && until > DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>
+    /// Notes that a request has run, and forgets any that are now too old to
+    /// pass VerifyPinSigned again. Never capped by count: dropping one still
+    /// inside its window would reopen the replay this guards against, and
+    /// the relay's own queue limit (MANAGE_QUEUE_MAX_ITEMS) and the time
+    /// limit keep it small.
+    /// </summary>
+    private void RememberManageRun(string reqId)
+    {
+        var now = DateTime.UtcNow;
+
+        lock (_manageGate)
+        {
+            foreach (var key in _manageRunUntil.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToList())
+            {
+                _manageRunUntil.Remove(key);
+            }
+
+            _manageRunUntil[reqId] = now + RelayManagerDevices.MaxAge + RelayManagerDevices.MaxAge;
         }
     }
 

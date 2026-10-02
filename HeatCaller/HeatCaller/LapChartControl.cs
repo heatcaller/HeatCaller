@@ -267,6 +267,12 @@ public sealed class LapChartControl : UserControl
             _clbDrivers.Items.Clear();
             _currentSession = null;
             _chartPanel.Invalidate();
+
+            // Clearing the driver list raises no ItemCheck, so nothing else
+            // would empty the Consistency table - it kept the rows of a
+            // session that had just been deleted. RefreshStats with no
+            // drivers ticked leaves it empty.
+            RefreshStats();
             return;
         }
 
@@ -294,6 +300,11 @@ public sealed class LapChartControl : UserControl
         if (_currentSession is null)
         {
             _chartPanel.Invalidate();
+
+            // As in RefreshAll: the list was just cleared without raising
+            // ItemCheck, so the table has to be emptied here or it goes on
+            // showing the previous session's drivers.
+            RefreshStats();
             return;
         }
 
@@ -337,15 +348,34 @@ public sealed class LapChartControl : UserControl
         }
 
         var drivers = CheckedDrivers();
-        if (_currentSession is null || drivers.Count == 0)
+
+        // Flying laps only, as RefreshStats and PaceAnalysis.CountedLaps
+        // count them. Index 0 of LapTimesMs is the run from the green to the
+        // first crossing, not a lap: with the grid just behind the line it is
+        // a second or so against laps of nine or ten, so plotting it pulled
+        // the time axis down to fit it and squashed every real lap into the
+        // top band of the chart - and the hover called it a "lap 1" quicker
+        // than the Best in the table underneath. A lap of zero or less (a
+        // jump start's placeholder) says nothing about pace either.
+        var maxLaps = drivers.Count == 0 ? 0 : drivers.Max(d => d.LapTimesMs.Count);
+        var allTimes = drivers.SelectMany(d => d.LapTimesMs.Skip(1)).Where(ms => ms > 0).ToList();
+
+        if (_currentSession is null || drivers.Count == 0 || allTimes.Count == 0)
         {
             using var msgBrush = new SolidBrush(palette.Muted);
-            var msg = _currentSession is null ? "Select a session." : "Tick a driver to plot their laps.";
+            var msg = _currentSession is null ? "Select a session."
+                : drivers.Count == 0 ? "Tick a driver to plot their laps."
+                : "No full laps to plot yet - only the start pass was recorded.";
             var size = g.MeasureString(msg, AppTheme.BodyFont);
 
             // Lifted by about half a line of the body face, at the text size
             // in use, so it stays centred as the face grows.
             g.DrawString(msg, AppTheme.BodyFont, msgBrush, bounds.Left + (bounds.Width - size.Width) / 2, bounds.Top + bounds.Height / 2f - UiLayout.AtTextSize(10));
+
+            // Nothing is plotted, so nothing is left to hover over - the
+            // points of the chart that was showing before would otherwise
+            // still turn the cursor into a hand over empty space.
+            _plotted.Clear();
             return;
         }
 
@@ -364,8 +394,6 @@ public sealed class LapChartControl : UserControl
             Math.Max(10, bounds.Width - padLeft - padRight),
             Math.Max(10, bounds.Height - padTop - padBottom));
 
-        var maxLaps = drivers.Max(d => d.LapTimesMs.Count);
-        var allTimes = drivers.SelectMany(d => d.LapTimesMs).ToList();
         var minMs = allTimes.Min();
         var maxMs = allTimes.Max();
 
@@ -399,12 +427,21 @@ public sealed class LapChartControl : UserControl
         g.DrawLine(axisPen, plot.Left, plot.Top, plot.Left, plot.Bottom);
         g.DrawLine(axisPen, plot.Left, plot.Bottom, plot.Right, plot.Bottom);
 
+        // The x axis runs over the flying laps, LapTimesMs index 1 to the
+        // last, so the first real lap sits on the left edge. Each is labeled
+        // index + 1, the same lap number the leaderboard and the lap popup
+        // give it (they show index 0 as the start pass), so "lap 5" here is
+        // "L5" there.
+        var flyingCount = Math.Max(1, maxLaps - 1);
+        float LapX(int lapIndex) =>
+            plot.Left + (flyingCount == 1 ? plot.Width / 2f : plot.Width * (lapIndex - 1f) / (flyingCount - 1f));
+
         // X-axis lap labels, thinned out so they never overlap.
-        var labelStep = Math.Max(1, maxLaps / 10);
-        for (var lap = 1; lap <= maxLaps; lap += labelStep)
+        var labelStep = Math.Max(1, flyingCount / 10);
+        for (var lapIndex = 1; lapIndex <= flyingCount; lapIndex += labelStep)
         {
-            var x = plot.Left + (maxLaps == 1 ? plot.Width / 2f : plot.Width * (lap - 1f) / (maxLaps - 1f));
-            g.DrawString(lap.ToString(), AppTheme.SmallFont, labelBrush, x - labelGap, plot.Bottom + labelGap);
+            var x = LapX(lapIndex);
+            g.DrawString((lapIndex + 1).ToString(), AppTheme.SmallFont, labelBrush, x - labelGap, plot.Bottom + labelGap);
         }
 
         // "Lap" a line below the lap numbers, at the text size in use.
@@ -438,9 +475,16 @@ public sealed class LapChartControl : UserControl
             using var dotBrush = new SolidBrush(color);
 
             var points = new List<PointF>();
-            for (var lap = 0; lap < driver.LapTimesMs.Count; lap++)
+            for (var lap = 1; lap < driver.LapTimesMs.Count; lap++)
             {
-                var x = plot.Left + (maxLaps == 1 ? plot.Width / 2f : plot.Width * lap / (maxLaps - 1f));
+                // Same filter as the axis range above, so no point can fall
+                // outside the plot.
+                if (driver.LapTimesMs[lap] <= 0)
+                {
+                    continue;
+                }
+
+                var x = LapX(lap);
                 var y = (float)(plot.Bottom - (driver.LapTimesMs[lap] - lowMs) / range * plot.Height);
                 points.Add(new PointF(x, y));
                 _plotted.Add((new PointF(x, y), driver.DriverName, lap + 1, driver.LapTimesMs[lap], color));

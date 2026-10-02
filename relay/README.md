@@ -451,7 +451,10 @@ DELETE /api/v1/c/:club          token required; erases everything that club publ
 The delete takes the club's wrong-PIN counts with it - check-in's and the
 manager's alike - from memory as well as disk, and waits for a save of
 either one already under way before the files go, so the save cannot put
-the file back.
+the file back. It does not take the club's HeatCaller voice count, its
+history or a top-up: those are what the club is billed by, and a delete
+followed by a fresh publish must not start a new month's allowance. Only the
+club's own recorded lines go.
 
 `whoami` exists so a token can be checked without publishing anything. It
 is the one authenticated read that changes nothing, which is what the

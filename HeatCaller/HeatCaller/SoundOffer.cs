@@ -59,8 +59,7 @@ internal sealed class SoundOffer
 
         Picker.DropDownStyle = ComboBoxStyle.DropDownList;
 
-        var setNow = host.SetNow();
-        Picker.Items.Add(new Choice(ChoiceKind.Keep, null, setNow.Length > 0 ? $"Keep what's set now ({setNow})" : "Keep what's set now", KeepHint));
+        Picker.Items.Add(KeepChoice(host.SetNow()));
 
         foreach (var theme in host.Soundscapes())
         {
@@ -79,6 +78,20 @@ internal sealed class SoundOffer
 
         DontAsk.Text = "Don't ask about the sound again";
         DontAsk.AutoSize = true;
+
+        // The tick is kept the moment it changes, not only when the step is
+        // left. Save runs from a wizard's SaveCurrentStep - Next, Back, a
+        // rail click - and a wizard can be left without any of those: closed
+        // with the window's X, which neither wizard turns into a save. A
+        // club that ticked "Don't ask about the sound again" and then closed
+        // the window has still answered the question, and being offered the
+        // sound again next time (with the Soundscapes page's tick showing it
+        // on) says the program ignored them. The sound choice itself still
+        // waits for the step to be left - applying a soundscape is a bigger
+        // thing, with an Undo entry, and the drop-down is passed through on
+        // the way to the one wanted. Save keeps its own check below, so
+        // calling it afterward changes nothing that was kept here.
+        DontAsk.CheckedChanged += (_, _) => KeepTick();
     }
 
     /// <summary>"Sound:" - what to do with it.</summary>
@@ -143,8 +156,27 @@ internal sealed class SoundOffer
             }
 
             _applied = picked;
+
+            // "Keep what's set now (...)" was named when the wizard opened,
+            // and what is set now has just changed. Left as it was, going
+            // Back showed "Keep what's set now (Arcade)" after lap times
+            // only had been applied - and picking it kept lap times only,
+            // because Keep applies nothing. Renamed from what is set now, it
+            // says what keeping really keeps. The item at 0 is never the
+            // one selected here (Keep is not applied), so the selection
+            // stays put; the width is measured again in case the new name
+            // is the longest.
+            Picker.Items[0] = KeepChoice(_host.SetNow());
+            _measured = null;
+            SizeFields();
         }
 
+        KeepTick();
+    }
+
+    /// <summary>Writes "Don't ask about the sound again" to the settings, and saves them, when it differs from what they hold.</summary>
+    private void KeepTick()
+    {
         var ask = !DontAsk.Checked;
 
         if (_settings.AskAboutSoundInWizards != ask)
@@ -153,6 +185,10 @@ internal sealed class SoundOffer
             _settings.Save();
         }
     }
+
+    /// <summary>"Keep what's set now", naming what that is when it is known - see SoundOfferHost.SetNow.</summary>
+    private static Choice KeepChoice(string setNow) =>
+        new(ChoiceKind.Keep, null, setNow.Length > 0 ? $"Keep what's set now ({setNow})" : "Keep what's set now", KeepHint);
 
     private enum ChoiceKind
     {

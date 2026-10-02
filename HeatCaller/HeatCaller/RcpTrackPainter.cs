@@ -797,7 +797,8 @@ public static class RcpTrackPainter
             return bitmap;
         }
 
-        var bounds = design.BoundsInTiles();
+        // Framed round the line only when the line is drawn.
+        var bounds = design.BoundsInTiles(includeRoute: showRoute);
         var margin = 0.6f;
 
         var scale = Math.Min(

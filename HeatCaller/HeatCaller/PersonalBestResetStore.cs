@@ -30,6 +30,8 @@ public sealed class PersonalBestResetStore
 
     public static PersonalBestResetStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -51,15 +53,37 @@ public sealed class PersonalBestResetStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new PersonalBestResetStore(new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase));
+        return new PersonalBestResetStore(new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase)) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every driver's
+    /// personal-best reset, and nobody remembers which ones were made or
+    /// when. It used to be loaded as empty and then written over whole at
+    /// the next reset, so a backup or sync tool holding it open for a
+    /// moment at launch was enough to lose every other driver's. Resets
+    /// made this session still apply until the app closes; they are just
+    /// not saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     private void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's near-empty set would replace it. The console has
+        // already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(_cutoffs, new JsonSerializerOptions { WriteIndented = true }));
     }
 

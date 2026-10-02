@@ -750,6 +750,17 @@ public sealed class CheckInControl : UserControl
             var baseName = Path.GetFileNameWithoutExtension(dialog.FileName);
             var written = new List<string>();
 
+            // The dialog only asked about the file it was given; the pages
+            // named from it are checked here - see PageFiles.
+            var paths = Enumerable.Range(0, pageCount)
+                .Select(page => pageCount == 1 ? dialog.FileName : Path.Combine(directory, $"{baseName}-page{page + 1}.png"))
+                .ToList();
+
+            if (!PageFiles.ConfirmReplacing(this, paths, dialog.FileName))
+            {
+                return;
+            }
+
             for (var page = 0; page < pageCount; page++)
             {
                 var slice = drivers
@@ -759,9 +770,7 @@ public sealed class CheckInControl : UserControl
 
                 // One file per page rather than one enormous image, so each
                 // maps directly onto a sheet of paper when printed.
-                var path = pageCount == 1
-                    ? dialog.FileName
-                    : Path.Combine(directory, $"{baseName}-page{page + 1}.png");
+                var path = paths[page];
 
                 using var bitmap = QrBadgeRenderer.RenderPage(slice);
                 bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);

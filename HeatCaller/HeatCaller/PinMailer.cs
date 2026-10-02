@@ -22,7 +22,19 @@ internal sealed class MailResult
     /// <summary>"Name (address): why", one per racer whose email did not go.</summary>
     public IReadOnlyList<string> Failures { get; init; } = Array.Empty<string>();
 
-    /// <summary>The transponders behind <see cref="Failures"/>, so an automatic send need not keep retrying a dead address.</summary>
+    /// <summary>
+    /// The racers whose OWN address was at fault - not a valid address, or
+    /// refused for good by the server - so an automatic send need not keep
+    /// retrying a dead address every ten minutes.
+    ///
+    /// Only some of <see cref="Failures"/>, on purpose. It used to be every
+    /// one of them, and MainForm skips these racers for the rest of the
+    /// session: so a fault on the club's side - Gmail's daily sending limit
+    /// reached halfway through, a sender address the server will not accept
+    /// - left every racer it touched without their PIN until the laptop was
+    /// restarted, long after the limit had reset. A fault that is not the
+    /// racer's is simply tried again on the next automatic pass.
+    /// </summary>
     public IReadOnlyList<string> FailedTransponders { get; init; } = Array.Empty<string>();
 
     /// <summary>Names of racers who have a PIN but no email address to send it to.</summary>
@@ -116,6 +128,25 @@ internal static class PinMailer
     }
 
     public static bool IsConfigured(AppSettings settings) => ConfigurationProblem(settings) is null;
+
+    /// <summary>
+    /// Whether SendPinsAsync would actually send a racer their PIN right now
+    /// - the same tests it makes before it sends anything: the mailbox set
+    /// up, personal PINs on, a check-in page to point the racer at (which
+    /// needs publishing to the relay on, with its address and club), and
+    /// not the rehearsal copy, which never sends email.
+    ///
+    /// For anything that tells a racer "your PIN is on its way" before the
+    /// sending has happened. Approving a sign-up did that on IsConfigured
+    /// alone, so with publishing switched off, or in a rehearsal, the phone
+    /// was promised an email that SendPinsAsync then refused to send.
+    /// Busy-ness (IsSending) is left to the caller, which says why.
+    /// </summary>
+    public static bool CanSendPinsNow(AppSettings settings) =>
+        IsConfigured(settings)
+        && settings.RelayRacerPinsEnabled
+        && RelayCheckIn.CheckInPageUrl(settings) is not null
+        && !AppPaths.IsRehearsal;
 
     /// <summary>
     /// The club's name as the emails give it. There is no separate setting
@@ -477,7 +508,15 @@ internal static class PinMailer
                 // This one address is refused - a typo, a closed mailbox.
                 // Nothing to do with the others.
                 failures.Add($"{outgoing.ToName} ({outgoing.To}): {Plain(ex)}");
-                failedTransponders.Add(outgoing.Transponder);
+
+                // Marked as a dead address only when the refusal is for good
+                // and about the address. A server can refuse a recipient for
+                // its own reasons too - full for now (4xx), or over the
+                // club's sending limit (5.4.5) - and those racers are fine.
+                if (IsDeadAddress(ex))
+                {
+                    failedTransponders.Add(outgoing.Transponder);
+                }
             }
             catch (SmtpException ex) when (IsSignInRefused(ex))
             {
@@ -489,8 +528,11 @@ internal static class PinMailer
             }
             catch (Exception ex) when (ex is SmtpException or InvalidOperationException or FormatException)
             {
+                // Not added to failedTransponders: nothing here says the
+                // racer's address is the problem - a sender the server will
+                // not take, a sending limit, a message it would not accept -
+                // so the next automatic pass tries them again.
                 failures.Add($"{outgoing.ToName} ({outgoing.To}): {Plain(ex)}");
-                failedTransponders.Add(outgoing.Transponder);
 
                 // The same fault three times running is the server, not the
                 // racers - stop rather than fail a hundred emails one by one.
@@ -551,6 +593,29 @@ internal static class PinMailer
                || text.Contains("not authenticated", StringComparison.OrdinalIgnoreCase)
                || text.Contains("Authentication unsuccessful", StringComparison.OrdinalIgnoreCase)
                || text.Contains("Username and Password", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a refused recipient is refused because of the address itself
+    /// - no such mailbox, not allowed, gone - rather than something passing
+    /// on the server's side. Only permanent (5xx) mailbox refusals count,
+    /// and not Gmail's "5.4.5" daily-limit answer, which arrives as a 550
+    /// refusal of whichever recipient it happened to be sent with.
+    /// </summary>
+    private static bool IsDeadAddress(SmtpFailedRecipientException ex)
+    {
+        if (ex.StatusCode is not (SmtpStatusCode.MailboxUnavailable
+            or SmtpStatusCode.UserNotLocalTryAlternatePath
+            or SmtpStatusCode.MailboxNameNotAllowed))
+        {
+            return false;
+        }
+
+        var text = ex.Message;
+
+        return !text.Contains("5.4.5", StringComparison.Ordinal)
+               && !text.Contains("limit", StringComparison.OrdinalIgnoreCase)
+               && !text.Contains("quota", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The server could not be reached or would not talk securely - every message after this would fail too.</summary>

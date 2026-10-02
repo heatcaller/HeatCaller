@@ -518,7 +518,7 @@ public sealed class DayScheduleControl : UserControl
 
             if (entry.ActualStartUtc is { } startedUtc)
             {
-                finished += $" · started {startedUtc.ToLocalTime():HH:mm}";
+                finished += $" · started {AppTime.TimeOfDay(startedUtc.ToLocalTime())}";
             }
 
             return (finished, AppTheme.TextMuted);
@@ -526,7 +526,7 @@ public sealed class DayScheduleControl : UserControl
 
         if (entry.ActualStartUtc is { } started)
         {
-            return ($"on track · started {started.ToLocalTime():HH:mm}{Drift(entry)}", AppTheme.Warning);
+            return ($"on track · started {AppTime.TimeOfDay(started.ToLocalTime())}{Drift(entry)}", AppTheme.Warning);
         }
 
         if (isNextUp)
@@ -811,9 +811,15 @@ public sealed class DayScheduleControl : UserControl
         {
             var title = _events.Current is { IsLegacy: false } current ? current.DisplayName : "Race Day";
 
-            using var bitmap = RunSheetRenderer.Render(title, entries);
-            bitmap.Save(dialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
-            AppDialog.Show(this, $"Saved to:\n{dialog.FileName}\n\nOpen and print it at full page size.",
+            // Every line, over as many pages as it takes - see PageFiles.
+            var pages = RunSheetRenderer.RenderPages(title, entries);
+
+            if (PageFiles.SavePages(this, pages, dialog.FileName) is not { } written)
+            {
+                return;
+            }
+
+            AppDialog.Show(this, $"{PageFiles.Describe(written)}\n\nOpen and print {(written.Count == 1 ? "it" : "each")} at full page size.",
                 "Run sheet saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
@@ -1132,12 +1138,18 @@ public sealed class DayScheduleControl : UserControl
 
         _lastFillMinutes = ask.MinutesEach;
 
-        var snapshot = _schedule.Snapshot();
         var wasFirstRace = day?.FirstRaceLocalTime;
+
+        // What each stamped line said before, written down as text as the
+        // pass goes - filled in below. Not a Snapshot: that holds the same
+        // line objects this pass changes in place, so its undo used to put
+        // back only the start time and leave every line restamped. See
+        // DayScheduleStore.RestoreTimes.
+        var changes = new List<DayScheduleStore.TimeChange>();
 
         _undo.Capture("Fill in the times", () =>
         {
-            _schedule.Restore(snapshot);
+            _schedule.RestoreTimes(changes);
 
             if (day is not null && _events.Get(day.Id) is { } live)
             {
@@ -1180,7 +1192,9 @@ public sealed class DayScheduleControl : UserControl
                 continue;
             }
 
+            var was = line.ScheduledTime;
             line.ScheduledTime = clock.ToString("HH:mm");
+            changes.Add(new DayScheduleStore.TimeChange(line.Id, was, line.ScheduledTime));
             stamped.Add(line);
 
             if (line.IsGenerated)

@@ -1117,7 +1117,7 @@ internal sealed class SignupReasonForm : Form
             Text = rejecting is null
                 ? "Who is it for? (optional - just for your list of invites)"
                 : "Tell them why, or what to do instead (optional - shown on their phone). Their phone is told straight away, "
-                  + "and that can't be taken back - Undo only opens their invite again here, so they can sign up again:",
+                  + "and that can't be taken back - Undo only opens their invite again here, under a new code, so they can sign up again:",
             AutoSize = true,
         };
 

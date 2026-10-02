@@ -442,8 +442,9 @@ public sealed class DriverStats
 
             // A lap or more is a finish - AchievementEvaluator's
             // MinimumLapsToCount. No laps is a DNF, which is what
-            // ComputeStandings calls it.
-            if (row.Laps < 1 || place is not { } p)
+            // ComputeStandings calls it. So is a result the race director
+            // has marked DNF or DQ in Edit Result - see IsFinish.
+            if (!IsFinish(row) || place is not { } p)
             {
                 continue;
             }
@@ -481,7 +482,7 @@ public sealed class DriverStats
 
         stats.RecentForm = races
             .Take(FormLength)
-            .Select(r => r.Row.Laps >= 1 && r.Place is { } p ? p : 0)
+            .Select(r => IsFinish(r.Row) && r.Place is { } p ? p : 0)
             .ToList();
 
         // --- Recent activity: races and setups (personal bests join later) ---
@@ -494,7 +495,7 @@ public sealed class DriverStats
 
             var field = session.Results.Count(e => !GhostService.IsGhost(e.Transponder));
 
-            var outcome = row.Laps < 1 || place is not { } finished
+            var outcome = !IsFinish(row) || place is not { } finished
                 ? "did not finish"
                 : $"P{finished} of {field}" + (row.FastLapMs > 0 ? $"  ·  best {LapText(row.FastLapMs)}s" : string.Empty);
 
@@ -732,7 +733,9 @@ public sealed class DriverStats
             handicap = string.Join(", ", parts);
         }
 
-        var eventsAttended = sources.CheckIns?.EventsAttended(transponder) ?? 0;
+        // Only race days that still exist - a deleted day's sheet is kept
+        // for its undo, not for counting (CheckInStore.EventsAttended).
+        var eventsAttended = sources.CheckIns?.EventsAttended(transponder, sources.Events is null ? null : id => sources.Events.Get(id) is not null) ?? 0;
 
         // The setup log files entries by driver name.
         var name = profile.DriverName?.Trim() ?? string.Empty;
@@ -743,6 +746,24 @@ public sealed class DriverStats
 
         return new RaceDayLine(checkedIn, tech, techFailed, handicap, eventsAttended, setupSheets);
     }
+
+    /// <summary>
+    /// Whether this result counts as a finish on the driver card: a lap or
+    /// more, and not marked DNF or DQ in Edit Result.
+    ///
+    /// The laps alone are not enough. ResultEditor keeps a DNF's laps (only a
+    /// DQ is cut to none), and places it after every finisher, so a driver
+    /// retired after 12 laps in a three-car race sits in P3 with laps on the
+    /// board. Going by laps alone counted that as a finish, a podium and a
+    /// top five, showed "P3" in the form strip and "P3 of 3" in the activity
+    /// list, while the results page said DNF. The outcome the race director
+    /// chose is the official word, so it wins here. An outcome that is none
+    /// of the known ones (NormaliseOutcome gives null) is left as a finish,
+    /// as it was before, rather than guessed at.
+    /// </summary>
+    private static bool IsFinish(SessionResultEntry row) =>
+        row.Laps >= 1
+        && ResultEditor.NormaliseOutcome(row.Outcome) is not (ResultEditor.Dnf or ResultEditor.Dq);
 
     /// <summary>
     /// Where this row finished among real cars only - AchievementEvaluator's

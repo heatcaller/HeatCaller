@@ -378,6 +378,16 @@ export class VoiceService {
     // suggestion rather than a limit. What is not spent is given back below.
     const reserved = await this.reserve(club, plan, spoken.length);
 
+    if (!reserved.ok && reserved.unreadable === true) {
+      return {
+        ok: false,
+        refusal: "busy",
+        status: 503,
+        message: "The HeatCaller voice can't check this club's allowance just now. The free Windows voice speaks this one.",
+        usage: reserved.usage,
+      };
+    }
+
     if (!reserved.ok) {
       return {
         ok: false,
@@ -468,21 +478,38 @@ export class VoiceService {
    * falls between them).
    */
   private async usageFor(club: string, plan: VoicePlan, month: string = monthOf(this.now())): Promise<VoiceUsage> {
+    return (await this.usageState(club, plan, month)).usage;
+  }
+
+  /**
+   * usageFor, and whether the count it gives is really the club's - read
+   * from its usage file, or there being no file yet - rather than a
+   * stand-in for a file that is there but could not be read.
+   *
+   * WHY THE DIFFERENCE MATTERS. A file that is there and cannot be read
+   * (not JSON after a power cut, EIO, EMFILE under load, a file whose
+   * owner was changed by hand) still holds this month's count and up to
+   * three years of the history a club is billed by. Taking it as "nothing
+   * spent" used to cache a count of 0 with no history, and the next line
+   * reserve took wrote {used: <that line>, history: {}} over the real file:
+   * the history gone for good, and the club handed a fresh allowance on
+   * HeatCaller's ElevenLabs account. So such a read is never cached - the
+   * next ask reads the file again - and reserve refuses to spend against
+   * it (see there). Only ENOENT means "nothing counted yet".
+   */
+  private async usageState(
+    club: string,
+    plan: VoicePlan,
+    month: string,
+  ): Promise<{ usage: VoiceUsage; known: boolean }> {
     const allowance = plan.monthlyChars + (await this.topUpFor(club, month));
     const cached = this.usageCache.get(club);
 
     if (cached !== undefined && cached.month === month) {
-      return { used: cached.used, allowance, resetsAt: resetOf(this.now()) };
+      return { usage: { used: cached.used, allowance, resetsAt: resetOf(this.now()) }, known: true };
     }
 
-    let read: { used: number; history: Readonly<Record<string, number>> } = { used: 0, history: {} };
-
-    try {
-      read = readUsageRecord(JSON.parse(await readFile(this.usagePath(club), "utf8")) as unknown, month);
-    } catch {
-      // No file yet, or one that cannot be read: this month has not been
-      // counted. Never a reason to refuse a club its voice.
-    }
+    const read = await this.readUsageFile(club, month);
 
     // Read outside the lock when the catalogue asks, so a line may have
     // been counted while the file was being read. What it left in memory
@@ -490,12 +517,62 @@ export class VoiceService {
     const meanwhile = this.usageCache.get(club);
 
     if (meanwhile !== undefined && meanwhile.month === month) {
-      return { used: meanwhile.used, allowance, resetsAt: resetOf(this.now()) };
+      return { usage: { used: meanwhile.used, allowance, resetsAt: resetOf(this.now()) }, known: true };
+    }
+
+    if (read === undefined) {
+      // Shown as nothing spent, so Voice Settings still opens - but not
+      // kept, and not spent against. See above.
+      return { usage: { used: 0, allowance, resetsAt: resetOf(this.now()) }, known: false };
     }
 
     this.usageCache.set(club, { month, used: read.used, history: read.history });
 
-    return { used: read.used, allowance, resetsAt: resetOf(this.now()) };
+    return { usage: { used: read.used, allowance, resetsAt: resetOf(this.now()) }, known: true };
+  }
+
+  /**
+   * The club's usage file read for <month>: zero and no history when there
+   * is no file yet, and undefined - logged - when there is one that cannot
+   * be read or is not a usage record at all. See usageState for why the
+   * two must never be confused.
+   */
+  private async readUsageFile(
+    club: string,
+    month: string,
+  ): Promise<{ used: number; history: Readonly<Record<string, number>> } | undefined> {
+    let text: string;
+
+    try {
+      text = await readFile(this.usagePath(club), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return { used: 0, history: {} };
+      }
+
+      this.log(`[voice] "${club}": could not read the usage file (${String(error)}); not spending against it until it reads.`);
+      return undefined;
+    }
+
+    let raw: unknown;
+
+    try {
+      raw = JSON.parse(text) as unknown;
+    } catch (error) {
+      this.log(`[voice] "${club}": the usage file is not readable JSON (${String(error)}); not spending against it until it is mended.`);
+      return undefined;
+    }
+
+    // readUsageRecord reads anything that is not an object as zero, which
+    // is right for its callers that only report - but a file of "null" or
+    // [] is not a record this relay wrote, and writing over it would lose
+    // whatever it was meant to hold just the same.
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      this.log(`[voice] "${club}": the usage file does not hold a usage record; not spending against it until it is mended.`);
+      return undefined;
+    }
+
+    return readUsageRecord(raw, month);
   }
 
   /**
@@ -547,8 +624,8 @@ export class VoiceService {
     club: string,
     plan: VoicePlan,
     characters: number,
-  ): Promise<{ ok: boolean; usage: VoiceUsage; month: string }> {
-    let outcome: { ok: boolean; usage: VoiceUsage; month: string } = {
+  ): Promise<{ ok: boolean; unreadable?: boolean; usage: VoiceUsage; month: string }> {
+    let outcome: { ok: boolean; unreadable?: boolean; usage: VoiceUsage; month: string } = {
       ok: false,
       usage: { used: 0, allowance: plan.monthlyChars, resetsAt: resetOf(this.now()) },
       month: monthOf(this.now()),
@@ -558,7 +635,19 @@ export class VoiceService {
       // The month, read once, is the month these characters are taken
       // from - and the one refund must give them back to. See refund.
       const month = monthOf(this.now());
-      const current = await this.usageFor(club, plan, month);
+      const state = await this.usageState(club, plan, month);
+      const current = state.usage;
+
+      if (!state.known) {
+        // The usage file is there but could not be read. Spending now
+        // would mean writing a count - and an empty history - over the
+        // one on disk, so the line is refused as busy instead: the laptop
+        // says it in the free Windows voice and asks again with the next
+        // line, by which time a passing fault (EMFILE, EIO) has usually
+        // cleared. Lines already in the cache are still served.
+        outcome = { ok: false, unreadable: true, usage: current, month };
+        return;
+      }
 
       if (current.used + characters > current.allowance) {
         outcome = { ok: false, usage: current, month };
@@ -602,9 +691,9 @@ export class VoiceService {
   /**
    * Writes the month's count, in memory and on the volume - with the
    * months before it, which are what a club is billed or its allowance
-   * set by. Under withUsageLock, always, and after usageFor has read the
-   * file for this month (reserve and refund both do), so the history in
-   * memory is the file's.
+   * set by. Under withUsageLock, always, and after usageState has read the
+   * file for this month and found it readable (reserve and refund both
+   * see to that), so the history in memory is the file's.
    */
   private async storeUsage(club: string, used: number, month: string): Promise<void> {
     const cached = this.usageCache.get(club);
@@ -612,7 +701,15 @@ export class VoiceService {
     // Always this month's entry: both callers read it under the same lock
     // for the same month first. The fallback only keeps a history from
     // being written away if that ever stops being so.
-    const history = cached !== undefined && cached.month === month ? cached.history : await this.historyOnDisk(club, month);
+    const history =
+      cached !== undefined && cached.month === month ? cached.history : (await this.readUsageFile(club, month))?.history;
+
+    if (history === undefined) {
+      // The file is there and could not be read: writing would put an
+      // empty history over the real one. Not reached today (see above);
+      // nothing is kept, so the next read of the file decides.
+      return;
+    }
 
     this.usageCache.set(club, { month, used, history });
 
@@ -623,15 +720,6 @@ export class VoiceService {
       // The count in memory still stands, so the allowance holds for as
       // long as this relay is up.
       this.log(`[voice] "${club}": could not write the month's usage (${String(error)}).`);
-    }
-  }
-
-  /** The months before <month>, read from the club's usage file. */
-  private async historyOnDisk(club: string, month: string): Promise<Readonly<Record<string, number>>> {
-    try {
-      return readUsageRecord(JSON.parse(await readFile(this.usagePath(club), "utf8")) as unknown, month).history;
-    } catch {
-      return {};
     }
   }
 
@@ -715,27 +803,37 @@ export class VoiceService {
   }
 
   /**
-   * Everything this relay keeps for one club, gone: its own lines - driver
-   * names, spoken - and its month's count. Called when a club deletes
-   * everything it has published, which is a club asking to be forgotten;
-   * its lines are in a folder of their own here, not in the club's, so the
-   * store's delete never reached them.
+   * The club's own lines - driver names, spoken - gone. Called when a club
+   * deletes everything it has published, which is a club asking to be
+   * forgotten; its lines are in a folder of their own here, not in the
+   * club's, so the store's delete never reached them.
    *
-   * The shared lines stay. They have no names in them and are nobody's.
-   * A line still being rendered when this runs can land after it; it is
-   * one line with no count beside it, and goes the next time the club is
-   * deleted or its folder is swept.
+   * The month's count, the months before it and the operator's top-up all
+   * stay. They are numbers with no names in them, and they are not the
+   * club's to wipe: the tenant lives in the relay's config, not in what
+   * the club published, so the same token goes on working the moment the
+   * delete is done. Wiping the count would hand the club a fresh full
+   * allowance every time it deleted - a cap any club could lift with one
+   * call, paid for on HeatCaller's ElevenLabs account - and the history
+   * is what the club is billed by and what voice-usage reports, so a
+   * delete would also erase the record of what was spent. The cached
+   * count in memory stays for the same reason; it is the file's, and a
+   * club that comes back under the same id is the same club on the same
+   * plan.
+   *
+   * The shared lines stay too. They have no names in them and are
+   * nobody's. A line still being rendered when this runs can land after
+   * it; it is one line, and goes the next time the club is deleted or its
+   * folder is swept.
    */
   async forget(club: string): Promise<void> {
     if (!isValidClubId(club)) {
       return;
     }
 
+    // Under the usage lock still, so the folder goes between one line's
+    // count and the next rather than in the middle of a reserve.
     await this.withUsageLock(club, async () => {
-      this.usageCache.delete(club);
-      this.topUpCache.delete(club);
-      await unlink(this.usagePath(club)).catch(() => {});
-      await unlink(voiceTopUpPath(this.dataDir, club)).catch(() => {});
       await rm(this.cacheDir(club, false), { recursive: true, force: true });
     });
   }

@@ -111,12 +111,34 @@ public sealed class VoiceSettingsStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Corrupt/unreadable file: start fresh rather than crashing on
+            // launch - but, when it could not be read at all or no copy of
+            // it could be kept, never save over it this session (see
+            // LoadedUnreadable).
+            var hold = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
+            return new VoiceSettingsStore(VoiceProfile.CreateDefault()) { LoadedUnreadable = hold };
         }
 
         return new VoiceSettingsStore(VoiceProfile.CreateDefault());
     }
+
+    /// <summary>
+    /// True when voice-settings.json was there at startup but could not be
+    /// read - see SafeFile.HoldWritesAfterUnreadable. The profile here is
+    /// then the defaults rather than the club's, and <see cref="Save"/>
+    /// writes nothing this session.
+    ///
+    /// This store used to fall back to defaults and let the next save write
+    /// them over the file, as settings.json once did. The file holds the
+    /// only copy on this PC of the sealed ElevenLabs key, the chosen voice
+    /// and model, and every announcement line and toggle the club edited -
+    /// and a backup, sync or antivirus tool holding it for a second at
+    /// launch usually stops it being copied aside too. Nudging the
+    /// announcer volume in the Mixer was enough to lose all of it. Secret
+    /// recovery also asks this, since defaults that only LOOK unlocked
+    /// would have it throw away the backup's copy of the key.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>
     /// Takes in an ElevenLabs key stored in plain text by an older version.
@@ -309,7 +331,14 @@ public sealed class VoiceSettingsStore
         }
     }
 
-    public void Save(VoiceProfile profile)
+    /// <summary>
+    /// Saves the profile and makes it current. Returns false when the file
+    /// could not be written (SafeFile reports that rather than throwing), or
+    /// was not written because it could not be read at startup -
+    /// the profile is current for this run either way. Most callers can
+    /// ignore it; secret recovery cannot (SecretRecovery.Run).
+    /// </summary>
+    public bool Save(VoiceProfile profile)
     {
         // A key that could not be opened on this PC (sealed on the old one)
         // shows as an empty box on the settings page, and that page saves a
@@ -325,8 +354,17 @@ public sealed class VoiceSettingsStore
         }
 
         Current = profile;
+
+        // Not written - and said so, through the answer. Still current for
+        // this run, so a change made tonight is heard tonight; see
+        // LoadedUnreadable for why it must not reach the file.
+        if (LoadedUnreadable)
+        {
+            return false;
+        }
+
         var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
-        SafeFile.WriteAllText(FilePath, json);
+        return SafeFile.WriteAllText(FilePath, json);
     }
 
     /// <summary>

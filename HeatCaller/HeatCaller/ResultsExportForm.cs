@@ -141,7 +141,7 @@ public sealed class ResultsExportForm : Form
     {
         ResultsExporter.Format.ResultsCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, "
-            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds",
+            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status",
 
         ResultsExporter.Format.LapCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, "

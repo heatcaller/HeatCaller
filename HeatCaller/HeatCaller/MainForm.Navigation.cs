@@ -422,14 +422,50 @@ public partial class MainForm
 
         lstNav.SetItems(names);
 
-        var toSelect = previouslySelected is not null && names.Contains(previouslySelected)
-            ? previouslySelected
-            : names.Contains("Race Control") ? "Race Control" : names.FirstOrDefault() ?? "Race Control";
+        // The page on screen is not always the one under the highlight - see
+        // _shownPage. A page hidden from the sidebar can be brought up by a
+        // button, and Race Mode brings up Race Control even when it is hidden,
+        // leaving the highlight on whatever was picked before. Rebuilding the
+        // list (a race day opening or closing with race-night focus on, or
+        // Ctrl+Z undoing a sidebar change) used to put the highlighted page
+        // up instead, which in Race Mode swapped the full-screen race board
+        // for another page mid-race, with no sidebar to get back with.
+        // So the page on screen stays up: always in Race Mode, which is one
+        // page on purpose, and otherwise when a button brought it up (it
+        // differs from the highlight) and no page search is driving this
+        // rebuild - a search still moves to what it found, and hiding the
+        // page that was picked from the sidebar still moves off it, as
+        // before.
+        var keepShown = _shownPage is not null
+            && _navItems.Any(i => i.Name == _shownPage)
+            && (_raceMode || (query.Length == 0 && _shownPage != previouslySelected));
 
-        lstNav.SelectedItem = toSelect;
-        ShowPage(toSelect);
-        SelectSearchedTab(toSelect);
+        var toSelect = keepShown && names.Contains(_shownPage!)
+            ? _shownPage!
+            : previouslySelected is not null && names.Contains(previouslySelected)
+                ? previouslySelected
+                : names.Contains("Race Control") ? "Race Control" : names.FirstOrDefault() ?? "Race Control";
+
+        // Moving the highlight raises SelectionChanged, which would show the
+        // highlighted page by itself - held off here, so the page shown is
+        // the one chosen just below, and it is shown once.
+        _rebuildingNav = true;
+        try
+        {
+            lstNav.SelectedItem = toSelect;
+        }
+        finally
+        {
+            _rebuildingNav = false;
+        }
+
+        var toShow = keepShown ? _shownPage! : toSelect;
+        ShowPage(toShow);
+        SelectSearchedTab(toShow);
     }
+
+    /// <summary>True while RebuildNav moves the highlight - see there.</summary>
+    private bool _rebuildingNav;
 
     /// <summary>How long a page can take to open before the session log says so - see ShowPage.</summary>
     private const int SlowPageMs = 500;
@@ -901,6 +937,11 @@ public partial class MainForm
 
     private void LstNav_SelectionChanged()
     {
+        if (_rebuildingNav)
+        {
+            return;
+        }
+
         if (lstNav.SelectedItem is string name)
         {
             ShowPage(name);
@@ -1009,7 +1050,15 @@ public partial class MainForm
         // because of the grouping; seeding this dialog from that and then
         // saving what comes back is what wrote the grouping into NavOrder
         // permanently. See OrderedNavNames.
-        var clubOrder = VisibleOrderedNavNames(raceNight: false);
+        //
+        // Every page, hidden ones included. This used to be seeded from the
+        // visible pages only, with the hidden ones tacked on at the end in
+        // the app's own order - so pressing OK put each hidden page at the
+        // bottom of the saved order, and a page the club had dragged near
+        // the top came back at the bottom of its group when shown again.
+        // The dialog lists hidden pages as unticked rows, so they can keep
+        // their real places in it.
+        var clubOrder = OrderedNavNames(raceNight: false);
 
         var orderedToggleable = clubOrder.Where(toggleable.Contains)
             .Concat(toggleable.Where(n => !clubOrder.Contains(n)))
@@ -1030,7 +1079,8 @@ public partial class MainForm
         // back where it already was. This used to put it first every time,
         // left over from when the connection page was pinned to the top -
         // so pressing OK here quietly moved it above Race Control.
-        var connectionIndex = OrderedNavNames(raceNight: false).IndexOf("Connection");
+        var orderShownBefore = OrderedNavNames(raceNight: false);
+        var connectionIndex = orderShownBefore.IndexOf("Connection");
         var newOrder = form.OrderedNames.ToList();
         newOrder.Insert(Math.Clamp(connectionIndex, 0, newOrder.Count), "Connection");
 
@@ -1040,8 +1090,14 @@ public partial class MainForm
         var orderBefore = _settings.NavOrder.ToList();
         var raceNightBefore = _settings.RaceNightFocus;
 
+        // The order is compared with the one the sidebar actually goes by,
+        // not with the raw saved NavOrder: that can be empty (a club that
+        // never rearranged anything) or hold names the app no longer has,
+        // and either made an untouched OK look like a change and push an
+        // Undo step that did nothing. Saving newOrder below is still right
+        // in that case - it is the same arrangement, written out in full.
         if (!form.HiddenTabs.SetEquals(hiddenBefore)
-            || !orderBefore.SequenceEqual(newOrder)
+            || !orderShownBefore.SequenceEqual(newOrder)
             || form.RaceNightFocus != raceNightBefore)
         {
             _undo.Capture("Change the sidebar's pages", () =>

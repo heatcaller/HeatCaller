@@ -92,7 +92,8 @@ public sealed class RaceReplayForm : Form
         }
 
         /// <summary>
-        /// How far round the current lap they are, 0 to 1.
+        /// How far round the current lap they are, 0 to 1 - and 0 once they
+        /// have made their last crossing, when there is no current lap.
         ///
         /// Interpolated between crossings, which is a claim about progress
         /// rather than about position on the track - a car is not
@@ -104,9 +105,16 @@ public sealed class RaceReplayForm : Form
         {
             var laps = LapsAt(ms);
 
+            // Past their last crossing there is no next lap they are partway
+            // round: they have finished or stopped, and LapsAt already counts
+            // every lap they did. This returned 1, which added a lap they
+            // never ran - a car that retired after five laps jumped to six and
+            // was drawn as the leader over cars still on their sixth, and the
+            // winner taking the flag in a twenty-lap race turned the heading
+            // to "Lap 21" and put the car half a second behind a lap down.
             if (laps >= CrossingsMs.Count)
             {
-                return 1;
+                return 0;
             }
 
             var from = laps == 0 ? 0 : CrossingsMs[laps - 1];

@@ -20,6 +20,8 @@ public sealed class VenueStore
 
     public static VenueStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -49,15 +51,36 @@ public sealed class VenueStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open -
+            // but, when it could not be read at all or no copy of it could
+            // be kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new VenueStore(new List<VenueProfile>());
+        return new VenueStore(new List<VenueProfile>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every saved venue
+    /// with its connection, track and soundscape. It used to be loaded as
+    /// empty and then written over whole at the next venue edit, so a
+    /// backup or sync tool holding it open for a moment at launch was
+    /// enough to lose every other venue. What this store holds is then only
+    /// what was added this session, and none of it is saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this session's near-empty list would replace it. The console has
+        // already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var json = JsonSerializer.Serialize(_venues, new JsonSerializerOptions { WriteIndented = true });
         SafeFile.WriteAllText(FilePath, json);
     }

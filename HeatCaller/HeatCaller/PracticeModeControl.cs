@@ -49,6 +49,39 @@ public sealed class PracticeModeControl : UserControl
     /// </summary>
     public event Action? PracticeStopped;
 
+    /// <summary>
+    /// The track this practice is run on - the layout picked on this page,
+    /// or null for "(none)". The host hands it to the ghost cars at the
+    /// green, and the save below files the practice under it, so a PB or
+    /// track-record ghost is paced from the same track the practice laps
+    /// are kept under. The ghosts used to be given Race Control's track
+    /// instead, which is often a different layout or "(none)" - and then a
+    /// "beat your PB" ghost ran at the driver's best on some other track,
+    /// or was skipped as having no PB here when there was one.
+    ///
+    /// The picker is only filled when the page is first shown (RefreshAll),
+    /// so a practice started by a car crossing the gate before anyone has
+    /// opened the page found it empty. The remembered layout stands in
+    /// then - the one the picker would have landed on.
+    ///
+    /// UI thread only, as the picker is.
+    /// </summary>
+    public string? SelectedTrackName
+    {
+        get
+        {
+            // Before the picker has been filled, the remembered layout - but
+            // only while it still exists, as RefreshAll would also fall back
+            // to "(none)" for one renamed or deleted since.
+            var remembered = _settings.PracticeTrackLayout;
+            var name = _cmbTrack.Items.Count == 0
+                ? (_trackLayouts.All.Any(t => string.Equals(t.Name, remembered, StringComparison.OrdinalIgnoreCase)) ? remembered : null)
+                : _cmbTrack.SelectedItem as string;
+
+            return string.IsNullOrWhiteSpace(name) || name == "(none)" ? null : name;
+        }
+    }
+
     private readonly KpiTracker _tracker = new();
     private List<KpiDefinition> _columns = new();
 
@@ -59,6 +92,19 @@ public sealed class PracticeModeControl : UserControl
     private readonly DayScheduleStore? _daySchedule;
     private readonly SponsorStore? _sponsors;
     private readonly UndoService? _undo;
+
+    /// <summary>
+    /// Race Control's qualifying projector and its live badge store, handed
+    /// to a Big Screen opened from here so it shows the same Qual and Badges
+    /// columns as one opened from Race Control. Optional: null when the main
+    /// window did not supply them (see the Open Big Screen button).
+    /// </summary>
+    private readonly QualifyingProjector? _projector;
+    private readonly Func<AchievementStore?>? _achievements;
+
+    /// <summary>How stale the badge counts may get on a Big Screen opened
+    /// from here when no live badge store was handed over.</summary>
+    private static readonly TimeSpan BadgeReloadInterval = TimeSpan.FromSeconds(30);
 
     private readonly RaceClockPanel _clock;
     private readonly Button _btnBigScreen = new();
@@ -115,8 +161,11 @@ public sealed class PracticeModeControl : UserControl
     public PracticeModeControl(RaceControlSession race, ProfileStore profiles, SessionHistoryStore history, TrackLayoutStore trackLayouts, AppSettings settings,
         GhostStore ghostStore,
         AnnouncementService? announcer = null, DayScheduleStore? daySchedule = null, SponsorStore? sponsors = null,
-        UndoService? undo = null)
+        UndoService? undo = null,
+        QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null)
     {
+        _projector = projector;
+        _achievements = achievements;
         _undo = undo;
         _ghostStore = ghostStore;
         _announcer = announcer;
@@ -439,7 +488,19 @@ public sealed class PracticeModeControl : UserControl
         {
             if (_announcer is not null)
             {
-                new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings).Show();
+                // The window is not tied to the practice: it watches the
+                // shared session and often stays on the wall through the
+                // heats and mains that follow, which DO award badges and
+                // DO have a qualifying order. So it gets the same live
+                // sources Race Control's own Big Screen uses when the main
+                // window handed them over. Without them, the badges come
+                // from disk, re-read at most every BadgeReloadInterval (not
+                // on every half-second refresh), and the Qual column stays
+                // empty, as there is no projector to fill it.
+                var achievements = _achievements ?? ThrottledAchievementLoader();
+
+                new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings,
+                    _projector, achievements).Show();
             }
         };
 
@@ -629,11 +690,17 @@ public sealed class PracticeModeControl : UserControl
     /// the save, and left the practice in the journal to be found at the
     /// next launch. Does nothing when no practice is running.
     /// </summary>
-    public void StopForShutdown()
+    /// <param name="personIsThere">
+    /// True when a person closed the app (CloseReason.UserClosing), so a
+    /// failed auto-save can be put to them in a dialog before the window
+    /// goes. Off by default: when Windows is shutting down nobody may be
+    /// there to answer it, and a dialog would hold the shutdown up.
+    /// </param>
+    public void StopForShutdown(bool personIsThere = false)
     {
         if (_active)
         {
-            StopPractice("the app was closed");
+            StopPractice("the app was closed", mayShowDialog: personIsThere);
         }
     }
 
@@ -842,7 +909,13 @@ public sealed class PracticeModeControl : UserControl
     /// method always overwrites that text at the end - setting it beforehand
     /// would just get clobbered.
     /// </summary>
-    private void StopPractice(string? reason = null)
+    /// <param name="mayShowDialog">
+    /// False only when the app is closing and cannot tell whether a person
+    /// is there to answer (see StopForShutdown) - a failed auto-save then
+    /// says so in the status line alone, rather than holding up a Windows
+    /// shutdown with a dialog nobody sees.
+    /// </param>
+    private void StopPractice(string? reason = null, bool mayShowDialog = true)
     {
         if (!_active)
         {
@@ -853,11 +926,13 @@ public sealed class PracticeModeControl : UserControl
         // standings this reads from, so afterwards there'd be nothing left
         // to save.
         var autoSaved = false;
+        var autoSaveFailed = false;
         var savedDrivers = 0;
         if (_settings.AutoSavePractice)
         {
             savedDrivers = SaveSession(silent: true);
             autoSaved = savedDrivers > 0;
+            autoSaveFailed = savedDrivers == SaveFailed;
         }
 
         if (_lapHandler is not null)
@@ -900,6 +975,14 @@ public sealed class PracticeModeControl : UserControl
             _lblStatus.Text = $"Stopped{suffix} - auto-saved {savedDrivers} driver{(savedDrivers == 1 ? "" : "s")} to Race History.";
             _lblStatus.ForeColor = AppTheme.Success;
         }
+        else if (autoSaveFailed)
+        {
+            // Not a normal stop: the laps are held in memory only and go
+            // when the app closes (see SaveSession), so it is said in red
+            // and kept on screen, not passed off as a plain "Stopped".
+            _lblStatus.Text = $"Stopped{suffix} - NOT saved: the race history file couldn't be written.";
+            _lblStatus.ForeColor = AppTheme.Danger;
+        }
         else
         {
             _lblStatus.Text = $"Stopped{suffix}";
@@ -907,6 +990,41 @@ public sealed class PracticeModeControl : UserControl
         }
 
         PracticeStopped?.Invoke();
+
+        // Last, with the session already handed back and the refresh timer
+        // stopped, so nothing runs underneath the dialog while it is up -
+        // the length target is checked from that timer, and would otherwise
+        // be free to come back in here.
+        if (autoSaveFailed && mayShowDialog)
+        {
+            ShowNotSavedDialog();
+        }
+    }
+
+    /// <summary>
+    /// A badge source for a Big Screen opened without Race Control's live
+    /// store: reads achievements.json from disk, then hands back that copy
+    /// until BadgeReloadInterval has passed. The Big Screen asks on every
+    /// half-second refresh, so reading the file each time would be wasteful,
+    /// but a copy kept forever froze the counts for the rest of the night.
+    /// Called only on the UI thread (the Big Screen's refresh timer), so the
+    /// captured state needs no locking.
+    /// </summary>
+    private static Func<AchievementStore?> ThrottledAchievementLoader()
+    {
+        AchievementStore? badges = null;
+        var readUtc = DateTime.MinValue;
+
+        return () =>
+        {
+            if (badges is null || DateTime.UtcNow - readUtc >= BadgeReloadInterval)
+            {
+                badges = AchievementStore.Load();
+                readUtc = DateTime.UtcNow;
+            }
+
+            return badges;
+        };
     }
 
     /// <summary>
@@ -922,9 +1040,20 @@ public sealed class PracticeModeControl : UserControl
     {
         if (_race.LapLimit is { } lapTarget)
         {
-            // The leading real car - a ghost lapping ahead of everybody used
-            // to end the practice on reaching the target by itself.
-            var leaderLaps = _race.RaceLeader()?.Laps ?? 0;
+            // The most laps any REAL car has done. A ghost lapping ahead of
+            // everybody used to end the practice on reaching the target by
+            // itself. RaceLeader() alone is not enough for that: it skips
+            // ghosts only while a real car has a standing, and falls back to
+            // the leading ghost before then. A real driver only gets a
+            // standing at their first crossing, while ghosts start lapping
+            // at the green - so a driver who pressed Start and then walked
+            // to the rostrum could find the practice already stopped by a
+            // ghost's fifth lap. Ghosts never count towards the target here.
+            var leaderLaps = _race.GetOrderedStandings()
+                .Where(s => !GhostService.IsGhost(s.TransponderId))
+                .Select(s => s.Laps)
+                .DefaultIfEmpty(0)
+                .Max();
             if (leaderLaps >= lapTarget)
             {
                 StopPractice($"{lapTarget} lap target reached");
@@ -1080,8 +1209,39 @@ public sealed class PracticeModeControl : UserControl
     /// letting Personal Bests and the Lap Times chart use the data - which
     /// is the whole reason to save it rather than let it evaporate.
     /// </summary>
+    /// <returns>
+    /// How many drivers were saved; 0 when there was nothing to save; or
+    /// SaveFailed when there was, but it could not be written.
+    /// </returns>
     private int SaveSession(bool silent = false)
     {
+        // Only a practice that is running here has anything of ours to save.
+        // Practice and Race Control share one session, so when no practice
+        // is running whatever is on it belongs to somebody else - a race
+        // still on the board after the checkered flag (already saved to
+        // Race History as a race), or a demo's made-up laps under real
+        // drivers' transponders. Saving either as Practice put a second copy
+        // of the race, or laps nobody drove, into the Personal Bests, the
+        // Lap Times chart and the PB ghosts. ClearStats keeps off the shared
+        // session for the same reason. The session's own flags are checked
+        // as well as _active, so that a demo somehow holding the session
+        // while this page still thinks practice is running is refused too.
+        // Stop's auto-save runs before _active is cleared, so it still
+        // passes this.
+        if (!_active || !_race.IsPracticeMode || _race.IsDemoMode)
+        {
+            if (!silent)
+            {
+                AppDialog.Show(this,
+                    "No practice is running, so there's nothing to save.\r\n\r\n"
+                    + "Whatever is on the timing board now belongs to Race Control or a demo, not to practice. "
+                    + "A practice is saved when you stop it if \"Save automatically on stop\" is ticked; "
+                    + "otherwise press Save Session before you stop it.",
+                    "Nothing to save", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            return 0;
+        }
+
         // Ghosts are what a practice session is usually run against, so
         // leaving them in a saved result would put a made-up lap time into
         // the personal bests and the pace charts as if somebody had driven
@@ -1121,18 +1281,35 @@ public sealed class PracticeModeControl : UserControl
                 };
             }).ToList();
 
-        var trackName = _cmbTrack.SelectedItem as string;
         var record = new SessionRecord
         {
             SessionType = RaceSessionType.Practice,
-            TrackLayoutName = trackName is null or "(none)" ? string.Empty : trackName,
+            TrackLayoutName = SelectedTrackName ?? string.Empty,
             Label = "Practice",
             StartedAtUtc = _startedAtUtc ?? DateTime.UtcNow,
             EndedAtUtc = DateTime.UtcNow,
             Results = results,
         };
 
-        _history.Add(record);
+        // A failed write is no longer picked up by a later save (see
+        // SessionHistoryStore.Add), and practice has no crash journal, so
+        // saying "saved" here would hide a session that is gone at the next
+        // restart.
+        //
+        // A silent save (Stop's auto-save) returns SaveFailed rather than 0,
+        // so Stop can tell "couldn't be written" from "nothing to save". The
+        // two used to look the same there, and an auto-save that failed was
+        // reported as a plain "Stopped" - the practice then vanished at the
+        // next restart with nobody told.
+        if (!_history.Add(record))
+        {
+            if (!silent)
+            {
+                ShowNotSavedDialog();
+            }
+
+            return SaveFailed;
+        }
 
         if (silent)
         {
@@ -1144,6 +1321,25 @@ public sealed class PracticeModeControl : UserControl
             "Practice saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         return results.Count;
+    }
+
+    /// <summary>
+    /// What SaveSession returns when the practice had laps to save but the
+    /// race history file could not be written - see SaveSession.
+    /// </summary>
+    private const int SaveFailed = -1;
+
+    /// <summary>
+    /// Says a practice could not be written to the race history file. One
+    /// wording for the Save button and for Stop's auto-save, so the two
+    /// cannot drift apart.
+    /// </summary>
+    private void ShowNotSavedDialog()
+    {
+        AppDialog.Show(this,
+            "The practice session couldn't be written to the race history file - something may have it open, "
+            + "or the disk may be full. It's listed in Race History until HeatCaller closes, but won't be kept.",
+            "Practice not saved", MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
     protected override void Dispose(bool disposing)

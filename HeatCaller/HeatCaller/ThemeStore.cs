@@ -79,6 +79,40 @@ public sealed class ThemeStore
 
                     var added = false;
 
+                    // Built-ins saved before their ids were fixed carry a
+                    // random one - see Theme.BuiltInId. They are re-id'd
+                    // below, by name, so this launch and every later one
+                    // agree about which soundscape is which. Each old id is
+                    // remembered with the id that replaces it, so the
+                    // "applied" marker can be carried across below rather
+                    // than lost.
+                    var reIded = new Dictionary<string, string>(StringComparer.Ordinal);
+
+                    // Built-ins from an older version are about to be
+                    // removed and replaced by this version's fresh copies -
+                    // and the one the club applied may be among them. The
+                    // map has to be filled for those BEFORE they go: once
+                    // removed they never reach the re-id loop, and the
+                    // marker would keep pointing at an id nothing has any
+                    // more - exactly the silent "Theme music stopped working
+                    // after an update" Theme.BuiltInId was written to end.
+                    // A built-in that was renamed when the packs arrived
+                    // follows its new name. Only mapped to an id this
+                    // version actually ships; one that was dropped has
+                    // nothing to carry the marker to.
+                    var shippedIds = Theme.CreateBuiltInDefaults().Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+
+                    foreach (var old in loaded.Where(t => t.IsBuiltIn && t.BuiltInVersion < Theme.CurrentBuiltInVersion))
+                    {
+                        var name = Theme.RenamedBuiltIns.TryGetValue(old.Name, out var renamed) ? renamed : old.Name;
+                        var stable = Theme.BuiltInId(name);
+
+                        if (shippedIds.Contains(stable) && !string.Equals(old.Id, stable, StringComparison.Ordinal))
+                        {
+                            reIded[old.Id] = stable;
+                        }
+                    }
+
                     // Built-ins from an older version are replaced
                     // wholesale by this version's - see
                     // Theme.CurrentBuiltInVersion. They can't be edited on
@@ -88,13 +122,6 @@ public sealed class ThemeStore
                     {
                         added = true;
                     }
-
-                    // Built-ins saved before their ids were fixed carry a
-                    // random one - see Theme.BuiltInId. Re-id them here, by
-                    // name, so this launch and every later one agree about
-                    // which soundscape is which. Remembered, so the "applied"
-                    // marker can be carried across below rather than lost.
-                    var reIded = new Dictionary<string, string>(StringComparer.Ordinal);
 
                     foreach (var theme in loaded.Where(t => t.IsBuiltIn))
                     {
@@ -156,15 +183,19 @@ public sealed class ThemeStore
         }
         catch (Exception ex)
         {
-            // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
-
+            // Corrupt/unreadable file: start with the built-ins rather than
+            // crashing on launch.
+            //
             // Not saved here. The built-ins are all a fresh store holds, and
             // writing them now would replace the user's custom themes the
             // moment the app opened - before anyone had seen the message
-            // saying the file couldn't be read. They're written on the
-            // first real change instead.
-            return new ThemeStore(Theme.CreateBuiltInDefaults());
+            // saying the file couldn't be read. When the file was damaged
+            // and a copy of it was kept, they're written on the first real
+            // change instead. When it could not be read at all, or no copy
+            // could be kept, nothing is written this session (see
+            // LoadedUnreadable).
+            var hold = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
+            return new ThemeStore(Theme.CreateBuiltInDefaults()) { LoadedUnreadable = hold };
         }
 
         // First run: seed the file with the starter themes.
@@ -173,8 +204,29 @@ public sealed class ThemeStore
         return fresh;
     }
 
+    /// <summary>
+    /// True when the file was there at startup but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every soundscape
+    /// the club has made. It used to be loaded as the built-ins alone and
+    /// then written over whole at the first edit - Customize on a built-in,
+    /// or Save current settings as new - so a backup or sync tool holding
+    /// it open for a moment at launch was enough to lose every custom
+    /// soundscape, with no copy kept. What this store holds is then the
+    /// built-ins plus whatever was made this session, and none of it is
+    /// saved.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
+
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // the built-ins over it would replace every custom soundscape. The
+        // console has already told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var options = new JsonSerializerOptions { WriteIndented = true };
 
         // Every theme's voice is already key-less (see Load, Apply and

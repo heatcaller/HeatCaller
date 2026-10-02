@@ -1179,8 +1179,11 @@ public sealed class AppSettings
                         // Sealed on another PC or account. Keep a copy of the
                         // file as it came, so the keys can still be had back
                         // on the PC that sealed them whatever happens here.
-                        SafeFile.PreserveUnreadable(SettingsPath,
-                            new CryptographicException("Secrets were sealed by another Windows account or PC."));
+                        // Not PreserveUnreadable: its message says the file
+                        // couldn't be read and the app started with
+                        // defaults, when every setting here loaded and only
+                        // the keys are locked (SecretRecovery's job).
+                        SafeFile.PreserveSealedSecrets(SettingsPath);
                     }
 
                     // Files from before sealing carried the secrets in plain
@@ -1202,11 +1205,36 @@ public sealed class AppSettings
             // rather than crashing the app on startup. A copy is kept first
             // - this file holds the API key and relay credentials, and the
             // next save would otherwise replace them with blanks.
-            SafeFile.PreserveUnreadable(SettingsPath, ex);
+            //
+            // HoldWritesAfterUnreadable rather than PreserveUnreadable, as
+            // the data stores do. A file that could not be READ - held open
+            // by a backup or sync tool for a second at launch - usually
+            // cannot be copied either, and was then written over whole by
+            // the first save: the first-run wizard, shown because the
+            // defaults have never completed it, saved at once. That took
+            // every sealed key with it - the relay token, the PINs, the
+            // email and backup passwords and the badge key every printed QR
+            // check-in depends on - from a file that was almost certainly
+            // fine. Damaged content that WAS copied aside is still started
+            // afresh, as before.
+            var hold = SafeFile.HoldWritesAfterUnreadable(SettingsPath, ex);
+            return new AppSettings { LoadedUnreadable = hold };
         }
 
         return new AppSettings();
     }
+
+    /// <summary>
+    /// True when settings.json was there at startup but could not be read -
+    /// see SafeFile.HoldWritesAfterUnreadable. These settings are then the
+    /// defaults rather than the club's, and <see cref="Save"/> writes nothing
+    /// this session, so the club's real file (and the keys sealed in it) is
+    /// still there for the next launch that can read it.
+    ///
+    /// Not saved: it describes this launch, not the club's settings.
+    /// </summary>
+    [JsonIgnore]
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>
     /// Puts back what a hand-edited or restored settings.json left as null.
@@ -1414,6 +1442,14 @@ public sealed class AppSettings
     /// </summary>
     public bool Save()
     {
+        // Not written - and said so, through the answer. See
+        // LoadedUnreadable: writing now would put defaults over a file
+        // that was only locked when the app started.
+        if (LoadedUnreadable)
+        {
+            return false;
+        }
+
         // SafeFile creates the folder itself, without throwing.
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         return SafeFile.WriteAllText(SettingsPath, json);

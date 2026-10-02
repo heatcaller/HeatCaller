@@ -212,7 +212,7 @@ public sealed partial class AnnouncementService
 
         try
         {
-            var audio = await SpeakThroughRelayAsync(client, profile, text, CancellationToken.None);
+            var audio = await SpeakWholeLineThroughRelayAsync(client, profile, text, CancellationToken.None);
 
             VoiceLibrary.Shared.Save(profile, text, audio);
 
@@ -274,7 +274,8 @@ public sealed partial class AnnouncementService
         HeatCallerVoiceClient client,
         VoiceProfile profile,
         string text,
-        CancellationToken cancel)
+        CancellationToken cancel,
+        bool? shared = null)
     {
         // Also here, not only in RenderWithHeatCallerAsync: Prepare Lines
         // comes straight to this method, and a whole grid prepared through
@@ -317,7 +318,7 @@ public sealed partial class AnnouncementService
             var (audio, allowance, cached) = await client.SpeakAsync(
                 profile.HeatCallerVoice,
                 text,
-                IsFixedLine(text),
+                shared ?? IsFixedLine(text),
                 timeout.Token);
 
             NoteHeatCallerAnswered(allowance, cached, generation);
@@ -344,6 +345,235 @@ public sealed partial class AnnouncementService
         {
             SynthesisGate.Release();
         }
+    }
+
+    /// <summary>
+    /// The quiet put between two pieces of a line the relay was asked for
+    /// in parts - about the pause a voice leaves between two sentences, so
+    /// the join is heard as one, not as a gap.
+    /// </summary>
+    private const double HeatCallerPieceGapSeconds = 0.2;
+
+    /// <summary>A sentence's end: the punctuation stays with the sentence, the space after it is where a line may be split.</summary>
+    private static readonly System.Text.RegularExpressions.Regex HeatCallerSentenceEnd =
+        new(@"(?<=[.!?])\s+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>The audio tags at the start of a sentence, such as "[excited] ".</summary>
+    private static readonly System.Text.RegularExpressions.Regex HeatCallerLeadingTags =
+        new(@"^(?:\[[a-zA-Z ]{1,24}\]\s*)+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// One line through the relay, however long it is. A line the relay
+    /// takes at once goes as it is; a longer one - a race recap with the
+    /// broadcast opening and closing, or a raised word limit, every sentence
+    /// tagged [excited] and every time spelled out - goes in pieces cut at
+    /// sentence ends, and the pieces are joined back into one take.
+    ///
+    /// Without this the relay refused the line as too long, and the recap -
+    /// the line of the night a club most wants in the HeatCaller voice - was
+    /// read by the Windows voice while every other line used the HeatCaller
+    /// one, with the reason logged once a session and never again.
+    ///
+    /// The length is counted with the audio tags in, which is how the relay
+    /// counts it for a v3 voice (the tags are sent on to it). For a voice
+    /// that can't use them the relay takes them out and counts less, so a
+    /// piece measured this way fits either way.
+    /// </summary>
+    private async Task<byte[]> SpeakWholeLineThroughRelayAsync(
+        HeatCallerVoiceClient client,
+        VoiceProfile profile,
+        string text,
+        CancellationToken cancel)
+    {
+        var pieces = SplitForHeatCaller(text, HeatCallerVoiceClient.MaxCharacters);
+
+        if (pieces.Count <= 1)
+        {
+            return await SpeakThroughRelayAsync(client, profile, text, cancel);
+        }
+
+        WaveFormat? format = null;
+        using var joined = new MemoryStream();
+
+        for (var i = 0; i < pieces.Count; i++)
+        {
+            // Never shared: only a whole line with nothing filled into it
+            // may be kept for every club, and a piece of a long line is part
+            // of one with names in it. Asking IsFixedLine of a piece could
+            // answer yes for a sentence that happens to match one.
+            var audio = await SpeakThroughRelayAsync(client, profile, pieces[i], cancel, shared: false);
+
+            byte[] pcm;
+            WaveFormat pieceFormat;
+
+            try
+            {
+                (pcm, pieceFormat) = DecodeMp3(audio);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // This one line's problem, like a line too long: the Windows
+                // voice says it, and nothing rests over it.
+                throw new HeatCallerVoiceException(HeatCallerRefusal.Text, $"A piece of a long line came back unreadable ({ex.Message}).");
+            }
+
+            if (format is null)
+            {
+                format = pieceFormat;
+            }
+            else if (!format.Equals(pieceFormat))
+            {
+                // Two pieces of one voice from one relay should never differ,
+                // but joined raw they would play at the wrong speed or as
+                // noise. Better the Windows voice than that.
+                throw new HeatCallerVoiceException(HeatCallerRefusal.Text, "The pieces of a long line came back in different audio formats.");
+            }
+            else
+            {
+                var gap = (int)(format.AverageBytesPerSecond * HeatCallerPieceGapSeconds);
+                gap -= gap % Math.Max(1, format.BlockAlign);
+                joined.Write(new byte[gap], 0, gap);
+            }
+
+            joined.Write(pcm, 0, pcm.Length);
+        }
+
+        // A WAV, like a release call cut out of a batch: the player and the
+        // saved-voice library both take one, and it is played as it is, with
+        // nothing more skipped from its start - the start of each piece was
+        // already trimmed by DecodeMp3 above.
+        return EncodeWav(joined.ToArray(), format!);
+    }
+
+    /// <summary>
+    /// Cuts a line into pieces no longer than <paramref name="maxCharacters"/>,
+    /// counted with any audio tags in. Pieces end at sentence ends where they
+    /// can, as many whole sentences in each as fit. A single sentence longer
+    /// than that is cut after a comma or between words, and its continuation
+    /// starts with the sentence's own tags again so the delivery holds.
+    /// A line that already fits comes back as itself, trimmed, in one piece.
+    /// </summary>
+    internal static IReadOnlyList<string> SplitForHeatCaller(string text, int maxCharacters)
+    {
+        var whole = (text ?? string.Empty).Trim();
+
+        if (whole.Length <= maxCharacters || maxCharacters < 1)
+        {
+            return [whole];
+        }
+
+        var pieces = new List<string>();
+        var current = new System.Text.StringBuilder();
+
+        foreach (var sentence in HeatCallerSentenceEnd.Split(whole))
+        {
+            var trimmed = sentence.Trim();
+
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var part in FitSentence(trimmed, maxCharacters))
+            {
+                if (current.Length == 0)
+                {
+                    current.Append(part);
+                }
+                else if (current.Length + 1 + part.Length <= maxCharacters)
+                {
+                    current.Append(' ').Append(part);
+                }
+                else
+                {
+                    pieces.Add(current.ToString());
+                    current.Clear().Append(part);
+                }
+            }
+        }
+
+        if (current.Length > 0)
+        {
+            pieces.Add(current.ToString());
+        }
+
+        return pieces;
+    }
+
+    /// <summary>One sentence as pieces that each fit; just the sentence when it already does.</summary>
+    private static List<string> FitSentence(string sentence, int maxCharacters)
+    {
+        var parts = new List<string>();
+
+        if (sentence.Length <= maxCharacters)
+        {
+            parts.Add(sentence);
+            return parts;
+        }
+
+        // Carried onto each continuation only while it leaves most of the
+        // room for words - a tag that ate the piece would never finish it.
+        var tags = HeatCallerLeadingTags.Match(sentence).Value;
+        var carry = tags.Length > 0 && tags.Length * 4 <= maxCharacters ? tags : string.Empty;
+
+        var rest = sentence;
+        var first = true;
+
+        while (rest.Length > 0)
+        {
+            // The first piece already starts with the tags.
+            var prefix = first ? string.Empty : carry;
+
+            if (prefix.Length + rest.Length <= maxCharacters)
+            {
+                parts.Add(prefix + rest);
+                break;
+            }
+
+            var cut = BestCut(rest, maxCharacters - prefix.Length);
+            var piece = (prefix + rest[..cut]).TrimEnd();
+
+            if (piece.Length > 0)
+            {
+                parts.Add(piece);
+            }
+
+            rest = rest[cut..].TrimStart();
+            first = false;
+        }
+
+        return parts;
+    }
+
+    /// <summary>
+    /// Where to end a piece of an over-long sentence, as a length of
+    /// <paramref name="rest"/> no more than <paramref name="room"/> and never
+    /// zero: after a comma or semicolon in its later half, else at the last
+    /// space, else - one unbroken run of letters - right at the limit.
+    /// </summary>
+    private static int BestCut(string rest, int room)
+    {
+        room = Math.Max(1, room);
+
+        for (var i = Math.Min(rest.Length, room) - 1; i >= room / 2; i--)
+        {
+            if (rest[i] is ',' or ';')
+            {
+                return i + 1;
+            }
+        }
+
+        // room itself is looked at: a space just past the limit still means
+        // everything before it fits.
+        for (var i = Math.Min(rest.Length - 1, room); i > 0; i--)
+        {
+            if (char.IsWhiteSpace(rest[i]))
+            {
+                return i;
+            }
+        }
+
+        return Math.Min(rest.Length, room);
     }
 
     /// <summary>
@@ -380,7 +610,7 @@ public sealed partial class AnnouncementService
                     return;
                 }
 
-                var audio = await SpeakThroughRelayAsync(client, profile, text, CancellationToken.None);
+                var audio = await SpeakWholeLineThroughRelayAsync(client, profile, text, CancellationToken.None);
 
                 VoiceLibrary.Shared.Save(profile, text, audio);
             }

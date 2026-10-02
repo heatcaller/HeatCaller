@@ -31,7 +31,8 @@ public static class AchievementEvaluator
         SessionRecord record,
         IReadOnlyList<SessionRecord> history,
         AchievementStore store,
-        RivalryStore? rivalries = null)
+        RivalryStore? rivalries = null,
+        ProfileStore? profiles = null)
     {
         var unlocks = new List<AchievementUnlock>();
 
@@ -102,6 +103,24 @@ public static class AchievementEvaluator
 
         var fastestOfRace = results
             .Where(r => r.FastLapMs > 0)
+            .Select(r => r.FastLapMs)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        // The quickest lap of the race among the cars allowed to hold a
+        // track record - which is not every real car. Race Control's live
+        // record (CheckAndAnnounceTrackRecord) turns away ghosts, rental
+        // transponders and drivers whose profile says "Exclude from track
+        // records", and the badge has to follow the same rule or the two
+        // disagree: an excluded guest who ran 9.700 under a 10.000 record
+        // was announced as Record Holder and had the layout counted towards
+        // Record Collector, while the club driver on 9.800 - who the Track
+        // Layouts page rightly names as the new holder - got nothing,
+        // because his lap was not the quickest in the race. fastestOfRace
+        // itself is left alone: the Fastest Lap badge is about tonight's
+        // race, not the club's records, and a guest can earn it.
+        var recordLapOfRace = results
+            .Where(r => r.FastLapMs > 0 && CanHoldTrackRecord(r.Transponder, profiles))
             .Select(r => r.FastLapMs)
             .DefaultIfEmpty(0)
             .Min();
@@ -676,8 +695,27 @@ public static class AchievementEvaluator
             // Not on a race with no layout: every such race would share one
             // blank "track", and its record went into TrackRecords as an
             // empty name that counted towards Three Track Records.
-            if (entry.FastLapMs > 0 && !string.IsNullOrWhiteSpace(record.TrackLayoutName)
-                && IsTrackRecord(earlier, record.TrackLayoutName, entry.FastLapMs))
+            //
+            // The lap must also be the quickest of THIS race. History only
+            // holds the races before tonight, so on its own the test let
+            // every car that went under the old record through: when the
+            // record was 10.000 and A ran 9.800 while B ran 9.900, both were
+            // announced as the record holder and both had the layout counted
+            // towards Three Track Records - yet B never held it, because A's
+            // lap beat B's in the very same race. fastestOfRace is worked out
+            // among the real cars only, so a ghost cannot take the record
+            // away from a driver. Two drivers who tie on the quickest lap
+            // both still get it, as they would share any other record.
+            //
+            // "Quickest" here means quickest among the cars that may hold a
+            // record at all (see recordLapOfRace), and the driver must be
+            // one of them - a rental or an excluded guest never takes the
+            // badge, and never stops the eligible driver behind them from
+            // taking it.
+            if (entry.FastLapMs > 0 && entry.FastLapMs == recordLapOfRace
+                && CanHoldTrackRecord(entry.Transponder, profiles)
+                && !string.IsNullOrWhiteSpace(record.TrackLayoutName)
+                && IsTrackRecord(earlier, record.TrackLayoutName, entry.FastLapMs, profiles))
             {
                 if (!driver.TrackRecords.Contains(record.TrackLayoutName, StringComparer.OrdinalIgnoreCase))
                 {
@@ -969,12 +1007,42 @@ public static class AchievementEvaluator
             .DefaultIfEmpty(0)
             .Min();
 
-    private static bool IsTrackRecord(IEnumerable<SessionRecord> history, string layout, long lapMs)
+    /// <summary>
+    /// Whether this car's laps may stand as a track record - the same rule
+    /// Race Control's live record uses (CheckAndAnnounceTrackRecord). A
+    /// ghost never may, checked by transponder so it holds even without
+    /// the profiles. Rentals and drivers marked "Exclude from track records"
+    /// may not either; that part needs the profiles, and without them
+    /// (an older caller) every real car is allowed, as before.
+    ///
+    /// The profile is today's, not the one the driver had on the night of
+    /// an old race. That is deliberate and matches the live record, which
+    /// also asks the profile as it stands: ticking the box on a guest is
+    /// a statement that their laps are not the club's records, past ones
+    /// included.
+    /// </summary>
+    private static bool CanHoldTrackRecord(string transponder, ProfileStore? profiles)
     {
+        if (GhostService.IsGhost(transponder))
+        {
+            return false;
+        }
+
+        return profiles?.Get(transponder) is not ({ ExcludeFromRecords: true } or { IsRental: true });
+    }
+
+    private static bool IsTrackRecord(IEnumerable<SessionRecord> history, string layout, long lapMs, ProfileStore? profiles)
+    {
+        // Only laps that could ever have been the record count as the bar
+        // to beat. Older saved races still carry their ghosts' rows, and a
+        // ghost's - or an excluded guest's - quicker lap left there set a
+        // bar no real driver could get under, so nobody ever earned the
+        // badge on that layout even when the Track Layouts page said they
+        // held the record.
         var bestEver = history
             .Where(r => string.Equals(r.TrackLayoutName, layout, StringComparison.OrdinalIgnoreCase))
             .SelectMany(r => r.Results)
-            .Where(e => e.FastLapMs > 0)
+            .Where(e => e.FastLapMs > 0 && CanHoldTrackRecord(e.Transponder, profiles))
             .Select(e => e.FastLapMs)
             .DefaultIfEmpty(0)
             .Min();

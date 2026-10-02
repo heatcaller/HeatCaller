@@ -413,13 +413,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        AnnouncementTextReady?.Invoke(text);
-
         // At this announcement's own Speed, as its Test button plays it.
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
+        // Screen text raised by EnqueueVoiceWork, once the line is accepted.
         EnqueueVoiceWork(type, humanTransponder,
-            () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed));
+            () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
+            displayText: text);
     }
 
     /// <summary>
@@ -459,11 +459,11 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        AnnouncementTextReady?.Invoke(text);
-
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
-        EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed));
+        // Screen text raised by EnqueueVoiceWork, once the line is accepted.
+        EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
+            displayText: text);
     }
 
     /// <summary>
@@ -795,8 +795,15 @@ public sealed partial class AnnouncementService
         {
             var sounds = _soundStore.Current;
             var bestCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.PersonalBest));
-            ConsiderPerLapAction("sound", transponderId, bestCfg?.Weight ?? 60, Math.Max(1, sounds.MaxEffectsPerLap),
-                () => PlaySound(SoundEffectKind.PersonalBest, ToneGenerator.PlayPersonalBestAsync, "personal best chime"));
+
+            // Only offered when it could be heard: it is off by default, and
+            // at weight 60 a switched-off one used to take the slot of the
+            // lap's Good lap chime (40) - see SoundCandidateCanPlay.
+            if (SoundCandidateCanPlay(SoundEffectKind.PersonalBest, bestCfg))
+            {
+                ConsiderPerLapAction("sound", transponderId, bestCfg.Weight, Math.Max(1, sounds.MaxEffectsPerLap),
+                    () => PlaySound(SoundEffectKind.PersonalBest, ToneGenerator.PlayPersonalBestAsync, "personal best chime"));
+            }
         }
 
         // In a qualifier a personal best is a running-order event, not a

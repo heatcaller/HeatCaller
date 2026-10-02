@@ -254,6 +254,7 @@ public sealed class SignupStore
                     var store = new SignupStore(shape.Enabled, shape.Invites ?? new List<SignupInvite>(), shape.SealedCodes ?? string.Empty);
                     store.OpenCodes();
                     store.Forget(DateTime.UtcNow);
+                    WarmHashes(store._invites);
                     return store;
                 }
             }
@@ -328,10 +329,15 @@ public sealed class SignupStore
 
     public SignupInvite? Get(string id) => _invites.FirstOrDefault(i => i.Id == id);
 
-    /// <summary>The invite a relay sign-up was made with, for this club - or null.</summary>
+    /// <summary>
+    /// The invite a relay sign-up was made with, for this club - or null.
+    /// The club is compared first: it is a plain string, while an invite's
+    /// hash can be a tenth of a second of PBKDF2 the first time it is asked
+    /// for, and an invite made under another club id can never match.
+    /// </summary>
     public SignupInvite? ByHash(string hash, string club) =>
-        _invites.FirstOrDefault(i => string.Equals(i.Hash, hash, StringComparison.OrdinalIgnoreCase)
-                                     && string.Equals(i.Club, club, StringComparison.Ordinal));
+        _invites.FirstOrDefault(i => string.Equals(i.Club, club, StringComparison.Ordinal)
+                                     && string.Equals(i.Hash, hash, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// A new invite with a fresh code - unique among this club's codes, never
@@ -340,12 +346,123 @@ public sealed class SignupStore
     /// </summary>
     public SignupInvite Create(AppSettings settings, string email, string note)
     {
+        var (code, club, salt) = FreshCode(settings);
+        var now = DateTime.UtcNow;
+        var invite = new SignupInvite
+        {
+            Code = code,
+            Club = club,
+            Salt = salt,
+            Email = email.Trim(),
+            Note = note.Trim(),
+            CreatedUtc = now,
+            ExpiresUtc = now + InviteLifetime,
+        };
+
+        _invites.Add(invite);
+        WarmHashes(new[] { invite });
+        return invite;
+    }
+
+    /// <summary>
+    /// Gives an invite a fresh code, by the same rules as Create, in place
+    /// of the one it had. For an invite opened again after its sign-up was
+    /// answered (RelaySignupDesk's undos): the relay keeps that answer
+    /// against the old code's hash for as long as it keeps any sign-up, and
+    /// refuses every new sign-up made with it - so the old code can never
+    /// be used again, and the invite only works again under a new one.
+    /// Marked as not emailed, so the list shows the new code still has to
+    /// reach them. Not saved: the caller saves.
+    /// </summary>
+    public void NewCode(SignupInvite invite, AppSettings settings)
+    {
+        var (code, club, salt) = FreshCode(settings);
+
+        invite.Code = code;
+        invite.Club = club;
+        invite.Salt = salt;
+        invite.EmailedUtc = null;
+
+        WarmHashes(new[] { invite });
+    }
+
+    /// <summary>
+    /// Works out the given invites' hashes on a background thread, so the
+    /// UI thread finds them ready when it next asks.
+    ///
+    /// A salted invite's hash is a 100,000-round PBKDF2 (PinKdf) - about a
+    /// tenth of a second - and SignupInvite.Hash makes it on first use, on
+    /// the UI thread: the sign-up document on the two-second roster tick,
+    /// every sign-up collected from the relay (ByHash), the Sign-ups window.
+    /// After a restart that was every invite kept from the last two months
+    /// at once, freezing race control and every check-in tap for seconds.
+    /// The racer PINs already have their hashes made in the background
+    /// (RelayDocuments.WarmRacerPinHashes); this does the same for invites.
+    ///
+    /// Only strings cross threads: the club, code and salt are copied here,
+    /// on the caller's (UI) thread, and the background only fills
+    /// PinKdf's own cache, which is concurrent. SignupInvite itself is
+    /// never touched off the UI thread - its Hash, asked for later, makes
+    /// the same call and finds the answer waiting. If it asks before the
+    /// background has got there, it simply works that one out itself, as
+    /// it always did: slower, never wrong.
+    /// </summary>
+    private static void WarmHashes(IEnumerable<SignupInvite> invites)
+    {
+        var jobs = invites
+            .Where(i => i.Code.Length > 0 && PinKdf.IsSalt(i.Salt))
+            .Select(i => (i.Club, i.Code, i.Salt))
+            .ToList();
+
+        if (jobs.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                // In parallel, but leaving a core for the UI thread - the
+                // point of this is that it does not wait.
+                Parallel.ForEach(
+                    jobs,
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) },
+                    job => InviteHash(job.Club, job.Code, job.Salt));
+            }
+            catch (Exception)
+            {
+                // Nothing expected. And nothing lost: Hash makes any that are
+                // missing on the spot, as before.
+            }
+        });
+    }
+
+    /// <summary>
+    /// A code unique among this club's codes, never an easy one
+    /// (RacerPins.IsFit), and never one of the desk's own PINs - with the
+    /// club and salt its hash is made with.
+    /// </summary>
+    private (string Code, string Club, string Salt) FreshCode(AppSettings settings)
+    {
         var club = settings.RelayClub.Trim().ToLowerInvariant();
         var reserved = new[] { settings.RelayCheckInPin, settings.WebServerPin, settings.WebServerCheckInPin, settings.ManagerPin }
             .Select(p => (p ?? string.Empty).Trim())
             .Where(p => p.Length > 0)
             .ToHashSet(StringComparer.Ordinal);
-        var taken = _invites.Select(i => i.Hash).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // By code, not by hash: two invites for the same club with the same
+        // code are the only ones whose hashes can collide (the club is in
+        // the hash), and comparing codes needs no PBKDF2 - building this from
+        // every invite's Hash was a tenth of a second per invite kept, on the
+        // UI thread, plus one more per code tried. It is also the stricter
+        // test: the relay tries a typed code both salted and unsalted, so
+        // one code shared by an old unsalted invite and a new salted one
+        // would open either. An invite whose code is sealed on another PC
+        // has no hash here either, so neither test ever saw it.
+        var taken = _invites
+            .Where(i => i.Code.Length > 0 && string.Equals(i.Club, club, StringComparison.Ordinal))
+            .Select(i => i.Code.Trim())
+            .ToHashSet(StringComparer.Ordinal);
 
         // Salted and slow, like every PIN hash the relay is given (PinKdf).
         var salt = PinKdf.EnsureSalt(settings);
@@ -353,27 +470,13 @@ public sealed class SignupStore
         for (var attempt = 0; attempt < 100_000; attempt++)
         {
             var code = RandomNumberGenerator.GetInt32(0, 100_000_000).ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
-            var hash = InviteHash(club, code, salt);
 
-            if (!RacerPins.IsFit(code[..6]) || reserved.Contains(code) || taken.Contains(hash))
+            if (!RacerPins.IsFit(code[..6]) || reserved.Contains(code) || taken.Contains(code))
             {
                 continue;
             }
 
-            var now = DateTime.UtcNow;
-            var invite = new SignupInvite
-            {
-                Code = code,
-                Club = club,
-                Salt = salt,
-                Email = email.Trim(),
-                Note = note.Trim(),
-                CreatedUtc = now,
-                ExpiresUtc = now + InviteLifetime,
-            };
-
-            _invites.Add(invite);
-            return invite;
+            return (code, club, salt);
         }
 
         throw new InvalidOperationException("Could not find an unused invite code.");

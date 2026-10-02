@@ -21,7 +21,8 @@ public static class JoinPosterRenderer
     /// <param name="heading">"LIVE RESULTS", "RACE REMOTE" - what they get by scanning.</param>
     /// <param name="subtitle">The one line of instruction underneath.</param>
     /// <param name="size">Overall square size in pixels. Print wants 1000+; a screen panel is happy at 300.</param>
-    public static Bitmap Render(string url, string heading, string subtitle, int size = 640)
+    /// <param name="forPrint">True for a bitmap headed to paper: text is drawn grayscale-antialiased instead of ClearType.</param>
+    public static Bitmap Render(string url, string heading, string subtitle, int size = 640, bool forPrint = false)
     {
         size = Math.Clamp(size, 220, 4000);
 
@@ -32,7 +33,14 @@ public static class JoinPosterRenderer
 
         using var g = Graphics.FromImage(bitmap);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+        // ClearType tunes text to the red-green-blue stripes of an LCD
+        // panel. On paper there are no stripes, so those subpixel tints
+        // print as colored fringes around every letter; plain grayscale
+        // antialiasing prints clean. The screen copy keeps ClearType.
+        g.TextRenderingHint = forPrint
+            ? System.Drawing.Text.TextRenderingHint.AntiAlias
+            : System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         // Always on white, whatever theme the app is wearing. A QR code
         // needs contrast far more than it needs to match the UI, and a dark

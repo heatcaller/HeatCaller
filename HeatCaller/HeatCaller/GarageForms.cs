@@ -839,9 +839,18 @@ internal sealed class ChassisTypesForm : Form
         }
     }
 
-    private void Reload()
+    // keepId names the chassis to leave selected. Save and Retire must pass
+    // it: they have already written the change by the time Reload runs, and
+    // the store sorts retired types last and the rest by name, so the list's
+    // old SelectedIndex can now point at a different chassis. Reading the id
+    // back through Selected() then picked whichever chassis slid into that
+    // slot - retire MA-020 and MB-010 came up selected with its button
+    // saying "Retire", so a second click meant as an undo retired the wrong
+    // one. With no id given (first load, Delete) the old slot is still the
+    // right guess: after a delete it lands on the chassis that followed.
+    private void Reload(string? keepId = null)
     {
-        var selectedId = Selected()?.Id;
+        var selectedId = keepId ?? Selected()?.Id;
 
         _list.BeginUpdate();
         _list.Items.Clear();
@@ -938,7 +947,7 @@ internal sealed class ChassisTypesForm : Form
         type.SetupSheetId = (_cmbSheet.SelectedItem as SheetChoice)?.Id ?? string.Empty;
 
         _types.Upsert(type);
-        Reload();
+        Reload(type.Id);
     }
 
     private void RetireSelected()
@@ -950,7 +959,7 @@ internal sealed class ChassisTypesForm : Form
 
         type.Retired = !type.Retired;
         _types.Upsert(type);
-        Reload();
+        Reload(type.Id);
     }
 
     private void DeleteSelected()
@@ -1661,7 +1670,14 @@ internal sealed class CarDetailForm : Form
         var before = isNew ? null : _setups.Get(entry.Id);
         var beforeCopy = before is null ? null : SetupLogStore.CopyOf(before);
 
-        using var form = new SetupEntryForm(entry, _chassisTemplates, _history, _profiles, _trackLayouts);
+        // The form writes onto what it is given as it goes (and folds an old
+        // entry's fixed fields into the sheet as it opens), so a stored entry
+        // is handed over as a copy - as the setup log does. Handed the stored
+        // one, a Cancel left the half-made changes in memory, and the next
+        // save of any setup wrote them to disk. A new entry is not stored
+        // yet, so it needs no copy.
+        using var form = new SetupEntryForm(isNew ? entry : SetupLogStore.CopyOf(entry),
+            _chassisTemplates, _history, _profiles, _trackLayouts);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {

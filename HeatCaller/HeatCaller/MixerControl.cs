@@ -354,8 +354,13 @@ public sealed class MixerControl : UserControl
                 // races.
                 _ambience.RefreshLevels();
             },
-            () => !_ambienceStore.Current.Enabled ? "Off"
-                : _ambience.IsRunning ? $"Playing - {_ambience.EffectiveIntensity}"
+            // What is playing first, the master switch second. A session's
+            // auto-start and this page's own Play Everything both bring the
+            // crowd up past the switch, which is off on a fresh install, so
+            // testing the switch first read "Off" for a crowd that could be
+            // heard - on the page meant for working out what is playing.
+            () => _ambience.IsRunning ? $"Playing - {_ambience.EffectiveIntensity}"
+                : !_ambienceStore.Current.Enabled ? "Off"
                 : "Idle"));
 
         strips.AddStrip(AddChannel(
@@ -370,8 +375,10 @@ public sealed class MixerControl : UserControl
                 _music.Settings = _musicStore.Current;
                 _music.RefreshVolume();
             },
-            () => !_musicStore.Current.Enabled ? "Off"
-                : _music.NowPlaying is { } t ? $"Playing - {t.DisplayName}"
+            // Live state first, as for the crowd above: auto-start and Play
+            // Everything play music whatever the master switch says.
+            () => _music.NowPlaying is { } t ? $"Playing - {t.DisplayName}"
+                : !_musicStore.Current.Enabled ? "Off"
                 : "Stopped"));
 
         // --- One caption column for everything below the strips ---
@@ -736,6 +743,33 @@ public sealed class MixerControl : UserControl
     }
 
     /// <summary>
+    /// A stored level (0 to 1) as the whole percent its fader shows.
+    /// </summary>
+    /// <remarks>
+    /// This rounds; it must not simply cut off the fraction. A fader stores
+    /// percent / 100f, and in single precision some of those do not come
+    /// back whole when multiplied by 100 again: 0.53f * 100f is 52.999996
+    /// and 0.59f * 100f is 58.999996. Cut off, they read back as 52 and 58,
+    /// and the meter refresh - which runs every 120 ms and puts the fader
+    /// back to whatever the store reads as - would snap a fader set to 53%
+    /// or 59% one step down, so Up or the wheel could never get past 52 or
+    /// 58, and a fader dragged there would show one percent less than the
+    /// level actually playing. Rounding gives back the exact percent that
+    /// was written, for every value from 0 to 100.
+    /// </remarks>
+    internal static int LevelToPercent(float level)
+    {
+        // A NaN would clamp to NaN and convert to nothing sensible; treat a
+        // level that is not a number as silence rather than guess.
+        if (float.IsNaN(level))
+        {
+            return 0;
+        }
+
+        return (int)MathF.Round(Math.Clamp(level * 100f, 0f, 100f), MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
     /// A number box as wide as its largest value - every digit of its
     /// Maximum, and its decimals - and its arrows need, in the face it is
     /// drawn in; never narrower than a number box at the normal text size,
@@ -984,7 +1018,7 @@ public sealed class MixerControl : UserControl
         // flips anything any more.
         var slider = new FaderControl
         {
-            Percent = (int)Math.Clamp(read() * 100f, 0, 100),
+            Percent = LevelToPercent(read()),
             SmallChange = 1,
             LargeChange = 10,
         };
@@ -1316,7 +1350,7 @@ public sealed class MixerControl : UserControl
         {
             channel.StateLabel.Text = channel.State();
 
-            var stored = (int)Math.Clamp(channel.Read() * 100f, 0, 100);
+            var stored = LevelToPercent(channel.Read());
 
             if (stored != channel.Slider.Percent)
             {
@@ -1457,8 +1491,8 @@ public sealed class MixerControl : UserControl
             _loading = true;
             try
             {
-                _channels[i].Slider.Percent = (int)(defaults[i] * 100f);
-                _channels[i].ValueLabel.Text = $"{(int)(defaults[i] * 100f)}%";
+                _channels[i].Slider.Percent = LevelToPercent(defaults[i]);
+                _channels[i].ValueLabel.Text = $"{LevelToPercent(defaults[i])}%";
             }
             finally
             {

@@ -257,6 +257,25 @@ public sealed class TechInspectionEditForm : Form
         {
             _cmbDriver.Items.Add(new DriverItem(profile));
         }
+
+        // A driver who is no longer in the list is kept as a choice, the
+        // way a deleted class is below. An inspection outlives its driver's
+        // profile (deleting one keeps their inspections, to match again if
+        // they come back) and a change of transponder does not move them
+        // either. Selecting nobody fell back to the first driver in the
+        // list, without a word: correcting a note on Zed's old inspection
+        // and pressing Save handed it to Aaron, re-stamped at today's race
+        // day, so Aaron counted as through tech with a car nobody had looked
+        // at and Zed's record was gone. The stand-in carries only the
+        // transponder and name the inspection was saved with, so saving it
+        // writes back exactly those and is not counted as a re-inspection.
+        if (!string.IsNullOrWhiteSpace(Result.Transponder) && !HasDriver(Result.Transponder))
+        {
+            _cmbDriver.Items.Add(new DriverItem(
+                new DriverProfile { Transponder = Result.Transponder, DriverName = Result.DriverName },
+                NoProfile: true));
+        }
+
         SelectDriver(Result.Transponder);
         _cmbDriver.SelectedIndexChanged += (_, _) => OnDriverChanged();
 
@@ -305,6 +324,10 @@ public sealed class TechInspectionEditForm : Form
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
     }
+
+    private bool HasDriver(string transponder) =>
+        _cmbDriver.Items.Cast<object>().OfType<DriverItem>()
+            .Any(item => string.Equals(item.Profile.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
 
     private void SelectDriver(string transponder)
     {
@@ -669,11 +692,21 @@ public sealed class TechInspectionEditForm : Form
     /// <summary>One check's line in the checklist, kept to be handed another check when the class changes - see BuildChecklist.</summary>
     private sealed record CheckRow(Control Line, Label Item, ComboBox State);
 
-    private sealed record DriverItem(DriverProfile Profile)
+    /// <summary>
+    /// One driver in the list. NoProfile marks the stand-in for an
+    /// inspection's driver who has no profile under that transponder any
+    /// more (see FillFields), said so in the list so nobody takes it for a
+    /// driver on file.
+    /// </summary>
+    private sealed record DriverItem(DriverProfile Profile, bool NoProfile = false)
     {
-        public override string ToString() =>
-            string.IsNullOrWhiteSpace(Profile.DriverName)
+        public override string ToString()
+        {
+            var shown = string.IsNullOrWhiteSpace(Profile.DriverName)
                 ? Profile.Transponder
                 : $"{Profile.DriverName}   [{Profile.Transponder}]";
+
+            return NoProfile ? $"{shown}   (no profile)" : shown;
+        }
     }
 }

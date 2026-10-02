@@ -114,6 +114,42 @@ public sealed class QualifyingProjector
             return null;
         }
 
+        // The same set the Program tab seeds from (RaceProgramControl.
+        // QualifyingRoundFilter, which is RaceEventStore.QualifyingScope):
+        // the open race day's rounds, and NONE when no real race day is open
+        // - the legacy holder included. This used to be "every round ever
+        // recorded" when no day was open, which is what the Program tab
+        // itself did before the 25 Sep audit. After End Race Day the Round
+        // box still offers every unrun qualifier, so a heat run then was
+        // ranked against months of old heats, and the leaderboard column,
+        // the Big Screen and this window showed places like P14 while the
+        // Program tab said no race day is open.
+        //
+        // With nothing to count there is no projection to show - the same
+        // answer the Program tab gives - so this returns null rather than
+        // ranking the live heat against itself, which would only repeat the
+        // leaderboard with every driver marked new. It is checked before the
+        // cache on purpose: the cache key does not know about race days, so
+        // ending the day part way through a heat would otherwise keep
+        // handing back the projection worked out while it was still open.
+        //
+        // No event store at all (a projector built by a tool or a test, never
+        // by Race Control) has no notion of race days, so it keeps ranking
+        // every recorded round, as it always has.
+        IReadOnlyCollection<string>? filter = null;
+
+        if (_events is not null)
+        {
+            var scope = _events.QualifyingScope();
+
+            if (scope.Count == 0)
+            {
+                return null;
+            }
+
+            filter = scope;
+        }
+
         var standings = _race.GetOrderedStandings();
 
         var key = BuildCacheKey(round, standings);
@@ -125,13 +161,6 @@ public sealed class QualifyingProjector
 
         var raceClass = _raceClasses.All
             .FirstOrDefault(c => string.Equals(c.Name, round.ClassName, StringComparison.OrdinalIgnoreCase));
-
-        // The same set the Program tab seeds from (RaceProgramControl.
-        // QualifyingRoundFilter): a real race day's rounds, or every round
-        // when the legacy holder or nothing is active. It used to take the
-        // legacy holder's rounds as a filter, so the projection ranked from
-        // a different set of heats than the seeding it forecasts.
-        var filter = _events?.Active is { IsLegacy: false } active ? active.RoundIds : null;
 
         var live = new QualifyingCalculator.LiveHeat(
             round.Id,

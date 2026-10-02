@@ -17,6 +17,24 @@ namespace HeatCaller;
 internal static class RaceDayDeleter
 {
     /// <summary>
+    /// The id of the round on track right now - staged, counting down,
+    /// racing, or finished and not yet saved - or null when nothing is.
+    /// Supplied once by MainForm, which owns Race Control, exactly as it
+    /// supplies RaceProgramControl.RoundOnTrackId; neither page that offers
+    /// this delete can see the race.
+    ///
+    /// Held here, rather than passed in by The Day and the Calendar, so the
+    /// two gestures cannot disagree about it - the reason this class exists
+    /// at all. A day's delete takes every round on it, and it used to take
+    /// the one out on track with them: deleting a single round from the
+    /// programme refuses that, and so does the phone, but deleting its
+    /// whole day went straight past both, and the result was then saved
+    /// against a round and a day that no longer existed. Null (not wired)
+    /// keeps the old behavior.
+    /// </summary>
+    public static Func<string?>? RoundOnTrackId { get; set; }
+
+    /// <summary>
     /// Everything one race day would take with it, read before anything is
     /// removed. Gathering and removing are separate so that deleting SEVERAL
     /// days can ask its question once, over the totals, instead of putting
@@ -29,8 +47,7 @@ internal static class RaceDayDeleter
         List<SessionRecord> Sessions,
         List<TrackLayout> RecordTracks,
         List<Season> Seasons,
-        int BadgeCount,
-        AchievementStore Achievements);
+        int BadgeCount);
 
     /// <summary>
     /// Deletes several race days after one question, asked over the totals.
@@ -65,6 +82,11 @@ internal static class RaceDayDeleter
             return Ask(owner, real[0], events, roundStore, history, seasonStore, layouts, undo, onChanged) ? 1 : 0;
         }
 
+        if (RefuseIfOnTrack(owner, real))
+        {
+            return 0;
+        }
+
         var gathered = real
             .Select(d => Gather(d, roundStore, history, seasonStore, layouts))
             .ToList();
@@ -81,7 +103,9 @@ internal static class RaceDayDeleter
 
         using var ask = new DeleteRaceDayForm($"{real.Count} race days", counts);
 
-        if (ask.ShowDialog(owner) != DialogResult.OK)
+        // Asked again once the answer is in: a heat can be put on track -
+        // from the phone, say - while the dialog is up.
+        if (ask.ShowDialog(owner) != DialogResult.OK || RefuseIfOnTrack(owner, real))
         {
             return 0;
         }
@@ -111,6 +135,11 @@ internal static class RaceDayDeleter
             return false;
         }
 
+        if (RefuseIfOnTrack(owner, new[] { day }))
+        {
+            return false;
+        }
+
         var gathered = Gather(day, roundStore, history, seasonStore, layouts);
 
         // --- Ask ---
@@ -124,13 +153,54 @@ internal static class RaceDayDeleter
                 gathered.Seasons.Count,
                 gathered.BadgeCount));
 
-        if (ask.ShowDialog(owner) != DialogResult.OK)
+        // Asked again once the answer is in - see AskMany.
+        if (ask.ShowDialog(owner) != DialogResult.OK || RefuseIfOnTrack(owner, new[] { day }))
         {
             return false;
         }
 
         Remove(gathered, events, roundStore, history, seasonStore, layouts, undo,
             ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
+
+        return true;
+    }
+
+    /// <summary>
+    /// The day among these that holds the round on track right now, or
+    /// null. Matched on the day's own list of rounds, not on the rounds
+    /// store, so a round on track is found even when the store no longer
+    /// has it. Pure, so it can be tested without a window.
+    /// </summary>
+    internal static RaceEvent? DayWithRoundOnTrack(IEnumerable<RaceEvent> days, string? onTrackId)
+    {
+        if (string.IsNullOrEmpty(onTrackId))
+        {
+            return null;
+        }
+
+        string id = onTrackId;
+
+        return days.FirstOrDefault(d => d.RoundIds.Contains(id, StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Says no, and returns true, when one of these days holds the round on
+    /// track - the same refusal the programme gives for a single round,
+    /// for the same reason: its result would have nothing to be saved
+    /// against. Refused outright rather than offered as a tick box, because
+    /// there is no answer that makes deleting it mid-race safe; the day can
+    /// go once that race has been saved.
+    /// </summary>
+    private static bool RefuseIfOnTrack(IWin32Window owner, IEnumerable<RaceEvent> days)
+    {
+        if (DayWithRoundOnTrack(days, RoundOnTrackId?.Invoke()) is not { } busy)
+        {
+            return false;
+        }
+
+        AppDialog.Show(owner,
+            $"\"{busy.DisplayName}\" has a round on track - its result would have nothing to be saved against. Delete the day when that race has finished and been saved.",
+            "Round on track", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
         return true;
     }
@@ -143,12 +213,16 @@ internal static class RaceDayDeleter
         SeasonStore seasonStore,
         TrackLayoutStore layouts)
     {
-        // Loaded here rather than held, because nothing in this app holds a
-        // shared one: Race Control, the badges page, the web server and the
-        // relay each load their own from disk and re-read it. achievements
-        // .json is the source of truth, so the only instance that can be
-        // trusted to be current is one read at the moment of use - and the
-        // undo below reads its own for the same reason.
+        // Read here only to COUNT the badges for the dialog, and then let go.
+        // Nothing in this app holds a shared store: Race Control, the badges
+        // page, the web server and the relay each load their own from disk
+        // and re-read it. achievements.json is the source of truth, so the
+        // only instance that can be trusted to be current is one read at the
+        // moment of use - which is why Remove reads its own rather than
+        // being handed this one. This copy was read before the dialog went
+        // up (a heat can finish and award a badge while it is open) and,
+        // when several days are deleted, before any of them was removed.
+        // Saving it would write back every badge removed since it was read.
         var achievements = AchievementStore.Load();
 
         var rounds = day.RoundIds
@@ -179,7 +253,7 @@ internal static class RaceDayDeleter
         var badgeCount = achievements.All
             .Sum(d => d.Unlocked.Count(u => u.SessionId is { } id && sessionIds.Contains(id, StringComparer.Ordinal)));
 
-        return new Gathered(day, rounds, sessionIds, sessions, recordTracks, seasons, badgeCount, achievements);
+        return new Gathered(day, rounds, sessionIds, sessions, recordTracks, seasons, badgeCount);
     }
 
     /// <summary>
@@ -202,7 +276,6 @@ internal static class RaceDayDeleter
         Action onChanged)
     {
         var day = gathered.Day;
-        var achievements = gathered.Achievements;
         var rounds = gathered.Rounds;
         var sessionIds = gathered.SessionIds;
         var sessions = gathered.Sessions;
@@ -251,12 +324,37 @@ internal static class RaceDayDeleter
                 roundStore.RestoreAll(backRounds);
             }
 
+            var unsaved = new List<SessionRecord>();
+
+            // The rounds unlinked below from each unsaved session, so the
+            // retry can link them again once it does save that session.
+            var relinkOnSave = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
             if (sessionsJson is not null
                 && System.Text.Json.JsonSerializer.Deserialize<List<SessionRecord>>(sessionsJson) is { } backSessions)
             {
                 foreach (var session in backSessions.Where(s => history.Get(s.Id) is null))
                 {
-                    history.Add(session);
+                    if (!history.Add(session))
+                    {
+                        unsaved.Add(session);
+                    }
+                }
+
+                // The rounds above came back with the links they had, and
+                // RestoreAll wrote them to the rounds file straight away. A
+                // session whose Add just failed is listed in memory but held
+                // out of race-history.json, so a round still linked to it
+                // would, after a restart, claim a result that is not there:
+                // shown as run, never offered again, and counted by
+                // qualifying with nothing to score. Unlinked, the heat is
+                // simply unrun - the state a deleted race leaves its round in
+                // elsewhere - and can be run again. Done after the Adds
+                // rather than by holding the rounds back, because which
+                // sessions fail is only known once they have been tried.
+                foreach (var session in unsaved)
+                {
+                    relinkOnSave[session.Id] = roundStore.ClearRecorded(session.Id);
                 }
             }
 
@@ -321,12 +419,47 @@ internal static class RaceDayDeleter
             }
 
             onChanged();
+
+            // Last, so everything above is done either way - see
+            // SessionHistoryStore.KeepRetryForUnsaved.
+            //
+            // When a retry does save one of these sessions, its rounds are
+            // linked again - unlinked, the race would be back in Race
+            // History while its heat still read as unrun. Only a round that
+            // is still unlinked, though: one run again since has a newer
+            // result, and writing the old link over it would make
+            // qualifying score the race that was thrown away. And only a
+            // round still in the store: the day may have been deleted again
+            // in between.
+            history.KeepRetryForUnsaved(undo!, unsaved, saved =>
+            {
+                if (!relinkOnSave.TryGetValue(saved.Id, out var roundIds))
+                {
+                    return;
+                }
+
+                foreach (var roundId in roundIds)
+                {
+                    if (roundStore.Get(roundId) is { } round && string.IsNullOrEmpty(round.LinkedSessionId))
+                    {
+                        roundStore.MarkRecorded(roundId, saved.Id);
+                    }
+                }
+
+                onChanged();
+            });
         });
 
         // --- Remove, working back out from the traces to the day itself ---
 
         if (clearBadges)
         {
+            // A fresh read, at the moment of removal, for the reason given in
+            // Gather. When several days go at once this runs once per day, so
+            // each day's read already has the previous day's badges gone and
+            // its save cannot put them back - and the undo entry above then
+            // records exactly the badges this save really took away.
+            var achievements = AchievementStore.Load();
             badgesRemoved = achievements.RemoveForSessions(sessionIds);
             achievements.Save();
         }
