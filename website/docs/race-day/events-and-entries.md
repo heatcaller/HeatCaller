@@ -57,7 +57,7 @@ The steps are listed down the left: **Tonight**, **The day**, **Classes**, **Dri
 
 | Step | What you do |
 |---|---|
-| **The day** | Choose what kind of night it is, and where. Moving on from here opens the day. |
+| **The day** | Choose what kind of night it is, and where, and the sound for tonight under **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only** (see [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards)). Moving on from here opens the day and applies the sound. |
 | **Classes** | Tick the classes out tonight (**Add Class** for a new one), then how many times each driver races, how many drivers go out at once, and the race format each class runs. |
 | **Drivers** | Tick everyone who has turned up, a class at a time if you like. **Add Driver** puts someone new on file and checks them in. |
 | **Program** | Builds tonight's races from the classes and drivers above. **Build It** builds them; **Back** lets you change anything first. |

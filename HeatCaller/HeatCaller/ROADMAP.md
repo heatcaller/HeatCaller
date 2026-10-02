@@ -1187,6 +1187,18 @@ fits.
   than none.
 - **Lap beeps differ in shape as well as pitch** (single, double, rising,
   falling, warble), because pitch alone doesn't carry over track noise.
+- **The setup wizards offer the sound, and "Lap times only" is switches,
+  not a soundscape** (b90, 2 Oct). Set Up Tonight's day step and the
+  first-run look step have "Sound:" - keep, a soundscape, or lap times only
+  (Asher: lap times plus the start, finish and flag calls; no music,
+  ambience, lap stingers or chatter; "Don't ask again" turns the offer off,
+  the Soundscapes page turns it back on; a choice lasts until changed).
+  Lap times only changes only Enabled ticks, never wording, so it works on
+  the HeatCaller voice too; it keeps what it changed in
+  `AppSettings.LapTimesOnly` and `LapTimesOnly.Leave` puts that back when
+  any soundscape is applied (Soundscapes page, venue, wizard). It adds no
+  new lines on air, so the "Nothing new on air" rule is not touched. Keep what's
+  set now is the default, so a club that ignores the row changes nothing.
 - **The laptop is the source of truth.** The relay never calls the laptop,
   nothing in a race waits on the network, and race control is refused
   online by design.

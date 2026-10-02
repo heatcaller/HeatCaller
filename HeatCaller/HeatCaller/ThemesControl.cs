@@ -23,9 +23,15 @@ public sealed class ThemesControl : UserControl
     private readonly AmbienceStore? _ambienceStore;
     private readonly MusicStore? _musicStore;
 
+    /// <summary>For whether the setup wizards ask about the sound, and lap times only (LapTimesOnly). Null in a host without them - the tick is not shown.</summary>
+    private readonly AppSettings? _settings;
+
     private readonly CardWall _cards;
     private readonly Label _lblStatus = new();
     private readonly CheckBox _chkPreviewVoice = new ThemedCheckBox();
+
+    /// <summary>Whether the setup wizards ask about the sound - turned off there by "Don't ask about the sound again", and back on here.</summary>
+    private readonly CheckBox _chkAskInWizards = new ThemedCheckBox();
 
     private CancellationTokenSource? _previewCts;
     private Button? _previewButton;
@@ -81,7 +87,8 @@ public sealed class ThemesControl : UserControl
         SoundEffectsStore soundStore,
         UndoService undo,
         AmbienceStore? ambienceStore = null,
-        MusicStore? musicStore = null)
+        MusicStore? musicStore = null,
+        AppSettings? settings = null)
     {
         _themeStore = themeStore;
         _voiceStore = voiceStore;
@@ -89,6 +96,7 @@ public sealed class ThemesControl : UserControl
         _undo = undo;
         _ambienceStore = ambienceStore;
         _musicStore = musicStore;
+        _settings = settings;
 
         _cards = new CardWall(CardLeastWidth);
 
@@ -142,6 +150,42 @@ public sealed class ThemesControl : UserControl
         else
         {
             SoundscapesChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Marks the soundscape applied somewhere else - a venue, or a setup
+    /// wizard - on its card, or none for lap times only.
+    /// </summary>
+    public void ShowApplied()
+    {
+        if (!IsDisposed && !Disposing)
+        {
+            RefreshCards();
+        }
+    }
+
+    /// <summary>
+    /// The wizards' tick as settings have it - "Don't ask about the sound
+    /// again" changes it from a wizard, which can be opened over this page
+    /// (Ctrl+Shift+S) without the page ever being hidden. Called by the host
+    /// when a wizard closes, and whenever the page is shown.
+    /// </summary>
+    public void ShowAskTick()
+    {
+        if (_settings is not null && _chkAskInWizards.Checked != _settings.AskAboutSoundInWizards)
+        {
+            _chkAskInWizards.Checked = _settings.AskAboutSoundInWizards;
+        }
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+
+        if (Visible)
+        {
+            ShowAskTick();
         }
     }
 
@@ -201,6 +245,22 @@ public sealed class ThemesControl : UserControl
         // cards under it do not hop the first time a preview reports. Its
         // own face, so the line is measured in the face it is drawn in (see
         // TextSize.ReserveLines).
+        _chkAskInWizards.Text = "Ask which sound to use in Set Up Tonight";
+        _chkAskInWizards.AutoSize = true;
+        _chkAskInWizards.Visible = _settings is not null;
+        _chkAskInWizards.Checked = _settings?.AskAboutSoundInWizards ?? true;
+        _chkAskInWizards.CheckedChanged += (_, _) =>
+        {
+            if (_settings is not null && _settings.AskAboutSoundInWizards != _chkAskInWizards.Checked)
+            {
+                _settings.AskAboutSoundInWizards = _chkAskInWizards.Checked;
+                _settings.Save();
+            }
+        };
+        previewTip.SetToolTip(_chkAskInWizards,
+            "Set Up Tonight, and the setup the app opens with the first time, offer a soundscape or lap times only. "
+            + "Untick to leave the sound as it is set here.");
+
         _lblStatus.AutoSize = true;
         _lblStatus.ForeColor = AppTheme.TextMuted;
         _lblStatus.Text = " ";
@@ -221,7 +281,12 @@ public sealed class ThemesControl : UserControl
         var page = new FillPage();
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(FieldGrid.Inline(btnSaveNew, _chkPreviewVoice), gapBelow: UiLayout.RowGap);
+        page.Add(FieldGrid.Inline(btnSaveNew, _chkPreviewVoice), gapBelow: _settings is null ? UiLayout.RowGap : UiLayout.HintGap);
+
+        if (_settings is not null)
+        {
+            page.Add(_chkAskInWizards, stretch: false, gapBelow: UiLayout.RowGap);
+        }
         page.Add(_lblStatus, gapBelow: UiLayout.RowGap);
 
         // At least a row of cards - below that the page scrolls.
@@ -768,8 +833,15 @@ public sealed class ThemesControl : UserControl
             ? "your sound effect settings"
             : "your current announcer lines and sound effect settings";
 
+        // Lap times only is left as a soundscape is applied (LapTimesOnly.Leave).
+        var leavesLapTimesOnly = _settings is not null && LapTimesOnly.IsOn(_settings)
+            ? "The sound is lap times only now. Music, ambience and the spoken race intros and recaps come back on as they "
+              + "were before, with this soundscape's announcements and sounds.\n\n"
+            : string.Empty;
+
         var confirm = AppDialog.Show(this,
             $"Apply \"{theme.Name}\"? This replaces {replaces}.\n\n"
+            + leavesLapTimesOnly
             + (switches.Length > 0 ? $"{switches}.\n\n" : string.Empty)
             + (background.Length > 0 ? $"{background}\n\n" : string.Empty)
             + notAffected,
@@ -783,10 +855,15 @@ public sealed class ThemesControl : UserControl
         // Everything Apply overwrites - lines, sounds, the crowd in Ambience,
         // the last-applied marker - taken now, so one undo puts it all back.
         var putBack = ThemeStore.CaptureForUndo(theme, _voiceStore, _soundStore, _ambienceStore);
+
+        // After the capture above - see LapTimesOnly.Leave.
+        var putBackLapTimesOnly = _settings is null ? null : LapTimesOnly.Leave(_settings, _voiceStore);
+
         var themeStore = _themeStore;
         _undo.Capture($"Apply the {theme.Name} soundscape", () =>
         {
             putBack();
+            putBackLapTimesOnly?.Invoke();
             themeStore.NotifyRestored(liveSettingsRestored: true);
         });
 

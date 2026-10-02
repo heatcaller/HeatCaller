@@ -50,7 +50,7 @@ internal static partial class WindowCatalog
         // classes in racing ticked (every one of them when null) and every
         // third driver checked in. The program step reads plan, or a
         // program ready to build.
-        static RaceDaySetupWizard Wizard(int step, bool dayOpen, IReadOnlyList<string>? racing = null, ProgramAnswer? plan = null)
+        static RaceDaySetupWizard Wizard(int step, bool dayOpen, IReadOnlyList<string>? racing = null, ProgramAnswer? plan = null, bool sound = false)
         {
             const string venue = "Riverside Community Hall - Main Hall";
             const string track = "Club Championship Layout 2026";
@@ -132,7 +132,8 @@ internal static partial class WindowCatalog
                     ChangeDay: _ => { },
                     SetClassesRacing: _ => { },
                     PlanBuild: () => answer,
-                    Build: () => answer),
+                    Build: () => answer,
+                    Sound: sound ? SoundTestHost() : null),
                 step);
         }
 
@@ -155,6 +156,7 @@ internal static partial class WindowCatalog
             ("Set Up Tonight", () => Wizard(0, dayOpen: false)),
             ("Set Up Tonight (the day, none open yet)", () => Wizard(RaceDaySetupWizard.StepDay, dayOpen: false)),
             ("Set Up Tonight (the day, open)", () => Wizard(RaceDaySetupWizard.StepDay, dayOpen: true)),
+            ("Set Up Tonight (the day, with the sound)", () => Wizard(RaceDaySetupWizard.StepDay, dayOpen: true, sound: true)),
             ("Set Up Tonight (classes, eight racing)", () => Wizard(RaceDaySetupWizard.StepClasses, dayOpen: true)),
             ("Set Up Tonight (classes, none ticked)", () => Wizard(RaceDaySetupWizard.StepClasses, dayOpen: true, racing: new[] { "Retired Class" })),
             ("Set Up Tonight (drivers, forty on file)", () => Wizard(RaceDaySetupWizard.StepDrivers, dayOpen: true)),
@@ -168,5 +170,23 @@ internal static partial class WindowCatalog
             ("Add a class", () => new QuickClassForm(_ => false)),
             ("Add a driver", () => new QuickDriverForm(Classes().Select(c => c.Name).ToList(), "Stock Buggy", _ => null)),
         };
+    }
+
+    /// <summary>
+    /// The sound as the setup wizards offer it (SoundOffer), over the
+    /// built-in soundscapes, with the longest of them applied last - so
+    /// "Keep what's set now (...)" is as wide as it gets with them. Choosing
+    /// changes nothing: the windows are only measured.
+    /// </summary>
+    private static SoundOfferHost SoundTestHost()
+    {
+        var soundscapes = Theme.CreateBuiltInDefaults();
+        var longest = soundscapes.MaxBy(theme => theme.Name.Length)!.Name;
+
+        return new SoundOfferHost(
+            Soundscapes: () => soundscapes,
+            SetNow: () => longest,
+            ApplySoundscape: _ => { },
+            ApplyLapTimesOnly: () => { });
     }
 }

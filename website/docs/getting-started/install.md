@@ -68,12 +68,12 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 | Step | What you enter | Where it goes |
 |---|---|---|
 | **Welcome** | Nothing. Press **Get started**. Moving from another laptop? Press **Restore a backup instead**, and HeatCaller opens **Backup & Restore**. | |
-| **Look** | The app's colours, with a preview, and whether times show on a 24-hour clock. | **Themes**. A new look is applied when HeatCaller restarts at the end of setup. |
+| **Look and sound** | The app's colours, with a preview, and whether times show on a 24-hour clock. Then **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only**. See [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards). | **Themes**. A new look is applied when HeatCaller restarts at the end of setup. The sound is applied as you leave the step, the same as **Apply** on **Sounds → Soundscapes**. |
 | **Timing** | The direct EasyLap decoder or an I-Lap decoder. For I-Lap, also pick its COM port (use **Rescan** if it isn't listed) and baud rate. | The **Connection** page, straight away. |
 | **Track** | A track layout name, such as "Garage Oval". | The **Track Layouts** page. It's also selected as the current layout. |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). | The **Classes** page. |
 | **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Profiles** page. |
-| **All set** | Nothing. A summary of what was set up, and a box to start the app tour. | |
+| **All set** | Nothing. A summary of what was set up, including the sound, and a box to start the app tour. | |
 
 Press **Finish** on the last step.
 

@@ -597,7 +597,8 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// After a soundscape is applied - on the Soundscapes page or by a venue:
+    /// After a soundscape is applied - on the Soundscapes page, by a venue or
+    /// from a setup wizard - or the sound is set to lap times only:
     /// the pages that read their settings once are rebuilt or refreshed, and
     /// anything already playing picks up the new background straight away.
     /// Nothing is STARTED that wasn't playing - see SoundscapeBackground.
@@ -631,6 +632,12 @@ public partial class MainForm
 
         _ambienceControl?.RefreshAll();
         _musicControl?.RefreshAll();
+
+        // Lap times only, and leaving it, change what the Mixer brings up
+        // with a race and what is spoken between races - pages that read
+        // those once (LapTimesOnly).
+        _mixerControl?.ShowStartTicks();
+        _commentaryControl?.ShowSpokenTicks();
     }
 
     /// <summary>

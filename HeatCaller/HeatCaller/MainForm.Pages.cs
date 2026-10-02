@@ -535,14 +535,17 @@ public partial class MainForm
                     ChangeDay: eventTab.ChangeDayFromElsewhere,
                     SetClassesRacing: eventTab.SetRacingClassesFromElsewhere,
                     PlanBuild: () => _raceProgram.PlanQualifyingBuild(),
-                    Build: () => _raceProgram.BuildQualifying(string.Empty)),
+                    Build: () => _raceProgram.BuildQualifying(string.Empty),
+                    Sound: MakeSoundOfferHost()),
                 startStep);
 
             wizard.ShowDialog(this);
 
             // Everything the wizard did went through the stores, so the
-            // pages re-read rather than being told what changed.
+            // pages re-read rather than being told what changed - and its
+            // "Don't ask about the sound again" may have been ticked.
             eventTab.RefreshAll();
+            _themesControl?.ShowAskTick();
             _raceProgram.RefreshAll();
             _todayControl?.RefreshAll();
             RefreshCurrentPage();
@@ -1248,6 +1251,7 @@ public partial class MainForm
         };
 
         var commentary = new CommentaryControl(_settings, _commentary) { Dock = DockStyle.Fill };
+        _commentaryControl = commentary;
         subPageCommentary.Controls.Add(commentary);
 
         // The recap's broadcast: the Garage's record of the winning car for
@@ -1316,6 +1320,7 @@ public partial class MainForm
         var mixerControl = new MixerControl(
             _voiceStore, _soundStore, _ambienceStore, _ambience, _musicStore, _music, _announcer, _settings, _undo)
         { Dock = DockStyle.Fill };
+        _mixerControl = mixerControl;
 
         // The Mixer's mute goes through the sidebar's, so it is saved and
         // the sidebar's unmute knows what it stopped - see SetAllSoundMuted.
@@ -1330,7 +1335,8 @@ public partial class MainForm
         // tabs after it hold - effects, voice, ambience, music - in one go.
         // It lived on Themes as "Announcer Style" until 0.56.
         var subPageSoundscapes = new TabPage("Soundscapes");
-        var themes = new ThemesControl(_themeStore, _voiceStore, _soundStore, _undo, _ambienceStore, _musicStore) { Dock = DockStyle.Fill, Announcer = _announcer };
+        var themes = new ThemesControl(_themeStore, _voiceStore, _soundStore, _undo, _ambienceStore, _musicStore, _settings) { Dock = DockStyle.Fill, Announcer = _announcer };
+        _themesControl = themes;
         themes.ThemeApplied += AfterSoundscapeApplied;
 
         // Editing or deleting the applied soundscape changes what Theme music
@@ -1477,6 +1483,10 @@ public partial class MainForm
             var venueTheme = string.IsNullOrWhiteSpace(venue.PreferredThemeName) ? null : _themeStore.FindByName(venue.PreferredThemeName);
             var putBackSoundscape = venueTheme is null ? null : ThemeStore.CaptureForUndo(venueTheme, _voiceStore, _soundStore, _ambienceStore);
 
+            // A soundscape ends lap times only, as it does on the Soundscapes
+            // page - left here, after the capture above (see LapTimesOnly.Leave).
+            var putBackLapTimesOnly = venueTheme is null ? null : LapTimesOnly.Leave(_settings, _voiceStore);
+
             var venueUndoDescription = $"Apply venue '{venue.Name}'";
             Action? undoVenue = null;
             undoVenue = () =>
@@ -1495,7 +1505,8 @@ public partial class MainForm
                 if (putBackSoundscape is not null)
                 {
                     putBackSoundscape();
-                    AfterSoundscapeApplied();
+                    putBackLapTimesOnly?.Invoke();
+                    ShowSoundscapeApplied();
                 }
 
                 if (decoderBefore >= 0 && decoderBefore < cmbConnectionType.Items.Count && cmbConnectionType.SelectedIndex != decoderBefore)
@@ -1553,7 +1564,7 @@ public partial class MainForm
                 {
                     ThemeStore.Apply(theme, _voiceStore, _soundStore, _ambienceStore, _musicStore);
                     _themeStore.MarkApplied(theme);
-                    AfterSoundscapeApplied();
+                    ShowSoundscapeApplied();
                 }
             }
 

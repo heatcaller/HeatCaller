@@ -95,6 +95,9 @@ public sealed class FirstRunWizard : Form
         "Welcome", "Look", "Timing", "Track", "Classes", "Drivers", "All set",
     };
 
+    /// <summary>The look step's name on the rail when it offers the sound as well - see SoundOffer.</summary>
+    private const string LookAndSoundName = "Look and sound";
+
     private static readonly string[] SuggestedClasses = { "Stock", "Modified", "Open", "Novice", "Spec" };
 
     private readonly AppSettings _settings;
@@ -135,6 +138,9 @@ public sealed class FirstRunWizard : Form
     private readonly Panel _lookPreview = new();
     private readonly Label _lblLookDescription = new();
     private readonly CheckBox _chk24Hour = new ThemedCheckBox();
+
+    /// <summary>The sound, under the look - null when there is no host to apply it, or the club said not to ask (AppSettings.AskAboutSoundInWizards).</summary>
+    private readonly SoundOffer? _sound;
 
     /// <summary>The looks list's width at the text size in use - see SizeFields.</summary>
     private int _lookListWidth = UiLayout.AtTextSize(LookListWidth);
@@ -182,6 +188,7 @@ public sealed class FirstRunWizard : Form
     private readonly Label _lblDoneTrack = new();
     private readonly Label _lblDoneClasses = new();
     private readonly Label _lblDoneDrivers = new();
+    private readonly Label _lblDoneSound = new();
 
     /// <summary>Under the drivers' answer when rows on the drivers step were not saved - see FillSummary.</summary>
     private readonly Label _lblDoneSkipped = new();
@@ -200,8 +207,13 @@ public sealed class FirstRunWizard : Form
     private readonly string _startingLookKey;
     private int _step;
 
-    public FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles)
-        : this(settings, trackLayouts, raceClasses, profiles, startStep: 0)
+    /// <summary>
+    /// The wizard, at the welcome page. With <paramref name="sound"/>, the
+    /// look step offers the sound too (SoundOffer) - unless the club has
+    /// said not to ask.
+    /// </summary>
+    internal FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles, SoundOfferHost? sound = null)
+        : this(settings, trackLayouts, raceClasses, profiles, startStep: 0, sound)
     {
     }
 
@@ -212,13 +224,14 @@ public sealed class FirstRunWizard : Form
     /// only see the step shown then (WindowCatalog.FirstRunWindows). The
     /// app always opens it at the welcome page.
     /// </summary>
-    internal FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles, int startStep)
+    internal FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles, int startStep, SoundOfferHost? sound = null)
     {
         _settings = settings;
         _trackLayouts = trackLayouts;
         _raceClasses = raceClasses;
         _profiles = profiles;
         _startingLookKey = Looks.ForApp(settings).Key;
+        _sound = sound is not null && settings.AskAboutSoundInWizards ? new SoundOffer(settings, sound) : null;
 
         Text = "Welcome to HeatCaller";
         Font = AppTheme.BodyFont;
@@ -392,7 +405,7 @@ public sealed class FirstRunWizard : Form
             var index = i;
             var label = new Label
             {
-                Text = StepNames[i],
+                Text = i == 1 && _sound is not null ? LookAndSoundName : StepNames[i],
                 AutoSize = false,
                 Height = stepHeight,
                 Padding = new Padding(inset, 0, 0, 0),
@@ -422,7 +435,9 @@ public sealed class FirstRunWizard : Form
     {
         var inset = UiLayout.AtTextSize(RailStepInset);
 
-        var names = StepNames.Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
+        // The look step's longer name too, whether or not it is on the rail -
+        // a few pixels at most, and the rail the same width either way.
+        var names = StepNames.Append(LookAndSoundName).Max(name => TextRenderer.MeasureText(name, AppTheme.BoldFont).Width);
         var brand = TextRenderer.MeasureText(BrandText, AppTheme.NavFont).Width;
 
         return Math.Max(UiLayout.AtTextSize(RailWidth), Math.Max(names, brand) + 3 * inset);
@@ -506,7 +521,20 @@ public sealed class FirstRunWizard : Form
         band.AddSideFill(_lstLooks, _ => LookListLeastRows * _lstLooks.ItemHeight + 4, gapBelow: 0);
 
         _lookStep.AddFill(band, band.LeastHeight, gapBelow: UiLayout.SectionGap);
-        _lookStep.Add(_chk24Hour, stretch: false, gapBelow: 0);
+
+        if (_sound is null)
+        {
+            _lookStep.Add(_chk24Hour, stretch: false, gapBelow: 0);
+            return;
+        }
+
+        _lookStep.Add(_chk24Hour, stretch: false, gapBelow: UiLayout.SectionGap);
+
+        // The sound under the look, in a grid of its own: its caption beside
+        // the drop-down, what the choice means under it, then the tick.
+        var soundGrid = new FieldGrid();
+        _sound.AddTo(soundGrid);
+        _lookStep.Add(soundGrid, gapBelow: 0);
     }
 
     /// <summary>
@@ -672,12 +700,19 @@ public sealed class FirstRunWizard : Form
         foreach (var (caption, answer) in new[]
         {
             ("Look:", _lblDoneLook),
+            ("Sound:", _lblDoneSound),
             ("Decoder:", _lblDoneDecoder),
             ("Track:", _lblDoneTrack),
             ("Classes:", _lblDoneClasses),
             ("Drivers:", _lblDoneDrivers),
         })
         {
+            // The sound only when the look step offered it.
+            if (answer == _lblDoneSound && _sound is null)
+            {
+                continue;
+            }
+
             answer.AutoSize = true;
 
             // A track or a class is named by the club - an "&" in it is
@@ -736,6 +771,7 @@ public sealed class FirstRunWizard : Form
         FitPicker(_cmbSerialPort, PortWidth);
         FitPicker(_cmbBaud, PortWidth);
         FitPicker(_cmbDriverClass, DriverClassWidth);
+        _sound?.SizeFields();
 
         _txtTrackName.Width = UiLayout.AtTextSize(TrackNameWidth);
 
@@ -806,10 +842,12 @@ public sealed class FirstRunWizard : Form
                 break;
 
             case 1:
-                _lblStepTitle.Text = "Pick a look";
-                _lblStepBody.Text =
-                    "How the app looks on this laptop. The screens and web pages your racers see can have a look of "
-                    + "their own - set that, and your club logo, on the Themes page later.";
+                _lblStepTitle.Text = _sound is null ? "Pick a look" : "Pick a look and a sound";
+                _lblStepBody.Text = _sound is null
+                    ? "How the app looks on this laptop. The screens and web pages your racers see can have a look of "
+                      + "their own - set that, and your club logo, on the Themes page later."
+                    : "How the app looks on this laptop, and how race night sounds. The screens and web pages your racers "
+                      + "see can have a look of their own - set that, and your club logo, on the Themes page later.";
                 break;
 
             case 2:
@@ -916,6 +954,11 @@ public sealed class FirstRunWizard : Form
             hint.ForeColor = AppTheme.TextMuted;
         }
 
+        if (_sound is not null)
+        {
+            _sound.Hint.ForeColor = AppTheme.TextMuted;
+        }
+
         AppTheme.StyleButton(_btnNext, AppTheme.ButtonKind.Primary);
         AppTheme.StyleButton(_btnBack, AppTheme.ButtonKind.Secondary);
         AppTheme.StyleButton(_btnSkipAll, AppTheme.ButtonKind.Secondary);
@@ -1007,6 +1050,9 @@ public sealed class FirstRunWizard : Form
         }
 
         _settings.Save();
+
+        // Applied now, as every step's answer is saved as the step is left.
+        _sound?.Save();
     }
 
     private void SaveTiming()
@@ -1214,6 +1260,7 @@ public sealed class FirstRunWizard : Form
         _lblDoneTrack.Text = track;
         _lblDoneClasses.Text = classes;
         _lblDoneDrivers.Text = drivers;
+        _lblDoneSound.Text = _sound?.Summary ?? string.Empty;
 
         _lblDoneSkipped.Text = _skippedDrivers > 0
             ? $"{_skippedDrivers} driver row(s) weren't saved - each needs a name and a transponder number "

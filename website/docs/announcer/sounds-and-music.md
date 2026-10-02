@@ -236,11 +236,15 @@ Built-in soundscapes can't be changed or deleted. A new version of HeatCaller ca
 
 **Previews include the announcer's voice**, at the top of the tab, is ticked to start with. The preview's lines are then spoken by the voice this PC already uses, in the soundscape's words. On your own ElevenLabs key each preview line costs characters, so untick it to hear the sounds only. With the HeatCaller voice chosen, the preview speaks the standard lines, because those are the words that voice would really say.
 
+**Ask which sound to use in Set Up Tonight**, under it, is ticked to start with. Untick it and the setup wizards stop offering the sound; see [Choosing the sound in the setup wizards](#choosing-the-sound-in-the-setup-wizards).
+
 ### Apply a soundscape
 
 1. Press **Apply** on the soundscape's card.
 2. Read the confirmation. It starts: "Apply "*name*"? This replaces your current announcer lines and sound effect settings." (With the HeatCaller voice chosen: "This replaces your sound effect settings.") It then says anything else the soundscape switches (an ElevenLabs voice and model, or a language), what it does underneath (for example "Underneath: the Podium crowd is added to Ambience - ..."), and what it doesn't touch.
 3. Click **Yes**.
+
+If the sound is lap times only (see [Choosing the sound in the setup wizards](#choosing-the-sound-in-the-setup-wizards)), the confirmation says so too: music, ambience and the spoken race intros and recaps come back on as they were before.
 
 The card is marked **LAST APPLIED**, the line above the cards says "Applied "*name*".", and the **Voice** and **Sounds** pages show the new settings straight away. **Undo** in the sidebar puts back everything the apply changed, in one step: the announcer settings, the sound effects, the crowd in **Ambience** and which soundscape is marked as applied.
 
@@ -260,6 +264,32 @@ With the HeatCaller voice chosen it adds a paragraph, so you know before you pre
 > The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Windows voice on Voice Settings.
 
 A venue's **Preferred soundscape:**, on the **Venues** page, is applied the same way when you press **Apply This Venue**, and one **Undo** puts it back with the rest of the venue. See [Venues](../race-day/drivers-and-classes.md#venues).
+
+### Choosing the sound in the setup wizards
+
+The **Set Up Tonight** wizard (on its **The day** step) and the **Welcome to HeatCaller** wizard (on its **Look and sound** step) both have a **Sound:** drop-down. A line under it says what the choice means.
+
+| Choice | What it does |
+|---|---|
+| **Keep what's set now** | Nothing changes. The soundscape you applied last is named in brackets, for example "Keep what's set now (Podium)". |
+| A soundscape | Applies it, the same as **Apply** on its card, without the confirmation. |
+| **Lap times only** | The announcer reads each driver's lap time and calls the start, the finish and the flags, and nothing else. See below. |
+
+The choice is applied when you move off the step, and stays until you change it, the same as an apply on this tab. In **Set Up Tonight**, **Skip setup** or closing the window while you're on **The day** leaves the sound as it was. Going **Back** and on again doesn't apply it a second time. **Undo** in the sidebar puts back everything it changed, in one step.
+
+**Lap times only** changes these settings:
+
+- **Voice → Announcements:** the lap time, the start, time up, the checkered flag and the yellow, red and green flags are switched on, for races and practice. Staging, the countdown, jump starts, staggered starts, the grid call, last lap and final minute are left as you have them. Everything else, such as fast laps, records, leader changes, battles and streaks, is switched off. Only the ticks change, so this works the same on every voice, the HeatCaller voice included.
+- **Sounds → Effects:** the sounds that play on a lap (**Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Track record**, **Consistency streak** and **Leader change**) are switched off. The start, countdown, flag and finish sounds are left as they are, and so are **Lap Beeps**.
+- **Mixer:** **Bring up:** **Music** and **Ambience** are unticked, so a race doesn't bring them up. Music or ambience playing now is stopped.
+- **Voice → Commentary:** **Race intros - a "coming up" line before a round starts**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
+- No soundscape card is marked **LAST APPLIED**.
+
+Whether the lap time includes the driver's name, and how often it's read, stay as you set them on the **Lap time only** row of **Voice → Announcements**.
+
+Applying a soundscape later (here, from a venue or from a wizard) leaves lap times only: the announcements it switched, the **Bring up:** ticks and the commentary ticks go back to how they were before.
+
+Tick **Don't ask about the sound again**, under the drop-down, and neither wizard offers the sound again; whatever is set stays as it is. To have it offered again, tick **Ask which sound to use in Set Up Tonight** on this tab.
 
 ### Customize or edit a soundscape
 

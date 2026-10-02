@@ -1335,6 +1335,24 @@ public sealed class MixerControl : UserControl
 
     public void RefreshAll() => RefreshMeters();
 
+    /// <summary>
+    /// "Bring up:" as settings now have it - changed from outside this page
+    /// by lap times only, and by leaving it (see LapTimesOnly). Only a tick
+    /// that differs is set, so nothing is saved for nothing.
+    /// </summary>
+    public void ShowStartTicks()
+    {
+        if (_chkStartMusic.Checked != _settings.AudioStartMusic)
+        {
+            _chkStartMusic.Checked = _settings.AudioStartMusic;
+        }
+
+        if (_chkStartAmbience.Checked != _settings.AudioStartAmbience)
+        {
+            _chkStartAmbience.Checked = _settings.AudioStartAmbience;
+        }
+    }
+
     /// <summary>Starts (or restarts) the wait before fader levels are written - see _saveDebounce.</summary>
     private void QueueLevelSave()
     {

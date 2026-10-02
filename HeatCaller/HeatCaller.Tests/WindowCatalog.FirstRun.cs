@@ -29,6 +29,7 @@ internal static partial class WindowCatalog
         {
             ("Welcome to HeatCaller (welcome)", () => FirstRunWizardAt(welcome, clubSetUp: false)),
             ("Welcome to HeatCaller (look)", () => FirstRunWizardAt(look, clubSetUp: false)),
+            ("Welcome to HeatCaller (look and sound)", () => FirstRunWizardAt(look, clubSetUp: false, sound: true)),
             ("Welcome to HeatCaller (timing, EasyLap)", () => FirstRunWizardAt(timing, clubSetUp: false)),
             ("Welcome to HeatCaller (timing, I-Lap)", () => FirstRunWizardAt(timing, clubSetUp: true)),
             ("Welcome to HeatCaller (track, none yet)", () => FirstRunWizardAt(track, clubSetUp: false)),
@@ -39,6 +40,7 @@ internal static partial class WindowCatalog
             ("Welcome to HeatCaller (drivers, ten classes to pick)", () => FirstRunWizardAt(drivers, clubSetUp: true)),
             ("Welcome to HeatCaller (all set, nothing on file)", () => FirstRunWizardAt(allSet, clubSetUp: false)),
             ("Welcome to HeatCaller (all set, club already set up)", () => FirstRunWizardAt(allSet, clubSetUp: true)),
+            ("Welcome to HeatCaller (all set, with the sound)", () => FirstRunWizardAt(allSet, clubSetUp: true, sound: true)),
         };
     }
 
@@ -46,9 +48,11 @@ internal static partial class WindowCatalog
     /// The wizard at a step. Not set up: new settings, nothing on file. Set
     /// up: a dark look and the 24-hour clock chosen, an I-Lap decoder on
     /// COM12 at 230400 baud, the last track's name remembered, and the
-    /// classes and layouts of FirstRunStores on file.
+    /// classes and layouts of FirstRunStores on file. With the sound, the
+    /// look step offers it too (SoundTestHost); without, as it is for a
+    /// club that said not to ask.
     /// </summary>
-    private static FirstRunWizard FirstRunWizardAt(int step, bool clubSetUp)
+    private static FirstRunWizard FirstRunWizardAt(int step, bool clubSetUp, bool sound = false)
     {
         var settings = new AppSettings();
 
@@ -64,7 +68,7 @@ internal static partial class WindowCatalog
 
         var (trackLayouts, raceClasses, profiles) = FirstRunStores(clubSetUp);
 
-        return new FirstRunWizard(settings, trackLayouts, raceClasses, profiles, step);
+        return new FirstRunWizard(settings, trackLayouts, raceClasses, profiles, step, sound ? SoundTestHost() : null);
     }
 
     /// <summary>

@@ -293,6 +293,26 @@ public sealed class ThemeStore
     }
 
     /// <summary>
+    /// Records that no soundscape is in use - the sound was set to lap times
+    /// only (see LapTimesOnly). Theme music then has nothing to play, which
+    /// is meant: lap times only has no music.
+    /// </summary>
+    public void ClearApplied()
+    {
+        try
+        {
+            if (File.Exists(ActiveFilePath))
+            {
+                File.Delete(ActiveFilePath);
+            }
+        }
+        catch
+        {
+            // See ActiveThemeId.
+        }
+    }
+
+    /// <summary>
     /// A theme by name, following a built-in that was renamed (a venue may
     /// still remember "Pro Broadcast" - that is now "Broadcast").
     /// </summary>
@@ -348,8 +368,9 @@ public sealed class ThemeStore
     /// <summary>
     /// Takes everything <see cref="Apply"/> is about to overwrite and returns
     /// the action that puts it back, for Undo. Call it immediately before
-    /// Apply - on the Soundscapes page, and by a venue with a preferred
-    /// soundscape.
+    /// Apply - on the Soundscapes page, by a venue with a preferred
+    /// soundscape, and by the setup wizards. With no theme (lap times only,
+    /// which is no soundscape - see LapTimesOnly) the ambience is left out.
     ///
     /// What comes back: the announcer's lines, delivery, voice, model and
     /// language; every sound effect; the soundscape crowd layers in Ambience
@@ -371,7 +392,7 @@ public sealed class ThemeStore
     /// which this does put back.
     /// </summary>
     public static Action CaptureForUndo(
-        Theme theme,
+        Theme? theme,
         VoiceSettingsStore voiceStore,
         SoundEffectsStore soundStore,
         AmbienceStore? ambienceStore = null)
@@ -394,7 +415,7 @@ public sealed class ThemeStore
         // Ambience only when this soundscape changes it: putting back the
         // crowd layers of a soundscape that never touched them would undo
         // whatever the club did to them since, for nothing.
-        var touchesAmbience = ambienceStore is not null && theme.Background?.AmbienceBed is not null;
+        var touchesAmbience = ambienceStore is not null && theme?.Background?.AmbienceBed is not null;
         var crowdBefore = touchesAmbience
             ? ambienceStore!.Current.Layers
                 .Select((layer, index) => (Index: index, Layer: layer.Clone()))

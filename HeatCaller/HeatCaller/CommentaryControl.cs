@@ -1095,6 +1095,30 @@ public sealed class CommentaryControl : UserControl
         public override string ToString() => Label;
     }
 
+    /// <summary>
+    /// The spoken race intros, recaps and teaser as settings now have them -
+    /// changed from outside this page by lap times only, and by leaving it
+    /// (see LapTimesOnly). Only a tick that differs is set, so nothing is
+    /// saved for nothing; each one's own handler greys what goes with it.
+    /// </summary>
+    public void ShowSpokenTicks()
+    {
+        if (_chkIntros.Checked != _settings.CommentaryRaceIntros)
+        {
+            _chkIntros.Checked = _settings.CommentaryRaceIntros;
+        }
+
+        if (_chkSummaries.Checked != _settings.CommentaryRaceSummaries)
+        {
+            _chkSummaries.Checked = _settings.CommentaryRaceSummaries;
+        }
+
+        if (_chkTeaser.Checked != _settings.SummaryTeaserEnabled)
+        {
+            _chkTeaser.Checked = _settings.SummaryTeaserEnabled;
+        }
+    }
+
     private void UpdateEnabledState()
     {
         var on = _chkEnabled.Checked;

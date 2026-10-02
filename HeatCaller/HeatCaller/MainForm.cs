@@ -1325,8 +1325,13 @@ public partial class MainForm : Form
                 return;
             }
 
-            using var wizard = new FirstRunWizard(_settings, _trackLayouts, _raceClasses, _profiles);
+            // The look step offers the sound too, applied through this form -
+            // see MainForm.SoundOffer.cs.
+            using var wizard = new FirstRunWizard(_settings, _trackLayouts, _raceClasses, _profiles, MakeSoundOfferHost());
             wizard.ShowDialog(this);
+
+            // "Don't ask about the sound again" may have been ticked.
+            _themesControl?.ShowAskTick();
 
             // Mark it done even if dismissed with the X - the wizard is a
             // convenience, and re-showing it every launch to someone who

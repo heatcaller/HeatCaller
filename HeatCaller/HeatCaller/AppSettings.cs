@@ -1045,6 +1045,20 @@ public sealed class AppSettings
     public bool HasSeenRaceDaySetup { get; set; }
 
     /// <summary>
+    /// Whether the setup wizards - Welcome to HeatCaller and Set Up Tonight -
+    /// ask which sound to use (SoundOffer). Turned off by "Don't ask about
+    /// the sound again" in either, and back on from the Soundscapes page.
+    /// </summary>
+    public bool AskAboutSoundInWizards { get; set; } = true;
+
+    /// <summary>
+    /// Set while the sound is lap times only: what it changed, as it was, to
+    /// put back when a soundscape is applied again. Null otherwise - see
+    /// LapTimesOnly.
+    /// </summary>
+    public LapTimesOnlyPutBack? LapTimesOnly { get; set; }
+
+    /// <summary>
     /// Set when first-run setup ended with "show me around" ticked AND a new
     /// look that needed a restart: the tour starts after that restart,
     /// once, and this is cleared.

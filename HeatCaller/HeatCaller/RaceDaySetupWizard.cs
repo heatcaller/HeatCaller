@@ -155,6 +155,9 @@ internal sealed class RaceDaySetupWizard : Form
 
     // --- the day ---
     private readonly PageStack _dayStep = new();
+
+    /// <summary>Tonight's sound, under the day's fields - null when there is no host to apply it, or the club said not to ask (AppSettings.AskAboutSoundInWizards).</summary>
+    private readonly SoundOffer? _sound;
     private readonly ComboBox _cmbShape = new();
 
     /// <summary>What the kind of night means - as tall as the longer wording, so the fields under it never move as the box is used.</summary>
@@ -285,6 +288,7 @@ internal sealed class RaceDaySetupWizard : Form
         _events = events;
         _checkIns = checkIns;
         _host = host;
+        _sound = host.Sound is not null && settings.AskAboutSoundInWizards ? new SoundOffer(settings, host.Sound) : null;
 
         Text = "Set Up Tonight";
         Font = AppTheme.BodyFont;
@@ -528,6 +532,10 @@ internal sealed class RaceDaySetupWizard : Form
         grid.AddRow("Call it:", _txtDayName);
         grid.AddRow("Venue:", _cmbVenue);
         grid.AddRow("Track layout:", _cmbTrack);
+
+        // Tonight's sound, in the same grid so its caption lines up with
+        // the others: a soundscape, lap times only, or what is set already.
+        _sound?.AddTo(grid);
 
         _dayStep.Add(grid, gapBelow: UiLayout.RowGap);
         _dayStep.Add(_lblDayState, gapBelow: 0);
@@ -980,6 +988,7 @@ internal sealed class RaceDaySetupWizard : Form
         FitPicker(_cmbVenue, FieldWidth);
         FitPicker(_cmbTrack, FieldWidth);
         FitPicker(_cmbWhoClass, ClassFilterWidth);
+        _sound?.SizeFields();
 
         _txtDayName.Width = wide;
         _lstClasses.Size = new Size(wide, ClassRows * _lstClasses.ItemHeight + 4);
@@ -1468,7 +1477,9 @@ internal sealed class RaceDaySetupWizard : Form
 
             case StepDay:
                 _lblStepTitle.Text = "Tonight's day";
-                _lblStepBody.Text = "What kind of night it is, and where. Moving on from here opens the day.";
+                _lblStepBody.Text = _sound is null
+                    ? "What kind of night it is, and where. Moving on from here opens the day."
+                    : "What kind of night it is, where, and how it sounds. Moving on from here opens the day.";
                 LoadDayStep();
                 content = _dayStep;
                 break;
@@ -1565,6 +1576,11 @@ internal sealed class RaceDaySetupWizard : Form
                  })
         {
             hint.ForeColor = AppTheme.TextMuted;
+        }
+
+        if (_sound is not null)
+        {
+            _sound.Hint.ForeColor = AppTheme.TextMuted;
         }
 
         AppTheme.StyleButton(_btnNext, AppTheme.ButtonKind.Primary);
@@ -1820,6 +1836,10 @@ internal sealed class RaceDaySetupWizard : Form
             day.VenueName = _cmbVenue.Text.Trim();
             day.TrackLayoutName = _cmbTrack.Text.Trim();
         });
+
+        // The sound is the club's, not the day's: applied as it is on the
+        // Soundscapes page, and kept until it is changed.
+        _sound?.Save();
     }
 
     private void LoadRacingStep()
@@ -1989,6 +2009,11 @@ internal sealed class RaceDaySetupWizard : Form
             lines.Add(day.ClassNames.Count == 0
                 ? "No classes are marked as racing tonight."
                 : "Racing tonight: " + string.Join(", ", day.ClassNames));
+        }
+
+        if (_sound is not null)
+        {
+            lines.Add($"Sound: {_sound.Summary}.");
         }
 
         lines.Add(string.Empty);
@@ -2294,9 +2319,11 @@ internal sealed class QuickDriverForm : Form
 /// <param name="SetClassesRacing">The Day's SetRacingClassesFromElsewhere.</param>
 /// <param name="PlanBuild">The programme's PlanQualifyingBuild - what building would do, changing nothing.</param>
 /// <param name="Build">The programme's BuildQualifying.</param>
+/// <param name="Sound">What the day step needs to offer tonight's sound - see SoundOffer. None, and the step does not offer it.</param>
 internal sealed record RaceDaySetupHost(
     Func<RaceDayShape, IReadOnlyList<string>, bool> StartDay,
     Action<Action<RaceEvent>> ChangeDay,
     Action<IReadOnlyList<string>> SetClassesRacing,
     Func<ProgramAnswer> PlanBuild,
-    Func<ProgramAnswer> Build);
+    Func<ProgramAnswer> Build,
+    SoundOfferHost? Sound = null);
