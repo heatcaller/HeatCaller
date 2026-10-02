@@ -28,8 +28,8 @@ set RESULT=%errorlevel%
 rem A mirror: a picture of a page that was not checked this time does not
 rem linger from an earlier run. Its own exit code is not this script's -
 rem robocopy counts anything under 8 as success.
-if exist "HeatCaller\HeatCaller.Tests\bin\Debug\net8.0-windows\layout" (
-  robocopy "HeatCaller\HeatCaller.Tests\bin\Debug\net8.0-windows\layout" "layout-check" /MIR /NJH /NJS /NFL /NDL /NP >nul
+if exist "HeatCaller\HeatCaller.Tests\bin\Debug\net10.0-windows\layout" (
+  robocopy "HeatCaller\HeatCaller.Tests\bin\Debug\net10.0-windows\layout" "layout-check" /MIR /NJH /NJS /NFL /NDL /NP >nul
 )
 
 echo.

@@ -96,6 +96,18 @@ public sealed class SetupEntryForm : Form
 
     public SetupEntry Result { get; }
 
+    /// <summary>
+    /// Why the page is held from the end of the constructor until the
+    /// window is sized (DialogFit lets it go then, children first): each of
+    /// its 33 drop-downs changes height as its window is made, and with the
+    /// page laid out live each change rippled out - its line, the column,
+    /// every line under it moved, window and all - and then it was all laid
+    /// out again at the size it opened at. Held, the heights change and
+    /// nothing moves until it is laid out once, at that size (session log,
+    /// 1 Oct).
+    /// </summary>
+    private void HoldUntilSized(FillPage page) => LayoutFreeze.Freeze(page);
+
     public SetupEntryForm(SetupEntry? existing, ChassisTemplateStore templates,
         SessionHistoryStore history, ProfileStore profiles, TrackLayoutStore trackLayouts)
     {
@@ -170,6 +182,10 @@ public sealed class SetupEntryForm : Form
 
         DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
         WhereTimeGoes.LogWhenShown(this);
+
+        // Held while its windows are made, and let go once it is sized -
+        // see HoldUntilSized.
+        HoldUntilSized(page);
 
         // Windows made from here are the ones showing it makes.
         WhereTimeGoes.Built();
@@ -468,7 +484,7 @@ public sealed class SetupEntryForm : Form
                     combo.Items.Add(current);
                     combo.SelectedItem = current;
                 }
-                combo.SelectedIndexChanged += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
+                combo.SelectedIndexChanged += (_, _) => EditorChanged(field.Id, combo);
                 editor = combo;
                 break;
             }
@@ -498,7 +514,7 @@ public sealed class SetupEntryForm : Form
                 list.ItemCheck += (_, _) =>
                 {
                     if (!IsHandleCreated || IsDisposed) { return; }
-                    BeginInvoke(() => { ReadEditorsIntoResult(); _canvas.Invalidate(); });
+                    BeginInvoke(() => EditorChanged(field.Id, list));
                 };
                 editor = list;
                 break;
@@ -513,7 +529,7 @@ public sealed class SetupEntryForm : Form
                     // Measured with no window handle made - see Caption.
                     UseMnemonic = false,
                 };
-                check.CheckedChanged += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
+                check.CheckedChanged += (_, _) => EditorChanged(field.Id, check);
                 editor = check;
                 break;
             }
@@ -528,7 +544,7 @@ public sealed class SetupEntryForm : Form
                 {
                     box.PlaceholderText = field.Unit;
                 }
-                box.Leave += (_, _) => { ReadEditorsIntoResult(); _canvas.Invalidate(); };
+                box.Leave += (_, _) => EditorChanged(field.Id, box);
                 editor = box;
                 break;
             }
@@ -688,24 +704,50 @@ public sealed class SetupEntryForm : Form
     {
         foreach (var (fieldId, editor) in _editors)
         {
-            var value = editor switch
-            {
-                ComboBox combo => combo.SelectedItem as string is { } s && s != NotSet ? s : string.Empty,
-                CheckedListBox list => string.Join(", ", list.CheckedItems.Cast<object>().Select(o => o.ToString())),
-                CheckBox check => check.Checked ? "true" : string.Empty,
-                TextBox box => box.Text.Trim(),
-                _ => string.Empty,
-            };
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                Result.Values.Remove(fieldId);
-            }
-            else
-            {
-                Result.Values[fieldId] = value;
-            }
+            ReadEditorIntoResult(fieldId, editor);
         }
+    }
+
+    /// <summary>
+    /// One editor changed: its field's value read into the result, and the
+    /// diagram drawn again when that changed what it shows.
+    ///
+    /// Only that editor's. Each used to read every editor in the sheet, and
+    /// a drop-down raises its change as its window is made - so as the
+    /// Setup Sheet was shown, each of its drop-downs read all fifty-four
+    /// editors, through their windows: 51,000 window-text reads, three
+    /// seconds of its opening (session log, 1 Oct).
+    /// </summary>
+    private void EditorChanged(string fieldId, Control editor)
+    {
+        if (ReadEditorIntoResult(fieldId, editor))
+        {
+            _canvas.Invalidate();
+        }
+    }
+
+    /// <summary>Puts what <paramref name="editor"/> says into the result's value for <paramref name="fieldId"/>. True when that changed it.</summary>
+    private bool ReadEditorIntoResult(string fieldId, Control editor)
+    {
+        var value = editor switch
+        {
+            ComboBox combo => combo.SelectedItem as string is { } s && s != NotSet ? s : string.Empty,
+            CheckedListBox list => string.Join(", ", list.CheckedItems.Cast<object>().Select(o => o.ToString())),
+            CheckBox check => check.Checked ? "true" : string.Empty,
+            TextBox box => box.Text.Trim(),
+            _ => string.Empty,
+        };
+
+        var had = Result.Values.TryGetValue(fieldId, out var before) ? before : null;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Result.Values.Remove(fieldId);
+            return had is not null;
+        }
+
+        Result.Values[fieldId] = value;
+        return !string.Equals(had, value, StringComparison.Ordinal);
     }
 
     /// <summary>Scrolls the fields to the editor for whichever callout is selected.</summary>

@@ -1816,8 +1816,15 @@ public partial class MainForm
         Shown += (_, _) =>
         {
             var warming = System.Diagnostics.Stopwatch.StartNew();
+
+            // What the windows made meanwhile cost, when it is slow - see
+            // WhereTimeGoes.
+            WhereTimeGoes.StartOnShownWindow("Making the pages ready");
             WarmPages();
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s.");
+            var timing = WhereTimeGoes.Take();
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s."
+                + (warming.Elapsed.TotalSeconds >= 1 && timing is not null ? $" {timing}" : string.Empty));
         };
     }
 }

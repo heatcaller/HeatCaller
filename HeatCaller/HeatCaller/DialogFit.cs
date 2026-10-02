@@ -152,6 +152,7 @@ internal static class DialogFit
         var frame = dialog.Size - dialog.ClientSize;
         var most = Most(area, frame);
         var (clientWidth, least) = SizeClient(dialog, fitting, most);
+        LetGo(fitting.Page);
 
         if (fitting.Height is not null && dialog.FormBorderStyle != FormBorderStyle.None)
         {
@@ -168,6 +169,26 @@ internal static class DialogFit
         }
 
         Centre(dialog, area);
+    }
+
+    /// <summary>
+    /// A page its dialog held while its windows were made
+    /// (SetupEntryForm) let go - children first, see LayoutFreeze.Thaw -
+    /// once the dialog is sized, so it is laid out once, at the size it
+    /// opens at, rather than at the size it was built at and then again.
+    /// Measured while held, so a held page must be one whose least height
+    /// is worked out without laying it out (no field grid in it). Nothing
+    /// for a page not held.
+    /// </summary>
+    private static void LetGo(FillPage page)
+    {
+        if (!LayoutFreeze.IsFrozen(page))
+        {
+            return;
+        }
+
+        LayoutFreeze.Thaw(page, childrenFirst: true);
+        WhereTimeGoes.Mark("let go, sized");
     }
 
     /// <summary>The most the screen leaves for inside the frame.</summary>
@@ -271,6 +292,7 @@ internal static class DialogFit
         var frame = dialog.Size - inside;
 
         SizeClient(client, fitting, Most(area, frame));
+        LetGo(fitting.Page);
 
         return client.Size + frame;
     }

@@ -374,7 +374,9 @@ describe("the HeatCaller voice", () => {
       harness = undefined;
 
       const kept = JSON.parse(await readFile(join(folder, ".voice", "usage", "acme-rc.json"), "utf8"));
-      assert.deepEqual(kept, { month: "2026-09", used: 10 });
+      // With the months before this one, of which there are none yet - see
+      // voiceadmin.test.ts.
+      assert.deepEqual(kept, { month: "2026-09", used: 10, history: {} });
 
       where = await serve({ render, acme: { enabled: true, monthlyChars: 100 } });
       const answer = await speak(where, { voice: "clubhouse", text: "abcdefghij", shared: false });

@@ -45,11 +45,23 @@ internal static class WhereTimeGoes
     }
 
     /// <summary>
+    /// Starts timing something done to a window that is up already - its
+    /// pages' windows being made (MainForm.WarmPages) - watching the windows
+    /// made meanwhile as Clock.MadeWhileShowing does. Ended by Take.
+    /// </summary>
+    public static void StartOnShownWindow(string name)
+    {
+        _timing?.StopWatchingWindows();
+        _timing = new Clock(name, window: null);
+        _timing.WatchWindowsMadeFromNow();
+    }
+
+    /// <summary>
     /// The window being timed is built - its constructor is done. Windows
     /// made from here on are the ones showing it makes; until here, any
     /// made were made early (see Clock.WatchWindowsMade).
     /// </summary>
-    public static void Built() => _timing?.StopWatchingWindows();
+    public static void Built() => _timing?.BuildingDone();
 
     /// <summary>Notes that the part called <paramref name="part"/> has just ended.</summary>
     public static void Mark(string part) => _timing?.Mark(part);
@@ -159,7 +171,6 @@ internal static class WhereTimeGoes
                 {
                     window.HandleCreated -= Made;
                     _madeBy = MadeBy();
-                    StopWatchingWindows();
                 }
 
                 window.HandleCreated += Made;
@@ -172,7 +183,9 @@ internal static class WhereTimeGoes
         /// <summary>
         /// Watches for windows made on this thread while the window is being
         /// built - before its own handle, and before its constructor is done
-        /// (Built) - and keeps who made the first few.
+        /// (Built) - and keeps who made the first few. And then, until it is
+        /// shown, how long each kind of control took to get its window, and
+        /// which messages were sent meanwhile, and how often (see Showing).
         ///
         /// Why: with the Setup Sheet's own handle no longer made early, its
         /// 26 controls still had handles by the time its fields were added,
@@ -188,6 +201,12 @@ internal static class WhereTimeGoes
             {
                 _onWindowMade = WindowMade;
                 _hook = SetWindowsHookEx(WhCbt, _onWindowMade, IntPtr.Zero, GetCurrentThreadId());
+
+                _onMessageSent = MessageSent;
+                _messageHook = SetWindowsHookEx(WhCallWndProc, _onMessageSent, IntPtr.Zero, GetCurrentThreadId());
+
+                _onMessageHandled = MessageHandled;
+                _handledHook = SetWindowsHookEx(WhCallWndProcRet, _onMessageHandled, IntPtr.Zero, GetCurrentThreadId());
             }
             catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
             {
@@ -198,7 +217,18 @@ internal static class WhereTimeGoes
 
         private IntPtr WindowMade(int code, IntPtr wParam, IntPtr lParam)
         {
-            if (code == HcbtCreateWnd)
+            if (code == HcbtCreateWnd && !_building)
+            {
+                try
+                {
+                    MadeWhileShowing(wParam);
+                }
+                catch (Exception)
+                {
+                    // Only a note for the log.
+                }
+            }
+            else if (code == HcbtCreateWnd)
             {
                 _windowsMadeEarly++;
 
@@ -224,6 +254,206 @@ internal static class WhereTimeGoes
             return CallNextHookEx(_hook, code, wParam, lParam);
         }
 
+        /// <summary>
+        /// A window made while the window is being shown: the time since the
+        /// one before was made is put down to that one's kind of control -
+        /// its window, and whatever its window being made set off, until the
+        /// next was begun. Known only now: Windows Forms ties a window to its
+        /// control after this hook has been told of it.
+        ///
+        /// Why: once nothing was made early, showing the Setup Sheet took 4.5
+        /// to 5 seconds, none of it in laying it out (1 Oct) - so what does
+        /// making its 364 windows cost, and where?
+        /// </summary>
+        private void MadeWhileShowing(IntPtr window)
+        {
+            var now = Stopwatch.GetTimestamp();
+
+            if (_lastMade is { } last)
+            {
+                var took = Stopwatch.GetElapsedTime(last.At, now);
+                var kind = KindOf(last.Window);
+
+                _madeByKind[kind] = _madeByKind.TryGetValue(kind, out var before)
+                    ? (before.Took + took, before.Count + 1)
+                    : (took, 1);
+
+                _longestMakes.Add((took, kind, last.Trace));
+                _longestMakes.Sort((a, b) => b.Took.CompareTo(a.Took));
+
+                if (_longestMakes.Count > 3)
+                {
+                    _longestMakes.RemoveAt(3);
+                }
+            }
+            else
+            {
+                _firstMadeShowing = now;
+            }
+
+            _windowsMadeShowing++;
+            _lastMade = (window, now, new StackTrace(2, false));
+        }
+
+        /// <summary>
+        /// The kind of control a window is - or, for a window a control makes
+        /// for itself (a drop-down's list), its control's, as its own - and
+        /// the page it is on: the nearest UserControl round it.
+        /// </summary>
+        private static string KindOf(IntPtr window)
+        {
+            var control = Control.FromHandle(window);
+            var own = string.Empty;
+
+            if (control is null && Control.FromHandle(GetParent(window)) is { } maker)
+            {
+                control = maker;
+                own = "'s own window";
+            }
+
+            if (control is null)
+            {
+                return "(not a control)";
+            }
+
+            for (var at = control.Parent; at is not null; at = at.Parent)
+            {
+                if (at is UserControl page)
+                {
+                    return $"{control.GetType().Name}{own} in {page.GetType().Name}";
+                }
+            }
+
+            return control.GetType().Name + own;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
+        /// <summary>Counts each message sent to a window on this thread while the window is being shown.</summary>
+        private IntPtr MessageSent(int code, IntPtr wParam, IntPtr lParam)
+        {
+            if (code >= 0 && !_building && lParam != IntPtr.Zero)
+            {
+                // CWPSTRUCT: lParam, wParam, message, hwnd.
+                var message = Marshal.ReadInt32(lParam, 2 * IntPtr.Size);
+
+                _messages[message] = _messages.TryGetValue(message, out var count) ? count + 1 : 1;
+
+                if (message == WmWindowPosChanging)
+                {
+                    try
+                    {
+                        Moving(Marshal.ReadIntPtr(lParam, 3 * IntPtr.Size));
+                    }
+                    catch (Exception)
+                    {
+                        // Only a note for the log.
+                    }
+                }
+
+                _inMessages.Push((message, Stopwatch.GetTimestamp(), 0));
+            }
+
+            return CallNextHookEx(_messageHook, code, wParam, lParam);
+        }
+
+        private const int WmWindowPosChanging = 0x0046;
+
+        /// <summary>
+        /// A window about to be moved, sized or put in front: counted by the
+        /// kind of control it is, and every 100th, who is moving it - a
+        /// sample, as a profiler takes one, of what all the moving is for.
+        ///
+        /// Why: with the Setup Sheet's layout held while its windows were
+        /// made, there were still 7,300 of these as they were made, three
+        /// seconds of handling (1 Oct) - none of them from its layout.
+        /// </summary>
+        private void Moving(IntPtr window)
+        {
+            var kind = Control.FromHandle(window)?.GetType().Name ?? "(not a control)";
+            _movedByKind[kind] = _movedByKind.TryGetValue(kind, out var count) ? count + 1 : 1;
+
+            if (++_moves % 100 != 0)
+            {
+                return;
+            }
+
+            var by = $"{kind}: {MadeBy(new StackTrace(2, false))}";
+            _movedBy[by] = _movedBy.TryGetValue(by, out var seen) ? seen + 1 : 1;
+        }
+
+        private int _moves;
+        private readonly Dictionary<string, int> _movedByKind = new();
+        private readonly Dictionary<string, int> _movedBy = new();
+
+        /// <summary>Watches the windows made from now on as made in showing a window (StartOnShownWindow).</summary>
+        public void WatchWindowsMadeFromNow()
+        {
+            _building = false;
+            WatchWindowsMade();
+        }
+
+        /// <summary>
+        /// A sent message handled: its time, less the time of the messages
+        /// sent while it was handled (which count as their own), added to
+        /// its kind's. So the time a message's own handling took - Windows'
+        /// and this app's code run for it - is put down to that message.
+        ///
+        /// Why: making each drop-down's window took a tenth of a second as
+        /// the Setup Sheet was shown, and three-quarters of a second all
+        /// told for the pages - none of it in this app's layout, and no
+        /// message sent often enough to account for it (1 Oct).
+        /// </summary>
+        private IntPtr MessageHandled(int code, IntPtr wParam, IntPtr lParam)
+        {
+            if (code >= 0 && !_building && lParam != IntPtr.Zero && _inMessages.Count > 0)
+            {
+                // CWPRETSTRUCT: lResult, lParam, wParam, message, hwnd.
+                var message = Marshal.ReadInt32(lParam, 3 * IntPtr.Size);
+                var now = Stopwatch.GetTimestamp();
+
+                // Normally the one on top; a message whose start was missed
+                // leaves the ones above it, which are let go.
+                while (_inMessages.Count > 0)
+                {
+                    var (sent, at, inner) = _inMessages.Pop();
+
+                    if (sent != message)
+                    {
+                        continue;
+                    }
+
+                    var whole = now - at;
+                    var own = TimeSpan.FromSeconds((double)Math.Max(0, whole - inner) / Stopwatch.Frequency);
+
+                    _messageTime[message] = _messageTime.TryGetValue(message, out var before) ? before + own : own;
+
+                    if (_inMessages.Count > 0)
+                    {
+                        var (outer, outerAt, outerInner) = _inMessages.Pop();
+                        _inMessages.Push((outer, outerAt, outerInner + whole));
+                    }
+
+                    break;
+                }
+            }
+
+            return CallNextHookEx(_handledHook, code, wParam, lParam);
+        }
+
+        /// <summary>The messages being handled now, innermost on top: which, since when, and the time of those sent while it was.</summary>
+        private readonly Stack<(int Message, long At, long Inner)> _inMessages = new();
+
+        /// <summary>The time each kind of message's own handling took - see MessageHandled.</summary>
+        private readonly Dictionary<int, TimeSpan> _messageTime = new();
+
+        private IntPtr _handledHook;
+        private HookProc? _onMessageHandled;
+
+        /// <summary>The constructor is done: what is made from here is made in showing the window.</summary>
+        public void BuildingDone() => _building = false;
+
         /// <summary>Stops watching for windows made (WatchWindowsMade). Safe to call more than once.</summary>
         public void StopWatchingWindows()
         {
@@ -232,9 +462,39 @@ internal static class WhereTimeGoes
                 UnhookWindowsHookEx(_hook);
                 _hook = IntPtr.Zero;
             }
+
+            if (_messageHook != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_messageHook);
+                _messageHook = IntPtr.Zero;
+            }
+
+            if (_handledHook != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_handledHook);
+                _handledHook = IntPtr.Zero;
+            }
+
+            if (_lastMade is { } last && _firstMadeShowing != 0)
+            {
+                _madeShowingSpan = Stopwatch.GetElapsedTime(_firstMadeShowing, last.At);
+            }
         }
 
         private IntPtr _hook;
+        private IntPtr _messageHook;
+
+        /// <summary>True until the window's constructor is done (BuildingDone).</summary>
+        private bool _building = true;
+
+        private HookProc? _onMessageSent;
+        private int _windowsMadeShowing;
+        private long _firstMadeShowing;
+        private TimeSpan _madeShowingSpan;
+        private (IntPtr Window, long At, StackTrace Trace)? _lastMade;
+        private readonly Dictionary<string, (TimeSpan Took, int Count)> _madeByKind = new();
+        private readonly List<(TimeSpan Took, string Kind, StackTrace Trace)> _longestMakes = new();
+        private readonly Dictionary<int, int> _messages = new();
 
         /// <summary>Kept for as long as the hook is in: Windows calls it, and nothing else holds it.</summary>
         private HookProc? _onWindowMade;
@@ -245,6 +505,8 @@ internal static class WhereTimeGoes
         private delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
 
         private const int WhCbt = 5;
+        private const int WhCallWndProc = 4;
+        private const int WhCallWndProcRet = 12;
         private const int HcbtCreateWnd = 3;
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -262,13 +524,15 @@ internal static class WhereTimeGoes
         /// <summary>The methods of this app that led to the window's handle being made, innermost first - null until it is.</summary>
         private string? _madeBy;
 
-        private static string MadeBy()
+        private static string MadeBy() => MadeBy(new StackTrace(2, false));
+
+        private static string MadeBy(StackTrace trace)
         {
             // Every frame, Windows Forms' own included, from the one that
             // asked for the handle out to this app's first: which call it was
             // is in Windows Forms' frames, as often as not (1 Oct: the frames
             // of this app alone said only "the constructor").
-            var frames = new StackTrace(2, false).GetFrames();
+            var frames = trace.GetFrames();
             var names = new List<string>();
             var ours = 0;
             var repeats = 1;
@@ -348,6 +612,79 @@ internal static class WhereTimeGoes
                 : (elapsed, 1);
         }
 
+        private static string MessageName(int message) => message switch
+        {
+            0x0001 => "WM_CREATE",
+            0x0003 => "WM_MOVE",
+            0x0005 => "WM_SIZE",
+            0x0006 => "WM_ACTIVATE",
+            0x0007 => "WM_SETFOCUS",
+            0x0008 => "WM_KILLFOCUS",
+            0x000B => "WM_SETREDRAW",
+            0x000C => "WM_SETTEXT",
+            0x000D => "WM_GETTEXT",
+            0x000E => "WM_GETTEXTLENGTH",
+            0x000F => "WM_PAINT",
+            0x0014 => "WM_ERASEBKGND",
+            0x0018 => "WM_SHOWWINDOW",
+            0x001C => "WM_ACTIVATEAPP",
+            0x0020 => "WM_SETCURSOR",
+            0x0024 => "WM_GETMINMAXINFO",
+            0x002B => "WM_DRAWITEM",
+            0x002C => "WM_MEASUREITEM",
+            0x0030 => "WM_SETFONT",
+            0x0031 => "WM_GETFONT",
+            0x003D => "WM_GETOBJECT",
+            0x0046 => "WM_WINDOWPOSCHANGING",
+            0x0047 => "WM_WINDOWPOSCHANGED",
+            0x004E => "WM_NOTIFY",
+            0x007C => "WM_STYLECHANGING",
+            0x007D => "WM_STYLECHANGED",
+            0x0081 => "WM_NCCREATE",
+            0x0082 => "WM_NCDESTROY",
+            0x0083 => "WM_NCCALCSIZE",
+            0x0085 => "WM_NCPAINT",
+            0x0086 => "WM_NCACTIVATE",
+            0x00B1 => "EM_SETSEL",
+            0x00D3 => "EM_SETMARGINS",
+            0x00F1 => "BM_SETCHECK",
+            0x00F4 => "BM_SETSTYLE",
+            0x0111 => "WM_COMMAND",
+            0x0114 => "WM_HSCROLL",
+            0x0115 => "WM_VSCROLL",
+            0x0127 => "WM_CHANGEUISTATE",
+            0x0128 => "WM_UPDATEUISTATE",
+            0x0129 => "WM_QUERYUISTATE",
+            0x0133 => "WM_CTLCOLOREDIT",
+            0x0134 => "WM_CTLCOLORLISTBOX",
+            0x0138 => "WM_CTLCOLORSTATIC",
+            0x0142 => "CB_SETEDITSEL",
+            0x0143 => "CB_ADDSTRING",
+            0x0146 => "CB_GETCOUNT",
+            0x0147 => "CB_GETCURSEL",
+            0x0148 => "CB_GETLBTEXT",
+            0x0149 => "CB_GETLBTEXTLEN",
+            0x014A => "CB_INSERTSTRING",
+            0x014B => "CB_RESETCONTENT",
+            0x0150 => "CB_GETITEMDATA",
+            0x0188 => "LB_GETCURSEL",
+            0x0189 => "LB_GETTEXT",
+            0x018A => "LB_GETTEXTLEN",
+            0x018B => "LB_GETCOUNT",
+            0x014E => "CB_SETCURSEL",
+            0x0153 => "CB_SETITEMHEIGHT",
+            0x0154 => "CB_GETITEMHEIGHT",
+            0x0210 => "WM_PARENTNOTIFY",
+            0x0281 => "WM_IME_SETCONTEXT",
+            0x0282 => "WM_IME_NOTIFY",
+            0x02E0 => "WM_DPICHANGED",
+            0x02E2 => "WM_DPICHANGED_BEFOREPARENT",
+            0x02E3 => "WM_DPICHANGED_AFTERPARENT",
+            0x031A => "WM_THEMECHANGED",
+            0x1501 => "EM_SETCUEBANNER",
+            _ => $"0x{message:X4}",
+        };
+
         private static int Handles(Control control)
         {
             var count = control.IsHandleCreated ? 1 : 0;
@@ -385,7 +722,37 @@ internal static class WhereTimeGoes
                 : $"; {_windowsMadeEarly} windows made while it was being built, before its own - "
                     + string.Join("; and by: ", _earlyMadeBy.Select((by, i) => i == 0 ? $"the first by: {by}" : by));
 
-            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}{made}{early}.";
+            var showing = _windowsMadeShowing == 0
+                ? string.Empty
+                : $"; {_windowsMadeShowing} windows made in showing it (or meanwhile), the first to the last {_madeShowingSpan.TotalSeconds:0.00}s - by kind (the time to the next being begun): "
+                    + string.Join(", ", _madeByKind
+                        .OrderByDescending(kind => kind.Value.Took)
+                        .Take(8)
+                        .Select(kind => $"{kind.Key} {kind.Value.Took.TotalSeconds:0.00} x{kind.Value.Count}"))
+                    + "; the longest: "
+                    + string.Join("; then: ", _longestMakes.Select(make => $"{make.Kind} {make.Took.TotalSeconds:0.000}s, made by {MadeBy(make.Trace)}"))
+                    + "; messages sent meanwhile: "
+                    + string.Join(", ", _messages
+                        .OrderByDescending(message => message.Value)
+                        .Take(10)
+                        .Select(message => $"{MessageName(message.Key)} x{message.Value}"))
+                    + "; the messages' own handling, by time: "
+                    + string.Join(", ", _messageTime
+                        .OrderByDescending(message => message.Value)
+                        .Take(10)
+                        .Select(message => $"{MessageName(message.Key)} {message.Value.TotalSeconds:0.00} x{(_messages.TryGetValue(message.Key, out var count) ? count : 0)}"))
+                    + "; windows moved, by kind: "
+                    + string.Join(", ", _movedByKind
+                        .OrderByDescending(kind => kind.Value)
+                        .Take(8)
+                        .Select(kind => $"{kind.Key} x{kind.Value}"))
+                    + "; who moved them (one in every 100): "
+                    + string.Join(" ;; ", _movedBy
+                        .OrderByDescending(by => by.Value)
+                        .Take(5)
+                        .Select(by => $"x{by.Value} {by.Key}"));
+
+            return $"{_name} took {_total.Elapsed.TotalSeconds:0.0}s to open - {parts}{styled}{called}{made}{early}{showing}.";
         }
     }
 }

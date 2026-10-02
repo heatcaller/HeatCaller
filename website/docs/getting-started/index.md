@@ -34,10 +34,10 @@ HeatCaller started as a Mini-Z tool, but nothing in it is specific to one scale.
 
 ### A Windows PC
 
-HeatCaller is a Windows desktop app built on .NET 8 (`net8.0-windows`). It needs a Windows version that .NET 8 supports, which means Windows 10 or Windows 11.
+HeatCaller is a Windows desktop app built on .NET 10 (`net10.0-windows`). It needs a Windows version that .NET 10 supports, which means Windows 11 or Windows 10. Windows 10 itself left Microsoft's support in October 2025, and Microsoft now lists only its long-term Enterprise and IoT editions as supported for .NET 10, so a laptop still on Windows 10 Home or Pro should move to Windows 11 when it can. Microsoft keeps the full list on its [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md) page.
 <!-- TODO: confirm the minimum Windows version and whether 32-bit/ARM PCs are tested -->
 
-Right now HeatCaller is run from its source code, so you also need the free .NET 8 SDK. See [Installing and running](install.md).
+Right now HeatCaller is run from its source code, so you also need the free .NET 10 SDK. See [Installing and running](install.md).
 
 The app is laid out at fixed pixel sizes and doesn't use Windows display scaling. On a high-resolution screen, text can look slightly soft. You can make everything bigger or smaller with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
 

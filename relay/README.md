@@ -797,6 +797,60 @@ Clubs start with no voice: a club needs `"voice": { "enabled": true }` in
 the config, and the relay refuses to start if a club names a voice the
 catalogue does not have.
 
+#### Metering: what each club has spoken, and topping one up
+
+Two commands, run from this folder on the laptop. Both run on the relay's
+own Fly machine through `fly ssh console`, so they need flyctl signed in to
+the account that runs the relay - and there is no web address for either:
+every other route here names one club and answers only its token, and a
+page that read every club at once would be the first that did not.
+
+```
+voice-usage.cmd                    every club with the voice: this month so far, and the three before
+voice-usage.cmd --json             every club and its whole history, as JSON - for billing
+voice-topup.cmd acme-rc 50000      50,000 more characters for acme-rc, this month only
+voice-topup.cmd acme-rc -20000     takes 20,000 of that back (never below no top-up)
+```
+
+Write the number without commas: in a Windows command a comma splits it in
+two, so `voice-topup.cmd` refuses anything after it rather than giving a
+club 50 characters for "50,000". The report says which data folder it read,
+so a report from the wrong one is not mistaken for a quiet month.
+
+```
+HeatCaller voice - October 2026, so far. Counts go back to zero on Sun, 01 Nov 2026 00:00:00 UTC.
+
+club     voice     plan  top-up    used    left    %  Sep 26  Aug 26  Jul 26
+acme-rc  on     100,000  50,000  61,200  88,800  40%  97,450  41,300       0
+
+All clubs: 61,200 characters this month.
+```
+
+- **The months before this one are kept**, in the club's usage file
+  (`"history"`), three years of them. The first line a club speaks in a new
+  month is what moves the old month's count there, so a club that said
+  nothing for a while loses nothing. A club that deletes everything it has
+  published loses its history with the rest.
+- **A top-up lasts the month it is given in**, and the relay picks it up on
+  the club's next line with no restart (it says so when the club's voice is
+  switched off, and the characters do nothing until it is on); a laptop
+  that ran out tries again
+  every 30 minutes, so it is speaking again within half an hour. A club that
+  needs more every month wants a bigger `voice.monthlyChars` on its own line
+  in the config (then `fly-set-config.cmd`). One top-up is at most
+  10,000,000 either way, so three zeros too many is refused, not billed.
+- Top-ups are kept in `dataDir/.voice/topups/<club>.json`, which only
+  `voice-topup` writes and the relay only reads - so neither can overwrite
+  the other. Run through ssh the command is root, and it hands the file -
+  before it is in place - and the folders it may have made to the relay's
+  own user (`RELAY_UID`/`RELAY_GID`, 1000), so the relay can always read
+  its top-ups and still write its own counts. As root it refuses to run
+  without `RELAY_DATA`, which is where the relay's data really is.
+- Run by hand on the machine: `node /app/dist/src/index.js voice-usage` and
+  `node /app/dist/src/index.js voice-topup <club> <characters>`. They read
+  the config from `RELAY_CONFIG_JSON` and the data from `RELAY_DATA`, as the
+  relay does.
+
 #### Trying it out on your own laptop
 
 `voice-test.cmd` runs all of the above here, on this PC, against your own
@@ -885,12 +939,14 @@ with a dot, so no club id can ever name it (a relay that still has the
 older `dataDir/voice/` moves it there on start, unless a club is actually
 called `voice`, in which case it is left alone and the log says so):
 `shared/` for lines with nothing filled into them, `clubs/<club>/` for
-lines carrying a driver's name, and `usage/<club>.json` for the month's
-character count. They are content-addressed - the file name is a hash of
+lines carrying a driver's name, `usage/<club>.json` for the month's
+character count and the months before it, and `topups/<club>.json` for
+characters given on top of a plan (see Metering). They are content-addressed - the file name is a hash of
 the voice's settings and the words - and swept oldest-used-first when a
 folder goes over its size (200 MB shared, 25 MB a club). None of it counts
 against a club's 50 MB publishing quota. A club that deletes everything it
-has published loses its own lines and its usage file along with it.
+has published loses its own lines, its usage file and its top-ups along
+with it.
 
 ## Deploying
 
@@ -1040,15 +1096,19 @@ src/preview.ts   the link-preview card for one session, read narrowly out of the
 src/config.ts    config loading, and refusing to start rather than starting wrong
 src/index.ts     serve, and the argv dispatch
 src/mint.ts      the `mint` subcommand, and the name the shell hands over
+src/voiceadmin.ts the `voice-usage` and `voice-topup` subcommands: every club's voice
+                 usage, its history, and characters given on top of a plan
 tools/build-font.py   rasterises Poppins into src/font-data.ts. Build-time only; needs Pillow
 
-test/            316 tests: tenancy, publishing, isolation, persistence, minting, pages,
+test/            430 tests: tenancy, publishing, isolation, persistence, minting, pages,
                  check-in, the race-day manager's tunnel and its budget, locking on disk, PIN limits and
                  lockouts, listing limits, theming, the voice's catalogue, caching, refusals and
-                 allowance, the results archive's meta and by-id reads, the preview reader and
+                 allowance and its metering, the results archive's meta and by-id reads, the preview reader and
                  its route, the drawn card and the type it is set in, and a relay woken by a burst
                  (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file
 
+voice-usage.cmd       every club's HeatCaller voice usage, read on the Fly machine
+voice-topup.cmd       gives a club more voice characters for this month, on the Fly machine
 voice-test.cmd        runs a voice relay on this laptop against your own ElevenLabs key
 voice-test-setup.mjs  writes that test relay's config, once, from the account's own voices
 ```

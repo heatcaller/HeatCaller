@@ -2,7 +2,7 @@
 
 ## What this is
 
-A minimal Windows Forms (.NET 8) app that connects to the local **Neon Timing API**
+A minimal Windows Forms (.NET 10) app that connects to the local **Neon Timing API**
 exposed by **Next Level Timing v4.9.1**, and dumps every raw message it receives
 to an on-screen developer console. It is intentionally read-only: it does not
 send race-control commands, and it never talks to the EasyLap USB decoder —
@@ -54,7 +54,7 @@ is the tool for diagnosing that — check it before assuming the code is wrong.
 ```
 HeatCaller.sln
 HeatCaller/
-  HeatCaller.csproj   .NET 8 WinForms app, references SocketIOClient 3.1.2 (doghappy)
+  HeatCaller.csproj   .NET 10 WinForms app, references SocketIOClient 3.1.2 (doghappy)
   Program.cs                 entry point
   MainForm.cs / .Designer.cs UI: host/port/API key fields, connect/disconnect, status, console
   AppSettings.cs             persists host/port/API key to %AppData%\HeatCaller\settings.json
@@ -63,7 +63,7 @@ HeatCaller/
 
 ## Building
 
-Requires the .NET 8 SDK and Windows (WinForms).
+Requires the .NET 10 SDK and Windows (WinForms).
 
 ```
 cd HeatCaller

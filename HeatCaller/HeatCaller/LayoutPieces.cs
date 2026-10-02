@@ -221,6 +221,32 @@ internal sealed class PageStack : Panel
         }
 
         /// <summary>
+        /// Holds the table's layout while it and its parts come into view,
+        /// and lays it out once when they all have.
+        ///
+        /// Why: a part becomes visible after the one before it, and a line
+        /// that sizes itself lays itself out as it does (Beside's
+        /// OnVisibleChanged) - and, measured hidden and then visible, asks
+        /// this table to lay out again, measuring every line, of which only
+        /// those before it are visible yet. As the Setup Sheet was shown its
+        /// fifty-four lines asked 108 times, 42,000 measurings, each reading
+        /// its caption's text from its window (session log, 1 Oct).
+        /// </summary>
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            SuspendLayout();
+
+            try
+            {
+                base.OnVisibleChanged(e);
+            }
+            finally
+            {
+                ResumeLayout(true);
+            }
+        }
+
+        /// <summary>
         /// As tall as the parts need at the width proposed, worked out here
         /// part by part, as Section works its own height out, and for the
         /// same reason: asked, the table kept the height its parts had grown
@@ -3677,12 +3703,14 @@ internal static class Pieces
         var told = new StrongBox<int>(field.Height);
         HeightsTold.Add(field, told);
 
+        // Set while the nudge below is under way - see there.
+        var nudging = false;
+
         field.SizeChanged += (_, _) =>
         {
-            // Anything it is told below comes back here with the height it
-            // was just told, and stops. A box of several lines is given its
-            // height by its page, which the layouts already go by.
-            if (field.IsDisposed || field.Height == told.Value || field is TextBoxBase { Multiline: true })
+            // A box of several lines is given its height by its page, which
+            // the layouts already go by.
+            if (nudging || field.IsDisposed || field.Height == told.Value || field is TextBoxBase { Multiline: true })
             {
                 return;
             }
@@ -3691,10 +3719,31 @@ internal static class Pieces
 
             // A move raises no SizeChanged; the second is nothing when the
             // layout has already put it back.
+            //
+            // Not again for what the nudge itself sets off. It was meant to
+            // come back here with the height it was just told, and stop -
+            // but a drop-down given a height settles on one of its own, a
+            // window's size apart (a drop-down's window is as tall as its
+            // list), so each nudge set off the next: 150 window moves for
+            // each drop-down as its window was made, nested ever deeper -
+            // 4,900 for the Setup Sheet's 33, the most of three seconds of
+            // its opening (session log, 1 Oct).
             var top = field.Top;
 
-            field.SetBounds(0, top + 1, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
-            field.SetBounds(0, top, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
+            nudging = true;
+
+            try
+            {
+                field.SetBounds(0, top + 1, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
+                field.SetBounds(0, top, 0, told.Value, BoundsSpecified.Y | BoundsSpecified.Height);
+            }
+            finally
+            {
+                nudging = false;
+            }
+
+            // The height it settled on, whatever that came to.
+            told.Value = field.Height;
         };
     }
 
@@ -3829,8 +3878,68 @@ internal static class Pieces
     /// Scrolls down, never sideways. The sideways bar is switched off BEFORE
     /// AutoScroll goes on - once it is on, WinForms ignores these settings
     /// (the old layout repair pass found the same, the hard way).
+    ///
+    /// Switching the bar off is done to the panel's window, so a panel that
+    /// has none yet has it switched off when it gets one - AutoScroll off
+    /// again for the moment that takes, with its layout held so it is laid
+    /// out once, after. Until then AutoScroll is simply on.
+    ///
+    /// Why: switching it off there and then made the panel's window on the
+    /// spot (ScrollProperties.Enabled calls EnableScrollBar with it), while
+    /// the panel was still being built and in no window - and everything put
+    /// in a panel that has a window gets one of its own as it goes in. Every
+    /// FillPage and PageStack did this as it was made: the Setup Sheet's
+    /// 360 controls all had windows before it was shown, which slowed every
+    /// part of its building - 423 windows made while it was built, the first
+    /// by this (session log, 1 Oct).
+    ///
+    /// Only while a window is being built under a hold, though
+    /// (LayoutFreeze.Building - the main window's pages, and a window
+    /// built inside HoldWhileBuilding, as the Setup Sheet is): there the
+    /// pieces are laid out once, with every part in, when the hold ends. A
+    /// dialog built without one is laid out as it is put together, and a
+    /// part in it that is only measured right once it has its window - a
+    /// field grid's rows, a wrapped line - grew after its column had been
+    /// placed and ran past its bottom: Race Format, the welcome wizard's
+    /// timing step and Set Up Tonight's classes failed the window test on
+    /// .NET 10 with this, and passed with the bar switched off as before
+    /// (layout-bisect, 1 Oct). So outside a hold it is done there and then,
+    /// as it always was.
     /// </summary>
     internal static void ScrollDownOnly(ScrollableControl scrollable)
+    {
+        if (scrollable.IsHandleCreated || !LayoutFreeze.Building)
+        {
+            NoSidewaysBar(scrollable);
+            return;
+        }
+
+        // Asks for no window: SetScrollInfo waits for one.
+        scrollable.HorizontalScroll.Maximum = 0;
+        scrollable.AutoScroll = true;
+
+        void Made(object? sender, EventArgs e)
+        {
+            scrollable.HandleCreated -= Made;
+
+            scrollable.SuspendLayout();
+
+            try
+            {
+                scrollable.AutoScroll = false;
+                NoSidewaysBar(scrollable);
+            }
+            finally
+            {
+                scrollable.ResumeLayout(true);
+            }
+        }
+
+        scrollable.HandleCreated += Made;
+    }
+
+    /// <summary>The sideways bar switched off and AutoScroll on, in that order - see ScrollDownOnly.</summary>
+    private static void NoSidewaysBar(ScrollableControl scrollable)
     {
         scrollable.HorizontalScroll.Maximum = 0;
         scrollable.HorizontalScroll.Enabled = false;

@@ -245,7 +245,7 @@ public static class BackupService
     /// secrets file lying in it, and adding this backup's own.
     ///
     /// Built by hand rather than with CreateFromDirectory and then edited,
-    /// because editing a zip (ZipArchiveMode.Update) in .NET 8 reads the
+    /// because editing a zip (ZipArchiveMode.Update) in .NET reads the
     /// whole archive into memory to write it back, and the data folder
     /// holds the music library. A secrets file can be in the data folder
     /// after a restore that hasn't been dealt with yet; it belongs to that

@@ -219,8 +219,14 @@ internal static class LayoutFreeze
     /// lays itself out once if anything asked it to while it was held -
     /// except those in a tab that is not showing, which stay held until it
     /// is (see the class notes). Does nothing for one not held.
+    ///
+    /// <paramref name="childrenFirst"/>: children before parents instead,
+    /// as the pieces are let go when a window is built (see the class
+    /// notes) - for a window of its own held while its windows are made
+    /// (SetupEntryForm), whose lines would otherwise each lay their column
+    /// out again as they were let go.
     /// </summary>
-    public static void Thaw(Control root)
+    public static void Thaw(Control root, bool childrenFirst = false)
     {
         if (!Held.TryGetValue(root, out var held))
         {
@@ -231,7 +237,7 @@ internal static class LayoutFreeze
 
         Dictionary<TabPage, List<Control>>? waiting = null;
 
-        foreach (var control in held)
+        foreach (var control in childrenFirst ? Enumerable.Reverse(held) : held)
         {
             if (control.IsDisposed)
             {

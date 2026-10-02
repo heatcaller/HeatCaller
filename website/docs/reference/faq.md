@@ -6,7 +6,7 @@ Short answers to the questions race directors and club admins ask most, with lin
 
 ### Does HeatCaller run on a Mac or Linux?
 
-No. HeatCaller is a Windows desktop app. It needs Windows 10 or 11 with .NET 8. See [What you need](../getting-started/index.md#what-you-need).
+No. HeatCaller is a Windows desktop app. It needs Windows 11 (or Windows 10) with .NET 10. See [What you need](../getting-started/index.md#what-you-need).
 
 ### Which timing systems does it work with?
 

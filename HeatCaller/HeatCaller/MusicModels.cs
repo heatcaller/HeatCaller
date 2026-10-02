@@ -475,7 +475,7 @@ public sealed class MusicStore
         yield return Path.Combine(cwd, "Assets", "Music");
         yield return Path.Combine(cwd, "HeatCaller", "Assets", "Music");
 
-        // Walking up from the build output covers bin/Debug/net8.0-windows
+        // Walking up from the build output covers bin/Debug/net10.0-windows
         // back to the project folder, where a run-from-source build has
         // them even when the copy-to-output step didn't fire.
         yield return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Assets", "Music"));

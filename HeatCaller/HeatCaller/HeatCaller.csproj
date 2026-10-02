@@ -2,7 +2,12 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- .NET 10, the long-term release (supported to November 2028).
+         .NET 8 stops getting security fixes on 10 November 2026, and the
+         installer ships the runtime inside it, so the first build a club
+         gets carries a supported one. .NET 9 was no use: it ended the same
+         day as 8. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -21,6 +26,19 @@
          exactly as designed on every machine - slightly soft on a 4K
          screen, but predictable rather than subtly broken. -->
     <ApplicationHighDpiMode>DpiUnaware</ApplicationHighDpiMode>
+
+    <!-- WFO1000 (from .NET 9, an error): every public property of a
+         control must say how the Windows Forms designer is to save it into
+         a form's .Designer.cs, so the designer cannot write out something
+         private by accident. HeatCaller's own controls are not designed in
+         Visual Studio's designer - every page and window is put together in
+         code (LayoutPieces) - so there is nothing for the designer to save,
+         and the 60-odd properties it would flag (Result on every dialog, a
+         canvas's settings) would each carry an attribute that means
+         nothing. Off, for that reason; if a control is ever laid out in the
+         designer, give its properties [DesignerSerializationVisibility] and
+         turn this back on. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,9 +53,10 @@
          Next Level Timing entirely. -->
     <PackageReference Include="HidSharp" Version="2.1.0" />
 
-    <!-- Serial port access for the I-Lap decoder connection. WinForms on
-         .NET 8 no longer ships System.IO.Ports in the box. -->
-    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <!-- Serial port access for the I-Lap decoder connection. Modern .NET
+         does not ship System.IO.Ports in the box. Kept at the runtime's own
+         version, 10.0.x, like System.Speech below. -->
+    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
 
     <!-- QR code generation for printable driver check-in badges. Only the
          PngByteQRCode renderer is used, which emits PNG bytes directly
@@ -46,15 +65,16 @@
 
     <!-- Windows DPAPI (ProtectedData), so API keys, the relay token and
          PINs are sealed to this Windows account on disk instead of sitting
-         in settings.json as plain text. See SecretBox. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+         in settings.json as plain text. See SecretBox. No package: from
+         .NET 10 it comes with the Windows desktop runtime, and the build
+         said so (NU1510, 1 Oct) - it was a package on .NET 8. -->
 
     <!-- The free Windows voice (SAPI 5), for clubs with no ElevenLabs
          account and as the stand-in when ElevenLabs can't speak a line.
          Windows only, like the app, and no dependencies of its own. It
          only talks to the speech voices already installed in Windows -
          nothing is downloaded and no account is needed. See WindowsVoice. -->
-    <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="System.Speech" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>

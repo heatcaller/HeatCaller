@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
+import { access, lchown, mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isValidClubId } from "./tenancy.js";
 
@@ -224,7 +224,10 @@ export class VoiceService {
 
   /** Usage writes, one club at a time, so two lines finishing together cannot both read 10 and both write 11. */
   private readonly usageLocks = new Map<string, Promise<void>>();
-  private readonly usageCache = new Map<string, { month: string; used: number }>();
+  private readonly usageCache = new Map<string, { month: string; used: number; history: Readonly<Record<string, number>> }>();
+
+  /** Each club's top-up file, as last read, by its modification time - see topUpFor. */
+  private readonly topUpCache = new Map<string, { mtimeMs: number; months: Readonly<Record<string, number>> }>();
 
   private readonly maxInFlightPerClub: number;
   private readonly maxWaitingPerClub: number;
@@ -455,34 +458,83 @@ export class VoiceService {
   // get a fresh allowance by accident.
 
   private usagePath(club: string): string {
-    return join(this.root, "usage", `${club}.json`);
+    return voiceUsagePath(this.dataDir, club);
   }
 
-  private async usageFor(club: string, plan: VoicePlan): Promise<VoiceUsage> {
-    const month = monthOf(this.now());
-    const allowance = plan.monthlyChars;
+  /**
+   * Where a club stands in <month> - this month, unless the caller has
+   * already decided which (reserve does, so the count it reads and the
+   * count it writes are the same month's even when midnight on the 1st
+   * falls between them).
+   */
+  private async usageFor(club: string, plan: VoicePlan, month: string = monthOf(this.now())): Promise<VoiceUsage> {
+    const allowance = plan.monthlyChars + (await this.topUpFor(club, month));
     const cached = this.usageCache.get(club);
 
     if (cached !== undefined && cached.month === month) {
       return { used: cached.used, allowance, resetsAt: resetOf(this.now()) };
     }
 
-    let used = 0;
+    let read: { used: number; history: Readonly<Record<string, number>> } = { used: 0, history: {} };
 
     try {
-      const raw = JSON.parse(await readFile(this.usagePath(club), "utf8")) as { month?: unknown; used?: unknown };
-
-      if (raw.month === month && typeof raw.used === "number" && Number.isFinite(raw.used) && raw.used > 0) {
-        used = Math.floor(raw.used);
-      }
+      read = readUsageRecord(JSON.parse(await readFile(this.usagePath(club), "utf8")) as unknown, month);
     } catch {
       // No file yet, or one that cannot be read: this month has not been
       // counted. Never a reason to refuse a club its voice.
     }
 
-    this.usageCache.set(club, { month, used });
+    // Read outside the lock when the catalogue asks, so a line may have
+    // been counted while the file was being read. What it left in memory
+    // is newer than the file this read saw, and stands.
+    const meanwhile = this.usageCache.get(club);
 
-    return { used, allowance, resetsAt: resetOf(this.now()) };
+    if (meanwhile !== undefined && meanwhile.month === month) {
+      return { used: meanwhile.used, allowance, resetsAt: resetOf(this.now()) };
+    }
+
+    this.usageCache.set(club, { month, used: read.used, history: read.history });
+
+    return { used: read.used, allowance, resetsAt: resetOf(this.now()) };
+  }
+
+  /**
+   * Characters added to this club's allowance for <month> by whoever runs
+   * the relay (`voice-topup`, see voiceadmin.ts) - nothing when there is
+   * no top-up.
+   *
+   * Read from its own file, which only that command writes and this only
+   * reads, so a top-up given while the relay is up takes effect on the
+   * club's next line without a restart, and can never be lost to a write
+   * of the count racing it. Kept in memory against the file's
+   * modification time, so asking costs one stat.
+   */
+  private async topUpFor(club: string, month: string): Promise<number> {
+    const path = voiceTopUpPath(this.dataDir, club);
+    const info = await stat(path).catch(() => undefined);
+
+    if (info === undefined || !info.isFile()) {
+      this.topUpCache.delete(club);
+      return 0;
+    }
+
+    let known = this.topUpCache.get(club);
+
+    if (known === undefined || known.mtimeMs !== info.mtimeMs) {
+      try {
+        known = { mtimeMs: info.mtimeMs, months: readTopUps(JSON.parse(await readFile(path, "utf8")) as unknown) };
+      } catch {
+        // Unreadable - no top-up, rather than no voice. Not kept: a file
+        // caught between being written and handed to this relay's user
+        // (voice-topup) reads again on the next line.
+        this.topUpCache.delete(club);
+        return 0;
+      }
+
+      this.topUpCache.set(club, known);
+    }
+
+    return known.months[month] ?? 0;
   }
 
   /**
@@ -506,7 +558,7 @@ export class VoiceService {
       // The month, read once, is the month these characters are taken
       // from - and the one refund must give them back to. See refund.
       const month = monthOf(this.now());
-      const current = await this.usageFor(club, plan);
+      const current = await this.usageFor(club, plan, month);
 
       if (current.used + characters > current.allowance) {
         outcome = { ok: false, usage: current, month };
@@ -514,7 +566,7 @@ export class VoiceService {
       }
 
       const used = current.used + characters;
-      await this.storeUsage(club, used);
+      await this.storeUsage(club, used, month);
 
       outcome = { ok: true, usage: { used, allowance: current.allowance, resetsAt: current.resetsAt }, month };
     });
@@ -543,23 +595,43 @@ export class VoiceService {
         return;
       }
 
-      await this.storeUsage(club, Math.max(0, current.used - characters));
+      await this.storeUsage(club, Math.max(0, current.used - characters), month);
     });
   }
 
-  /** Writes the month's count, in memory and on the volume. Under withUsageLock, always. */
-  private async storeUsage(club: string, used: number): Promise<void> {
-    const month = monthOf(this.now());
+  /**
+   * Writes the month's count, in memory and on the volume - with the
+   * months before it, which are what a club is billed or its allowance
+   * set by. Under withUsageLock, always, and after usageFor has read the
+   * file for this month (reserve and refund both do), so the history in
+   * memory is the file's.
+   */
+  private async storeUsage(club: string, used: number, month: string): Promise<void> {
+    const cached = this.usageCache.get(club);
 
-    this.usageCache.set(club, { month, used });
+    // Always this month's entry: both callers read it under the same lock
+    // for the same month first. The fallback only keeps a history from
+    // being written away if that ever stops being so.
+    const history = cached !== undefined && cached.month === month ? cached.history : await this.historyOnDisk(club, month);
+
+    this.usageCache.set(club, { month, used, history });
 
     try {
       await mkdir(join(this.root, "usage"), { recursive: true, mode: 0o700 });
-      await writeFileAtomically(this.usagePath(club), Buffer.from(JSON.stringify({ month, used }), "utf8"));
+      await writeFileAtomically(this.usagePath(club), Buffer.from(JSON.stringify({ month, used, history }), "utf8"));
     } catch (error) {
       // The count in memory still stands, so the allowance holds for as
       // long as this relay is up.
       this.log(`[voice] "${club}": could not write the month's usage (${String(error)}).`);
+    }
+  }
+
+  /** The months before <month>, read from the club's usage file. */
+  private async historyOnDisk(club: string, month: string): Promise<Readonly<Record<string, number>>> {
+    try {
+      return readUsageRecord(JSON.parse(await readFile(this.usagePath(club), "utf8")) as unknown, month).history;
+    } catch {
+      return {};
     }
   }
 
@@ -661,7 +733,9 @@ export class VoiceService {
 
     await this.withUsageLock(club, async () => {
       this.usageCache.delete(club);
+      this.topUpCache.delete(club);
       await unlink(this.usagePath(club)).catch(() => {});
+      await unlink(voiceTopUpPath(this.dataDir, club)).catch(() => {});
       await rm(this.cacheDir(club, false), { recursive: true, force: true });
     });
   }
@@ -1087,11 +1161,101 @@ export function stripAudioTags(value: string): string {
     .trim();
 }
 
-function monthOf(when: Date): string {
+/** Where a club's count is kept: this month's, and the months before it. */
+export function voiceUsagePath(dataDir: string, club: string): string {
+  return join(dataDir, VOICE_DIR, "usage", `${club}.json`);
+}
+
+/** Where the characters given to a club on top of its plan are kept, by month - see voiceadmin.ts. */
+export function voiceTopUpPath(dataDir: string, club: string): string {
+  return join(dataDir, VOICE_DIR, "topups", `${club}.json`);
+}
+
+/** How many months of a club's counts are kept: three years, which is as far back as anyone bills or ElevenLabs audits. */
+export const VOICE_HISTORY_MONTHS = 36;
+
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * A usage file read for <month>: this month's count, and every month
+ * before it.
+ *
+ * The file holds the month it was last written in. When that is not this
+ * month, its count is a finished month's, and moves into the history here
+ * - the first line a club speaks in a new month is what turns the page,
+ * and nothing is lost if it speaks none for a while. Files written before
+ * there was a history ({ month, used }) read the same way.
+ */
+export function readUsageRecord(raw: unknown, month: string): { used: number; history: Readonly<Record<string, number>> } {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return { used: 0, history: {} };
+  }
+
+  const record = raw as Record<string, unknown>;
+  const history: Record<string, number> = {};
+  const past = record["history"];
+
+  if (typeof past === "object" && past !== null && !Array.isArray(past)) {
+    for (const [key, value] of Object.entries(past as Record<string, unknown>)) {
+      if (MONTH_PATTERN.test(key) && key < month && count(value) > 0) {
+        history[key] = count(value);
+      }
+    }
+  }
+
+  const fileMonth = typeof record["month"] === "string" ? record["month"] : "";
+  const fileUsed = count(record["used"]);
+
+  if (fileMonth === month) {
+    return { used: fileUsed, history: trimHistory(history) };
+  }
+
+  if (MONTH_PATTERN.test(fileMonth) && fileMonth < month && fileUsed > 0) {
+    history[fileMonth] = fileUsed;
+  }
+
+  return { used: 0, history: trimHistory(history) };
+}
+
+/** A top-up file: characters added, by month. Anything else in it is ignored. */
+export function readTopUps(raw: unknown): Readonly<Record<string, number>> {
+  const months: Record<string, number> = {};
+
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return months;
+  }
+
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (MONTH_PATTERN.test(key) && count(value) > 0) {
+      months[key] = count(value);
+    }
+  }
+
+  return months;
+}
+
+/** The newest VOICE_HISTORY_MONTHS months, oldest dropped. */
+function trimHistory(history: Record<string, number>): Readonly<Record<string, number>> {
+  const keys = Object.keys(history).sort();
+  const kept: Record<string, number> = {};
+
+  for (const key of keys.slice(Math.max(0, keys.length - VOICE_HISTORY_MONTHS))) {
+    kept[key] = history[key] as number;
+  }
+
+  return kept;
+}
+
+/** A whole, non-negative number of characters, or 0. */
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+export function monthOf(when: Date): string {
   return `${when.getUTCFullYear()}-${String(when.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function resetOf(when: Date): string {
+export function resetOf(when: Date): string {
   return new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth() + 1, 1)).toISOString();
 }
 
@@ -1124,11 +1288,22 @@ function whole(value: unknown, fallback: number, low: number, high: number, what
  * half a file - a reader would take that for the whole line and play a
  * click.
  */
-async function writeFileAtomically(path: string, bytes: Buffer): Promise<void> {
+export async function writeFileAtomically(
+  path: string,
+  bytes: Buffer,
+  owner?: { readonly uid: number; readonly gid: number },
+): Promise<void> {
   const temp = `${path}.${Math.random().toString(36).slice(2)}.tmp`;
 
   try {
     await writeFile(temp, bytes, { flag: "wx", mode: 0o600 });
+
+    // Handed over before it is in place, so nobody can ever read it at
+    // its real name while it is still someone else's - see voice-topup.
+    if (owner !== undefined) {
+      await lchown(temp, owner.uid, owner.gid);
+    }
+
     await rename(temp, path);
   } catch (error) {
     // Only when the move did not happen: after a rename there is nothing

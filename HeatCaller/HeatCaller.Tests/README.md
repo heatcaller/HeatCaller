@@ -1,6 +1,6 @@
 # HeatCaller.Tests
 
-Automated tests for the HeatCaller app (xUnit, .NET 8, Windows).
+Automated tests for the HeatCaller app (xUnit, .NET 10, Windows).
 
 ## Running them
 
@@ -60,7 +60,7 @@ Every file the app reads or writes lives under `AppPaths.Root` (`%AppData%\HeatC
 
 ## The layout report
 
-`LayoutTests` writes `bin\Debug\net8.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, as the app shows it - nothing in the app nudges a page into shape any more (the old layout repair pass was deleted on 30 Sep, once every page was on the layout pieces, `LayoutPieces.cs`, ROADMAP item 8).
+`LayoutTests` writes `bin\Debug\net10.0-windows\layout\report.txt` on every run: for each page and each size, what does not fit, and where. It is each page's own layout, as the app shows it - nothing in the app nudges a page into shape any more (the old layout repair pass was deleted on 30 Sep, once every page was on the layout pieces, `LayoutPieces.cs`, ROADMAP item 8).
 
 For pictures as well, run `layout.cmd` beside `check.cmd`: every page and tab at every size, in `layout\pictures`. `layout.cmd "Race Control"` does one page (several: `"Race Control;Voice"`), which is quicker. It copies the report and the pictures to `layout-check\` at the top of the folder too, where a clean build doesn't delete them and Claude's file bridge can reach them (it stops seven folders down); git ignores that folder.
 

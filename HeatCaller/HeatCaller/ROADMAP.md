@@ -40,9 +40,9 @@ What follows from that:
 | | |
 |---|---|
 | Version | 0.59.0 BETA (`AppVersion.cs`), cut on 28 Sep 2026 from everything since 0.52.0 - 0.53 to 0.58 were working builds with no notes of their own. Its notes are in `website\docs\release-notes.md` |
-| App | C# / .NET 8 WinForms, about 305 source files, ~177k lines, 25 pages |
+| App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 305 source files, ~177k lines, 25 pages |
 | Tests | `HeatCaller.Tests`: 354 tests (30 Sep), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
-| Relay | TypeScript on Fly.io (`relay\`), 26 test files |
+| Relay | TypeScript on Fly.io (`relay\`), 27 test files |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Three solo rehearsal nights at home (27 Sep), one called clean. No club has run a night on it yet |
@@ -304,6 +304,78 @@ day: the layout overhaul is finished before the beta rather than after it
    thread while the window is built (a WH_CBT hook, until `Built()` or its
    own handle) and keeps who made the first few; each slow part lists
    what its layout time went on; MainColumn's ask has a span of its own.
+   b77 measured (1 Oct, a slow run - startup 9.3s): 4.7s, and the hook
+   named the cause - `Pieces.ScrollDownOnly`'s `HorizontalScroll.Enabled =
+   false` calls EnableScrollBar with the panel's window, making it there
+   and then (parked) in every FillPage and PageStack constructor; every
+   control added under one then got a window as it went in (423 windows
+   while the Setup Sheet was built; the same in every page MainForm
+   builds). With 359 windows each Beside layout cost ~4.6ms (x273 = 1.25s
+   letting go). Then 108 column layouts as the windows were made and 108
+   more as it was shown (combos changing height as they get windows, each
+   line asking the column). b78: ScrollDownOnly switches the sideways bar
+   off when the panel gets its window (AutoScroll off for that moment,
+   layout held); StackColumn holds its layout from its window being made
+   until its parts' are (OnCreateControl; BeginInvoke and OnHandleDestroyed
+   as fallbacks). Controls in pieces no longer have windows while being
+   built - the audit found nothing that needed them (BeginInvokes guarded
+   or from clicks; skins bind on HandleCreated). Watch: a grid that now
+   opens with its first row selected; `KeepFillWeights` waits for a
+   SizeChanged after the grid's window.
+   b78 measured (1 Oct): building the Setup Sheet now takes 0.1s (0
+   handles), but making its 364 windows in ShowDialog took 4.5-5.2s, none
+   of it in layout; startup "Pages built" 5.0s -> 1.6s but "made ready"
+   (WarmPages) 0.5s -> 7.0s. Making windows under the real window costs
+   far more than parked ones did - cause unknown. b79: `WhereTimeGoes`
+   keeps watching until the window is shown: per control kind, the time
+   from its window being made to the next (what its window set off), the
+   three longest with stacks, and the messages sent meanwhile (WH_CALLWNDPROC).
+   b79 measured: 3.06s of the 3.26s making windows followed the 35
+   drop-downs' own windows, and 51,000 WM_GETTEXT(LENGTH) were sent - each
+   drop-down raises SelectedIndexChanged as its window is made, and the
+   Setup Sheet's handler read EVERY editor into the result. b80: a change
+   reads only its own editor (`EditorChanged`; the diagram redrawn only
+   when the value changed); WarmPages is timed the same way
+   (`WhereTimeGoes.StartOnShownWindow`; on the made-ready line at 1s+),
+   each kind named with its page.
+   b80 measured: 4.2-5.1s. The 51,000 text reads were not the editors -
+   they are StatusLine measures reading caption text through the window
+   (42k measures as it was shown: lines becoming visible one by one, each
+   asking the column - 108 column layouts after Load, which the handle
+   hold never covered). The 3.45s is the drop-downs' windows themselves:
+   ~0.1s per combo, ~50ms on the pages (73 combos, 3.75s of WarmPages'
+   6.1s), not layout and no message frequent enough. b81: the handle hold
+   is gone; StackColumn holds its layout while it comes into view
+   (OnVisibleChanged), laid out once after; WhereTimeGoes also times each
+   message's own handling (WH_CALLWNDPROCRET, exclusive of nested ones).
+   b81 measured: 4.0-4.3s; 'showing' 0.53 -> 0.09 (the visibility hold
+   works); the 3.5s of making windows is window moves - WM_WINDOWPOSCHANGED
+   1.3s, WM_SIZE 1.0s, POSCHANGING 0.55s, WM_MOVE 0.45s, 6,700 of them:
+   each drop-down's height changing as its window is made rippled out
+   through a page laid out live, moving every line under it, windows and
+   all. (Parked early, they had been made while the pieces were held.)
+   b82: SetupEntryForm holds its page (LayoutFreeze.Freeze) from the end of
+   its constructor and lets it go children first (`Thaw(root,
+   childrenFirst: true)`) in OnLoad, before DialogFit sizes it;
+   `DialogFit.FitForLayoutCheck` lets a held page go the same way.
+   b82 measured: 3.3s and 4.1s - holding the page changed little: its
+   layouts in that part came to 0.2s, but 6,200 WM_WINDOWPOSCHANGED (and
+   3,400 WM_SIZE, 4,400 WM_MOVE) still came as the windows were made -
+   ~17 per window, not from the layout. WarmPages 3.5s this run. b83:
+   `WhereTimeGoes` counts windows moved by kind and samples who moves
+   them (every 100th WM_WINDOWPOSCHANGING, with its stack).
+   b83 found it: `Pieces.KeepHeightTold` - a drop-down given a height
+   settles on its own, so each nudge's SizeChanged set off another nudge,
+   nested: ComboBox moved 4,898 times in the Setup Sheet (33 combos) and
+   2,754 in WarmPages. b84: no nudge from inside a nudge; told.Value is
+   the height it settled on.
+   b84 measured: 2.0-2.2s (from 4.0); "made ready" 3.2s. Left: letting
+   go 1.2-1.4s (drop-downs' windows ~0.5s, two layouts of the 54 lines
+   with windows) and DialogFit's first layout 0.6s - a whole second
+   layout, at the size it opens at. b85: DialogFit lets a held page go
+   after sizing the dialog (`DialogFit.LetGo`, in Fit and
+   FitForLayoutCheck), so the Setup Sheet is laid out once, at its real
+   size; it measures the held page's least height without a layout.
    **`LayoutDoctor` is deleted**:
    what it still did lives on in `ScrollTheming` (the themed bars and the
    32px room under a scrolling page, `NoRoomBelow`); MainForm's startup and
@@ -313,7 +385,33 @@ day: the layout overhaul is finished before the beta rather than after it
    finding on ANY page, converted or not. Left: a hardware spike for
    `PerMonitorV2`, then making `--dpi-aware` the default (SystemAware) once
    it has been used on a 150% laptop.
-5. **Move to .NET 10 - before the installer** (Asher, 1 Oct). .NET 8
+5. **Move to .NET 10 - before the installer** (Asher, 1 Oct). **Done in
+   b86 (1 Oct) - needs a green `check.cmd` on the .NET 10 SDK and the next
+   rehearsal.** What was done: both projects on `net10.0-windows`; the
+   three Microsoft packages on 10.0.12 (Sept 2026's patch); CI on
+   `10.0.x`; `layout.cmd` reads `bin\Debug\net10.0-windows\layout`;
+   WFO1000 (a .NET 9 designer analyzer that is an ERROR - every public
+   property of a control must say how the designer saves it; ~65 here)
+   suppressed in both projects with the reason, as nothing is designed in
+   the designer; docs (What you need, Installing and running, FAQ) and a
+   release note. Checked against the .NET 9 and 10 breaking-change lists:
+   no BinaryFormatter, Clipboard.GetData, OnClosing/OnClosed, StatusStrip
+   or System.Drawing OutOfMemoryException catches; drag-and-drop of
+   RoundDrag/DriverDrag is in-process, which never went through
+   BinaryFormatter (only dragging OUT of the process does) - but try a
+   drag on Next Steps' program and in Heat Balance anyway; C# 14's `field`
+   keyword and array `.Reverse()` (now the in-place span one) are not used
+   in a way that changes meaning. Windows 10 Home/Pro is no longer on
+   Microsoft's .NET 10 support list (only Enterprise/IoT LTSC) - the docs
+   say so. First check on .NET 10 (1 Oct): 385 of 386 - the window test
+   failed for Race Format (2 fillings), the welcome wizard's timing step
+   and Set Up Tonight's classes, content past the bottom of a PageStack
+   column. layout-bisect (switches for the three generic speed changes)
+   put it on b78's ScrollDownOnly deferral alone; b87 defers only under a
+   building hold (LayoutFreeze.Building - MainForm's pages, the Setup
+   Sheet), elsewhere switches the bar off at once as before. NU1510: the
+   ProtectedData package is part of the .NET 10 desktop runtime - reference
+   removed. The original plan, for the record: .NET 8
    loses support on **10 Nov 2026** (no more security fixes); .NET 10 is
    the long-term release, supported to Nov 2028. .NET 9 is no use - it
    ends the same day as 8. It goes before the installer because the
@@ -565,8 +663,15 @@ never silent, and a warning at nine tenths. What remains is not code:
 - [ ] Two or three voices whose terms allow this use.
 - [ ] A real monthly allowance - 100,000 characters is a guess; measure a
       rehearsal night.
-- [ ] A way for you to see each club's usage (today it is only in the
-      relay's data and each club's Voice Settings page).
+- [x] A way for you to see each club's usage (1 Oct): `relay\voice-usage.cmd`
+      lists every club - this month, top-up, what is left, the three months
+      before - through `fly ssh console` (`--json` for every month kept);
+      each club's usage file keeps three years of months (`history`); and
+      `relay\voice-topup.cmd <club> <characters>` gives a club more for this
+      month only, picked up by the running relay on its next line. Commands
+      on the machine rather than a web page: no route reads every club.
+- [ ] Billing: plan tiers per club (a club's `voice.monthlyChars`), and
+      invoices from `voice-usage --json`.
 
 ### 8. Terms and privacy
 

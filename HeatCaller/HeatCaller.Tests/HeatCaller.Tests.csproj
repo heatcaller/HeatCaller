@@ -6,13 +6,17 @@
   <PropertyGroup>
     <!-- The same target as the app: it is a Windows Forms app, and the
          tests load it. -->
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>HeatCaller.Tests</RootNamespace>
+
+    <!-- For the reason the app gives (HeatCaller.csproj): the small windows
+         and panels the tests build are never designed in the designer. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

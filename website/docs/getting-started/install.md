@@ -12,14 +12,14 @@ This page covers getting HeatCaller running on a Windows PC: what happens the fi
 You need:
 
 - A Windows 10 or Windows 11 PC (see [What you need](index.md#what-you-need)).
-- The **.NET 8 SDK** from Microsoft. The SDK is what builds the app. The smaller ".NET Runtime" download on its own isn't enough to build from source.
+- The **.NET 10 SDK** from Microsoft. The SDK is what builds the app. The smaller ".NET Runtime" download on its own isn't enough to build from source.
 - An internet connection for the first build. It downloads the libraries HeatCaller uses (NuGet packages). After that, you don't need internet to build or run.
 - A copy of the HeatCaller source folder. It's the folder that contains `HeatCaller.csproj`.
   <!-- TODO: confirm where clubs get the source folder from (download/zip/repository link) -->
 
 ## Install and run
 
-1. Install the .NET 8 SDK from Microsoft's .NET download page. Choose the **SDK** for Windows (x64 on most laptops).
+1. Install the .NET 10 SDK from Microsoft's .NET download page. Choose the **SDK** for Windows (x64 on most laptops).
 2. Copy the HeatCaller source folder somewhere permanent, for example `C:\HeatCaller`.
 3. Open **Command Prompt** or **PowerShell**.
 4. Run this command, with your folder's path in place of `<path>`:
@@ -34,7 +34,7 @@ You need:
 6. The startup screen appears, and then the main window. On the very first start, the **Welcome to HeatCaller** wizard opens too (see below).
 
 !!! tip "A desktop shortcut"
-    After the first build, the program itself is in the project's build output folder, normally `bin\Debug\net8.0-windows\HeatCaller.exe` inside the source folder. You can make a desktop shortcut to that file. Windows shows the program as **HeatCaller** in Task Manager and in the file's properties.
+    After the first build, the program itself is in the project's build output folder, normally `bin\Debug\net10.0-windows\HeatCaller.exe` inside the source folder. You can make a desktop shortcut to that file. Windows shows the program as **HeatCaller** in Task Manager and in the file's properties.
     <!-- TODO: confirm the recommended way for clubs to launch day-to-day (dotnet run vs. shortcut to the built exe, Debug vs. Release) -->
 
 ## The startup screen
@@ -148,7 +148,7 @@ Your data isn't stored in the source folder, so replacing the app doesn't touch 
 3. If you want to remove your data too, delete `%AppData%\HeatCaller`. **This deletes all your drivers, results and settings for good.** Make a backup first if there's any chance you'll want it.
 4. Optionally, delete `Documents\HeatCaller Backups` and `Documents\HeatCaller Results`.
 5. If you set up the phone web server with the one-time `netsh` commands, you can remove that reservation and firewall rule from an admin Command Prompt. See [Local Screens](../screens/phone-and-web.md).
-6. If you don't use .NET for anything else, you can uninstall the .NET 8 SDK from Windows **Settings → Apps**.
+6. If you don't use .NET for anything else, you can uninstall the .NET 10 SDK from Windows **Settings → Apps**.
 
 If your club runs an online relay, uninstalling the app doesn't stop it. See [Hosting the relay](../admin/relay-hosting.md).
 

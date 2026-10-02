@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **HeatCaller now runs on .NET 10.** .NET 8, which it ran on until now, stops getting security fixes from Microsoft on 10 November 2026; .NET 10 is supported until November 2028. If you run HeatCaller from its source folder, install the **.NET 10 SDK** before you next build it (see [Installing and running](getting-started/install.md)). The program is now in `bin\Debug\net10.0-windows`, so a desktop shortcut to the old `net8.0-windows` folder needs pointing at the new one. Nothing else changes: your drivers, results and settings stay where they are.
 - **Race Control fits at every text size.** At a larger text size the flag buttons, **State:** and **Flag:**, the format chip and **Race Format...** no longer run into each other, the buttons under the clock get wider to fit their captions, and the correction buttons under the leaderboard get taller to fit their text. **Flag:** no longer overlaps **None** at the normal size either.
 - **A short window scrolls Race Control instead of squashing it.** The leaderboard always shows its headings and at least three drivers, and the clock column is never cut off at the bottom.
 - **The Session row is part of the Race Control page.** **Name:**, **Track:** and **Round:** are in a card at the top of the page. **Track:** is as wide as your longest track layout name, and **Name:** shows all of its hint. In a narrow window **Round:** moves onto a line of its own instead of cutting a round's name short.
