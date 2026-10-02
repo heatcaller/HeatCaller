@@ -1261,7 +1261,12 @@ public sealed class RaceProgramControl : UserControl
                 .GroupBy(e => e.RoundId, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First().ScheduledTime.Trim(), StringComparer.Ordinal);
 
-        _grid.Columns["due"].Visible = shown.Any(r => due.ContainsKey(r.Id));
+        // Made with the grid, so always there; asked for by name, which
+        // .NET says can come back empty.
+        if (_grid.Columns["due"] is { } dueColumn)
+        {
+            dueColumn.Visible = shown.Any(r => due.ContainsKey(r.Id));
+        }
 
         var position = 1;
 

@@ -147,8 +147,25 @@ public sealed partial class AnnouncementService
         // by the device-startup clipping bug this whole feature was built to
         // fix. Discarding a small slice of decoded audio here - not just
         // padding around it - actually removes it from the stream.
-        var skipBuffer = new byte[(int)(format.AverageBytesPerSecond * DecodeSkipSeconds)];
-        mp3Reader.Read(skipBuffer, 0, skipBuffer.Length);
+        //
+        // Read until that much has gone, or the line has: one Read may hand
+        // back less than was asked for (CA2022), and what it left would be
+        // heard.
+        var skip = (int)(format.AverageBytesPerSecond * DecodeSkipSeconds);
+        var skipBuffer = new byte[Math.Max(1, skip)];
+        var skipped = 0;
+
+        while (skipped < skip)
+        {
+            var read = mp3Reader.Read(skipBuffer, 0, skip - skipped);
+
+            if (read <= 0)
+            {
+                break;
+            }
+
+            skipped += read;
+        }
 
         using var pcm = new MemoryStream();
         var buffer = new byte[format.AverageBytesPerSecond];

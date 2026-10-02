@@ -72,7 +72,7 @@ public sealed class MarshalAssignmentsForm : Form
                         i == 0 ? assignment.Round.RoundLabel : string.Empty,
                         i == 0 ? assignment.MarshalledBy?.RoundLabel ?? "(not assigned)" : string.Empty,
                         post.Name,
-                        post.IsFilled ? post.DriverName : "- UNCOVERED -");
+                        post.IsFilled ? post.DriverName ?? string.Empty : "- UNCOVERED -");
 
                     if (!post.IsFilled)
                     {
