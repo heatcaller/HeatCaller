@@ -28,12 +28,14 @@ The roster is down the left and the driver you pick is beside it.
 
 The driver has six tabs:
 
-- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
+- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), their honours, and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
+  - **Track records** lists each layout whose lap record is theirs now, with the lap and when it was set, and the layouts they've held it on before.
+  - **Badges** shows every badge they've earned as medallions, then the latest twelve with what each was for and when; the rest are on the **Achievements** page.
 - **Garage**: the driver's cars, as cards. See [A driver's garage](#a-drivers-garage).
 - **Transponders**: every transponder the driver has. See [A driver's transponders](#a-drivers-transponders).
 - **Setups**: every setup logged for the driver's cars or under their name, newest first, with the columns **Date**, **Car**, **Track** and **Setup**. Double-click one, or select it and click **Open Car**, to open its car. A setup with no car shows "(no car)"; double-click it, or select it and click **Link to Car**, to pick the car it was for (see [Setups without a car](#setups-without-a-car)).
 - **Batteries**: the driver's battery packs, which one is in the car, the pack each session was run on, and pace by pack. See [A driver's batteries](#a-drivers-batteries).
-- **Stats**: the driver's record — their results, recent form, personal bests, championships and earned badges.
+- **Stats**: the driver's record — their results, recent form, personal bests and championships.
 
 On the **Stats** tab, under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
 

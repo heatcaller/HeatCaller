@@ -114,6 +114,7 @@ public partial class MainForm
             CheckIns = _checkInStore,
             SetupLog = _setupLog,
             ChassisTemplates = _chassisTemplates,
+            TrackLayouts = _trackLayouts,
         };
 
         // A driver's cars, transponders and setups on their own page - the

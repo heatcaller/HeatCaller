@@ -23,6 +23,9 @@ public sealed class DriverStatsSources
 
     /// <summary>The setup sheets, for the names of the fields a setup changed - see DriverStats.RecentActivity.</summary>
     public ChassisTemplateStore? ChassisTemplates { get; init; }
+
+    /// <summary>The track layouts, for the lap records a driver holds.</summary>
+    public TrackLayoutStore? TrackLayouts { get; init; }
 }
 
 /// <summary>
@@ -62,6 +65,10 @@ public sealed class DriverStatsSnapshot
 
     /// <summary>The setup sheets by id, copied out of the store for the field names.</summary>
     public IReadOnlyDictionary<string, ChassisTemplate> SetupSheets { get; init; } = new Dictionary<string, ChassisTemplate>();
+
+    /// <summary>Each layout's lap record as it stands - layout, lap, who it was announced for, when - copied from the live store.</summary>
+    public IReadOnlyList<(string Layout, long LapMs, string Holder, DateTime? SetUtc)> TrackRecords { get; init; } =
+        Array.Empty<(string, long, string, DateTime?)>();
 
     /// <summary>Takes the copy. UI thread only - see the class summary.</summary>
     public static DriverStatsSnapshot Take(DriverStatsSources sources, ProfileStore profiles)
@@ -152,6 +159,13 @@ public sealed class DriverStatsSnapshot
             // sums may be reading these on another thread.
             Setups = (sources.SetupLog?.All ?? Array.Empty<SetupEntry>()).Select(SetupLogStore.CopyOf).ToList(),
             SetupSheets = sheets,
+
+            // Copied as values: the sums may run on another thread, and a
+            // race finishing meanwhile writes a new record into the layout.
+            TrackRecords = (sources.TrackLayouts?.All ?? Array.Empty<TrackLayout>())
+                .Where(t => t.RecordLapMs > 0 && !string.IsNullOrWhiteSpace(t.Name))
+                .Select(t => (t.Name.Trim(), t.RecordLapMs, t.RecordHolderName?.Trim() ?? string.Empty, t.RecordSetUtc))
+                .ToList(),
         };
     }
 }
@@ -168,6 +182,12 @@ public sealed class DriverStatsQuery
     /// <summary>The profile's driver name, trimmed; empty when they have none.</summary>
     public required string DriverName { get; init; }
 }
+
+/// <summary>A badge a driver has earned: which, when, and what it was for ("12 laps", "4.586").</summary>
+public sealed record BadgeLine(AchievementDefinition Badge, DateTime EarnedUtc, string Detail);
+
+/// <summary>A layout whose lap record a driver holds.</summary>
+public sealed record TrackRecordLine(string Layout, long LapMs, DateTime? SetUtc);
 
 /// <summary>A personal best on one track layout.</summary>
 public sealed record PersonalBestLine(string Layout, long LapMs, DateTime SetUtc, string Car);
@@ -303,6 +323,15 @@ public sealed class DriverStats
 
     /// <summary>Their most recently earned badges, newest first.</summary>
     public IReadOnlyList<AchievementDefinition> LatestBadges { get; private set; } = Array.Empty<AchievementDefinition>();
+
+    /// <summary>Every badge they have earned, newest first, with when and what it was for.</summary>
+    public IReadOnlyList<BadgeLine> Badges { get; private set; } = Array.Empty<BadgeLine>();
+
+    /// <summary>The layouts whose lap record is theirs now, quickest first.</summary>
+    public IReadOnlyList<TrackRecordLine> RecordsHeld { get; private set; } = Array.Empty<TrackRecordLine>();
+
+    /// <summary>Layouts they have held the record on and no longer do (from their badges' running totals).</summary>
+    public IReadOnlyList<string> RecordsHeldBefore { get; private set; } = Array.Empty<string>();
 
     /// <summary>Filled on the UI thread once the sums are back - it reads live stores.</summary>
     public RaceDayLine? RaceDay { get; set; }
@@ -557,12 +586,30 @@ public sealed class DriverStats
 
             stats.BadgeCount = earned.Count;
 
-            stats.LatestBadges = earned
+            stats.Badges = earned
                 .OrderByDescending(u => u.UnlockedUtc)
-                .Select(u => AchievementCatalogue.Get(u.Id))
+                .Select(u => AchievementCatalogue.Get(u.Id) is { } badge ? new BadgeLine(badge, u.UnlockedUtc, u.Detail ?? string.Empty) : null)
                 .Where(b => b is not null)
                 .Select(b => b!)
-                .Take(5)
+                .ToList();
+
+            stats.LatestBadges = stats.Badges.Take(5).Select(b => b.Badge).ToList();
+        }
+
+        // --- Track records ---
+        stats.RecordsHeld = RecordsHeldBy(mine, query.DriverName, namesInResults, snapshot);
+
+        if (snapshot.Achievements is not null)
+        {
+            var held = stats.RecordsHeld.Select(r => r.Layout).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            stats.RecordsHeldBefore = snapshot.Achievements.All
+                .Where(d => d.Transponder is { } t && mine.Contains(t.Trim()))
+                .SelectMany(d => d.TrackRecords ?? new List<string>())
+                .Where(layout => !string.IsNullOrWhiteSpace(layout) && !held.Contains(layout.Trim()))
+                .Select(layout => layout.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(layout => layout, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
         }
 
@@ -792,6 +839,68 @@ public sealed class DriverStats
     /// name, every shared non-demo session, practice included, and whoever
     /// finished higher takes it. Ghost cars are never a rival.
     /// </summary>
+    /// <summary>
+    /// The lap records that are this driver's now. A layout's record keeps
+    /// only the holder's name as it was announced, so it is matched by the
+    /// lap itself: one of their (non-demo) results on that layout has the
+    /// record lap as its best. Should somebody else have the very same lap
+    /// there too, the name announced decides - so a tie never makes two
+    /// holders, and a driver renamed since still keeps a record nobody
+    /// else could hold.
+    /// </summary>
+    private static List<TrackRecordLine> RecordsHeldBy(IReadOnlySet<string> mine, string driverName, IReadOnlySet<string> namesInResults, DriverStatsSnapshot snapshot)
+    {
+        var held = new List<TrackRecordLine>();
+
+        foreach (var (layout, lapMs, holder, setUtc) in snapshot.TrackRecords)
+        {
+            var theirs = false;
+            var others = false;
+
+            foreach (var session in snapshot.Sessions)
+            {
+                if (session.IsDemoSession() || !string.Equals(session.TrackLayoutName?.Trim(), layout, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (var result in session.Results)
+                {
+                    if (result.FastLapMs != lapMs)
+                    {
+                        continue;
+                    }
+
+                    if (mine.Contains(result.Transponder?.Trim() ?? string.Empty))
+                    {
+                        theirs = true;
+                    }
+                    else
+                    {
+                        others = true;
+                    }
+                }
+            }
+
+            if (!theirs)
+            {
+                continue;
+            }
+
+            var named = holder.Length > 0
+                        && (string.Equals(holder, driverName, StringComparison.OrdinalIgnoreCase)
+                            || namesInResults.Contains(holder)
+                            || mine.Contains(holder));
+
+            if (named || !others)
+            {
+                held.Add(new TrackRecordLine(layout, lapMs, setUtc));
+            }
+        }
+
+        return held.OrderBy(r => r.LapMs).ThenBy(r => r.Layout, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
     private static RivalLine? TopRival(string driverName, DriverStatsSnapshot snapshot)
     {
         if (string.IsNullOrWhiteSpace(driverName))

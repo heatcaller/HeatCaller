@@ -1130,6 +1130,7 @@ public sealed partial class ProfileManagerControl : UserControl
         {
             RenderOnFile(c, stats, profile);
             RenderRaceDay(c, stats?.RaceDay);
+            RenderHonours(c, stats);
             RenderProfileDetails(c, profile);
 
             if (!string.IsNullOrWhiteSpace(profile.Notes))
@@ -1318,19 +1319,92 @@ public sealed partial class ProfileManagerControl : UserControl
                 AppTheme.SmallFont, AppTheme.TextMuted);
         }
 
-        // --- Badges ---
-        if (stats.BadgeCount > 0)
+        // Badges and track records are on the Profile side - see
+        // RenderHonours.
+    }
+
+    /// <summary>
+    /// What they have won that stays won: the lap records that are theirs
+    /// now (and the layouts they held one on before), and every badge they
+    /// have earned - each badge's medallion, then the list with when and
+    /// what for. On the Profile tab (and on the card itself without tabs),
+    /// since it is part of who they are rather than a running total.
+    /// </summary>
+    private static void RenderHonours(CardCursor c, DriverStats? stats)
+    {
+        if (stats is not { Failed: false })
         {
-            Heading(c, "Badges");
-            Medallions(c, stats.LatestBadges);
-
-            var latest = stats.LatestBadges.Take(3).Select(b => b.Name).ToList();
-
-            Paragraph(c,
-                $"{Plural.Of(stats.BadgeCount, "badge")} earned"
-                + (latest.Count == 0 ? string.Empty : $"  ·  latest: {string.Join(", ", latest)}"),
-                AppTheme.BodyFont, AppTheme.TextDark);
+            return;
         }
+
+        if (stats.RecordsHeld.Count > 0 || stats.RecordsHeldBefore.Count > 0)
+        {
+            Heading(c, stats.RecordsHeld.Count == 1 ? "Track record" : "Track records");
+
+            foreach (var record in stats.RecordsHeld)
+            {
+                KeyValue(c, record.Layout, record.SetUtc is { } set
+                    ? $"{Lap(record.LapMs)}s  ·  {DateWithAge(set)}"
+                    : $"{Lap(record.LapMs)}s",
+                    AppTheme.Success);
+            }
+
+            if (stats.RecordsHeldBefore.Count > 0)
+            {
+                Paragraph(c,
+                    (stats.RecordsHeld.Count == 0 ? "Has held the record on " : "Has also held the record on ")
+                    + string.Join(", ", stats.RecordsHeldBefore) + ".",
+                    AppTheme.BodyFont, AppTheme.TextMuted);
+            }
+        }
+
+        if (stats.Badges.Count > 0)
+        {
+            const int listed = 12;
+
+            Heading(c, $"Badges  ·  {stats.Badges.Count}");
+            MedallionGrid(c, stats.Badges.Select(b => b.Badge).ToList());
+
+            foreach (var line in stats.Badges.Take(listed))
+            {
+                var when = line.EarnedUtc.ToLocalTime().ToString("d MMM yyyy");
+                KeyValue(c, line.Badge.Name, string.IsNullOrWhiteSpace(line.Detail) ? when : $"{line.Detail.Trim()}  ·  {when}");
+            }
+
+            if (stats.Badges.Count > listed)
+            {
+                Paragraph(c, $"...and {stats.Badges.Count - listed} more on the Achievements page.", AppTheme.BodyFont, AppTheme.TextMuted);
+            }
+        }
+    }
+
+    /// <summary>Every badge's medallion, wrapping onto as many rows as it takes.</summary>
+    private static void MedallionGrid(CardCursor c, IReadOnlyList<AchievementDefinition> badges)
+    {
+        if (badges.Count == 0)
+        {
+            return;
+        }
+
+        // Scaled from the body text, so it grows with Ctrl +. The halo
+        // DrawMedallion paints sits four pixels outside the box, hence the
+        // inset and the spacing.
+        var size = AppTheme.BodyFont.GetHeight(c.G) * 2.4f;
+        var step = size + 12f;
+        var perRow = Math.Max(1, (int)((c.Width - 8f + 12f) / step));
+        var rows = (badges.Count + perRow - 1) / perRow;
+
+        if (c.Draw)
+        {
+            for (var i = 0; i < badges.Count; i++)
+            {
+                var x = c.Left + 4f + (i % perRow) * step;
+                var y = c.Y + 4f + (i / perRow) * step;
+                BadgeArt.DrawMedallion(c.G, new RectangleF(x, y, size, size), badges[i], earned: true);
+            }
+        }
+
+        c.Y += rows * step;
     }
 
     /// <summary>
@@ -1795,38 +1869,6 @@ public sealed partial class ProfileManagerControl : UserControl
         var rows = (tiles.Count + columns - 1) / columns;
 
         c.Y += rows * tileHeight + (rows - 1) * gap + 10f;
-    }
-
-    /// <summary>The latest badges as medallions, the same artwork the Achievements page draws.</summary>
-    private static void Medallions(CardCursor c, IReadOnlyList<AchievementDefinition> badges)
-    {
-        if (badges.Count == 0)
-        {
-            return;
-        }
-
-        // Scaled from the body text, so it grows with Ctrl +. The halo
-        // DrawMedallion paints sits four pixels outside the box, hence the
-        // inset and the spacing.
-        var size = AppTheme.BodyFont.GetHeight(c.G) * 2.4f;
-        var x = c.Left + 4f;
-
-        foreach (var badge in badges)
-        {
-            if (x + size > c.Left + c.Width - 4f)
-            {
-                break;
-            }
-
-            if (c.Draw)
-            {
-                BadgeArt.DrawMedallion(c.G, new RectangleF(x, c.Y + 4f, size, size), badge, earned: true);
-            }
-
-            x += size + 12f;
-        }
-
-        c.Y += size + 12f;
     }
 
     /// <summary>A lap time as people say it: seconds to three places.</summary>
