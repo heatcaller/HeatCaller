@@ -9,6 +9,10 @@ namespace HeatCaller;
 /// Only asks; the caller makes the change (MainForm.GiveTransponderTo), so
 /// it can take its undo step.
 ///
+/// The same window transfers a transponder a driver already has to another
+/// driver (TransponderTransferring.Run): given the driver it comes from, it
+/// leaves them off the list and words itself as a transfer.
+///
 /// On the layout pieces (DialogFit): the question at the top, the search
 /// and the drivers taking the height, the choices under them and the
 /// buttons at the foot.
@@ -21,6 +25,9 @@ internal sealed class BelongsToForm : Form
     private readonly string _transponder;
     private readonly ProfileStore _profiles;
     private readonly CarStore _cars;
+
+    /// <summary>For a transfer: the driver it comes from (main transponder), left off the list. Null for a transponder nobody has.</summary>
+    private readonly string? _fromDriver;
 
     private readonly TextBox _txtFind = new();
     private readonly ListBox _lstDrivers = new();
@@ -40,13 +47,14 @@ internal sealed class BelongsToForm : Form
     /// <summary>The driver's transponder it replaces, to be retired, or empty. Set on OK.</summary>
     public string Replaces { get; private set; } = string.Empty;
 
-    public BelongsToForm(string transponder, string whatItDid, ProfileStore profiles, CarStore cars)
+    public BelongsToForm(string transponder, string whatItDid, ProfileStore profiles, CarStore cars, string? fromDriver = null)
     {
         _transponder = transponder;
         _profiles = profiles;
         _cars = cars;
+        _fromDriver = string.IsNullOrWhiteSpace(fromDriver) ? null : fromDriver.Trim();
 
-        Text = $"Who is on transponder {transponder}?";
+        Text = _fromDriver is null ? $"Who is on transponder {transponder}?" : $"Transfer transponder {transponder}";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
@@ -89,7 +97,7 @@ internal sealed class BelongsToForm : Form
         _cmbReplaces.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbReplaces.SelectedIndexChanged += (_, _) => UpdateOutcome();
 
-        _btnGive.Text = "Give to Driver";
+        _btnGive.Text = GiveCaption(null);
         _btnGive.Click += (_, _) => Give();
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
@@ -152,6 +160,7 @@ internal sealed class BelongsToForm : Form
         bool Has(string? value) => !string.IsNullOrEmpty(value) && value.Contains(find, StringComparison.OrdinalIgnoreCase);
 
         var matches = _profiles.All
+            .Where(p => _fromDriver is null || !string.Equals(p.Transponder, _fromDriver, StringComparison.OrdinalIgnoreCase))
             .Where(p => find.Length == 0
                         || Has(p.DriverName) || Has(p.AnnouncerName) || Has(p.RaceNumber)
                         || p.AllTransponderIds.Any(Has))
@@ -223,7 +232,7 @@ internal sealed class BelongsToForm : Form
         _cmbReplaces.SelectedIndex = 0;
 
         _btnGive.Enabled = profile is not null;
-        _btnGive.Text = profile is null ? "Give to Driver" : $"Give {_transponder} to {NameOf(profile)}";
+        _btnGive.Text = GiveCaption(profile);
 
         UpdateOutcome();
     }
@@ -242,8 +251,16 @@ internal sealed class BelongsToForm : Form
         var replaces = (_cmbReplaces.SelectedItem as Item)?.Value ?? string.Empty;
         var retire = replaces.Length > 0 ? $" {replaces} is retired." : string.Empty;
 
-        _lblOutcome.Text = $"Laps timed on {_transponder} will count for {NameOf(profile)}.{retire}";
+        _lblOutcome.Text = _fromDriver is null
+            ? $"Laps timed on {_transponder} will count for {NameOf(profile)}.{retire}"
+            : $"{_transponder} becomes {NameOf(profile)}'s, and their laps on it count for them. Races already run stay with whoever ran them.{retire}";
     }
+
+    /// <summary>The button's caption: Give for a transponder nobody has, Transfer for one somebody does.</summary>
+    private string GiveCaption(DriverProfile? profile) =>
+        _fromDriver is null
+            ? profile is null ? "Give to Driver" : $"Give {_transponder} to {NameOf(profile)}"
+            : profile is null ? "Transfer" : $"Transfer {_transponder} to {NameOf(profile)}";
 
     private void Give()
     {

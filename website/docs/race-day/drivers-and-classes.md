@@ -71,9 +71,22 @@ The list shows each transponder the driver has, which car it's **Fitted to** (or
 - **Fitted to:** sets which of the driver's cars the selected transponder is in.
 - **Add Transponder** adds another one: a second car's, a spare or a replacement.
 - **Retire** marks the selected one as no longer used. It stays the driver's, and so does everything timed on it. **Bring Back** puts it back in use.
+- **Transfer** gives the selected one to another driver for good: sold, given or swapped. See [Transfer a transponder](#transfer-a-transponder).
 - **Remove** takes a transponder off the driver altogether; laps already timed on it no longer count as theirs. The main transponder can't be removed.
 
 Each change is saved straight away, and Undo takes it back. A transponder that's already another driver's is refused, with a "Transponder already in use" message naming them.
+
+### Transfer a transponder
+
+When a transponder changes hands for good, transfer it. A transponder that goes with a car is moved when the car is [transferred](#transfer-a-car), so this is for one on its own.
+
+1. On the old owner's **Transponders** tab, select it and click **Transfer**.
+2. Pick who gets it. Type in **Find:** to narrow the list.
+3. Under **Where is it?**, pick **In one of their cars:** and the car, or **Their own transponder - it moves between cars**.
+4. If it replaces one of theirs, pick it in **It replaces:**. That one is retired: it stays theirs, and so does everything timed on it.
+5. Click **Transfer *number* to *name***.
+
+It leaves the old owner's list and joins the new owner's, in use. Laps timed on it from then on count for the new owner; races already run stay with whoever ran them. A driver's main transponder can't be transferred, because their results, check-ins and badges are filed under it. Undo puts it back with the old owner.
 
 ### A driver's batteries
 

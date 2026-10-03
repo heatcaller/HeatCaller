@@ -5,8 +5,8 @@ namespace HeatCaller;
 /// <summary>
 /// One driver's transponders, on their page (Driver Hub): the main one
 /// and every other, which car each is fitted to, and which are retired -
-/// with Add, Fitted To, Retire / Bring Back and Remove, each saved at once
-/// with its own Undo step.
+/// with Add, Fitted To, Retire / Bring Back, Transfer and Remove, each
+/// saved at once with its own Undo step.
 ///
 /// The same changes the profile form's Transponders line makes, without
 /// opening the form; the rules are the store's (DescribeClash), so a
@@ -22,6 +22,9 @@ internal sealed class DriverTransponderPanel : UserControl
     private readonly ComboBox _cmbFitted = new();
     private readonly Button _btnAdd = new() { Text = "Add Transponder..." };
     private readonly Button _btnRetire = new() { Text = "Retire" };
+
+    /// <summary>Gives the picked transponder to another driver for good (TransponderTransferring) - not the main one, which is their key.</summary>
+    private readonly Button _btnTransfer = new() { Text = "Transfer..." };
     private readonly Button _btnRemove = new() { Text = "Remove" };
     private readonly Label _lblHint = new() { AutoSize = true };
 
@@ -60,6 +63,7 @@ internal sealed class DriverTransponderPanel : UserControl
 
         _btnAdd.Click += (_, _) => AddTransponder();
         _btnRetire.Click += (_, _) => ToggleRetired();
+        _btnTransfer.Click += (_, _) => TransferTransponder();
         _btnRemove.Click += (_, _) => RemoveTransponder();
 
         _lblHint.Text = "A retired transponder is no longer in use, but it is still theirs - and so is everything timed on it.";
@@ -70,7 +74,7 @@ internal sealed class DriverTransponderPanel : UserControl
         var page = new FillPage();
         page.AddFill(_list, _ => UiLayout.AtTextSize(120), gapBelow: UiLayout.RowGap);
         page.Add(fitted, gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(_btnAdd, _btnRetire, _btnRemove), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(_btnAdd, _btnRetire, _btnTransfer, _btnRemove), gapBelow: UiLayout.RowGap);
         page.Add(_lblHint, gapBelow: 0);
 
         Controls.Add(page);
@@ -163,6 +167,7 @@ internal sealed class DriverTransponderPanel : UserControl
         _btnRetire.Enabled = row is not null;
         _btnRetire.Text = row is { Retired: true } ? "Bring Back" : "Retire";
         _btnRemove.Enabled = row is { IsMain: false };
+        _btnTransfer.Enabled = row is { IsMain: false };
 
         _filling = true;
 
@@ -353,6 +358,21 @@ internal sealed class DriverTransponderPanel : UserControl
         Change($"Remove transponder {row.Id} from {NameOf(profile)}",
             p => p.Transponders.RemoveAll(t => string.Equals(t.Id?.Trim(), row.Id, StringComparison.OrdinalIgnoreCase)),
             keep: null);
+    }
+
+    /// <summary>Transfer: the picked transponder to another driver for good, with one Undo step for both.</summary>
+    private void TransferTransponder()
+    {
+        if (Picked() is not { IsMain: false } row || Driver() is not { } profile)
+        {
+            return;
+        }
+
+        if (TransponderTransferring.Run(this, row.Id, profile, _profiles, _cars, _undo))
+        {
+            Fill(keep: null);
+            Changed?.Invoke();
+        }
     }
 
     /// <summary>The fitted-to drop-down changed: which car the picked transponder is in.</summary>
