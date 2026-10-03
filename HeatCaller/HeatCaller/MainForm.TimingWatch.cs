@@ -78,8 +78,12 @@ public partial class MainForm
             racing = situation.Racing;
             problem = _timingWatch.Check(situation, WatchClock());
 
-            // The line's problems first: they're about laps. The split
-            // loop's only show while the line is fine.
+            // The line's problems first: they're about laps. That includes
+            // the decoder being off before the green - a heat staged with
+            // it unplugged is the moment to say so, not a lap into the
+            // race. The split loop's only show while the line is fine.
+            problem ??= TimingWatch.DecoderOffBeforeTheGreen(_race.State, _race.IsDemoMode, situation.DecoderConnected);
+
             problem ??= SplitLoopProblem(situation);
         }
         catch (Exception ex)

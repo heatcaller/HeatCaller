@@ -100,7 +100,7 @@ Every line the decoder sends appears in the console as `[ilap raw] ...`, and eve
 
 Things to know about I-Lap:
 
-- **Transponder numbers** are read as a run of 3 to 8 digits, with any leading zeros removed.
+- **Transponder numbers** are read from the I-Lap's passing record. It comes in two forms: a long one, which is the decoder's number, then the transponder, then the decoder's time, and a short one such as `@040000070442`, where the two digits after the @ are the transponder (here, 4). Leading zeros are removed. A line in any other shape is read for its first run of 3 to 8 digits. Status messages from the decoder, and the clock it sends every second, are never counted as laps. The first clock reading after you connect shows in the console as "[ilap] The decoder is talking...". If nothing at all arrives in the first 5 seconds, the console says so.
 - **Lap times** are measured by the laptop, at the moment each line arrives from the decoder.
 - **Repeated reads** of the same transponder within 0.8 seconds are treated as one pass. The console shows "[ilap] Suppressed repeat of ...".
 - **Signal strength** isn't available from I-Lap, so the pre-race check never marks an I-Lap transponder as weak. See [Transponders](transponders.md#the-pre-race-check).
@@ -114,8 +114,6 @@ While connected, HeatCaller writes every line the I-Lap decoder sends to a file 
 - Each day's file is capped at 20 MB. If it reaches that, capture stops for the day and the console says "Raw capture file reached 20 MB - capture stopped; timing is unaffected." That usually means the decoder is sending garbage, for example because of a wrong baud rate.
 
 See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder location.
-
-<!-- TODO: confirm how thoroughly I-Lap support has been tested against real hardware; the code says the parser was written to be tolerant ahead of bench testing -->
 
 ## A split loop
 

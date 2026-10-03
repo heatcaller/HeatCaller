@@ -78,6 +78,15 @@ public sealed class ILapClient : IDisposable
     /// </summary>
     private const int DuplicateWindowMs = 800;
 
+    /// <summary>How long a connection may hear nothing before the console says so, once.</summary>
+    private static readonly TimeSpan NothingReceivedWarning = TimeSpan.FromSeconds(5);
+
+    /// <summary>Set while a reader thread should keep going; cleared first thing on disconnect.</summary>
+    private volatile bool _reading;
+
+    /// <summary>Whether this connection has reported the decoder's clock yet - once is enough for the console.</summary>
+    private bool _sawClockTick; // guarded by _lineLock
+
     public event Action<DecoderConnectionState, string>? StatusChanged;
     public event Action<string>? RawMessage;
     public event Action<DirectLapEvent>? LapEventReceived;
@@ -119,6 +128,13 @@ public sealed class ILapClient : IDisposable
             {
                 ReadTimeout = 1000,
                 NewLine = "\n",
+                // Asserted, as a terminal program does. Off by default in
+                // .NET, and a USB serial device commonly stays silent until
+                // the host raises DTR - on 3 Oct 2026 the I-Lap sent nothing
+                // at all to a port opened without it, though the same
+                // decoder had streamed passes the night before.
+                DtrEnable = true,
+                RtsEnable = true,
                 Encoding = Encoding.ASCII,
             };
             _port.Open();
@@ -180,11 +196,76 @@ public sealed class ILapClient : IDisposable
             _lineBuffer.Clear();
         }
 
+        _sawClockTick = false;
+
+        // Read on a thread of our own, polling as a terminal does, rather
+        // than waiting on SerialPort.DataReceived. On 3 Oct 2026 the I-Lap
+        // streamed to a PowerShell loop calling ReadExisting on this very
+        // port while HeatCaller, waiting on the event, captured nothing at
+        // all from it. Polling every 20ms is well inside one character's
+        // worth of club-racing precision and does not depend on the USB
+        // serial driver raising the event.
         var port = _port;
-        port.DataReceived += (_, _) => DrainPort(port);
+        _reading = true;
+        new Thread(() => ReadLoop(port, portName))
+        {
+            IsBackground = true,
+            Name = "I-Lap reader",
+        }.Start();
 
         SetState(DecoderConnectionState.Connected,
             $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
+    }
+
+    /// <summary>
+    /// The reader thread: drains the port while this connection is the
+    /// current one, and says once if the decoder sends nothing at all.
+    /// </summary>
+    private void ReadLoop(SerialPort port, string portName)
+    {
+        var quiet = System.Diagnostics.Stopwatch.StartNew();
+        var anything = false;
+        var warned = false;
+
+        while (_reading && ReferenceEquals(_port, port))
+        {
+            int waiting;
+
+            try
+            {
+                waiting = port.IsOpen ? port.BytesToRead : 0;
+            }
+            catch (Exception ex)
+            {
+                if (_reading && ReferenceEquals(_port, port) && State == DecoderConnectionState.Connected)
+                {
+                    SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
+                }
+
+                return;
+            }
+
+            if (waiting > 0)
+            {
+                anything = true;
+
+                if (!DrainPort(port))
+                {
+                    return;
+                }
+
+                continue;
+            }
+
+            if (!anything && !warned && quiet.Elapsed > NothingReceivedWarning)
+            {
+                warned = true;
+                Log($"[ilap] Nothing at all has come from {portName} in {NothingReceivedWarning.TotalSeconds:0} seconds. " +
+                    "A working I-Lap sends its clock every second, so check this is the I-Lap's port and that nothing else has it open.");
+            }
+
+            Thread.Sleep(20);
+        }
     }
 
     /// <summary>
@@ -193,7 +274,7 @@ public sealed class ILapClient : IDisposable
     /// CR, LF, or CRLF all count, because the terminator is one of the
     /// things not being assumed about this device.
     /// </summary>
-    private void DrainPort(SerialPort port)
+    private bool DrainPort(SerialPort port)
     {
         try
         {
@@ -227,11 +308,15 @@ public sealed class ILapClient : IDisposable
         }
         catch (Exception ex)
         {
-            if (State == DecoderConnectionState.Connected)
+            if (_reading && ReferenceEquals(_port, port) && State == DecoderConnectionState.Connected)
             {
                 SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
             }
+
+            return false;
         }
+
+        return true;
     }
 
     /// <summary>
@@ -250,6 +335,22 @@ public sealed class ILapClient : IDisposable
     private void FeedLineLocked(string line)
     {
         Capture(line);
+
+        // The decoder's clock, sent every second ("@00000124" is 1:24 since
+        // it started). It goes in the capture file but not, every second,
+        // into the console - the first one is reported, since it proves the
+        // decoder is talking.
+        if (IsILapClockTick(line))
+        {
+            if (!_sawClockTick)
+            {
+                _sawClockTick = true;
+                Log($"[ilap] The decoder is talking - its clock reads {line.Trim().TrimStart('\u0001')}. Waiting for cars.");
+            }
+
+            return;
+        }
+
         Log($"[ilap raw] {line}");
 
         if (ParseLine(line) is { } lap)
@@ -281,7 +382,38 @@ public sealed class ILapClient : IDisposable
     /// </summary>
     private DirectLapEvent? ParseLine(string line)
     {
-        var cleaned = line.Trim().TrimStart('@', '%', '$', '#', '*', '>');
+        // The I-Lap's real passing record, read off the bench on 2 Oct 2026:
+        //   SOH '@' TAB decoder TAB transponder TAB seconds CR LF
+        //   e.g. "\u0001@\t210\t4385919\t344.699"
+        // The tolerant reading below took the FIRST run of 3-8 digits, which
+        // here is the decoder's own number (210) - so every car came in as
+        // transponder "210" and matched no driver. A line of this shape is
+        // now read by position; anything else still falls through to the
+        // tolerant reading.
+        if (TryParseILapPassing(line) is { } transponder)
+        {
+            return new DirectLapEvent
+            {
+                TransponderId = transponder,
+                DeviceTimeMs = (uint)TimingClock.NowMs,
+                SignalHits = 0,
+                SignalStrength = 0,
+            };
+        }
+
+        var trimmed = line.Trim().TrimStart('\u0001');
+
+        // Anything else from the I-Lap - its once-a-second clock
+        // ("@00000124"), or a framed status or heartbeat record - carries
+        // numbers too, and the tolerant reading would happily take one for
+        // a car: the clock would have been a phantom lap every second. Only
+        // the tab-separated passing record above is a pass.
+        if (trimmed.StartsWith('@') || line.TrimStart().StartsWith('\u0001'))
+        {
+            return null;
+        }
+
+        var cleaned = trimmed.TrimStart('@', '%', '$', '#', '*', '>');
 
         if (cleaned.Length == 0)
         {
@@ -313,6 +445,63 @@ public sealed class ILapClient : IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The transponder from an I-Lap passing record - the long form
+    /// ("\u0001@\tdecoder\ttransponder\tseconds") or the short one ("@TTHHMMSScc42"),
+    /// or null when the line is not one. Leading zeros are dropped, as in the tolerant reading.
+    /// </summary>
+    internal static string? TryParseILapPassing(string line)
+    {
+        var trimmed = line.Trim().TrimStart('\u0001');
+
+        if (!trimmed.StartsWith('@'))
+        {
+            return null;
+        }
+
+        // The short form, sent once the decoder has been reset by the port
+        // opening (3 Oct 2026, beside its once-a-second clock):
+        //   "@040000070442" = '@', transponder 04, then 00:00:07.04 on the
+        //   decoder's clock, then 42.
+        // Two digits of transponder: 04 is read as "4". The time is not used
+        // - laps are timed on receipt, like every other I-Lap line.
+        if (trimmed.Length == 13 && trimmed.Skip(1).All(char.IsAsciiDigit))
+        {
+            var shortId = trimmed.Substring(1, 2).TrimStart('0');
+            return shortId.Length > 0 ? shortId : "0";
+        }
+
+        var fields = trimmed.Split('\t', StringSplitOptions.TrimEntries);
+
+        // '@', decoder, transponder, time - the time is not needed, but a
+        // record cut short before it is still a pass worth counting.
+        if (fields.Length < 3 || fields[0] != "@")
+        {
+            return null;
+        }
+
+        var id = fields[2];
+
+        if (id.Length is < 1 or > 10 || !id.All(char.IsAsciiDigit))
+        {
+            return null;
+        }
+
+        var stripped = id.TrimStart('0');
+        return stripped.Length > 0 ? stripped : id;
+    }
+
+    /// <summary>
+    /// The I-Lap's once-a-second clock: '@' then exactly eight digits, e.g.
+    /// "@00000124" - minutes and seconds since the decoder started. Eight
+    /// exactly: a passing in the short form is '@' and twelve digits.
+    /// </summary>
+    internal static bool IsILapClockTick(string line)
+    {
+        var trimmed = line.Trim().TrimStart('\u0001');
+        return trimmed.Length == 9 && trimmed[0] == '@' && trimmed.Skip(1).All(char.IsAsciiDigit);
     }
 
     private void Capture(string line)
@@ -394,6 +583,10 @@ public sealed class ILapClient : IDisposable
 
     public void Disconnect()
     {
+        // First, so the reader thread stops before the port goes away
+        // under it and does not report that as a read failure.
+        _reading = false;
+
         if (_port is not null)
         {
             try

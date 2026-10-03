@@ -330,7 +330,9 @@ internal sealed class CarTransferForm : Form
 
     private readonly TextBox _txtFind = new();
     private readonly ListBox _lstTo = new();
-    private readonly CheckedListBox _lstTransponders = new();
+    // The app's own list, like every other checked list: its tick boxes, and
+    // a drag down it ticking or unticking each row it passes.
+    private readonly CheckedListBox _lstTransponders = new ThemedCheckedListBox();
     private readonly Label _lblOutcome = new() { AutoSize = true };
     private readonly Button _btnTransfer = new();
 

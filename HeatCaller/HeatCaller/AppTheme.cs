@@ -3316,6 +3316,10 @@ public static class AppTheme
                     break;
                 case ListView listView:
                     StyleListView(listView);
+
+                    // Click and drag down it to select a run of rows, when
+                    // it can hold more than one. See DragSelect.
+                    DragSelect.Attach(listView);
                     break;
                 case TabControl tabControl:
                     tabControl.BackColor = Background;

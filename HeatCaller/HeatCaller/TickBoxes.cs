@@ -684,6 +684,120 @@ internal class ThemedRadioButton : RadioButton
 /// </summary>
 internal class ThemedCheckedListBox : CheckedListBox
 {
+    /// <summary>The row a press landed on, while a drag from it may tick others; -1 when none.</summary>
+    private int _sweepFrom = -1;
+
+    /// <summary>What a drag from <see cref="_sweepFrom"/> sets every row it passes to: the opposite of how that first row was.</summary>
+    private CheckState _sweepTo;
+
+    /// <summary>The last row the drag reached, so a fast flick fills in the rows it skipped.</summary>
+    private int _sweepAt = -1;
+
+    /// <summary>Every row this drag has set - set again on release, in case Windows' own click handling toggled one back.</summary>
+    private readonly HashSet<int> _swept = new();
+
+    /// <summary>
+    /// Notes where a press lands and how that row was BEFORE Windows' own
+    /// handling of the press ticks or unticks it - only here, ahead of
+    /// base.WndProc, is that still knowable.
+    /// </summary>
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_LBUTTONDOWN = 0x0201;
+
+        if (m.Msg == WM_LBUTTONDOWN)
+        {
+            _swept.Clear();
+            _sweepFrom = -1;
+            _sweepAt = -1;
+
+            if (CheckOnClick && Enabled)
+            {
+                var lParam = m.LParam.ToInt64();
+                var index = IndexFromPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
+
+                if (index >= 0 && index < Items.Count)
+                {
+                    _sweepFrom = index;
+                    _sweepAt = index;
+                    _sweepTo = GetItemCheckState(index) == CheckState.Checked ? CheckState.Unchecked : CheckState.Checked;
+                }
+            }
+        }
+
+        base.WndProc(ref m);
+    }
+
+    /// <summary>
+    /// Click and drag down the list to tick - or untick - every row the
+    /// pointer passes, the checked list's version of dragging out a
+    /// selection (see DragSelect). Each row is set to the opposite of how
+    /// the first one was, so a drag that starts on a ticked row unticks.
+    /// Nothing happens until the pointer reaches another row, so an
+    /// ordinary click is exactly what it always was.
+    /// </summary>
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+
+        if (_sweepFrom < 0 || (e.Button & MouseButtons.Left) == 0 || _sweepFrom >= Items.Count)
+        {
+            return;
+        }
+
+        // Held to the list's edge: past the top or bottom it reads the row
+        // at the edge, as Windows scrolls the list under it.
+        var x = Math.Clamp(e.X, 0, Math.Max(0, ClientSize.Width - 1));
+        var y = Math.Clamp(e.Y, 0, Math.Max(0, ClientSize.Height - 1));
+        var index = IndexFromPoint(x, y);
+
+        if (index < 0 || index >= Items.Count || (index == _sweepFrom && _swept.Count == 0) || index == _sweepAt)
+        {
+            return;
+        }
+
+        _swept.Add(_sweepFrom);
+
+        var step = index > _sweepAt ? 1 : -1;
+
+        for (var i = _sweepAt; i != index + step; i += step)
+        {
+            _swept.Add(i);
+        }
+
+        _sweepAt = index;
+
+        SetSwept();
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+
+        // Set once more: Windows ticks on the press and again as the
+        // picked row moves, and whatever it toggled in passing is put back.
+        if (_swept.Count > 0)
+        {
+            SetSwept();
+        }
+
+        _swept.Clear();
+        _sweepFrom = -1;
+        _sweepAt = -1;
+    }
+
+    /// <summary>Every swept row to the sweep's state - only those not already in it, so ItemCheck is raised once per real change.</summary>
+    private void SetSwept()
+    {
+        foreach (var i in _swept)
+        {
+            if (i >= 0 && i < Items.Count && GetItemCheckState(i) != _sweepTo)
+            {
+                SetItemCheckState(i, _sweepTo);
+            }
+        }
+    }
+
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         // Windows asks for a row with no item when the list is empty and has

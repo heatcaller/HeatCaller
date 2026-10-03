@@ -91,6 +91,13 @@ public sealed class RaceProgramControl : UserControl
     // which is also what tells the paint handler to draw no line.
     private Point _pressAt;
     private int _pressRow = -1;
+
+    /// <summary>
+    /// The rows selected while no mouse button is down - what the selection
+    /// was just BEFORE a press, whichever order the grid's own handling of
+    /// the press and the MouseDown event come in. See EnableDragReorder.
+    /// </summary>
+    private HashSet<int> _selectedAtRest = new();
     private int _dropBefore = -1;
     private int _dropY;
 
@@ -2574,10 +2581,24 @@ public sealed class RaceProgramControl : UserControl
     /// for the pointer to travel past the system's drag threshold, so that
     /// an ordinary click still selects a row and a double-click still
     /// starts the round - both of which a drag-on-press would eat.
+    ///
+    /// Only a drag that starts on a row already selected moves anything. A
+    /// drag that starts on any other row is left to the grid, which sweeps
+    /// the selection down the rows it passes, as every list in the app
+    /// does (see DragSelect) - so: drag to select a run of rounds, then
+    /// drag them to where they go.
     /// </summary>
     private void EnableDragReorder()
     {
         _grid.AllowDrop = true;
+
+        _grid.SelectionChanged += (_, _) =>
+        {
+            if ((Control.MouseButtons & MouseButtons.Left) == 0)
+            {
+                _selectedAtRest = _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index).ToHashSet();
+            }
+        };
 
         _grid.MouseDown += (_, e) =>
         {
@@ -2587,7 +2608,10 @@ public sealed class RaceProgramControl : UserControl
                 return;
             }
 
-            _pressRow = _grid.HitTest(e.X, e.Y).RowIndex;
+            var pressed = _grid.HitTest(e.X, e.Y).RowIndex;
+
+            // Not a selected row: the grid's own drag-to-select has it.
+            _pressRow = _selectedAtRest.Contains(pressed) ? pressed : -1;
             _pressAt = e.Location;
         };
 
@@ -2618,13 +2642,12 @@ public sealed class RaceProgramControl : UserControl
                 return;
             }
 
-            // Dragging a row that is not in the selection moves THAT row.
-            // Anything else means a drag can quietly move rounds that are
-            // nowhere near the pointer.
+            // Only a row that was in the selection gets here (see the press
+            // above), but a Ctrl-click can have taken it out since. Moving
+            // the rest would move rounds nowhere near the pointer.
             if (!_grid.Rows[row].Selected)
             {
-                _grid.ClearSelection();
-                _grid.Rows[row].Selected = true;
+                return;
             }
 
             var ids = _grid.SelectedRows
@@ -2643,7 +2666,14 @@ public sealed class RaceProgramControl : UserControl
             _grid.DoDragDrop(new RoundDrag(ids), DragDropEffects.Move);
         };
 
-        _grid.MouseUp += (_, _) => _pressRow = -1;
+        _grid.MouseUp += (_, _) =>
+        {
+            _pressRow = -1;
+
+            // The sweep just made is the selection at rest now. Raised after
+            // the button is up, which SelectionChanged during the sweep was not.
+            _selectedAtRest = _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index).ToHashSet();
+        };
 
         _grid.DragOver += (_, e) =>
         {

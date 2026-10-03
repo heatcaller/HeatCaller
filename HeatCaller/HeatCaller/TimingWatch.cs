@@ -82,6 +82,29 @@ internal sealed class TimingWatch
     /// <summary>When each car was first expected in this spell of racing - its release, in a held or staggered start. Cleared when racing stops.</summary>
     private readonly Dictionary<string, DateTime> _expectedSinceUtc = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The decoder is off while a session is on its way or under way but
+    /// <see cref="Check"/> isn't looking: a heat staged or counting down,
+    /// a race nobody has been released into yet, a red flag, practice.
+    /// Rehearsal 4 staged a qualifier with the EasyLap unplugged and the
+    /// first word of it came after the green - by then the start was lost.
+    /// Not in a demo, whose laps are made up and need no decoder, and not
+    /// when nothing is on (Idle, Finished): setting up with the decoder in
+    /// its box is normal.
+    /// </summary>
+    internal static Problem? DecoderOffBeforeTheGreen(RaceState state, bool demo, bool decoderConnected)
+    {
+        if (decoderConnected || demo || state is RaceState.Idle or RaceState.Finished)
+        {
+            return null;
+        }
+
+        return new Problem("decoder-off",
+            state is RaceState.Staging or RaceState.Countdown
+                ? "The decoder isn't connected - laps won't be counted. Connect it before the green, on the Connection page."
+                : "The decoder isn't connected - no laps are being counted. Connect it on the Connection page.");
+    }
+
     /// <summary>The decoder has just connected. Any thread.</summary>
     public void DecoderConnected(DateTime utc) => Interlocked.Exchange(ref _connectedTicks, utc.Ticks);
 
