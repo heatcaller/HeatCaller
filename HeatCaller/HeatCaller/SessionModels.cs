@@ -197,6 +197,20 @@ public sealed class SessionRecord
     public bool RecordsIncidents { get; set; }
 
     /// <summary>
+    /// How the laps were cut into sectors when the session was run - the
+    /// layout's <see cref="TrackLayout.CutFor"/> - so best sectors from
+    /// nights with the split loops in different places are never mixed.
+    /// Null for a session without sectors, or saved before this existed.
+    /// </summary>
+    public string? SectorCut { get; set; }
+
+    /// <summary>The cut a lap of these sectors had: <see cref="SectorCut"/> when it is for that many sectors, otherwise just the count.</summary>
+    public string SectorCutOf(long[] sectors) =>
+        TrackLayout.CountOfCut(SectorCut) == sectors.Length
+            ? SectorCut!
+            : sectors.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
     /// A simulated race from Demo Mode, kept only because "Save demo races
     /// to history" was ticked.
     ///

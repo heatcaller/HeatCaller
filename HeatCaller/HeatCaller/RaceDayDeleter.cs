@@ -46,6 +46,7 @@ internal static class RaceDayDeleter
         List<string> SessionIds,
         List<SessionRecord> Sessions,
         List<TrackLayout> RecordTracks,
+        List<TrackLayout> SectorRecordTracks,
         List<Season> Seasons,
         int BadgeCount);
 
@@ -97,7 +98,9 @@ internal static class RaceDayDeleter
 
             // Distinct: one track's record can only be cleared once, however
             // many of these nights could have set it.
-            gathered.SelectMany(g => g.RecordTracks).Select(t => t.Id).Distinct(StringComparer.Ordinal).Count(),
+            // A layout with only a sector record from these nights counts
+            // too: "Clear records" is what takes it away.
+            gathered.SelectMany(g => g.RecordTracks.Concat(g.SectorRecordTracks)).Select(t => t.Id).Distinct(StringComparer.Ordinal).Count(),
             gathered.SelectMany(g => g.Seasons).Select(s => s.Id).Distinct(StringComparer.Ordinal).Count(),
             gathered.Sum(g => g.BadgeCount));
 
@@ -149,7 +152,7 @@ internal static class RaceDayDeleter
             new DeleteRaceDayForm.Counts(
                 gathered.Rounds.Count,
                 gathered.Sessions.Count,
-                gathered.RecordTracks.Count,
+                gathered.RecordTracks.Concat(gathered.SectorRecordTracks).Select(t => t.Id).Distinct(StringComparer.Ordinal).Count(),
                 gathered.Seasons.Count,
                 gathered.BadgeCount));
 
@@ -245,6 +248,7 @@ internal static class RaceDayDeleter
             .ToList();
 
         var recordTracks = TracksWithRecordsFrom(layouts, sessions);
+        var sectorRecordTracks = SectorRecordsFrom(layouts, sessions);
 
         var seasons = seasonStore.All
             .Where(s => s.IncludedSessionIds.Any(id => sessionIds.Contains(id, StringComparer.Ordinal)))
@@ -253,7 +257,7 @@ internal static class RaceDayDeleter
         var badgeCount = achievements.All
             .Sum(d => d.Unlocked.Count(u => u.SessionId is { } id && sessionIds.Contains(id, StringComparer.Ordinal)));
 
-        return new Gathered(day, rounds, sessionIds, sessions, recordTracks, seasons, badgeCount);
+        return new Gathered(day, rounds, sessionIds, sessions, recordTracks, sectorRecordTracks, seasons, badgeCount);
     }
 
     /// <summary>
@@ -297,9 +301,19 @@ internal static class RaceDayDeleter
         // which was Id and nothing else.
         var recordsBefore = clearRecords
             ? recordTracks
-                .Select(t => (Id: t.Id, Ms: t.RecordLapMs, Holder: t.RecordHolderName, SetUtc: t.RecordSetUtc))
+                .Select(t => (Id: t.Id, Ms: t.RecordLapMs, Holder: t.RecordHolderName, SetUtc: t.RecordSetUtc, Sectors: t.RecordSectorsMs?.ToList()))
                 .ToList()
-            : new List<(string Id, long Ms, string Holder, DateTime? SetUtc)>();
+            : new List<(string Id, long Ms, string Holder, DateTime? SetUtc, List<long>? Sectors)>();
+
+        // The sector records these sessions set (TrackLayout.SectorRecordsByCut):
+        // a record whose holder ran exactly that time through that sector in
+        // one of them goes with them, and the undo puts it back - each under
+        // the cut it was set for.
+        var sectorRecordsBefore = clearRecords
+            ? SectorRecordsFrom(layouts, sessions)
+                .Select(t => (Id: t.Id, Records: t.SectorRecordsCopy() ?? new Dictionary<string, List<SectorRecord>>()))
+                .ToList()
+            : new List<(string Id, Dictionary<string, List<SectorRecord>> Records)>();
 
         var seasonsBefore = clearSeasons
             ? seasons.Select(s => (s.Id, Ids: s.IncludedSessionIds.ToList())).ToList()
@@ -379,6 +393,20 @@ internal static class RaceDayDeleter
                 track.RecordLapMs = record.Ms;
                 track.RecordHolderName = record.Holder;
                 track.RecordSetUtc = record.SetUtc;
+                track.RecordSectorsMs = record.Sectors?.ToList();
+                layouts.Upsert(track);
+            }
+
+            // Sector records back as they were - only over a sector that
+            // has no record now, or a slower one than was taken away.
+            foreach (var (id, taken) in sectorRecordsBefore)
+            {
+                if (layouts.Get(id) is not { } track)
+                {
+                    continue;
+                }
+
+                track.RestoreSectorRecords(taken);
                 layouts.Upsert(track);
             }
 
@@ -483,6 +511,23 @@ internal static class RaceDayDeleter
                 track.RecordLapMs = 0;
                 track.RecordHolderName = string.Empty;
                 track.RecordSetUtc = null;
+                track.RecordSectorsMs = null;
+                layouts.Upsert(track);
+            }
+
+            foreach (var track in SectorRecordsFrom(layouts, sessions))
+            {
+                foreach (var (cut, list) in track.SectorRecordsByCut!.ToList())
+                {
+                    var count = TrackLayout.CountOfCut(cut);
+                    list?.RemoveAll(r => r is null || SetIn(sessions, track, count, r));
+
+                    if (list is not { Count: > 0 })
+                    {
+                        track.SectorRecordsByCut.Remove(cut);
+                    }
+                }
+
                 layouts.Upsert(track);
             }
         }
@@ -543,6 +588,25 @@ internal static class RaceDayDeleter
                                     StringComparison.OrdinalIgnoreCase))))
             .ToList();
     }
+
+    /// <summary>The layouts with a sector record set in one of these sessions - see SetIn.</summary>
+    private static List<TrackLayout> SectorRecordsFrom(TrackLayoutStore layouts, IReadOnlyCollection<SessionRecord> sessions) =>
+        sessions.Count == 0
+            ? new List<TrackLayout>()
+            : layouts.All.Where(t => t.AllSectorRecords().Any(x => SetIn(sessions, t, x.Count, x.Record))).ToList();
+
+    /// <summary>
+    /// Whether the holder of this sector record, kept for laps of
+    /// <paramref name="count"/> sectors, ran exactly that time through that
+    /// sector on such a lap in one of these sessions, on this layout.
+    /// </summary>
+    private static bool SetIn(IReadOnlyCollection<SessionRecord> sessions, TrackLayout track, int count, SectorRecord record) =>
+        record.Sector >= 1 && record.Sector <= count
+        && sessions.Any(s => RanOn(s, track) && s.Results.Any(r =>
+            string.Equals((r.DriverName ?? string.Empty).Trim(), (record.Holder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
+            && Enumerable.Range(0, r.LapTimesMs.Count).Any(i => r.SectorsOf(i) is { } sectors
+                                                                && sectors.Length == count
+                                                                && sectors[record.Sector - 1] == record.Ms)));
 
     /// <summary>
     /// Whether this session could have set that layout's record - it named

@@ -577,6 +577,9 @@ public sealed class TrackLayoutManagerControl : UserControl
         // --- The layouts ---
         _list.View = View.Details;
         _list.FullRowSelect = true;
+
+        // Who holds each sector record shows on hover - see RefreshList.
+        _list.ShowItemToolTips = true;
         _list.MultiSelect = false;
         _list.GridLines = true;
         _list.Columns.Add("Name");
@@ -669,9 +672,25 @@ public sealed class TrackLayoutManagerControl : UserControl
         foreach (var t in _store.All)
         {
             var item = new ListViewItem(t.Name) { Tag = t.Id };
+            // The sector records after the lap record, for the way the lap is
+            // cut now - hover for who holds each.
+            var sectorRecords = t.HasSectorRecords()
+                ? t.CurrentSectorRecords().Where(r => r is not null).Select(r => r!).ToList()
+                : new List<SectorRecord>();
+
+            var sectors = sectorRecords.Count == 0
+                ? string.Empty
+                : "  ·  " + string.Join(", ", sectorRecords.Select(r => $"S{r.Sector} {Sectors.Format(r.Ms)}"));
+
             item.SubItems.Add(t.RecordLapMs > 0
-                ? $"{t.RecordLapMs / 1000.0:0.000}s - {t.RecordHolderName}"
-                : "(none yet)");
+                ? $"{t.RecordLapMs / 1000.0:0.000}s - {t.RecordHolderName}{sectors}"
+                : sectorRecords.Count > 0 ? "(none yet)" + sectors : "(none yet)");
+
+            if (sectorRecords.Count > 0)
+            {
+                item.ToolTipText = string.Join(Environment.NewLine,
+                    sectorRecords.Select(r => $"Sector {r.Sector} record: {Sectors.Format(r.Ms)} by {r.Holder}{(r.SetUtc is { } set ? $", {set.ToLocalTime():d MMM yyyy}" : string.Empty)}"));
+            }
             item.SubItems.Add(string.IsNullOrWhiteSpace(t.AttachmentFileName) ? "-" : t.AttachmentFileName);
 
             item.SubItems.Add(t.Design is { IsEmpty: false } design
@@ -997,13 +1016,19 @@ public sealed class TrackLayoutManagerControl : UserControl
 
         var id = (string)_list.SelectedItems[0].Tag!;
         var track = _store.Get(id);
-        if (track is null || track.RecordLapMs == 0)
+        var hasSectorRecords = track?.HasSectorRecords() == true;
+
+        if (track is null || (track.RecordLapMs == 0 && !hasSectorRecords))
         {
             return;
         }
 
+        var what = track.RecordLapMs > 0
+            ? $"the all-time record ({track.RecordLapMs / 1000.0:0.000}s by {track.RecordHolderName})"
+            : "the sector records";
+
         var confirm = AppDialog.Show(this,
-            $"Clear the all-time record ({track.RecordLapMs / 1000.0:0.000}s by {track.RecordHolderName}) for '{track.Name}'? " +
+            $"Clear {what} for '{track.Name}'?{(hasSectorRecords && track.RecordLapMs > 0 ? " Its sector records are cleared too." : string.Empty)} " +
             "Useful if the track's physical layout has changed since it was set.",
             "Reset track record", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
@@ -1017,6 +1042,9 @@ public sealed class TrackLayoutManagerControl : UserControl
         var oldMs = track.RecordLapMs;
         var oldHolder = track.RecordHolderName;
         var oldSet = track.RecordSetUtc;
+        var oldRecordSectors = track.RecordSectorsMs?.ToList();
+        var oldSectorRecords = track.SectorRecordsCopy();
+        var oldLatestCut = track.LatestSectorCut;
         var trackId = track.Id;
 
         // Store only - the host refreshes this page after an undo.
@@ -1029,6 +1057,13 @@ public sealed class TrackLayoutManagerControl : UserControl
                 restoreTarget.RecordLapMs = oldMs;
                 restoreTarget.RecordHolderName = oldHolder;
                 restoreTarget.RecordSetUtc = oldSet;
+                restoreTarget.RecordSectorsMs = oldRecordSectors;
+
+                // Sector records merged back, not put over: a heat run
+                // since the reset can have set some, and they stand unless
+                // one taken away was quicker.
+                restoreTarget.RestoreSectorRecords(oldSectorRecords);
+                restoreTarget.LatestSectorCut ??= oldLatestCut;
                 store.Upsert(restoreTarget);
             }
         });
@@ -1036,6 +1071,9 @@ public sealed class TrackLayoutManagerControl : UserControl
         track.RecordLapMs = 0;
         track.RecordHolderName = string.Empty;
         track.RecordSetUtc = null;
+        track.RecordSectorsMs = null;
+        track.SectorRecordsByCut = null;
+        track.LatestSectorCut = null;
         _store.Upsert(track);
         RefreshList();
     }

@@ -24,7 +24,7 @@ Corrections made on the **Race Control** board after the checkered flag change t
 
 ## Race History
 
-The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Warnings**, plus **Handicap Pos** when the class uses handicaps. **Warnings** shows "-", the number of warnings a driver was given in the race (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag; hover over it to see each warning.
+The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Warnings**, plus **Handicap Pos** when the class uses handicaps, and **Best Sectors** and **Ideal Lap** when the session was run with a [split loop](../timing/decoders.md#a-split-loop). **Warnings** shows "-", the number of warnings a driver was given in the race (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag; hover over it to see each warning.
 
 A saved demo race shows **Demo** as its type, and its detail title reads "Demo race (not scored)".
 
@@ -77,8 +77,8 @@ The card saved automatically at the end of a race uses the app's own on-screen s
 
 1. Choose a **Format:**:
     - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status. **Status** is the driver's result status, for example DNF or DQ after a correction.
-    - **Lap CSV - one row per lap**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, LapNumber, LapSeconds, CumulativeSeconds. Lap 1 is the start lap, which runs from the green to the car's first crossing.
-    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races. Each result has a `status`, and an `outcome` of `DNF` or `DQ` when a correction set one (`null` otherwise).
+    - **Lap CSV - one row per lap**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, LapNumber, LapSeconds, CumulativeSeconds. Lap 1 is the start lap, which runs from the green to the car's first crossing. When any exported lap has sector times, there's also a column for each sector, S1Seconds, S2Seconds and so on, empty for a lap without them.
+    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races. Each result has a `status`, and an `outcome` of `DNF` or `DQ` when a correction set one (`null` otherwise). With a split loop, each result also has `sectorTimesSeconds`: each lap's sectors, in step with its lap times (`null` for a lap without them, or for the whole result when it has none).
 2. Under **Sessions**, choose **Selected only** or **All recorded sessions**.
 3. Press **Export** and choose where to save the file.
 

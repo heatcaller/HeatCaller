@@ -1476,6 +1476,10 @@ public partial class MainForm
                     car = r.CarModel,
                     laps = r.Laps,
                     fastLapMs = r.FastLapMs,
+
+                    // Their best through each sector, with a split loop -
+                    // null without, which the page shows as nothing.
+                    sectorsMs = Sectors.Bests(r),
                     elapsedMs = r.ElapsedMs,
 
                     // "active" is what this app calls a driver who simply

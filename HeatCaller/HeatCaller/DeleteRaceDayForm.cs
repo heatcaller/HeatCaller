@@ -58,7 +58,7 @@ public sealed class DeleteRaceDayForm : Form
     /// <summary>What a day's delete would touch, counted before anything is asked.</summary>
     /// <param name="Rounds">Heats and finals on the day. Always removed - see the dialog's own wording.</param>
     /// <param name="Sessions">Saved races in Race History.</param>
-    /// <param name="Records">Track records whose lap was set in one of those races.</param>
+    /// <param name="Records">Tracks with a record - the lap record or a sector record - set in one of those races.</param>
     /// <param name="Seasons">Championships that named one of those races by hand.</param>
     /// <param name="Badges">Badges earned in those races.</param>
     public readonly record struct Counts(int Rounds, int Sessions, int Records, int Seasons, int Badges);

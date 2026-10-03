@@ -45,6 +45,7 @@ public partial class RaceControlControl
         {
             CallFastestSector(standing, sectors);
             KeepLateRecordSectors(standing, lapIndex, sectors);
+            KeepSectorRecords(standing, lapIndex, sectors);
         }
         catch (Exception ex)
         {
@@ -234,6 +235,53 @@ public partial class RaceControlControl
 
         track.RecordSectorsMs = sectors.ToList();
         _trackLayouts.Upsert(track);
+    }
+
+    /// <summary>
+    /// The layout's sector records (TrackLayout.SectorRecordsByCut): any sector
+    /// of a race lap quicker than anyone has ever gone through it. The same
+    /// drivers and the same doubts as the lap record - no practice, demo,
+    /// ghost, rental or excluded driver, and nothing from a lap that would
+    /// not be believed as a lap (IsPlausibleRecord) - nor a sector a quarter
+    /// quicker than it usually takes tonight (Sectors.Typical).
+    /// </summary>
+    private void KeepSectorRecords(RacerStanding standing, int lapIndex, long[] sectors)
+    {
+        if (_race.IsPracticeMode || _race.IsDemoMode
+            || lapIndex < 0 || lapIndex >= standing.LapTimesMs.Count
+            || GhostService.IsGhost(standing.TransponderId)
+            || _profiles.Get(standing.TransponderId) is { ExcludeFromRecords: true } or { IsRental: true })
+        {
+            return;
+        }
+
+        var trackName = SelectedTrackName();
+
+        if (string.IsNullOrWhiteSpace(trackName)
+            || _trackLayouts.All.FirstOrDefault(t => t.Name == trackName) is not { } track
+            || !IsPlausibleRecord(standing.LapTimesMs[lapIndex], standing.TransponderId, track, out _))
+        {
+            return;
+        }
+
+        var name = _profiles.Get(standing.TransponderId)?.DriverName;
+        var holder = string.IsNullOrWhiteSpace(name) ? standing.TransponderId : name.Trim();
+        var before = System.Text.Json.JsonSerializer.Serialize(track.SectorRecordsByCut);
+        var cutBefore = track.LatestSectorCut;
+
+        var beaten = track.OfferSectors(sectors, holder, DateTime.UtcNow, Sectors.Typical(_race.GetOrderedStandings(), sectors.Length));
+
+        if (before == System.Text.Json.JsonSerializer.Serialize(track.SectorRecordsByCut) && cutBefore == track.LatestSectorCut)
+        {
+            return;
+        }
+
+        _trackLayouts.Upsert(track);
+
+        foreach (var sector in beaten)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] Sector {sector} record on {track.Name}: {holder}, {Sectors.Format(sectors[sector - 1])}.");
+        }
     }
 
     /// <summary>The sectors of the lap that just took the track record, to keep with it - or null without them.</summary>

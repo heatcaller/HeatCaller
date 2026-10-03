@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Sector records and best sectors.** Each track layout keeps a record for each sector, the quickest anyone has gone through it in a race. They're shown in **Track Layouts**, on the holder's **Profile** tab and on the online **Tracks** page, and they belong to where the split loops are: move a loop on the plan and the records set with it are put aside until it goes back. A driver's **Stats** tab lists their best sectors and ideal lap on each layout. **Race History** shows **Best Sectors** and **Ideal Lap** for a session run with a split loop, and the online results show each driver's best sectors. The lap CSV and JSON exports include sector times. **Reset Record** clears the sector records too, and deleting a race day takes back any record set in it. See [Track Layouts](race-day/drivers-and-classes.md#track-layouts).
+
 - **Split loops on the track plan, sector speeds and a speed trap.** The Track Designer has **Split 1 loop**, **Split 2 loop** and **Split 3 loop** markings. With the racing line drawn through them, **The lap** lists each sector's length, and Race Control shows **S1 mph**, **S2 mph** and **Top Speed** columns. With the split loop a few feet past the line, that's a speed trap. See [Split times](timing/decoders.md#split-times).
 - **Split calls for the announcer.** **Fastest sector**, **Up at the split** and **Record pace at the split** are on **Voice → Announcements**, all off by default, with new {sector}, {sectortime}, {split} and {gap} placeholders. A new track record set with a split loop now keeps its sector times.
 

@@ -120,6 +120,42 @@ public static class Sectors
     }
 
     /// <summary>
+    /// What each sector usually takes this session: the median of every
+    /// lap's time through it, over the cars cut into <paramref name="count"/>
+    /// sectors (ghosts and start laps left out) - or null with fewer than
+    /// three such laps, too few to say what is usual. A misread can't move
+    /// a median the way it moves a best.
+    /// </summary>
+    public static long[]? Typical(IEnumerable<RacerStanding> standings, int count)
+    {
+        if (count < 2)
+        {
+            return null;
+        }
+
+        var laps = standings
+            .Where(s => !GhostService.IsGhost(s.TransponderId))
+            .SelectMany(s => LapsOf(s).Where(l => l.Lap > 0).Select(l => l.Sectors))
+            .Where(sectors => sectors.Length == count)
+            .ToList();
+
+        if (laps.Count < 3)
+        {
+            return null;
+        }
+
+        var typical = new long[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            var sorted = laps.Select(l => l[i]).OrderBy(ms => ms).ToList();
+            typical[i] = sorted[sorted.Count / 2];
+        }
+
+        return typical;
+    }
+
+    /// <summary>
     /// The live gap at the split loop the car crossed last on the lap in
     /// progress: how far it is up (negative) or down on its own best lap's
     /// time to that point. The best lap's own sectors when it has them,
@@ -186,6 +222,42 @@ public static class Sectors
 
         return null;
     }
+
+    /// <summary>
+    /// A saved result's best time through each sector - from its laps with
+    /// sectors (not the start lap), cut the way its last such lap is - or null.
+    /// </summary>
+    public static long[]? Bests(SessionResultEntry result)
+    {
+        var laps = Enumerable.Range(1, Math.Max(0, result.LapTimesMs.Count - 1))
+            .Select(result.SectorsOf)
+            .Where(sectors => sectors is not null)
+            .Select(sectors => sectors!)
+            .ToList();
+
+        if (laps.Count == 0)
+        {
+            return null;
+        }
+
+        var count = laps[^1].Length;
+        long[]? best = null;
+
+        foreach (var sectors in laps.Where(s => s.Length == count))
+        {
+            best ??= sectors.ToArray();
+
+            for (var i = 0; i < count; i++)
+            {
+                best[i] = Math.Min(best[i], sectors[i]);
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Sector times on one line: "3.41 / 6.02".</summary>
+    public static string Line(long[] sectors) => string.Join(" / ", sectors.Select(Format));
 
     /// <summary>A sector time on the board: seconds to the hundredth - the split loop's clock tie is good to about that, not to the thousandth.</summary>
     public static string Format(long ms) => ms > 0 ? (ms / 1000.0).ToString("0.00") : "-";

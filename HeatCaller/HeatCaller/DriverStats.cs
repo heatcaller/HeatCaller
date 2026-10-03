@@ -70,6 +70,10 @@ public sealed class DriverStatsSnapshot
     public IReadOnlyList<(string Layout, long LapMs, string Holder, DateTime? SetUtc)> TrackRecords { get; init; } =
         Array.Empty<(string, long, string, DateTime?)>();
 
+    /// <summary>Each layout's sector records as they stand now - layout, sector (from 1), time, holder - copied from the live store.</summary>
+    public IReadOnlyList<(string Layout, int Sector, long Ms, string Holder)> SectorRecords { get; init; } =
+        Array.Empty<(string, int, long, string)>();
+
     /// <summary>Takes the copy. UI thread only - see the class summary.</summary>
     public static DriverStatsSnapshot Take(DriverStatsSources sources, ProfileStore profiles)
     {
@@ -166,6 +170,14 @@ public sealed class DriverStatsSnapshot
                 .Where(t => t.RecordLapMs > 0 && !string.IsNullOrWhiteSpace(t.Name))
                 .Select(t => (t.Name.Trim(), t.RecordLapMs, t.RecordHolderName?.Trim() ?? string.Empty, t.RecordSetUtc))
                 .ToList(),
+
+            // Only those for the way each lap is cut now.
+            SectorRecords = (sources.TrackLayouts?.All ?? Array.Empty<TrackLayout>())
+                .Where(t => t.HasSectorRecords() && !string.IsNullOrWhiteSpace(t.Name))
+                .SelectMany(t => t.CurrentSectorRecords()
+                    .Where(r => r is not null)
+                    .Select(r => (t.Name.Trim(), r!.Sector, r.Ms, r.Holder?.Trim() ?? string.Empty)))
+                .ToList(),
         };
     }
 }
@@ -191,6 +203,12 @@ public sealed record TrackRecordLine(string Layout, long LapMs, DateTime? SetUtc
 
 /// <summary>A personal best on one track layout.</summary>
 public sealed record PersonalBestLine(string Layout, long LapMs, DateTime SetUtc, string Car);
+
+/// <summary>A driver's best time through each sector of a layout, and those added up - their ideal lap there.</summary>
+public sealed record SectorBestLine(string Layout, long[] Sectors, long IdealMs);
+
+/// <summary>A sector record of a layout that is theirs now.</summary>
+public sealed record SectorRecordLine(string Layout, int Sector, long Ms);
 
 /// <summary>Where a driver stands in one championship.</summary>
 public sealed record ChampionshipLine(string Season, int Position, int FieldSize, int Points, int Wins);
@@ -327,6 +345,12 @@ public sealed class DriverStats
     /// <summary>Every badge they have earned, newest first, with when and what it was for.</summary>
     public IReadOnlyList<BadgeLine> Badges { get; private set; } = Array.Empty<BadgeLine>();
 
+    /// <summary>Their best through each sector, layout by layout - from laps run with a split loop. Newest layout first.</summary>
+    public IReadOnlyList<SectorBestLine> BestSectors { get; private set; } = Array.Empty<SectorBestLine>();
+
+    /// <summary>The sector records that are theirs now.</summary>
+    public IReadOnlyList<SectorRecordLine> SectorRecordsHeld { get; private set; } = Array.Empty<SectorRecordLine>();
+
     /// <summary>The layouts whose lap record is theirs now, quickest first.</summary>
     public IReadOnlyList<TrackRecordLine> RecordsHeld { get; private set; } = Array.Empty<TrackRecordLine>();
 
@@ -383,6 +407,9 @@ public sealed class DriverStats
         // and a practice run on one evening is one day at the track.
         var daysOnTrack = new HashSet<DateTime>();
 
+        // Laps with sector times: layout, when, sectors.
+        var sectorLaps = new List<(string Layout, DateTime StartedUtc, int Lap, string Cut, long[] Sectors)>();
+
         foreach (var session in snapshot.Sessions)
         {
             if (session.IsDemoSession())
@@ -408,6 +435,19 @@ public sealed class DriverStats
                     && !string.IsNullOrWhiteSpace(session.TrackLayoutName))
                 {
                     stats._lapCandidates.Add((session.TrackLayoutName, result.DriverName, result.FastLapMs, session.StartedAtUtc, result.CarModel));
+                }
+
+                // Their laps with sectors, by layout - the start lap
+                // (index 0) is not a lap of the circuit.
+                if (!string.IsNullOrWhiteSpace(session.TrackLayoutName) && result.SectorTimesMs is not null)
+                {
+                    for (var i = 1; i < result.LapTimesMs.Count; i++)
+                    {
+                        if (result.SectorsOf(i) is { } sectors)
+                        {
+                            sectorLaps.Add((session.TrackLayoutName.Trim(), session.StartedAtUtc, i, session.SectorCutOf(sectors), sectors));
+                        }
+                    }
                 }
 
                 // One row per driver per session. An older session can hold
@@ -598,6 +638,49 @@ public sealed class DriverStats
 
         // --- Track records ---
         stats.RecordsHeld = RecordsHeldBy(mine, query.DriverName, namesInResults, snapshot);
+
+        // Best sectors per layout, cut the way their latest laps there are:
+        // the split loops can move between nights, and sectors from loops
+        // in other places measure other stretches of track.
+        stats.BestSectors = sectorLaps
+            .GroupBy(l => l.Layout, StringComparer.OrdinalIgnoreCase)
+            .Select(layout =>
+            {
+                // The latest lap: the newest session, and its last lap.
+                var latest = layout.OrderByDescending(l => l.StartedUtc).ThenByDescending(l => l.Lap).First();
+                var cut = latest.Sectors.Length;
+                long[]? best = null;
+
+                foreach (var (_, _, _, _, sectors) in layout.Where(l => l.Sectors.Length == cut && string.Equals(l.Cut, latest.Cut, StringComparison.Ordinal)))
+                {
+                    best ??= sectors.ToArray();
+
+                    for (var i = 0; i < cut; i++)
+                    {
+                        best[i] = Math.Min(best[i], sectors[i]);
+                    }
+                }
+
+                return (Layout: layout.Key, Newest: layout.Max(l => l.StartedUtc), Best: best!);
+            })
+            .OrderByDescending(l => l.Newest)
+            .Select(l => new SectorBestLine(l.Layout, l.Best, l.Best.Sum()))
+            .ToList();
+
+        // Sector records announced under a name they race as.
+        var asNames = new HashSet<string>(namesInResults, StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(query.DriverName))
+        {
+            asNames.Add(query.DriverName.Trim());
+        }
+
+        stats.SectorRecordsHeld = snapshot.SectorRecords
+            .Where(r => asNames.Contains(r.Holder))
+            .Select(r => new SectorRecordLine(r.Layout, r.Sector, r.Ms))
+            .OrderBy(r => r.Layout, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(r => r.Sector)
+            .ToList();
 
         if (snapshot.Achievements is not null)
         {

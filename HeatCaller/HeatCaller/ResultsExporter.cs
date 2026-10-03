@@ -102,7 +102,20 @@ public static class ResultsExporter
         RoundDefinitionStore? rounds, ProfileStore profiles)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Driver,Transponder,LapNumber,LapSeconds,CumulativeSeconds");
+
+        // A column for each sector, after the lap's own - as many as the
+        // most finely cut lap in the export, so no reader has to cope with
+        // rows of different widths. Empty for a lap without sectors. None
+        // at all when nothing was run with a split loop, so the file is
+        // exactly what it always was.
+        var sectorColumns = sessions
+            .SelectMany(s => s.Results)
+            .SelectMany(r => Enumerable.Range(0, r.LapTimesMs.Count).Select(i => r.SectorsOf(i)?.Length ?? 0))
+            .DefaultIfEmpty(0)
+            .Max();
+
+        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Driver,Transponder,LapNumber,LapSeconds,CumulativeSeconds"
+                      + string.Concat(Enumerable.Range(1, sectorColumns).Select(n => $",S{n}Seconds")));
 
         foreach (var session in sessions.OrderBy(s => s.StartedAtUtc))
         {
@@ -117,6 +130,8 @@ public static class ResultsExporter
                 {
                     cumulative += result.LapTimesMs[lap];
 
+                    var sectors = result.SectorsOf(lap);
+
                     sb.AppendLine(string.Join(",", new[]
                     {
                         Csv(local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
@@ -129,7 +144,7 @@ public static class ResultsExporter
                         (lap + 1).ToString(CultureInfo.InvariantCulture),
                         Seconds(result.LapTimesMs[lap]),
                         Seconds(cumulative),
-                    }));
+                    }.Concat(Enumerable.Range(0, sectorColumns).Select(i => sectors is not null && i < sectors.Length ? Seconds(sectors[i]) : string.Empty))));
                 }
             }
         }
@@ -167,6 +182,12 @@ public static class ResultsExporter
                     totalTimeSeconds = r.ElapsedMs / 1000.0,
                     bestLapSeconds = r.FastLapMs > 0 ? r.FastLapMs / 1000.0 : (double?)null,
                     lapTimesSeconds = r.LapTimesMs.Select(l => l / 1000.0).ToList(),
+
+                    // Each lap's sectors, in step with lapTimesSeconds - null
+                    // for a lap without them - or null when no lap had any.
+                    sectorTimesSeconds = Enumerable.Range(0, r.LapTimesMs.Count).Any(i => r.SectorsOf(i) is not null)
+                        ? Enumerable.Range(0, r.LapTimesMs.Count).Select(i => r.SectorsOf(i)?.Select(ms => ms / 1000.0).ToList()).ToList()
+                        : null,
 
                     // What the race recorded ("active" for an ordinary run),
                     // and the outcome a correction set - "DNF", "DQ", or

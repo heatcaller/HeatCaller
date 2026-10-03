@@ -128,7 +128,12 @@ public sealed class RaceHistoryControl : UserControl
             new DataGridViewTextBoxColumn { Name = "laps", HeaderText = "Laps", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "fast", HeaderText = "Fastest Lap", FillWeight = 70 },
             new DataGridViewTextBoxColumn { Name = "adj", HeaderText = "Handicap Pos", FillWeight = 70 },
-            new DataGridViewTextBoxColumn { Name = "warn", HeaderText = "Warnings", FillWeight = 55 }
+            new DataGridViewTextBoxColumn { Name = "warn", HeaderText = "Warnings", FillWeight = 55 },
+
+            // With a split loop: their best through each sector, and those
+            // added up - shown only for a session that has sectors.
+            new DataGridViewTextBoxColumn { Name = "sectors", HeaderText = "Best Sectors", FillWeight = 90 },
+            new DataGridViewTextBoxColumn { Name = "ideal", HeaderText = "Ideal Lap", FillWeight = 60 }
         );
 
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
@@ -288,6 +293,10 @@ public sealed class RaceHistoryControl : UserControl
 
         _detailGrid.Columns["adj"]!.Visible = adjusted is not null;
 
+        var hasSectors = session.Results.Any(r => Sectors.Bests(r) is not null);
+        _detailGrid.Columns["sectors"]!.Visible = hasSectors;
+        _detailGrid.Columns["ideal"]!.Visible = hasSectors;
+
         foreach (var r in session.Results.OrderBy(r => r.Position))
         {
             var adj = adjusted is not null && adjusted.TryGetValue(r.Transponder, out var a) ? a : null;
@@ -307,7 +316,9 @@ public sealed class RaceHistoryControl : UserControl
                 r.Laps,
                 r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}s" : "-",
                 adjText,
-                WarningsText(r));
+                WarningsText(r),
+                Sectors.Bests(r) is { } bests ? Sectors.Line(bests) : "-",
+                Sectors.Bests(r) is { } forIdeal ? $"{Sectors.Format(forIdeal.Sum())}s" : "-");
 
             // Hover for what each warning was for.
             if (r.Warnings.Count > 0)

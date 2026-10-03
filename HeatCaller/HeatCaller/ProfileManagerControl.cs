@@ -1294,6 +1294,20 @@ public sealed partial class ProfileManagerControl : UserControl
             }
         }
 
+        // --- Best sectors, one line per layout run with a split loop ---
+        if (stats.BestSectors.Count > 0)
+        {
+            const int shown = 6;
+
+            Heading(c, "Best sectors");
+
+            foreach (var line in stats.BestSectors.Take(shown))
+            {
+                var sectors = string.Join("  ", line.Sectors.Select((ms, i) => $"S{i + 1} {Sectors.Format(ms)}"));
+                KeyValue(c, line.Layout, $"{sectors}  ·  ideal {Sectors.Format(line.IdealMs)}");
+            }
+        }
+
         // --- Championships ---
         if (stats.Championships.Count > 0)
         {
@@ -1355,6 +1369,19 @@ public sealed partial class ProfileManagerControl : UserControl
                     (stats.RecordsHeld.Count == 0 ? "Has held the record on " : "Has also held the record on ")
                     + string.Join(", ", stats.RecordsHeldBefore) + ".",
                     AppTheme.BodyFont, AppTheme.TextMuted);
+            }
+        }
+
+        // Sector records - the quickest anyone has gone through a sector.
+        if (stats.SectorRecordsHeld.Count > 0)
+        {
+            Heading(c, stats.SectorRecordsHeld.Count == 1 ? "Sector record" : "Sector records");
+
+            foreach (var layout in stats.SectorRecordsHeld.GroupBy(r => r.Layout))
+            {
+                KeyValue(c, layout.Key,
+                    string.Join("  ", layout.Select(r => $"S{r.Sector} {Sectors.Format(r.Ms)}")),
+                    AppTheme.Success);
             }
         }
 

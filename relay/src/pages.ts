@@ -98,6 +98,7 @@ thead th { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.06em;
 .card thead th { border-top: none; }
 tbody tr:nth-child(odd) { background: var(--row-alt); }
 td.n, th.n { text-align: right; }
+.sec { display: block; font-size: 0.75em; color: var(--muted); white-space: nowrap; }
 td.pos { color: var(--muted); width: 2.5rem; }
 tbody tr:first-child td.pos { color: var(--primary); font-weight: 700; }
 td.e-good { color: var(--good); }
@@ -372,6 +373,13 @@ const stamp = document.getElementById('stamp');
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
+
+// A lap's sector times from a split loop, "S1 3.41 · S2 6.02" - or
+// nothing, for a club without one or a document from before them.
+function sectors(list) {
+  if (!Array.isArray(list) || list.length < 2 || !list.every((ms) => typeof ms === 'number' && ms > 0)) return '';
+  return list.map((ms, i) => 'S' + (i + 1) + ' ' + (ms / 1000).toFixed(2)).join(' \u00b7 ');
+}
 
 function lap(ms) {
   if (typeof ms !== 'number' || ms <= 0) return '-';
@@ -854,7 +862,7 @@ function rows(results) {
       <td>\${nm(r.name)}</td>
       <td class="car">\${esc(r.car || '')}</td>
       <td class="n">\${esc(r.laps ?? '-')}</td>
-      <td class="n">\${lap(r.fastLapMs)}</td>
+      <td class="n">\${lap(r.fastLapMs)}\${sectors(r.sectorsMs) ? '<span class="sec">' + esc(sectors(r.sectorsMs)) + '</span>' : ''}</td>
       <td class="n">\${esc(r.status) || clock(r.elapsedMs)}</td>
     </tr>\`).join('') + '</tbody>';
 }
@@ -2770,6 +2778,9 @@ function card(t, current) {
       stat('Set', rec ? esc(day(rec.setUtc)) : '') +
       stat('Length', t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '') +
       stat('Typical lap', t.averageLapSeconds > 0 ? esc(Number(t.averageLapSeconds).toFixed(1)) + 's' : '') +
+      stat('Sector records', Array.isArray(t.sectorRecords) && t.sectorRecords.length > 0
+        ? t.sectorRecords.map((r) => esc('S' + r.sector + ' ' + (Number(r.ms) / 1000).toFixed(2)) + (r.holder ? ' ' + nm(r.holder) : '')).join(' &middot; ')
+        : '') +
     '</div>' + (rec === null && best.length === 0 ? '<p class="when">No laps recorded here yet.</p>' : '') + '</div>' +
     (best.length === 0 ? '' : '<table><thead><tr><th class="pos">#</th><th>Driver</th>' +
       '<th class="n">Best lap</th><th class="n opt">Set</th></tr></thead><tbody>' +

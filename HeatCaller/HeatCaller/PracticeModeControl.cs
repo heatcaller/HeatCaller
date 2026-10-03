@@ -1318,6 +1318,10 @@ public sealed class PracticeModeControl : UserControl
             Results = results,
         };
 
+        record.SectorCut = TrackLayout.CutOfResults(
+            _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
+            results);
+
         // A failed write is no longer picked up by a later save (see
         // SessionHistoryStore.Add), and practice has no crash journal, so
         // saying "saved" here would hide a session that is gone at the next

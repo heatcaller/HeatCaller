@@ -355,18 +355,30 @@ internal static class RelayDocuments
         // A record set by a car nobody had named yet carries its
         // transponder as the holder's "name". A profile under that exact
         // id, or a result that raced under it, is how to tell.
-        if (holder.Length > 0
-            && (profiles.Get(holder) is not null
+        bool IsTransponder(string name) =>
+            name.Length > 0
+            && (profiles.Get(name) is not null
                 || sessions.Any(s => s.Results.Any(r =>
-                    string.Equals((r.Transponder ?? string.Empty).Trim(), holder, StringComparison.OrdinalIgnoreCase)))))
+                    string.Equals((r.Transponder ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase))));
+
+        if (IsTransponder(holder))
         {
             holder = UnnamedDriver;
         }
 
+        // The sector records for the way the lap is cut now, their holders
+        // dealt with as the lap record's is.
+        var sectorRecords = track.HasSectorRecords()
+            ? track.CurrentSectorRecords()
+                .Where(r => r is not null)
+                .Select(r => (r!.Sector, r.Ms, Holder: IsTransponder(r.Holder?.Trim() ?? string.Empty) ? UnnamedDriver : r.Holder?.Trim() ?? string.Empty))
+                .ToList()
+            : new List<(int Sector, long Ms, string Holder)>();
+
         // The holder is shortened together with the table, so the record
         // line and the top row of the table name the same person the same
         // way.
-        var shown = NameMap(best.Select(b => b.Name).Append(holder).Where(n => n.Length > 0), abbreviate);
+        var shown = NameMap(best.Select(b => b.Name).Append(holder).Concat(sectorRecords.Select(r => r.Holder)).Where(n => n.Length > 0), abbreviate);
 
         return new
         {
@@ -381,6 +393,9 @@ internal static class RelayDocuments
                     setUtc = track.RecordSetUtc,
                 }
                 : null,
+            sectorRecords = sectorRecords.Count == 0
+                ? null
+                : sectorRecords.Select(r => new { sector = r.Sector, ms = r.Ms, holder = r.Holder.Length == 0 ? string.Empty : shown[r.Holder] }).ToList(),
             image = imageSize.IsEmpty ? null : ImageFor(track, imageSize, imageCache),
             best = best.Select(b => new { name = shown[b.Name], ms = b.Ms, whenUtc = b.When }).ToList(),
         };

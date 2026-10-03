@@ -81,6 +81,32 @@ public sealed class TrackLayoutStore
         t.RecordHolderName ??= string.Empty;
         t.MarshalPostNames ??= new List<string>();
 
+        // Sector records: a null list, a null record or one for no sector
+        // would throw or show as nonsense on the Track Layouts page.
+        if (t.SectorRecordsByCut is { } byCut)
+        {
+            foreach (var cut in byCut.Keys.ToList())
+            {
+                var kept = (byCut[cut] ?? new List<SectorRecord>())
+                    .Where(r => r is not null && r.Sector >= 1 && r.Ms > 0)
+                    .ToList();
+
+                foreach (var record in kept)
+                {
+                    record.Holder ??= string.Empty;
+                }
+
+                if (kept.Count == 0)
+                {
+                    byCut.Remove(cut);
+                }
+                else
+                {
+                    byCut[cut] = kept;
+                }
+            }
+        }
+
         if (t.Design is { } design)
         {
             design.Tiles = (design.Tiles ?? new List<RcpTile>()).Where(x => x is not null).ToList();

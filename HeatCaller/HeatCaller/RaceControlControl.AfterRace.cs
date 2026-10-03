@@ -1476,6 +1476,10 @@ public sealed partial class RaceControlControl
             RecordsIncidents = true,
         };
 
+        record.SectorCut = TrackLayout.CutOfResults(
+            _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
+            results);
+
         // A black flag from the warning ladder becomes a DQ on the saved
         // result, logged as a correction so it can be seen and reversed in
         // Race History like any other.
