@@ -1458,7 +1458,7 @@ public sealed class RelaySettingsControl : UserControl
         {
             AppDialog.Show(this,
                 "Nobody with a PIN has an email address yet.\n\n"
-                + "Add one in the Email box on each racer's driver profile, or import an Email column from a CSV on the Driver Profiles page.",
+                + "Add one in the Email box on each racer's driver profile, or import an Email column from a CSV on the Driver Hub page.",
                 "Nobody to email", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }

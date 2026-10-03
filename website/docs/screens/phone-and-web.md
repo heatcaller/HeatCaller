@@ -134,7 +134,7 @@ The page at `/checkin` lets drivers sign themselves on from their own phones, wh
 
 Each row shows a driver's name and class, marked **TAP** or **HERE**. The top bar counts how many are here, for example "12 / 18 HERE".
 
-- The list is every driver on the **Driver Profiles** page. Ghost cars aren't included.
+- The list is every driver on the **Driver Hub** page. Ghost cars aren't included.
 - Tapping a name that's already **HERE** asks "Check *name* out?" before checking them out, so a slip of the finger while scrolling doesn't sign anyone off.
 - A check-in from a phone shows up on **Race Day → Who's Racing** straight away, and the console notes "[web] *name* checked in from a phone."
 - The page refreshes itself every few seconds.

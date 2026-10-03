@@ -19,7 +19,7 @@ namespace HeatCaller;
 ///  2. <b>Email addresses</b> become <c>[email]</c> - before names, so an
 ///     address made of a name goes whole rather than as
 ///     <c>[driver 1].smith@...</c>.
-///  3. <b>Driver names and contact details</b> from Driver Profiles. Each
+///  3. <b>Driver names and contact details</b> from Driver Hub. Each
 ///     driver gets a number, and every form of their name - the full name,
 ///     the announcer's name, and each word of either - becomes
 ///     <c>[driver n]</c>, so one driver can still be followed through a
@@ -29,7 +29,7 @@ namespace HeatCaller;
 ///     would otherwise take every "max" and "will" in the log with them.
 ///
 /// Best effort, and said so wherever it is used: a name that isn't in
-/// Driver Profiles can't be recognised.
+/// Driver Hub can't be recognised.
 /// </remarks>
 internal sealed class Redactor
 {

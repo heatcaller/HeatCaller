@@ -517,7 +517,7 @@ public sealed class AppSettings
     public string? LastActiveRoundId { get; set; }
 
     /// <summary>
-    /// The driver the Driver Profiles card was last showing, by transponder,
+    /// The driver the Driver Hub card was last showing, by transponder,
     /// so the page opens on them rather than on an empty card. Empty on a
     /// new install; a driver since deleted falls back to the top of the
     /// roster. See ProfileManagerControl.CardProfile.
@@ -525,7 +525,7 @@ public sealed class AppSettings
     public string LastDriverProfileTransponder { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which view Driver Profiles opens on: "Hub" (the list beside one
+    /// Which view Driver Hub opens on: "Hub" - the Drivers button (the list beside one
     /// driver's card, with its tabs) or "Garage" (one driver's cars, big,
     /// with their transponders). The last one picked.
     /// </summary>

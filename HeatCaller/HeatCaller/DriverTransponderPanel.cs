@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace HeatCaller;
 
 /// <summary>
-/// One driver's transponders, on their page (Driver Profiles): the main one
+/// One driver's transponders, on their page (Driver Hub): the main one
 /// and every other, which car each is fitted to, and which are retired -
 /// with Add, Fitted To, Retire / Bring Back and Remove, each saved at once
 /// with its own Undo step.

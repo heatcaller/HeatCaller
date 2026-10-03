@@ -130,7 +130,7 @@ internal static partial class WindowCatalog
     /// <summary>Every page the sidebar can hide, in its own order - all of them but Connection (MainForm.Pages).</summary>
     private static string[] PickerNavPages() => new[]
     {
-        "Race Control", "Race Day", "Championship", "Driver Profiles", "Classes", "Rentals", "Handicaps",
+        "Race Control", "Race Day", "Championship", "Driver Hub", "Classes", "Rentals", "Handicaps",
         "Batteries", "Track Layouts", "Race History", "Race Analytics", "Achievements", "Garage", "Practice",
         "Ghost Cars", "Demo Mode", "Venues", "Themes", "Sponsors", "Local Screens", "Club Website", "Voice",
         "Sounds", "Backup & Restore",

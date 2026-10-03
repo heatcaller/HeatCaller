@@ -50,7 +50,7 @@ internal static class LayoutAudit
         "Connection",
 
         // The roster beside the driver's card (ProfileManagerControl).
-        "Driver Profiles",
+        "Driver Hub",
 
         // The grid of classes (RaceClassesControl).
         "Classes",

@@ -72,7 +72,7 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 | **Timing** | The direct EasyLap decoder or an I-Lap decoder. For I-Lap, also pick its COM port (use **Rescan** if it isn't listed) and baud rate. | The **Connection** page, straight away. |
 | **Track** | A track layout name, such as "Garage Oval". | The **Track Layouts** page. It's also selected as the current layout. |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). | The **Classes** page. |
-| **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Profiles** page. |
+| **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Hub** page. |
 | **All set** | Nothing. A summary of what was set up, including the sound, and a box to start the app tour. | |
 
 Press **Finish** on the last step.

@@ -34,7 +34,7 @@ public sealed class BackupRestoreControl : UserControl
 
     /// <summary>
     /// Raised by Save Support Info. The host (MainForm) does the work - see
-    /// SupportInfo - because it needs Driver Profiles, which this page
+    /// SupportInfo - because it needs Driver Hub, which this page
     /// doesn't have, to know whose names to take out.
     /// </summary>
     public event Action? SupportInfoRequested;

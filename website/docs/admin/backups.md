@@ -213,11 +213,11 @@ When something has gone wrong and you want help with it, **Save Support Info** o
 
 Before anything goes in, HeatCaller replaces:
 
-- each driver's **Driver name:** and **Announcer name:** from **Driver Profiles**, whole and word by word, with `[driver 1]`, `[driver 2]` and so on. The same driver keeps the same number all the way through, so one driver can still be followed through the night;
+- each driver's **Driver name:** and **Announcer name:** from **Driver Hub**, whole and word by word, with `[driver 1]`, `[driver 2]` and so on. The same driver keeps the same number all the way through, so one driver can still be followed through the night;
 - email addresses with `[email]`, and each driver's **Contact:** with `[contact]`;
 - your Windows user name in folder paths with `[user]`.
 
-Names are matched as written and in capitals (`Sam`, `SAM`), not in lower case, so a driver called Max doesn't take every "max" in the log with them. A name that isn't in **Driver Profiles**, such as an online sign-up you turned down, isn't recognized. Open the file and look if you need to be sure.
+Names are matched as written and in capitals (`Sam`, `SAM`), not in lower case, so a driver called Max doesn't take every "max" in the log with them. A name that isn't in **Driver Hub**, such as an online sign-up you turned down, isn't recognized. Open the file and look if you need to be sure.
 
 Freeze dumps are never included. If HeatCaller stops responding, it saves a copy of its memory for working out why (see [Data files](data-files.md#the-data-folder)). That copy holds everything the app had open, so only send one if you're asked for it; the README in the support file says where it is.
 

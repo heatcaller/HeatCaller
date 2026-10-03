@@ -173,7 +173,7 @@ A club that switches to HeatCaller part way through a season can bring its stand
 
 There are two ways to carry points in:
 
-- **Import them with the drivers.** Import the old software's standings with **Import from CSV** on **Driver Profiles**, with the points column set to **Points so far**. See [Import drivers from a spreadsheet](../race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
+- **Import them with the drivers.** Import the old software's standings with **Import from CSV** on **Driver Hub**, with the points column set to **Points so far**. See [Import drivers from a spreadsheet](../race-day/drivers-and-classes.md#import-drivers-from-a-spreadsheet).
 - **Type them in.** Select the championship and click **Points Carried In**, under the standings. Type a driver and their points on each row, then click **Save**. Use each name exactly as the standings show it, since that's how the points are matched to the driver's results; the list offers the names the table already knows as you type. Delete a row, or clear its points, to carry nothing in for that driver, and **Clear All** empties the list.
 
 Either way, the sidebar **Undo** button puts the points back as they were.

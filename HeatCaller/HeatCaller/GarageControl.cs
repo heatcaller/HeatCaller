@@ -30,7 +30,7 @@ public sealed class GarageControl : UserControl
     private readonly UndoService _undo;
 
     /// <summary>
-    /// True for the garage shown on a driver's page (Driver Profiles): one
+    /// True for the garage shown on a driver's page (Driver Hub): one
     /// driver's cars, no Show filter, no club-wide lists, and each card
     /// saying whether it is their active car and which transponder is
     /// fitted to it. The same cards, dialogs and undo as the Garage page -

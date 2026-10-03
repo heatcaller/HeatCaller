@@ -44,7 +44,7 @@ public sealed class RivalriesControl : UserControl
     private const int TemplateLeastLines = 5;
 
     /// <summary>Said when there is nobody to pick - see RefreshDriverCombos. The longest of the statuses, and one of the wordings the status is kept tall enough for.</summary>
-    private const string NoProfilesStatus = "No named driver profiles yet - add some in Driver Profiles first.";
+    private const string NoProfilesStatus = "No named driver profiles yet - add some in Driver Hub first.";
 
     private bool _suppressEvents;
 
@@ -132,7 +132,7 @@ public sealed class RivalriesControl : UserControl
         var lblIntro = new Label
         {
             Text = "Fires a custom line whenever these two named drivers swap position in the standings - in either direction. " +
-                   "Both names must currently be assigned to a driver profile (see Driver Profiles) for a rivalry to fire.",
+                   "Both names must currently be assigned to a driver profile (see Driver Hub) for a rivalry to fire.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -501,7 +501,7 @@ public sealed class RivalriesControl : UserControl
     {
         if (_profiles.AllRaceable.Count(p => !string.IsNullOrWhiteSpace(p.DriverName)) < 2)
         {
-            AppDialog.Show(this, "Add at least two named driver profiles first (see the Driver Profiles tab).",
+            AppDialog.Show(this, "Add at least two named driver profiles first (see Driver Hub).",
                 "Not enough drivers", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }

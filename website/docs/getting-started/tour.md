@@ -32,7 +32,7 @@ You can reorder pages within a group, or hide them (see [Reordering and hiding p
 | Page | What it's for |
 |---|---|
 | **Race Control** | Running a race: the flag buttons, the clock, the live leaderboard, the Next Up bar, the **Session** row (name, track, round), **Quick Race**, **Open Big Screen**, **Open Announcer Screen**, **Qualifying Projection** and **Pre-race check**. See [Running a race](../race-control/running-a-race.md). |
-| **Driver Profiles** | Your drivers: name, transponder, class, cars, photo, email. Also **Import from CSV**. See [Drivers and classes](../race-day/drivers-and-classes.md). |
+| **Driver Hub** | Your drivers: name, transponders, class, photo and email, each driver's cars and setups, and their record. Also **Import from CSV**. See [Drivers and classes](../race-day/drivers-and-classes.md). |
 | **Classes** | The rules each class races under: qualifying method, heats that count, main size, bump-ups, race format, tech checklist. |
 | **Batteries** | Tag each session with the pack that was in the car, and compare pace by pack. |
 | **Track Layouts** | Your layouts, with lap records, photos, marshal posts and the **Track Designer**. |
@@ -74,7 +74,7 @@ Type in the **Search pages...** box to filter the sidebar (<kbd>Ctrl</kbd>+<kbd>
 
 | Type | Finds |
 |---|---|
-| `transponder` | Driver Profiles, Rentals |
+| `transponder` | Driver Hub, Rentals |
 | `flag`, `min lap`, `f11` | Race Control |
 | `heat`, `badge`, `scan`, `schedule` | Race Day |
 | `tech`, `qualifying` | Race Day, Classes |

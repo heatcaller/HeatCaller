@@ -719,7 +719,7 @@ internal static class GarageMigration
     /// RunOnce above filled the Garage from every profile on the first
     /// launch that had one, and nothing did it again afterwards. So every
     /// driver added since - named from the new-transponder prompt, added on
-    /// Driver Profiles, signed up on a phone, entered on Race Day - had a
+    /// Driver Hub, signed up on a phone, entered on Race Day - had a
     /// car on their card and nothing in the Garage. GarageSync now keeps
     /// new drivers in step as they arrive; this catches up the ones that
     /// arrived before it did.

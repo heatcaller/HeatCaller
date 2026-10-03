@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The stores the Driver Profiles card reads a driver's record from.
+/// The stores the Driver Hub card reads a driver's record from.
 ///
 /// A bag of optional references rather than ten more constructor
 /// parameters: the card works with any of them missing - it simply shows

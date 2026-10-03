@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// One driver's setups, newest first, on their page (Driver Profiles):
+/// One driver's setups, newest first, on their page (Driver Hub):
 /// when, which car, which track and what was set. Open Car takes the
 /// highlighted one's car to its own window, where setups are logged and
 /// edited - the same window the Garage opens, so there is one place a

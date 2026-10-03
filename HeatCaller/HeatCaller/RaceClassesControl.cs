@@ -10,7 +10,7 @@ namespace HeatCaller;
 /// class is scored lives on a class: its qualifying method, how many heats
 /// count, how big a main is, whether bump-ups happen, its formats, its
 /// tech checklist, its colour, and now which sanctioning body's rules it
-/// follows. All of that was reachable only through Driver Profiles, then a
+/// follows. All of that was reachable only through Driver Hub, then a
 /// button, then a list, then Edit - four steps into a page that is about
 /// people rather than rules.
 ///

@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The Driver Profiles page: a searchable roster on the left, and the
+/// The Driver Hub page: a searchable roster on the left, and the
 /// selected driver writ large on the right.
 ///
 /// This used to be a nine-column table, which answered "what is stored"

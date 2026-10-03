@@ -2,17 +2,17 @@
 
 This page covers the reference data you set up once and then keep up to date: the drivers who race, the classes they race in, and the club's gear — rental transponders, battery packs, venues, track layouts and car setups. Everything on the Race Day pages is built from this data, so it's worth getting right before your first race night.
 
-The pages covered here are all in the sidebar: **Driver Profiles**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Garage**.
+The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Garage**.
 
-## Driver Profiles
+## Driver Hub
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-<!-- screenshot: Driver Profiles page with the roster on the left and a driver card on the right -->
+<!-- screenshot: Driver Hub page with the roster on the left and a driver card on the right -->
 
-The page has two views. The **Hub** and **Garage** buttons at the top switch between them, and the page opens on the one you used last. Both show the same driver: pick a driver in one, and the other follows. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is at the top of both.
+The page has two views. The **Drivers** and **Garage** buttons at the top switch between them, and the page opens on the one you used last. Both show the same driver: pick a driver in one, and the other follows. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is at the top of both.
 
-### Hub view
+### Drivers view
 
 - **The roster** on the left, with a photo (or an initials disc) and the columns **Driver**, **#**, **Class**, **Car / Model** and **Transponder**. If a driver has more than one car, the **Car / Model** column shows the active car and how many others they have, for example `MR-03 (+1)`.
 - **The driver card** on the right, with five tabs:
@@ -26,7 +26,7 @@ On the **Stats** tab, under the driver's recent form, **Recent activity** lists 
 
 ### Garage view
 
-Pick a driver in **Driver:** at the top. Their cars fill the page, with their **Transponders** beside them. It's the same garage and transponder list as the Hub's tabs, only bigger.
+Pick a driver in **Driver:** at the top. Their cars fill the page, with their **Transponders** beside them. It's the same garage and transponder list as the tabs in the Drivers view, only bigger.
 
 ### A driver's garage
 
@@ -68,7 +68,7 @@ You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click
 
 ### Add a driver
 
-1. On the **Driver Profiles** page, click **Add**.
+1. On the **Driver Hub** page, click **Add**.
 2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
@@ -464,7 +464,7 @@ At the bottom, **Show this plan as the track's main picture** (on by default) ma
 
 ## Garage
 
-The **Garage** page shows all the club's cars. One driver's cars are also on their own page, in **Driver Profiles** (see [A driver's garage](#a-drivers-garage)). Both show the same cars.
+The **Garage** page shows all the club's cars. One driver's cars are also on their own page, in **Driver Hub** (see [A driver's garage](#a-drivers-garage)). Both show the same cars.
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be) and **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)).
 

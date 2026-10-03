@@ -178,7 +178,7 @@ public sealed partial class RaceDayService
     }
 
     /// <summary>
-    /// Adds a new driver - the Driver Profiles page's Add, with the fields
+    /// Adds a new driver - the Driver Hub page's Add, with the fields
     /// a race day needs. Refused, like the desk refuses it, when either
     /// transponder already belongs to somebody (ProfileStore.TryAdd).
     /// </summary>
@@ -248,7 +248,7 @@ public sealed partial class RaceDayService
             {
                 throw new InvalidOperationException(
                     $"{NameOf(profile)} has been changed since the phone added them, and undoing the add now would throw those changes away. "
-                    + "Delete them on the Driver Profiles page if they should go. Nothing was changed.");
+                    + "Delete them on the Driver Hub page if they should go. Nothing was changed.");
             }
 
             _host.Profiles.Delete(profile.Transponder);

@@ -3,7 +3,7 @@ namespace HeatCaller;
 /// <summary>
 /// Transponders that crossed the line with no driver, waiting for someone
 /// to say whose they are - the list behind the banner on Race Control and
-/// Driver Profiles, and the count on the sidebar.
+/// Driver Hub, and the count on the sidebar.
 ///
 /// It used to be a question asked with a modal box as each session ended,
 /// one transponder at a time, which only ever offered to make a NEW driver.
@@ -187,7 +187,7 @@ public sealed class UnknownTransponders
 }
 
 /// <summary>
-/// The banner over Race Control and Driver Profiles: one line for each
+/// The banner over Race Control and Driver Hub: one line for each
 /// transponder that crossed the line with no driver, with Belongs To, New
 /// Driver and Club Rental beside it, and Later to put it away until
 /// another turns up.

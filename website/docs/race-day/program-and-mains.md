@@ -15,7 +15,7 @@ The program is built from the current race day, so set that up first on **Race D
 
 Changes on **Setup** save themselves; there's nothing to click.
 
-Each class also needs drivers: a driver is in a class when their profile says so (see [Driver Profiles](drivers-and-classes.md#driver-profiles)). How a class is scored — its qualifying method, main size and bump-ups — is set on the **Classes** page (see [Classes](drivers-and-classes.md#classes)).
+Each class also needs drivers: a driver is in a class when their profile says so (see [Driver Hub](drivers-and-classes.md#driver-hub)). How a class is scored — its qualifying method, main size and bump-ups — is set on the **Classes** page (see [Classes](drivers-and-classes.md#classes)).
 
 !!! note "Club nights"
     On a club night (**What kind of night:** set to **Club night - just races**) there are no finals. The program builds races instead of heats, the finals commands and **Move the Top Finishers Up** aren't offered, and the next-step card never asks for bump-ups or finals. See [Race day or club night](events-and-entries.md#race-day-or-club-night).
@@ -42,7 +42,7 @@ The card works out the single next thing to do, with one button that does it. Th
 | No race day is open | "No race day is open." | **Start a Race Day** (opens the Set Up Tonight wizard) |
 | The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start a Race Day** |
 | There are no classes at all | "There are no classes yet." | **Set Up Classes** (opens the **Classes** page) |
-| There are no drivers at all | "There are no drivers yet." | **Add Drivers** (opens **Driver Profiles**) |
+| There are no drivers at all | "There are no drivers yet." | **Add Drivers** (opens **Driver Hub**) |
 | No driver has a class | "No driver is in a class yet." | **Add Drivers** |
 | The day only uses checked-in drivers, and nobody has checked in | "Nobody has checked in yet." | **Check Drivers In** (opens **Who's Racing**) |
 | The classes picked for the day no longer exist (renamed, say) | "No classes are running today." | **Choose Today's Classes** (opens **Setup**) |

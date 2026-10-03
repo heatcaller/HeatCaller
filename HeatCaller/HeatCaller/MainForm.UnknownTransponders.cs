@@ -11,11 +11,11 @@ namespace HeatCaller;
 /// </summary>
 public partial class MainForm
 {
-    /// <summary>The list behind the banners on Race Control and Driver Profiles.</summary>
+    /// <summary>The list behind the banners on Race Control and Driver Hub.</summary>
     private readonly UnknownTransponders _unknownTransponders = new();
 
     /// <summary>The sidebar entry the count goes on.</summary>
-    private const string DriversNavItem = "Driver Profiles";
+    private const string DriversNavItem = "Driver Hub";
 
     /// <summary>Connects the list to the sidebar count and to the banners' buttons. Once, after the pages are built.</summary>
     private void WireUnknownTransponders()
@@ -60,7 +60,7 @@ public partial class MainForm
 
     /// <summary>
     /// Takes off the list any transponder that has a driver now, however it
-    /// got one - by hand on Driver Profiles, a phone sign-up, an import.
+    /// got one - by hand on Driver Hub, a phone sign-up, an import.
     /// From the two-second roster tick.
     /// </summary>
     private void DropNamedUnknownTransponders() =>

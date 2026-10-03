@@ -1,7 +1,7 @@
 namespace HeatCaller.Tests;
 
 /// <summary>
-/// A driver's recent activity on the Driver Profiles card (27 Sep 2026):
+/// A driver's recent activity on the Driver Hub card (27 Sep 2026):
 /// their races with place and best lap, their personal bests, and the
 /// setups logged for them with what each changed - newest first.
 /// </summary>

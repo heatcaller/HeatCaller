@@ -63,7 +63,7 @@ AI commentary through Ollama runs on the laptop itself. See [What you need](../g
 
 ### Do I have to add every driver before the first race?
 
-No. A car with an unknown transponder can still race. When the session ends, HeatCaller asks whether you want to name it ("New transponder detected: ..."). For a big roster, use **Import from CSV** on **Driver Profiles**. **Download Template** gives you the right column headings. See [Drivers and classes](../race-day/drivers-and-classes.md).
+No. A car with an unknown transponder can still race. It's listed on a banner at the top of **Driver Hub** (and on **Race Control** between races), where you can give it to a driver or add a new one. See [Unknown transponders](../timing/transponders.md#unknown-transponders). For a big roster, use **Import from CSV** on **Driver Hub**. **Download Template** gives you the right column headings. See [Drivers and classes](../race-day/drivers-and-classes.md).
 
 ## On race night
 

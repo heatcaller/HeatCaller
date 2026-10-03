@@ -21,12 +21,12 @@ public sealed class DriverGarageSources
 }
 
 /// <summary>
-/// The Driver Profiles page's two views, and the tabs on the driver's card.
+/// The Driver Hub page's two views, and the tabs on the driver's card.
 ///
-/// Hub: the roster on the left and the driver's card on the right, with
+/// Drivers (the Hub view): the roster on the left and the driver's card on the right, with
 /// tabs for Profile, Garage, Transponders, Setups and Stats. Garage: one
 /// driver picked at the top and their cars big, with their transponders
-/// beside them. A Hub | Garage switch moves between the two, and the page
+/// beside them. A Drivers | Garage switch moves between the two, and the page
 /// opens on the one used last (AppSettings.DriversPageView).
 ///
 /// Both views show the same driver - picking one in either moves the
@@ -45,6 +45,7 @@ public sealed partial class ProfileManagerControl
         Stats,
     }
 
+    /// <summary>The setting's value for the roster-and-card view - "Hub" since before its button read Drivers, so a saved choice still reads.</summary>
     private const string HubView = "Hub";
     private const string GarageView = "Garage";
 
@@ -162,7 +163,7 @@ public sealed partial class ProfileManagerControl
 
     private ButtonBar BuildViewSwitch()
     {
-        _btnHub = new Button { Text = HubView };
+        _btnHub = new Button { Text = "Drivers" };
         _btnHub.Click += (_, _) => SelectView(garage: false);
 
         _btnGarageView = new Button { Text = GarageView };

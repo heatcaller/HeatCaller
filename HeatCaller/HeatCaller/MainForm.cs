@@ -151,7 +151,7 @@ public partial class MainForm : Form
     /// A timer rather than an event on every store that could change the
     /// answer. The page shows who is on the driver list and who has been
     /// marked present, and either can be changed from half a dozen places -
-    /// Entries, Driver Profiles, an import, a new race day. Hooking all of
+    /// Entries, Driver Hub, an import, a new race day. Hooking all of
     /// them would be six couplings that have to be remembered every time a
     /// seventh appears; a two-second republish of a list this size costs
     /// nothing and cannot be forgotten.
@@ -191,7 +191,7 @@ public partial class MainForm : Form
     // which ConfigurePage below does for these.
     /// <summary>
     /// Classes. A nav item of its own, because the rules a class runs
-    /// under were reachable only through Driver Profiles, then a button,
+    /// under were reachable only through Driver Hub, then a button,
     /// then a list, then Edit - four steps into a page about people.
     /// </summary>
     private readonly Panel pageClasses = new();
@@ -386,6 +386,11 @@ public partial class MainForm : Form
             // which holds Mixer, Soundscapes, Effects, Ambience, Music and
             // Lap Beeps in exactly the same way.
             ["Voice Announcements"] = "Voice",
+
+            // Driver Profiles became a driver's whole page - their cars,
+            // transponders and setups as well as the profile - so its name
+            // says that now.
+            ["Driver Profiles"] = "Driver Hub",
         };
 
         if (_settings.NavOrder.Concat(_settings.HiddenTabs).Any(renamedPages.ContainsKey))
@@ -495,7 +500,7 @@ public partial class MainForm : Form
         GarageMigration.CatchUpOnce(_settings, _cars, _profiles);
 
         // And from now on as they arrive: a driver named from the
-        // new-transponder prompt, added on Driver Profiles, imported,
+        // new-transponder prompt, added on Driver Hub, imported,
         // signed up on a phone or entered on Race Day gets their car in the
         // Garage straight away. See ProfileStore.CarsAdded for why it is
         // handed only the NEW names.
@@ -1433,7 +1438,7 @@ public partial class MainForm : Form
 
             // Pages that list classes, drivers and tracks were built before
             // the wizard added any.
-            foreach (var name in new[] { "Driver Profiles", "Classes", "Track Layouts" })
+            foreach (var name in new[] { "Driver Hub", "Classes", "Track Layouts" })
             {
                 if (_navRefreshHooks.TryGetValue(name, out var refresh))
                 {

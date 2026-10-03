@@ -198,7 +198,7 @@ public sealed class RaceClassStore
     /// <summary>
     /// Where each class's handicap mode is kept (by class name), so deleting
     /// a class from either door - the Classes page, or the classes window
-    /// opened from Driver Profiles - forgets its mode, and a class added
+    /// opened from Driver Hub - forgets its mode, and a class added
     /// later under the same name does not inherit it. Set once at start-up
     /// by MainForm, for the same two-doors reason as AppDefaultFormat.
     /// </summary>

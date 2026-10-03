@@ -4,7 +4,7 @@ internal static partial class WindowCatalog
 {
     /// <summary>
     /// A driver's profile (ProfileForm, titled Add or Edit Driver Profile) in
-    /// each way it is opened: added from Driver Profiles, empty, with the
+    /// each way it is opened: added from Driver Hub, empty, with the
     /// club's classes to pick from - one with a name long enough to widen the
     /// class drop-down; the same with only short class names, the narrowest
     /// the window comes; edited, every field filled with the longest there

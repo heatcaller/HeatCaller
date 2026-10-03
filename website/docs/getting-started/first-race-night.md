@@ -44,11 +44,11 @@ If your club follows a sanctioning body's rules, **Sanctioning Preset** can fill
 
 Every driver needs a profile with a **transponder** and a **class**. That's how HeatCaller knows who crossed the line and which heats to put them in.
 
-**One at a time:** on **Driver Profiles**, click **Add**, and fill in **Transponder:**, **Driver name:** and **Class:**.
+**One at a time:** on **Driver Hub**, click **Add**, and fill in **Transponder:**, **Driver name:** and **Class:**.
 
 **All at once from a spreadsheet:**
 
-1. On **Driver Profiles**, click **Download Template** and save the CSV file.
+1. On **Driver Hub**, click **Download Template** and save the CSV file.
 2. Fill in one row per driver. **Transponder** is required. Everything else is optional.
 3. Click **Import from CSV** and choose your file.
 

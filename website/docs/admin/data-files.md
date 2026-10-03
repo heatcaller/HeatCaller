@@ -45,7 +45,7 @@ All data files are plain JSON text, except where noted.
 
 | File | What it holds |
 |---|---|
-| `profiles.json` | Driver profiles (**Driver Profiles** page), one per transponder, including ghost cars. |
+| `profiles.json` | Driver profiles (**Driver Hub** page), one per transponder, including ghost cars. |
 | `race-history.json` | Every saved race and practice session (**Race History** page). |
 | `race-in-progress.json` | A running copy of the race in progress, for crash recovery. See [The race journal](#the-race-journal). |
 | `events.json` | Race days (events), set up on **Race Day → Setup**. |

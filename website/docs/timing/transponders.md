@@ -4,7 +4,7 @@ Every car carries a transponder, and the decoder reports each pass as a transpon
 
 ## How a transponder becomes a driver
 
-HeatCaller matches each pass to a driver by the **Transponder:** number on their driver profile (**Driver Profiles** page). The driver's name, car, class and photo all come from that profile, and so do announcements, results and records.
+HeatCaller matches each pass to a driver by the **Transponder:** number on their driver profile (**Driver Hub** page). The driver's name, car, class and photo all come from that profile, and so do announcements, results and records.
 
 - Matching ignores upper and lower case, so `8467be` on a profile matches `8467BE` from the decoder.
 - Each transponder number belongs to one profile. Once a profile is saved, its transponder number can't be edited; to move a driver to a different transponder, create a new profile.
@@ -57,7 +57,7 @@ A transponder that isn't on any profile still gets timed. It appears on the lead
 HeatCaller never interrupts a race to ask about it. Instead:
 
 1. The first time an unknown transponder crosses the line in a session, the console on the **Connection** page shows "[race] New transponder *number* is on track - it's listed above the board once the session ends, to say whose it is."
-2. It goes on a list shown as a banner at the top of the **Driver Profiles** page, and on the **Race Control** page between races. The banner says "A transponder crossed the line with no driver" (or how many did). Each one has a line with what it did, for example "14 laps in Heat 2 · best 7.905". The sidebar shows the count next to **Driver Profiles**.
+2. It goes on a list shown as a banner at the top of the **Driver Hub** page, and on the **Race Control** page between races. The banner says "A transponder crossed the line with no driver" (or how many did). Each one has a line with what it did, for example "14 laps in Heat 2 · best 7.905". The sidebar shows the count next to **Driver Hub**.
 3. On its line, choose what it is:
     - **Belongs To** gives it to a driver already on file. The **Who is on transponder *number*?** window lists your drivers; type in **Find:** to narrow the list, and pick one. Under **Where is it?**, choose **In one of their cars:** and pick the car from their garage, or **Their own transponder - it moves between cars**. If it replaces one of theirs, pick that one in **It replaces:**; the old one is retired, and everything timed on it stays theirs. Click **Give *number* to *driver***. The laps it has already done count for that driver.
     - **New Driver** opens a profile form with the number already filled in. Enter the driver's name and anything else you know, and click **Save**.
@@ -68,7 +68,7 @@ Each choice can be undone with **Undo**, which puts the transponder back on the 
 
 On the **Race Control** leaderboard you can also right-click an unknown transponder's row and choose **Give *number* to an existing driver**, which opens the same window, or **New driver on *number***.
 
-If a number already belongs to another driver, you get the same "Transponder already in use" warning as on the **Driver Profiles** page. A transponder you name some other way, for example from the **Driver Profiles** page or a phone sign-up, leaves the list by itself within a few seconds.
+If a number already belongs to another driver, you get the same "Transponder already in use" warning as on the **Driver Hub** page. A transponder you name some other way, for example from the **Driver Hub** page or a phone sign-up, leaves the list by itself within a few seconds.
 
 The list lasts until HeatCaller is closed. A transponder still unnamed is listed again the next time it crosses the line.
 

@@ -2439,7 +2439,7 @@ public static class AppTheme
                 g.DrawLine(pen, cx + r * 0.85f, cy + r * 0.5f, cx + 2f, cy + 1f);
                 break;
 
-            case "Driver Profiles":
+            case "Driver Hub":
                 // Person: head + shoulders.
                 var headR = r * 0.5f;
                 g.FillEllipse(brush, cx - headR, b.Top + 1, headR * 2f, headR * 2f);

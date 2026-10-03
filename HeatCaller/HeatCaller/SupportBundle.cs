@@ -424,15 +424,15 @@ internal static class SupportBundle
         text.AppendLine();
         text.AppendLine("Before anything went in:");
         text.AppendLine();
-        text.AppendLine("  - Every driver's name in Driver Profiles was replaced with [driver 1], [driver 2]");
+        text.AppendLine("  - Every driver's name in Driver Hub was replaced with [driver 1], [driver 2]");
         text.AppendLine("    and so on - the same number for the same driver all the way through, so one");
         text.AppendLine("    driver can still be followed through the night.");
         text.AppendLine("  - Email addresses were replaced with [email], and the contact details in");
-        text.AppendLine("    Driver Profiles with [contact].");
+        text.AppendLine("    Driver Hub with [contact].");
         text.AppendLine("  - The Windows user name in folder paths was replaced with [user].");
         text.AppendLine($"  {Plural.Of(linesChanged, "line")} had something replaced.");
         text.AppendLine();
-        text.AppendLine("Not replaced: a name that isn't in Driver Profiles (an online sign-up that was");
+        text.AppendLine("Not replaced: a name that isn't in Driver Hub (an online sign-up that was");
         text.AppendLine("turned down, say), and transponder numbers. Open the logs and look if you need");
         text.AppendLine("to be sure.");
         text.AppendLine();

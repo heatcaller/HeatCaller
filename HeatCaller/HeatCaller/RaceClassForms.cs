@@ -796,7 +796,7 @@ public sealed class RaceClassEditForm : Form
 
 /// <summary>
 /// The classes list as a dialog, for the places that reach it from
-/// somewhere else - Driver Profiles, where you are naming a driver's class
+/// somewhere else - Driver Hub, where you are naming a driver's class
 /// and realise the class does not exist yet.
 ///
 /// A SHELL around the page, not a second copy of it. There were two lists

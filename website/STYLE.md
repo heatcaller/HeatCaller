@@ -23,7 +23,7 @@ names/paths/commands are what the reader needs.
 
 ## Navigation (exact sidebar page names in the app, in order)
 Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (tabs include Standings and Calendar),
-Driver Profiles, Classes, Rentals, Handicaps, Batteries, Track Layouts, Race History,
+Driver Hub, Classes, Rentals, Handicaps, Batteries, Track Layouts, Race History,
 Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Garage,
 Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens, Club Website,
 Voice (Voice Settings, Announcements, Commentary, Rivalries), Sounds (Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps),
@@ -59,7 +59,7 @@ docs/getting-started/index.md                  What HeatCaller does, what you ne
 docs/getting-started/install.md                Installing/running, updates, where data lives, first-run wizard
 docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
-docs/race-day/drivers-and-classes.md           Driver Profiles, Classes, Rentals, Batteries, Venues, Track Layouts, Garage
+docs/race-day/drivers-and-classes.md           Driver Hub, Classes, Rentals, Batteries, Venues, Track Layouts, Garage
 docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins
 docs/race-day/program-and-mains.md             Race Day → Next Steps and its program, the Timetable window, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
 docs/race-control/running-a-race.md            Race Control page: staging → countdown → green → flags → checkered; start types; limits

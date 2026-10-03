@@ -144,7 +144,7 @@ If no race day is open, a banner at the top says "No race day is open." Check-in
 
 ### The Drivers card
 
-Each row is a driver profile. The class shown is the class on the driver's profile — to move a driver to another class, edit their profile on the [Driver Profiles](drivers-and-classes.md#driver-profiles) page.
+Each row is a driver profile. The class shown is the class on the driver's profile — to move a driver to another class, edit their profile on the [Driver Hub](drivers-and-classes.md#driver-hub) page.
 
 | Column | What it shows |
 |---|---|

@@ -26,7 +26,7 @@ public sealed class AppTour : Form
 
         // The order these four come in is the order a club actually needs
         // them, which is not the order they used to be shown in. The tour
-        // opened with Race Control and reached Classes and Driver Profiles
+        // opened with Race Control and reached Classes and Driver Hub
         // two stops after Race Day - so it demonstrated the one screen
         // that needs nothing set up first, and introduced the two things
         // everything else is built from last.
@@ -35,10 +35,10 @@ public sealed class AppTour : Form
             + "type and qualifying rules. Everything else is grouped by class, so this is the first thing to set "
             + "up. If everyone races together, one class called \"Open\" is all you need."),
 
-        new("Driver Profiles", "Driver Profiles",
-            "Every driver and their transponder, class, photo and personal bests. Giving a driver a class is what "
-            + "puts them in that class's heats. A transponder the app doesn't know is offered for naming the first "
-            + "time it crosses the line, so nobody has to be typed in twice."),
+        new("Driver Hub", "Driver Hub",
+            "Every driver in one place: their profile, their cars, their transponders, their setups and their "
+            + "record. Giving a driver a class is what puts them in that class's heats. A transponder the app "
+            + "doesn't know waits on a banner at the top, so it can be given to a driver or named in one go."),
 
         new("Race Day", "Race Day: the night itself",
             "Start here on race night. Next Steps tells you the one next thing to do and has the button that does it - "

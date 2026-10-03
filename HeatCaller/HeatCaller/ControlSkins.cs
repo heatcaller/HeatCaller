@@ -1576,7 +1576,7 @@ internal sealed class ListViewHeaderSkin : NativeWindow
     /// caption in plain capitals - as Draw falls back to when the spaced
     /// ones do not fit - with the inset it is drawn at and a little room.
     /// In the header face in use, so it follows the text size. What
-    /// Pieces.FitListColumns and the Driver Profiles roster hold a list's
+    /// Pieces.FitListColumns and the Driver Hub roster hold a list's
     /// columns to.
     ///
     /// It used to be measured by each of them in the bold or the body face,

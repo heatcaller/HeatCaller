@@ -119,7 +119,7 @@ For each racer, HeatCaller uses:
 
 Anything else, such as "Dad: 07700 900123, dad@example.com" in the Contact box, isn't treated as an address.
 
-To add addresses in bulk, use **Import from CSV** on the **Driver Profiles** page with an `Email` column (a column called `e-mail`, `email address` or `e-mail address` also works). **Download Template** on the same page gives a file with the column already in place. See [Drivers and classes](../race-day/drivers-and-classes.md).
+To add addresses in bulk, use **Import from CSV** on the **Driver Hub** page with an `Email` column (a column called `e-mail`, `email address` or `e-mail address` also works). **Download Template** on the same page gives a file with the column already in place. See [Drivers and classes](../race-day/drivers-and-classes.md).
 
 Email addresses stay on the laptop. They're never published to the relay.
 

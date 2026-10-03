@@ -3,7 +3,7 @@ namespace HeatCaller.Tests;
 internal static partial class WindowCatalog
 {
     /// <summary>
-    /// Import drivers (CsvMappingForm), from Driver Profiles' Import from
+    /// Import drivers (CsvMappingForm), from Driver Hub's Import from
     /// CSV...: each file made up here as the lines of text it would hold, and
     /// read the way the page reads one (ProfileManagerControl.ImportFromCsv) -
     /// the separator found from the heading line, every line split, each
@@ -197,7 +197,7 @@ internal static partial class WindowCatalog
     }
 
     /// <summary>
-    /// The window as Driver Profiles opens it for a file of these lines: the
+    /// The window as Driver Hub opens it for a file of these lines: the
     /// separator found from the heading line, every line split with it, and
     /// each column's guess from its heading.
     /// </summary>

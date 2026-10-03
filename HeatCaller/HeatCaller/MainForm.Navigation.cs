@@ -122,7 +122,7 @@ public partial class MainForm
             // it has to land.
             "announcer", "announcer screen", "spotlight", "mc", "microphone", "mic", "talking points" },
         ["Connection"] = new[] { "connect", "decoder", "easylap", "i-lap", "ilap", "com port", "serial", "baud", "auto-connect", "console", "quick race" },
-        ["Driver Profiles"] = new[] { "transponder", "car", "name", "roster", "import", "export" },
+        ["Driver Hub"] = new[] { "transponder", "car", "name", "roster", "import", "export", "driver profiles", "profile", "setups", "transfer" },
         // Race Day swallowed four pages, so it answers for all four
         // pages' words - someone searching "check-in" is not wrong just
         // because it became a tab.

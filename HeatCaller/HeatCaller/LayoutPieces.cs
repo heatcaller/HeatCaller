@@ -1902,7 +1902,7 @@ internal sealed class FieldRow : Panel
 /// AddFill). On the right, the column (AddSide, AddSideCard): as wide as
 /// the widest button in it needs, and never narrower than it was told, with
 /// every part in it that wide, one under another from the top - and one of
-/// them can take the height the column has left, as Driver Profiles' card
+/// them can take the height the column has left, as Driver Hub's card
 /// does (AddSideFill).
 ///
 /// Goes in a FillPage as its filling part, with LeastHeight as the least it
@@ -2089,7 +2089,7 @@ internal sealed class Beside : Panel
 
     /// <summary>
     /// Adds the part of the column that takes the height the column has
-    /// left once the others have theirs - Driver Profiles' card, the
+    /// left once the others have theirs - Driver Hub's card, the
     /// driver's picture and record, which scrolls inside itself. One only.
     /// It is given the column's width, and never less height than
     /// <paramref name="leastHeight"/> says at that width, which is what the
@@ -3456,7 +3456,7 @@ internal static class Pieces
     /// When that does not fit, the others give way first, down to their
     /// headings, before the list scrolls sideways.
     ///
-    /// As Driver Profiles' roster does it (ProfileManagerControl.FitColumns,
+    /// As Driver Hub's roster does it (ProfileManagerControl.FitColumns,
     /// whose own least is a photo and a name). At fixed widths a list's
     /// columns overran it at 1280x720 and at 200% text, and stopped short of
     /// it on a wide screen with a blank band down the right.

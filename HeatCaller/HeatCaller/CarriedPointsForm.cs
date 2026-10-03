@@ -3,7 +3,7 @@ namespace HeatCaller;
 /// <summary>
 /// The points each driver brings into a championship from before it ran in
 /// HeatCaller (27 Sep 2026) - typed in here, or brought in with the drivers
-/// by Driver Profiles' Import from CSV, and changed here either way.
+/// by Driver Hub's Import from CSV, and changed here either way.
 ///
 /// On the layout pieces (DialogFit): the note on what the points are across
 /// the top, the drivers and their points taking the height, two lines kept

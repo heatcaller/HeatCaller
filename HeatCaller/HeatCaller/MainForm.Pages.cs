@@ -135,11 +135,11 @@ public partial class MainForm
 
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings, driverGarage) { Dock = DockStyle.Fill };
         pageDriverProfiles.Controls.Add(driverProfiles);
-        _navRefreshHooks["Driver Profiles"] = driverProfiles.RefreshAll;
+        _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);
         WireUnknownTransponders();
 
-        // Next to Driver Profiles in the sidebar: the two together are "who
+        // Next to Driver Hub in the sidebar: the two together are "who
         // races and under what rules", and they are the two pages somebody
         // sets up before a first race day.
         ConfigurePage(pageClasses);
@@ -148,11 +148,11 @@ public partial class MainForm
         pageClasses.Controls.Add(classes);
 
         // Refreshed on entry, not only at construction: a class can be
-        // edited from the dialog on Driver Profiles while this page sits in
+        // edited from the dialog on Driver Hub while this page sits in
         // the background.
         _navRefreshHooks["Classes"] = classes.RefreshAll;
 
-        StartupMark("Race Control, Driver Profiles and Classes");
+        StartupMark("Race Control, Driver Hub and Classes");
 
         // --- Race Day and Championship ---
         //
@@ -663,7 +663,7 @@ public partial class MainForm
         // need the tab control, and that does not exist until the tabs
         // have all been made.
         raceProgram.GoToEventTab += () => tabRaceDay.SelectedTab = subPageEvent;
-        raceProgram.ManageDriversRequested += () => GoToPage("Driver Profiles");
+        raceProgram.ManageDriversRequested += () => GoToPage("Driver Hub");
 
         // The two empty states the banner could not tell apart before, and
         // so could not send anywhere useful - see ProgramNextStep.
@@ -1661,7 +1661,7 @@ public partial class MainForm
         backupRestore.IsRaceUnderWay = () => _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
 
         // Save Support Info - done here rather than on the page, which has
-        // no Driver Profiles to take the names out with. See SupportInfo.
+        // no Driver Hub to take the names out with. See SupportInfo.
         backupRestore.SupportInfoRequested += () => SupportInfo.Save(backupRestore, _settings, _profiles, OnClientRawMessage);
         backupRestore.RestoreCompleted += () =>
         {
@@ -1722,7 +1722,7 @@ public partial class MainForm
             new("Race Control", pageRaceControl),
             new("Race Day", pageRaceDay),
             new("Championship", pageChampionship),
-            new("Driver Profiles", pageDriverProfiles),
+            new("Driver Hub", pageDriverProfiles),
             new("Classes", pageClasses),
             new("Rentals", pageRentals),
             new("Handicaps", pageHandicaps),

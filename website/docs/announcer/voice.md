@@ -328,7 +328,7 @@ Now and then a take comes out odd: a strange pause, or a word stressed wrongly. 
 
 On the HeatCaller voice only the second one is available — the **Test** buttons are hidden, so there's no way to keep asking for a take until you like it. **Forget Line** still works, but it usually brings back the same take: the relay keeps its own copy of each line and hands that out again, which costs your allowance nothing but also doesn't reroll it. If a line reads badly on your announcer voice, the practical fixes are the driver's **Announcer name:**, a different announcer voice, or your own ElevenLabs key.
 
-A name the voice says wrongly is best fixed with the driver's **Announcer name:** on **Driver Profiles**. Changing the words makes a new line, so it's rendered the new way from then on. That works on every voice.
+A name the voice says wrongly is best fixed with the driver's **Announcer name:** on **Driver Hub**. Changing the words makes a new line, so it's rendered the new way from then on. That works on every voice.
 
 **Forget All** clears every saved line, after asking first. Everything is then rendered, and paid for, again as it's spoken. It's worth doing after changing something HeatCaller can't see, such as editing a cloned voice in your ElevenLabs account.
 
@@ -508,7 +508,7 @@ The stand-in never covers a test. See [Testing a line](#testing-a-line).
 
 ### Driver details used in calls
 
-Everything the announcer says about a driver comes from their profile on **Driver Profiles**:
+Everything the announcer says about a driver comes from their profile on **Driver Hub**:
 
 - **Announcer name:** is what's spoken for `{driver}` (and `{rival}`). Use it for a nickname the crowd knows, or a spelling the voice pronounces correctly. Leave it blank to use the driver name.
 - **Cars:** gives `{car}`.

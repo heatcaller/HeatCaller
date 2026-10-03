@@ -464,7 +464,7 @@ public sealed partial class RaceControlControl
     /// the leaderboard for somebody to notice and fix later.
     ///
     /// It goes on the list behind the banner (UnknownTransponders), which
-    /// shows above the board between races and on Driver Profiles, with the
+    /// shows above the board between races and on Driver Hub, with the
     /// sidebar's count. Nothing modal: this is called from the lap pipeline,
     /// and a dialog here once let the race finish behind a question nobody
     /// had answered - see the history in UnknownTransponders.
