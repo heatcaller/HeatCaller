@@ -29,8 +29,26 @@ public sealed class GarageControl : UserControl
     private readonly RaceEventStore? _events;
     private readonly UndoService _undo;
 
+    /// <summary>
+    /// True for the garage shown on a driver's page (Driver Profiles): one
+    /// driver's cars, no Show filter, no club-wide lists, and each card
+    /// saying whether it is their active car and which transponder is
+    /// fitted to it. The same cards, dialogs and undo as the Garage page -
+    /// one set of cars, shown two ways.
+    /// </summary>
+    private readonly bool _forOneDriver;
+
+    /// <summary>Raised after anything here changed a car or a driver - for a host showing more of the driver than this.</summary>
+    public event Action? Changed;
+
     private readonly ComboBox _cmbOwnerFilter = new();
     private readonly CheckBox _chkRetired = new ThemedCheckBox();
+
+    /// <summary>Set while ShowDriver refills and moves the hidden owner filter, so the wall is built once, after.</summary>
+    private bool _quietFilter;
+
+    /// <summary>Add a Car - on a driver's page, only while there is a driver to add it for.</summary>
+    private Button? _btnAddCar;
     private readonly Label _lblSummary = new();
     private readonly Panel _wall = new();
     private readonly Label _lblEmpty = new();
@@ -77,8 +95,10 @@ public sealed class GarageControl : UserControl
         TrackLayoutStore trackLayouts,
         ChassisTemplateStore chassisTemplates,
         UndoService undo,
-        RaceEventStore? events = null)
+        RaceEventStore? events = null,
+        bool forOneDriver = false)
     {
+        _forOneDriver = forOneDriver;
         _cars = cars;
         _chassisTypes = chassisTypes;
         _profiles = profiles;
@@ -141,7 +161,13 @@ public sealed class GarageControl : UserControl
         };
 
         _cmbOwnerFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbOwnerFilter.SelectedIndexChanged += (_, _) => BuildWall();
+        _cmbOwnerFilter.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_quietFilter)
+            {
+                BuildWall();
+            }
+        };
 
         _chkRetired.Text = "Include retired";
         _chkRetired.AutoSize = true;
@@ -182,6 +208,7 @@ public sealed class GarageControl : UserControl
 
         var btnAdd = new Button { Text = "Add a Car..." };
         btnAdd.Click += (_, _) => AddCar();
+        _btnAddCar = btnAdd;
 
         var btnChassis = new Button { Text = "Chassis Types..." };
         btnChassis.Click += (_, _) => ManageChassisTypes();
@@ -191,15 +218,23 @@ public sealed class GarageControl : UserControl
 
         var page = new FillPage();
 
-        page.Add(lblIntro);
+        // On a driver's page the driver is chosen there: no intro, no Show
+        // filter (it is kept, set by ShowDriver, and hidden), and no
+        // club-wide lists - those stay on the Garage page.
+        if (!_forOneDriver)
+        {
+            page.Add(lblIntro);
+        }
+
         page.Add(filterRow, gapBelow: UiLayout.RowGap);
+        filterRow.Visible = !_forOneDriver;
 
         // At least a row of cars under a heading - below that the page
         // scrolls. Asked each time the page works out its range, so it is a
         // card at the text size in use; a larger one only makes the page's
         // least taller, and a window shorter than that scrolls the page.
         page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets), gapBelow: 0);
+        page.Add(_forOneDriver ? new ButtonBar().With(btnAdd) : new ButtonBar().With(btnAdd, btnChassis, btnSheets), gapBelow: 0);
 
         Controls.Add(page);
     }
@@ -211,7 +246,9 @@ public sealed class GarageControl : UserControl
     /// read as an empty garage next to a count of the cars in it.
     /// </summary>
     private string EmptyWallText() =>
-        _cars.All.Count == 0
+        _forOneDriver
+            ? "No cars yet. Click Add a Car, and it appears here."
+            : _cars.All.Count == 0
             ? "No cars yet. Add one, and it appears here under its class."
             : _chkRetired.Checked
                 ? "No cars to show - pick another in Show."
@@ -262,14 +299,22 @@ public sealed class GarageControl : UserControl
     {
         var chosen = (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder ?? EveryoneKey;
 
+        // A driver's page shows nobody's cars until it is told whose.
+        if (_forOneDriver && chosen is EveryoneKey or ClubKey)
+        {
+            return Array.Empty<Car>();
+        }
+
         var cars = chosen switch
         {
             EveryoneKey => _cars.All,
             ClubKey => _cars.ClubCars,
-            _ => _cars.OwnedBy(chosen),
+            _ => _profiles.Get(chosen) is { } owner ? _cars.OwnedBy(owner) : _cars.OwnedBy(chosen),
         };
 
-        return _chkRetired.Checked ? cars : cars.Where(c => !c.Retired).ToList();
+        // A driver's page shows their retired cars too, marked Retired on
+        // the card: no longer used, but still theirs and still openable.
+        return _forOneDriver || _chkRetired.Checked ? cars : cars.Where(c => !c.Retired).ToList();
     }
 
     /// <summary>
@@ -319,6 +364,10 @@ public sealed class GarageControl : UserControl
 
             foreach (var card in cards)
             {
+                // Not disposed with the card it is attached to.
+                var menu = card.ContextMenuStrip;
+                card.ContextMenuStrip = null;
+                menu?.Dispose();
                 card.Dispose();
             }
         }
@@ -375,9 +424,17 @@ public sealed class GarageControl : UserControl
 
             foreach (var car in inClass)
             {
-                var card = new CarCard(car, WhoHasIt(car, eventId), _chassisTypes.NameOf(car.ChassisTypeId));
+                var card = new CarCard(
+                    car,
+                    _forOneDriver ? DriverLine(car, eventId) : WhoHasIt(car, eventId),
+                    _chassisTypes.NameOf(car.ChassisTypeId));
 
                 card.Opened += OpenCar;
+
+                if (_forOneDriver)
+                {
+                    card.ContextMenuStrip = CarMenu(card.Car);
+                }
 
                 _wall.Controls.Add(card);
                 cards.Add(card);
@@ -547,12 +604,19 @@ public sealed class GarageControl : UserControl
         // closes, so the wall simply re-reads rather than being told what
         // changed. One path, and no chance of the two disagreeing.
         RefreshAll();
+        Changed?.Invoke();
     }
 
     private void AddCar()
     {
         var chosenOwner = (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder;
         var owner = chosenOwner is null or EveryoneKey or ClubKey ? string.Empty : chosenOwner;
+
+        // A driver's page adds cars for its driver, never for the club.
+        if (_forOneDriver && owner.Length == 0)
+        {
+            return;
+        }
 
         var car = new Car
         {
@@ -586,12 +650,18 @@ public sealed class GarageControl : UserControl
         {
             _cars.Delete(saved.Id);
             undoProfile?.Invoke();
-            RefreshAll();
+
+            if (!IsDisposed)
+            {
+                RefreshAll();
+                Changed?.Invoke();
+            }
         });
 
         _cars.Upsert(saved);
         undoProfile = SyncActiveCarString(saved);
         RefreshAll();
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -656,6 +726,160 @@ public sealed class GarageControl : UserControl
 
             _profiles.Upsert(current);
         };
+    }
+
+    // ------------------------------------------------- a driver's page
+
+    /// <summary>
+    /// Shows one driver's cars - for the garage on a driver's page. Null or
+    /// a driver not on file shows none.
+    /// </summary>
+    public void ShowDriver(string? transponder)
+    {
+        _quietFilter = true;
+
+        try
+        {
+            RefreshOwnerFilter();
+
+            var match = _cmbOwnerFilter.Items
+                .Cast<OwnerChoice>()
+                .FirstOrDefault(c => string.Equals(c.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+
+            // Everyone, which a driver's page shows as no cars, when there
+            // is nobody to show.
+            _cmbOwnerFilter.SelectedItem = match ?? _cmbOwnerFilter.Items[0];
+
+            if (_btnAddCar is not null)
+            {
+                _btnAddCar.Enabled = match is not null;
+            }
+        }
+        finally
+        {
+            _quietFilter = false;
+        }
+
+        BuildWall();
+    }
+
+    /// <summary>
+    /// The line under a car's name on a driver's page: whether it is the car
+    /// they are announced and recorded in, the transponders fitted to it,
+    /// and who has it tonight when that is not them.
+    /// </summary>
+    private string DriverLine(Car car, string? eventId)
+    {
+        var parts = new List<string>();
+        var owner = _profiles.Get(car.OwnerTransponder);
+
+        if (owner is not null && IsActiveCar(owner, car))
+        {
+            parts.Add("Active");
+        }
+
+        if (owner is not null)
+        {
+            parts.AddRange(owner.Transponders
+                .Where(t => t is not null && !t.Retired && string.Equals(t.CarId, car.Id, StringComparison.Ordinal))
+                .Select(t => t.Id));
+        }
+
+        var driver = car.DriverFor(eventId);
+
+        if (!string.IsNullOrWhiteSpace(driver)
+            && !string.Equals(driver, car.OwnerTransponder, StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add($"Lent to {NameOf(driver)}");
+        }
+
+        if (car.Retired)
+        {
+            parts.Add("Retired");
+        }
+
+        return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>Whether this is the car the driver is announced and recorded in - their profile's active car.</summary>
+    private static bool IsActiveCar(DriverProfile profile, Car car) =>
+        !string.IsNullOrWhiteSpace(profile.CarModel)
+        && (string.Equals(profile.CarModel.Trim(), car.DisplayName.Trim(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(profile.CarModel.Trim(), car.Name?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A car's right-click menu on a driver's page: open it, or make it their active car.</summary>
+    private ContextMenuStrip CarMenu(Car car)
+    {
+        var menu = new ContextMenuStrip();
+
+        var open = new ToolStripMenuItem("Open...");
+        open.Click += (_, _) => OpenCar(car);
+
+        var makeActive = new ToolStripMenuItem("Make Active Car");
+        makeActive.Click += (_, _) => MakeActiveCar(car);
+
+        menu.Items.AddRange(new ToolStripItem[] { open, makeActive });
+
+        menu.Opening += (_, _) =>
+        {
+            var owner = _profiles.Get(car.OwnerTransponder);
+            makeActive.Enabled = owner is not null && !car.Retired && !IsActiveCar(owner, car);
+        };
+
+        AppTheme.StyleContextMenu(menu);
+        return menu;
+    }
+
+    /// <summary>
+    /// Makes this the car the driver is announced and recorded in (their
+    /// profile's CarModel), with an undo that puts back the car they had -
+    /// while they still have this one.
+    /// </summary>
+    private void MakeActiveCar(Car car)
+    {
+        if (_profiles.Get(car.OwnerTransponder) is not { } profile)
+        {
+            return;
+        }
+
+        var key = profile.Transponder;
+        var previousModel = profile.CarModel;
+        var name = car.DisplayName.Trim();
+        var hadName = profile.Cars.Any(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+        var who = string.IsNullOrWhiteSpace(profile.DriverName) ? key : profile.DriverName.Trim();
+
+        if (!profile.SetActiveCar(car.DisplayName))
+        {
+            return;
+        }
+
+        _undo.Capture($"Make {name} {who}'s active car", () =>
+        {
+            if (_profiles.Get(key) is not { } current
+                || !string.Equals(current.CarModel, name, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"{who}'s active car has been changed again since. Nothing was changed.");
+            }
+
+            current.CarModel = previousModel;
+
+            if (!hadName)
+            {
+                current.Cars.RemoveAll(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _profiles.Upsert(current);
+
+            if (!IsDisposed)
+            {
+                RefreshAll();
+                Changed?.Invoke();
+            }
+        });
+
+        _profiles.Upsert(profile);
+        RefreshAll();
+        Changed?.Invoke();
     }
 
     // ------------------------------------------------------- the lists

@@ -120,7 +120,14 @@ internal sealed class CarCard : Control
 
     protected override void OnClick(EventArgs e)
     {
-        Opened?.Invoke(Car);
+        // A left click opens the car. A Control raises Click for the right
+        // button too, and a card with a right-click menu would open the car
+        // window over its own menu.
+        if (e is not MouseEventArgs { Button: not MouseButtons.Left })
+        {
+            Opened?.Invoke(Car);
+        }
+
         base.OnClick(e);
     }
 

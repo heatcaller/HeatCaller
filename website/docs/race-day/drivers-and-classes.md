@@ -10,12 +10,42 @@ A driver profile ties a transponder to a person. When the decoder reports a tran
 
 <!-- screenshot: Driver Profiles page with the roster on the left and a driver card on the right -->
 
-The page has two halves:
+The page has two views. The **Hub** and **Garage** buttons at the top switch between them, and the page opens on the one you used last. Both show the same driver: pick a driver in one, and the other follows. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is at the top of both.
+
+### Hub view
 
 - **The roster** on the left, with a photo (or an initials disc) and the columns **Driver**, **#**, **Class**, **Car / Model** and **Transponder**. If a driver has more than one car, the **Car / Model** column shows the active car and how many others they have, for example `MR-03 (+1)`.
-- **The driver card** on the right, which shows the selected driver's photo, number, class (in the class's color), car, team, sponsors, home track, skill level, transponder, any flags, earned badges and notes. Empty fields are left off the card.
+- **The driver card** on the right, with five tabs:
+    - **Profile**: the driver's photo, number, class (in the class's color), car, team, sponsors, home track, skill level, transponder, any flags and notes. Empty fields are left off the card.
+    - **Garage**: the driver's cars, as cards. See [A driver's garage](#a-drivers-garage).
+    - **Transponders**: every transponder the driver has. See [A driver's transponders](#a-drivers-transponders).
+    - **Setups**: every setup logged for the driver's cars, newest first, with the columns **Date**, **Car**, **Track** and **Setup**. Setups logged before they were linked to a car are listed when they carry the driver's name. Double-click one, or select it and click **Open Car**, to open its car.
+    - **Stats**: the driver's record — their results, recent form, personal bests, championships and earned badges.
 
-Under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
+On the **Stats** tab, under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
+
+### Garage view
+
+Pick a driver in **Driver:** at the top. Their cars fill the page, with their **Transponders** beside them. It's the same garage and transponder list as the Hub's tabs, only bigger.
+
+### A driver's garage
+
+Each of the driver's cars is a card, grouped under its class. Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
+
+- Click a car to open it, the same window as on the [Garage](#garage) page: photos, details, lending, setups.
+- Right-click a car for **Open** and **Make Active Car**. **Make Active Car** changes the car the driver is announced in. Undo puts back the car they had.
+- **Add a Car** adds a car for this driver, in their class.
+
+### A driver's transponders
+
+The list shows each transponder the driver has, which car it's **Fitted to** (or "moves between cars" for a personal transponder they move from car to car), and whether it's their main one or retired.
+
+- **Fitted to:** sets which of the driver's cars the selected transponder is in.
+- **Add Transponder** adds another one: a second car's, a spare or a replacement.
+- **Retire** marks the selected one as no longer used. It stays the driver's, and so does everything timed on it. **Bring Back** puts it back in use.
+- **Remove** takes a transponder off the driver altogether; laps already timed on it no longer count as theirs. The main transponder can't be removed.
+
+Each change is saved straight away, and Undo takes it back. A transponder that's already another driver's is refused, with a "Transponder already in use" message naming them.
 
 The **Search name, number, car, class, team...** box filters the roster as you type. It matches the driver name, announcer name, transponder, race number, class, team, sponsors, home track and any car in the driver's garage.
 
@@ -30,7 +60,7 @@ You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click
 
 If the transponder (or one of the others on the **Transponders:** line) is already another driver's, you get a "Transponder already in use" warning naming that driver, and the dialog stays open so you can fix the number. Nothing is replaced.
 
-You can also create profiles from Race Control. When transponders with no profile were on track, HeatCaller asks **Name them now?** after the session and opens this dialog for each one, with the transponder already filled in and locked. See [Transponders](../timing/transponders.md).
+You can also add a driver from a transponder that crossed the line with no profile: click **New Driver** on its line in the unknown-transponders banner, and this dialog opens with the transponder already filled in and locked. See [Unknown transponders](../timing/transponders.md#unknown-transponders).
 
 ### Edit or delete a driver
 
@@ -418,6 +448,8 @@ At the bottom, **Show this plan as the track's main picture** (on by default) ma
 <a id="setup-log"></a>
 
 ## Garage
+
+The **Garage** page shows all the club's cars. One driver's cars are also on their own page, in **Driver Profiles** (see [A driver's garage](#a-drivers-garage)). Both show the same cars.
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be) and **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)).
 

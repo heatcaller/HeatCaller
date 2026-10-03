@@ -113,7 +113,27 @@ public partial class MainForm
             ChassisTemplates = _chassisTemplates,
         };
 
-        var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings) { Dock = DockStyle.Fill };
+        // A driver's cars, transponders and setups on their own page - the
+        // same stores and the same car window as the Garage, so a car is
+        // changed in one place whichever page it was opened from.
+        var driverGarage = new DriverGarageSources
+        {
+            Cars = _cars,
+            Setups = _setupLog,
+            Templates = _chassisTemplates,
+            MakeGarage = () => new GarageControl(
+                _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
+                _trackLayouts, _chassisTemplates, _undo, _raceEvents, forOneDriver: true),
+            OpenCar = (car, owner) =>
+            {
+                using var form = new CarDetailForm(
+                    car, _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
+                    _trackLayouts, _chassisTemplates, _undo, _raceEvents);
+                form.ShowDialog(owner);
+            },
+        };
+
+        var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings, driverGarage) { Dock = DockStyle.Fill };
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Profiles"] = driverProfiles.RefreshAll;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);

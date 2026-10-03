@@ -113,6 +113,22 @@ public sealed class DriverTransponderListTests : IDisposable
         Assert.Equal(new[] { "100", "200" }, reloaded.AllTransponderIds);
     }
 
+    [Fact]
+    public void A_drivers_cars_include_ones_owned_under_another_of_their_transponders()
+    {
+        var cars = CarStore.Load();
+        cars.Upsert(new Car { Id = "a", Name = "Main car", OwnerTransponder = "100" });
+        cars.Upsert(new Car { Id = "b", Name = "Spare", OwnerTransponder = "200" });
+        cars.Upsert(new Car { Id = "c", Name = "Old", OwnerTransponder = "300", Retired = true });
+        cars.Upsert(new Car { Id = "d", Name = "Dev's", OwnerTransponder = "500" });
+
+        var maya = new DriverProfile { Transponder = "100", DriverName = "Maya" };
+        maya.Transponders.Add(new OwnedTransponder { Id = "200" });
+        maya.Transponders.Add(new OwnedTransponder { Id = "300", Retired = true });
+
+        Assert.Equal(new[] { "a", "b", "c" }, cars.OwnedBy(maya).Select(c => c.Id).OrderBy(id => id));
+    }
+
     private static void Pass(RaceControlSession race, string car, uint deviceTimeMs) =>
         race.ProcessLapEvent(new DirectLapEvent
         {

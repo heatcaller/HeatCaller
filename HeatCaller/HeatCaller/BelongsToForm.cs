@@ -164,7 +164,7 @@ internal sealed class BelongsToForm : Form
         foreach (var profile in matches)
         {
             var number = string.IsNullOrWhiteSpace(profile.RaceNumber) ? string.Empty : $"  #{profile.RaceNumber.Trim()}";
-            var cars = _cars.OwnedBy(profile.Transponder).Count(c => !c.Retired);
+            var cars = _cars.OwnedBy(profile).Count(c => !c.Retired);
             var carText = cars == 1 ? "1 car" : $"{cars} cars";
             _lstDrivers.Items.Add(new DriverChoice(profile, $"{NameOf(profile)}{number}  ·  {profile.Transponder}  ·  {carText}"));
         }
@@ -197,7 +197,7 @@ internal sealed class BelongsToForm : Form
 
         if (profile is not null)
         {
-            foreach (var car in _cars.OwnedBy(profile.Transponder).Where(c => !c.Retired))
+            foreach (var car in _cars.OwnedBy(profile).Where(c => !c.Retired))
             {
                 _cmbCar.Items.Add(new Item(car.Id, car.DisplayName));
             }

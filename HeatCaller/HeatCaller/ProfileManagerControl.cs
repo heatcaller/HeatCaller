@@ -17,7 +17,7 @@ namespace HeatCaller;
 /// Editing still happens in ProfileForm; this page decides what a driver
 /// LOOKS like, not what they are.
 /// </summary>
-public sealed class ProfileManagerControl : UserControl
+public sealed partial class ProfileManagerControl : UserControl
 {
     private const int ThumbSize = 40;
 
@@ -137,8 +137,10 @@ public sealed class ProfileManagerControl : UserControl
         RaceClassStore classStore,
         UndoService undo,
         DriverStatsSources? statsSources = null,
-        AppSettings? settings = null)
+        AppSettings? settings = null,
+        DriverGarageSources? garage = null)
     {
+        _garageSources = garage;
         _store = store;
         _undo = undo;
         _classStore = classStore;
@@ -222,6 +224,7 @@ public sealed class ProfileManagerControl : UserControl
     {
         base.OnFontChanged(e);
         _textSize.Apply();
+        RestyleSegmentsAfterThemePass();
     }
 
     /// <summary>A new text size, reaching this page through the window's font - the only way it does, since the page wears a face of its own. See TextSize.</summary>
@@ -229,6 +232,26 @@ public sealed class ProfileManagerControl : UserControl
     {
         base.OnParentFontChanged(e);
         _textSize.Apply();
+        RestyleSegmentsAfterThemePass();
+    }
+
+    /// <summary>
+    /// The theme pass that follows a new text size styles every button by
+    /// its caption, which leaves no tab or view looking chosen: once it has
+    /// run (the message queue is reached after it), they are marked again.
+    /// </summary>
+    private void RestyleSegmentsAfterThemePass()
+    {
+        if (_garageSources is not null && IsHandleCreated && !IsDisposed)
+        {
+            BeginInvoke(() =>
+            {
+                if (!IsDisposed)
+                {
+                    StyleSegments();
+                }
+            });
+        }
     }
 
     /// <summary>
@@ -276,7 +299,19 @@ public sealed class ProfileManagerControl : UserControl
         // their room.
         var card = new Section();
 
-        card.AddFill(_cardScroll, () => UiLayout.AtTextSize(LeastCanvasHeight));
+        if (_garageSources is not null)
+        {
+            // The card's tabs - Profile, Garage, Transponders, Setups, Stats
+            // - over one body that shows whichever is chosen. See the Views
+            // half of this class.
+            card.Add(BuildCardTabs(), gapBelow: UiLayout.RowGap);
+            card.AddFill(BuildCardBody(), () => UiLayout.AtTextSize(LeastCanvasHeight));
+        }
+        else
+        {
+            card.AddFill(_cardScroll, () => UiLayout.AtTextSize(LeastCanvasHeight));
+        }
+
         _cardButtons = card.Add(new ButtonBar().With(_btnCardEdit, _btnCardPhoto), gapBelow: 0);
 
         // --- The page ---
@@ -292,7 +327,18 @@ public sealed class ProfileManagerControl : UserControl
         // Transponders that crossed the line with no driver - see
         // UnknownTransponders. Hidden while there are none.
         page.Add(_unknownBanner);
-        page.AddFill(band, band.LeastHeight, gapBelow: 0);
+
+        if (_garageSources is not null)
+        {
+            // Hub (the roster and the driver's card) or Garage (one driver's
+            // cars, big) - see the Views half of this class.
+            page.Add(BuildViewSwitch(), gapBelow: UiLayout.RowGap);
+            page.AddFill(BuildViews(band), ViewsLeastHeight, gapBelow: 0);
+        }
+        else
+        {
+            page.AddFill(band, band.LeastHeight, gapBelow: 0);
+        }
 
         Controls.Add(page);
     }
@@ -398,6 +444,8 @@ public sealed class ProfileManagerControl : UserControl
     {
         InvalidateStats();
         RefreshList();
+        RefreshGarageDriverPicker();
+        ShowDriverInViews(CardProfile()?.Transponder);
 
         // Scrolled to on arrival. The first pick is made while the page is
         // still being built, before the roster has a window to scroll, so a
@@ -411,6 +459,11 @@ public sealed class ProfileManagerControl : UserControl
         {
             onCard.EnsureVisible();
         }
+
+        // The theme pass run as the page is shown, or at a new text size,
+        // styles every button by its caption, which leaves no tab or view
+        // looking chosen - so the chosen ones are marked again after it.
+        StyleSegments();
     }
 
     // ==================== The roster ====================
@@ -630,6 +683,9 @@ public sealed class ProfileManagerControl : UserControl
         RequestStats(profile);
         UpdateCardExtent();
         _cardScroll.Invalidate();
+
+        // The garage, transponders and setups follow the driver too.
+        ShowDriverInViews(profile?.Transponder);
     }
 
     /// <summary>
@@ -1082,9 +1138,10 @@ public sealed class ProfileManagerControl : UserControl
         Chips(c, chips);
 
         // --- Their record ---
-        if (_sources?.History is null)
+        if (_sources?.History is null || !ShowsStats)
         {
             // Built without the race history - the profile is all there is.
+            // Or the Profile tab is showing: the record is on Stats.
         }
         else if (stats is null)
         {
@@ -1101,14 +1158,19 @@ public sealed class ProfileManagerControl : UserControl
             RenderRecord(c, stats);
         }
 
-        RenderOnFile(c, stats, profile);
-        RenderRaceDay(c, stats?.RaceDay);
-        RenderProfileDetails(c, profile);
-
-        if (!string.IsNullOrWhiteSpace(profile.Notes))
+        // With the card's tabs, Profile is who they are and Stats is their
+        // record; without them (no garage sources), the card is both.
+        if (ShowsProfile)
         {
-            Heading(c, "Notes");
-            Paragraph(c, profile.Notes.Trim(), AppTheme.BodyFont, AppTheme.TextDark);
+            RenderOnFile(c, stats, profile);
+            RenderRaceDay(c, stats?.RaceDay);
+            RenderProfileDetails(c, profile);
+
+            if (!string.IsNullOrWhiteSpace(profile.Notes))
+            {
+                Heading(c, "Notes");
+                Paragraph(c, profile.Notes.Trim(), AppTheme.BodyFont, AppTheme.TextDark);
+            }
         }
 
         return (int)Math.Ceiling(c.Y + CardPad);

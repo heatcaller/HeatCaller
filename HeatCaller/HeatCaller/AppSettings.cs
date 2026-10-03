@@ -524,6 +524,13 @@ public sealed class AppSettings
     /// </summary>
     public string LastDriverProfileTransponder { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Which view Driver Profiles opens on: "Hub" (the list beside one
+    /// driver's card, with its tabs) or "Garage" (one driver's cars, big,
+    /// with their transponders). The last one picked.
+    /// </summary>
+    public string DriversPageView { get; set; } = "Hub";
+
     // Race Program
     public string LastRaceProgramClass { get; set; } = string.Empty;
 

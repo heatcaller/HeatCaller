@@ -422,6 +422,16 @@ public sealed class CarStore
             ? new List<Car>()
             : All.Where(c => string.Equals(c.OwnerTransponder, transponder, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    /// <summary>
+    /// A driver's cars: owned under their main transponder or any other of
+    /// theirs, since a car's owner field can hold either.
+    /// </summary>
+    public IReadOnlyList<Car> OwnedBy(DriverProfile profile)
+    {
+        var ids = profile.AllTransponderIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return All.Where(c => !string.IsNullOrWhiteSpace(c.OwnerTransponder) && ids.Contains(c.OwnerTransponder.Trim())).ToList();
+    }
+
     /// <summary>The club's own cars - the loan pool.</summary>
     public IReadOnlyList<Car> ClubCars => All.Where(c => c.IsClubCar).ToList();
 
