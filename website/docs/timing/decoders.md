@@ -18,7 +18,7 @@ The line at the top of the page says the same: "Choose your timing decoder and c
 - **You have an EasyLap decoder.** Choose **Direct EasyLap Decoder (USB)**. Close any other timing program first, Next Level Timing included, because only one program can use the decoder at a time.
 - **You have an I-Lap decoder.** Choose **I-Lap Decoder (Serial)**.
 
-Only one connection is active at a time. See [Switching decoder types](#switching-decoder-types).
+The decoder you choose here is the start/finish line, where laps are counted. If you have both, the other one can be a split loop partway round the track. See [A split loop](#a-split-loop). See also [Switching decoder types](#switching-decoder-types).
 
 !!! note "Next Level Timing"
     Earlier versions could also listen to Next Level Timing through its Neon API, with NLT running the race. That connection was retired in 0.50.0. If this laptop last used it, HeatCaller now starts on the EasyLap decoder, and the console says "[connection] Next Level Timing (Neon API) is no longer offered - the Connection page now starts on the EasyLap decoder." Sessions saved from Next Level Timing stay in **Race History**.
@@ -117,11 +117,46 @@ See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder lo
 
 <!-- TODO: confirm how thoroughly I-Lap support has been tested against real hardware; the code says the parser was written to be tolerant ahead of bench testing -->
 
+## A split loop
+
+With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/finish line, and the other can read cars partway round the track. Choose it in **Split loop:** (it lists the decoder that isn't the line).
+
+- **Connect** connects both. **Connect Split** connects the split loop on its own, for example after it was unplugged. **Disconnect** disconnects both.
+- **Split status:** has its own light. Once connected, it says how closely the two decoders' clocks are tied together, for example "Clocks tied together to within about 4 ms". HeatCaller works this out from the EasyLap's once-a-second clock reading; nothing needs setting.
+- **The split loop never counts a lap.** Laps, the minimum lap time, jump starts and the finish all come from the line, exactly as with one decoder. If the split loop unplugs or misreads, the race carries on as it would without it.
+- **Each car needs a transponder for each decoder:** one the line reads and one the split loop reads. Add the split loop's on the driver's **Transponders** tab with **Add Split Transponder**. See [A driver's transponders](../race-day/drivers-and-classes.md#a-drivers-transponders).
+- During a race, the TIMING line on the Next Up bar says "Split loop not connected" or "Split loop quiet" if the split loop stops. Laps are still timed.
+- The console logs each split pass as `[split] Split 1: ...`, with whose transponder it is.
+
+### Line Up
+
+Each decoder takes a moment to report a car, and the I-Lap's serial line adds a little more, so the split loop reads a car slightly late. **Line Up** measures how late, once:
+
+1. Lay the split loop right beside the start/finish line, at the same spot.
+2. Click **Line Up**, then drive a car with both its transponders across them five or six times. Each crossing both loops read is listed.
+3. Click **Save**. The middle reading is kept and taken off every split time. **Set to Zero** clears it.
+4. Put the split loop back in its place round the track.
+
+### Split times
+
+With the split loop on, each flying lap is cut into two sectors: **S1** from the line to the split loop, **S2** from the split loop back to the line. The sectors always add up to the lap time exactly.
+
+- **On the board:** add the **S1**, **S2**, **Ideal Lap** and **At Split** columns with **Columns**. See [Columns](../race-control/running-a-race.md#columns). The quickest sector of the session is highlighted, and a driver's own best is green. **At Split** shows, as a car crosses the split loop, whether it's up or down on its best lap.
+- **On the Big Screen:** the same columns, and a banner such as "FASTEST SECTOR 1 — MAYA 12.31" when someone sets the quickest sector of the session.
+- **In the lap breakdown:** each lap's sectors, and the driver's ideal lap.
+- **Saved with the race:** each lap's sectors are kept in the results.
+
+A lap gets no sectors when the split loop didn't read the car, when it's the start lap or a lap through a crash recovery, or when it was merged or edited by hand afterwards. It still counts as a lap.
+
+**Possible missed lap.** If the split loop reads a car twice without the line reading it in between, the TIMING line on the Next Up bar says so for 20 seconds, for example "Possible missed lap: Maya was read at the split twice without crossing the line - check their lap count". Nothing is added to the race; you decide whether to correct the lap count.
+
+**Pre-race check** notes any car that has no split transponder: it races normally, just without sector times.
+
 ## Switching decoder types
 
-Only the chosen decoder stays connected. When you change **Connect via:**:
+The decoder chosen in **Connect via:** is the line; with **Split loop:** on, the other one is the split loop. Any other connection is disconnected. When you change **Connect via:**:
 
-- Any EasyLap or I-Lap connection that isn't the new choice is disconnected.
+- Any EasyLap or I-Lap connection that is neither the new line nor the split loop is disconnected. With the split loop on, the two decoders swap roles.
 - The **Status:** line switches to the new choice's own state (usually "Disconnected"). Click **Connect** to connect it.
 
 HeatCaller remembers your choice and uses it next time it opens.

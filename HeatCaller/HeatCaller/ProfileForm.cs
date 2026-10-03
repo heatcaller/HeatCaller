@@ -885,6 +885,12 @@ public sealed class ProfileForm : Form
             Contact = _txtContact.Text.Trim(),
             Email = _txtEmail.Text.Trim(),
             Transponders = _transponders.ToList(),
+
+            // Not on this form - the driver's Transponders tab has them -
+            // so they are kept as they were rather than lost on an edit.
+            SplitTransponders = System.Text.Json.JsonSerializer.Deserialize<List<OwnedTransponder>>(
+                                    System.Text.Json.JsonSerializer.Serialize(Result.SplitTransponders ?? new List<OwnedTransponder>()))
+                                ?? new List<OwnedTransponder>(),
             IsRental = _chkRental.Checked,
             ExcludeFromRecords = _chkExcludeRecords.Checked,
 

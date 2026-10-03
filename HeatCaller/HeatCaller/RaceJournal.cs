@@ -146,6 +146,9 @@ public sealed class RaceJournal
         public List<long> LapTimesMs { get; set; } = new();
         public List<int> StreakAtLap { get; set; } = new();
 
+        /// <summary>Each lap's sectors - see RacerStanding.SectorsAtLap. Null in a journal written before splits existed.</summary>
+        public List<long[]?>? SectorsAtLap { get; set; }
+
         /// <summary>
         /// Which laps ran through an earlier crash recovery - see
         /// RacerStanding.RecoveryLapIndexes. Empty in a journal written
@@ -402,6 +405,7 @@ public sealed class RaceJournal
                     QualifyingZeroMs = s.QualifyingZeroMs,
                     LapTimesMs = s.LapTimesMs.ToList(),
                     StreakAtLap = s.StreakAtLap.ToList(),
+                    SectorsAtLap = s.SectorsAtLap.ToList(),
                     RecoveryLapIndexes = s.RecoveryLapIndexes.ToList(),
                     Warnings = s.Warnings.ToList(),
                 }).ToList(),
@@ -819,6 +823,11 @@ public sealed class RaceJournal
 
             standing.LapTimesMs.AddRange(s.LapTimesMs);
             standing.StreakAtLap.AddRange(s.StreakAtLap);
+
+            if (s.SectorsAtLap is not null)
+            {
+                standing.SectorsAtLap.AddRange(s.SectorsAtLap);
+            }
 
             // Null only if the file says so explicitly; missing reads as empty.
             if (s.RecoveryLapIndexes is not null)

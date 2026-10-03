@@ -12,6 +12,11 @@ namespace HeatCaller;
 /// to it that they say go too. What stays: the races already run, filed
 /// under the driver who ran them, and the old owner's main transponder,
 /// which is their key (DriverProfile.Transponder) and never moves.
+///
+/// The split-loop transponders fitted to it (DriverProfile.SplitTransponders)
+/// go with it to a driver without asking - they only ever tell the split
+/// loop which car crossed it. Going to the club, they stay with the old
+/// owner, moving between their cars.
 /// </summary>
 internal static class CarTransferring
 {
@@ -36,15 +41,20 @@ internal static class CarTransferring
         : profile.DriverName.Trim();
 
     /// <summary>The fields a transfer changes on a driver, for its undo to check and put back.</summary>
-    private sealed record DriverPart(string Transponders, string CarModel)
+    private sealed record DriverPart(string Transponders, string Split, string CarModel)
     {
         public static DriverPart Of(DriverProfile profile) => new(
             JsonSerializer.Serialize(profile.Transponders ?? new List<OwnedTransponder>()),
+            JsonSerializer.Serialize(profile.SplitTransponders ?? new List<OwnedTransponder>()),
             profile.CarModel ?? string.Empty);
+
+        /// <summary>Both transponder lists as they are saved - what the undo checks are unchanged.</summary>
+        public string Lists => Transponders + "|" + Split;
 
         public void PutBack(DriverProfile profile)
         {
             profile.Transponders = JsonSerializer.Deserialize<List<OwnedTransponder>>(Transponders) ?? new List<OwnedTransponder>();
+            profile.SplitTransponders = JsonSerializer.Deserialize<List<OwnedTransponder>>(Split) ?? new List<OwnedTransponder>();
 
             if (CarModel.Length > 0)
             {
@@ -136,6 +146,15 @@ internal static class CarTransferring
 
         var fromBefore = from is null ? null : DriverPart.Of(from);
         var toBefore = to is null ? null : DriverPart.Of(to);
+
+        // The split-loop transponders fitted to the car: they go with it to
+        // a driver (copies, so the old owner's list isn't touched by it).
+        var splitMoving = to is null || from is null
+            ? new List<OwnedTransponder>()
+            : (from.SplitTransponders ?? new List<OwnedTransponder>())
+                .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Id) && string.Equals(t.CarId, car.Id, StringComparison.Ordinal))
+                .Select(t => new OwnedTransponder { Id = t.Id.Trim(), CarId = car.Id, Retired = t.Retired, RetiredUtc = t.RetiredUtc, AddedUtc = DateTime.UtcNow })
+                .ToList();
         // 1. The car changes hands. In the app this alone puts both drivers'
         //    car names in step (CarStore.Changed); the steps below read the
         //    profiles afresh for that reason.
@@ -154,6 +173,16 @@ internal static class CarTransferring
                 entry.CarId = string.Empty;
             }
 
+            // Split transponders: gone with the car to a driver; kept,
+            // moving between their cars, when it went to the club.
+            updated.SplitTransponders ??= new List<OwnedTransponder>();
+            updated.SplitTransponders.RemoveAll(t => t is not null && splitMoving.Any(m => string.Equals(m.Id, t.Id?.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+            foreach (var entry in updated.SplitTransponders.Where(t => t is not null && string.Equals(t.CarId, car.Id, StringComparison.Ordinal)))
+            {
+                entry.CarId = string.Empty;
+            }
+
             profiles.Upsert(updated);
         }
 
@@ -167,6 +196,13 @@ internal static class CarTransferring
             foreach (var id in moving)
             {
                 updated.Transponders.Add(new OwnedTransponder { Id = id, CarId = car.Id, AddedUtc = DateTime.UtcNow });
+            }
+
+            updated.SplitTransponders ??= new List<OwnedTransponder>();
+
+            foreach (var entry in splitMoving.Where(m => updated.SplitEntry(m.Id) is null))
+            {
+                updated.SplitTransponders.Add(entry);
             }
 
             if (string.IsNullOrWhiteSpace(updated.CarModel))
@@ -206,8 +242,8 @@ internal static class CarTransferring
         {
             if (cars.Get(carBefore.Id) is not { } nowCar
                 || JsonSerializer.Serialize(nowCar) != carAfterJson
-                || (fromKey is not null && (profiles.Get(fromKey) is not { } f || DriverPart.Of(f).Transponders != fromAfter?.Transponders))
-                || (to is not null && (profiles.Get(toKey) is not { } t || DriverPart.Of(t).Transponders != toAfter?.Transponders)))
+                || (fromKey is not null && (profiles.Get(fromKey) is not { } f || DriverPart.Of(f).Lists != fromAfter?.Lists))
+                || (to is not null && (profiles.Get(toKey) is not { } t || DriverPart.Of(t).Lists != toAfter?.Lists)))
             {
                 throw new InvalidOperationException(
                     $"{carBefore.DisplayName}, or a transponder that went with it, has been changed since, and undoing the transfer now would undo that too. Nothing was changed.");

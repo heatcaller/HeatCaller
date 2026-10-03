@@ -6,7 +6,9 @@ namespace HeatCaller;
 /// One driver's transponders, on their page (Driver Hub): the main one
 /// and every other, which car each is fitted to, and which are retired -
 /// with Add, Fitted To, Retire / Bring Back, Transfer and Remove, each
-/// saved at once with its own Undo step.
+/// saved at once with its own Undo step. Their split-loop transponders
+/// (DriverProfile.SplitTransponders) are listed under them, marked
+/// "split loop", with Add Split Transponder.
 ///
 /// The same changes the profile form's Transponders line makes, without
 /// opening the form; the rules are the store's (DescribeClash), so a
@@ -21,6 +23,9 @@ internal sealed class DriverTransponderPanel : UserControl
     private readonly ListView _list = new();
     private readonly ComboBox _cmbFitted = new();
     private readonly Button _btnAdd = new() { Text = "Add Transponder..." };
+
+    /// <summary>A transponder the split loop reads (DriverProfile.SplitTransponders).</summary>
+    private readonly Button _btnAddSplit = new() { Text = "Add Split Transponder..." };
     private readonly Button _btnRetire = new() { Text = "Retire" };
 
     /// <summary>Gives the picked transponder to another driver for good (TransponderTransferring) - not the main one, which is their key.</summary>
@@ -36,6 +41,9 @@ internal sealed class DriverTransponderPanel : UserControl
 
     /// <summary>Raised after a change was saved - for a host showing more of the driver than this.</summary>
     public event Action? Changed;
+
+    /// <summary>The split loop's recent unknown reads, most recent first - see DriverGarageSources.SplitSeenRecently.</summary>
+    public Func<IReadOnlyList<string>>? SplitSeenRecently { get; init; }
 
     public DriverTransponderPanel(ProfileStore profiles, CarStore cars, UndoService undo)
     {
@@ -62,11 +70,13 @@ internal sealed class DriverTransponderPanel : UserControl
         _cmbFitted.SelectionChangeCommitted += (_, _) => FitToCar();
 
         _btnAdd.Click += (_, _) => AddTransponder();
+        _btnAddSplit.Click += (_, _) => AddSplitTransponder();
         _btnRetire.Click += (_, _) => ToggleRetired();
         _btnTransfer.Click += (_, _) => TransferTransponder();
         _btnRemove.Click += (_, _) => RemoveTransponder();
 
-        _lblHint.Text = "A retired transponder is no longer in use, but it is still theirs - and so is everything timed on it.";
+        _lblHint.Text = "A retired transponder is no longer in use, but it is still theirs - and so is everything timed on it. "
+                        + "A split transponder is read only by the split loop partway round the track: fit it to the car it's in.";
 
         var fitted = new FieldGrid();
         fitted.AddRow("Fitted to:", _cmbFitted);
@@ -74,7 +84,7 @@ internal sealed class DriverTransponderPanel : UserControl
         var page = new FillPage();
         page.AddFill(_list, _ => UiLayout.AtTextSize(120), gapBelow: UiLayout.RowGap);
         page.Add(fitted, gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(_btnAdd, _btnRetire, _btnTransfer, _btnRemove), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(_btnAdd, _btnAddSplit, _btnRetire, _btnTransfer, _btnRemove), gapBelow: UiLayout.RowGap);
         page.Add(_lblHint, gapBelow: 0);
 
         Controls.Add(page);
@@ -93,13 +103,36 @@ internal sealed class DriverTransponderPanel : UserControl
         // highlighted transponder stays highlighted.
         var same = string.Equals(driver, _driver, StringComparison.OrdinalIgnoreCase);
         _driver = driver;
-        Fill(keep: same ? Picked()?.Id : null);
+        Fill(keep: same && Picked() is { } picked ? KeyOf(picked) : null);
     }
 
     private DriverProfile? Driver() => _driver is null ? null : _profiles.Get(_driver);
 
+    /// <summary>What keeps a row highlighted across a refill: its number, and which loop it's for.</summary>
+    private static string KeyOf(Row row) => KeyOf(row.Id, row.IsSplit);
+
+    private static string KeyOf(string id, bool split) => (split ? "split:" : "line:") + id.Trim().ToUpperInvariant();
+
+    /// <summary>The list of entries a row's transponder is in - the line's or the split loop's.</summary>
+    private static List<OwnedTransponder> ListFor(DriverProfile profile, bool split) =>
+        split ? profile.SplitTransponders ??= new List<OwnedTransponder>() : profile.Transponders ??= new List<OwnedTransponder>();
+
+    /// <summary>The entry to change for a row - a split one is always listed already; a line one is made when it has none (the main one).</summary>
+    private static OwnedTransponder EntryFor(DriverProfile profile, Row row) =>
+        row.IsSplit
+            ? profile.SplitEntry(row.Id) ?? throw new InvalidOperationException($"Split transponder {row.Id} isn't {NameOf(profile)}'s any more.")
+            : profile.EntryToChange(row.Id);
+
+    /// <summary>Both of a driver's transponder lists, as they are saved - what an undo compares and puts back.</summary>
+    private static string ListsOf(DriverProfile profile) =>
+        JsonSerializer.Serialize(new
+        {
+            Line = profile.Transponders ?? new List<OwnedTransponder>(),
+            Split = profile.SplitTransponders ?? new List<OwnedTransponder>(),
+        });
+
     /// <summary>One line of the list.</summary>
-    private sealed record Row(string Id, bool IsMain, bool Retired, string CarId);
+    private sealed record Row(string Id, bool IsMain, bool Retired, string CarId, bool IsSplit = false);
 
     /// <summary>One line of the fitted-to drop-down.</summary>
     private sealed record CarChoice(string CarId, string Caption)
@@ -133,13 +166,32 @@ internal sealed class DriverTransponderPanel : UserControl
 
                 _list.Items.Add(item);
             }
+
+            // The split loop's, under them: a different decoder, with
+            // numbers of its own.
+            foreach (var entry in (profile.SplitTransponders ?? new List<OwnedTransponder>()).Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Id)))
+            {
+                var row = new Row(entry.Id.Trim(), false, entry.Retired, entry.CarId ?? string.Empty, IsSplit: true);
+                var status = row.Retired ? "split loop, retired" : "split loop";
+
+                var item = new ListViewItem(new[] { row.Id, CarName(row.CarId), status }) { Tag = row };
+
+                if (row.Retired)
+                {
+                    item.ForeColor = AppTheme.TextMuted;
+                }
+
+                _list.Items.Add(item);
+            }
         }
 
         _list.EndUpdate();
         FitColumns();
 
+        // Kept by number and kind: a split transponder can have the same
+        // number as a line one.
         var again = _list.Items.Cast<ListViewItem>()
-            .FirstOrDefault(i => string.Equals(((Row)i.Tag!).Id, keep, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(i => KeyOf((Row)i.Tag!) == keep);
 
         if (again is not null)
         {
@@ -151,6 +203,7 @@ internal sealed class DriverTransponderPanel : UserControl
         }
 
         _btnAdd.Enabled = profile is not null;
+        _btnAddSplit.Enabled = profile is not null;
         OnPicked();
     }
 
@@ -167,7 +220,9 @@ internal sealed class DriverTransponderPanel : UserControl
         _btnRetire.Enabled = row is not null;
         _btnRetire.Text = row is { Retired: true } ? "Bring Back" : "Retire";
         _btnRemove.Enabled = row is { IsMain: false };
-        _btnTransfer.Enabled = row is { IsMain: false };
+
+        // A split transponder goes with its car, not on its own.
+        _btnTransfer.Enabled = row is { IsMain: false, IsSplit: false };
 
         _filling = true;
 
@@ -233,33 +288,46 @@ internal sealed class DriverTransponderPanel : UserControl
             return false;
         }
 
-        var before = JsonSerializer.Serialize(current.Transponders ?? new List<OwnedTransponder>());
+        var before = ListsOf(current);
+        var lineBefore = JsonSerializer.Serialize(current.Transponders ?? new List<OwnedTransponder>());
+        var splitBefore = JsonSerializer.Serialize(current.SplitTransponders ?? new List<OwnedTransponder>());
         var updated = ProfileStore.Snapshot(current);
-        change(updated);
 
-        if (_profiles.DescribeClash(updated, editing: updated.Transponder) is { } clash)
+        try
+        {
+            change(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AppDialog.Show(this, ex.Message, "Transponders", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Fill(keep);
+            return false;
+        }
+
+        if ((_profiles.DescribeClash(updated, editing: updated.Transponder)
+             ?? _profiles.DescribeSplitClash(updated, editing: updated.Transponder)) is { } clash)
         {
             AppDialog.Show(this, clash, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
 
-        var after = JsonSerializer.Serialize(updated.Transponders);
+        var after = ListsOf(updated);
         var key = updated.Transponder;
         var who = NameOf(updated);
         var profiles = _profiles;
 
         _undo.Capture(undoName, () =>
         {
-            if (profiles.Get(key) is not { } now
-                || JsonSerializer.Serialize(now.Transponders ?? new List<OwnedTransponder>()) != after)
+            if (profiles.Get(key) is not { } now || ListsOf(now) != after)
             {
                 throw new InvalidOperationException($"{who}'s transponders have been changed again since, and undoing this now would undo that too. Nothing was changed.");
             }
 
             var restored = ProfileStore.Snapshot(now);
-            restored.Transponders = JsonSerializer.Deserialize<List<OwnedTransponder>>(before) ?? new List<OwnedTransponder>();
+            restored.Transponders = JsonSerializer.Deserialize<List<OwnedTransponder>>(lineBefore) ?? new List<OwnedTransponder>();
+            restored.SplitTransponders = JsonSerializer.Deserialize<List<OwnedTransponder>>(splitBefore) ?? new List<OwnedTransponder>();
 
-            if (profiles.DescribeClash(restored, editing: key) is { } taken)
+            if ((profiles.DescribeClash(restored, editing: key) ?? profiles.DescribeSplitClash(restored, editing: key)) is { } taken)
             {
                 throw new InvalidOperationException($"{taken} Nothing was changed.");
             }
@@ -312,13 +380,76 @@ internal sealed class DriverTransponderPanel : UserControl
 
         if (profile.AllTransponderIds.Contains(id, StringComparer.OrdinalIgnoreCase))
         {
-            Fill(keep: id);
+            Fill(keep: KeyOf(id, split: false));
             return;
         }
 
         Change($"Add transponder {id} to {NameOf(profile)}",
             p => p.Transponders.Add(new OwnedTransponder { Id = id, AddedUtc = DateTime.UtcNow }),
-            keep: id);
+            keep: KeyOf(id, split: false));
+    }
+
+    /// <summary>
+    /// Add Split Transponder: one the split loop reads, fitted to one of
+    /// their cars when they have just one in use. The number fills itself in
+    /// when the car has just been driven over the split loop and nobody has
+    /// that transponder yet.
+    /// </summary>
+    private void AddSplitTransponder()
+    {
+        if (Driver() is not { } profile)
+        {
+            return;
+        }
+
+        var seen = SplitSeenRecently?.Invoke() ?? Array.Empty<string>();
+        var suggested = seen.FirstOrDefault() ?? string.Empty;
+
+        var prompt = $"A transponder for {NameOf(profile)} that the split loop reads (its own decoder's - not the line's). Its number:";
+
+        if (suggested.Length > 0)
+        {
+            prompt += $"\n\nFilled in with the last one the split loop read that nobody has yet.";
+        }
+        else if (SplitSeenRecently is not null)
+        {
+            prompt += "\n\nTip: drive the car over the split loop first, and its number is filled in here.";
+        }
+
+        using var ask = new RentalPromptForm("Add Split Transponder", prompt, suggested);
+
+        if (ask.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var id = ask.Answer;
+
+        if (id.Length == 0)
+        {
+            return;
+        }
+
+        if (id.Length > 40)
+        {
+            AppDialog.Show(this, "That transponder number is too long.", "Add Split Transponder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (profile.SplitEntry(id) is not null)
+        {
+            Fill(keep: KeyOf(id, split: true));
+            return;
+        }
+
+        // Fitted to their car when there is only one it could be in - the
+        // split loop finds a car's row on the board through its car.
+        var cars = _cars.OwnedBy(profile).Where(c => !c.Retired).ToList();
+        var carId = cars.Count == 1 ? cars[0].Id : string.Empty;
+
+        Change($"Add split transponder {id} to {NameOf(profile)}",
+            p => (p.SplitTransponders ??= new List<OwnedTransponder>()).Add(new OwnedTransponder { Id = id, CarId = carId, AddedUtc = DateTime.UtcNow }),
+            keep: KeyOf(id, split: true));
     }
 
     private void ToggleRetired()
@@ -330,14 +461,16 @@ internal sealed class DriverTransponderPanel : UserControl
 
         var retire = !row.Retired;
 
-        Change(retire ? $"Retire transponder {row.Id}" : $"Bring back transponder {row.Id}",
+        var kind = row.IsSplit ? "split transponder" : "transponder";
+
+        Change(retire ? $"Retire {kind} {row.Id}" : $"Bring back {kind} {row.Id}",
             p =>
             {
-                var entry = p.EntryToChange(row.Id);
+                var entry = EntryFor(p, row);
                 entry.Retired = retire;
                 entry.RetiredUtc = retire ? DateTime.UtcNow : null;
             },
-            keep: row.Id);
+            keep: KeyOf(row));
     }
 
     private void RemoveTransponder()
@@ -347,23 +480,26 @@ internal sealed class DriverTransponderPanel : UserControl
             return;
         }
 
-        if (AppDialog.Show(this,
-                $"Remove transponder {row.Id} from {NameOf(profile)}?\n\nLaps already timed on it will no longer count as theirs. "
-                + "If it is just no longer used, Retire it instead - that keeps them.",
-                "Remove transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        var question = row.IsSplit
+            ? $"Remove split transponder {row.Id} from {NameOf(profile)}?\n\nThe split loop won't know whose it is any more."
+            : $"Remove transponder {row.Id} from {NameOf(profile)}?\n\nLaps already timed on it will no longer count as theirs. "
+              + "If it is just no longer used, Retire it instead - that keeps them.";
+
+        if (AppDialog.Show(this, question, row.IsSplit ? "Remove split transponder" : "Remove transponder",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
         }
 
-        Change($"Remove transponder {row.Id} from {NameOf(profile)}",
-            p => p.Transponders.RemoveAll(t => string.Equals(t.Id?.Trim(), row.Id, StringComparison.OrdinalIgnoreCase)),
+        Change($"Remove {(row.IsSplit ? "split transponder" : "transponder")} {row.Id} from {NameOf(profile)}",
+            p => ListFor(p, row.IsSplit).RemoveAll(t => t is not null && string.Equals(t.Id?.Trim(), row.Id, StringComparison.OrdinalIgnoreCase)),
             keep: null);
     }
 
     /// <summary>Transfer: the picked transponder to another driver for good, with one Undo step for both.</summary>
     private void TransferTransponder()
     {
-        if (Picked() is not { IsMain: false } row || Driver() is not { } profile)
+        if (Picked() is not { IsMain: false, IsSplit: false } row || Driver() is not { } profile)
         {
             return;
         }
@@ -388,10 +524,12 @@ internal sealed class DriverTransponderPanel : UserControl
             return;
         }
 
+        var kind = row.IsSplit ? "Split transponder" : "Transponder";
+
         Change(choice.CarId.Length == 0
-                ? $"Transponder {row.Id} moves between cars"
-                : $"Fit transponder {row.Id} to {choice.Caption}",
-            p => p.EntryToChange(row.Id).CarId = choice.CarId,
-            keep: row.Id);
+                ? $"{kind} {row.Id} moves between cars"
+                : $"Fit {kind.ToLowerInvariant()} {row.Id} to {choice.Caption}",
+            p => EntryFor(p, row).CarId = choice.CarId,
+            keep: KeyOf(row));
     }
 }

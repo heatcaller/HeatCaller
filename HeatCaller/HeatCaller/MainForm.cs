@@ -1283,13 +1283,16 @@ public partial class MainForm : Form
         };
         _decoderClient.StatusChanged += OnDecoderStatusChanged;
         _decoderClient.RawMessage += OnClientRawMessage;
-        _decoderClient.LapEventReceived += OnDecoderLapEvent;
+        _decoderClient.LapEventReceived += OnEasyLapPass;
 
         // The I-Lap path ends in the same handler as EasyLap's - one lap
-        // pipeline whatever the hardware at the gate.
+        // pipeline whatever the hardware at the gate. Whichever decoder is
+        // the split loop goes to the split loop instead (RoutePass).
         _ilapClient.StatusChanged += OnILapStatusChanged;
         _ilapClient.RawMessage += OnClientRawMessage;
-        _ilapClient.LapEventReceived += OnDecoderLapEvent;
+        _ilapClient.LapEventReceived += OnILapPass;
+
+        WireSplitLoop();
 
         // Watches for timing going quietly wrong mid-race - a decoder gone
         // quiet, nothing crossing, a car not seen. See TimingWatch.
@@ -1302,12 +1305,19 @@ public partial class MainForm : Form
             // opening the EasyLap every three seconds regardless - two
             // decoders feeding one race.
             if (chkAutoConnect.Checked
-                && SelectedDecoder == DecoderConnection.EasyLap
+                && RoleOf(DecoderConnection.EasyLap) != DecoderRole.None
                 && _decoderClient.State is DecoderConnectionState.Disconnected or DecoderConnectionState.Error)
             {
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] Retrying...");
-                btnConnect.Enabled = false;
-                btnDisconnect.Enabled = true;
+
+                // The line's buttons only when the EasyLap is the line - an
+                // EasyLap split loop has its own (RenderSplitStatus).
+                if (RoleOf(DecoderConnection.EasyLap) == DecoderRole.Line)
+                {
+                    btnConnect.Enabled = false;
+                    btnDisconnect.Enabled = true;
+                }
+
                 _decoderClient.Connect();
             }
         };

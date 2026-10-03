@@ -26,11 +26,11 @@ public sealed class ILapClient : IDisposable
 
     private SerialPort? _port;
     private readonly StringBuilder _lineBuffer = new();
-    // Started once, here, and never restarted. DeviceTimeMs is read from
-    // this clock and the race session measures laps as differences between
-    // successive readings - restarting it on a reconnect would make the
-    // clock jump backwards mid-race and every later lap come out negative.
-    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    // DeviceTimeMs is the app's own clock (TimingClock) at receipt: it
+    // never restarts - a reconnect can't make it jump backwards mid-race
+    // and turn every later lap negative - and it is the clock an EasyLap's
+    // passes are mapped onto (DecoderClockMap), so an I-Lap split loop and
+    // an EasyLap line can be placed against each other.
     private readonly Dictionary<string, long> _lastPassMs = new(StringComparer.Ordinal);
     private StreamWriter? _rawCapture;
     private readonly object _captureLock = new();
@@ -173,7 +173,7 @@ public sealed class ILapClient : IDisposable
             }
         }
 
-        // Only per-connection state is reset here - NOT _clock (see its comment).
+        // Only per-connection state is reset here - the clock (TimingClock) never restarts.
         lock (_lineLock)
         {
             _lastPassMs.Clear();
@@ -254,7 +254,7 @@ public sealed class ILapClient : IDisposable
 
         if (ParseLine(line) is { } lap)
         {
-            var now = _clock.ElapsedMilliseconds;
+            var now = TimingClock.NowMs;
 
             if (_lastPassMs.TryGetValue(lap.TransponderId, out var last) && now - last < DuplicateWindowMs)
             {
@@ -264,7 +264,7 @@ public sealed class ILapClient : IDisposable
 
             _lastPassMs[lap.TransponderId] = now;
             Log($"[LAP EVENT] transponder={lap.TransponderId}  device_time={lap.DeviceTimeMs}ms");
-            LapEventReceived?.Invoke(lap);
+            LapEventReceived?.Invoke(lap.Stamped(DecoderConnection.ILap, now, TimingPoint.Line));
         }
     }
 
@@ -301,7 +301,7 @@ public sealed class ILapClient : IDisposable
                 return new DirectLapEvent
                 {
                     TransponderId = token.TrimStart('0').Length > 0 ? token.TrimStart('0') : token,
-                    DeviceTimeMs = (uint)_clock.ElapsedMilliseconds,
+                    DeviceTimeMs = (uint)TimingClock.NowMs,
                     // 0 = unknown. Nothing in the line is known to be a hit
                     // count yet, and TransponderWatch treats any value from 1
                     // to 2 as a marginal pass - claiming 1 made every I-Lap

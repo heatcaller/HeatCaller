@@ -1018,7 +1018,7 @@ public sealed partial class RaceControlControl
             source = "drivers already on the board";
         }
 
-        using var form = new ReadinessCheckForm(roster, _transponderWatch, _profiles, source);
+        using var form = new ReadinessCheckForm(roster, _transponderWatch, _profiles, source, splitLoop: _settings.SplitLoopEnabled);
         form.ShowDialog(this);
     }
 }

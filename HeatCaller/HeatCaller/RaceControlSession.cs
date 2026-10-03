@@ -82,6 +82,64 @@ public sealed class RacerStanding
     /// <summary>Whether the lap at this index in LapTimesMs ran through a crash recovery - see RecoveryLapIndexes.</summary>
     public bool IsRecoveryLap(int lapIndex) => RecoveryLapIndexes.Contains(lapIndex);
 
+    /// <summary>
+    /// Each counted lap's sector times - split loop to split loop, in order,
+    /// the last one ending at the line - in step with LapTimesMs; null for a
+    /// lap with none (no split loop, a split missed, the start lap, a lap
+    /// through a crash recovery, a ghost's).
+    ///
+    /// Read through <see cref="SectorsOf"/>, never directly: the last sector
+    /// is the lap less the others, so a lap's sectors always add up to its
+    /// time, and a lap merged or edited by hand since no longer matches them
+    /// and simply shows none. That makes a list that slips out of step with
+    /// the laps show blanks rather than another lap's sectors.
+    /// </summary>
+    public List<long[]?> SectorsAtLap { get; } = new();
+
+    /// <summary>
+    /// This lap's sector times, or null - only while they still add up to
+    /// the lap's time exactly (see <see cref="SectorsAtLap"/>).
+    /// </summary>
+    public long[]? SectorsOf(int lapIndex) =>
+        lapIndex >= 0 && lapIndex < SectorsAtLap.Count && lapIndex < LapTimesMs.Count
+            ? Sectors.Checked(SectorsAtLap[lapIndex], LapTimesMs[lapIndex])
+            : null;
+
+    /// <summary>
+    /// Each time a split loop has read the car going past since its last
+    /// line crossing, on the line decoder's clock - one list per split loop,
+    /// Split 1 first, sized to the session's SplitCount as it is used. One
+    /// read is the usual; two in one lap is a lap the line may have missed
+    /// (worked out when the line next counts one - see
+    /// RaceControlSession.PossibleMissedLap). A read later than the line's
+    /// next crossing, which can arrive before that crossing does, is carried
+    /// on to the lap it belongs to.
+    /// </summary>
+    public List<long>[] SplitReadsMs { get; set; } = Array.Empty<List<long>>();
+
+    /// <summary>
+    /// The latest raw read at each split loop, repeats included - what a
+    /// repeat is measured from, so a car parked on a split loop, read every
+    /// couple of seconds, stays one crossing rather than becoming several.
+    /// </summary>
+    public long[] SplitLastRawMs { get; set; } = Array.Empty<long>();
+
+    /// <summary>Forgets every split read for the lap in progress - a jump-start credit, a clock that went backwards.</summary>
+    public void ClearSplitReads()
+    {
+        SplitReadsMs = Array.Empty<List<long>>();
+        SplitLastRawMs = Array.Empty<long>();
+        OpenLastLap = null;
+    }
+
+    /// <summary>
+    /// The lap just finished, when it finished without all its splits - its
+    /// start and end on the line's clock and what had been read - so a split
+    /// read arriving a moment after the line (a split loop just before the
+    /// line, the I-Lap's serial delay) can still complete it. Null otherwise.
+    /// </summary>
+    public (long StartMs, long EndMs, long?[] Splits)? OpenLastLap { get; set; }
+
     /// <summary>Total manually-applied penalty time, tracked separately from ElapsedMs so the UI can show that a penalty is in effect.</summary>
     public long PenaltyMs { get; set; }
 
@@ -200,6 +258,229 @@ public sealed class RaceControlSession
     /// before this was fixed.
     /// </summary>
     public int MinLapTimeMs { get; set; } = 3000;
+
+    /// <summary>
+    /// How many split loops are round the track (0-3): how many sectors a lap
+    /// is cut into, less one. 0 - no split loop - means no lap has sectors.
+    /// Set by MainForm from the Connection page.
+    /// </summary>
+    public int SplitCount
+    {
+        get => _splitCount;
+        set => _splitCount = Math.Clamp(value, 0, 3);
+    }
+
+    private int _splitCount;
+
+    /// <summary>
+    /// The least time between the line and a split loop, or two split loops,
+    /// for a read to be a car going round rather than one read twice.
+    /// </summary>
+    public const long MinSectorMs = 300;
+
+    /// <summary>A lap's sectors were worked out: the standing, the lap's index in LapTimesMs, and the sectors.</summary>
+    public event Action<RacerStanding, int, long[]>? SectorsRecorded;
+
+    /// <summary>A car crossed a split loop: the standing, which split, and how long since it crossed the line.</summary>
+    public event Action<RacerStanding, TimingPoint, long>? SplitCrossed;
+
+    /// <summary>
+    /// A car was read at a split loop twice without the line reading it in
+    /// between - a lap the line may have missed: the standing, and the two
+    /// reads on the line's clock. Nothing is added; the race director decides.
+    /// </summary>
+    public event Action<RacerStanding, long, long>? PossibleMissedLap;
+
+    /// <summary>
+    /// A split loop read this row's car at <paramref name="lineMs"/> (on the
+    /// line decoder's clock). True when it was used for the lap in progress
+    /// (or, arriving late, the lap just finished).
+    ///
+    /// This can never change a lap: it only notes where the car was, and
+    /// the lap's sectors are worked out when the line counts it.
+    /// </summary>
+    public bool ProcessSplitPass(string rowTransponder, TimingPoint point, long lineMs)
+    {
+        var slot = (int)point - 1;
+
+        // Not under a red: cars rolling round to the line while the race is
+        // stopped are not racing laps, and the line ignores them too.
+        if (SplitCount == 0 || slot < 0 || slot >= SplitCount
+            || State != RaceState.Racing
+            || Flag == FlagState.Red
+            || !_standings.TryGetValue(rowTransponder, out var standing)
+            || GhostService.IsGhost(standing.TransponderId)
+            || HasTakenFlag(standing.TransponderId))
+        {
+            return false;
+        }
+
+        // Not until the car has crossed the line once: before that it is
+        // on its way from the grid, and there is no lap to cut.
+        if (standing.LapTimesMs.Count == 0 || standing.LastLapDeviceTimeMs <= 0)
+        {
+            return false;
+        }
+
+        // Sized to the split loops in use, each on its own: reads carried
+        // over from the last lap (CloseSplits) are kept.
+        if (standing.SplitReadsMs.Length != SplitCount)
+        {
+            standing.SplitReadsMs = Enumerable.Range(0, SplitCount).Select(_ => new List<long>()).ToArray();
+        }
+
+        if (standing.SplitLastRawMs.Length != SplitCount)
+        {
+            standing.SplitLastRawMs = new long[SplitCount];
+        }
+
+        // A repeat: the same crossing read again, or a car sitting on the
+        // loop - measured from the latest read, so a parked car stays one
+        // crossing however long it sits there.
+        var lastRaw = standing.SplitLastRawMs[slot];
+        standing.SplitLastRawMs[slot] = Math.Max(lastRaw, lineMs);
+
+        if (lastRaw > 0 && lineMs >= lastRaw - Math.Max(MinLapTimeMs, 1000) && lineMs - lastRaw < Math.Max(MinLapTimeMs, 1000))
+        {
+            return false;
+        }
+
+        var since = lineMs - standing.LastLapDeviceTimeMs;
+
+        // Read before the line's last crossing: it belongs to the lap just
+        // finished, when that one is still waiting for it.
+        if (since < 0)
+        {
+            return CompleteOpenLap(standing, slot, lineMs);
+        }
+
+        if (since < MinSectorMs)
+        {
+            return false;
+        }
+
+        var reads = standing.SplitReadsMs[slot];
+        reads.Add(lineMs);
+
+        // The live gap is for the first crossing of the lap only.
+        if (reads.Count == 1)
+        {
+            SafeRaise(SplitCrossed, h => h(standing, point, since), nameof(SplitCrossed));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The sectors of a lap that ran from <paramref name="startMs"/> to
+    /// <paramref name="endMs"/> through these split reads, or null when one
+    /// is missing or out of place. The last sector is the lap less the
+    /// others, so they always add up to it.
+    /// </summary>
+    internal static long[]? SectorsFrom(long startMs, long endMs, IReadOnlyList<long?> splits)
+    {
+        if (splits.Count == 0 || endMs <= startMs)
+        {
+            return null;
+        }
+
+        var sectors = new long[splits.Count + 1];
+        var from = startMs;
+
+        for (var i = 0; i < splits.Count; i++)
+        {
+            if (splits[i] is not { } at || at - from < MinSectorMs || endMs - at < MinSectorMs)
+            {
+                return null;
+            }
+
+            sectors[i] = at - from;
+            from = at;
+        }
+
+        sectors[^1] = endMs - startMs - sectors.Take(splits.Count).Sum();
+        return sectors;
+    }
+
+    /// <summary>
+    /// Closes the lap in progress as the line counts it: its sectors, or null,
+    /// and the split reads cleared for the next lap - all but any read later
+    /// than this crossing, which belongs to the next lap and only arrived
+    /// first. Two reads at one split loop inside the lap mean the car went
+    /// past it twice without the line seeing it: a possible missed lap.
+    /// A lap left waiting on a split that may still be on its way is
+    /// remembered (OpenLastLap).
+    /// </summary>
+    private long[]? CloseSplits(RacerStanding standing, bool allowed, long startMs, long endMs)
+    {
+        var reads = standing.SplitReadsMs;
+        standing.OpenLastLap = null;
+
+        // Nothing read yet this race, or the split loops changed: no reads.
+        if (reads.Length != SplitCount)
+        {
+            reads = Enumerable.Range(0, SplitCount).Select(_ => new List<long>()).ToArray();
+        }
+
+        // Carried on: the reads that came after this crossing.
+        standing.SplitReadsMs = reads.Select(list => list.Where(at => at > endMs).ToList()).ToArray();
+
+        var inLap = reads.Select(list => list.Where(at => at > startMs && at <= endMs).ToList()).ToArray();
+
+        var twice = inLap.FirstOrDefault(list => list.Count >= 2);
+
+        if (twice is not null && startMs > 0)
+        {
+            var (first, second) = (twice[0], twice[1]);
+
+            Log($"Possible missed lap: {standing.TransponderId} went past a split loop twice "
+                + $"({(second - first) / 1000.0:0.000}s apart) without the line reading them in between.");
+            SafeRaise(PossibleMissedLap, h => h(standing, first, second), nameof(PossibleMissedLap));
+            return null;
+        }
+
+        if (!allowed || SplitCount == 0)
+        {
+            return null;
+        }
+
+        var splits = inLap.Select(list => list.Count == 1 ? list[0] : (long?)null).ToArray();
+        var sectors = SectorsFrom(startMs, endMs, splits);
+
+        if (sectors is null && splits.Any(at => at is null))
+        {
+            standing.OpenLastLap = (startMs, endMs, splits);
+        }
+
+        return sectors;
+    }
+
+    /// <summary>A split read for the lap just finished, arriving after the line counted it.</summary>
+    private bool CompleteOpenLap(RacerStanding standing, int slot, long lineMs)
+    {
+        if (standing.OpenLastLap is not { } open
+            || lineMs <= open.StartMs || lineMs >= open.EndMs
+            || open.Splits[slot] is not null
+            || standing.SectorsAtLap.Count != standing.LapTimesMs.Count
+            || standing.SectorsAtLap[^1] is not null)
+        {
+            return false;
+        }
+
+        open.Splits[slot] = lineMs;
+
+        if (SectorsFrom(open.StartMs, open.EndMs, open.Splits) is not { } sectors
+            || Sectors.Checked(sectors, standing.LapTimesMs[^1]) is null)
+        {
+            return open.Splits.Any(s => s is null);
+        }
+
+        var lapIndex = standing.LapTimesMs.Count - 1;
+        standing.SectorsAtLap[lapIndex] = sectors;
+        standing.OpenLastLap = null;
+        SafeRaise(SectorsRecorded, h => h(standing, lapIndex, sectors), nameof(SectorsRecorded));
+        return true;
+    }
 
     /// <summary>
     /// Resolves how many consecutive clean laps make a streak.
@@ -847,6 +1128,15 @@ public sealed class RaceControlSession
                 standing.StreakAtLap.RemoveAt(standing.StreakAtLap.Count - 1);
             }
 
+            // The merged lap's sectors no longer add up to it, so it shows
+            // none (SectorsOf); the removed lap's go with it.
+            if (standing.SectorsAtLap.Count > standing.LapTimesMs.Count)
+            {
+                standing.SectorsAtLap.RemoveRange(standing.LapTimesMs.Count, standing.SectorsAtLap.Count - standing.LapTimesMs.Count);
+            }
+
+            standing.OpenLastLap = null;
+
             standing.Laps--;
             mergedAny = true;
         }
@@ -1127,6 +1417,7 @@ public sealed class RaceControlSession
         internal int LapsBefore { get; init; }
         internal List<long> LapTimesBefore { get; init; } = new();
         internal List<int> StreakBefore { get; init; } = new();
+        internal List<long[]?> SectorsBefore { get; init; } = new();
         internal List<int> RecoveryBefore { get; init; } = new();
         internal long FastestLapBefore { get; init; }
         internal int ConsecutiveBefore { get; init; }
@@ -1179,6 +1470,9 @@ public sealed class RaceControlSession
             LapsBefore = standing.Laps,
             LapTimesBefore = standing.LapTimesMs.ToList(),
             StreakBefore = standing.StreakAtLap.ToList(),
+            SectorsBefore = Enumerable.Range(0, standing.LapTimesMs.Count)
+                .Select(i => i < standing.SectorsAtLap.Count ? standing.SectorsAtLap[i] : null)
+                .ToList(),
             RecoveryBefore = standing.RecoveryLapIndexes.ToList(),
             FastestLapBefore = standing.FastestLapMs,
             ConsecutiveBefore = standing.ConsecutiveValidLaps,
@@ -1256,6 +1550,11 @@ public sealed class RaceControlSession
 
             var newTimes = standing.LapTimesMs.Skip(afterCount).ToList();
             var newStreaks = standing.StreakAtLap.Skip(edit.StreakCountAfter).ToList();
+            // By lap index, so each new lap keeps its own sectors whatever
+            // length the list had - one restored from an older journal is short.
+            var newSectors = Enumerable.Range(afterCount, Math.Max(0, standing.LapTimesMs.Count - afterCount))
+                .Select(i => i < standing.SectorsAtLap.Count ? standing.SectorsAtLap[i] : null)
+                .ToList();
             var shift = edit.LapTimesBefore.Count - afterCount;
             var newRecovery = standing.RecoveryLapIndexes.Where(i => i >= afterCount).Select(i => i + shift).ToList();
             var lapsCountedSince = standing.Laps - edit.LapsAfter;
@@ -1267,6 +1566,11 @@ public sealed class RaceControlSession
             standing.StreakAtLap.Clear();
             standing.StreakAtLap.AddRange(edit.StreakBefore);
             standing.StreakAtLap.AddRange(newStreaks);
+
+            standing.SectorsAtLap.Clear();
+            standing.SectorsAtLap.AddRange(edit.SectorsBefore);
+            standing.SectorsAtLap.AddRange(newSectors);
+            standing.OpenLastLap = null;
 
             standing.RecoveryLapIndexes.Clear();
             standing.RecoveryLapIndexes.AddRange(edit.RecoveryBefore);
@@ -1907,6 +2211,11 @@ public sealed class RaceControlSession
                 // StreakAtLap is the LONGER of the two.
                 jumper.StreakAtLap.Clear();
                 jumper.StreakAtLap.Add(1);
+
+                // A start lap has no sectors.
+                jumper.SectorsAtLap.Clear();
+                jumper.SectorsAtLap.Add(null);
+                jumper.ClearSplitReads();
                 jumper.ConsecutiveValidLaps = 1;
                 jumper.StreakLapTimeSumMs = 0;
                 jumper.StreakLapCount = 0;
@@ -2139,6 +2448,7 @@ public sealed class RaceControlSession
             };
             copy.LapTimesMs.AddRange(s.LapTimesMs);
             copy.StreakAtLap.AddRange(s.StreakAtLap);
+            copy.SectorsAtLap.AddRange(s.SectorsAtLap.Select(sectors => sectors?.ToArray()));
             copy.RecoveryLapIndexes.AddRange(s.RecoveryLapIndexes);
             copy.Warnings.AddRange(s.Warnings);
             return copy;
@@ -3073,15 +3383,8 @@ public sealed class RaceControlSession
 
         // A copy rather than a change: the event is init-only, and the same
         // instance has already been handed to TransponderWatch. Every field
-        // is carried across - if DirectLapEvent grows one, add it here.
-        return new DirectLapEvent
-        {
-            TransponderId = primary,
-            DeviceTimeMs = lap.DeviceTimeMs,
-            SignalHits = lap.SignalHits,
-            SignalStrength = lap.SignalStrength,
-            IsSynthetic = lap.IsSynthetic,
-        };
+        // is carried across (DirectLapEvent.WithTransponder).
+        return lap.WithTransponder(primary);
     }
 
     public void ProcessLapEvent(DirectLapEvent lap)
@@ -3470,6 +3773,9 @@ public sealed class RaceControlSession
             // rest of the race rather than the one lap it really broke.
             standing.LastLapDeviceTimeMs = lap.DeviceTimeMs;
 
+            // Split reads on the old clock can't be placed against the new one.
+            standing.ClearSplitReads();
+
             // The race's own zero point is on the old clock as well, and
             // every driver's elapsed time is measured from it - left there,
             // elapsed came out negative, was floored at zero, and the order
@@ -3488,6 +3794,11 @@ public sealed class RaceControlSession
 
         var isFastestLap = false;
         var isPersonalBest = false;
+
+        // Where the lap now ending began, on the line's clock - for its
+        // sectors, worked out below once the lap is counted.
+        var lapStartedAtMs = standing.LastLapDeviceTimeMs;
+        long[]? lapSectors = null;
 
         // Ghosts run in real races as pace cars to chase. They keep their
         // own laps and bests, but nothing that decides or describes the
@@ -3644,6 +3955,30 @@ public sealed class RaceControlSession
             standing.LapTimesMs.Add(lapTimeMs);
             standing.StreakAtLap.Add(standing.ConsecutiveValidLaps);
 
+            // Its sectors: only for a flying lap timed by the decoder from
+            // the line's last crossing - the start lap, a lap through a crash
+            // recovery and a ghost's have none.
+            var sectorsAllowed = !lap.IsSynthetic && !isGhost && competesForBest
+                                 && lapStartedAtMs > 0 && lap.DeviceTimeMs - lapStartedAtMs == lapTimeMs;
+            lapSectors = CloseSplits(standing, sectorsAllowed, lapStartedAtMs, lap.DeviceTimeMs);
+
+            // In step with the lap list whatever came before - a standing
+            // brought back from a journal written before sectors were kept
+            // has none for its earlier laps.
+            var sectorIndex = standing.LapTimesMs.Count - 1;
+
+            while (standing.SectorsAtLap.Count < sectorIndex)
+            {
+                standing.SectorsAtLap.Add(null);
+            }
+
+            if (standing.SectorsAtLap.Count > sectorIndex)
+            {
+                standing.SectorsAtLap.RemoveRange(sectorIndex, standing.SectorsAtLap.Count - sectorIndex);
+            }
+
+            standing.SectorsAtLap.Add(lapSectors);
+
             // Remembered, so it stays out of bests and streaks when the
             // laps are worked out again after a lap is removed by hand -
             // see RecomputeAfterLapRemoval.
@@ -3686,6 +4021,12 @@ public sealed class RaceControlSession
         // taken further down this method, and a throwing lap listener used
         // to stop the race ending on the very crossing that ended it.
         SafeRaise(LapProcessed, h => h(standing, isValid, isFastestLap), nameof(LapProcessed));
+
+        if (lapSectors is not null)
+        {
+            var sectorLap = standing.LapTimesMs.Count - 1;
+            SafeRaise(SectorsRecorded, h => h(standing, sectorLap, lapSectors), nameof(SectorsRecorded));
+        }
 
         if (isPersonalBest)
         {

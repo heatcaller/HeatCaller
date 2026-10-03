@@ -171,6 +171,7 @@ internal static class RaceFiling
                 ElapsedMs = s.ElapsedMs,
                 Status = "active",
                 LapTimesMs = s.LapTimesMs.ToList(),
+                SectorTimesMs = SessionResultEntry.SectorsToSave(s),
                 RejectedLaps = s.RejectedLaps,
                 LapsLed = s.LapsLed,
                 StartPosition = s.StartPosition,

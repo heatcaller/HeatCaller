@@ -1303,6 +1303,7 @@ public sealed class PracticeModeControl : UserControl
                     ElapsedMs = s.ElapsedMs,
                     Status = "practice",
                     LapTimesMs = s.LapTimesMs.ToList(),
+                    SectorTimesMs = SessionResultEntry.SectorsToSave(s),
                 };
             }).ToList();
 

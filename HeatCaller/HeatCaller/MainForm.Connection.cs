@@ -16,11 +16,16 @@ public partial class MainForm
         _settings.DirectDecoderAutoConnect = chkAutoConnect.Checked;
         _settings.Save();
 
-        if (chkAutoConnect.Checked && SelectedDecoder == DecoderConnection.EasyLap
+        if (chkAutoConnect.Checked && RoleOf(DecoderConnection.EasyLap) != DecoderRole.None
             && _decoderClient.State is DecoderConnectionState.Disconnected or DecoderConnectionState.Error)
         {
-            btnConnect.Enabled = false;
-            btnDisconnect.Enabled = true;
+            // The line's buttons only when the EasyLap is the line.
+            if (RoleOf(DecoderConnection.EasyLap) == DecoderRole.Line)
+            {
+                btnConnect.Enabled = false;
+                btnDisconnect.Enabled = true;
+            }
+
             _decoderClient.Connect();
         }
     }
@@ -32,12 +37,24 @@ public partial class MainForm
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnDecoderStatusChanged(state, message)); return; }
 
-        if (SelectedDecoder != DecoderConnection.EasyLap)
+        // The line's light for the line; the split loop's own for the split.
+        switch (RoleOf(DecoderConnection.EasyLap))
         {
-            return; // not the active connection method right now - don't steal the shared status light
-        }
+            case DecoderRole.Line:
+                RenderDecoderStatus(state, message);
 
-        RenderDecoderStatus(state, message);
+                // However the line came to connect - Connect, or
+                // auto-connect - the split loop joins it.
+                if (state == DecoderConnectionState.Connected)
+                {
+                    ConnectSplitLoop();
+                }
+
+                break;
+            case DecoderRole.Split:
+                RenderSplitStatus();
+                break;
+        }
     }
 
     private void OnILapStatusChanged(DecoderConnectionState state, string message)
@@ -47,12 +64,21 @@ public partial class MainForm
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnILapStatusChanged(state, message)); return; }
 
-        if (SelectedDecoder != DecoderConnection.ILap)
+        switch (RoleOf(DecoderConnection.ILap))
         {
-            return; // not the active connection method right now - don't steal the shared status light
-        }
+            case DecoderRole.Line:
+                RenderDecoderStatus(state, message);
 
-        RenderDecoderStatus(state, message);
+                if (state == DecoderConnectionState.Connected)
+                {
+                    ConnectSplitLoop();
+                }
+
+                break;
+            case DecoderRole.Split:
+                RenderSplitStatus();
+                break;
+        }
     }
 
     /// <summary>Repopulates the COM port picker, keeping the remembered port selected when it is still present.</summary>
@@ -159,6 +185,20 @@ public partial class MainForm
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnDecoderLapEvent(lap)); return; }
 
+        // For the split loop's "quiet" warning and for Line Up, which pairs
+        // the line's passes with the split loop's. Line Up can never cost
+        // the race a lap: whatever it does, the pass goes on below.
+        _lastLinePassAt = TimingClock.NowMs;
+
+        try
+        {
+            LinePassSeen?.Invoke(lap);
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [split] Line Up couldn't use a pass: {ex.Message}");
+        }
+
         // Recorded first, and whatever happens to the pass afterwards. A
         // pass that no race counts still proves the transponder is alive,
         // and that is the whole point of keeping them.
@@ -220,8 +260,49 @@ public partial class MainForm
     private void UpdateConnectionModeUi()
     {
         var decoder = SelectedDecoder;
-        var isEasyLap = decoder == DecoderConnection.EasyLap;
-        var isILap = decoder == DecoderConnection.ILap;
+
+        // The line moved to the other decoder while the split loop is on:
+        // the two have swapped roles. Neither may carry on as it was - the
+        // decoder partway round the track would otherwise start counting
+        // laps on the spot, reading split transponders as line ones. Both
+        // are disconnected (Connect brings them back in their new roles),
+        // the split loop forgets what it read, and the Line Up offset, which
+        // measured one decoder against the other, now runs the other way.
+        if (_lineDecoderKnown && decoder != _lineDecoder && _settings.SplitLoopEnabled)
+        {
+            // Auto-connect, when ticked, brings the EasyLap back in its new
+            // role - which is what passes are then routed by.
+            if (_decoderClient.State is not DecoderConnectionState.Disconnected)
+            {
+                _decoderClient.Disconnect();
+            }
+
+            if (_ilapClient.State is not DecoderConnectionState.Disconnected)
+            {
+                _ilapClient.Disconnect();
+            }
+
+            _splitLoop?.Clear();
+
+            if (_settings.SplitLoopOffsetMs != 0)
+            {
+                _settings.SplitLoopOffsetMs = -_settings.SplitLoopOffsetMs;
+            }
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [split] The line and the split loop swapped decoders - both disconnected. Click Connect to connect them in their new places, and run Line Up again to be sure.");
+        }
+
+        _lineDecoder = decoder;
+        _lineDecoderKnown = true;
+
+        // How many sectors a lap is cut into: one split loop, two sectors.
+        _race.SplitCount = _settings.SplitLoopEnabled ? 1 : 0;
+
+        // The line's own, or the split loop's: each decoder's settings show
+        // while it has either role.
+        var isEasyLap = RoleOf(DecoderConnection.EasyLap) != DecoderRole.None;
+        var isILap = RoleOf(DecoderConnection.ILap) != DecoderRole.None;
+        var lineIsILap = decoder == DecoderConnection.ILap;
 
         // Auto-connect retry belongs to the EasyLap HID search alone; a
         // serial port that fails to open should say so once, not every
@@ -248,9 +329,11 @@ public partial class MainForm
         _settings.LastConnectionType = decoder;
         _settings.Save();
 
-        // Only the chosen decoder stays connected. Switching used to leave
-        // the old one running underneath - its laps still arriving, into
-        // the same race, from hardware the screen said was not in use.
+        // Only the decoders in use stay connected - the line, and the split
+        // loop when it is on. Switching used to leave the old one running
+        // underneath - its laps still arriving, into the same race, from
+        // hardware the screen said was not in use. (A pass from a decoder
+        // with no role is not used either way - see RoutePass.)
         if (!isEasyLap && _decoderClient.State is not DecoderConnectionState.Disconnected)
         {
             _decoderClient.Disconnect();
@@ -265,7 +348,7 @@ public partial class MainForm
         // one's showing - switching from a connected EasyLap to I-Lap
         // should show I-Lap's own (probably disconnected) state, not a
         // stale green light.
-        if (isILap)
+        if (lineIsILap)
         {
             RenderDecoderStatus(_ilapClient.State, _ilapClient.State.ToString());
         }
@@ -273,6 +356,10 @@ public partial class MainForm
         {
             RenderDecoderStatus(_decoderClient.State, _decoderClient.State.ToString());
         }
+
+        // The split loop is whichever decoder the line isn't.
+        FillSplitLoopChoices();
+        RenderSplitStatus();
     }
 
     private void CmbConnectionType_SelectedIndexChanged(object? sender, EventArgs e) => UpdateConnectionModeUi();
@@ -303,16 +390,31 @@ public partial class MainForm
             btnConnect.Enabled = false;
             btnDisconnect.Enabled = true;
             _ilapClient.Connect(ilapPort, _settings.ILapBaud);
+            ConnectSplitLoop();
             return;
         }
 
         btnConnect.Enabled = false;
         btnDisconnect.Enabled = true;
         _decoderClient.Connect();
+        ConnectSplitLoop();
     }
 
     private void BtnDisconnect_Click(object? sender, EventArgs e)
     {
+        // The split loop goes with the line: it has nothing to time against.
+        // An EasyLap split loop would otherwise be opened again by
+        // auto-connect a few seconds later.
+        if (_settings.SplitLoopEnabled)
+        {
+            if (RoleOf(DecoderConnection.EasyLap) == DecoderRole.Split)
+            {
+                chkAutoConnect.Checked = false;
+            }
+
+            DisconnectSplitLoop();
+        }
+
         if (SelectedDecoder == DecoderConnection.ILap)
         {
             _ilapClient.Disconnect();

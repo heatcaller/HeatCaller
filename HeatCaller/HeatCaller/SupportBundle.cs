@@ -552,6 +552,7 @@ internal static class SupportBundle
         text.AppendLine($"  Decoder:                 {decoder}");
         text.AppendLine($"  Connect automatically:   {YesNo(s.DirectDecoderAutoConnect)}");
         text.AppendLine($"  I-Lap port:              {iLapPort} at {s.ILapBaud} baud");
+        text.AppendLine($"  Split loop:              {(s.SplitLoopEnabled ? $"on, Line Up offset {s.SplitLoopOffsetMs} ms" : "off")}");
 
         text.AppendLine();
         text.AppendLine("RACES");

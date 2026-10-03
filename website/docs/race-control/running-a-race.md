@@ -253,7 +253,7 @@ Set the minimum a little under the quickest real lap anyone could do on your tra
 
 The board orders drivers by most laps, then by lowest total time. Total time includes penalties.
 
-- **Double-click** a driver to open their lap breakdown. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
+- **Double-click** a driver to open their lap breakdown. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. With a [split loop](../timing/decoders.md#a-split-loop), each lap's sector times replace the pace bar, the driver's best in each sector is in green, and the line at the foot gives their **Ideal lap**. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
 - **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, lap and penalty corrections, their battery pack, **Exclude from records**, and **Copy transponder ID**. The pack item lists the driver's packs and the club's, with the one in use ticked. During a race it reads ***name*'s pack in the car**: picking one puts it in their car, so the race is recorded on it. Once the race is saved it reads ***name*'s pack for this race**: picking one records it for the race just run, or **No pack recorded**, and a pack also goes in their car. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
 - **Show {name}'s laps on the board** opens a strip of recent lap times under the driver's row. You can open strips for several drivers at once to compare them. In the strip, a star (★) marks a lap inside a clean run, and a broken circle (◌) marks the lap where a run ended.
 - The driver with the fastest lap of the race has their **Best Lap** highlighted.
@@ -271,6 +271,9 @@ Press **Columns** to choose the columns and their order. In the dialog, click th
 | **Laps** | Laps completed. |
 | **Last Lap** | Most recent counted lap. |
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
+| **S1**, **S2**, **S3**, **S4** | With a [split loop](../timing/decoders.md#a-split-loop): each sector of the last lap. S1 runs from the line to the split loop, S2 from the split loop back to the line. Highlighted when it's the quickest of anyone this session, green when it's the driver's own best. |
+| **Ideal Lap** | The driver's best sectors added up: their lap with every sector at its best. |
+| **At Split** | Live, the moment a car crosses the split loop: how far up (green, −0.08) or down (red, +0.12) it is on its own best lap to that point. |
 | **Badges** | How many achievement badges this driver has earned. |
 | **vs Best** | How far the last lap was off this driver's own best. Shows **BEST** when it was their best. |
 | **Qual** | During a qualifying round: where this driver would qualify overall if the heat ended now, and how many places this heat has moved them. |

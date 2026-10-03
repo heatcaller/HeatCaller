@@ -36,15 +36,23 @@ public partial class MainForm
         // On the decoder's own thread - TimingWatch stores these atomically.
         // Connected is set before the read loop starts, so it always comes
         // before that connection's first heartbeat.
+        // The LINE decoder's only: an EasyLap split loop's connection and
+        // heartbeat say nothing about whether laps are being timed.
         _decoderClient.StatusChanged += (state, _) =>
         {
-            if (state == DecoderConnectionState.Connected)
+            if (state == DecoderConnectionState.Connected && _lineDecoder == DecoderConnection.EasyLap)
             {
                 _timingWatch.DecoderConnected(WatchClock());
             }
         };
 
-        _decoderClient.HeartbeatReceived += _ => _timingWatch.Heartbeat(WatchClock());
+        _decoderClient.HeartbeatReceived += _ =>
+        {
+            if (_lineDecoder == DecoderConnection.EasyLap)
+            {
+                _timingWatch.Heartbeat(WatchClock());
+            }
+        };
 
         // Every crossing the race judged, counted or thrown out as too soon
         // - either way the car is out there. Under its driver's own
@@ -69,6 +77,10 @@ public partial class MainForm
             var situation = TimingSituation();
             racing = situation.Racing;
             problem = _timingWatch.Check(situation, WatchClock());
+
+            // The line's problems first: they're about laps. The split
+            // loop's only show while the line is fine.
+            problem ??= SplitLoopProblem(situation);
         }
         catch (Exception ex)
         {
@@ -96,10 +108,12 @@ public partial class MainForm
         {
             OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] WARNING: {problem.Text}");
         }
-        else if (racing && _timingProblemKey is not null && _timingProblemKey != "check-failed")
+        else if (racing && _timingProblemKey is not null && _timingProblemKey != "check-failed"
+                 && !_timingProblemKey.StartsWith("missed-lap:", StringComparison.Ordinal))
         {
             // Only while racing: a warning that ends because the race did
-            // (the flag, a red, a reset) hasn't been put right.
+            // (the flag, a red, a reset) hasn't been put right. Nor has a
+            // possible missed lap that has simply been shown long enough.
             OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] That's cleared - timing looks normal again.");
         }
 

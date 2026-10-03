@@ -137,6 +137,7 @@ public partial class MainForm
             },
             Batteries = _batteryPacks,
             History = _sessionHistory,
+            SplitSeenRecently = () => _splitLoop?.UnknownRecently(TimingClock.NowMs) ?? Array.Empty<string>(),
         };
 
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings, driverGarage) { Dock = DockStyle.Fill };
@@ -727,11 +728,9 @@ public partial class MainForm
             _raceClasses,
             _checkInStore,
             _daySchedule,
-            // Either decoder, because which one is live depends on the
-            // venue's saved connection type and only one of them is ever
-            // out of Disconnected at a time.
-            () => _decoderClient.State == DecoderConnectionState.Connected
-                  || _ilapClient.State == DecoderConnectionState.Connected) { Dock = DockStyle.Fill };
+            // The line decoder, whichever it is - a split loop connected on
+            // its own times no laps.
+            LineDecoderConnected) { Dock = DockStyle.Fill };
 
         _todayControl = today;
 

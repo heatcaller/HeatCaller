@@ -59,6 +59,21 @@ public sealed class AppSettings
     /// <summary>Baud rate for the I-Lap serial connection. 9600 is the widely-reported default.</summary>
     public int ILapBaud { get; set; } = 9600;
 
+    /// <summary>
+    /// Whether the decoder that ISN'T the start/finish line (LastConnectionType)
+    /// is connected too, as a split loop partway round the track - an I-Lap
+    /// beside an EasyLap line, or the other way about. Its passes never count
+    /// laps; see SplitLoop.
+    /// </summary>
+    public bool SplitLoopEnabled { get; set; }
+
+    /// <summary>
+    /// How much later the split loop reads a car than the line decoder would
+    /// at the same spot, in milliseconds - measured by Line Up on the
+    /// Connection page, and taken off every split time. 0 until measured.
+    /// </summary>
+    public int SplitLoopOffsetMs { get; set; }
+
     // Automated backup settings. AutoBackupFolder empty = use
     // BackupService.DefaultBackupFolder (a Documents subfolder) rather than
     // baking in a path here, so the default can change later without an

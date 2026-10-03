@@ -274,6 +274,32 @@ public sealed class DriverProfile
         return made;
     }
 
+    /// <summary>
+    /// The driver's transponders for the SPLIT loop - read by the decoder
+    /// partway round the track (an I-Lap beside an EasyLap line, say),
+    /// which can't read the line's transponders. Each is fitted to one of
+    /// their cars (CarId), which is how a split pass finds the row it
+    /// belongs to on the board.
+    ///
+    /// Kept apart from <see cref="Transponders"/> on purpose: a split
+    /// transponder never counts a lap, never makes a row of its own and
+    /// never answers ProfileStore.Get, and its number is only unique among
+    /// split transponders - I-Lap 1234 and EasyLap 1234 are different
+    /// transponders. See ProfileStore.SplitOwnerOf.
+    /// </summary>
+    public List<OwnedTransponder> SplitTransponders { get; set; } = new();
+
+    /// <summary>The entry for this split transponder, or null.</summary>
+    public OwnedTransponder? SplitEntry(string id)
+    {
+        var wanted = id?.Trim() ?? string.Empty;
+
+        return wanted.Length == 0
+            ? null
+            : (SplitTransponders ?? new List<OwnedTransponder>())
+              .FirstOrDefault(t => t is not null && string.Equals(t.Id?.Trim(), wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Marks a rental or loaner transponder, which shouldn't accrue personal bests.</summary>
     public bool IsRental { get; set; }
 

@@ -42,9 +42,10 @@ public sealed class ReadinessCheckForm : Form
         IEnumerable<string> roster,
         TransponderWatch watch,
         ProfileStore profiles,
-        string rosterSource)
+        string rosterSource,
+        bool splitLoop = false)
     {
-        _lines = Build(roster, watch, profiles);
+        _lines = Build(roster, watch, profiles, splitLoop);
 
         Text = "Pre-race check";
 
@@ -61,7 +62,7 @@ public sealed class ReadinessCheckForm : Form
         btnRecheck.Click += (_, _) =>
         {
             _lines.Clear();
-            _lines.AddRange(Build(roster, watch, profiles));
+            _lines.AddRange(Build(roster, watch, profiles, splitLoop));
             BuildHeadline(rosterSource);
             Fill();
         };
@@ -101,8 +102,17 @@ public sealed class ReadinessCheckForm : Form
     /// car from the previous class still circulating, either of which will
     /// appear in the results as a driver nobody expected.
     /// </summary>
-    private static List<Line> Build(IEnumerable<string> roster, TransponderWatch watch, ProfileStore profiles)
+    private static List<Line> Build(IEnumerable<string> roster, TransponderWatch watch, ProfileStore profiles, bool splitLoop)
     {
+        // With a split loop, a car the line hears fine but that has no split
+        // transponder races normally - it just gets no sector times. Said on
+        // its line, without making it a fault.
+        string SplitNote(string transponder) =>
+            splitLoop && profiles.Get(transponder) is { } driver
+                      && !(driver.SplitTransponders ?? new List<OwnedTransponder>()).Any(t => t is not null && !t.Retired)
+                ? " No split transponder, so no sector times."
+                : string.Empty;
+
         var lines = new List<Line>();
         var expected = new HashSet<string>(roster, StringComparer.OrdinalIgnoreCase);
 
@@ -129,13 +139,13 @@ public sealed class ReadinessCheckForm : Form
                 lines.Add(new Line(Verdict.Weak, DriverNameFor(profiles, transponder), transponder,
                     $"Heard {when}, but only just - {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}, "
                     + $"best {sighting.BestHits} hit{(sighting.BestHits == 1 ? string.Empty : "s")}. "
-                    + "Likely to be missed at racing speed. Check the battery and how it is mounted."));
+                    + "Likely to be missed at racing speed. Check the battery and how it is mounted." + SplitNote(transponder)));
 
                 continue;
             }
 
             lines.Add(new Line(Verdict.Ready, DriverNameFor(profiles, transponder), transponder,
-                $"Heard {when}, {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}{(sighting.SignalKnown ? $", signal {sighting.AverageStrength}." : ".")}"));
+                $"Heard {when}, {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}{(sighting.SignalKnown ? $", signal {sighting.AverageStrength}." : ".")}" + SplitNote(transponder)));
         }
 
         foreach (var sighting in watch.Recent().Where(s => !expected.Contains(s.TransponderId)))

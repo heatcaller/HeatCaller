@@ -131,6 +131,16 @@ public sealed class LapDetailPopup : ToolStripDropDown
         // squashed every other bar down to the stub.
         private HashSet<int> _recoveryLaps = new();
 
+        // Each lap's sector times (RacerStanding.SectorsOf), in step with
+        // _lapMs, and the driver's best in each and their ideal lap - all
+        // empty without a split loop, when the PACE bars show as they did.
+        // With sectors, the bars' room shows them instead.
+        private long[]?[] _sectors = Array.Empty<long[]?>();
+        private long[]? _bestSectors;
+        private long? _idealMs;
+
+        private bool HasSectors => _bestSectors is not null;
+
         private bool _present;
         private int _position;
         private int _laps;
@@ -184,6 +194,9 @@ public sealed class LapDetailPopup : ToolStripDropDown
                 _lapMs = Array.Empty<long>();
                 _streakAtLap = Array.Empty<int>();
                 _recoveryLaps = new HashSet<int>();
+                _sectors = Array.Empty<long[]?>();
+                _bestSectors = null;
+                _idealMs = null;
                 _laps = 0;
                 _bestMs = 0;
                 _penaltyMs = 0;
@@ -207,9 +220,16 @@ public sealed class LapDetailPopup : ToolStripDropDown
                     var streakAtLap = standing.StreakAtLap.ToArray();
                     var recoveryLaps = new HashSet<int>(standing.RecoveryLapIndexes.ToArray());
 
+                    var sectors = Enumerable.Range(0, lapMs.Length).Select(standing.SectorsOf).ToArray();
+                    var bestSectors = Sectors.Bests(standing);
+                    var ideal = Sectors.TheoreticalBest(standing);
+
                     _lapMs = lapMs;
                     _streakAtLap = streakAtLap;
                     _recoveryLaps = recoveryLaps;
+                    _sectors = sectors;
+                    _bestSectors = bestSectors;
+                    _idealMs = ideal;
                 }
                 catch
                 {
@@ -394,7 +414,7 @@ public sealed class LapDetailPopup : ToolStripDropDown
 
             g.DrawString(AppTheme.Spaced("LAP"), AppTheme.MicroFont, brush, new RectangleF(left, top, Px(40), height), near);
             g.DrawString(AppTheme.Spaced("TIME"), AppTheme.MicroFont, brush, new RectangleF(TimeX(left), top, Px(76), height), near);
-            g.DrawString(AppTheme.Spaced("PACE"), AppTheme.MicroFont, brush, new RectangleF(BarLeft(left), top, Px(80), height), near);
+            g.DrawString(AppTheme.Spaced(HasSectors ? "SECTORS" : "PACE"), AppTheme.MicroFont, brush, new RectangleF(BarLeft(left), top, BarRight(right) - BarLeft(left), height), near);
             g.DrawString(AppTheme.Spaced("OFF BEST"), AppTheme.MicroFont, brush, new RectangleF(DeltaLeft(right), top, DeltaRight(right) - DeltaLeft(right), height), far);
             g.DrawString(AppTheme.Spaced("RUN"), AppTheme.MicroFont, brush, new RectangleF(RunLeft(right), top, right - RunLeft(right), height), far);
 
@@ -509,7 +529,14 @@ public sealed class LapDetailPopup : ToolStripDropDown
             g.DrawString($"{lapMs / 1000.0:0.000}", timeFont, timeBrush,
                 new RectangleF(TimeX(left), top, Px(76), RowHeight), near);
 
-            if (!isStartLap)
+            if (HasSectors)
+            {
+                // The sectors where the bar would be: each in the driver's
+                // best colour when it is their best in that sector, and a
+                // dash for a lap without them (a split missed, the start lap).
+                DrawSectors(g, BarLeft(left), BarRight(right), top, lapIndex);
+            }
+            else if (!isStartLap)
             {
                 var track = new RectangleF(BarLeft(left), top + RowHeight / 2f - Px(4), BarRight(right) - BarLeft(left), Px(8));
 
@@ -560,6 +587,39 @@ public sealed class LapDetailPopup : ToolStripDropDown
             }
         }
 
+        /// <summary>One lap's sectors across the room the pace bar has, equally spaced.</summary>
+        private void DrawSectors(Graphics g, int left, int right, int top, int lapIndex)
+        {
+            var sectors = lapIndex < _sectors.Length ? _sectors[lapIndex] : null;
+            var count = _bestSectors?.Length ?? 0;
+
+            using var muted = new SolidBrush(AppTheme.TextMuted);
+            using var plain = new SolidBrush(AppTheme.TextDark);
+            using var best = new SolidBrush(AppTheme.Success);
+            using var near = new StringFormat
+            {
+                FormatFlags = StringFormatFlags.NoWrap,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+            };
+
+            if (sectors is null || sectors.Length != count)
+            {
+                g.DrawString("-", AppTheme.SmallFont, muted, new RectangleF(left, top, right - left, RowHeight), near);
+                return;
+            }
+
+            var width = (right - left) / (float)count;
+
+            for (var i = 0; i < count; i++)
+            {
+                var isBest = _bestSectors is { } bests && sectors[i] == bests[i];
+
+                g.DrawString(Sectors.Format(sectors[i]), AppTheme.SmallFont, isBest ? best : plain,
+                    new RectangleF(left + width * i, top, width, RowHeight), near);
+            }
+        }
+
         private void DrawNote(Graphics g, int left, int right, int top, string text)
         {
             using var brush = new SolidBrush(AppTheme.TextMuted);
@@ -586,6 +646,14 @@ public sealed class LapDetailPopup : ToolStripDropDown
             if (_penaltyMs != 0)
             {
                 text = $"Penalty {_penaltyMs / 1000.0:0.0}s applied - " + text;
+            }
+
+            // Their best sectors on one lap: what they could do, and how
+            // much of it they have put together so far.
+            if (_idealMs is { } ideal && ideal > 0)
+            {
+                var gap = _bestMs > ideal ? $" ({(_bestMs - ideal) / 1000.0:0.00} under their best)" : string.Empty;
+                text = $"Ideal lap {Sectors.Format(ideal)}{gap} - " + text;
             }
 
             using var brush = new SolidBrush(AppTheme.TextMuted);

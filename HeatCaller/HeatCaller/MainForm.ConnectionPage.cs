@@ -54,6 +54,7 @@ public partial class MainForm
     private (Font Font, int Count, int Width)? _serialPickerWidth;
     private (Font Font, int Count, int Width)? _baudPickerWidth;
     private (Font Font, int Count, int Width)? _consolePresetWidth;
+    private (Font Font, int Count, int Width)? _splitPickerWidth;
 
     /// <summary>The text size the console's type was last made for - 0 before it has been.</summary>
     private float _consoleFontScale;
@@ -114,6 +115,28 @@ public partial class MainForm
 
         grid.AddField(chkAutoConnect);
         grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);
+
+        // The split loop: the other decoder, partway round the track - see
+        // MainForm.SplitLoop. Its light and line show only while it is on.
+        cmbSplitLoop.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbSplitLoop.SelectedIndexChanged += CmbSplitLoop_SelectedIndexChanged;
+
+        btnConnectSplit.Text = "Connect Split";
+        btnConnectSplit.Click += (_, _) => ConnectSplitLoop();
+
+        btnLineUp.Text = "Line Up...";
+        btnLineUp.Click += BtnLineUp_Click;
+
+        pnlSplitDot.BackColor = Color.Gray;
+        lblSplitStatus.Text = "Not connected.";
+
+        grid.AddRow("Split loop:", FieldGrid.Inline(cmbSplitLoop, btnConnectSplit, btnLineUp));
+        splitStatusLine = new StatusLine(pnlSplitDot, lblSplitStatus);
+        lblSplitStatusCaption = grid.AddRow("Split status:", splitStatusLine, stretch: true);
+        lblSplitStatusCaption.Visible = false;
+        splitStatusLine.Visible = false;
+        btnConnectSplit.Visible = false;
+        btnLineUp.Visible = false;
 
         // Only the chosen decoder's rows show - UpdateConnectionModeUi,
         // which runs as the window is set up. EasyLap is the first choice.
@@ -183,7 +206,8 @@ public partial class MainForm
         // --- The page ---
         var intro = new Label
         {
-            Text = "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race.",
+            Text = "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race. "
+                   + "With two decoders, the other one can be a split loop partway round the track.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -219,6 +243,7 @@ public partial class MainForm
         FitWidth(cmbConnectionType, Math.Max(UiLayout.AtTextSize(ConnectionPickerWidth), Pieces.PickerWidth(cmbConnectionType, ref _connectionPickerWidth)));
         FitWidth(cmbSerialPort, Math.Max(UiLayout.AtTextSize(SerialPickerWidth), Pieces.PickerWidth(cmbSerialPort, ref _serialPickerWidth)));
         FitWidth(cmbBaud, Math.Max(UiLayout.AtTextSize(SerialPickerWidth), Pieces.PickerWidth(cmbBaud, ref _baudPickerWidth)));
+        FitWidth(cmbSplitLoop, Math.Max(UiLayout.AtTextSize(ConnectionPickerWidth), Pieces.PickerWidth(cmbSplitLoop, ref _splitPickerWidth)));
 
         // Its own face, which nothing else hands it: a monospaced log reads
         // in columns. Made again only for a new text size.

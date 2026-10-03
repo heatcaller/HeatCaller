@@ -268,6 +268,24 @@ public sealed class KpiContext
     /// says "Unnamed driver" and the Transponder column is blank.
     /// </summary>
     public bool PublicCopy { get; init; }
+
+    private readonly Dictionary<int, long[]?> _sessionSectorBests = new();
+
+    /// <summary>
+    /// The quickest time anyone in the field has set in each sector, for
+    /// laps cut into <paramref name="count"/> sectors - worked out once per
+    /// board refresh, not once per cell.
+    /// </summary>
+    public long[]? SessionSectorBests(int count)
+    {
+        if (!_sessionSectorBests.TryGetValue(count, out var bests))
+        {
+            bests = Sectors.SessionBests(Ordered, count);
+            _sessionSectorBests[count] = bests;
+        }
+
+        return bests;
+    }
 }
 
 /// <summary>How a KPI value should be tinted, so every surface highlights the same things.</summary>
@@ -336,6 +354,19 @@ public static class KpiCatalog
         new("best", "Best Lap", "Fastest lap this session. Highlighted when it's the quickest of anyone.", 65,
             (s, _, ctx) => new KpiValue(Secs(s.FastestLapMs),
                 s.FastestLapMs > 0 && s.FastestLapMs == ctx.FastestOverall ? KpiEmphasis.Highlight : KpiEmphasis.None)),
+
+        SectorKpi(1),
+        SectorKpi(2),
+        SectorKpi(3),
+        SectorKpi(4),
+
+        new("ideal", "Ideal Lap", "The driver's best sectors added up: their lap with every sector at its best. Needs a split loop.", 65,
+            (s, _, _) => Sectors.TheoreticalBest(s) is { } ideal ? new KpiValue(Sectors.Format(ideal)) : new KpiValue("-")),
+
+        new("atsplit", "At Split", "Live, as the car crosses a split loop: how far up (green) or down (red) it is on its own best lap to that point - or on its best sectors, when its best lap has none. Needs a split loop.", 60,
+            (s, _, _) => Sectors.LiveDelta(s) is { } live
+                ? new KpiValue(Sectors.FormatDelta(live.DeltaMs), live.DeltaMs < 0 ? KpiEmphasis.Good : live.DeltaMs > 0 ? KpiEmphasis.Bad : KpiEmphasis.None)
+                : new KpiValue("-")),
 
         new("badges", "Badges", "How many achievement badges this driver has earned.", 60,
             (s, _, ctx) =>
@@ -580,6 +611,40 @@ public static class KpiCatalog
             : new KpiValue(name + WarningRules.Badge(s.Warnings), KpiEmphasis.Bad);
 
     private static string Secs(long ms) => ms > 0 ? $"{ms / 1000.0:0.000}" : "-";
+
+    /// <summary>
+    /// A sector of the last lap. Highlighted when it is the quickest anyone
+    /// has gone through that sector this session, green when it is the
+    /// driver's own best there - the colours a timing screen uses.
+    /// </summary>
+    private static KpiDefinition SectorKpi(int sector) => new(
+        $"s{sector}",
+        $"S{sector}",
+        $"Sector {sector} of the last lap: from {(sector == 1 ? "the line" : $"split {sector - 1}")} to the next timing point. "
+        + "Highlighted when it's the quickest of anyone this session, green when it's the driver's own best. Needs a split loop.",
+        50,
+        (s, _, ctx) =>
+        {
+            if (Sectors.Last(s) is not { } last || last.Length < sector)
+            {
+                return new KpiValue("-");
+            }
+
+            var ms = last[sector - 1];
+            var emphasis = KpiEmphasis.None;
+
+            if (ctx.SessionSectorBests(last.Length) is { } session && ms == session[sector - 1])
+            {
+                emphasis = KpiEmphasis.Highlight;
+            }
+            else if (Sectors.LapsOf(s).Skip(1).Any() && Sectors.Bests(s) is { } own && own.Length == last.Length && ms == own[sector - 1])
+            {
+                // Not on their first lap with sectors, which is a best by default.
+                emphasis = KpiEmphasis.Good;
+            }
+
+            return new KpiValue(Sectors.Format(ms), emphasis);
+        });
 
     public static KpiDefinition? Find(string key) =>
         All.FirstOrDefault(k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase));

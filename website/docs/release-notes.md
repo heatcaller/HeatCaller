@@ -4,6 +4,10 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Split times.** With a split loop, each lap is cut into sectors that add up to the lap. New board columns: **S1**–**S4**, **Ideal Lap** and **At Split**, live as each car crosses the split loop. The quickest sector of the session is highlighted, and a driver's own best is green. The lap breakdown shows each lap's sectors and the driver's ideal lap, the Big Screen puts up "FASTEST SECTOR", and sectors are saved with the results. A car read at the split twice without crossing the line is flagged as a possible missed lap on the TIMING line; nothing is added. See [Split times](timing/decoders.md#split-times).
+
+- **A split loop.** With both an EasyLap and an I-Lap, the decoder that isn't the start/finish line can now read cars partway round the track. Choose it in **Split loop:** on the **Connection** page. Its own status light shows how closely the two decoders' clocks are tied together. **Line Up** measures how late it reads a car, and drivers get **Add Split Transponder** on their **Transponders** tab. The split loop never counts a lap, and the TIMING line warns if it stops during a race. Split times on screen come next. See [A split loop](timing/decoders.md#a-split-loop).
+
 - **Tick a whole column at once.** On **Voice → Announcements**, the **Race**, **Practice** and **Caution** columns have a tick box under their headings that ticks every row, or clears them all when they're all ticked. The **Race** and **Practice** columns on **Sound Effects** have one too. Each shows a part-way mark when only some rows are ticked, and Undo puts back the ticks you had.
 
 - **Everyone's cars in Driver Hub's Garage view.** **Driver** in the **Garage** view now lists **Everyone's cars** and **The club's own cars** above the drivers, so the whole garage can fill the page. In a driver's garage, **Add a Car** is now under the cars, beside **Batteries**, and the driver's photo in the header is twice the size. See [Garage view](race-day/drivers-and-classes.md#garage-view).

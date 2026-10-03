@@ -85,6 +85,11 @@ public sealed class BigScreenForm : Form
     private DateTime? _warningShownUtc;
     private static readonly TimeSpan WarningBannerTime = TimeSpan.FromSeconds(8);
     private Action<RacerStanding, RaceWarning>? _warningIssuedHandler;
+    private Action<RacerStanding, int, long[]>? _sectorsRecordedHandler;
+    private Action<RacerStanding, TimingPoint, long>? _splitCrossedHandler;
+
+    /// <summary>True while the banner shows a warning - a fastest sector never covers one.</summary>
+    private bool _bannerIsWarning;
     private readonly Label _lblElapsed = new();
     private readonly Label _lblCountdown = new();
     private readonly Label _lblRaceState = new();
@@ -173,6 +178,16 @@ public sealed class BigScreenForm : Form
         _warningIssuedHandler = (standing, warning) => SafeInvoke(() => ShowWarningBanner(standing, warning));
         _race.WarningIssued += _warningIssuedHandler;
 
+        _sectorsRecordedHandler = (standing, _, sectors) => SafeInvoke(() =>
+        {
+            ShowFastestSector(standing, sectors);
+            RefreshAll();
+        });
+        _race.SectorsRecorded += _sectorsRecordedHandler;
+
+        _splitCrossedHandler = (_, _, _) => SafeInvoke(RefreshAll);
+        _race.SplitCrossed += _splitCrossedHandler;
+
         _refreshTimer.Tick += (_, _) => RefreshCountdownOnly();
         _refreshTimer.Start();
 
@@ -206,6 +221,8 @@ public sealed class BigScreenForm : Form
             _race.StateChanged -= _stateChangedHandler;
             _race.FlagChanged -= _flagChangedHandler;
             _race.WarningIssued -= _warningIssuedHandler;
+            _race.SectorsRecorded -= _sectorsRecordedHandler;
+            _race.SplitCrossed -= _splitCrossedHandler;
             _announcer.AnnouncementTextReady -= OnAnnouncementTextReady;
             UnsubscribeDisplays();
         };
@@ -963,6 +980,60 @@ public sealed class BigScreenForm : Form
         _lblWarning.ForeColor = blackFlag ? Color.White : Color.Black;
         _lblWarning.Visible = true;
         _warningShownUtc = DateTime.UtcNow;
+        _bannerIsWarning = true;
+    }
+
+    /// <summary>
+    /// A lap's sectors came in: when one of them is now the quickest anyone
+    /// has gone through that sector this session, it goes up across the
+    /// screen - "FASTEST SECTOR 1 - MAYA 12.31". Not for the very first
+    /// sector times of the session, which are fastest by default, and never
+    /// over a warning that is still showing.
+    /// </summary>
+    private void ShowFastestSector(RacerStanding standing, long[] sectors)
+    {
+        if (IsDisposed || Disposing || GhostService.IsGhost(standing.TransponderId)
+            || (_bannerIsWarning && _warningShownUtc is not null))
+        {
+            return;
+        }
+
+        var field = _race.GetOrderedStandings();
+
+        if (field.Sum(s => Sectors.LapsOf(s).Count()) < 2
+            || Sectors.SessionBests(field, sectors.Length) is not { } bests)
+        {
+            return;
+        }
+
+        var sector = -1;
+
+        for (var i = 0; i < sectors.Length; i++)
+        {
+            if (sectors[i] == bests[i])
+            {
+                sector = i;
+            }
+        }
+
+        if (sector < 0)
+        {
+            return;
+        }
+
+        var name = _profiles.Get(standing.TransponderId)?.DriverName;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = standing.TransponderId;
+        }
+
+        _lblWarning.Text = $"\u25C6 FASTEST SECTOR {sector + 1} \u2014 {name.ToUpperInvariant()}  {Sectors.Format(sectors[sector])}";
+        _lblWarning.BackColor = HighlightColor;
+        _lblWarning.ForeColor = Color.White;
+        _lblWarning.Visible = true;
+        _warningShownUtc = DateTime.UtcNow;
+        _bannerIsWarning = false;
     }
 
     private void RefreshCountdownOnly()

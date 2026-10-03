@@ -20,6 +20,10 @@ public sealed partial class RaceControlControl
     private Action<FlagState>? _flagChangedHandler;
     private Action? _warmUpChangedHandler;
     private Action<RacerStanding, bool, bool>? _lapProcessedHandler;
+
+    /// <summary>A car crossed a split loop, or a lap's sectors came in late - the board's split columns follow.</summary>
+    private Action<RacerStanding, TimingPoint, long>? _splitCrossedHandler;
+    private Action<RacerStanding, int, long[]>? _sectorsRecordedHandler;
     private Action<RacerStanding>? _personalBestHandler;
     private Action<RacerStanding>? _standingAdjustedHandler;
     private Action<string, long>? _jumpStartHandler;
@@ -64,6 +68,22 @@ public sealed partial class RaceControlControl
             OnLapProcessed(standing, isValid, isFastestLap);
         };
         _race.LapProcessed += _lapProcessedHandler;
+
+        // The At Split column changes as a car crosses a split loop, between
+        // its laps; and a lap's sectors can arrive a moment after the lap.
+        _splitCrossedHandler = (_, _, _) =>
+        {
+            if (InvokeRequired) { BeginInvoke(RenderLeaderboard); return; }
+            RenderLeaderboard();
+        };
+        _race.SplitCrossed += _splitCrossedHandler;
+
+        _sectorsRecordedHandler = (_, _, _) =>
+        {
+            if (InvokeRequired) { BeginInvoke(RenderLeaderboard); return; }
+            RenderLeaderboard();
+        };
+        _race.SectorsRecorded += _sectorsRecordedHandler;
 
         _personalBestHandler = standing =>
         {
@@ -179,6 +199,8 @@ public sealed partial class RaceControlControl
         if (_flagChangedHandler is not null) _race.FlagChanged -= _flagChangedHandler;
         if (_warmUpChangedHandler is not null) _race.WarmUpChanged -= _warmUpChangedHandler;
         if (_lapProcessedHandler is not null) _race.LapProcessed -= _lapProcessedHandler;
+        if (_splitCrossedHandler is not null) _race.SplitCrossed -= _splitCrossedHandler;
+        if (_sectorsRecordedHandler is not null) _race.SectorsRecorded -= _sectorsRecordedHandler;
         if (_personalBestHandler is not null) _race.PersonalBestLap -= _personalBestHandler;
         if (_standingAdjustedHandler is not null) _race.StandingAdjusted -= _standingAdjustedHandler;
         if (_jumpStartHandler is not null) _race.JumpStartDetected -= _jumpStartHandler;

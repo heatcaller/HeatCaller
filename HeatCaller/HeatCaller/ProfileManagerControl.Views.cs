@@ -26,6 +26,14 @@ public sealed class DriverGarageSources
 
     /// <summary>The race history, for the sessions and pace on the Batteries tab.</summary>
     public SessionHistoryStore? History { get; init; }
+
+    /// <summary>
+    /// The transponders the split loop has read lately that are nobody's
+    /// split transponder, the most recent first - so Add Split Transponder
+    /// fills itself in when a car is driven over the loop. Null without a
+    /// split loop.
+    /// </summary>
+    public Func<IReadOnlyList<string>>? SplitSeenRecently { get; init; }
 }
 
 /// <summary>
@@ -340,7 +348,7 @@ public sealed partial class ProfileManagerControl
         _hubGarage.Changed += OnDriverThingsChanged;
         _cardBody.Controls.Add(_hubGarage);
 
-        _hubTransponders = new DriverTransponderPanel(_store, sources.Cars, _undo) { Visible = false };
+        _hubTransponders = new DriverTransponderPanel(_store, sources.Cars, _undo) { Visible = false, SplitSeenRecently = sources.SplitSeenRecently };
         _hubTransponders.Changed += OnDriverThingsChanged;
         _cardBody.Controls.Add(_hubTransponders);
 

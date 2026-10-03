@@ -61,7 +61,7 @@ When a car changes hands for good — sold or given — transfer it. A car lent 
 
 1. Open the car (on the **Garage** page or in the driver's garage) and click **Transfer**. In a driver's garage you can also right-click the car.
 2. Pick who gets it: a driver, or **The club**. Type in **Find:** to narrow the list.
-3. If any of the owner's transponders are fitted to the car, they're listed with a tick. Untick any that stay with the owner. A transponder that stays with them moves between their cars from now on. The owner's main transponder always stays with them, because their results are filed under it. A transponder can't go to the club.
+3. If any of the owner's transponders are fitted to the car, they're listed with a tick. Untick any that stay with the owner. A transponder that stays with them moves between their cars from now on. The owner's main transponder always stays with them, because their results are filed under it. A transponder can't go to the club. Split transponders fitted to the car always go with it to a driver; going to the club, they stay with the owner.
 4. Click **Transfer to *name***.
 
 The car's photos, notes and setups go with it. Races already run stay with whoever ran them, and setups the old owner logged still show on their **Setups** tab. The car window shows who it was **Transferred from:** and when. If the new owner had no active car, this one becomes it. Undo puts the car and its transponders back with the old owner.
@@ -77,6 +77,7 @@ The list shows each transponder the driver has, which car it's **Fitted to** (or
 - **Retire** marks the selected one as no longer used. It stays the driver's, and so does everything timed on it. **Bring Back** puts it back in use.
 - **Transfer** gives the selected one to another driver for good: sold, given or swapped. See [Transfer a transponder](#transfer-a-transponder).
 - **Remove** takes a transponder off the driver altogether; laps already timed on it no longer count as theirs. The main transponder can't be removed.
+- **Add Split Transponder** adds one the [split loop](../timing/decoders.md#a-split-loop) reads, listed as "split loop". Drive the car over the split loop first, and its number is filled in. It's fitted to the driver's car when they have only one; otherwise pick the car in **Fitted to:**. A split transponder never counts a lap and can't be transferred on its own. Its number only has to be different from other split transponders, since it's a different decoder's.
 
 Each change is saved straight away, and Undo takes it back. A transponder that's already another driver's is refused, with a "Transponder already in use" message naming them.
 

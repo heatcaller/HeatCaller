@@ -369,6 +369,56 @@ public sealed class ProfileStore
         return _profiles.Values.FirstOrDefault(p => p.AllTransponderIds.Contains(id, StringComparer.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// The driver with this SPLIT-loop transponder, and its entry - or null.
+    /// Only split transponders are looked at: a line transponder with the
+    /// same number is a different transponder (see
+    /// DriverProfile.SplitTransponders).
+    /// </summary>
+    public (DriverProfile Driver, OwnedTransponder Entry)? SplitOwnerOf(string transponder)
+    {
+        var id = transponder?.Trim() ?? string.Empty;
+
+        if (id.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var profile in _profiles.Values)
+        {
+            if (profile.SplitEntry(id) is { } entry)
+            {
+                return (profile, entry);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Why this driver's split transponders can't be saved - one of them is
+    /// already another driver's split transponder - or null when they can.
+    /// <paramref name="editing"/> is the driver's main transponder.
+    /// </summary>
+    public string? DescribeSplitClash(DriverProfile candidate, string? editing)
+    {
+        foreach (var entry in candidate.SplitTransponders ?? new List<OwnedTransponder>())
+        {
+            if (entry is null || string.IsNullOrWhiteSpace(entry.Id))
+            {
+                continue;
+            }
+
+            if (SplitOwnerOf(entry.Id) is { } owner
+                && !string.Equals(owner.Driver.Transponder, editing, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Split transponder {entry.Id.Trim()} is already {DescribeOwner(owner.Driver)}'s. Remove it from {DescribeOwner(owner.Driver)} first.";
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The name to put in a clash message - a driver name if there is one, otherwise the transponder.</summary>
     private static string DescribeOwner(DriverProfile profile) =>
         string.IsNullOrWhiteSpace(profile.DriverName) ? $"the profile for {profile.Transponder}" : profile.DriverName.Trim();

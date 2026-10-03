@@ -26,6 +26,27 @@ public sealed class SessionResultEntry
     public List<long> LapTimesMs { get; set; } = new();
 
     /// <summary>
+    /// Each lap's sector times, in step with LapTimesMs - null for a lap
+    /// with none (see RacerStanding.SectorsAtLap). Null for a session run
+    /// without a split loop, or saved before splits existed. Read through
+    /// <see cref="SectorsOf"/>, which only gives sectors that still add up
+    /// to the lap - a result corrected since shows none for laps it changed.
+    /// </summary>
+    public List<long[]?>? SectorTimesMs { get; set; }
+
+    /// <summary>This lap's sectors, when it has some that still add up to it.</summary>
+    public long[]? SectorsOf(int lapIndex) =>
+        SectorTimesMs is { } all && lapIndex >= 0 && lapIndex < all.Count && lapIndex < LapTimesMs.Count
+            ? Sectors.Checked(all[lapIndex], LapTimesMs[lapIndex])
+            : null;
+
+    /// <summary>What to save for a standing's sectors: its list when any lap has some, otherwise null - so a session without a split loop saves nothing extra.</summary>
+    public static List<long[]?>? SectorsToSave(RacerStanding standing) =>
+        standing.SectorsAtLap.Any(sectors => sectors is not null)
+            ? standing.SectorsAtLap.Take(standing.LapTimesMs.Count).Select(sectors => sectors?.ToArray()).ToList()
+            : null;
+
+    /// <summary>
     /// Passes rejected as too soon to be real laps.
     ///
     /// Zero on sessions saved before this was recorded, which is
