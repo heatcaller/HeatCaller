@@ -827,8 +827,11 @@ public partial class MainForm : Form
             PublishStandingsToRelay();
 
             // A finished session is when badges are earned; read them
-            // afresh on the next pass rather than waiting out the cache.
+            // afresh on the next pass rather than waiting out the cache -
+            // and the badge list with them, so a badge not on offer where
+            // the club races, earned anyway, is on the website's list too.
             _relayAchievementsReadUtc = DateTime.MinValue;
+            _lastRelayDocuments.Remove(RelayChannel.Badges);
         };
 
         // A saved result corrected after the flag - the laptop's Edit

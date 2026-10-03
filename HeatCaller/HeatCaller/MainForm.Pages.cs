@@ -427,7 +427,11 @@ public partial class MainForm
         pageRaceHistory.Controls.Add(raceHistory);
         _navRefreshHooks["Race History"] = raceHistory.RefreshAll;
 
-        var achievements = new AchievementsControl(_profiles) { Dock = DockStyle.Fill };
+        var achievements = new AchievementsControl(_profiles, _settings) { Dock = DockStyle.Fill };
+
+        // Where you race changed: the club website's badge list is sent
+        // again on the next pass, with what is on offer now.
+        achievements.RacingAtChanged += () => _lastRelayDocuments.Remove(RelayChannel.Badges);
         pageAchievements.Controls.Add(achievements);
 
         // Refreshed on entry, not just at construction: Race Control awards
@@ -1111,6 +1115,23 @@ public partial class MainForm
             // from Practice keeps up with the races run since. Read through
             // the property each time: the badge store is replaced on unlock.
             projector: raceControl.Projector, achievements: () => raceControl.Achievements) { Dock = DockStyle.Fill };
+
+        // What the home and garage badges read, for races and (at a home
+        // track) practice alike; and each driver's pack in the car recorded
+        // on a saved practice, as Race Control records it on a race.
+        var badgeStores = new AchievementContext
+        {
+            Setups = _setupLog,
+            Cars = _cars,
+            Packs = _batteryPacks,
+            GhostCars = () => _ghostStore.Current.Ghosts.ToList(),
+        };
+
+        raceControl.AchievementStores = badgeStores;
+        practice.AchievementStores = badgeStores;
+        practice.BatteryPacks = _batteryPacks;
+        practice.StatusMessage += OnClientRawMessage;
+        practice.BadgesAwarded += raceControl.ReloadAchievements;
         // Ghost profiles kept in step as ghosts are added, edited and
         // deleted - so a new ghost is immediately pickable everywhere.
         _ghostStore.Saved += _ => OnGhostStoreSaved();

@@ -155,7 +155,9 @@ internal static class RelayDocuments
     // -------------------------------------------------------------- badges
 
     /// <summary>
-    /// Every badge there is, with its medallion as a picture.
+    /// Every badge on offer where the club races (AchievementCatalogue
+    /// .IsOffered) - and any other that somebody has earned, so an earned
+    /// badge never shows on the website as a bare id - with its medallion as a picture.
     ///
     /// The art is drawn by the same code as the Achievements page, so the
     /// website shows the badges a driver has actually seen on the laptop
@@ -163,15 +165,19 @@ internal static class RelayDocuments
     /// catalogue would not fit, and none at all as a last resort - a list
     /// of badge names is still worth having.
     /// </summary>
-    internal static string Badges()
+    internal static string Badges(RacingSetting where, IReadOnlySet<string> earned)
     {
+        var badges = AchievementCatalogue.All
+            .Where(b => AchievementCatalogue.IsOffered(b, where) || earned.Contains(b.Id))
+            .ToList();
+
         var json = string.Empty;
 
         foreach (var size in new[] { 64, 48, 32, 0 })
         {
             json = JsonSerializer.Serialize(new
             {
-                badges = AchievementCatalogue.All.Select(b => new
+                badges = badges.Select(b => new
                 {
                     id = b.Id,
                     name = b.Name,

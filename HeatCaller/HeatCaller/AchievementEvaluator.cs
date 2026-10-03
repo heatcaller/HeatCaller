@@ -16,7 +16,7 @@ public sealed record AchievementUnlock(string Transponder, string DriverName, Ac
 /// and hands back a list. Nothing in here speaks, draws or saves, so it can
 /// be reasoned about - and eventually tested - without a race running.
 /// </summary>
-public static class AchievementEvaluator
+public static partial class AchievementEvaluator
 {
     /// <summary>A driver has to complete this many laps for a race to count towards anything.</summary>
     private const int MinimumLapsToCount = 1;
@@ -32,9 +32,11 @@ public static class AchievementEvaluator
         IReadOnlyList<SessionRecord> history,
         AchievementStore store,
         RivalryStore? rivalries = null,
-        ProfileStore? profiles = null)
+        ProfileStore? profiles = null,
+        AchievementContext? context = null)
     {
         var unlocks = new List<AchievementUnlock>();
+        profiles ??= context?.Profiles;
 
         // Practice isn't a race, and nothing here should be earnable by
         // lapping alone on a quiet evening.
@@ -100,6 +102,12 @@ public static class AchievementEvaluator
                         && !r.IsDemoSession()
                         && !string.Equals(r.Id, record.Id, StringComparison.Ordinal))
             .ToList();
+
+        // What a personal best is measured against. At a club, races only,
+        // as ever; at a home track, practice too - a lap there is just as
+        // much the driver's own, and a race "best" that practice already
+        // beat would be no best at all.
+        var bestsPool = context?.AtHome == true ? EarlierSessions(history, record) : earlier;
 
         var fastestOfRace = results
             .Where(r => r.FastLapMs > 0)
@@ -185,12 +193,17 @@ public static class AchievementEvaluator
             driver.RacesFinished++;
             driver.TotalLaps += entry.Laps;
 
-            if (PlaceOf(entry) == 1)
+            // Only against somebody: alone on track, first is not a win
+            // and the box is not a podium. It used to count both, so one
+            // driver lapping a Quick Race on their own was awarded Winner
+            // and On the Box - and every race alone after that walked them
+            // on towards Serial Winner.
+            if (PlaceOf(entry) == 1 && results.Count > 1)
             {
                 driver.Wins++;
             }
 
-            if (PlaceOf(entry) is >= 1 and <= 3)
+            if (PlaceOf(entry) is >= 1 and <= 3 && results.Count > 1)
             {
                 driver.Podiums++;
             }
@@ -371,7 +384,7 @@ public static class AchievementEvaluator
             // races before it that this driver actually appeared in, so a
             // night off does not break the run - only a race they entered
             // and did not win.
-            if (PlaceOf(entry) == 1 && WonTheLastTwo(earlier, entry.Transponder))
+            if (PlaceOf(entry) == 1 && results.Count > 1 && WonTheLastTwo(earlier, entry.Transponder))
             {
                 Award(AchievementCatalogue.HatTrick);
             }
@@ -638,7 +651,7 @@ public static class AchievementEvaluator
             // nothing about whether this one was an improvement, and
             // comparing across layouts would hand out "New Heights" for
             // simply moving to a shorter circuit.
-            var previousBest = BestLapOnLayout(earlier, entry.Transponder, record.TrackLayoutName);
+            var previousBest = BestLapOnLayout(bestsPool, entry.Transponder, record.TrackLayoutName);
 
             if (entry.FastLapMs > 0 && previousBest > 0 && entry.FastLapMs < previousBest)
             {
@@ -652,12 +665,12 @@ public static class AchievementEvaluator
                     Award(AchievementCatalogue.BigStep, $"{(previousBest - entry.FastLapMs) / 1000.0:0.000}s quicker");
                 }
 
-                if (HasImprovedThreeRunning(earlier, record, entry.Transponder))
+                if (HasImprovedThreeRunning(bestsPool, record, entry.Transponder))
                 {
                     Award(AchievementCatalogue.ThreeMeetingsImproving);
                 }
 
-                var layoutsImproved = LayoutsImprovedOn(earlier, record, entry.Transponder);
+                var layoutsImproved = LayoutsImprovedOn(bestsPool, record, entry.Transponder);
 
                 if (layoutsImproved >= 3)
                 {
@@ -853,6 +866,9 @@ public static class AchievementEvaluator
             {
                 Award(AchievementCatalogue.OldFriends, $"{mostShared} races together");
             }
+
+            // --- Home and garage (Oct 2026) ---
+            EvaluateHomeAndGarage(entry, record, bestsPool, context, Award, practice: false);
         }
 
         store.Save();
@@ -1163,7 +1179,9 @@ public static class AchievementEvaluator
             .Take(2)
             .ToList();
 
-        return recent.Count == 2 && recent.All(r => PlaceInRace(r, transponder) == 1);
+        // Won outright - with somebody else in it. First in a race alone is
+        // not a win, so two of those are not two thirds of a hat-trick.
+        return recent.Count == 2 && recent.All(r => WonOutright(r, transponder));
     }
 
     /// <summary>

@@ -19,17 +19,37 @@ namespace HeatCaller;
 public sealed class AchievementsControl : UserControl
 {
     private readonly ProfileStore _profiles;
+
+    /// <summary>Where the app is used (AppSettings.RacingAt) - null on a page built without it, which then offers every badge.</summary>
+    private readonly AppSettings? _settings;
+
     private readonly ComboBox _cmbDriver = new();
     private readonly CheckBox _chkHideLocked = new ThemedCheckBox();
+
+    /// <summary>Where you race: Club or At home - which badges are on offer.</summary>
+    private readonly ComboBox _cmbWhere = new();
+
+    /// <summary>Shows the badges not on offer where you race too (club-sized ones at home, home ones at a club).</summary>
+    private readonly CheckBox _chkShowOthers = new ThemedCheckBox();
+
+    /// <summary>Whether any badge is not on offer where you race - kept rather than read back from the tick's Visible, which reads false while the page is hidden.</summary>
+    private bool _haveOthers;
+
+    /// <summary>Set while the Where combo is being filled, so filling it changes nothing.</summary>
+    private bool _fillingWhere;
+
+    /// <summary>Raised after Where you race was changed here - for the club website's badge list to be sent again.</summary>
+    public event Action? RacingAtChanged;
     private readonly ProgressStrip _progress = new();
     private readonly Panel _scroll = new();
     private readonly BadgeWall _wall = new();
 
     private AchievementStore _store = AchievementStore.Load();
 
-    public AchievementsControl(ProfileStore profiles)
+    public AchievementsControl(ProfileStore profiles, AppSettings? settings = null)
     {
         _profiles = profiles;
+        _settings = settings;
 
         Dock = DockStyle.Fill;
         BackColor = AppTheme.Background;
@@ -106,10 +126,30 @@ public sealed class AchievementsControl : UserControl
         var lblDriver = new Label { Text = "Driver:" };
         _textSize.Wear(lblDriver, () => AppTheme.BoldFont);
 
+        // Where you race - Club or At home - decides which badges are on
+        // offer here (AchievementCatalogue.IsOffered). Earned ones always show.
+        _cmbWhere.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbWhere.Items.AddRange(new object[] { "Club", "At home" });
+        _cmbWhere.SelectedIndexChanged += (_, _) => OnWhereChanged();
+
+        _chkShowOthers.AutoSize = true;
+        _chkShowOthers.CheckedChanged += (_, _) => RenderBadges();
+
+        var lblWhere = new Label { Text = "Where you race:" };
+        _textSize.Wear(lblWhere, () => AppTheme.BoldFont);
+
         var pickRow = new FieldRow();
 
         pickRow.Add(lblDriver, _cmbDriver, DriverWidth);
         pickRow.Add(null, _chkHideLocked);
+
+        if (_settings is not null)
+        {
+            pickRow.Add(lblWhere, _cmbWhere, () => UiLayout.AtTextSize(130));
+            pickRow.Add(null, _chkShowOthers);
+            ShowWhere();
+        }
+
         pickRow.AddLast(null, lblOpenHint, () => lblOpenHint.GetPreferredSize(Size.Empty).Width);
         _pickRow = pickRow;
 
@@ -152,6 +192,59 @@ public sealed class AchievementsControl : UserControl
         Controls.Add(page);
     }
 
+    /// <summary>Where you race, as the settings have it - Club on a page built without them.</summary>
+    private RacingSetting Where => _settings?.RacingAt ?? RacingSetting.Club;
+
+    /// <summary>The Where combo and the show-the-others tick put to the setting.</summary>
+    private void ShowWhere()
+    {
+        _fillingWhere = true;
+
+        try
+        {
+            _cmbWhere.SelectedIndex = Where == RacingSetting.Home ? 1 : 0;
+        }
+        finally
+        {
+            _fillingWhere = false;
+        }
+
+        var others = AchievementCatalogue.All.Count(b => !AchievementCatalogue.IsOffered(b, Where));
+        var text = Where == RacingSetting.Home ? $"Show club badges ({others})" : $"Show home badges ({others})";
+
+        if (!string.Equals(_chkShowOthers.Text, text, StringComparison.Ordinal))
+        {
+            _chkShowOthers.Text = text;
+        }
+
+        _haveOthers = others > 0;
+        _chkShowOthers.Visible = _haveOthers;
+    }
+
+    /// <summary>Where you race changed here: saved, and the wall drawn again with what is on offer now.</summary>
+    private void OnWhereChanged()
+    {
+        if (_fillingWhere || _settings is null)
+        {
+            return;
+        }
+
+        var wanted = _cmbWhere.SelectedIndex == 1 ? RacingSetting.Home : RacingSetting.Club;
+
+        if (_settings.RacingAt == wanted)
+        {
+            return;
+        }
+
+        _settings.RacingAt = wanted;
+        _settings.Save();
+
+        _chkShowOthers.Checked = false;
+        ShowWhere();
+        RenderBadges();
+        RacingAtChanged?.Invoke();
+    }
+
     /// <summary>The driver picker: as wide as its longest entry, and never under its width at the normal text size.</summary>
     private int DriverWidth() =>
         Math.Max(UiLayout.AtTextSize(DriverPickerWidth), Pieces.PickerWidth(_cmbDriver, ref _driverWidth));
@@ -179,6 +272,12 @@ public sealed class AchievementsControl : UserControl
     public void RefreshAll()
     {
         _store = AchievementStore.Load();
+
+        // The setting may have been changed elsewhere (the first-run wizard).
+        if (_settings is not null)
+        {
+            ShowWhere();
+        }
 
         var selected = _cmbDriver.SelectedItem as string;
 
@@ -220,7 +319,8 @@ public sealed class AchievementsControl : UserControl
 
         if (_cmbDriver.Items.Count == 0)
         {
-            _progress.Apply("No drivers yet", "Badges appear once somebody has raced.", 0, AchievementCatalogue.All.Count, string.Empty);
+            _progress.Apply("No drivers yet", "Badges appear once somebody has raced.", 0,
+                AchievementCatalogue.All.Count(b => AchievementCatalogue.IsOffered(b, Where)), string.Empty);
             _wall.Apply(new List<BadgeWall.Entry>());
             LayoutWall();
             return;
@@ -302,12 +402,23 @@ public sealed class AchievementsControl : UserControl
 
         var driver = _store.For(transponder);
         var entries = new List<BadgeWall.Entry>();
+        var showOthers = _settings is null || (_haveOthers && _chkShowOthers.Checked);
+        var total = 0;
 
         foreach (var badge in AchievementCatalogue.All)
         {
             var earned = driver.Unlocked.FirstOrDefault(u => string.Equals(u.Id, badge.Id, StringComparison.Ordinal));
 
-            if (earned is null && _chkHideLocked.Checked)
+            // On offer where you race, or earned anyway (somewhere else, or
+            // before the setting changed): what the count is out of.
+            var offered = AchievementCatalogue.IsOffered(badge, Where);
+
+            if (offered || earned is not null)
+            {
+                total++;
+            }
+
+            if (earned is null && (_chkHideLocked.Checked || (!offered && !showOthers)))
             {
                 continue;
             }
@@ -318,7 +429,6 @@ public sealed class AchievementsControl : UserControl
         _wall.Apply(entries);
         LayoutWall();
 
-        var total = AchievementCatalogue.All.Count;
         var held = driver.Unlocked.Count(u => AchievementCatalogue.Get(u.Id) is not null);
 
         var name = _cmbDriver.SelectedItem as string ?? transponder;

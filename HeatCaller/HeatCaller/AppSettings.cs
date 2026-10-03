@@ -1049,6 +1049,15 @@ public sealed class AppSettings
     public bool HasLinkedSetupsToCars { get; set; }
 
     /// <summary>
+    /// Where the app is used: a club, or a home track. Decides which badges
+    /// are offered (a home track is not offered the club-sized ones) and
+    /// whether practice earns any (at home it earns the ones a driver can
+    /// earn alone). Asked in the first-run wizard and changed on the
+    /// Achievements page. Club for every install from before it existed.
+    /// </summary>
+    public RacingSetting RacingAt { get; set; } = RacingSetting.Club;
+
+    /// <summary>
     /// Set once the race-day setup wizard has been finished OR skipped, so
     /// it is only ever offered unprompted the once.
     ///

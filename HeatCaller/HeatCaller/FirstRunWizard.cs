@@ -161,6 +161,11 @@ public sealed class FirstRunWizard : Form
     private readonly TextBox _txtTrackName = new();
     private readonly Label _lblTrackHint = new();
 
+    /// <summary>Where you race (AppSettings.RacingAt): which badges are on offer, and whether practice earns any.</summary>
+    private readonly RadioButton _rdoClub = new ThemedRadioButton();
+    private readonly RadioButton _rdoHome = new ThemedRadioButton();
+    private readonly Label _lblWhereHint = new();
+
     // Classes
     private readonly PageStack _classesStep = new();
     private readonly TextBox _txtClasses = new();
@@ -186,6 +191,7 @@ public sealed class FirstRunWizard : Form
     private readonly Label _lblDoneLook = new();
     private readonly Label _lblDoneDecoder = new();
     private readonly Label _lblDoneTrack = new();
+    private readonly Label _lblDoneWhere = new();
     private readonly Label _lblDoneClasses = new();
     private readonly Label _lblDoneDrivers = new();
     private readonly Label _lblDoneSound = new();
@@ -601,7 +607,26 @@ public sealed class FirstRunWizard : Form
         // the box that the theme draws its outline in - against the step's
         // edge, that side of the outline would be cut off.
         _trackStep.Add(FieldGrid.Inline(_txtTrackName), gapBelow: UiLayout.RowGap);
-        _trackStep.Add(_lblTrackHint, gapBelow: 0);
+        _trackStep.Add(_lblTrackHint, gapBelow: UiLayout.SectionGap);
+
+        // Where you race - the badges on offer, and whether practice earns
+        // any. Both in the step itself, so WinForms groups them.
+        _rdoClub.Text = "At a club";
+        _rdoClub.AutoSize = true;
+        _rdoHome.Text = "At home, with family or friends";
+        _rdoHome.AutoSize = true;
+        _rdoClub.Checked = _settings.RacingAt != RacingSetting.Home;
+        _rdoHome.Checked = _settings.RacingAt == RacingSetting.Home;
+
+        _lblWhereHint.AutoSize = true;
+        _lblWhereHint.Font = AppTheme.SmallFont;
+        _lblWhereHint.Text = "At home, practice earns the badges you can earn on your own, and the club-sized ones "
+                             + "(a full grid, fifty opponents) aren't offered. Change it any time on the Achievements page.";
+
+        _trackStep.Add(new Label { Text = "Where do you race?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
+        _trackStep.Add(_rdoClub, stretch: false, gapBelow: UiLayout.HintGap);
+        _trackStep.Add(_rdoHome, stretch: false, gapBelow: UiLayout.RowGap);
+        _trackStep.Add(_lblWhereHint, gapBelow: 0);
     }
 
     /// <summary>
@@ -703,6 +728,7 @@ public sealed class FirstRunWizard : Form
             ("Sound:", _lblDoneSound),
             ("Decoder:", _lblDoneDecoder),
             ("Track:", _lblDoneTrack),
+            ("Racing:", _lblDoneWhere),
             ("Classes:", _lblDoneClasses),
             ("Drivers:", _lblDoneDrivers),
         })
@@ -1083,6 +1109,15 @@ public sealed class FirstRunWizard : Form
 
     private void SaveTrack()
     {
+        // Where you race first: it is saved whether or not a track is named.
+        var where = _rdoHome.Checked ? RacingSetting.Home : RacingSetting.Club;
+
+        if (_settings.RacingAt != where)
+        {
+            _settings.RacingAt = where;
+            _settings.Save();
+        }
+
         var trackName = _txtTrackName.Text.Trim();
         if (trackName.Length == 0)
         {
@@ -1266,6 +1301,7 @@ public sealed class FirstRunWizard : Form
         _lblDoneLook.Text = _doneLook ?? Looks.ForApp(_settings).Name;
         _lblDoneDecoder.Text = decoder;
         _lblDoneTrack.Text = track;
+        _lblDoneWhere.Text = _settings.RacingAt == RacingSetting.Home ? "At home" : "At a club";
         _lblDoneClasses.Text = classes;
         _lblDoneDrivers.Text = drivers;
         _lblDoneSound.Text = _sound?.Summary ?? string.Empty;

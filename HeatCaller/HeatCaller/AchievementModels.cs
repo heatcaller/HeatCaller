@@ -17,6 +17,37 @@ public enum AchievementCategory
 }
 
 /// <summary>
+/// What a badge needs that a driver cannot bring on their own - which decides
+/// whether a home track is offered it (AppSettings.RacingAt). Not persisted:
+/// worked out from the catalogue (AchievementCatalogue.NeedsOf), so it can be
+/// re-judged freely.
+/// </summary>
+public enum AchievementNeeds
+{
+    /// <summary>Earnable racing alone - clean laps, personal bests, lap totals, the calendar.</summary>
+    Alone,
+
+    /// <summary>At least one other real car in the race - a win, a podium, a gap, beating somebody.</summary>
+    Rival,
+
+    /// <summary>A club-sized field or roster: five or six cars in one race, or ten or more different opponents.</summary>
+    Club,
+
+    /// <summary>Only earned at a home track, where practice is judged too (practice laps and practice days).</summary>
+    Home,
+}
+
+/// <summary>Where the app is used - which decides which badges are offered and whether practice earns any.</summary>
+public enum RacingSetting
+{
+    /// <summary>A club: every badge but the home ones, earned in races only. The default, and every install from before this existed.</summary>
+    Club = 0,
+
+    /// <summary>A home track - a family or a few friends: no club-sized badges, and practice earns the ones that can be earned alone.</summary>
+    Home = 1,
+}
+
+/// <summary>
 /// Roughly how hard a badge is to come by, which is all the tier is for:
 /// it picks the medal's colour so a page of badges has a shape to it,
 /// rather than being forty identical discs.
@@ -58,7 +89,11 @@ public sealed record AchievementDefinition(
     AchievementCategory Category,
     string Icon,
     AchievementTier Tier = AchievementTier.Bronze,
-    string Art = "star");
+    string Art = "star")
+{
+    /// <summary>What it needs beyond the driver themselves - see AchievementNeeds. Filled from AchievementCatalogue.NeedsOf.</summary>
+    public AchievementNeeds Needs { get; init; } = AchievementNeeds.Alone;
+}
 
 /// <summary>One badge, earned, by one driver.</summary>
 public sealed class UnlockedAchievement
@@ -188,7 +223,56 @@ public static class AchievementCatalogue
     public const string Payback = "payback";
     public const string OldFriends = "old-friends";
 
-    public static IReadOnlyList<AchievementDefinition> All { get; } = new List<AchievementDefinition>
+    // --- Home and garage (Oct 2026) ---
+    public const string GhostBuster = "ghost-buster";
+    public const string ShadowBoxer = "shadow-boxer";
+    public const string PracticeMakesPerfect = "practice-makes-perfect";
+    public const string RegularAtTheTrack = "regular-at-the-track";
+    public const string DialledIn = "dialled-in";
+    public const string FreshLegs = "fresh-legs";
+    public const string GarageTour = "garage-tour";
+    public const string PackRotation = "pack-rotation";
+    public const string BackToBack = "back-to-back";
+
+    /// <summary>The badges that need at least one other real car in the race.</summary>
+    private static readonly HashSet<string> NeedRival = new(StringComparer.Ordinal)
+    {
+        FastestLap, WireToWire, ComeFromBehind, PhotoFinish, LateShow, PoleConverted, LapClear, QuickAndTidy,
+        Double, HatTrick, Charge, RocketStart, NailBiter, GrandSlam, NeverSayDie, CountryMile, SlowAndSteady,
+        PaceSetter, FirstWin, TenWins, TwentyFiveWins, FiftyWins, FirstPodium, TenPodiums, TwentyFivePodiums,
+        RookieSensation, DoubleTrouble, KingOfTheHill, Bridesmaid, FourLeafClover, BounceBack, BeatARival,
+        PodiumRegular, GiantKiller, StreakBreaker, Payback, OldFriends,
+    };
+
+    /// <summary>The badges that need a club-sized field (five or six cars) or roster (ten or more opponents).</summary>
+    private static readonly HashSet<string> NeedClub = new(StringComparer.Ordinal)
+    {
+        FullHouse, ComebackKid, RacedEveryone, TwentyOpponents, FiftyOpponents,
+    };
+
+    /// <summary>The badges only a home track earns - they are judged on practice, which a club's never is.</summary>
+    private static readonly HashSet<string> NeedHome = new(StringComparer.Ordinal)
+    {
+        PracticeMakesPerfect, RegularAtTheTrack,
+    };
+
+    /// <summary>What a badge needs beyond the driver themselves.</summary>
+    public static AchievementNeeds NeedsOf(string id) =>
+        NeedClub.Contains(id) ? AchievementNeeds.Club
+        : NeedRival.Contains(id) ? AchievementNeeds.Rival
+        : NeedHome.Contains(id) ? AchievementNeeds.Home
+        : AchievementNeeds.Alone;
+
+    /// <summary>
+    /// Whether a badge is on offer where the app is used: a club is offered
+    /// everything but the home badges, a home track everything but the
+    /// club-sized ones. A badge somebody has earned is shown whatever this
+    /// says - see the Achievements page.
+    /// </summary>
+    public static bool IsOffered(AchievementDefinition badge, RacingSetting where) =>
+        where == RacingSetting.Home ? badge.Needs != AchievementNeeds.Club : badge.Needs != AchievementNeeds.Home;
+
+    public static IReadOnlyList<AchievementDefinition> All { get; } = Tagged(new List<AchievementDefinition>
     {
         // --- Single race ---
         new(CleanTen, "Metronome", "Ten consecutive clean laps in one race.",
@@ -351,7 +435,31 @@ public static class AchievementCatalogue
             AchievementCategory.Rivalry, "\u21a9", AchievementTier.Bronze, "boomerang"),
         new(OldFriends, "Old Friends", "Twenty races against the same driver.",
             AchievementCategory.Rivalry, "\u263a", AchievementTier.Silver, "rings"),
-    };
+
+        // --- Home and garage (Oct 2026) ---
+        new(GhostBuster, "Ghost Buster", "Beat a ghost running your own best lap, in practice or a race.",
+            AchievementCategory.Progress, "\u25cc", AchievementTier.Silver, "ghost"),
+        new(ShadowBoxer, "Shadow Boxer", "Finished a race ahead of a live-pace ghost - one whose pace moves as the race goes.",
+            AchievementCategory.Race, "\u25cc", AchievementTier.Silver, "ghost"),
+        new(PracticeMakesPerfect, "Practice Makes Perfect", "A hundred laps in one practice session.",
+            AchievementCategory.Milestone, "\u221e", AchievementTier.Silver, "route"),
+        new(RegularAtTheTrack, "Regular at the Track", "Practised on ten different days.",
+            AchievementCategory.Milestone, "\u25a6", AchievementTier.Gold, "calendar"),
+        new(DialledIn, "Dialled In", "A personal best within three sessions of logging a setup on that car.",
+            AchievementCategory.Progress, "\u2692", AchievementTier.Silver, "wrench"),
+        new(FreshLegs, "Fresh Legs", "A personal best on a pack other than the one you run most.",
+            AchievementCategory.Progress, "\u26a1", AchievementTier.Bronze, "battery"),
+        new(GarageTour, "Garage Tour", "Personal bests in three different cars.",
+            AchievementCategory.Progress, "\u25ad", AchievementTier.Gold, "car"),
+        new(PackRotation, "Pack Rotation", "Ran three or more of your own packs in one day.",
+            AchievementCategory.Milestone, "\u26a1", AchievementTier.Bronze, "battery"),
+        new(BackToBack, "Back to Back", "New personal bests on two days in a row.",
+            AchievementCategory.Progress, "\u21d7", AchievementTier.Silver, "chevron-up-double"),
+    });
+
+    /// <summary>Each badge with what it needs filled in (NeedsOf).</summary>
+    private static IReadOnlyList<AchievementDefinition> Tagged(List<AchievementDefinition> badges) =>
+        badges.Select(b => b with { Needs = NeedsOf(b.Id) }).ToList();
 
     /// <summary>
     /// Spotless, Wire to Wire and Through the Field each need something a

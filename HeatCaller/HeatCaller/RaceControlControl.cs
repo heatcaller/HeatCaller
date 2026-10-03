@@ -277,6 +277,17 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     internal AchievementStore Achievements => _achievements;
 
+    /// <summary>Badges were awarded somewhere else (a practice at home): the board, the Big Screen and the projections read them afresh.</summary>
+    public void ReloadAchievements()
+    {
+        var store = AchievementStore.Load();
+
+        if (!store.LoadedUnreadable)
+        {
+            _achievements = store;
+        }
+    }
+
     /// <summary>The projection window, when it is open. One at a time.</summary>
     private QualifyingProjectionForm? _projectionWindow;
     private readonly Button _btnReadiness = new();

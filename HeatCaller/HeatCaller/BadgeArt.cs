@@ -1131,6 +1131,68 @@ public static class BadgeArt
                 break;
             }
 
+            case "ghost":
+            {
+                // A sheet with a wavy hem and two eyes - the ghost car you
+                // race against in practice.
+                using var path = new GraphicsPath();
+                var left = cx - r * 0.62f;
+                var right = cx + r * 0.62f;
+                var hem = cy + r * 0.78f;
+
+                path.AddArc(left, cy - r * 0.86f, right - left, (right - left) * 1.05f, 180f, 180f);
+                path.AddLine(right, cy - r * 0.21f, right, hem);
+
+                var waves = 3;
+                var step = (right - left) / waves;
+
+                for (var i = 0; i < waves; i++)
+                {
+                    var x = right - i * step;
+                    path.AddLine(x, hem, x - step / 2f, hem - r * 0.22f);
+                    path.AddLine(x - step / 2f, hem - r * 0.22f, x - step, hem);
+                }
+
+                path.CloseFigure();
+                g.DrawPath(pen, path);
+
+                var eye = r * 0.2f;
+                g.FillEllipse(brush, cx - r * 0.32f, cy - r * 0.32f, eye, eye * 1.3f);
+                g.FillEllipse(brush, cx + r * 0.12f, cy - r * 0.32f, eye, eye * 1.3f);
+                break;
+            }
+
+            case "wrench":
+            {
+                // An open-ended spanner: a handle up to a jaw open at the top
+                // right - a setup change that paid off.
+                var jaw = r * 0.4f;
+                var jx = cx + r * 0.38f;
+                var jy = cy - r * 0.38f;
+
+                g.DrawLine(pen, cx - r * 0.72f, cy + r * 0.72f, jx - jaw * 0.6f, jy + jaw * 0.6f);
+                g.DrawArc(pen, jx - jaw, jy - jaw, jaw * 2f, jaw * 2f, 0f, 270f);
+                break;
+            }
+
+            case "battery":
+            {
+                // A pack standing up, its terminal on top and a bolt inside.
+                var body = new RectangleF(cx - r * 0.46f, cy - r * 0.62f, r * 0.92f, r * 1.42f);
+                g.DrawRectangle(pen, body.X, body.Y, body.Width, body.Height);
+                g.FillRectangle(brush, cx - r * 0.2f, body.Top - r * 0.2f, r * 0.4f, r * 0.2f);
+                g.FillPolygon(brush, new[]
+                {
+                    new PointF(cx + r * 0.1f, cy - r * 0.42f),
+                    new PointF(cx - r * 0.22f, cy + r * 0.12f),
+                    new PointF(cx - r * 0.02f, cy + r * 0.12f),
+                    new PointF(cx - r * 0.12f, cy + r * 0.58f),
+                    new PointF(cx + r * 0.22f, cy - r * 0.02f),
+                    new PointF(cx + r * 0.02f, cy - r * 0.02f),
+                });
+                break;
+            }
+
             default:
             {
                 DrawStar(g, brush, cx, cy, r, r * 0.45f, 5);

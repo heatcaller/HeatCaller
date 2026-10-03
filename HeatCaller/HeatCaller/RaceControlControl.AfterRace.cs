@@ -85,8 +85,17 @@ public sealed partial class RaceControlControl
 
             // The profiles too, so a guest marked "Exclude from records", a
             // rental or a ghost does not take the Track Record badge.
+            // Where the app is used, the garage, the packs and the ghosts
+            // beaten - for the home and garage badges.
+            var context = (AchievementStores ?? new AchievementContext()) with
+            {
+                RacingAt = _settings.RacingAt,
+                Profiles = _profiles,
+                GhostsBeaten = _ghostsBeatenAtFlag,
+            };
+
             var unlocks = AchievementEvaluator.EvaluateFinishedRace(
-                record, _sessionHistory.All, store, RivalryStore.Load(), _profiles);
+                record, _sessionHistory.All, store, RivalryStore.Load(), _profiles, context);
 
             if (unlocks.Count == 0)
             {
@@ -121,6 +130,17 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out achievements for this race: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// The stores the home and garage badges read (setups, cars, packs, the
+    /// ghosts as set up) - set by MainForm. Without it those badges are
+    /// simply not judged.
+    /// </summary>
+    public AchievementContext? AchievementStores { get; set; }
+
+    /// <summary>The ghosts each driver beat in the race just filed - see SaveCompletedSessionToHistory.</summary>
+    private IReadOnlyDictionary<string, IReadOnlyList<GhostCar>> _ghostsBeatenAtFlag =
+        new Dictionary<string, IReadOnlyList<GhostCar>>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Raised with everything a finished race unlocked, for anything that wants to show it.</summary>
     public event Action<List<AchievementUnlock>>? AchievementsUnlocked;
@@ -1345,6 +1365,24 @@ public sealed partial class RaceControlControl
         // did not just score the points for third: it pushed every real
         // driver behind it down a place and took a place off each of them.
         var racers = ordered.Where(s => !GhostService.IsGhost(s.TransponderId)).ToList();
+
+        // Which ghosts each driver finished ahead of, for Ghost Buster and
+        // Shadow Boxer - worked out here, from the board, because the saved
+        // result below leaves the ghosts out.
+        // Badges never stop a save: anything going wrong here means no ghost
+        // badges for this race, and the race is filed as ever.
+        try
+        {
+            _ghostsBeatenAtFlag = AchievementEvaluator.GhostsBeatenBy(
+                ordered.Select(s => (s.TransponderId, s.Laps, s.FastestLapMs)).ToList(),
+                AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
+                byBestLap: false);
+        }
+        catch (Exception ex)
+        {
+            _ghostsBeatenAtFlag = new Dictionary<string, IReadOnlyList<GhostCar>>(StringComparer.OrdinalIgnoreCase);
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out which ghosts were beaten: {ex.Message}");
+        }
 
         // Both of these used to return silently, which made a race that
         // finished but never appeared in history impossible to diagnose.

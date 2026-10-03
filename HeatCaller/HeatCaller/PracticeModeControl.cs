@@ -1202,6 +1202,30 @@ public sealed class PracticeModeControl : UserControl
         SizeFields();
     }
 
+    /// <summary>The battery packs - each driver's pack in the car is recorded on the practice when it is saved (BatteryPackStore.AutoTag). Set by MainForm.</summary>
+    public BatteryPackStore? BatteryPacks { get; set; }
+
+    /// <summary>
+    /// The stores the home and garage badges read - set by MainForm. At a
+    /// home track a saved practice is judged for the badges a driver can
+    /// earn alone (AchievementEvaluator.EvaluatePractice); at a club it is not.
+    /// </summary>
+    public AchievementContext? AchievementStores { get; set; }
+
+    /// <summary>A line for the console - the badges a practice earned.</summary>
+    public event Action<string>? StatusMessage;
+
+    /// <summary>Raised after a practice at home awarded badges - for Race Control's board and the Big Screen to read them afresh.</summary>
+    public event Action? BadgesAwarded;
+
+    /// <summary>
+    /// The practice whose badges have been worked out - by when it started.
+    /// Save Session part-way through and the save when it stops both file
+    /// the whole board, and judging both would count every lap of the first
+    /// twice towards the lap totals.
+    /// </summary>
+    private DateTime? _judgedPracticeStart;
+
     /// <summary>
     /// Writes the current practice laps into race history, flagged as a
     /// Practice session. That flag is what keeps it out of track records
@@ -1246,7 +1270,8 @@ public sealed class PracticeModeControl : UserControl
         // leaving them in a saved result would put a made-up lap time into
         // the personal bests and the pace charts as if somebody had driven
         // it.
-        var standings = _race.GetOrderedStandings()
+        var board = _race.GetOrderedStandings();
+        var standings = board
             .Where(s => s.LapTimesMs.Count > 0 && !GhostService.IsGhost(s.TransponderId))
             .ToList();
         if (standings.Count == 0)
@@ -1311,6 +1336,8 @@ public sealed class PracticeModeControl : UserControl
             return SaveFailed;
         }
 
+        AfterPracticeSaved(record, board);
+
         if (silent)
         {
             return results.Count;
@@ -1321,6 +1348,78 @@ public sealed class PracticeModeControl : UserControl
             "Practice saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         return results.Count;
+    }
+
+    /// <summary>
+    /// Once a practice is safely in Race History: each driver's pack in the
+    /// car recorded on it, and - at a home track - its badges. Neither may
+    /// stop the save it follows, so neither is allowed to throw out of here.
+    /// </summary>
+    private void AfterPracticeSaved(SessionRecord record, IReadOnlyList<RacerStanding> board)
+    {
+        try
+        {
+            BatteryPacks?.AutoTag(record, _profiles);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [packs] Couldn't record the packs on this practice: {ex.Message}");
+        }
+
+        if (_settings.RacingAt != RacingSetting.Home || _judgedPracticeStart == record.StartedAtUtc)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = AchievementStore.Load();
+
+            if (store.LoadedUnreadable)
+            {
+                StatusMessage?.Invoke("[badges] achievements.json could not be read just now, so badges were not worked out for this practice.");
+                return;
+            }
+
+            // Judged by best lap: in practice nobody finishes ahead of
+            // anybody, a ghost included.
+            var beaten = AchievementEvaluator.GhostsBeatenBy(
+                board.Select(s => (s.TransponderId, s.Laps, s.FastestLapMs)).ToList(),
+                AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
+                byBestLap: true);
+
+            var context = (AchievementStores ?? new AchievementContext()) with
+            {
+                RacingAt = _settings.RacingAt,
+                Profiles = _profiles,
+                GhostsBeaten = beaten,
+            };
+
+            var unlocks = AchievementEvaluator.EvaluatePractice(record, _history.All, store, context);
+            _judgedPracticeStart = record.StartedAtUtc;
+
+            if (unlocks.Count > 0)
+            {
+                BadgesAwarded?.Invoke();
+            }
+
+            foreach (var unlock in unlocks)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [badge] {unlock.DriverName} unlocked \"{unlock.Badge.Name}\" in practice"
+                    + (string.IsNullOrWhiteSpace(unlock.Detail) ? "." : $" ({unlock.Detail})."));
+            }
+
+            // Said, as after a race - the first few, rarest first.
+            foreach (var unlock in unlocks.Take(3))
+            {
+                _announcer?.NotifyAchievement(unlock.Transponder, unlock.Badge.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out badges for this practice: {ex.Message}");
+        }
     }
 
     /// <summary>

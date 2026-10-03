@@ -1163,7 +1163,9 @@ public partial class MainForm
         {
             _lastRelayDocuments.Remove(RelayChannel.Badges);
             _relayBadgesSentUtc = DateTime.UtcNow;
-            SendToRelayIfChanged(RelayChannel.Badges, "the badge list", RelayDocuments.Badges);
+            SendToRelayIfChanged(RelayChannel.Badges, "the badge list", () => RelayDocuments.Badges(
+                _settings.RacingAt,
+                RelayAchievements().All.SelectMany(d => d.Unlocked).Select(u => u.Id).ToHashSet(StringComparer.Ordinal)));
         }
     }
 
