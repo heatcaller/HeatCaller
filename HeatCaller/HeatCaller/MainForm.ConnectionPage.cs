@@ -116,6 +116,12 @@ public partial class MainForm
         grid.AddField(chkAutoConnect);
         grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);
 
+        // Every check before a green flag at once - the decoder, the cars
+        // heard, timing, the website, the sound. See MissionControl.
+        var btnMissionControl = new Button { Text = "Mission Control..." };
+        btnMissionControl.Click += (_, _) => ShowMissionControl();
+        grid.AddRow("Before a race:", FieldGrid.Inline(btnMissionControl));
+
         // The split loop: the other decoder, partway round the track - see
         // MainForm.SplitLoop. Its light and line show only while it is on.
         cmbSplitLoop.DropDownStyle = ComboBoxStyle.DropDownList;

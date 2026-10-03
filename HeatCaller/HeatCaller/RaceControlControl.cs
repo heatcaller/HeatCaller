@@ -196,6 +196,13 @@ public sealed partial class RaceControlControl : UserControl
     public Func<string?>? TimingProblem { get; set; }
 
     /// <summary>
+    /// The live track map - the line of the layout being raced on and every
+    /// car placed on it - for the Big Screen this page opens. Null leaves
+    /// the Big Screen without one. See MainForm.TrackMap.
+    /// </summary>
+    public Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? TrackMap { get; set; }
+
+    /// <summary>
     /// What the Garage has on the winning car, for the mechanic in the
     /// recap's interview - see MechanicBrief. Given the saved race and the
     /// round it was run for (null for a freeform race). Worked out by the

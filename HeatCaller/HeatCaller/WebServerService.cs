@@ -86,6 +86,21 @@ public sealed class WebServerService
     /// </summary>
     public Func<string>? RaceInHand { get; set; }
 
+    /// <summary>
+    /// The races still to run, in order, for phones following a driver -
+    /// when is their next race and where do they grid (PhoneFollow). Asked
+    /// on the UI thread as the LAN copy of the live state is built. Never in
+    /// the relay's copy.
+    /// </summary>
+    public Func<IReadOnlyList<UpcomingRace>>? UpcomingRaces { get; set; }
+
+    /// <summary>
+    /// The live track map - the line and every car on it - for the Live
+    /// Results page's Track page. Asked on the UI thread as the LAN copy of
+    /// the live state is built. Never in the relay's copy.
+    /// </summary>
+    public Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? TrackMap { get; set; }
+
     private volatile bool _hostReady;
 
     /// <summary>
@@ -2374,7 +2389,155 @@ public sealed class WebServerService
 
         var node = JsonSerializer.SerializeToNode(document)!.AsObject();
         node["race"] = race;
+
+        // Following a driver (PhoneFollow): each row's transponder, so the
+        // page can pick out the one being followed; their card - position,
+        // laps, last lap, the gaps either side; when each driver's next race
+        // is; and who can be followed. Guarded like the heading above: the
+        // board must not go stale for the sake of the extras.
+        try
+        {
+            AddFollowing(node, ordered);
+        }
+        catch
+        {
+            // The board without the follow view, rather than no board.
+        }
+
+        try
+        {
+            AddTrackMap(node);
+        }
+        catch
+        {
+            // The board without the track map, rather than no board.
+        }
+
         return node.ToJsonString();
+    }
+
+    /// <summary>
+    /// Adds the live track map to the LAN copy of the live state: the racing
+    /// line (in tiles - the page fits it to the screen), where the split
+    /// loops are, and each car's place on it with its pace, so the page can
+    /// move the dots smoothly between its once-a-second polls. Null when the
+    /// layout being raced on has no plan to draw. See TrackPositions.
+    /// </summary>
+    private void AddTrackMap(System.Text.Json.Nodes.JsonObject node)
+    {
+        var (line, cars) = TrackMap?.Invoke() ?? (null, Array.Empty<TrackPositions.Car>());
+
+        if (line is null)
+        {
+            node["map"] = null;
+            return;
+        }
+
+        static double Round(float value) => Math.Round(value, 3);
+
+        var points = new System.Text.Json.Nodes.JsonArray(line.Points
+            .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonArray(Round(p.X), Round(p.Y)))
+            .ToArray());
+
+        var splits = new System.Text.Json.Nodes.JsonArray(line.SplitAt
+            .Select(f => (System.Text.Json.Nodes.JsonNode?)Round(f))
+            .ToArray());
+
+        var placed = new System.Text.Json.Nodes.JsonArray(cars
+            .Select(c => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+            {
+                ["id"] = c.Transponder,
+                ["pos"] = c.Position,
+                ["f"] = Round(c.Fraction),
+                ["rate"] = Math.Round(c.Rate, 5),
+                ["cap"] = Round(c.Cap),
+                ["stop"] = c.Stopped,
+                ["where"] = c.Where,
+            })
+            .ToArray());
+
+        node["map"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["pts"] = points,
+            ["splits"] = splits,
+            ["cars"] = placed,
+        };
+    }
+
+    /// <summary>
+    /// Adds what a phone following one driver needs to the LAN copy of the
+    /// live state: an id on each row, a card per car on the board, the
+    /// call-ups for the races still to run, and everyone who can be
+    /// followed, by name. See PhoneFollow.
+    /// </summary>
+    private void AddFollowing(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<RacerStanding> ordered)
+    {
+        if (node["standings"] is System.Text.Json.Nodes.JsonArray rows)
+        {
+            for (var i = 0; i < rows.Count && i < ordered.Count; i++)
+            {
+                if (rows[i] is System.Text.Json.Nodes.JsonObject row)
+                {
+                    row["id"] = ordered[i].TransponderId;
+                }
+            }
+        }
+
+        var cards = new System.Text.Json.Nodes.JsonObject();
+
+        foreach (var (id, card) in PhoneFollow.Cards(ordered))
+        {
+            cards[id] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["pos"] = card.Position,
+                ["laps"] = card.Laps,
+                ["last"] = card.LastLapMs,
+                ["ahead"] = card.Ahead,
+                ["behind"] = card.Behind,
+            };
+        }
+
+        node["cards"] = cards;
+
+        IReadOnlyList<UpcomingRace> upcoming;
+
+        try
+        {
+            upcoming = UpcomingRaces?.Invoke() ?? Array.Empty<UpcomingRace>();
+        }
+        catch
+        {
+            upcoming = Array.Empty<UpcomingRace>();
+        }
+
+        var callUps = new System.Text.Json.Nodes.JsonObject();
+
+        foreach (var (id, callUp) in PhoneFollow.CallUps(upcoming))
+        {
+            callUps[id] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["race"] = callUp.Race,
+                ["away"] = callUp.Away,
+                ["slot"] = callUp.Slot,
+                ["now"] = callUp.OnTrack,
+                ["words"] = PhoneFollow.Words(callUp),
+            };
+        }
+
+        node["callups"] = callUps;
+
+        // Everyone on the board or due in a race to come, by name - the
+        // page's "Follow" list.
+        var people = ordered.Select(s => s.TransponderId)
+            .Concat(upcoming.SelectMany(r => r.Grid))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(id => (Id: id, Name: DisplayNameFor(id, false)))
+            .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["id"] = p.Id, ["name"] = p.Name })
+            .ToArray();
+
+        node["people"] = new System.Text.Json.Nodes.JsonArray(people);
     }
 
     /// <summary>
@@ -2664,11 +2827,34 @@ public sealed class WebServerService
         body.overlay th { background:var(--glass-bg); }
         body.overlay .ondeck { background:var(--glass-surface); }
         body.overlay #sponsor { display:none !important; }
+        /* Following one driver: a picker, their card, and the call-up for
+           their next race - which flashes when it is next. */
+        .follow { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 18px; }
+        .follow select { font:inherit; font-size:15px; padding:6px 8px; border-radius:8px; max-width:100%;
+                         background:var(--bg); color:var(--text); border:1px solid var(--border); }
+        .fcard { display:none; margin-top:10px; align-items:baseline; gap:16px; flex-wrap:wrap; }
+        .fcard .fpos { font-size:44px; font-weight:800; color:var(--accent); line-height:1; }
+        .fcard .fname { font-size:20px; font-weight:700; }
+        .fcard .fstat { color:var(--soft); font-size:15px; }
+        .fcard .fstat b { color:var(--text); }
+        .callup { display:none; margin-top:10px; padding:12px 14px; border-radius:10px; font-weight:800;
+                  font-size:18px; background:var(--bg); border:2px solid var(--border); }
+        .callup.next { border-color:var(--accent); color:var(--accent); animation:callpulse 1.1s ease-in-out infinite; }
+        .callup.now { border-color:var(--good); color:var(--good); }
+        @keyframes callpulse { 0%,100% { box-shadow:0 0 0 0 transparent; } 50% { box-shadow:0 0 0 6px var(--accent); } }
+        tr.me td { outline:2px solid var(--accent); outline-offset:-2px; }
+        body.overlay .follow { display:none; }
         </style></head><body data-look="{{look.Fingerprint}}">
         <div class="bar"><h1>{{look.Logo}}LIVE RESULTS</h1>
           <div><span class="state" id="state">-</span> &nbsp; <span class="countdown" id="countdown"></span></div>
         </div>
         <div class="ondeck" id="ondeck" style="display:none"></div>
+        <div class="follow" id="follow">
+          <select id="followPick"><option value="">Follow a driver...</option></select>
+          <div class="fcard" id="fcard"><span class="fpos" id="fpos"></span>
+            <span><span class="fname" id="fname"></span><br><span class="fstat" id="fstat"></span></span></div>
+          <div class="callup" id="callup"></div>
+        </div>
 
         <div class="deck" id="deck">
           <div class="page">
@@ -2685,8 +2871,13 @@ public sealed class WebServerService
             <canvas id="paceChart" height="300"></canvas>
             <div class="legend"><span>Bar length is the best lap - shorter is quicker. The lighter tail is lap-time spread.</span></div>
           </div>
+          <div class="page">
+            <div class="ptitle">Track map</div>
+            <canvas id="mapChart" height="340"></canvas>
+            <div class="legend" id="mapLegend"><span>Draw the racing line and the finish line on this layout's plan (Track Designer) to see the cars go round.</span></div>
+          </div>
         </div>
-        <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i></div>
+        <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
 
         <div id="sponsor"><img id="sponsorImg" src=""></div>
         <script>
@@ -2721,10 +2912,13 @@ public sealed class WebServerService
             document.getElementById('head').innerHTML =
               (d.columns||[]).map((c,i) => `<th class="${i===0?'pos':''}">${esc(c)}</th>`).join('');
             document.getElementById('rows').innerHTML = d.standings.map((s,ri) =>
-              `<tr class="${ri===0?'p1':''}">` + s.cells.map((c,i) =>
+              `<tr class="${ri===0?'p1':''}${s.id && s.id===following?' me':''}">` + s.cells.map((c,i) =>
                 `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
               ).join('') + '</tr>').join('');
             document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
+
+            showFollowing(d);
+            takeMap(d.map);
 
             window.lastRows = d.standings;
             drawLaps(d.standings);
@@ -2878,6 +3072,172 @@ public sealed class WebServerService
         }, {passive:true});
 
         window.addEventListener('resize', () => { if (window.lastRows) { drawLaps(window.lastRows); drawPace(window.lastRows); } });
+
+        // --- The track map ----------------------------------------------
+        // Each car is placed where the laptop last worked it out to be, then
+        // moved on at its usual pace between polls - held short of the next
+        // loop, as the laptop holds it - so the dots glide rather than hop
+        // once a second. A car that seems to have stopped is red and pulses.
+        let map = null, mapAt = 0;
+
+        function takeMap(m){
+          map = m || null; mapAt = performance.now();
+          if (map) {
+            const stopped = (map.cars || []).filter(c => c.stop);
+            document.getElementById('mapLegend').innerHTML = stopped.length
+              ? stopped.map(c => `<span style="color:var(--bad)">${esc(nameOf(c.id))} may have stopped ${esc(c.where)}</span>`).join('')
+              : '<span>Each dot is a car, its number its place in the race.</span>';
+          }
+        }
+
+        function nameOf(id){
+          const p = (window.people || []).find(x => x.id === id);
+          return p ? p.name : id;
+        }
+
+        function pointAt(pts, cum, f){
+          f = f - Math.floor(f);
+          const want = f * cum[cum.length-1];
+          for (let i = 1; i < pts.length; i++){
+            if (cum[i] >= want){
+              const seg = cum[i] - cum[i-1], t = seg <= 0 ? 0 : (want - cum[i-1]) / seg;
+              return [pts[i-1][0] + (pts[i][0]-pts[i-1][0])*t, pts[i-1][1] + (pts[i][1]-pts[i-1][1])*t];
+            }
+          }
+          return pts[pts.length-1];
+        }
+
+        function drawMap(){
+          const cv = document.getElementById('mapChart');
+          if (!cv || !cv.clientWidth) return;
+          const {g,w,h} = prep(cv);
+          if (!map || !map.pts || map.pts.length < 2){
+            g.fillStyle = INK.muted; g.font = '14px system-ui';
+            g.fillText('No track plan for this layout.', 16, h/2);
+            return;
+          }
+          const pts = map.pts, cum = [0];
+          for (let i = 1; i < pts.length; i++) cum.push(cum[i-1] + Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]));
+          const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+          const minX = Math.min(...xs), minY = Math.min(...ys);
+          const spanX = Math.max(0.01, Math.max(...xs) - minX), spanY = Math.max(0.01, Math.max(...ys) - minY);
+          const pad = 22, k = Math.min((w-2*pad)/spanX, (h-2*pad)/spanY);
+          const ox = (w - spanX*k)/2 - minX*k, oy = (h - spanY*k)/2 - minY*k;
+          const P = p => [ox + p[0]*k, oy + p[1]*k];
+
+          g.lineJoin = 'round'; g.strokeStyle = INK.line; g.lineWidth = 12;
+          g.beginPath(); pts.forEach((p,i) => { const q = P(p); i ? g.lineTo(q[0],q[1]) : g.moveTo(q[0],q[1]); }); g.stroke();
+
+          const mark = (f, label, colour) => {
+            const a = P(pointAt(pts, cum, f)), b = P(pointAt(pts, cum, f + 0.005));
+            const dx = b[0]-a[0], dy = b[1]-a[1], len = Math.hypot(dx,dy) || 1, nx = -dy/len*12, ny = dx/len*12;
+            g.strokeStyle = colour; g.lineWidth = 3;
+            g.beginPath(); g.moveTo(a[0]-nx, a[1]-ny); g.lineTo(a[0]+nx, a[1]+ny); g.stroke();
+            g.fillStyle = colour; g.font = 'bold 11px system-ui'; g.fillText(label, a[0]+nx*1.3, a[1]+ny*1.3);
+          };
+          mark(0, 'S/F', INK.text);
+          (map.splits || []).forEach((f,i) => mark(f, 'S' + (i+1), INK.soft));
+
+          const secs = (performance.now() - mapAt) / 1000, pulse = (1 - Math.cos(performance.now()/1100*2*Math.PI))/2;
+          [...(map.cars || [])].sort((a,b) => b.pos - a.pos).forEach(c => {
+            const f = c.stop ? c.f : Math.min(c.cap, c.f + c.rate * secs);
+            const q = P(pointAt(pts, cum, f));
+            const r = c.id === following ? 11 : 9;
+            if (c.stop){
+              g.strokeStyle = 'rgba(239,68,68,' + (0.9 - pulse*0.6) + ')'; g.lineWidth = 3;
+              g.beginPath(); g.arc(q[0], q[1], r * (1.6 + pulse*1.4), 0, Math.PI*2); g.stroke();
+            }
+            g.fillStyle = c.stop ? '#EF4444' : COLOURS[(c.pos-1) % COLOURS.length];
+            g.beginPath(); g.arc(q[0], q[1], r, 0, Math.PI*2); g.fill();
+            if (c.id === following){ g.strokeStyle = INK.text; g.lineWidth = 2; g.stroke(); }
+            g.fillStyle = c.stop ? '#fff' : '#000'; g.font = 'bold 11px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+            g.fillText(c.stop ? '!' : String(c.pos), q[0], q[1] + 0.5);
+            g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+          });
+        }
+
+        // About ten frames a second, and only while the map page is the one showing.
+        setInterval(() => {
+          const i = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
+          if (i === 3) drawMap();
+        }, 100);
+
+        // --- Following one driver ---------------------------------------
+        // Remembered on this phone, so it is still following them after a
+        // reload. Picking a driver is also the tap that lets the page buzz
+        // and beep later: phones only allow either after a touch.
+        const FOLLOW_KEY = 'hcFollow';
+        let following = '';
+        try { following = localStorage.getItem(FOLLOW_KEY) || ''; } catch(e) {}
+        let lastCallKey = '', audio = null;
+
+        const pick = document.getElementById('followPick');
+        pick.addEventListener('change', () => {
+          following = pick.value;
+          try { localStorage.setItem(FOLLOW_KEY, following); } catch(e) {}
+          try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+          lastCallKey = '';
+          tick();
+        });
+
+        function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
+
+        function showFollowing(d){
+          // The picker, filled again only when the list of people changes.
+          const people = d.people || [];
+          window.people = people;
+          const sig = people.map(p => p.id).join('|');
+          if (pick.dataset.sig !== sig){
+            pick.innerHTML = '<option value="">Follow a driver...</option>' + people.map(p =>
+              `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+            pick.dataset.sig = sig;
+          }
+          pick.value = people.some(p => p.id === following) ? following : '';
+
+          const card = (d.cards || {})[following];
+          const fc = document.getElementById('fcard');
+          if (following && card){
+            const who = people.find(p => p.id === following);
+            document.getElementById('fpos').textContent = 'P' + card.pos;
+            document.getElementById('fname').textContent = who ? who.name : following;
+            document.getElementById('fstat').innerHTML =
+              `Lap <b>${card.laps}</b> &nbsp; Last <b>${fmt(card.last)}</b><br>` +
+              `Ahead <b>${esc(card.ahead)}</b> &nbsp; Behind <b>${esc(card.behind)}</b>`;
+            fc.style.display = 'flex';
+          } else {
+            fc.style.display = 'none';
+          }
+
+          const call = (d.callups || {})[following];
+          const cu = document.getElementById('callup');
+          if (following && call){
+            cu.textContent = call.words.toUpperCase() + ' - ' + call.race + ' - grid ' + call.slot;
+            cu.className = 'callup ' + (call.now ? 'now' : call.away === 0 ? 'next' : '');
+            cu.style.display = 'block';
+
+            // Buzz once as their race becomes the next one.
+            const key = call.race + '|' + call.away;
+            if (!call.now && call.away === 0 && lastCallKey && lastCallKey !== key) buzz();
+            lastCallKey = key;
+          } else {
+            cu.style.display = 'none';
+            lastCallKey = lastCallKey || 'none';
+          }
+        }
+
+        function buzz(){
+          try { if (navigator.vibrate) navigator.vibrate([250,120,250,120,400]); } catch(e) {}
+          try {
+            if (!audio) return;
+            [0, 0.25].forEach(at => {
+              const o = audio.createOscillator(), g = audio.createGain();
+              o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
+              g.gain.setValueAtTime(0.2, audio.currentTime + at);
+              g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + at + 0.2);
+              o.start(audio.currentTime + at); o.stop(audio.currentTime + at + 0.22);
+            });
+          } catch(e) {}
+        }
 
         function hideSponsor(){
           document.getElementById('sponsor').style.display = 'none';

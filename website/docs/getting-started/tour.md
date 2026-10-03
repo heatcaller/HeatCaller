@@ -197,6 +197,14 @@ HeatCaller doesn't use pop-up notifications. Status is shown in these places:
 - **The Rentals count** in the sidebar, while any rental transponder is still out.
 - **The Developer Console**, for everything else.
 
+## Selecting several rows
+
+In any list where you can select more than one row, such as the drivers in **Driver Hub** or the races in **Race History**, press on a row and drag up or down to select every row you pass. Drag past the top or bottom of the list and it scrolls with you. Hold <kbd>Ctrl</kbd> as you start the drag to add the rows to what's already selected. <kbd>Shift</kbd>+click and <kbd>Ctrl</kbd>+click work as usual.
+
+In a list of tick boxes, dragging ticks every row you pass, or unticks them if the row you started on was ticked.
+
+Some lists only ever hold one selection, because their buttons act on one thing at a time (**Edit**, **Transfer**). Dragging does nothing special there.
+
 ## Dialogs
 
 Most dialogs follow the same rules:

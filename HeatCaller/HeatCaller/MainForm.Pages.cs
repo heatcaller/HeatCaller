@@ -58,6 +58,13 @@ public partial class MainForm
         // where the LAN copy of the live state is built.
         _webServer.RaceInHand = raceControl.RaceInHandTitle;
 
+        // The races still to run, for phones following a driver - when is
+        // their next race and where do they grid. See PhoneFollow.
+        _webServer.UpcomingRaces = () => raceControl.UpcomingRaces(8);
+
+        // The live track map, for the Big Screen this page opens - see MainForm.TrackMap.
+        raceControl.TrackMap = TrackMapNow;
+
         // A finished race changes race-program state, so refresh the visible
         // page rather than leaving a heat showing "Scheduled" until the user
         // happens to navigate away and back.
@@ -1307,6 +1314,7 @@ public partial class MainForm
         cmbActiveRound.SelectedIndexChanged += (_, _) => _raceControlControl.RefreshFormat();
 
         _raceControlControl.AnnouncerRequested += OpenAnnouncerWindow;
+        _raceControlControl.MissionControlRequested += ShowMissionControl;
 
         // Brings Race Control forward without closing the announcer's
         // window. It used to be a tab, so "Race Control" meant leaving the

@@ -291,6 +291,27 @@ public sealed partial class RaceControlControl
             .FirstOrDefault(r => !r.IsRecorded && !string.Equals(r.Id, active?.Id, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The next <paramref name="count"/> races still to run, in running
+    /// order, for the phones following a driver (PhoneFollow): the round in
+    /// hand first while it is staged or on track, then the program's
+    /// unrecorded rounds. Each with its cars in grid order. UI thread.
+    /// </summary>
+    internal IReadOnlyList<UpcomingRace> UpcomingRaces(int count)
+    {
+        var active = _activeRound?.Invoke();
+        var onTrack = (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing) && !_race.IsPracticeMode;
+
+        return OrderedProgram()
+            .Where(r => !r.IsRecorded && r.AssignedTransponders.Count > 0)
+            .Take(Math.Max(0, count))
+            .Select(r => new UpcomingRace(
+                RoundTitle(r),
+                r.AssignedTransponders.ToList(),
+                onTrack && string.Equals(r.Id, active?.Id, StringComparison.Ordinal)))
+            .ToList();
+    }
+
     private static string RoundTitle(RoundDefinition round) =>
         string.IsNullOrWhiteSpace(round.ClassName)
             ? round.RoundLabel
@@ -1002,23 +1023,45 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var round = _activeRound?.Invoke();
+        var (roster, source) = PreRaceRoster();
 
-        List<string> roster;
-        string source;
+        // Mission Control is offered from here: this is where somebody is
+        // already looking before the green. Closing the check first, as the
+        // window it opens is not modal and would otherwise sit behind it.
+        var wantsMissionControl = false;
+
+        using (var form = new ReadinessCheckForm(roster, _transponderWatch, _profiles, source, splitLoop: _settings.SplitLoopEnabled,
+                   openMissionControl: MissionControlRequested is null ? null : (Action)(() => wantsMissionControl = true)))
+        {
+            form.ShowDialog(this);
+        }
+
+        if (wantsMissionControl)
+        {
+            MissionControlRequested?.Invoke();
+        }
+    }
+
+    /// <summary>Raised when somebody asks for Mission Control from Race Control - MainForm opens it.</summary>
+    public event Action? MissionControlRequested;
+
+    /// <summary>
+    /// Who should be in the next race, and where that list came from: the
+    /// selected round's roster if there is one, because that is the list
+    /// somebody has already agreed to; failing that, whoever is already on
+    /// the board. Shared by the pre-race check, Mission Control and the Big
+    /// Screen's roll call, so all three check the same cars.
+    /// </summary>
+    internal (List<string> Roster, string Source) PreRaceRoster()
+    {
+        var round = _activeRound?.Invoke();
 
         if (round is { AssignedTransponders.Count: > 0 })
         {
-            roster = round.AssignedTransponders.ToList();
-            source = string.IsNullOrWhiteSpace(round.RoundLabel) ? "round roster" : $"roster for {round.RoundLabel}";
-        }
-        else
-        {
-            roster = _race.GetOrderedStandings().Select(s => s.TransponderId).ToList();
-            source = "drivers already on the board";
+            return (round.AssignedTransponders.ToList(),
+                string.IsNullOrWhiteSpace(round.RoundLabel) ? "round roster" : $"roster for {round.RoundLabel}");
         }
 
-        using var form = new ReadinessCheckForm(roster, _transponderWatch, _profiles, source, splitLoop: _settings.SplitLoopEnabled);
-        form.ShowDialog(this);
+        return (_race.GetOrderedStandings().Select(s => s.TransponderId).ToList(), "drivers already on the board");
     }
 }

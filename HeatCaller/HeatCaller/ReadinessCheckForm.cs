@@ -43,7 +43,8 @@ public sealed class ReadinessCheckForm : Form
         TransponderWatch watch,
         ProfileStore profiles,
         string rosterSource,
-        bool splitLoop = false)
+        bool splitLoop = false,
+        Action? openMissionControl = null)
     {
         _lines = Build(roster, watch, profiles, splitLoop);
 
@@ -75,8 +76,24 @@ public sealed class ReadinessCheckForm : Form
         page.Add(_lblHeadline);
         page.AddFill(_list, _ => (LeastRows + 1) * (Pieces.LineHeight(_list.Font) + 6));
 
-        // Against the right-hand edge, Close furthest right, as a dialog's buttons go.
-        page.Add(new ButtonBar(alignRight: true).With(btnClose, btnRecheck), gapBelow: 0);
+        // Against the right-hand edge, Close furthest right, as a dialog's
+        // buttons go. Mission Control, when there is one to open, takes the
+        // check further - the decoder, timing, the website - and closes this.
+        var buttons = new ButtonBar(alignRight: true).With(btnClose, btnRecheck);
+
+        if (openMissionControl is not null)
+        {
+            var btnMissionControl = new Button { Text = "Mission Control..." };
+            btnMissionControl.Click += (_, _) =>
+            {
+                openMissionControl();
+                Close();
+            };
+
+            buttons.With(btnMissionControl);
+        }
+
+        page.Add(buttons, gapBelow: 0);
 
         Controls.Add(page);
 

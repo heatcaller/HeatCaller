@@ -159,7 +159,9 @@ Nothing is saved until you click **Save**, and **Cancel** discards everything. I
 
 ### Change the running order
 
-Drag rounds up or down the list to reorder them — a line shows where they'll land. You can drag several selected rounds together. **Move Up** and **Move Down** on the round menu do the same one place at a time. **Move Up** and **Move Down** on a round's line in the Timetable move the round here too.
+Drag rounds up or down the list to reorder them — a line shows where they'll land. You can drag several selected rounds together.
+
+A drag that starts on a round that's already selected moves it. A drag that starts on a round that isn't selected selects every round you pass instead. So to move a run of rounds, drag down them to select them, then drag them to where they go. **Move Up** and **Move Down** on the round menu do the same one place at a time. **Move Up** and **Move Down** on a round's line in the Timetable move the round here too.
 
 When the list is filtered to one class, moves are made relative to what you can see. A move can be undone with **Undo**, which puts the whole running order back as it was.
 

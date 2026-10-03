@@ -105,6 +105,7 @@ All data files are plain JSON text, except where noted.
 | `crash.log` | Details of any unexpected errors. When it passes 5 MB it's renamed to `crash.old.log` and a new one is started. |
 | `crash.old.log` | The previous crash log. |
 | `heatcaller-migrated.txt` | Marks that saved paths and settings from before the rename to HeatCaller have been brought up to date. Safe to delete: HeatCaller checks again on the next start. |
+| `transponder-health.json` | How strongly each transponder has been read, night by night, for the last 20 nights it raced. Used to spot a transponder that is fading. Safe to delete: the record starts again, and transponders can't be called fading until they have a few nights again. See [Signal over time](../timing/transponders.md#signal-over-time). |
 | `ilap-raw-YYYY-MM-DD.log` | Everything an I-Lap decoder sent, one file per day. Deleted automatically after 14 days, and capped at 20 MB a day. See [Connecting your decoder](../timing/decoders.md#the-raw-capture-log). |
 | `*.unreadable-YYYYMMDD-HHMMSS` | A copy of a file HeatCaller couldn't read. See [Unreadable files](#unreadable-files). |
 | `race-in-progress-discarded.json` | The last unfinished race you chose not to restore. |

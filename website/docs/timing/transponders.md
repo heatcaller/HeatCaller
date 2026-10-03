@@ -132,6 +132,26 @@ The I-Lap decoder doesn't report signal information. I-Lap transponders show no 
 !!! note
     What the decoder has heard is kept in memory only, for 12 minutes. Restarting HeatCaller starts the list afresh.
 
+### Signal over time
+
+A transponder rarely dies all at once. A battery going flat, a cracked case or a transponder knocked loose in its mount shows first as a slow slide in signal over a few nights, each night still "fine" on its own. So HeatCaller also keeps a record of how strongly each transponder is read, night by night, and compares each night with that transponder's usual.
+
+A transponder is called **fading** when, on its latest night:
+
+- its average signal is 25% or more below its usual, or
+- 30% or more of its passes were only just caught (fewer than 3 hits), when it's normally read cleanly.
+
+"Its usual" is the middle value of its earlier nights, up to eight of them, so one odd night doesn't set the bar. A transponder needs at least three earlier nights, and at least 5 passes on a night, before it's judged.
+
+When a transponder is fading:
+
+- The console says so, once a night, for example "Frank's transponder 4385919 is reading 32% weaker than usual - check its battery and how it's mounted before it drops out of a race."
+- The **Transponders** tile in [Mission Control](../race-control/running-a-race.md#mission-control) lists it while its latest night is within the last month.
+
+A night runs from 6am to 6am, so a club night that goes past midnight counts as one night. The record is per transponder, not per driver: a driver's second car has its own. Ghost cars aren't recorded.
+
+This is EasyLap only. The I-Lap decoder doesn't report signal strength, so its transponders are never called fading.
+
 ## Minimum lap time and rejected laps
 
 A transponder sitting near the loop, or a car that bounces over it after a crash, can be read twice in quick succession. HeatCaller rejects any pass that comes too soon after the previous one from the same transponder.

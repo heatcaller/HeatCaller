@@ -342,6 +342,16 @@ public partial class MainForm : Form
     /// the useful moment is before a race rather than during one.
     /// </summary>
     private readonly TransponderWatch _transponderWatch = new();
+
+    /// <summary>
+    /// How well each transponder has been read, night by night - so one that
+    /// is fading is noticed before it drops out of a race. See
+    /// TransponderHealthStore and MainForm.MissionControl.
+    /// </summary>
+    private readonly TransponderHealthStore _transponderHealth = TransponderHealthStore.Load();
+
+    /// <summary>Where each car is on the track, for the live track map - see TrackPositions and MainForm.TrackMap.</summary>
+    private readonly TrackPositions _trackPositions = new();
     private SoundEffectsControl _soundEffectsControl = null!;
 
     /// <summary>
@@ -1298,6 +1308,12 @@ public partial class MainForm : Form
         // quiet, nothing crossing, a car not seen. See TimingWatch.
         WireTimingWatch();
 
+        // The heartbeat clock Mission Control reads - see MainForm.MissionControl.
+        WireMissionControl();
+
+        // The live track map: following the race's crossings - see MainForm.TrackMap.
+        WireTrackMap();
+
         _decoderAutoConnectRetryTimer.Tick += (_, _) =>
         {
             // Only while EasyLap is the decoder chosen. The box stays ticked
@@ -1333,6 +1349,9 @@ public partial class MainForm : Form
             _race.Tick();
 
             UpdateTimingWatch();
+
+            // At most once a minute, and only when a pass has changed it.
+            _transponderHealth.SaveIfDue();
 
             // The live page's state document is built HERE, on the UI
             // thread, and served from a published copy - see
@@ -1641,6 +1660,16 @@ public partial class MainForm : Form
             catch
             {
                 // Best effort - closing must not be stopped by a failed save.
+            }
+
+            // Tonight's transponder readings, not left to the once-a-minute save.
+            try
+            {
+                _transponderHealth.Save();
+            }
+            catch
+            {
+                // Best effort - a few minutes of readings are all that is lost.
             }
 
             // The last crossings before the window went away, written now

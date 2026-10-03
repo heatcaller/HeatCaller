@@ -115,14 +115,41 @@ public sealed class BigScreenForm : Form
     private readonly Action _displaysChangedHandler;
     private bool _displaysSubscribed;
 
+    // The grid roll call (RollCall): while a race is staged, counting down
+    // or warming up, the board gives way to a card for each car due in it,
+    // each turning green as that car is heard. Null watch or roster - the
+    // Big Screen opened from Practice - and it never shows.
+    private readonly TransponderWatch? _watch;
+    private readonly Func<IReadOnlyList<string>>? _roster;
+    private readonly RollCallBoard _rollCall = new();
+
+    /// <summary>When the roll call now showing began, less its grace - passes from before it don't count. Null while it isn't showing.</summary>
+    private DateTime? _rollCallSinceUtc;
+
+    // The live track map (TrackMapView) down the right of the board, when
+    // the layout being raced on has a plan with a racing line. M shows and
+    // hides it. Null source - the Big Screen opened from Practice - and it
+    // never shows.
+    private readonly Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? _trackMap;
+    private readonly TrackMapView _mapView = new();
+    private bool _mapWanted = true;
+
+    /// <summary>How much of the board's width the map takes.</summary>
+    private const float MapShare = 0.36f;
+
     private bool _isFullscreen;
     private FormBorderStyle _restoreBorderStyle;
     private FormWindowState _restoreWindowState;
 
     public BigScreenForm(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles,
         DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null,
-        QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null)
+        QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null,
+        TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
+        Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null)
     {
+        _trackMap = trackMap;
+        _watch = watch;
+        _roster = roster;
         _projector = projector;
         _achievements = achievements;
         _race = race;
@@ -154,6 +181,9 @@ public sealed class BigScreenForm : Form
 
         BuildLayout();
         ApplyLook();
+
+        // The roll call's and the track map's colours, from the same look.
+        ColourRollCall();
 
         // The crowd-screen look and the logo can be changed on Themes →
         // Looks while this window is up on the wall; it follows straight
@@ -198,6 +228,11 @@ public sealed class BigScreenForm : Form
             if (e.KeyCode == Keys.Escape)
             {
                 Close();
+            }
+            else if (e.KeyCode == Keys.M && _trackMap is not null)
+            {
+                _mapWanted = !_mapWanted;
+                UpdateTrackMap();
             }
             else if (e.KeyCode == Keys.F11)
             {
@@ -313,6 +348,7 @@ public sealed class BigScreenForm : Form
 
         _look = CurrentLook();
         ApplyLook();
+        ColourRollCall();
         RefreshAll();
     }
 
@@ -400,7 +436,7 @@ public sealed class BigScreenForm : Form
     {
         // Colours are left to ApplyLook, which runs straight after this and
         // again whenever the crowd-screen look changes.
-        _lblHint.Text = "F11: toggle fullscreen     Esc: close";
+        _lblHint.Text = "F11: toggle fullscreen     M: track map     Esc: close";
         _lblHint.Dock = DockStyle.Top;
         _lblHint.Height = UiLayout.AtDpi(24);
         _lblHint.TextAlign = ContentAlignment.MiddleRight;
@@ -506,8 +542,20 @@ public sealed class BigScreenForm : Form
         _picSponsor.SizeMode = PictureBoxSizeMode.Zoom;
         _picSponsor.Visible = false;
 
+        _rollCall.Dock = DockStyle.Fill;
+        _rollCall.Visible = false;
+
+        _mapView.Dock = DockStyle.Right;
+        _mapView.Visible = false;
+        _mapView.Source = _trackMap;
+
+        _pnlLeaderboardArea.Controls.Add(_rollCall);
         _pnlLeaderboardArea.Controls.Add(_picSponsor);
         _pnlLeaderboardArea.Controls.Add(_grid);
+
+        // Added last, so it takes its strip down the right before the board
+        // fills what is left.
+        _pnlLeaderboardArea.Controls.Add(_mapView);
 
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
@@ -608,6 +656,7 @@ public sealed class BigScreenForm : Form
             }
 
             _pnlOnDeck.Height = Sized(62);
+            _mapView.Width = (int)(client.Width * MapShare);
             _lblWarning.Height = Sized(84);
 
             // The faces made again at this size; the old ones disposed once
@@ -709,6 +758,13 @@ public sealed class BigScreenForm : Form
             return;
         }
 
+        // The roll call keeps the screen while it is up: a sponsor slide
+        // cutting in would hide whose car hasn't been heard.
+        if (_rollCallSinceUtc is not null)
+        {
+            return;
+        }
+
         // Don't cut away from live standings mid-race if configured not to -
         // just wait and try again after another full leaderboard interval.
         if (_sponsors.Current.PauseDuringRace && _race.State == RaceState.Racing)
@@ -772,7 +828,10 @@ public sealed class BigScreenForm : Form
     private void ShowLeaderboardAgain()
     {
         _picSponsor.Visible = false;
-        _grid.Visible = true;
+
+        // Not over the roll call, while one is up - it shows the board
+        // again itself once the race goes green.
+        _grid.Visible = _rollCallSinceUtc is null;
         _showingSponsor = false;
         _sponsorTimer.Interval = SponsorIntervalMs(_sponsors!.Current.LeaderboardSeconds);
     }
@@ -1052,6 +1111,9 @@ public sealed class BigScreenForm : Form
         _lblCountdown.Text = _race.GetCountdownText();
         _lblElapsed.Text = ElapsedText();
 
+        UpdateRollCall();
+        UpdateTrackMap();
+
         // Also refresh the banner here, not just on lap events - otherwise
         // it goes stale between laps, and never recovers once a displayed
         // announcement's few seconds are up.
@@ -1059,6 +1121,101 @@ public sealed class BigScreenForm : Form
             ? "WARM-UP"
             : $"{_race.State.ToString().ToUpperInvariant()} — {_race.Flag.ToString().ToUpperInvariant()} FLAG";
         RefreshAnnouncementFallback();
+    }
+
+    /// <summary>
+    /// Shows the grid roll call while a race is on its way, and the board
+    /// again once it goes green (or is reset). Runs on the half-second timer,
+    /// so a car crossing the line turns its card within half a second. A
+    /// roll call that fails must not take the Big Screen with it: it is put
+    /// away and the board shown.
+    /// </summary>
+    private void UpdateRollCall()
+    {
+        try
+        {
+            var roster = _watch is not null && _roster is not null ? _roster() : null;
+
+            var showing = roster is not null
+                && RollCall.Showing(_race.State, _race.IsWarmingUp, _race.IsPracticeMode, _race.IsDemoMode, roster.Count);
+
+            if (!showing)
+            {
+                HideRollCall();
+                return;
+            }
+
+            if (_rollCallSinceUtc is null)
+            {
+                _rollCallSinceUtc = DateTime.UtcNow - RollCall.Grace;
+                _rollCall.Reset();
+                ColourRollCall();
+
+                _grid.Visible = false;
+                _picSponsor.Visible = false;
+                _rollCall.Visible = true;
+            }
+
+            _rollCall.ShowEntries(RollCall.Build(roster!, _watch!, t => _profiles.Get(t)?.DriverName, _rollCallSinceUtc.Value));
+        }
+        catch
+        {
+            HideRollCall();
+        }
+    }
+
+    private void HideRollCall()
+    {
+        if (_rollCallSinceUtc is null)
+        {
+            return;
+        }
+
+        _rollCallSinceUtc = null;
+        _rollCall.Visible = false;
+        _picSponsor.Visible = _showingSponsor;
+        _grid.Visible = !_showingSponsor;
+    }
+
+    /// <summary>
+    /// Shows the track map beside the board when there is a line to draw,
+    /// it is wanted (M) and the roll call isn't up - which takes the whole
+    /// area. The map reads its cars itself, ten times a second.
+    /// </summary>
+    private void UpdateTrackMap()
+    {
+        bool show;
+
+        try
+        {
+            show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && _trackMap().Line is not null;
+        }
+        catch
+        {
+            show = false;
+        }
+
+        if (_mapView.Visible != show)
+        {
+            _mapView.Visible = show;
+        }
+    }
+
+    /// <summary>The roll call in the look's colours - called as it opens, and whenever the look changes.</summary>
+    private void ColourRollCall()
+    {
+        _rollCall.Canvas = CanvasColor;
+        _rollCall.Card = PanelColor;
+        _rollCall.Ink = TextColor;
+        _rollCall.Muted = MutedColor;
+        _rollCall.Highlight = HighlightColor;
+        _rollCall.Invalidate();
+
+        _mapView.Canvas = CanvasColor;
+        _mapView.Track = PanelColor == CanvasColor ? GridLineColor : PanelColor;
+        _mapView.Ink = TextColor;
+        _mapView.Muted = MutedColor;
+        _mapView.Invalidate();
     }
 
     private void ToggleFullscreen()

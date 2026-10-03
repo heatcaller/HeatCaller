@@ -318,7 +318,7 @@ A lap that beats the record by an implausible margin doesn't set the record. The
 
 The bar across the top of the page has three parts, and a fourth when timing goes wrong:
 
-- **TIMING** (in red, first): only during a race, when HeatCaller thinks laps aren't being counted. See [Timing warnings](#timing-warnings).
+- **TIMING**: when HeatCaller thinks laps aren't being counted, or won't be. The whole bar then turns into an alarm. See [Timing warnings](#timing-warnings).
 - **NOW**: the round or session that's running and its state, for example "Q1 Heat 2 (Stock) · racing".
 - **NEXT**: the next round that hasn't run yet, how many drivers are in it, how many of them aren't checked in (shown in amber), and who marshals it (the heat before). When there are no rounds left it says "program complete". With no program it says "no program - Quick Race is one press away".
 - **DAY**: how many rounds have been recorded, for example "6/14 recorded". If the timetable gives the next round a time, it also shows how far ahead or behind you are, once that's 3 minutes or more.
@@ -333,7 +333,11 @@ If something is owed before the next race can go out, the bar says so in place o
 
 ## Timing warnings
 
-During a race, HeatCaller watches for timing going wrong without anyone noticing, the kind of fault that otherwise only shows when the results are wrong. When it spots one, the Next Up bar shows it first, in red, under **TIMING**, and the console gets a line starting `[timing] WARNING:`. When things are right again, the warning goes and the console says so.
+During a race, HeatCaller watches for timing going wrong without anyone noticing, the kind of fault that otherwise only shows when the results are wrong. When it spots one, the whole Next Up bar turns into an alarm: it glows red and slowly pulses, with yellow-and-black hazard stripes moving down its left end and the warning in white under **TIMING**. **NOW** and **NEXT** give way to it until timing is right again. The console also gets a line starting `[timing] WARNING:`. When things are right again, the bar goes back to normal and the console says so.
+
+<!-- screenshot: Race Control with the Next Up bar showing the red timing alarm -->
+
+The decoder being unplugged is also caught **before** the green: as soon as a race is staged or counting down, the alarm says "The decoder isn't connected - laps won't be counted. Connect it before the green, on the Connection page." This also applies to practice, while a race is held under a red flag, and before anyone has been released. It doesn't apply to Demo Mode, or when nothing is running.
 
 It checks these, most serious first, and shows only the first that fails:
 
@@ -348,13 +352,36 @@ It only watches real races while they're running: not practice, not a demo, not 
 
 A car whose transponder was flat before the race never crosses at all, so it can't be missed: use **Pre-race check** before the heat for that. See [Transponders](../timing/transponders.md).
 
+## Mission Control
+
+Mission Control puts every check that matters before a green flag in one window, as a wall of tiles that are green when all is well, amber when something is worth a look, and red when laps or results are at risk. A red tile glows and pulses so it's seen from across the room. A tile for something you're not using tonight, such as a split loop, is dimmed.
+
+Open it from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
+
+<!-- screenshot: Mission Control with all tiles green except an amber "Next race 7 of 8" tile -->
+
+The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to race - 2 to keep an eye on." or "1 problem to fix before the green."
+
+| Tile | Green | Amber | Red |
+|---|---|---|---|
+| **Decoder** | Connected. | Still connecting. | Not connected, or an error: no laps are being counted. |
+| **Heartbeat** | The EasyLap's once-a-second signal is arriving. | | Nothing for 5 seconds or more: check the USB cable. The I-Lap sends no heartbeat, so this tile is dimmed for it. |
+| **Split loop** | Connected. | Not connected: laps are still timed, sectors aren't. | |
+| **Cars heard** | How many transponders the decoder has heard in the last 12 minutes, and when the last pass was. | Some of them were only just caught. | |
+| **Next race** | Every car in the next race has been heard ("8 of 8"). | Names the cars not heard yet. | |
+| **Timing** | Nothing looks wrong. | | The current [timing warning](#timing-warnings). |
+| **Transponders** | None reading weaker than usual. | Names the transponders that are fading. See [Signal over time](../timing/transponders.md#signal-over-time). | |
+| **Website** | Online and up to date, or updates on their way. | Switched on but not set up, or offline with results waiting. | |
+| **Sound** | The announcer will be heard. | The announcer is muted. | |
+
+**Next race** uses the same drivers as the pre-race check: the selected round's roster, or the drivers on the leaderboard when no round is selected.
 ## The clock column buttons
 
 - **Quick Race** (<kbd>F8</kbd>) runs a race with whoever is on track. See [Other ways to start](#other-ways-to-start).
 - **Open Big Screen** (<kbd>B</kbd>) opens the audience display. See [Big Screen](../screens/big-screen.md).
 - **Open Announcer Screen** (<kbd>A</kbd>) opens the Announcer screen in a window of its own, beside this one or on a second monitor. Its **Race Control** button brings the main window back to the front. See [Announcer screen](../announcer/voice.md#announcer-screen).
 - **Qualifying Projection** opens or closes a window that shows where the class would qualify if the running heat ended now. See [Program and mains](../race-day/program-and-mains.md#qualifying-projection).
-- **Pre-race check** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
+- **Pre-race check** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
 
 ## Tips
 

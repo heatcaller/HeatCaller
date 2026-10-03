@@ -78,15 +78,46 @@ The page at `/` is a read-only view of the race, for spectators' phones or a dis
 
 - The top bar shows "LIVE RESULTS", the race state and flag (for example "Racing - Green flag") and the race clock.
 - An "ON DECK:" line shows what's next on the race day's **Timetable**, when there is something.
-- Swipe left and right between three views:
+- Swipe left and right between four views:
     - The **standings** table. Choose its columns with **Choose Web Columns** on the **Local Screens** page.
     - **Lap times**: a line chart of each driver's laps (up to ten drivers). It needs two laps before it has anything to draw.
     - **Best lap & consistency**: a bar for each driver's best lap, with a paler tail showing how much their lap times vary.
+    - **Track map**: the cars going round the track, as on the Big Screen. It needs a plan for the layout being raced on, and shows "No track plan for this layout." without one. A car that seems to have stopped is red and pulses, and the line under the map says who and where. See [Track map](big-screen.md#track-map).
 - If you've set up sponsor slides on the **Sponsors** page, the page cuts to them between spells of standings, using the timings set there. See [The Big Screen and sponsors](big-screen.md).
 
 The page refreshes itself every second. Before any laps are in, it shows "Waiting for lap data...".
 
 Drivers without a name on their profile appear under their transponder number.
+
+#### Follow a driver
+
+A driver, or a parent at the fence, can follow one driver on their phone. Under the top bar, pick a name from **Follow a driver...**. The list has everyone on the board and everyone in the races still to run.
+
+<!-- screenshot: Live results on a phone following one driver, showing P2, the gaps and a flashing "YOU'RE UP NEXT" call-up -->
+
+While that driver is racing, a card shows:
+
+- their position, large ("P2"),
+- their lap and last lap time,
+- the gap to the car ahead ("Leading" for the leader) and to the car behind, in seconds, or in laps when they're lapped ("+1L").
+
+Their row on the standings is outlined, and on the track map their dot has a ring.
+
+Under it, the call-up says when they race next and where they grid:
+
+| Call-up | When |
+|---|---|
+| "ON TRACK NOW - Q2 Heat 1 (Stock) - grid 3" | Their race is staged or running. |
+| "YOU'RE UP NEXT - Q2 Heat 3 (Stock) - grid 4" | Theirs is the next race. It flashes. |
+| "2 RACES BEFORE YOURS - ..." | Races to go before theirs. |
+
+The call-up follows the program on **Race Day → Next Steps**, in running order. The grid slot is their place in the round's roster.
+
+When their race becomes the next one, the phone buzzes and beeps. Phones only allow this after you've touched the page, and choosing a driver counts. Buzzing works on Android phones; iPhones flash the call-up but don't buzz. Leave the page open, with the screen on.
+
+The phone remembers who it's following, so it's still following them after a reload. Pick **Follow a driver...** to stop.
+
+The follow view is only on the club Wi-Fi page, not on your club's online pages, and never in the OBS overlay.
 
 ### OBS overlay
 

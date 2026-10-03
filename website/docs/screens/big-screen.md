@@ -12,7 +12,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window. The banner, the clocks, the leaderboard and the ON DECK bar grow and shrink with the window, so full screen on a TV the writing fills the screen. It doesn't follow the text size you set for the laptop with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd>.
 5. Press <kbd>Esc</kbd> to close it.
 
-A small reminder of these two keys, "F11: toggle fullscreen     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
+A small reminder of the keys, "F11: toggle fullscreen     M: track map     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
 
 <!-- screenshot: Big Screen during a race, full screen, showing the banner, clock, countdown, leaderboard and ON DECK bar -->
 
@@ -26,6 +26,9 @@ From top to bottom:
 - **Countdown** on the right, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit.
 - **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news, such as the quickest lap of the session, is highlighted in color. Warnings aren't shown on the Big Screen, so it stays readable from across the room.
 - **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable).
+- **Track map**, down the right-hand side, when the layout you're racing on has a plan. See [Track map](#track-map).
+
+Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call).
 
 If you've set a club logo, it sits in the top-left corner. Untick **Show the logo on the Big Screen and Wi-Fi pages** on the **Themes** page to hide it. A logo that would vanish on the background, such as a black logo on a black screen, is put on a plate.
 
@@ -34,6 +37,50 @@ If you've set a club logo, it sits in the top-left corner. Untick **Show the log
 The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on the **Themes** page, in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
 
 A change of look or logo shows on an open Big Screen straight away; you don't need to reopen it. For the dark Big Screen of earlier versions, choose **Race Wall**. See [Looks and the club logo](looks-and-logo.md).
+
+## Grid roll call
+
+While a race is staged, counting down or warming up, the Big Screen shows a card for each driver due in it instead of the leaderboard. Each card turns over to green ("HEARD") as that car crosses the line, or to amber ("WEAK SIGNAL") if it's only just being caught. Cards still waiting are dark and say "WAITING". Drivers can watch their own name go green, and you can see at a glance whose transponder hasn't been heard while there's still time to change a battery.
+
+<!-- screenshot: Big Screen roll call with six green cards and two waiting -->
+
+The headline counts them in, for example "ROLL CALL - 6 OF 8 CARS HEARD", and reads "ALL 8 CARS HEARD - READY" once everyone is in.
+
+- The cars are the same ones the [pre-race check](../race-day/events-and-entries.md#pre-race-check) checks: the selected round's roster, or the drivers on the leaderboard when no round is selected.
+- A car counts as heard if it crossed the line after the roll call began, or up to two minutes before. A car heard in the heat before doesn't count, in case its transponder has died since.
+- Sponsor slides wait while the roll call is up.
+- At the green the leaderboard comes back.
+
+The roll call doesn't run in practice or Demo Mode, or on a Big Screen opened from the **Practice** page.
+
+## Track map
+
+If the layout you're racing on has a plan in the Track Designer with the racing line and the finish line drawn, the Big Screen shows a live map down its right-hand side. Each car is a dot going round, colored by its place in the race, with its position in the dot. The finish line is marked "S/F" and any split loops "S1", "S2" and "S3".
+
+<!-- screenshot: Big Screen with the leaderboard on the left and the track map on the right -->
+
+Press <kbd>M</kbd> to hide the map and give the leaderboard the whole width; press it again to bring the map back.
+
+The layout is the one picked in **Track:** on the **Race Control** page. For the map to appear, its plan needs:
+
+- a racing line, with "The line closes into a lap" ticked, and
+- the finish line on the racing line.
+
+See [Track Layouts](../race-day/drivers-and-classes.md) for drawing a plan.
+
+### How the dots move
+
+HeatCaller doesn't know exactly where a car is between timing loops, so it works it out. From the moment a car crosses the finish line (or a split loop), its dot moves round at that car's usual lap pace. A car with no timed lap yet uses the field's usual pace. The dot is held just short of the next loop until that loop hears the car, so it never runs ahead of the timing. With split loops on the plan, the dots are corrected more often and are more accurate.
+
+A car appears on the map once it has crossed a loop in this race.
+
+### Stopped cars
+
+During a race, a car that is well overdue at the next loop has probably stopped. Its dot turns red with a "!" and a red ring pulses round it, in the middle of the stretch where it stopped, so a marshal can be sent. The console says who and where, for example "Frank may have stopped between Split 1 and the line". It counts as overdue when it has taken twice its usual time to reach the next loop, and at least 8 seconds longer than usual.
+
+With no split loops the map can only say the car is somewhere on the lap; with split loops it narrows it down to one stretch. The dot goes back to normal when the car is heard at a loop again.
+
+Stopped cars are only called during a race: not in practice, not under a red flag, and not after the finish.
 
 ## Choose the leaderboard columns
 

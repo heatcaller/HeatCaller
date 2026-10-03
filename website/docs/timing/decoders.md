@@ -174,6 +174,8 @@ The race on the **Race Control** page keeps running. Its clock and time limit ca
 - If the decoder's own clock restarted (for example, it lost power), HeatCaller can't work out a real lap time for the first crossing afterward. It rejects that one crossing, logs "Lap rejected: the decoder clock went backwards for ... The decoder was most likely reconnected during the race.", and times the following laps normally.
 - I-Lap lap times come from the laptop's clock, which doesn't restart when you reconnect.
 
+You won't miss it: the Next Up bar on **Race Control** turns into a pulsing red alarm while the decoder is unplugged, from the moment a race is staged. [Mission Control](../race-control/running-a-race.md#mission-control) shows the decoder and its heartbeat as tiles you can keep on a second screen. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
+
 ## The Developer Console
 
 The **Developer console** card, under the **Timing decoder** card, shows everything HeatCaller logs: decoder traffic from whichever connection you use, race events, voice, sound, storage messages and more.

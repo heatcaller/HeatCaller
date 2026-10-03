@@ -204,6 +204,10 @@ public partial class MainForm
         // and that is the whole point of keeping them.
         _transponderWatch.Record(lap);
 
+        // And across nights, so a transponder that is fading shows up before
+        // it fails - see TransponderHealthStore. Never throws.
+        RecordTransponderHealth(lap);
+
         // Checked BEFORE the lap is processed. Starting practice afterwards
         // would mean the crossing that triggered it lands in a session that
         // didn't exist yet, and the driver's first lap silently vanishes.

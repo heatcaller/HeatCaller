@@ -271,8 +271,15 @@ public sealed partial class RaceControlControl
         // The badge store is read through a lambda, not passed as-is, because
         // AwardAchievements replaces _achievements after every unlock and the
         // Big Screen should show the new count as soon as it is announced.
+        //
+        // The transponder watch and the next race's roster give it the grid
+        // roll call before the green (RollCall) - the same cars the
+        // pre-race check checks.
         _actBigScreen = () => new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector,
-            () => _achievements).Show();
+            () => _achievements,
+            watch: _transponderWatch,
+            roster: () => PreRaceRoster().Roster,
+            trackMap: TrackMap).Show();
         _btnBigScreen.Click += (_, _) => _actBigScreen();
 
         // --- The flags ---

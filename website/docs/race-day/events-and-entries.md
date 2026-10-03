@@ -316,6 +316,10 @@ HeatCaller checks against the selected round's drivers. If no round is selected,
 
 The headline sums it up, for example "All 8 clear. Every car on the roster for Q1 Heat 2 is being heard. Good to go." or "1 not heard at all, 1 only just being heard." Put the problem cars on the track and click **Check again**.
 
+To check the decoder, timing, the website and the sound as well, click **Mission Control**. The pre-race check closes and Mission Control opens. See [Mission Control](../race-control/running-a-race.md#mission-control).
+
+On the **Big Screen**, the same check runs by itself while a race is staged: each driver's card turns green as their car is heard. See [Grid roll call](../screens/big-screen.md#grid-roll-call).
+
 For more on signal strength and transponder problems, see [Transponders](../timing/transponders.md).
 
 ## Championship → Calendar
