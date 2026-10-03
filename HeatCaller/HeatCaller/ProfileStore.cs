@@ -168,7 +168,19 @@ public sealed class ProfileStore
         profile.SkillLevel ??= string.Empty;
         profile.Contact ??= string.Empty;
         profile.Email ??= string.Empty;
-        profile.AlternateTransponder ??= string.Empty;
+        // Entries with no id are dropped, ids trimmed, and each listed once
+        // (the first entry for an id wins) - the lookups below assume it.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        profile.Transponders = (profile.Transponders ?? new List<OwnedTransponder>())
+            .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Id))
+            .Select(t =>
+            {
+                t.Id = t.Id.Trim();
+                t.CarId ??= string.Empty;
+                return t;
+            })
+            .Where(t => seen.Add(t.Id))
+            .ToList();
         profile.PhotoFileName ??= string.Empty;
         profile.Sponsors ??= string.Empty;
         profile.Team ??= string.Empty;
@@ -266,13 +278,11 @@ public sealed class ProfileStore
     /// </summary>
     public string? DescribeClash(DriverProfile candidate, string? editing)
     {
-        var primary = candidate.Transponder?.Trim() ?? string.Empty;
-        var alternate = candidate.AlternateTransponder?.Trim() ?? string.Empty;
+        var main = candidate.Transponder?.Trim() ?? string.Empty;
 
-        if (alternate.Length > 0 && string.Equals(alternate, primary, StringComparison.OrdinalIgnoreCase))
-        {
-            return $"The alt transponder {alternate} is the same as the main one. Leave Alt transponder blank, or enter the second car's transponder.";
-        }
+        // An extra entry repeating the main transponder is left out by
+        // ExtraTransponders, so it can never clash with the driver itself.
+        var mine = candidate.AllTransponderIds;
 
         foreach (var other in _profiles.Values)
         {
@@ -281,31 +291,54 @@ public sealed class ProfileStore
                 continue;
             }
 
-            var otherAlternate = other.AlternateTransponder?.Trim() ?? string.Empty;
+            var otherMain = other.Transponder?.Trim() ?? string.Empty;
+            var theirs = other.AllTransponderIds;
             var who = DescribeOwner(other);
 
-            if (string.Equals(other.Transponder, primary, StringComparison.OrdinalIgnoreCase))
+            foreach (var id in mine)
             {
-                return $"Transponder {primary} already belongs to {who}. Edit {who}'s profile instead, or change or delete it first.";
-            }
+                if (!theirs.Contains(id, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-            if (otherAlternate.Length > 0 && string.Equals(otherAlternate, primary, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"Transponder {primary} is already {who}'s alt transponder. Remove it from {who}'s profile first.";
-            }
+                var isMyMain = string.Equals(id, main, StringComparison.OrdinalIgnoreCase);
+                var isTheirMain = string.Equals(id, otherMain, StringComparison.OrdinalIgnoreCase);
 
-            if (alternate.Length > 0 && string.Equals(other.Transponder, alternate, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"The alt transponder {alternate} already belongs to {who}. A transponder can only belong to one driver.";
-            }
-
-            if (alternate.Length > 0 && string.Equals(otherAlternate, alternate, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"The alt transponder {alternate} is already {who}'s alt transponder. Remove it from {who}'s profile first.";
+                return (isMyMain, isTheirMain) switch
+                {
+                    (true, true) => $"Transponder {id} already belongs to {who}. Edit {who}'s profile instead, or change or delete it first.",
+                    (true, false) => $"Transponder {id} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
+                    (false, true) => $"Transponder {id} already belongs to {who}. A transponder can only belong to one driver.",
+                    _ => $"Transponder {id} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
+                };
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The driver who has this transponder - as their main one or one of
+    /// their others, retired or not - or null when nobody does. Unlike Get,
+    /// it also finds an id the timing index leaves out because two drivers
+    /// list it, so a new claim on it can be refused.
+    /// </summary>
+    public DriverProfile? OwnerOf(string transponder)
+    {
+        var id = transponder?.Trim() ?? string.Empty;
+
+        if (id.Length == 0)
+        {
+            return null;
+        }
+
+        if (_profiles.TryGetValue(id, out var main))
+        {
+            return main;
+        }
+
+        return _profiles.Values.FirstOrDefault(p => p.AllTransponderIds.Contains(id, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>The name to put in a clash message - a driver name if there is one, otherwise the transponder.</summary>
@@ -680,15 +713,7 @@ public sealed class ProfileStore
     private string? DescribeTakenSince(DriverProfile profile, HashSet<DriverProfile> ignore)
     {
         var main = profile.Transponder?.Trim() ?? string.Empty;
-        var alternate = profile.AlternateTransponder?.Trim() ?? string.Empty;
-
-        // An alt transponder repeating the profile's own main one is a quirk
-        // of an older file, not somebody else's claim - the alternate index
-        // leaves it out too.
-        if (string.Equals(alternate, main, StringComparison.OrdinalIgnoreCase))
-        {
-            alternate = string.Empty;
-        }
+        var mine = profile.AllTransponderIds;
 
         foreach (var other in _profiles.Values)
         {
@@ -698,27 +723,22 @@ public sealed class ProfileStore
             }
 
             var otherMain = other.Transponder?.Trim() ?? string.Empty;
-            var otherAlternate = other.AlternateTransponder?.Trim() ?? string.Empty;
+            var theirs = other.AllTransponderIds;
             var who = DescribeOwner(other);
 
-            if (main.Length > 0 && string.Equals(otherMain, main, StringComparison.OrdinalIgnoreCase))
+            foreach (var id in mine)
             {
-                return $"transponder {main} belongs to {who} now";
-            }
+                if (!theirs.Contains(id, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-            if (main.Length > 0 && string.Equals(otherAlternate, main, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"transponder {main} is {who}'s alt transponder now";
-            }
+                var isMyMain = string.Equals(id, main, StringComparison.OrdinalIgnoreCase);
+                var isTheirMain = string.Equals(id, otherMain, StringComparison.OrdinalIgnoreCase);
 
-            if (alternate.Length > 0 && string.Equals(otherMain, alternate, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"the alt transponder {alternate} belongs to {who} now";
-            }
-
-            if (alternate.Length > 0 && string.Equals(otherAlternate, alternate, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"the alt transponder {alternate} is {who}'s alt transponder now";
+                return isTheirMain
+                    ? $"{(isMyMain ? "transponder" : "the other transponder")} {id} belongs to {who} now"
+                    : $"{(isMyMain ? "transponder" : "the other transponder")} {id} is one of {who}'s transponders now";
             }
         }
 
@@ -820,18 +840,29 @@ public sealed class ProfileStore
 
         foreach (var profile in _profiles.Values)
         {
-            var alternate = profile.AlternateTransponder?.Trim() ?? string.Empty;
-
-            if (alternate.Length == 0
-                || string.Equals(alternate, profile.Transponder, StringComparison.OrdinalIgnoreCase)
-                || _profiles.ContainsKey(alternate))
+            // Every transponder the driver has besides the main one, retired
+            // ones included: a retired transponder is still theirs, and laps
+            // from one that turns up again are still theirs too.
+            foreach (var entry in profile.ExtraTransponders)
             {
-                continue;
-            }
+                var alternate = entry.Id.Trim();
 
-            if (!owners.TryAdd(alternate, profile.Transponder))
-            {
-                ambiguous.Add(alternate);
+                if (_profiles.ContainsKey(alternate))
+                {
+                    continue;
+                }
+
+                if (owners.TryGetValue(alternate, out var already))
+                {
+                    if (!string.Equals(already, profile.Transponder, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ambiguous.Add(alternate);
+                    }
+
+                    continue;
+                }
+
+                owners[alternate] = profile.Transponder;
             }
         }
 

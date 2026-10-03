@@ -88,7 +88,7 @@ public sealed partial class RaceDayService
             // are somebody's.
             || (context.Channel == RaceDayChannel.WiFi
                 && (p.Transponder.Contains(query, StringComparison.OrdinalIgnoreCase)
-                    || p.AlternateTransponder.Contains(query, StringComparison.OrdinalIgnoreCase)));
+                    || p.AllTransponderIds.Any(id => id.Contains(query, StringComparison.OrdinalIgnoreCase))));
 
         var found = _host.Profiles.All
             .Where(p => className is null
@@ -195,6 +195,11 @@ public sealed partial class RaceDayService
         if (transponder.Length > 40 || alternate.Length > 40)
         {
             throw new OpRefused("That transponder number is too long.");
+        }
+
+        if (alternate.Length > 0 && string.Equals(alternate, transponder, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new OpRefused("The alt transponder is the same as the main one. Leave it blank, or enter the second car's transponder.");
         }
 
         if (name.Length > 80 || car.Length > 80 || raceNumber.Length > 20)
@@ -348,12 +353,23 @@ public sealed partial class RaceDayService
             return OpResult.Read(new { changed = false, driver = DriverRow(profile, context.Channel) });
         }
 
+        if (string.Equals(alternate, profile.Transponder?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new OpRefused($"{alternate} is already {NameOf(profile)}'s main transponder.");
+        }
+
         var candidate = new DriverProfile { Transponder = profile.Transponder, AlternateTransponder = alternate };
 
         if (_host.Profiles.DescribeClash(candidate, editing: profile.Transponder) is { } clash)
         {
             throw new OpRefused(clash);
         }
+
+        // The driver's whole list as it was, for the undo: a driver can own
+        // several transponders now, and the phone only knows "the alt" -
+        // putting back the list puts back exactly what this changed.
+        var listBefore = System.Text.Json.JsonSerializer.Serialize(profile.Transponders ?? new List<OwnedTransponder>());
+        var listAfter = string.Empty;
 
         _host.Undo.Capture($"Phone: Change {NameOf(profile)}'s alt transponder", () =>
         {
@@ -367,32 +383,72 @@ public sealed partial class RaceDayService
             // clash with anybody, so that is not checked.
             RefuseUnlessStillOnFile(profile);
 
-            if (!string.Equals((profile.AlternateTransponder ?? string.Empty).Trim(), alternate, StringComparison.OrdinalIgnoreCase))
+            if (System.Text.Json.JsonSerializer.Serialize(profile.Transponders ?? new List<OwnedTransponder>()) != listAfter)
             {
                 throw new InvalidOperationException(
-                    $"{NameOf(profile)}'s alt transponder has been changed again since, and undoing this now would undo that too. Nothing was changed.");
+                    $"{NameOf(profile)}'s transponders have been changed again since, and undoing this now would undo that too. Nothing was changed.");
             }
 
-            if (previous.Trim().Length > 0
-                && _host.Profiles.DescribeClash(
-                       new DriverProfile { Transponder = profile.Transponder, AlternateTransponder = previous.Trim() },
-                       editing: profile.Transponder) is { } taken)
+            var restored = System.Text.Json.JsonSerializer.Deserialize<List<OwnedTransponder>>(listBefore) ?? new List<OwnedTransponder>();
+
+            if (_host.Profiles.DescribeClash(
+                    new DriverProfile { Transponder = profile.Transponder, Transponders = restored },
+                    editing: profile.Transponder) is { } taken)
             {
                 throw new InvalidOperationException($"{taken} Nothing was changed.");
             }
 
-            profile.AlternateTransponder = previous;
+            profile.Transponders = restored;
             _host.Profiles.Upsert(profile);
             _host.RefreshDesk();
         });
 
-        profile.AlternateTransponder = alternate;
+        ReplaceAlternate(profile, alternate);
+        listAfter = System.Text.Json.JsonSerializer.Serialize(profile.Transponders);
         _host.Profiles.Upsert(profile);
 
         return OpResult.Done(
             alternate.Length == 0 ? $"Cleared {NameOf(profile)}'s alt transponder" : $"Set {NameOf(profile)}'s alt transponder",
             "Saved.",
             new { changed = true, driver = DriverRow(profile, context.Channel) });
+    }
+
+    /// <summary>
+    /// The phone's "alt transponder": replaces the driver's first extra
+    /// transponder in use with this one, in its place (empty just removes
+    /// it), as the single alt box always did. One that is already theirs is
+    /// brought back into use rather than listed twice.
+    /// </summary>
+    private static void ReplaceAlternate(DriverProfile profile, string alternate)
+    {
+        var list = profile.Transponders ??= new List<OwnedTransponder>();
+        var current = profile.ExtraTransponders.FirstOrDefault(t => !t.Retired);
+        var index = current is null ? 0 : list.IndexOf(current);
+
+        if (current is not null)
+        {
+            list.Remove(current);
+        }
+
+        if (alternate.Length == 0)
+        {
+            return;
+        }
+
+        var entry = profile.TransponderEntry(alternate);
+
+        if (entry is not null)
+        {
+            list.Remove(entry);
+            entry.Retired = false;
+            entry.RetiredUtc = null;
+        }
+        else
+        {
+            entry = new OwnedTransponder { Id = alternate, AddedUtc = DateTime.UtcNow };
+        }
+
+        list.Insert(Math.Clamp(index, 0, list.Count), entry);
     }
 
     /// <summary>

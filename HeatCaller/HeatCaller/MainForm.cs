@@ -831,6 +831,10 @@ public partial class MainForm : Form
             // with their PIN in the same publish.
             KeepRacerPinsInStep();
 
+            // A transponder on the "no driver" banner that has been named
+            // some other way since - by hand, a phone sign-up, an import.
+            DropNamedUnknownTransponders();
+
             // Also when the local server is off. The relay is a separate
             // audience: a club publishing online without running the LAN
             // pages would otherwise never send a roster at all.

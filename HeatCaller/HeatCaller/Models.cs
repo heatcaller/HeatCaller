@@ -137,8 +137,142 @@ public sealed class DriverProfile
     /// </summary>
     public string Email { get; set; } = string.Empty;
 
-    /// <summary>Transponder they also run, so a second car doesn't look like a stranger.</summary>
-    public string AlternateTransponder { get; set; } = string.Empty;
+    /// <summary>
+    /// Every transponder this driver has besides the main one - a second
+    /// car's, a replacement, a spare - and, when it has been given one, an
+    /// entry for the main transponder too (to retire it, or to say which
+    /// car it is fitted to).
+    ///
+    /// The main transponder (<see cref="Transponder"/>) stays the driver's
+    /// key for good, even once it is retired: results, badges, check-ins,
+    /// PINs and the rest are filed under it, and it is only an id - nothing
+    /// needs a decoder to keep reporting it. A lap from any of these is
+    /// filed under the main one (ProfileStore.PrimaryForAlternate), so a
+    /// driver has one row, one best and one history whichever they carry.
+    ///
+    /// A retired transponder still belongs to the driver - its laps stay
+    /// theirs, and one turning up again is still them - it is just marked
+    /// as no longer in use.
+    /// </summary>
+    public List<OwnedTransponder> Transponders { get; set; } = new();
+
+    /// <summary>
+    /// The one extra transponder that older files, the phone's race-day
+    /// page and the old "Alt transponder" box know about: the first extra
+    /// one that is not retired, or empty.
+    ///
+    /// Still written to profiles.json, so a file opened by an older copy of
+    /// the app keeps the driver's second car - and reading an older file
+    /// turns its alt transponder into an entry in <see cref="Transponders"/>.
+    ///
+    /// Setting it only ever ADDS: the id becomes the driver's first extra
+    /// transponder in use (added, or brought back into use and moved to the
+    /// front), so the getter returns it. Nothing else is removed, and empty,
+    /// or the main transponder, changes nothing. Code that means to replace
+    /// or remove one works on the list - see RaceDayOpsEntries.
+    /// </summary>
+    public string AlternateTransponder
+    {
+        get => ExtraTransponders.FirstOrDefault(t => !t.Retired)?.Id ?? string.Empty;
+        set
+        {
+            var id = value?.Trim() ?? string.Empty;
+
+            if (id.Length == 0 || string.Equals(id, Transponder?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var list = Transponders ??= new List<OwnedTransponder>();
+
+            if (string.Equals(AlternateTransponder, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var entry = TransponderEntry(id);
+
+            if (entry is null)
+            {
+                entry = new OwnedTransponder { Id = id };
+            }
+            else
+            {
+                list.Remove(entry);
+                entry.Retired = false;
+                entry.RetiredUtc = null;
+            }
+
+            list.Insert(0, entry);
+        }
+    }
+
+    /// <summary>The entries for transponders other than the main one, in the order they were added.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IEnumerable<OwnedTransponder> ExtraTransponders =>
+        (Transponders ?? new List<OwnedTransponder>())
+        .Where(t => t is not null
+                    && !string.IsNullOrWhiteSpace(t.Id)
+                    && !string.Equals(t.Id.Trim(), Transponder?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The main transponder and every extra one, retired ones included, each once.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<string> AllTransponderIds
+    {
+        get
+        {
+            var ids = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(Transponder))
+            {
+                ids.Add(Transponder.Trim());
+            }
+
+            foreach (var entry in ExtraTransponders)
+            {
+                var id = entry.Id.Trim();
+
+                if (!ids.Contains(id, StringComparer.OrdinalIgnoreCase))
+                {
+                    ids.Add(id);
+                }
+            }
+
+            return ids;
+        }
+    }
+
+    /// <summary>The entry for this transponder (main or extra), or null - the main one has an entry only once it is retired or fitted to a car.</summary>
+    public OwnedTransponder? TransponderEntry(string id)
+    {
+        var wanted = id?.Trim() ?? string.Empty;
+
+        return wanted.Length == 0
+            ? null
+            : (Transponders ?? new List<OwnedTransponder>())
+              .FirstOrDefault(t => t is not null && string.Equals(t.Id?.Trim(), wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Whether this transponder (main or extra) is marked as no longer in use.</summary>
+    public bool IsRetired(string id) => TransponderEntry(id)?.Retired == true;
+
+    /// <summary>
+    /// The entry for this transponder, made when it has none. Only for one
+    /// of this driver's own - the main one, or an extra already listed.
+    /// </summary>
+    public OwnedTransponder EntryToChange(string id)
+    {
+        var wanted = id.Trim();
+
+        if (TransponderEntry(wanted) is { } entry)
+        {
+            return entry;
+        }
+
+        var made = new OwnedTransponder { Id = wanted };
+        (Transponders ??= new List<OwnedTransponder>()).Add(made);
+        return made;
+    }
 
     /// <summary>Marks a rental or loaner transponder, which shouldn't accrue personal bests.</summary>
     public bool IsRental { get; set; }
@@ -178,6 +312,30 @@ public sealed class DriverProfile
         !string.IsNullOrWhiteSpace(AnnouncerName) ? AnnouncerName
         : !string.IsNullOrWhiteSpace(DriverName) ? DriverName
         : Transponder;
+}
+
+/// <summary>
+/// One transponder a driver owns - see DriverProfile.Transponders.
+/// </summary>
+public sealed class OwnedTransponder
+{
+    /// <summary>The id the decoder reports.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The Garage car it is fitted to (Car.Id), or empty when it moves
+    /// between cars or nobody has said.
+    /// </summary>
+    public string CarId { get; set; } = string.Empty;
+
+    /// <summary>No longer in use. Still the driver's: its laps stay theirs.</summary>
+    public bool Retired { get; set; }
+
+    /// <summary>When it was given to the driver, when that is known.</summary>
+    public DateTime? AddedUtc { get; set; }
+
+    /// <summary>When it was retired, when it is.</summary>
+    public DateTime? RetiredUtc { get; set; }
 }
 
 /// <summary>

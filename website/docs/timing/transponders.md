@@ -8,7 +8,7 @@ HeatCaller matches each pass to a driver by the **Transponder:** number on their
 
 - Matching ignores upper and lower case, so `8467be` on a profile matches `8467BE` from the decoder.
 - Each transponder number belongs to one profile. Once a profile is saved, its transponder number can't be edited; to move a driver to a different transponder, create a new profile.
-- A transponder number can't be on two profiles. If you add or edit a profile and its **Transponder:** or **Alt transponder:** is already another driver's main or alt transponder, HeatCaller refuses with a "Transponder already in use" warning that names that driver. The profile form stays open so you can correct the number.
+- A transponder number can't be on two profiles. If you add or edit a profile and its **Transponder:** or one of its other **Transponders:** is already another driver's, HeatCaller refuses with a "Transponder already in use" warning that names that driver. The profile form stays open so you can correct the number.
 
 What the number looks like depends on your decoder:
 
@@ -23,27 +23,26 @@ For adding and editing profiles, see [Drivers, classes and venues](../race-day/d
 
 ### Alternate transponder
 
-A profile has an **Alt transponder:** field ("a second car they also run"). The number is saved with the profile and shown on the driver card, next to the main number, as "(alt ...)".
+A driver can have more than one transponder: one in each car, a spare, or a replacement for one that died. The profile's **Transponder:** number is their main one. The others are on the **Transponders:** line of the profile form: type a number and click **Add**.
 
-The alt transponder counts as that driver everywhere: names, announcements and results all use the profile's name.
+Every one of a driver's transponders counts as that driver: names, announcements, results and the driver card's figures all use the profile. The driver card lists them all after **Transponders**.
 
-On a direct decoder (EasyLap or I-Lap), HeatCaller decides what to do with the second car once per race, the first time the alt transponder crosses the line:
+When a driver stops using a transponder, pick it on the **Transponders:** line and click **Retire**. A retired transponder is shown as "(retired)" and is no longer in use, but it is still the driver's: everything timed on it stays theirs, and if it turns up again its laps are still filed under them. **Bring Back** puts it back in use. **Remove** takes it off the driver altogether, for a number added by mistake. Laps already timed on a removed transponder no longer count as theirs, so the form asks first. The main transponder can be retired but not removed, because the driver's results are filed under it.
 
-| When the alt is first heard | What happens for the rest of that race |
+On a direct decoder (EasyLap or I-Lap), HeatCaller decides what to do with each of a driver's other transponders once per race, the first time it crosses the line:
+
+| When it's first heard | What happens for the rest of that race |
 |---|---|
-| The main transponder hasn't been heard yet this race | The alt's laps go in the driver's own row, as if it were the main car. |
-| The main car is already on track | The alt is timed as a separate row, still showing the driver's name. The Race Control log says so. |
+| None of the driver's other cars is on track yet | Its laps go in the driver's own row, as if it were the main car. |
+| The main car, or another of the driver's cars, is already on track | It's timed as a separate row, still showing the driver's name. The Race Control log says so. |
+| It was timed under its own number earlier in this race (it was given to the driver mid-race) | It keeps its own row, so its laps stay together. |
 
-If the main car turns up after the alt's laps have already gone into the driver's row, the Race Control log warns that the row's lap times can't be trusted, because two cars' passes are mixed together.
+If the main car turns up after another car's laps have already gone into the driver's row, the Race Control log warns that the row's lap times can't be trusted, because two cars' passes are mixed together.
 
 !!! warning
-    Don't run both of a driver's cars in the same heat. One car per driver per heat keeps the lap times clean.
+    Don't run two of a driver's cars in the same heat. One car per driver per heat keeps the lap times clean.
 
-An alt transponder is ignored for matching, and arrives as an unknown transponder, when it:
-
-- is someone else's main transponder,
-- is the same as the profile's own main transponder, or
-- is listed as the alt on two profiles.
+A transponder listed on two profiles, perhaps in a file saved by an older version, is ignored for matching and arrives as an unknown transponder.
 
 ## Unknown transponders
 
@@ -51,13 +50,21 @@ A transponder that isn't on any profile still gets timed. It appears on the lead
 
 HeatCaller never interrupts a race to ask about it. Instead:
 
-1. The first time an unknown transponder crosses the line in a session, the console on the **Connection** page shows "[race] New transponder *number* is on track - you'll be asked to name it when the session ends."
-2. When the race finishes, or the session stops, HeatCaller asks. For one transponder, the **Unknown transponder** window says "New transponder detected: *number*" and asks "Assign a driver name and car to it now?" For several, it lists them and asks "Name them now?"
-3. Click **Yes**. A profile form opens for each transponder, with the number already filled in. Enter the driver's name and anything else you know, and click **Save**. Click **Cancel** to skip one.
+1. The first time an unknown transponder crosses the line in a session, the console on the **Connection** page shows "[race] New transponder *number* is on track - it's listed above the board once the session ends, to say whose it is."
+2. It goes on a list shown as a banner at the top of the **Driver Profiles** page, and on the **Race Control** page between races. The banner says "A transponder crossed the line with no driver" (or how many did). Each one has a line with what it did, for example "14 laps in Heat 2 · best 7.905". The sidebar shows the count next to **Driver Profiles**.
+3. On its line, choose what it is:
+    - **Belongs To** gives it to a driver already on file. The **Who is on transponder *number*?** window lists your drivers; type in **Find:** to narrow the list, and pick one. Under **Where is it?**, choose **In one of their cars:** and pick the car from their garage, or **Their own transponder - it moves between cars**. If it replaces one of theirs, pick that one in **It replaces:**; the old one is retired, and everything timed on it stays theirs. Click **Give *number* to *driver***. The laps it has already done count for that driver.
+    - **New Driver** opens a profile form with the number already filled in. Enter the driver's name and anything else you know, and click **Save**.
+    - **Club Rental** registers it as one of the club's loan units, asking what it's called at the counter (an asset tag such as R4, or nothing). It gets a rental profile named "Rental R4" (or "Rental *number*"), so its laps have a name and stay out of the club's records. It appears on the **Rentals** page.
+4. **Later** hides the banner until another unknown transponder turns up. The sidebar count stays.
 
-If a number you enter on the form already belongs to another driver, you get the same "Transponder already in use" warning as on the **Driver Profiles** page, and the form stays open.
+Each choice can be undone with **Undo**, which puts the transponder back on the list.
 
-If you click **No**, nothing is saved; add the profile later from the **Driver Profiles** page. Transponders that you've named some other way in the meantime aren't asked about again.
+On the **Race Control** leaderboard you can also right-click an unknown transponder's row and choose **Give *number* to an existing driver**, which opens the same window, or **New driver on *number***.
+
+If a number already belongs to another driver, you get the same "Transponder already in use" warning as on the **Driver Profiles** page. A transponder you name some other way, for example from the **Driver Profiles** page or a phone sign-up, leaves the list by itself within a few seconds.
+
+The list lasts until HeatCaller is closed. A transponder still unnamed is listed again the next time it crosses the line.
 
 Unknown transponders are detected on the direct decoder connections (EasyLap and I-Lap), where HeatCaller runs the race.
 

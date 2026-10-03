@@ -45,6 +45,24 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     private readonly List<string> _unnamedTransponders = new();
 
+    /// <summary>The list of transponders nobody has - see UnknownTransponders. Null until MainForm attaches it.</summary>
+    private UnknownTransponders? _unknowns;
+
+    /// <summary>The banner above the board listing them, between races.</summary>
+    private readonly UnknownTransponderBanner _unknownBanner = new();
+
+    /// <summary>
+    /// Connects the page to the app's list of unknown transponders: noted
+    /// here as they cross the line, shown on the banner between races.
+    /// </summary>
+    public void AttachUnknownTransponders(UnknownTransponders unknowns)
+    {
+        _unknowns = unknowns;
+        _unknownBanner.ShowWhen = () =>
+            !_race.IsPracticeMode && _race.State is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing);
+        _unknownBanner.Attach(unknowns);
+    }
+
     /// <summary>The flag before the current one - the only way to tell an initial green apart from a restart after a caution, since both leave the race in the Racing state.</summary>
     private FlagState _previousFlag = FlagState.None;
 

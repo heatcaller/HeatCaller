@@ -65,7 +65,14 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtSkillLevel = new();
     private readonly TextBox _txtContact = new();
     private readonly TextBox _txtEmail = new();
-    private readonly TextBox _txtAltTransponder = new();
+    /// <summary>The driver's other transponders, and the main one's Retire - see TransponderChoice.</summary>
+    private readonly ComboBox _cmbTransponders = new();
+
+    /// <summary>
+    /// The transponder list as it stands in the dialog: a copy of the
+    /// profile's, so Cancel leaves the stored driver exactly as it was.
+    /// </summary>
+    private readonly List<OwnedTransponder> _transponders;
     private readonly CheckBox _chkRental = new ThemedCheckBox();
     private readonly CheckBox _chkExcludeRecords = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
@@ -116,6 +123,9 @@ public sealed class ProfileForm : Form
         _profiles = profiles;
         _editingTransponder = existing?.Transponder;
         Result = existing ?? new DriverProfile { Transponder = fixedTransponder ?? string.Empty };
+        _transponders = System.Text.Json.JsonSerializer.Deserialize<List<OwnedTransponder>>(
+                            System.Text.Json.JsonSerializer.Serialize(Result.Transponders ?? new List<OwnedTransponder>()))
+                        ?? new List<OwnedTransponder>();
 
         Text = existing is null ? "Add Driver Profile" : "Edit Driver Profile";
         Font = AppTheme.BodyFont;
@@ -210,8 +220,43 @@ public sealed class ProfileForm : Form
         captions.Add(AddLabeledTextBox(fields, "Email:", _txtEmail, Result.Email));
         _txtEmail.PlaceholderText = "for check-in PINs - never shown publicly";
 
-        captions.Add(AddLabeledTextBox(fields, "Alt transponder:", _txtAltTransponder, Result.AlternateTransponder));
-        _txtAltTransponder.PlaceholderText = "a second car they also run";
+        // Every transponder the driver has besides the main one: a second
+        // car's, a spare, a replacement. Type one and press Add. Retire marks
+        // one no longer in use without losing what was timed on it; Remove
+        // is for one added by mistake.
+        _cmbTransponders.DropDownStyle = ComboBoxStyle.DropDown;
+        RefillTransponders(null);
+
+        var btnAddTransponder = new Button { Text = "Add" };
+        btnAddTransponder.Click += (_, _) => AddTransponder();
+
+        var btnRetireTransponder = new Button { Text = "Retire" };
+        btnRetireTransponder.Click += (_, _) => ToggleRetired();
+
+        var btnRemoveTransponder = new Button { Text = "Remove" };
+        btnRemoveTransponder.Click += (_, _) => RemoveTransponder();
+
+        // "Retire" or "Bring Back", for whichever is picked; Remove only for
+        // an extra one - the main transponder is the driver's key.
+        void UpdateTransponderButtons()
+        {
+            var picked = PickedTransponder();
+            btnRetireTransponder.Text = picked is not null && IsRetiredHere(picked.Id) ? "Bring Back" : "Retire";
+            btnRetireTransponder.Enabled = picked is not null;
+            btnRemoveTransponder.Enabled = picked is { IsMain: false };
+        }
+
+        _cmbTransponders.SelectedIndexChanged += (_, _) => UpdateTransponderButtons();
+
+        // A new driver's main transponder is typed after the form opens; the
+        // list's first line follows it.
+        _txtTransponder.TextChanged += (_, _) =>
+            RefillTransponders((_cmbTransponders.SelectedItem as TransponderChoice)?.Id);
+        _cmbTransponders.TextChanged += (_, _) => UpdateTransponderButtons();
+        UpdateTransponderButtons();
+
+        captions.Add(fields.AddRow("Transponders:", ButtonsBeside(_cmbTransponders, btnAddTransponder, btnRetireTransponder, btnRemoveTransponder)));
+        fields.AddHint("Any other transponders they run - a second car, a spare. Retire one that is no longer used: what was timed on it stays theirs.");
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
 
@@ -383,6 +428,7 @@ public sealed class ProfileForm : Form
 
         var carsWidth = FitPicker(_cmbCars, keepToRow: false);
         var classWidth = FitPicker(_cmbClass, keepToRow: false);
+        FitPicker(_cmbTransponders, keepToRow: false);
 
         // The fields' column: never narrower than the text boxes were, wide
         // enough for the garage's drop-down and its two buttons on one line
@@ -653,6 +699,160 @@ public sealed class ProfileForm : Form
         return -1;
     }
 
+    /// <summary>One line in the transponder drop-down: the main one or an extra, marked when retired.</summary>
+    private sealed record TransponderChoice(string Id, bool IsMain, bool Retired)
+    {
+        public override string ToString() =>
+            Id + (IsMain ? " (main)" : string.Empty) + (Retired ? " (retired)" : string.Empty);
+    }
+
+    /// <summary>The main transponder as typed in the Transponder box.</summary>
+    private string MainHere => _txtTransponder.Text.Trim();
+
+    private OwnedTransponder? EntryHere(string id) =>
+        _transponders.FirstOrDefault(t => string.Equals(t.Id?.Trim(), id, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsRetiredHere(string id) => EntryHere(id)?.Retired == true;
+
+    /// <summary>Fills the transponder drop-down - the main one first - and picks <paramref name="select"/> when given.</summary>
+    private void RefillTransponders(string? select)
+    {
+        _cmbTransponders.Items.Clear();
+
+        if (MainHere.Length > 0)
+        {
+            _cmbTransponders.Items.Add(new TransponderChoice(MainHere, true, IsRetiredHere(MainHere)));
+        }
+
+        foreach (var entry in _transponders)
+        {
+            var id = entry.Id?.Trim() ?? string.Empty;
+
+            if (id.Length > 0 && !string.Equals(id, MainHere, StringComparison.OrdinalIgnoreCase))
+            {
+                _cmbTransponders.Items.Add(new TransponderChoice(id, false, entry.Retired));
+            }
+        }
+
+        var match = _cmbTransponders.Items.Cast<TransponderChoice>()
+            .FirstOrDefault(c => string.Equals(c.Id, select, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null)
+        {
+            _cmbTransponders.SelectedItem = match;
+        }
+        else
+        {
+            _cmbTransponders.Text = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// What is typed in the transponder drop-down, when it is not just a
+    /// listed line picked - or empty. Compared with the picked line's text
+    /// rather than read from SelectedItem alone: an editable drop-down can
+    /// keep its pick while something else is typed over it.
+    /// </summary>
+    private string TypedTransponder()
+    {
+        var text = _cmbTransponders.Text.Trim();
+
+        return _cmbTransponders.SelectedItem is TransponderChoice picked
+               && string.Equals(picked.ToString(), _cmbTransponders.Text, StringComparison.Ordinal)
+            ? string.Empty
+            : text;
+    }
+
+    /// <summary>The listed line picked, when nothing else is typed over it.</summary>
+    private TransponderChoice? PickedTransponder() =>
+        TypedTransponder().Length == 0 ? _cmbTransponders.SelectedItem as TransponderChoice : null;
+
+    /// <summary>
+    /// Adds the transponder typed in the drop-down to the driver's list.
+    /// False when it was refused (and the reason shown); true when it was
+    /// added, or there was nothing new to add.
+    /// </summary>
+    private bool AddTransponder()
+    {
+        var id = TypedTransponder();
+
+        if (id.Length == 0)
+        {
+            return true;
+        }
+
+        if (id.Length > 40)
+        {
+            AppDialog.Show(this, "That transponder number is too long.", "Transponder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        if (string.Equals(id, MainHere, StringComparison.OrdinalIgnoreCase) || EntryHere(id) is not null)
+        {
+            RefillTransponders(id);
+            return true;
+        }
+
+        // Somebody else's already? Said now rather than at Save.
+        if (_profiles?.OwnerOf(id) is { } owner
+            && !string.Equals(owner.Transponder, _editingTransponder, StringComparison.OrdinalIgnoreCase))
+        {
+            var who = string.IsNullOrWhiteSpace(owner.DriverName) ? $"the profile for {owner.Transponder}" : owner.DriverName.Trim();
+            AppDialog.Show(this, $"Transponder {id} already belongs to {who}. A transponder can only belong to one driver.",
+                "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        _transponders.Add(new OwnedTransponder { Id = id, AddedUtc = DateTime.UtcNow });
+        RefillTransponders(id);
+        FitPicker(_cmbTransponders, keepToRow: true);
+        return true;
+    }
+
+    /// <summary>Retires the picked transponder, or brings a retired one back into use.</summary>
+    private void ToggleRetired()
+    {
+        if (PickedTransponder() is not { } picked)
+        {
+            return;
+        }
+
+        var entry = EntryHere(picked.Id);
+
+        if (entry is null)
+        {
+            // The main transponder has an entry only once it is retired or
+            // fitted to a car.
+            entry = new OwnedTransponder { Id = picked.Id };
+            _transponders.Add(entry);
+        }
+
+        entry.Retired = !entry.Retired;
+        entry.RetiredUtc = entry.Retired ? DateTime.UtcNow : null;
+        RefillTransponders(picked.Id);
+    }
+
+    /// <summary>Takes an extra transponder off the driver - for one added by mistake.</summary>
+    private void RemoveTransponder()
+    {
+        if (PickedTransponder() is not { IsMain: false } picked)
+        {
+            return;
+        }
+
+        if (AppDialog.Show(this,
+                $"Remove transponder {picked.Id} from this driver?\n\nLaps already timed on it will no longer count as theirs. "
+                + "If it is just no longer used, Retire it instead - that keeps them.",
+                "Remove transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _transponders.RemoveAll(t => string.Equals(t.Id?.Trim(), picked.Id, StringComparison.OrdinalIgnoreCase));
+        RefillTransponders(null);
+        FitPicker(_cmbTransponders, keepToRow: true);
+    }
+
     /// <summary>A caption and its text box, filled in, the box running to the grid's right-hand edge. Returns the caption.</summary>
     private static Label AddLabeledTextBox(FieldGrid fields, string label, TextBox box, string initialValue)
     {
@@ -666,6 +866,14 @@ public sealed class ProfileForm : Form
         if (string.IsNullOrWhiteSpace(transponder))
         {
             AppDialog.Show(this, "Transponder is required.", "Missing transponder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        // One typed but not yet Added counts, as a typed car does - and the
+        // old Alt transponder box saved whatever was in it. Refused (too
+        // long, somebody else's), the form stays open.
+        if (!AddTransponder())
+        {
             return;
         }
 
@@ -692,7 +900,7 @@ public sealed class ProfileForm : Form
             SkillLevel = _txtSkillLevel.Text.Trim(),
             Contact = _txtContact.Text.Trim(),
             Email = _txtEmail.Text.Trim(),
-            AlternateTransponder = _txtAltTransponder.Text.Trim(),
+            Transponders = _transponders.ToList(),
             IsRental = _chkRental.Checked,
             ExcludeFromRecords = _chkExcludeRecords.Checked,
 

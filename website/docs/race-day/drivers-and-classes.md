@@ -28,7 +28,7 @@ You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
 
-If the transponder (or the **Alt transponder:**) is already another driver's, you get a "Transponder already in use" warning naming that driver, and the dialog stays open so you can fix the number. Nothing is replaced.
+If the transponder (or one of the others on the **Transponders:** line) is already another driver's, you get a "Transponder already in use" warning naming that driver, and the dialog stays open so you can fix the number. Nothing is replaced.
 
 You can also create profiles from Race Control. When transponders with no profile were on track, HeatCaller asks **Name them now?** after the session and opens this dialog for each one, with the transponder already filled in and locked. See [Transponders](../timing/transponders.md).
 
@@ -62,7 +62,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Skill level:** | Free text, for example "Novice / Intermediate / Expert". |
 | **Contact:** | For organizer use only. It's never announced. |
 | **Email:** | Where the driver's personal check-in PIN is sent. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
-| **Alt transponder:** | A second transponder the driver runs, for a second car. Its laps count as this driver's — see [Alternate transponder](../timing/transponders.md#alternate-transponder). |
+| **Transponders:** | The driver's other transponders: a second car's, a spare, a replacement. Type a number and click **Add**. Pick one and click **Retire** when it's no longer used (what was timed on it stays theirs), or **Remove** for one added by mistake. The main transponder is listed first and can be retired too. See [Alternate transponder](../timing/transponders.md#alternate-transponder). |
 | **Class:** | The class the driver races in, or **(none)**. Click **Manage** to open the class list if the class you need doesn't exist yet. |
 | **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, log setups against the car in the [Garage](#garage). |
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |

@@ -253,12 +253,15 @@ public sealed partial class RaceControlControl
 
         _lblRaceState.Text = state.ToString();
 
+        // The unknown-transponder banner is for between races.
+        _unknownBanner.RefreshVisibility();
+
         // Posted, not called. A lap is what ends a race, so this handler
         // can be sitting inside RecordLap right now - see
-        // PromptForUnnamedTransponders.
+        // NoteUnnamedTransponderLaps.
         if (state is (RaceState.Finished or RaceState.Idle) && IsHandleCreated && !IsDisposed)
         {
-            BeginInvoke(() => PromptForUnnamedTransponders());
+            BeginInvoke(() => NoteUnnamedTransponderLaps());
         }
 
         switch (state)

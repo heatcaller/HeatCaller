@@ -2998,7 +2998,17 @@ public sealed class RaceControlSession
 
         if (!_alternateMerged.TryGetValue(id, out var merged))
         {
-            merged = !_heardThisRace.Contains(primary);
+            // Not when the main transponder has been heard, and not when
+            // another of the driver's transponders is already being filed
+            // under it either: a driver can own several now, and two of
+            // them out together are two cars, whose crossings in one row
+            // would make nonsense lap times.
+            //
+            // Nor when this transponder has already crossed the line this
+            // race under its own id - given to a driver mid-race from the
+            // board's menu, say. Its laps so far are in a row of their own,
+            // and they stay together there rather than splitting halfway.
+            merged = !_heardThisRace.Contains(id) && !_heardThisRace.Contains(primary) && !_mergedInto.Contains(primary);
             _alternateMerged[id] = merged;
 
             if (merged)
@@ -3007,8 +3017,11 @@ public sealed class RaceControlSession
             }
             else
             {
-                Log($"{id} is {primary}'s alternate transponder, but {primary} is on track too - "
-                    + $"timing {id} as a separate car this race.");
+                Log(_heardThisRace.Contains(id)
+                    ? $"{id} is one of {primary}'s transponders now, but it was timed on its own earlier this race - "
+                      + $"keeping {id} as a separate car until the race ends."
+                    : $"{id} is one of {primary}'s transponders, but {primary} already has a car on track - "
+                      + $"timing {id} as a separate car this race.");
             }
         }
 

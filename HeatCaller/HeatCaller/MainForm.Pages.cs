@@ -45,6 +45,7 @@ public partial class MainForm
         var raceControl = new RaceControlControl(_race, _announcer, _profiles, _raceClasses, _trackLayouts, _sessionHistory, _settings, _undo, _daySchedule, _sponsors, _rounds, () => _activeRound, _commentary, _transponderWatch, _raceEvents, _checkInStore, _seasonStore, techInspections: _techInspections) { Dock = DockStyle.Fill };
         _raceControlControl = raceControl;
         raceControl.StatusMessage += OnClientRawMessage;
+        raceControl.AttachUnknownTransponders(_unknownTransponders);
 
         // The TIMING line on the Next Up bar, worked out every race tick in
         // UpdateTimingWatch whichever page is showing.
@@ -115,6 +116,8 @@ public partial class MainForm
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings) { Dock = DockStyle.Fill };
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Profiles"] = driverProfiles.RefreshAll;
+        driverProfiles.AttachUnknownTransponders(_unknownTransponders);
+        WireUnknownTransponders();
 
         // Next to Driver Profiles in the sidebar: the two together are "who
         // races and under what rules", and they are the two pages somebody

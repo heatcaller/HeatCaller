@@ -463,16 +463,11 @@ public sealed partial class RaceControlControl
     /// once the racing stops - instead of leaving a bare hex id sitting in
     /// the leaderboard for somebody to notice and fix later.
     ///
-    /// This used to ask right here, with a modal dialog, and it is called
-    /// from the lap pipeline. A modal pumps the message loop: every queued
-    /// lap, every clock tick and every state change went on running INSIDE
-    /// it, so the next lap was processed while the previous one was still
-    /// on the stack, and the race could finish behind a question box nobody
-    /// had answered yet. It also froze the flag buttons at the one moment
-    /// an unknown car is most likely to need a marshal call.
-    ///
-    /// So nothing modal happens during a session now. The operator gets a
-    /// line in the race log and the question afterwards.
+    /// It goes on the list behind the banner (UnknownTransponders), which
+    /// shows above the board between races and on Driver Profiles, with the
+    /// sidebar's count. Nothing modal: this is called from the lap pipeline,
+    /// and a dialog here once let the race finish behind a question nobody
+    /// had answered - see the history in UnknownTransponders.
     /// </summary>
     private void NoteUnknownTransponder(string transponderId)
     {
@@ -481,26 +476,44 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // A demo's placeholder cars (DEMO01...) are nobody's and never will
+        // be - nothing to ask about.
+        if (_race.IsDemoMode)
+        {
+            return;
+        }
+
         _promptedTransponders.Add(transponderId);
         _unnamedTransponders.Add(transponderId);
 
+        string where;
+
+        try
+        {
+            where = RaceInHandTitle();
+        }
+        catch (Exception)
+        {
+            where = string.Empty;
+        }
+
+        _unknowns?.Note(transponderId, where);
+
         StatusMessage?.Invoke(
-            $"{AppTime.LogStampNow()}  [race] New transponder {transponderId} is on track - you'll be asked to name it when the session ends.");
+            $"{AppTime.LogStampNow()}  [race] New transponder {transponderId} is on track - it's listed above the board once the session ends, to say whose it is.");
     }
 
     /// <summary>
-    /// Offers to name whatever turned up unrecognised, once the racing has
-    /// actually stopped.
+    /// Once the racing has stopped: what each unrecognised transponder did
+    /// this session, for its line on the banner - and the banner shown.
     ///
-    /// Always reached through BeginInvoke, never called straight from an
-    /// event: the thing that ends a race is usually a lap, so a dialog
-    /// opened inline would sit on top of the very pipeline it interrupted.
-    /// Posting it means the lap, the finish and everything behind them are
-    /// finished and off the stack before anything modal opens.
+    /// Always reached through BeginInvoke, never straight from an event:
+    /// the thing that ends a race is usually a lap, and the standings are
+    /// final once it is off the stack.
     /// </summary>
-    private void PromptForUnnamedTransponders()
+    private void NoteUnnamedTransponderLaps()
     {
-        if (IsDisposed || Disposing || _unnamedTransponders.Count == 0)
+        if (IsDisposed || Disposing)
         {
             return;
         }
@@ -510,60 +523,22 @@ public sealed partial class RaceControlControl
             return; // a new session started while this was queued
         }
 
-        // Taken and cleared BEFORE the first dialog. A modal still pumps
-        // the message loop, so a queued state change can call back in here
-        // while one is open - and would otherwise hand out the same
-        // transponder a second time. Anyone named in the meantime (from the
-        // profiles page, say) drops out here.
-        var pending = _unnamedTransponders
-            .Where(t => _profiles.Get(t) is null)
-            .ToList();
-
+        var pending = _unnamedTransponders.ToList();
         _unnamedTransponders.Clear();
-
-        if (pending.Count == 0)
-        {
-            return;
-        }
-
-        var question = pending.Count == 1
-            ? $"New transponder detected: {pending[0]}\n\nAssign a driver name and car to it now?"
-            : $"{Plural.Of(pending.Count, "new transponder")} were on track this session:\n\n   "
-              + string.Join("\n   ", pending)
-              + "\n\nName them now?";
-
-        if (AppDialog.Show(this, question, "Unknown transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-            != DialogResult.Yes)
-        {
-            return;
-        }
 
         foreach (var transponderId in pending)
         {
-            // Named elsewhere while an earlier form in this loop was open
-            // (the profiles page, a phone check-in) - nothing left to add,
-            // and TryAdd below would only refuse it as a clash with itself.
-            if (_profiles.Get(transponderId) is not null)
+            if (FindStanding(transponderId) is { } standing)
             {
-                continue;
-            }
-
-            using var form = new ProfileForm(null, _raceClasses, fixedTransponder: transponderId, undo: _undo, profiles: _profiles);
-
-            // A NEW driver, so TryAdd rather than Upsert: Upsert would
-            // silently replace anybody already stored on this transponder.
-            // The form checks the same thing before it closes, so this only
-            // refuses if someone claimed the transponder (or the alt one) on
-            // another page while the form was open.
-            if (form.ShowDialog(this) == DialogResult.OK
-                && !_profiles.TryAdd(form.Result, out var refusal))
-            {
-                AppDialog.Show(this, refusal, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _unknowns?.SetLaps(transponderId, standing.Laps, standing.FastestLapMs);
             }
         }
 
-        RenderLeaderboard();
+        _unknownBanner.RefreshVisibility();
     }
+
+    /// <summary>Draws the board again - after a transponder was given a driver from outside this page.</summary>
+    public void RefreshNames() => RenderLeaderboard();
 
     /// <summary>
     /// The drivers whose lap detail is open beneath their row. Survives the
@@ -788,6 +763,18 @@ public sealed partial class RaceControlControl
         var editDriver = new ToolStripMenuItem("Edit driver...");
         editDriver.Click += (_, _) => EditSelectedDriver();
 
+        // For a transponder nobody has: give it to a driver already on file,
+        // rather than making a new one - a second car, a spare, a borrowed
+        // transponder. The same as Belongs To on the banner.
+        var giveToDriver = new ToolStripMenuItem("Give to an existing driver...");
+        giveToDriver.Click += (_, _) =>
+        {
+            if (SelectedTransponder() is { Length: > 0 } transponder)
+            {
+                _unknowns?.Request(transponder, UnknownTransponders.Choice.BelongsTo);
+            }
+        };
+
         var lapBreakdown = new ToolStripMenuItem("Lap breakdown...");
         lapBreakdown.Click += (_, _) =>
         {
@@ -877,6 +864,7 @@ public sealed partial class RaceControlControl
         menu.Items.AddRange(new ToolStripItem[]
         {
             editDriver,
+            giveToDriver,
             lapBreakdown,
             toggleLaps,
             hideAllLaps,
@@ -910,7 +898,9 @@ public sealed partial class RaceControlControl
             var profile = _profiles.Get(transponder);
             var name = string.IsNullOrWhiteSpace(profile?.DriverName) ? transponder : profile!.DriverName;
 
-            editDriver.Text = profile is null ? $"Assign a driver to {transponder}..." : $"Edit {name}...";
+            editDriver.Text = profile is null ? $"New driver on {transponder}..." : $"Edit {name}...";
+            giveToDriver.Visible = profile is null && _unknowns is not null && !GhostService.IsGhost(transponder);
+            giveToDriver.Text = $"Give {transponder} to an existing driver...";
 
             lapBreakdown.Text = $"{name}'s lap breakdown...";
 

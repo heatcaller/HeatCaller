@@ -964,6 +964,7 @@ public sealed partial class RaceControlControl
         body.AddSide(_statStrip);
 
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
+        _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
         Controls.Add(_page);

@@ -126,6 +126,12 @@ public sealed class ProfileManagerControl : UserControl
     private bool _measuring;
     private bool _extentCheckQueued;
 
+    /// <summary>The banner listing transponders nobody has - see UnknownTransponders.</summary>
+    private readonly UnknownTransponderBanner _unknownBanner = new();
+
+    /// <summary>Shows the app's list of unknown transponders on this page's banner.</summary>
+    public void AttachUnknownTransponders(UnknownTransponders unknowns) => _unknownBanner.Attach(unknowns);
+
     public ProfileManagerControl(
         ProfileStore store,
         RaceClassStore classStore,
@@ -283,6 +289,9 @@ public sealed class ProfileManagerControl : UserControl
 
         var page = new FillPage();
 
+        // Transponders that crossed the line with no driver - see
+        // UnknownTransponders. Hidden while there are none.
+        page.Add(_unknownBanner);
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
@@ -514,7 +523,7 @@ public sealed class ProfileManagerControl : UserControl
     }
 
     private static bool Matches(DriverProfile p, string filter) =>
-        Has(p.DriverName, filter) || Has(p.AnnouncerName, filter) || Has(p.Transponder, filter)
+        Has(p.DriverName, filter) || Has(p.AnnouncerName, filter) || p.AllTransponderIds.Any(id => Has(id, filter))
         || Has(p.RaceNumber, filter) || Has(p.ClassName, filter) || Has(p.Team, filter)
         || Has(p.Sponsors, filter) || Has(p.HomeTrack, filter)
         || p.AllCars.Any(car => Has(car, filter));
@@ -846,19 +855,21 @@ public sealed class ProfileManagerControl : UserControl
     }
 
     /// <summary>
-    /// Who the sums are for: the driver's main transponder and, when the
-    /// store resolves it to them, their alternate - so a second car's
-    /// races count as theirs exactly as they do everywhere else.
+    /// Who the sums are for: the driver's main transponder and every other
+    /// one the store resolves to them - so another car's races count as
+    /// theirs exactly as they do everywhere else.
     /// </summary>
     private DriverStatsQuery BuildQuery(DriverProfile profile)
     {
         var transponders = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { profile.Transponder.Trim() };
-        var alternate = profile.AlternateTransponder?.Trim() ?? string.Empty;
 
-        if (alternate.Length > 0
-            && string.Equals(_store.PrimaryForAlternate(alternate), profile.Transponder, StringComparison.OrdinalIgnoreCase))
+        // Retired ones included: what they raced is still the driver's.
+        foreach (var entry in profile.ExtraTransponders)
         {
-            transponders.Add(alternate);
+            if (string.Equals(_store.PrimaryForAlternate(entry.Id), profile.Transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                transponders.Add(entry.Id.Trim());
+            }
         }
 
         return new DriverStatsQuery
@@ -1510,11 +1521,13 @@ public sealed class ProfileManagerControl : UserControl
             KeyValue(c, "Skill", profile.SkillLevel);
         }
 
-        KeyValue(c,
-            string.IsNullOrWhiteSpace(profile.AlternateTransponder) ? "Transponder" : "Transponders",
-            string.IsNullOrWhiteSpace(profile.AlternateTransponder)
-                ? profile.Transponder
-                : $"{profile.Transponder}  (alt {profile.AlternateTransponder.Trim()})");
+        // Every one the driver has, the main one first; a retired one is
+        // still listed - its laps are still theirs - and says so.
+        var ids = profile.AllTransponderIds
+            .Select(id => profile.IsRetired(id) ? $"{id} (retired)" : id)
+            .ToList();
+
+        KeyValue(c, ids.Count == 1 ? "Transponder" : "Transponders", string.Join(",  ", ids));
     }
 
     // ---- Card drawing helpers ----
