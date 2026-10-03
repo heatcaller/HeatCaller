@@ -39,6 +39,27 @@ public sealed class TrackLayout
     public string RecordHolderName { get; set; } = string.Empty;
     public DateTime? RecordSetUtc { get; set; }
 
+    /// <summary>
+    /// The record lap's sector times, when it was set with a split loop -
+    /// for "record pace at the split". Only used while they add up to
+    /// RecordLapMs (Sectors.Checked), so a record changed any other way
+    /// leaves them unused rather than wrong. Null without.
+    /// </summary>
+    public List<long>? RecordSectorsMs { get; set; }
+
+    /// <summary>
+    /// The length of each sector in feet, from the split loops placed on the
+    /// layout's plan and the racing line through them (RcpPlan.MeasureSectors)
+    /// - or null without a plan that measures.
+    /// </summary>
+    public double[]? SectorLengthsFeet() =>
+        Design is { } design && RcpPlan.MeasureSectors(design) is { Sectors: { } sectors }
+            ? sectors.Select(tiles => RcpPlan.TilesToFeet(design, tiles)).ToArray()
+            : null;
+
+    /// <summary>The record lap's sectors, when they still belong to it.</summary>
+    public long[]? RecordSectors() => Sectors.Checked(RecordSectorsMs?.ToArray(), RecordLapMs);
+
     // Optional reference figures for this track, used by Demo Mode to
     // simulate a realistic pace instead of an arbitrary made-up one.
     // AverageLapSeconds is the one that actually drives simulated pacing;

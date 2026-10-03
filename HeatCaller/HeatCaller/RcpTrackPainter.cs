@@ -36,6 +36,11 @@ public static class RcpTrackPainter
     private static readonly Color TurnFace = ColorTranslator.FromHtml("#F4557E");
     private static readonly Color TurnEdge = ColorTranslator.FromHtml("#BE3A5D");
 
+    // A split loop: the colour timing loops are taped in, so it never reads
+    // as the chequered finish line or a kerb.
+    private static readonly Color LoopFace = ColorTranslator.FromHtml("#2D9CDB");
+    private static readonly Color LoopEdge = ColorTranslator.FromHtml("#1B6FA0");
+
     private static readonly Color RailShadow = Color.FromArgb(90, 0, 0, 0);
     private static readonly Color InfieldFill = ColorTranslator.FromHtml("#1E1E20");
 
@@ -524,8 +529,48 @@ public static class RcpTrackPainter
             case RcpDecalKind.Furniture:
                 DrawFurniture(g, rect);
                 break;
+
+            case RcpDecalKind.SplitLoop1:
+            case RcpDecalKind.SplitLoop2:
+            case RcpDecalKind.SplitLoop3:
+                DrawSplitLoop(g, rect, RcpPlan.SplitNumberOf(decal.Kind), decal.Turns);
+                break;
         }
 
+        g.Restore(state);
+    }
+
+    /// <summary>
+    /// A split loop: a blue band across the track where the finish line's
+    /// chequer would be, and "S1", "S2" or "S3" on it - kept upright
+    /// whichever way the band is turned.
+    /// </summary>
+    private static void DrawSplitLoop(Graphics g, RectangleF rect, int number, int turns)
+    {
+        var band = new RectangleF(0, rect.Height * 0.38f, rect.Width, rect.Height * 0.24f);
+
+        using (var face = new SolidBrush(LoopFace))
+        using (var edge = new Pen(LoopEdge, Math.Max(1f, rect.Height * 0.03f)))
+        {
+            g.FillRectangle(face, band);
+            g.DrawRectangle(edge, band.X, band.Y, band.Width, band.Height);
+        }
+
+        if (rect.Height < 18)
+        {
+            return;
+        }
+
+        // Turned back, so the label reads the right way up.
+        var state = g.Save();
+        g.TranslateTransform(rect.Width / 2f, rect.Height / 2f);
+        g.RotateTransform(-turns * 90f);
+
+        using var font = new Font(AppTheme.BoldFont.FontFamily, Math.Max(5f, rect.Height * 0.17f), FontStyle.Bold, GraphicsUnit.Pixel);
+        using var text = new SolidBrush(Color.White);
+        using var centred = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+        g.DrawString($"S{number}", font, text, new RectangleF(-rect.Width / 2f, -rect.Height / 2f, rect.Width, rect.Height), centred);
         g.Restore(state);
     }
 

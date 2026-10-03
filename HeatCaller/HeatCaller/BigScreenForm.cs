@@ -867,6 +867,7 @@ public sealed class BigScreenForm : Form
             Tracker = _kpiTracker,
             FastestOverall = ordered.Where(s => s.FastestLapMs > 0).Select(s => s.FastestLapMs).DefaultIfEmpty(0).Min(),
             StreakThreshold = _race.StreakThreshold,
+            SectorLengthsFeet = _race.SectorLengthsFeet,
 
             // Shared with the Race Control leaderboard, and cached there -
             // so putting the Qual column on both boards is one calculation,

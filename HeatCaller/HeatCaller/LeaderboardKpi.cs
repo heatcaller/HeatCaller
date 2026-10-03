@@ -269,7 +269,19 @@ public sealed class KpiContext
     /// </summary>
     public bool PublicCopy { get; init; }
 
+    /// <summary>
+    /// The length of each sector in feet, from the split loops on the track
+    /// layout's plan - for the speed columns. Null when the layout has none,
+    /// and they show a dash.
+    /// </summary>
+    public double[]? SectorLengthsFeet { get; init; }
+
     private readonly Dictionary<int, long[]?> _sessionSectorBests = new();
+
+    private double? _fieldTopSpeed;
+
+    /// <summary>The field's top speed through any sector, worked out once per board refresh - see KpiCatalog's Top Speed.</summary>
+    internal double FieldTopSpeed(Func<double> work) => _fieldTopSpeed ??= work();
 
     /// <summary>
     /// The quickest time anyone in the field has set in each sector, for
@@ -359,6 +371,28 @@ public static class KpiCatalog
         SectorKpi(2),
         SectorKpi(3),
         SectorKpi(4),
+
+        SpeedKpi(1),
+        SpeedKpi(2),
+        SpeedKpi(3),
+        SpeedKpi(4),
+
+        new("topspeed", "Top Speed", "The fastest the driver has gone through any sector this session, in mph - with the split loop a few feet past the line, that is a speed trap. Needs the split loops placed on the layout's plan in the Track Designer.", 60,
+            (s, _, ctx) =>
+            {
+                if (TopSpeed(s, ctx.SectorLengthsFeet) is not { } top)
+                {
+                    return new KpiValue("-");
+                }
+
+                var fieldTop = ctx.FieldTopSpeed(() => ctx.Ordered
+                    .Where(o => !GhostService.IsGhost(o.TransponderId))
+                    .Select(o => TopSpeed(o, ctx.SectorLengthsFeet) ?? 0)
+                    .DefaultIfEmpty(0)
+                    .Max());
+
+                return new KpiValue(Mph(top), top >= fieldTop ? KpiEmphasis.Highlight : KpiEmphasis.None);
+            }),
 
         new("ideal", "Ideal Lap", "The driver's best sectors added up: their lap with every sector at its best. Needs a split loop.", 65,
             (s, _, _) => Sectors.TheoreticalBest(s) is { } ideal ? new KpiValue(Sectors.Format(ideal)) : new KpiValue("-")),
@@ -611,6 +645,69 @@ public static class KpiCatalog
             : new KpiValue(name + WarningRules.Badge(s.Warnings), KpiEmphasis.Bad);
 
     private static string Secs(long ms) => ms > 0 ? $"{ms / 1000.0:0.000}" : "-";
+
+    /// <summary>Feet a second to miles an hour.</summary>
+    private const double MphPerFootPerSecond = 3600.0 / 5280.0;
+
+    /// <summary>A speed on the board: "23.4".</summary>
+    private static string Mph(double mph) => mph.ToString("0.0");
+
+    /// <summary>The average speed in mph through a sector of this length, taken in this time - or null.</summary>
+    public static double? SectorMph(double feet, long ms) => feet > 0 && ms > 0 ? feet / (ms / 1000.0) * MphPerFootPerSecond : null;
+
+    /// <summary>The car's highest average speed through any sector this session, in mph, or null.</summary>
+    private static double? TopSpeed(RacerStanding s, double[]? lengths)
+    {
+        if (lengths is null)
+        {
+            return null;
+        }
+
+        double? top = null;
+
+        foreach (var (_, sectors) in Sectors.LapsOf(s))
+        {
+            if (sectors.Length != lengths.Length)
+            {
+                continue;
+            }
+
+            for (var i = 0; i < sectors.Length; i++)
+            {
+                if (SectorMph(lengths[i], sectors[i]) is { } mph && (top is null || mph > top))
+                {
+                    top = mph;
+                }
+            }
+        }
+
+        return top;
+    }
+
+    /// <summary>
+    /// The average speed through a sector on the last lap, in mph, from its
+    /// length on the layout's plan. Coloured as the sector's time is.
+    /// </summary>
+    private static KpiDefinition SpeedKpi(int sector) => new(
+        $"v{sector}",
+        $"S{sector} mph",
+        $"Average speed through sector {sector} on the last lap, in mph. Needs the split loops placed on the layout's plan in the Track Designer.",
+        50,
+        (s, index, ctx) =>
+        {
+            if (ctx.SectorLengthsFeet is not { } lengths
+                || Sectors.Last(s) is not { } last
+                || last.Length != lengths.Length
+                || last.Length < sector
+                || SectorMph(lengths[sector - 1], last[sector - 1]) is not { } mph)
+            {
+                return new KpiValue("-");
+            }
+
+            // The same colour as the sector's time: quickest of anyone, or their own best.
+            var timeEmphasis = SectorKpi(sector).Compute(s, index, ctx).Emphasis;
+            return new KpiValue(Mph(mph), timeEmphasis);
+        });
 
     /// <summary>
     /// A sector of the last lap. Highlighted when it is the quickest anyone

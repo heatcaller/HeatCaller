@@ -391,6 +391,10 @@ Placeholders are words in curly brackets that are filled in when the line is spo
 | `{badge}` | The badge just earned (**Achievement unlocked** only). |
 | `{class}` | The class being called (**Grid call** only). |
 | `{round}` | The round being called (**Grid call** only). |
+| `{sector}` | The sector's number, "1" (**Fastest sector** only). |
+| `{sectortime}` | The sector's time (**Fastest sector** only). |
+| `{split}` | The split loop, "Split 1" (**Up at the split** and **Record pace at the split**). |
+| `{gap}` | How far up at the split, said as "point two seconds" (**Up at the split** and **Record pace at the split**). |
 | `{marshals}` | The corner marshals for the heat being called, said as "Sam, Bill and Frank" (**Grid call** only). It's the same list as the **Marshals...** window, for the current race day. |
 
 Each row's hint says which placeholders that announcement supports.
@@ -433,6 +437,9 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Provisional pole (qualifying)** | The top of the qualifying order changes hands. Qualifiers only. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | Yes | – |
 | **Qualifying improvement** | A driver improves their own best in a qualifier without taking provisional pole. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | No | – |
 | **Grid call** | A round is called to the grid as it starts. | `{class}` `{round}` `{marshals}` | Yes | – |
+| **Fastest sector** | With a [split loop](../timing/decoders.md#a-split-loop): a driver goes quicker through a sector than anyone has this session. Not for the session's first sector times. | `{driver}` `{car}` `{team}` `{sponsors}` `{sector}` `{sectortime}` | No | – |
+| **Up at the split** | With a split loop: a driver crosses it at least a tenth up on their own best lap to that point. At most once every five of their laps. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{gap}` | No | – |
+| **Record pace at the split** | With a split loop: a driver crosses it ahead of the track record lap at that point. Races only. Needs a record set with a split loop running. At most once every five of their laps. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{gap}` | No | – |
 
 The default **Grid call** lines include "grid up! Marshals: {marshals}." so the marshals are read out with each call. If you've been using HeatCaller before, your own grid-call lines are kept as they are; add `{marshals}` to them yourself, or use **Restore Default Lines** (which replaces all your lines). Marshals come from [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
 

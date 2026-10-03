@@ -471,12 +471,15 @@ The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, 
 
 - **Wall the edge** puts a rail round every open edge of the floor.
 - **Trace route** follows the corridor between the rails and lays the racing line down it.
+- **Reverse** turns the racing line round, so it runs the way the cars go.
 - **Play** sends a car round the line you drew; **Stop** ends it.
 - **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>), **Redo** (<kbd>Ctrl</kbd>+<kbd>Y</kbd>), **Fit** (<kbd>F</kbd>) and **Clear**.
 
 In any tool, <kbd>Ctrl</kbd>+click or right-click erases. <kbd>R</kbd> turns markings 90 degrees, and <kbd>G</kbd> shows or hides the grid. The tool keys only work while the drawing area has focus, so they don't interfere with typing the track name.
 
 The palette on the left holds floor pieces, barriers (with **Turn radius, in tiles:** buttons for 0.5, 1, 1.5 and 2) and markings.
+
+**Split loops.** The markings include **Split 1 loop**, **Split 2 loop** and **Split 3 loop**: a blue band marked S1, S2 or S3, for where a [split loop](../timing/decoders.md#a-split-loop) lies across the track. A plan has one of each; placing it somewhere else moves it. With the finish line on the plan and the racing line drawn through the loops, **The lap** lists each sector's length along the racing line, for example "Sector 1: 4.50 m / 14.8 ft". Race Control uses those lengths for the sector speed columns. If they can't be measured, it says why, for example "The racing line doesn't pass over Split 1." Number the loops in the order cars reach them. The racing line has to close into a lap and run the way the cars go; its arrows show which way, and **Reverse** on the toolbar turns it round.
 
 The side panel on the right has:
 

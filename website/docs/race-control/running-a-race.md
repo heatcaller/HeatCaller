@@ -273,6 +273,8 @@ Press **Columns** to choose the columns and their order. In the dialog, click th
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
 | **S1**, **S2**, **S3**, **S4** | With a [split loop](../timing/decoders.md#a-split-loop): each sector of the last lap. S1 runs from the line to the split loop, S2 from the split loop back to the line. Highlighted when it's the quickest of anyone this session, green when it's the driver's own best. |
 | **Ideal Lap** | The driver's best sectors added up: their lap with every sector at its best. |
+| **S1 mph**, **S2 mph**, **S3 mph**, **S4 mph** | Average speed through each sector on the last lap. Needs the split loops placed on the layout's plan in the Track Designer, so the sectors' lengths are known. |
+| **Top Speed** | The fastest the driver has gone through any sector this session, in mph. Highlighted for the fastest on the board. With the split loop a few feet past the line, this is a speed trap. |
 | **At Split** | Live, the moment a car crosses the split loop: how far up (green, −0.08) or down (red, +0.12) it is on its own best lap to that point. |
 | **Badges** | How many achievement badges this driver has earned. |
 | **vs Best** | How far the last lap was off this driver's own best. Shows **BEST** when it was their best. |

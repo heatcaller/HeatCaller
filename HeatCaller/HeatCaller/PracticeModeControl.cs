@@ -1124,6 +1124,7 @@ public sealed class PracticeModeControl : UserControl
             RollingWindow = window,
             FastestOverall = fastestOverall,
             StreakThreshold = _race.StreakThreshold,
+            SectorLengthsFeet = _race.SectorLengthsFeet,
         };
 
         for (var index = 0; index < standings.Count; index++)

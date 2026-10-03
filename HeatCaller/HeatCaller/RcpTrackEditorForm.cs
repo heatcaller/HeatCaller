@@ -273,6 +273,7 @@ public sealed class RcpTrackEditorForm : Form
 
         var wallEdge = Add("Wall the edge", "Put a rail round every open edge of the floor.", () => _canvas.WallThePerimeter());
         var traceRoute = Add("Trace route", "Follow the corridor between the rails and lay the racing line down it.", () => _canvas.AutoRoute());
+        var reverseRoute = Add("Reverse", "Turn the racing line round, so it runs the way the cars do - its arrows show which way. Sectors are measured in that direction.", () => _canvas.ReverseRoute());
 
         _btnPlay.Text = "Play";
         _btnPlay.Click += (_, _) =>
@@ -299,7 +300,7 @@ public sealed class RcpTrackEditorForm : Form
 
         var toolbar = new FieldRow();
         toolbar.Add(null, new ButtonBar(tight: true).With(floor, wall, curve, marker, route, erase, photo));
-        toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, _btnPlay));
+        toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, reverseRoute, _btnPlay));
         toolbar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit, clear));
 
         return toolbar;
@@ -607,6 +608,14 @@ public sealed class RcpTrackEditorForm : Form
             Readout(floorOnly, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
             Readout(floorOnly, lengthTiles: 0f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds),
+
+            // Every split loop placed: four sectors under the lap.
+            Readout(floorOnly, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
+                sectors: (new[] { 40f, 40f, 40f, 40f }, null)),
+
+            // ...or the longest thing it says about why they can't be measured.
+            Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
+                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops.")),
         };
 
         var lapCard = new Section("The lap");
@@ -997,7 +1006,7 @@ public sealed class RcpTrackEditorForm : Form
         var inventory = RcpPlan.Count(Result);
         var lengthTiles = RcpPlan.RouteLengthInTiles(Result);
 
-        _lblStats.Text = Readout(inventory, lengthTiles, Result.TileSizeMm, _canvas.LapSeconds);
+        _lblStats.Text = Readout(inventory, lengthTiles, Result.TileSizeMm, _canvas.LapSeconds, RcpPlan.MeasureSectors(Result));
 
         RefreshKitCheck(inventory);
     }
@@ -1009,7 +1018,12 @@ public sealed class RcpTrackEditorForm : Form
     /// a lap - for the plan being drawn, and for the most it can say, which
     /// the readout is made as tall as (see BuildSidePanel).
     /// </summary>
-    private static string Readout(RcpInventory inventory, float lengthTiles, double tileSizeMm, double lapSeconds)
+    /// <param name="sectors">
+    /// The sectors between the split loops on the plan (RcpPlan.MeasureSectors),
+    /// or what stops them being measured; null with no split loops.
+    /// </param>
+    private static string Readout(RcpInventory inventory, float lengthTiles, double tileSizeMm, double lapSeconds,
+        (float[]? Sectors, string? Problem)? sectors = null)
     {
         var metres = lengthTiles * tileSizeMm / 1000.0;
         var feet = metres * 3.28084;
@@ -1034,6 +1048,21 @@ public sealed class RcpTrackEditorForm : Form
                 ? $"Lap: {metres:0.00} m  /  {feet:0.0} ft"
                 : "Lap: draw the racing line, or press Trace route",
         };
+
+        // Each sector along the racing line, between the split loops -
+        // what Race Control turns into sector speeds.
+        if (sectors is { Sectors: { } measured })
+        {
+            for (var i = 0; i < measured.Length; i++)
+            {
+                var sectorMetres = measured[i] * tileSizeMm / 1000.0;
+                lines.Add($"Sector {i + 1}: {sectorMetres:0.00} m  /  {sectorMetres * 3.28084:0.0} ft");
+            }
+        }
+        else if (sectors is { Problem: { } problem })
+        {
+            lines.Add("Sectors: " + problem);
+        }
 
         if (lengthTiles > 0 && lapSeconds > 0)
         {

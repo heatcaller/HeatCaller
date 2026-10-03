@@ -72,6 +72,7 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
 | **S1**, **S2**, **S3**, **S4** | With a split loop: each sector of the last lap. Highlighted when it's the quickest of anyone this session. |
 | **Ideal Lap** | The driver's best sectors added up. |
+| **S1 mph** to **S4 mph**, **Top Speed** | Speeds through the sectors, in mph, when the split loops are placed on the layout's plan. |
 | **At Split** | Live at the split loop: how far up or down the car is on its own best lap to that point. |
 | **Badges** | How many achievement badges this driver has earned. |
 | **vs Best** | How far the last lap was off this driver's own best. |

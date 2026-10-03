@@ -273,6 +273,30 @@ public sealed class RaceControlSession
     private int _splitCount;
 
     /// <summary>
+    /// The length of each sector in feet, for sector speeds - from the split
+    /// loops placed on the track layout's plan in the Track Designer. Null
+    /// when the layout has none. Set by MainForm, which has the layouts.
+    /// </summary>
+    public Func<double[]?>? SectorLengthsFeetProvider { get; set; }
+
+    /// <summary>The sectors' lengths in feet now, or null - see SectorLengthsFeetProvider.</summary>
+    public double[]? SectorLengthsFeet
+    {
+        get
+        {
+            try
+            {
+                return SectorLengthsFeetProvider?.Invoke();
+            }
+            catch
+            {
+                // A plan that can't be measured only costs the speeds.
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
     /// The least time between the line and a split loop, or two split loops,
     /// for a read to be a car going round rather than one read twice.
     /// </summary>

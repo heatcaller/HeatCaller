@@ -50,6 +50,7 @@ public sealed partial class RaceControlControl
             Tracker = _kpiTracker,
             FastestOverall = ordered.Where(s => s.FastestLapMs > 0).Select(s => s.FastestLapMs).DefaultIfEmpty(0).Min(),
             StreakThreshold = _race.StreakThreshold,
+            SectorLengthsFeet = _race.SectorLengthsFeet,
             Achievements = _achievements,
 
             // Null outside a qualifier, which is what makes the Qual column

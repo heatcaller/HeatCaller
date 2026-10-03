@@ -142,6 +142,52 @@ public sealed partial class AnnouncementService
     public void NotifyRecordPace(RaceStanding standing, long lapMs) =>
         EnqueueVoice(AnnouncementEventType.RecordPace, standing, null, lapMs);
 
+    /// <summary>
+    /// The quickest anyone has gone through this sector this session. The
+    /// caller (Race Control) has decided it beats an earlier best, so it is
+    /// not the session's first sector time, which is fastest by default.
+    /// </summary>
+    public void NotifyFastestSector(RaceStanding standing, int sector, long sectorMs) =>
+        EnqueueVoice(AnnouncementEventType.FastestSector, standing, null, extras: new Dictionary<string, (string, string)>
+        {
+            ["sector"] = (sector.ToString(System.Globalization.CultureInfo.InvariantCulture), sector.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ["sectortime"] = (FormatSecondsForSpeech(sectorMs), (sectorMs / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "s"),
+        });
+
+    /// <summary>Whether this call is switched on for the session running now (races or practice) - so a caller choosing between calls picks one that will be said.</summary>
+    public bool WillCall(AnnouncementEventType type) =>
+        !Muted
+        && _voiceStore.Current.Events.TryGetValue(type.ToString(), out var config)
+        && config.IsEnabledFor(IsPracticeMode)
+        && !HeldByCaution(type, config);
+
+    /// <summary>A driver crossed the split loop up on their own best lap by <paramref name="upMs"/>.</summary>
+    public void NotifySplitPace(RaceStanding standing, string split, long upMs) =>
+        EnqueueVoice(AnnouncementEventType.SplitPace, standing, null, extras: SplitExtras(split, upMs));
+
+    /// <summary>A driver crossed the split loop ahead of the track record lap there by <paramref name="upMs"/>.</summary>
+    public void NotifySplitRecordPace(RaceStanding standing, string split, long upMs) =>
+        EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs));
+
+    /// <summary>{split} and {gap} - a gap to the tenth, said as "point two seconds".</summary>
+    private static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)
+    {
+        // Tenths: a split time is good to a few hundredths, and "nought
+        // point two seconds" is what an announcer would say.
+        var tenths = Math.Max(1, (long)Math.Round(Math.Abs(upMs) / 100.0));
+        var whole = tenths / 10;
+        var fraction = DigitWords[tenths % 10];
+        var spoken = whole == 0
+            ? $"point {fraction} {(tenths == 1 ? "second" : "seconds")}"
+            : $"{whole} point {fraction} seconds";
+
+        return new Dictionary<string, (string, string)>
+        {
+            ["split"] = (split, split),
+            ["gap"] = (spoken, (tenths / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "s"),
+        };
+    }
+
     /// <param name="greenIn">
     /// When the green is due, if the caller knows - the automatic start
     /// does. The ticks are timed to end on it. Null when nobody knows (a

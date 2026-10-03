@@ -41,6 +41,9 @@ public enum RcpPaletteItem
     Post,
     Kerb,
     Furniture,
+    Split1,
+    Split2,
+    Split3,
 }
 
 /// <summary>
@@ -1125,12 +1128,22 @@ public sealed class RcpTrackCanvas : Control
             RcpPaletteItem.GridBox => RcpDecalKind.GridBox,
             RcpPaletteItem.Post => RcpDecalKind.Post,
             RcpPaletteItem.Kerb => RcpDecalKind.Kerb,
+            RcpPaletteItem.Split1 => RcpDecalKind.SplitLoop1,
+            RcpPaletteItem.Split2 => RcpDecalKind.SplitLoop2,
+            RcpPaletteItem.Split3 => RcpDecalKind.SplitLoop3,
             _ => RcpDecalKind.Furniture,
         };
 
         var existing = _design.Decals.FirstOrDefault(d => d.Col == cell.X && d.Row == cell.Y);
 
         Remember();
+
+        // One of each split loop on a plan: placed somewhere else, it moves
+        // there - a track has one Split 1.
+        if (RcpPlan.SplitNumberOf(kind) > 0)
+        {
+            _design.Decals.RemoveAll(d => d is not null && d.Kind == kind && !(d.Col == cell.X && d.Row == cell.Y));
+        }
 
         if (existing is null)
         {
@@ -1228,6 +1241,35 @@ public sealed class RcpTrackCanvas : Control
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Turns the racing line round, keeping where it starts: the cars run
+    /// the other way. Sectors are measured in the line's direction
+    /// (RcpPlan.MeasureSectors), so a line traced or drawn against the cars
+    /// would otherwise swap them.
+    /// </summary>
+    public void ReverseRoute()
+    {
+        if (_design.Route.Count < 2)
+        {
+            StatusChanged?.Invoke("Draw the racing line first.");
+            return;
+        }
+
+        Remember();
+
+        var first = _design.Route[0];
+        var rest = _design.Route.Skip(1).Reverse().ToList();
+
+        // A closed lap keeps its first point and runs round the other way;
+        // an open line simply runs from its other end.
+        _design.Route = _design.RouteClosed
+            ? new[] { first }.Concat(rest).ToList()
+            : _design.Route.AsEnumerable().Reverse().ToList();
+
+        StatusChanged?.Invoke("The racing line now runs the other way - its arrows show which.");
+        RaiseChanged();
     }
 
     public void AutoRoute()
@@ -1936,6 +1978,9 @@ public static class RcpTiles
         RcpPaletteItem.GridBox => "Grid box",
         RcpPaletteItem.Post => "Rail post",
         RcpPaletteItem.Kerb => "Apex kerb",
+        RcpPaletteItem.Split1 => "Split 1 loop",
+        RcpPaletteItem.Split2 => "Split 2 loop",
+        RcpPaletteItem.Split3 => "Split 3 loop",
         _ => "Rostrum / table",
     };
 
@@ -1950,6 +1995,8 @@ public static class RcpTiles
         RcpPaletteItem.GridBox => "One staggered starting box.",
         RcpPaletteItem.Post => "The pink disc.",
         RcpPaletteItem.Kerb => "Red and white, for marking an apex.",
+        RcpPaletteItem.Split1 or RcpPaletteItem.Split2 or RcpPaletteItem.Split3 =>
+            "Where a split loop lies across the track. With the racing line through it, it measures each sector for sector speeds.",
         _ => "Anything else standing on the floor.",
     };
 
@@ -1981,6 +2028,9 @@ public static class RcpTiles
         RcpPaletteItem.Post,
         RcpPaletteItem.Kerb,
         RcpPaletteItem.Furniture,
+        RcpPaletteItem.Split1,
+        RcpPaletteItem.Split2,
+        RcpPaletteItem.Split3,
     };
 
     /// <summary>
@@ -2032,6 +2082,18 @@ public static class RcpTiles
 
             case RcpPaletteItem.Furniture:
                 design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.Furniture });
+                break;
+
+            case RcpPaletteItem.Split1:
+                design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.SplitLoop1 });
+                break;
+
+            case RcpPaletteItem.Split2:
+                design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.SplitLoop2 });
+                break;
+
+            case RcpPaletteItem.Split3:
+                design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.SplitLoop3 });
                 break;
         }
 

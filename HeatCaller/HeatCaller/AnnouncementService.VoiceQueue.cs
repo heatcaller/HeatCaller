@@ -66,7 +66,12 @@ public sealed partial class AnnouncementService
     /// Appended to the finished line, for context the template itself can't
     /// carry - currently the runner-up's streak.
     /// </param>
-    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null)
+    /// <param name="extras">
+    /// Placeholders only some lines have - the split loop's {sector},
+    /// {sectortime}, {split} and {gap} - each with its spoken and its
+    /// on-screen form.
+    /// </param>
+    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null)
     {
         if (Muted)
         {
@@ -159,7 +164,23 @@ public sealed partial class AnnouncementService
         // an empty substitution used to leave the words that introduced
         // it: "in his !". OrMissing marks them; TidyTemplate takes the
         // clause out.
-        var text = chosenTemplate
+        // The occasional placeholders first, each as it is said or shown.
+        string WithExtras(string line, bool display)
+        {
+            if (extras is null)
+            {
+                return line;
+            }
+
+            foreach (var (name, value) in extras)
+            {
+                line = line.Replace("{" + name + "}", AnnouncementText.OrMissing(display ? value.Display : value.Spoken));
+            }
+
+            return line;
+        }
+
+        var text = WithExtras(chosenTemplate, display: false)
             .Replace("{driver}", driver)
             .Replace("{car}", AnnouncementText.OrMissing(car))
             .Replace("{lap}", AnnouncementText.OrMissing(lap))
@@ -173,7 +194,7 @@ public sealed partial class AnnouncementService
             .WithDriverDetails(driverProfile)
             .TidyTemplate();
 
-        var displayText = chosenTemplate
+        var displayText = WithExtras(chosenTemplate, display: true)
             .Replace("{driver}", driver)
             .Replace("{car}", AnnouncementText.OrMissing(car))
             .Replace("{lap}", AnnouncementText.OrMissing(lap))

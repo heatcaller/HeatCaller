@@ -2841,6 +2841,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{round}", "Heat 2", StringComparison.OrdinalIgnoreCase)
             .Replace("{class}", "Stock Buggy", StringComparison.OrdinalIgnoreCase)
             .Replace("{marshals}", "Sam, Bill and Frank", StringComparison.OrdinalIgnoreCase)
+            .Replace("{sector}", "1", StringComparison.OrdinalIgnoreCase)
+            .Replace("{sectortime}", "3.41 seconds", StringComparison.OrdinalIgnoreCase)
+            .Replace("{split}", "Split 1", StringComparison.OrdinalIgnoreCase)
+            .Replace("{gap}", "point two seconds", StringComparison.OrdinalIgnoreCase)
 
             // Tidied as the race tidies every line, so a fixed line tested
             // here is word for word the one the race asks for.

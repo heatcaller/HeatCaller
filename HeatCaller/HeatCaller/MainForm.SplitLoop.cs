@@ -40,6 +40,9 @@ public partial class MainForm
     /// <summary>A message for the split loop's line that stays until its decoder's state changes - see RenderSplitStatus.</summary>
     private (string Text, DecoderConnectionState State)? _splitNote;
 
+    /// <summary>The sector lengths last worked out on the UI thread - see SectorLengthsFeetProvider.</summary>
+    private volatile double[]? _sectorLengthsFeet;
+
     /// <summary>When the line last read a real car (TimingClock), for the split loop's "quiet" warning.</summary>
     private long? _lastLinePassAt;
 
@@ -102,6 +105,27 @@ public partial class MainForm
 
         split.Log += line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
         _splitLoop = split;
+
+        // Sector lengths for the speed columns: from the split loops placed
+        // on the plan of the layout Race Control is racing on.
+        //
+        // Worked out on the UI thread, where the layouts are changed; the
+        // web server asks from its own, and gets the last answer worked out.
+        _race.SectorLengthsFeetProvider = () =>
+        {
+            if (!IsHandleCreated || InvokeRequired)
+            {
+                return _sectorLengthsFeet;
+            }
+
+            var name = _settings.LastRaceControlTrackName;
+
+            _sectorLengthsFeet = string.IsNullOrWhiteSpace(name)
+                ? null
+                : _trackLayouts.All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal))?.SectorLengthsFeet();
+
+            return _sectorLengthsFeet;
+        };
 
         // Into the race: the row the car is on, and where on the line's
         // clock it crossed. Nothing goes in while the clocks can't be tied

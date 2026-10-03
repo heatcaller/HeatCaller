@@ -106,6 +106,15 @@ public enum AnnouncementEventType
 
     /// <summary>A round is being called to the grid as it starts. Appended at the END. Placeholders: {class} {round} {marshals}.</summary>
     GridCall,
+
+    /// <summary>A driver beat the session's quickest time through a sector (split loop). Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {sector} {sectortime}.</summary>
+    FastestSector,
+
+    /// <summary>A driver crossed the split loop up on their own best lap - on for a personal best. Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}.</summary>
+    SplitPace,
+
+    /// <summary>A driver crossed the split loop ahead of the track record lap at that point. Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}.</summary>
+    SplitRecordPace,
 }
 
 public sealed class AnnouncementEventConfig
@@ -1350,6 +1359,44 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // The split loop's calls. Off by default, like every addition, and
+        // only ever fired with a split loop connected.
+        p.Events[nameof(AnnouncementEventType.FastestSector)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            Weight = 60,
+            Templates = new List<string>
+            {
+                "[excited] {driver} goes fastest through sector {sector} - {sectortime}!",
+                "Quickest sector {sector} of the session for {driver}, {sectortime}.",
+                "[excited] {driver} - best sector {sector} so far!",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.SplitPace)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            Weight = 60,
+            Templates = new List<string>
+            {
+                "[excited] {driver} is {gap} up on their best at the split - on for a personal best!",
+                "{driver} is {gap} up at the split. Watch this lap!",
+                "[excited] Up at the split for {driver} - this could be a best!",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.SplitRecordPace)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            Weight = 88,
+            Templates = new List<string>
+            {
+                "[excited] {driver} is {gap} up on the track record at the split!",
+                "[shouting] {driver} is ahead of record pace at the split - {gap} up!",
+                "[excited] Record pace at the split for {driver}!",
+            },
+        };
+
         return p;
     }
 
@@ -1385,6 +1432,9 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"P1 Sam, P2 Bill, P3 Frank\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes."),
         AnnouncementEventType.YellowFlag => ("Yellow flag", "A yellow/caution flag was called during the race."),
         AnnouncementEventType.RedFlag => ("Red flag", "A red flag was called - racing is stopped."),
+        AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),
+        AnnouncementEventType.SplitPace => ("Up at the split", "With a split loop: a driver crosses the split loop at least a tenth up on their own best lap to that point - the lap that might be a personal best, called before it is done. At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
+        AnnouncementEventType.SplitRecordPace => ("Record pace at the split", "With a split loop: a driver crosses the split loop ahead of the track record lap at that point. Needs the record set with sector times (a record set before the split loop has none). At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
         AnnouncementEventType.GreenFlagResumed => ("Green flag (resumed)", "Racing resumed after a yellow or red. Separate from \"Race started\" so the restart can be worded differently from the initial start."),
         _ => (type.ToString(), string.Empty),
     };

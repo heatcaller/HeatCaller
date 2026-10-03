@@ -83,6 +83,17 @@ public enum RcpDecalKind
 
     /// <summary>The rostrum, the table, the timing gear.</summary>
     Furniture,
+
+    /// <summary>
+    /// Where a split loop lies across the track - Split 1, 2 or 3, partway
+    /// round from the finish line (the start/finish loop). One of each on a
+    /// plan. With the racing line drawn through them, the distance along it
+    /// between loops is each sector's length (RcpPlan.MeasureSectors), which
+    /// gives sector speeds. Appended at the END - saved as numbers.
+    /// </summary>
+    SplitLoop1,
+    SplitLoop2,
+    SplitLoop3,
 }
 
 /// <summary>One tile of floor, at a place on the grid.</summary>
@@ -501,6 +512,180 @@ public static class RcpPlan
 
         return inventory;
     }
+
+    /// <summary>
+    /// How far a marking may sit from the racing line, in tiles, and still
+    /// be measured as being on it.
+    /// </summary>
+    public const float OnRouteTiles = 1.0f;
+
+    /// <summary>Which split loop a marking is (1-3), or 0 for anything else.</summary>
+    public static int SplitNumberOf(RcpDecalKind kind) => kind switch
+    {
+        RcpDecalKind.SplitLoop1 => 1,
+        RcpDecalKind.SplitLoop2 => 2,
+        RcpDecalKind.SplitLoop3 => 3,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// The plan's sectors, measured along the racing line: from the finish
+    /// line to Split 1, Split 1 to Split 2, and so on, and the last split
+    /// back round to the finish line - in tiles, in the order the line is
+    /// driven. Null with no split loops on the plan at all; otherwise either
+    /// the sectors or what stops them being measured.
+    /// </summary>
+    public static (float[]? Sectors, string? Problem)? MeasureSectors(RcpTrackDesign design)
+    {
+        var splits = design.Decals
+            .Where(d => d is not null && SplitNumberOf(d.Kind) > 0)
+            .GroupBy(d => SplitNumberOf(d.Kind))
+            .OrderBy(g => g.Key)
+            .Select(g => g.First())
+            .ToList();
+
+        if (splits.Count == 0)
+        {
+            return null;
+        }
+
+        // Split 1, then 2, then 3 - none skipped.
+        for (var i = 0; i < splits.Count; i++)
+        {
+            if (SplitNumberOf(splits[i].Kind) != i + 1)
+            {
+                return (null, $"There's a Split {SplitNumberOf(splits[i].Kind)} but no Split {i + 1}. Number the loops in the order cars reach them.");
+            }
+        }
+
+        if (design.Decals.FirstOrDefault(d => d is not null && d.Kind == RcpDecalKind.FinishLine) is not { } finish)
+        {
+            return (null, "Put the finish line on the plan - sectors are measured from it.");
+        }
+
+        if (design.Route.Count < 2)
+        {
+            return (null, "Draw the racing line (or press Trace route) through the finish line and the split loops.");
+        }
+
+        // The last sector runs from the last split loop round to the finish
+        // line, which only a lap does.
+        if (!design.RouteClosed)
+        {
+            return (null, "Tick \"The line closes into a lap\" - the last sector runs round to the finish line.");
+        }
+
+        var points = design.Route.Select(p => p.Point).ToList();
+
+        if (design.RouteClosed)
+        {
+            points.Add(points[0]);
+        }
+
+        var length = RouteLengthInTiles(design);
+
+        if (Along(points, finish) is not { } start)
+        {
+            return (null, "The racing line doesn't pass over the finish line.");
+        }
+
+        var at = new List<float>();
+
+        foreach (var split in splits)
+        {
+            if (Along(points, split) is not { } along)
+            {
+                return (null, $"The racing line doesn't pass over Split {SplitNumberOf(split.Kind)}.");
+            }
+
+            var fromFinish = along - start;
+
+            if (fromFinish <= 0)
+            {
+                if (!design.RouteClosed)
+                {
+                    return (null, $"Split {SplitNumberOf(split.Kind)} comes before the finish line on the racing line.");
+                }
+
+                fromFinish += length;
+            }
+
+            at.Add(fromFinish);
+        }
+
+        // Every loop in exactly the reverse order: the line runs against
+        // the cars, not the loops numbered wrong.
+        if (at.Count >= 2 && at.Zip(at.Skip(1)).All(pair => pair.Second < pair.First))
+        {
+            return (null, "The racing line runs the wrong way round - click Reverse.");
+        }
+
+        for (var i = 1; i < at.Count; i++)
+        {
+            if (at[i] <= at[i - 1])
+            {
+                return (null, $"Split {i + 1} comes before Split {i} going round. Number the loops in the order cars reach them.");
+            }
+        }
+
+        if (at[^1] >= length)
+        {
+            return (null, $"Split {at.Count} is past the end of the racing line.");
+        }
+
+        var sectors = new float[at.Count + 1];
+        var from = 0f;
+
+        for (var i = 0; i < at.Count; i++)
+        {
+            sectors[i] = at[i] - from;
+            from = at[i];
+        }
+
+        sectors[^1] = length - from;
+        return (sectors, null);
+
+        // How far along the line the nearest point to this marking's tile
+        // centre is, or null when the line doesn't come near it.
+        static float? Along(List<PointF> line, RcpDecal decal)
+        {
+            var target = new PointF(decal.Col + 0.5f, decal.Row + 0.5f);
+            float? best = null;
+            var bestGap = float.MaxValue;
+            var travelled = 0f;
+
+            for (var i = 1; i < line.Count; i++)
+            {
+                var a = line[i - 1];
+                var b = line[i];
+                var segment = Distance(a, b);
+
+                if (segment <= 0)
+                {
+                    continue;
+                }
+
+                var t = ((target.X - a.X) * (b.X - a.X) + (target.Y - a.Y) * (b.Y - a.Y)) / (segment * segment);
+                t = Math.Clamp(t, 0f, 1f);
+
+                var nearest = new PointF(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+                var gap = Distance(nearest, target);
+
+                if (gap < bestGap)
+                {
+                    bestGap = gap;
+                    best = travelled + segment * t;
+                }
+
+                travelled += segment;
+            }
+
+            return bestGap <= OnRouteTiles ? best : null;
+        }
+    }
+
+    /// <summary>Tiles to feet, at this plan's tile size.</summary>
+    public static double TilesToFeet(RcpTrackDesign design, float tiles) => tiles * design.TileSizeMm / 1000.0 * 3.28084;
 
     public static float RouteLengthInTiles(RcpTrackDesign design)
     {

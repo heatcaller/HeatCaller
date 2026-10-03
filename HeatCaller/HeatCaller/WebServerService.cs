@@ -2291,6 +2291,7 @@ public sealed class WebServerService
             Tracker = _kpiTracker,
             FastestOverall = bestLapMs,
             StreakThreshold = _race.StreakThreshold,
+            SectorLengthsFeet = _race.SectorLengthsFeet,
 
             // Re-read per request rather than held: the web server and Race
             // Control are separate objects, and a badge awarded between

@@ -323,7 +323,7 @@ public sealed partial class VoiceSettingsControl
 
         var lblLegend = new Label
         {
-            Text = "Placeholders you can use in a line: {driver} {car} {team} {sponsors} {lap} {time} {laptime} {gate}",
+            Text = "Placeholders you can use in a line: {driver} {car} {team} {sponsors} {lap} {time} {laptime} {gate} - and with a split loop {sector} {sectortime} {split} {gap}",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

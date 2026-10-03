@@ -71,17 +71,17 @@ public sealed partial class RaceControlControl
 
         // The At Split column changes as a car crosses a split loop, between
         // its laps; and a lap's sectors can arrive a moment after the lap.
-        _splitCrossedHandler = (_, _, _) =>
+        _splitCrossedHandler = (standing, point, _) =>
         {
-            if (InvokeRequired) { BeginInvoke(RenderLeaderboard); return; }
-            RenderLeaderboard();
+            if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
+            OnSplitCrossed(standing, point);
         };
         _race.SplitCrossed += _splitCrossedHandler;
 
-        _sectorsRecordedHandler = (_, _, _) =>
+        _sectorsRecordedHandler = (standing, lapIndex, sectors) =>
         {
-            if (InvokeRequired) { BeginInvoke(RenderLeaderboard); return; }
-            RenderLeaderboard();
+            if (InvokeRequired) { BeginInvoke(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
+            OnSectorsRecorded(standing, lapIndex, sectors);
         };
         _race.SectorsRecorded += _sectorsRecordedHandler;
 
@@ -684,6 +684,10 @@ public sealed partial class RaceControlControl
         track.RecordLapMs = standing.FastLapMs;
         track.RecordHolderName = string.IsNullOrWhiteSpace(standing.Name) ? standing.Transponder : standing.Name;
         track.RecordSetUtc = DateTime.UtcNow;
+
+        // Its sectors when it had some - for record pace at the split. A
+        // record set without them clears the old record's.
+        track.RecordSectorsMs = RecordLapSectors(standing.Transponder, standing.FastLapMs);
         _trackLayouts.Upsert(track);
 
         _announcer.NotifyTrackRecord(standing);
