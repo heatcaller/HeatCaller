@@ -138,7 +138,7 @@ public sealed partial class AnnouncementService
         // something else (e.g. an unusual character in a saved custom
         // template) is going on, rather than guessing again.
         StatusMessage?.Invoke($"[voice] Template chosen: \"{chosenTemplate}\"  resolved driver=\"{driver}\"");
-        var car = driverProfile?.CarModel ?? string.Empty;
+        var car = transponder is null ? string.Empty : _profiles.CarModelFor(transponder);
         var lap = standing?.Laps.ToString() ?? string.Empty;
         var time = standing is { FastLapMs: > 0 } ? FormatSecondsForSpeech(standing.FastLapMs) : string.Empty;
         var lapTimeText = lapTimeMs.HasValue ? FormatSecondsForSpeech(lapTimeMs.Value) : string.Empty;

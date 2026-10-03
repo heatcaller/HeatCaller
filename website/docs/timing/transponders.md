@@ -37,6 +37,12 @@ On a direct decoder (EasyLap or I-Lap), HeatCaller decides what to do with each 
 | The main car, or another of the driver's cars, is already on track | It's timed as a separate row, still showing the driver's name. The Race Control log says so. |
 | It was timed under its own number earlier in this race (it was given to the driver mid-race) | It keeps its own row, so its laps stay together. |
 
+#### Which car is announced
+
+A transponder can be fitted to one of the driver's cars, or move between their cars. Set this with **Fitted to:** on the driver's **Transponders** tab (see [A driver's transponders](../race-day/drivers-and-classes.md#a-drivers-transponders)), or when you give an unknown transponder to a driver with **Belongs To**.
+
+When a transponder fitted to a car crosses the line, that car is the one announced, shown on the race board and recorded in the results for that row. This applies even when its laps go in the driver's own row. A transponder that moves between cars uses the driver's active car.
+
 If the main car turns up after another car's laps have already gone into the driver's row, the Race Control log warns that the row's lap times can't be trusted, because two cars' passes are mixed together.
 
 !!! warning

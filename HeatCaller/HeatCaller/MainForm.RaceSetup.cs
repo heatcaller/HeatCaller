@@ -572,6 +572,65 @@ public partial class MainForm
         }
     }
 
+    /// <summary>Set while the drivers' car names are being put in step with the Garage.</summary>
+    private bool _syncingCarNames;
+
+    /// <summary>What changed in the Garage while they were, for one more pass.</summary>
+    private readonly List<CarChange> _carChangesPending = new();
+
+    /// <summary>
+    /// A car changed in the Garage: every driver's car names are put in
+    /// step with it (GarageSync.SyncNames). A save made while that runs -
+    /// a car the sync's own profile save adds - goes round once more
+    /// rather than starting a second pass inside the first.
+    /// </summary>
+    private void OnCarsChanged(IReadOnlyList<CarChange> changes)
+    {
+        if (IsDisposed || _closingDown)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnCarsChanged(changes));
+            return;
+        }
+
+        if (_syncingCarNames)
+        {
+            _carChangesPending.AddRange(changes);
+            return;
+        }
+
+        _syncingCarNames = true;
+
+        try
+        {
+            var now = changes;
+
+            // Twice at most: a second pass is only ever a car added for a
+            // name the first one wrote, and that moves nobody's car.
+            for (var pass = 0; pass < 2; pass++)
+            {
+                GarageSync.SyncAll(_profiles, _cars, now);
+
+                if (_carChangesPending.Count == 0)
+                {
+                    break;
+                }
+
+                now = _carChangesPending.ToList();
+                _carChangesPending.Clear();
+            }
+        }
+        finally
+        {
+            _carChangesPending.Clear();
+            _syncingCarNames = false;
+        }
+    }
+
     /// <summary>
     /// Keeps the Race Control track picker in step with the layouts on
     /// disk, whichever page changed them.

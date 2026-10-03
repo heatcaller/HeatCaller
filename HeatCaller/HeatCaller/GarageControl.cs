@@ -648,8 +648,10 @@ public sealed class GarageControl : UserControl
 
         _undo.Capture($"Add {saved.DisplayName} to the garage", () =>
         {
-            _cars.Delete(saved.Id);
+            // The profile first, so that when the car goes the driver is
+            // already back on the car they had rather than moved to another.
             undoProfile?.Invoke();
+            _cars.Delete(saved.Id);
 
             if (!IsDisposed)
             {
@@ -695,7 +697,6 @@ public sealed class GarageControl : UserControl
 
         var previousModel = profile.CarModel;
         var name = car.DisplayName.Trim();
-        var hadName = profile.Cars.Any(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
 
         if (!profile.SetActiveCar(car.DisplayName))
         {
@@ -717,13 +718,9 @@ public sealed class GarageControl : UserControl
                 return;
             }
 
+            // The car's name leaves their list with the car itself (the
+            // Garage's own change reaches the profile - GarageSync.SyncNames).
             current.CarModel = previousModel;
-
-            if (!hadName)
-            {
-                current.Cars.RemoveAll(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
-            }
-
             _profiles.Upsert(current);
         };
     }
@@ -818,7 +815,10 @@ public sealed class GarageControl : UserControl
         var makeActive = new ToolStripMenuItem("Make Active Car");
         makeActive.Click += (_, _) => MakeActiveCar(car);
 
-        menu.Items.AddRange(new ToolStripItem[] { open, makeActive });
+        var transfer = new ToolStripMenuItem("Transfer...");
+        transfer.Click += (_, _) => TransferCar(car);
+
+        menu.Items.AddRange(new ToolStripItem[] { open, makeActive, transfer });
 
         menu.Opening += (_, _) =>
         {
@@ -845,7 +845,6 @@ public sealed class GarageControl : UserControl
         var key = profile.Transponder;
         var previousModel = profile.CarModel;
         var name = car.DisplayName.Trim();
-        var hadName = profile.Cars.Any(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
         var who = string.IsNullOrWhiteSpace(profile.DriverName) ? key : profile.DriverName.Trim();
 
         if (!profile.SetActiveCar(car.DisplayName))
@@ -862,12 +861,6 @@ public sealed class GarageControl : UserControl
             }
 
             current.CarModel = previousModel;
-
-            if (!hadName)
-            {
-                current.Cars.RemoveAll(c => string.Equals(c, name, StringComparison.OrdinalIgnoreCase));
-            }
-
             _profiles.Upsert(current);
 
             if (!IsDisposed)
@@ -878,6 +871,18 @@ public sealed class GarageControl : UserControl
         });
 
         _profiles.Upsert(profile);
+        RefreshAll();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Gives a car to someone else for good (CarTransferring) - from a driver's page, where it then leaves their garage.</summary>
+    private void TransferCar(Car car)
+    {
+        if (!CarTransferring.Run(this, car, _cars, _profiles, _undo))
+        {
+            return;
+        }
+
         RefreshAll();
         Changed?.Invoke();
     }

@@ -238,6 +238,34 @@ public sealed class ProfileStore
     }
 
     /// <summary>
+    /// The car a row on the race board is in tonight, when the Garage knows
+    /// better than the driver's active car: the car the transponder heard is
+    /// fitted to. Given by MainForm, which has the race and the garage; null
+    /// (or answering null) leaves every row on the profile's CarModel.
+    /// </summary>
+    public Func<string, string?>? RaceCarName { get; set; }
+
+    /// <summary>
+    /// What car to announce and record for a row on the race board - the
+    /// row's transponder: the car the transponder heard is fitted to, and
+    /// otherwise the driver's active car (CarModel). Empty for nobody.
+    /// </summary>
+    public string CarModelFor(string rowTransponder)
+    {
+        if (string.IsNullOrWhiteSpace(rowTransponder))
+        {
+            return string.Empty;
+        }
+
+        if (RaceCarName?.Invoke(rowTransponder) is { Length: > 0 } fitted)
+        {
+            return fitted;
+        }
+
+        return Get(rowTransponder)?.CarModel ?? string.Empty;
+    }
+
+    /// <summary>
     /// When this id is a driver's ALTERNATE transponder (and nobody's main
     /// one), that driver's main transponder; otherwise null.
     ///

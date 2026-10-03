@@ -120,6 +120,12 @@ public sealed class Car
 
     public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Every time it changed hands for good - sold or given - oldest first
+    /// (CarTransfer.Apply). A loan for a night is not one of these.
+    /// </summary>
+    public List<CarTransfer> Transfers { get; set; } = new();
+
     /// <summary>True when the club owns it rather than a driver.</summary>
     public bool IsClubCar => string.IsNullOrWhiteSpace(OwnerTransponder);
 
@@ -172,7 +178,27 @@ public sealed class Car
         LoanedForEventId = LoanedForEventId,
         Retired = Retired,
         AddedUtc = AddedUtc,
+        Transfers = Transfers.Select(t => t with { }).ToList(),
     };
+}
+
+/// <summary>
+/// A car changing hands for good: from whom, to whom, and when. Empty
+/// From or To is the club. Whether it was a sale or a gift is nobody's
+/// business but theirs, so it isn't asked.
+/// </summary>
+public sealed record CarTransfer
+{
+    public string FromTransponder { get; init; } = string.Empty;
+
+    public string ToTransponder { get; init; } = string.Empty;
+
+    /// <summary>Their names as they were then, for a driver since deleted.</summary>
+    public string FromName { get; init; } = string.Empty;
+
+    public string ToName { get; init; } = string.Empty;
+
+    public DateTime AtUtc { get; init; } = DateTime.UtcNow;
 }
 
 /// <summary>
@@ -348,10 +374,76 @@ public sealed class CarStore
         AppPaths.Root,
         "garage.json");
 
+    /// <summary>
+    /// Every read and change of the list. The voice queue reads a car on its
+    /// own thread (ProfileStore.CarModelFor, GarageSync.FittedCar) while this
+    /// one may be saving one.
+    /// </summary>
+    private readonly object _gate = new();
+
+    /// <summary>Each car's name, owner and whether it is retired as of the last Changed - what the next one is told it was.</summary>
+    private Dictionary<string, CarFacts> _lastFacts;
+
+    /// <summary>
+    /// Raised after every change is saved - a car added, edited, lent,
+    /// retired, deleted or put back by Undo - with what changed about each
+    /// car's name, owner or retirement (empty for a change to anything
+    /// else). The driver profiles follow from it (GarageSync.SyncNames),
+    /// since a car's name is what they are announced in.
+    /// </summary>
+    public event Action<IReadOnlyList<CarChange>>? Changed;
+
+    /// <summary>True when garage.json was there and could not be read: nothing is written, and nothing should be worked out from an empty garage.</summary>
+    public bool Unreadable => _loadedUnreadable;
+
     private CarStore(List<Car> cars, bool unreadable = false)
     {
         _cars = cars;
         _loadedUnreadable = unreadable;
+        _lastFacts = FactsNow();
+    }
+
+    private Dictionary<string, CarFacts> FactsNow()
+    {
+        lock (_gate)
+        {
+            // Not ToDictionary: a file with one id twice would throw here.
+            var facts = new Dictionary<string, CarFacts>(StringComparer.Ordinal);
+
+            foreach (var car in _cars)
+            {
+                facts[car.Id] = CarFacts.Of(car);
+            }
+
+            return facts;
+        }
+    }
+
+    /// <summary>
+    /// Raises Changed with what is different since the last time. Worked
+    /// out by comparing, not from what the caller handed in, so a car
+    /// changed in place before it was saved (Lend does) is still seen.
+    /// </summary>
+    private void RaiseChanged()
+    {
+        var now = FactsNow();
+        var before = _lastFacts;
+        _lastFacts = now;
+
+        var changes = new List<CarChange>();
+
+        foreach (var id in before.Keys.Union(now.Keys))
+        {
+            before.TryGetValue(id, out var was);
+            now.TryGetValue(id, out var isNow);
+
+            if (was != isNow)
+            {
+                changes.Add(new CarChange(id, was, isNow));
+            }
+        }
+
+        Changed?.Invoke(changes);
     }
 
     public static CarStore Load()
@@ -382,6 +474,7 @@ public sealed class CarStore
                         car.Notes ??= string.Empty;
                         car.LoanedToTransponder ??= string.Empty;
                         car.LoanedForEventId ??= string.Empty;
+                        car.Transfers = (car.Transfers ?? new List<CarTransfer>()).Where(t => t is not null).ToList();
 
                         // Leaf names only. This file is what a restored
                         // backup writes, and every one of these is a name
@@ -407,11 +500,19 @@ public sealed class CarStore
     }
 
     /// <summary>Everything, retired last, then newest first.</summary>
-    public IReadOnlyList<Car> All =>
-        _cars
-            .OrderBy(c => c.Retired)
-            .ThenByDescending(c => c.AddedUtc)
-            .ToList();
+    public IReadOnlyList<Car> All
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _cars
+                    .OrderBy(c => c.Retired)
+                    .ThenByDescending(c => c.AddedUtc)
+                    .ToList();
+            }
+        }
+    }
 
     /// <summary>The cars still in use.</summary>
     public IReadOnlyList<Car> InUse => All.Where(c => !c.Retired).ToList();
@@ -452,10 +553,18 @@ public sealed class CarStore
             .ToList();
     }
 
-    public Car? Get(string? id) =>
-        string.IsNullOrWhiteSpace(id)
-            ? null
-            : _cars.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+    public Car? Get(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return _cars.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        }
+    }
 
     public void Upsert(Car car)
     {
@@ -464,24 +573,33 @@ public sealed class CarStore
             car.Id = Guid.NewGuid().ToString("N");
         }
 
-        var index = _cars.FindIndex(c => string.Equals(c.Id, car.Id, StringComparison.Ordinal));
+        lock (_gate)
+        {
+            var index = _cars.FindIndex(c => string.Equals(c.Id, car.Id, StringComparison.Ordinal));
 
-        if (index >= 0)
-        {
-            _cars[index] = car;
-        }
-        else
-        {
-            _cars.Add(car);
+            if (index >= 0)
+            {
+                _cars[index] = car;
+            }
+            else
+            {
+                _cars.Add(car);
+            }
         }
 
         Save();
+        RaiseChanged();
     }
 
     public void Delete(string id)
     {
-        _cars.RemoveAll(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        lock (_gate)
+        {
+            _cars.RemoveAll(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        }
+
         Save();
+        RaiseChanged();
     }
 
     /// <summary>
@@ -508,14 +626,25 @@ public sealed class CarStore
     }
 
     /// <summary>Everything as it stands, for an undo entry to put back.</summary>
-    public List<Car> Snapshot() => _cars.Select(c => c.CloneForUndo()).ToList();
+    public List<Car> Snapshot()
+    {
+        lock (_gate)
+        {
+            return _cars.Select(c => c.CloneForUndo()).ToList();
+        }
+    }
 
     /// <summary>Puts a snapshot back whole. Used by undo, which took it from Snapshot.</summary>
     public void Restore(IEnumerable<Car> cars)
     {
-        _cars.Clear();
-        _cars.AddRange(cars.Select(c => c.CloneForUndo()));
+        lock (_gate)
+        {
+            _cars.Clear();
+            _cars.AddRange(cars.Select(c => c.CloneForUndo()));
+        }
+
         Save();
+        RaiseChanged();
     }
 
     public void Save()
@@ -525,10 +654,26 @@ public sealed class CarStore
             return;
         }
 
+        string json;
+
+        lock (_gate)
+        {
+            json = JsonSerializer.Serialize(_cars, new JsonSerializerOptions { WriteIndented = true });
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(_cars, new JsonSerializerOptions { WriteIndented = true }));
+        SafeFile.WriteAllText(FilePath, json);
     }
 }
+
+/// <summary>What a driver's car names are made from: a car's name, owner and whether it is retired.</summary>
+public sealed record CarFacts(string Name, string Owner, bool Retired)
+{
+    public static CarFacts Of(Car car) => new(car.DisplayName, car.OwnerTransponder?.Trim() ?? string.Empty, car.Retired);
+}
+
+/// <summary>One car's facts before and after a change to the garage; null before for a car added, null after for one deleted.</summary>
+public sealed record CarChange(string Id, CarFacts? Before, CarFacts? After);
 
 /// <summary>
 /// Filling the garage from what the club already had.
@@ -625,6 +770,224 @@ internal static class GarageMigration
 internal static class GarageSync
 {
     /// <summary>
+    /// The driver's car names put in step with their garage, after the
+    /// garage changed (<paramref name="changes"/>, from CarStore.Changed).
+    /// Returns the profile changed, as a copy to save, or null when it
+    /// already agrees - which it does after almost every change, so a
+    /// driver's own Undo steps are left alone.
+    /// </summary>
+    /// <remarks>
+    /// THE GARAGE IS THE SOURCE. AddCars, below, is the other direction and
+    /// only ever adds; this is how a car changed in the Garage reaches the
+    /// profile, so the two can't drift apart.
+    ///
+    /// CarModel - what they are announced and recorded in - is only ever
+    /// moved by a change to the car it names: renamed, it follows the new
+    /// name; retired, deleted or no longer theirs, it moves to their oldest
+    /// car still in use, or to none. A name with no car behind it, or one
+    /// picked on the profile form, is never touched: what the club typed is
+    /// what the announcer says.
+    ///
+    /// Cars follows the cars that changed: a car renamed, retired, deleted
+    /// or gone to someone else leaves it, one that became theirs or came back
+    /// into use joins it, and nothing else on it is touched. Only the pass
+    /// at startup, with no changes, makes it again from the garage. It is
+    /// compared as a set, whatever the order or capitals, so a list that
+    /// already says the same is not written again.
+    /// </remarks>
+    public static DriverProfile? SyncNames(DriverProfile profile, CarStore cars, IReadOnlyList<CarChange> changes)
+    {
+        var ids = profile.AllTransponderIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var inUse = cars.OwnedBy(profile).Where(c => !c.Retired).OrderBy(c => c.AddedUtc).ToList();
+        var model = profile.CarModel?.Trim() ?? string.Empty;
+
+        bool Same(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool Names(Car car, string name) => Same(car.DisplayName, name) || Same(car.Name, name);
+        bool Theirs(CarFacts? facts) => facts is { Retired: false } f && ids.Contains(f.Owner);
+
+        var newModel = profile.CarModel ?? string.Empty;
+
+        if (model.Length > 0 && !inUse.Any(c => Names(c, model)))
+        {
+            // The car it named, in use and theirs before this change.
+            var change = changes.FirstOrDefault(c => Theirs(c.Before) && Same(c.Before!.Name, model));
+
+            if (change is not null)
+            {
+                newModel = Theirs(change.After)
+                    ? change.After!.Name
+                    : inUse.FirstOrDefault()?.DisplayName ?? string.Empty;
+            }
+        }
+
+        List<string> newCars;
+
+        if (changes.Count == 0)
+        {
+            // Nothing has just changed (the pass at startup): the list is
+            // made again from the garage.
+            newCars = inUse
+                .Select(c => c.DisplayName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        else
+        {
+            // Only the cars that changed move on the list - anything else on
+            // it, a name typed with no car behind it, stays where it is, so a
+            // change to somebody else's car never rewrites this driver.
+            newCars = (profile.Cars ?? new List<string>())
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim())
+                .ToList();
+
+            bool StillHave(string name) => inUse.Any(c => Names(c, name));
+
+            foreach (var change in changes)
+            {
+                var had = Theirs(change.Before) ? change.Before!.Name : null;
+                var has = Theirs(change.After) ? change.After!.Name : null;
+
+                if (had is not null && !Same(had, has) && !StillHave(had))
+                {
+                    newCars.RemoveAll(c => Same(c, had));
+                }
+
+                if (has is not null && !newCars.Any(c => Same(c, has)))
+                {
+                    newCars.Add(has.Trim());
+                }
+            }
+        }
+
+        // A name with no car behind it stays on the list too, as it always was.
+        if (newModel.Trim().Length > 0 && !newCars.Contains(newModel.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            newCars.Insert(0, newModel.Trim());
+        }
+
+        var oldCars = (profile.Cars ?? new List<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (string.Equals(newModel, profile.CarModel, StringComparison.Ordinal)
+            && oldCars.SetEquals(newCars))
+        {
+            return null;
+        }
+
+        var updated = ProfileStore.Snapshot(profile);
+        updated.CarModel = newModel;
+        updated.Cars = newCars;
+        return updated;
+    }
+
+    /// <summary>
+    /// Every driver's car names put in step with the Garage (SyncNames),
+    /// saving only the ones that changed, each read afresh just before.
+    /// Not while garage.json couldn't be read: an empty garage would take
+    /// every driver's cars away.
+    /// </summary>
+    public static int SyncAll(ProfileStore profiles, CarStore cars, IReadOnlyList<CarChange> changes)
+    {
+        if (cars.Unreadable)
+        {
+            return 0;
+        }
+
+        var updates = new List<DriverProfile>();
+
+        foreach (var key in profiles.All.Select(p => p.Transponder).ToList())
+        {
+            if (profiles.Get(key) is { } profile
+                && string.Equals(profile.Transponder, key, StringComparison.OrdinalIgnoreCase)
+                && SyncNames(profile, cars, changes) is { } updated)
+            {
+                updates.Add(updated);
+            }
+        }
+
+        // One save for all of them, not a rewrite of the file per driver.
+        if (updates.Count > 0)
+        {
+            profiles.UpsertMany(updates);
+        }
+
+        return updates.Count;
+    }
+
+    /// <summary>
+    /// The car a transponder is fitted to, when its driver has said so
+    /// (OwnedTransponder.CarId) and it is still in the garage: the car
+    /// that transponder crossing the line is. Null for a transponder that
+    /// moves between cars - their active car is the one.
+    ///
+    /// Read from the voice queue's thread as well as this one; the stores
+    /// it reads are safe for that (CarStore locks; ProfileStore.Get is read
+    /// from there already).
+    /// </summary>
+    public static Car? FittedCar(string? transponder, ProfileStore profiles, CarStore cars)
+    {
+        if (string.IsNullOrWhiteSpace(transponder) || profiles.Get(transponder) is not { } profile)
+        {
+            return null;
+        }
+
+        return profile.TransponderEntry(transponder.Trim()) is { Retired: false, CarId: { Length: > 0 } carId }
+            ? cars.Get(carId)
+            : null;
+    }
+
+    /// <summary>
+    /// Remembers which car a car's owner is announced in, so that undoing a
+    /// change to the car (retire, delete) also puts them back in it -
+    /// SyncNames moves them off a car that goes, and putting the car back
+    /// alone would leave them in the one they were moved to. Call Settle
+    /// once the change is made, and PutBack in its undo, after the car.
+    /// </summary>
+    public sealed class ActiveCarMemo
+    {
+        private readonly ProfileStore _profiles;
+        private readonly string? _key;
+        private readonly string _before;
+        private string? _after;
+
+        public ActiveCarMemo(ProfileStore profiles, string? ownerTransponder)
+        {
+            _profiles = profiles;
+            var owner = string.IsNullOrWhiteSpace(ownerTransponder) ? null : profiles.Get(ownerTransponder);
+            _key = owner?.Transponder;
+            _before = owner?.CarModel ?? string.Empty;
+        }
+
+        public void Settle() => _after = _key is null ? null : _profiles.Get(_key)?.CarModel ?? string.Empty;
+
+        /// <summary>Back in the car they were in - only while they are still in the one the change moved them to.</summary>
+        public void PutBack()
+        {
+            if (_key is null
+                || _after is null
+                || string.Equals(_after, _before, StringComparison.Ordinal)
+                || _profiles.Get(_key) is not { } now
+                || !string.Equals(now.CarModel, _after, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var restored = ProfileStore.Snapshot(now);
+            restored.SetActiveCar(_before);
+
+            if (_before.Length == 0)
+            {
+                restored.CarModel = string.Empty;
+            }
+
+            _profiles.Upsert(restored);
+        }
+    }
+
+    /// <summary>
     /// Adds a Garage car for each of <paramref name="names"/> the driver
     /// does not already own under that name. Returns how many were added.
     /// </summary>
@@ -649,7 +1012,7 @@ internal static class GarageSync
             // Asked afresh each time rather than read once, so two names on
             // the same profile that differ only in case make one car, not
             // two. A car the club already added by hand is theirs to keep.
-            if (cars.OwnedBy(profile.Transponder)
+            if (cars.OwnedBy(profile)
                 .Any(c => string.Equals(c.DisplayName, trimmed, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;

@@ -163,7 +163,9 @@ internal static class RaceFiling
                 Position = i + 1,
                 Transponder = s.TransponderId,
                 DriverName = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : s.TransponderId,
-                CarModel = profile?.CarModel ?? string.Empty,
+                // The car the transponder heard is fitted to, when its
+                // driver has said; otherwise their active car.
+                CarModel = profiles.CarModelFor(s.TransponderId),
                 Laps = s.Laps,
                 FastLapMs = s.FastestLapMs,
                 ElapsedMs = s.ElapsedMs,

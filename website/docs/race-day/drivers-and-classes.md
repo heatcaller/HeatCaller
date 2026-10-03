@@ -33,8 +33,23 @@ Pick a driver in **Driver:** at the top. Their cars fill the page, with their **
 Each of the driver's cars is a card, grouped under its class. Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
 
 - Click a car to open it, the same window as on the [Garage](#garage) page: photos, details, lending, setups.
-- Right-click a car for **Open** and **Make Active Car**. **Make Active Car** changes the car the driver is announced in. Undo puts back the car they had.
+- Right-click a car for **Open**, **Make Active Car** and **Transfer**. **Make Active Car** changes the car the driver is announced in. Undo puts back the car they had.
 - **Add a Car** adds a car for this driver, in their class.
+
+Their garage is where their cars come from. If you rename a car, the driver is announced in the new name. If you retire, delete or transfer their active car, their oldest other car takes its place, or none if they have no other car; undoing it puts them back in the car.
+
+### Transfer a car
+
+When a car changes hands for good — sold or given — transfer it. A car lent for one night is **Lend Out** instead.
+
+1. Open the car (on the **Garage** page or in the driver's garage) and click **Transfer**. In a driver's garage you can also right-click the car.
+2. Pick who gets it: a driver, or **The club**. Type in **Find:** to narrow the list.
+3. If any of the owner's transponders are fitted to the car, they're listed with a tick. Untick any that stay with the owner. A transponder that stays with them moves between their cars from now on. The owner's main transponder always stays with them, because their results are filed under it. A transponder can't go to the club.
+4. Click **Transfer to *name***.
+
+The car's photos, notes and setups go with it. Races already run stay with whoever ran them, and setups the old owner logged still show on their **Setups** tab. The car window shows who it was **Transferred from:** and when. If the new owner had no active car, this one becomes it. Undo puts the car and its transponders back with the old owner.
+
+A car's owner can only be picked when it's added. After that, use **Transfer**.
 
 ### A driver's transponders
 
@@ -86,7 +101,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Transponder:** | Required. The transponder number the decoder reports. Locked after the profile is saved. |
 | **Driver name:** | The driver's name, as shown on screens, results and heat sheets. |
 | **Announcer name:** | What the announcer says, if it's different from the driver name — a nickname, or a spelling the voice pronounces correctly. Leave it blank to use the driver name. It takes effect straight away. |
-| **Cars:** | The driver's garage. Type a car and click **Add**; select one and click **Remove** to take it out. The car showing in the box is the *active* car — the one that's announced and recorded. A car you type but forget to add is still saved. |
+| **Active car:** | The car they race in now — the one that's announced and recorded. Pick one of their cars from the list. To add a new car, type its name and click **Add**; it's added to their garage when you save (a name you type but don't add is saved too). To retire a car or give it to someone else, use their [garage](#a-drivers-garage). |
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Home track:** | Home club or town. |
 | **Skill level:** | Free text, for example "Novice / Intermediate / Expert". |
@@ -453,7 +468,7 @@ The **Garage** page shows all the club's cars. One driver's cars are also on the
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be) and **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)).
 
-Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Retire** and **Delete**, and every setup logged for it.
+Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete**, and every setup logged for it.
 
 <!-- TODO: confirm and document the car window's details, Lend Out and Chassis Types in full; this section only covers setups in detail. -->
 

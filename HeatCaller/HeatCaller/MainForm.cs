@@ -501,6 +501,24 @@ public partial class MainForm : Form
         // handed only the NEW names.
         _profiles.CarsAdded += OnProfileCarsAdded;
 
+        // The other direction: a car renamed, retired, deleted or given to
+        // somebody else in the Garage reaches the driver's profile - the
+        // names they are announced in. Once now, for car lists that drifted
+        // before this version kept them in step (what anyone is announced
+        // in is left alone - nothing has just changed), then on every change.
+        // Not into an empty garage: a garage.json lost or never written
+        // would leave every driver with just their active car.
+        if (_cars.All.Count > 0)
+        {
+            GarageSync.SyncAll(_profiles, _cars, Array.Empty<CarChange>());
+        }
+
+        _cars.Changed += OnCarsChanged;
+
+        // A row's car on the board, in the calls and in the results: the
+        // car the transponder heard is fitted to, when its driver has said.
+        _profiles.RaceCarName = row => GarageSync.FittedCar(_race.HeardAs(row), _profiles, _cars)?.DisplayName;
+
         // A driver with a second car carries two transponders. Both the race
         // and the unknown-transponder watch ask the profiles which driver an
         // alternate belongs to, so a lap from the second car is filed under

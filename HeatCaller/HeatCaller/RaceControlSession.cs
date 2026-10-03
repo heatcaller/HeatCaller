@@ -628,6 +628,42 @@ public sealed class RaceControlSession
     public Func<string, string?>? AlternateTransponderOwner { get; set; }
 
     /// <summary>
+    /// The transponder actually crossing the line for a row: the row's own
+    /// id, or - when one of the driver's other transponders is being filed
+    /// under their main one this race - that one. The car on the board is
+    /// the car the heard transponder is fitted to (ProfileStore.CarModelFor),
+    /// so a driver out in their second car is announced in it.
+    /// </summary>
+    public string HeardAs(string rowTransponder) =>
+        !string.IsNullOrWhiteSpace(rowTransponder) && _heardAsByRow.TryGetValue(rowTransponder, out var heard)
+            ? heard
+            : rowTransponder;
+
+    /// <summary>
+    /// For HeardAs: each row a transponder is being filed under this race,
+    /// and that transponder. Replaced whole, never changed in place, since
+    /// the voice queue reads it on its own thread while laps arrive on this
+    /// one.
+    /// </summary>
+    private volatile Dictionary<string, string> _heardAsByRow = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>HeardAs's rows worked out again from the race's alternates - after a crash recovery puts them back.</summary>
+    private void RebuildHeardAs()
+    {
+        var rows = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (id, merged) in _alternateMerged)
+        {
+            if (merged && AlternateTransponderOwner?.Invoke(id) is { Length: > 0 } primary)
+            {
+                rows.TryAdd(primary, id);
+            }
+        }
+
+        _heardAsByRow = rows;
+    }
+
+    /// <summary>
     /// Per race: each alternate transponder heard so far, and whether its
     /// laps are being filed under the owner's main transponder (true) or
     /// timed as a car of its own (false). Decided once, on the alternate's
@@ -649,6 +685,7 @@ public sealed class RaceControlSession
     private void ClearAlternateDecisions()
     {
         _alternateMerged.Clear();
+        _heardAsByRow = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _mergedInto.Clear();
         _heardThisRace.Clear();
         _bothCarsWarned.Clear();
@@ -2377,6 +2414,7 @@ public sealed class RaceControlSession
         if (snapshot.AlternateMerged is not null)
         {
             RestoreInto(_alternateMerged, snapshot.AlternateMerged);
+            RebuildHeardAs();
             RestoreInto(_mergedInto, snapshot.MergedInto);
             RestoreInto(_heardThisRace, snapshot.HeardThisRace);
             return;
@@ -3014,6 +3052,7 @@ public sealed class RaceControlSession
             if (merged)
             {
                 _mergedInto.Add(primary);
+                _heardAsByRow = new Dictionary<string, string>(_heardAsByRow, StringComparer.OrdinalIgnoreCase) { [primary] = id };
             }
             else
             {

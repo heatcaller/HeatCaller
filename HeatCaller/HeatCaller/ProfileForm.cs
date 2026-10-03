@@ -150,10 +150,10 @@ public sealed class ProfileForm : Form
         captions.Add(AddLabeledTextBox(fields, "Announcer name:", _txtAnnouncerName, Result.AnnouncerName));
         _txtAnnouncerName.PlaceholderText = "optional - blank uses the driver name";
 
-        // Garage rather than a single box. The combo shows the active car
-        // and lists the rest; Add and Remove manage the garage. A driver
-        // with a stock and a modified car shouldn't need two profiles -
-        // that splits their lap history and personal bests in two.
+        // Their garage's cars, the active one showing - what they are
+        // announced and recorded in. A name typed and Added is a new car,
+        // which the Garage makes when the profile is saved (ProfileStore.
+        // CarsAdded); everything else about a car is done in the Garage.
         _cmbCars.DropDownStyle = ComboBoxStyle.DropDown;
 
         foreach (var car in Result.AllCars)
@@ -185,26 +185,11 @@ public sealed class ProfileForm : Form
             FitPicker(_cmbCars, keepToRow: true);
         };
 
-        var btnRemoveCar = new Button { Text = "Remove" };
-        btnRemoveCar.Click += (_, _) =>
-        {
-            if (_cmbCars.SelectedItem is not string car)
-            {
-                return;
-            }
-
-            _cmbCars.Items.Remove(car);
-
-            // Fall back to whatever is left, so the active car is never a
-            // name that's no longer in the garage.
-            _cmbCars.Text = _cmbCars.Items.Count > 0 ? (string)_cmbCars.Items[0]! : string.Empty;
-
-            // The longest name may just have gone.
-            FitPicker(_cmbCars, keepToRow: true);
-        };
-
-        captions.Add(fields.AddRow("Cars:", ButtonsBeside(_cmbCars, btnAddCar, btnRemoveCar)));
-        fields.AddHint("Type a car and press Add. The one shown is the active car - what gets announced and recorded.");
+        // No Remove: the list is their garage (GarageSync.SyncNames), where
+        // a car is retired, deleted or transferred - a name taken off here
+        // would only come back from it.
+        captions.Add(fields.AddRow("Active car:", ButtonsBeside(_cmbCars, btnAddCar)));
+        fields.AddHint("The car they race in now - what gets announced and recorded. Pick one of their cars, or type a new one and press Add: it's added to their garage when you save. To retire a car or give it to someone else, use their garage.");
 
         captions.Add(AddLabeledTextBox(fields, "Race number:", _txtRaceNumber, Result.RaceNumber));
         captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
@@ -438,8 +423,7 @@ public sealed class ProfileForm : Form
         // never read back from the controls - see QuickDriverForm.
         var carsOnOneLine = UiLayout.AtTextSize(PickerLeastWidth)
             + UiLayout.TightButtonSizeFor(btnAddCar).Width
-            + UiLayout.TightButtonSizeFor(btnRemoveCar).Width
-            + 3 * UiLayout.TightButtonGap;
+            + 2 * UiLayout.TightButtonGap;
 
         var fieldColumn = new[]
         {

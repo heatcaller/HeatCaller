@@ -600,7 +600,7 @@ public sealed partial class AnnouncementService
 
             var text = template
                 .Replace("{driver}", driver, StringComparison.OrdinalIgnoreCase)
-                .Replace("{car}", AnnouncementText.OrMissing(_profiles.Get(transponder)?.CarModel), StringComparison.OrdinalIgnoreCase)
+                .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(transponder)), StringComparison.OrdinalIgnoreCase)
                 .Replace("{streak}", streak.ToString(), StringComparison.OrdinalIgnoreCase)
                 // Captured at the crossing: the standings are the UI
                 // thread's to touch, and this runs on the voice queue's.
@@ -735,7 +735,7 @@ public sealed partial class AnnouncementService
 
         var text = template
             .Replace("{driver}", DisplayNameFor(transponder), StringComparison.OrdinalIgnoreCase)
-            .Replace("{car}", AnnouncementText.OrMissing(_profiles.Get(transponder)?.CarModel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(transponder)), StringComparison.OrdinalIgnoreCase)
             .Replace("{streak}", streakCount.ToString(), StringComparison.OrdinalIgnoreCase)
             .Replace("{rival}", rival is null ? "the field" : DisplayNameFor(rival), StringComparison.OrdinalIgnoreCase)
             .Replace("{rivalstreak}", (rival is null ? 0 : Math.Max(chaserCount, 0)).ToString(), StringComparison.OrdinalIgnoreCase)
@@ -979,7 +979,7 @@ public sealed partial class AnnouncementService
         var text = template
             .Replace("{driver}", DisplayNameFor(driverTransponder), StringComparison.OrdinalIgnoreCase)
             .Replace("{rival}", DisplayNameFor(rivalTransponder), StringComparison.OrdinalIgnoreCase)
-            .Replace("{car}", AnnouncementText.OrMissing(_profiles.Get(driverTransponder)?.CarModel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(driverTransponder)), StringComparison.OrdinalIgnoreCase)
             .WithDriverDetails(_profiles.Get(driverTransponder))
             .TidyTemplate();
 

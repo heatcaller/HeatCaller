@@ -7,9 +7,10 @@ namespace HeatCaller;
 /// edited - the same window the Garage opens, so there is one place a
 /// setup is changed.
 ///
-/// A setup is the driver's when it is linked to one of their cars, or -
-/// one logged before setups were linked to cars - when it carries their
-/// name.
+/// A setup is the driver's when it is linked to one of their cars, or
+/// when it carries their name - one logged before setups were linked to
+/// cars, or on a car they have since transferred to someone else, which
+/// takes its setups with it.
 /// </summary>
 internal sealed class DriverSetupsPanel : UserControl
 {
@@ -92,8 +93,7 @@ internal sealed class DriverSetupsPanel : UserControl
             ? new List<SetupEntry>()
             : _setups.All
                 .Where(e => (!string.IsNullOrEmpty(e.CarId) && carIds.Contains(e.CarId))
-                            || (string.IsNullOrEmpty(e.CarId)
-                                && name.Length > 0
+                            || (name.Length > 0
                                 && string.Equals(e.DriverName?.Trim(), name, StringComparison.OrdinalIgnoreCase)))
                 .OrderByDescending(e => e.RecordedAtUtc)
                 .ToList();

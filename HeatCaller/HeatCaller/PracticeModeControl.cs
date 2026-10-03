@@ -1272,7 +1272,7 @@ public sealed class PracticeModeControl : UserControl
                     Position = i + 1,
                     Transponder = s.TransponderId,
                     DriverName = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : s.TransponderId,
-                    CarModel = profile?.CarModel ?? string.Empty,
+                    CarModel = _profiles.CarModelFor(s.TransponderId),
                     Laps = s.Laps,
                     FastLapMs = s.FastestLapMs,
                     ElapsedMs = s.ElapsedMs,

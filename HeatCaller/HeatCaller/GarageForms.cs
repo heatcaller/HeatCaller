@@ -71,10 +71,22 @@ internal sealed class CarForm : Form
             _cmbOwner.Items.Add(new OwnerChoice(profile.Transponder, name));
         }
 
-        _cmbOwner.SelectedItem = _cmbOwner.Items
+        var ownerChoice = _cmbOwner.Items
             .Cast<OwnerChoice>()
-            .FirstOrDefault(o => string.Equals(o.Transponder, car.OwnerTransponder, StringComparison.OrdinalIgnoreCase))
-            ?? _cmbOwner.Items[0];
+            .FirstOrDefault(o => string.Equals(o.Transponder, car.OwnerTransponder, StringComparison.OrdinalIgnoreCase));
+
+        // Owned under one of a driver's other transponders, or by a driver
+        // no longer on file: shown as who it is, never as the club.
+        if (ownerChoice is null && !string.IsNullOrWhiteSpace(car.OwnerTransponder))
+        {
+            var holder = profiles.Get(car.OwnerTransponder);
+            ownerChoice = new OwnerChoice(
+                car.OwnerTransponder,
+                holder is null ? car.OwnerTransponder : string.IsNullOrWhiteSpace(holder.DriverName) ? holder.Transponder : holder.DriverName);
+            _cmbOwner.Items.Add(ownerChoice);
+        }
+
+        _cmbOwner.SelectedItem = ownerChoice ?? _cmbOwner.Items[0];
 
         // Editable rather than a fixed list: a club can put a car in a
         // class it has not set up yet, and the Garage groups on the name
@@ -138,6 +150,12 @@ internal sealed class CarForm : Form
         fields.AddHint("What people call it - \"the red one\", \"Dave's Audi\". Left blank, the shell is used instead.");
 
         captions.Add(fields.AddRow("Owner:", _cmbOwner, stretch: true));
+
+        if (!isNew)
+        {
+            _cmbOwner.Enabled = false;
+            fields.AddHint("To give it to someone else, sold or given, close this and click Transfer.");
+        }
         captions.Add(fields.AddRow("Class:", _cmbClass, stretch: true));
         captions.Add(fields.AddRow("Chassis:", _cmbChassis, stretch: true));
         captions.Add(fields.AddRow("Shell:", _txtShell, stretch: true));
@@ -183,7 +201,14 @@ internal sealed class CarForm : Form
             }
 
             _car.Name = _txtName.Text.Trim();
-            _car.OwnerTransponder = (_cmbOwner.SelectedItem as OwnerChoice)?.Transponder ?? string.Empty;
+            // Only a new car's owner is picked here. A car already in the
+            // garage changes hands through Transfer, which takes its
+            // transponders and the drivers' car names with it.
+            if (isNew)
+            {
+                _car.OwnerTransponder = (_cmbOwner.SelectedItem as OwnerChoice)?.Transponder ?? string.Empty;
+            }
+
             _car.ClassName = _cmbClass.Text.Trim();
             _car.ChassisTypeId = (_cmbChassis.SelectedItem as ChassisChoice)?.Id ?? string.Empty;
             _car.Bodyshell = _txtShell.Text.Trim();
@@ -1079,6 +1104,7 @@ internal sealed class CarDetailForm : Form
 
     private readonly Button _btnRetire = new();
     private readonly Button _btnLend = new();
+    private readonly Button _btnTransfer = new();
 
     private readonly DataGridView _setupGrid = new();
     private readonly Button _btnEditSetup = new();
@@ -1172,6 +1198,9 @@ internal sealed class CarDetailForm : Form
         _btnRetire.Text = "Retire";
         _btnRetire.Click += (_, _) => RetireCar();
 
+        _btnTransfer.Text = "Transfer...";
+        _btnTransfer.Click += (_, _) => TransferCar();
+
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteCar();
 
@@ -1213,12 +1242,13 @@ internal sealed class CarDetailForm : Form
         // added.
         var toolbar = new SplitBar(
             new ButtonBar().With(new ButtonBar(tight: true).With(_btnPrev, _btnNext), _lblCount, btnPhotos),
-            new ButtonBar(alignRight: true).With(btnDelete, _btnRetire, _btnLend, btnEdit));
+            new ButtonBar(alignRight: true).With(btnDelete, _btnRetire, _btnTransfer, _btnLend, btnEdit));
 
         btnEdit.TabIndex = 0;
         _btnLend.TabIndex = 1;
-        _btnRetire.TabIndex = 2;
-        btnDelete.TabIndex = 3;
+        _btnTransfer.TabIndex = 2;
+        _btnRetire.TabIndex = 3;
+        btnDelete.TabIndex = 4;
 
         // --- its setups ---
 
@@ -1303,6 +1333,19 @@ internal sealed class CarDetailForm : Form
 
         var owner = _car.IsClubCar ? "The club" : NameOf(_car.OwnerTransponder);
         lines.Add($"Owner:  {(owner.Length == 0 ? "—" : owner)}");
+
+        // The last time it changed hands, and from whom: by their name now,
+        // or as it was then for a driver no longer on file.
+        if (_car.Transfers.LastOrDefault() is { } last)
+        {
+            var was = string.IsNullOrWhiteSpace(last.FromTransponder)
+                ? "the club"
+                : _profiles.Get(last.FromTransponder) is not null
+                    ? NameOf(last.FromTransponder)
+                    : last.FromName.Length > 0 ? last.FromName : last.FromTransponder;
+
+            lines.Add($"Transferred from:  {was}, {last.AtUtc.ToLocalTime():d MMM yyyy}");
+        }
 
         lines.Add($"Class:  {(string.IsNullOrWhiteSpace(_car.ClassName) ? "—" : _car.ClassName)}");
 
@@ -1466,13 +1509,22 @@ internal sealed class CarDetailForm : Form
     {
         var before = _car.CloneForUndo();
 
+        // Retiring the car its owner is announced in moves them to another
+        // (GarageSync.SyncNames); undoing it puts them back in this one.
+        var activeCar = new GarageSync.ActiveCarMemo(_profiles, _car.OwnerTransponder);
+
         _undo.Capture(before.Retired ? $"Put {before.DisplayName} back" : $"Retire {before.DisplayName}",
-            () => _cars.Upsert(before));
+            () =>
+            {
+                _cars.Upsert(before.CloneForUndo());
+                activeCar.PutBack();
+            });
 
         var after = _car.CloneForUndo();
         after.Retired = !after.Retired;
 
         Apply(after);
+        activeCar.Settle();
     }
 
     private void DeleteCar()
@@ -1491,12 +1543,18 @@ internal sealed class CarDetailForm : Form
         }
 
         var before = _car.CloneForUndo();
+        var activeCar = new GarageSync.ActiveCarMemo(_profiles, _car.OwnerTransponder);
 
-        _undo.Capture($"Delete {before.DisplayName}", () => _cars.Upsert(before));
+        _undo.Capture($"Delete {before.DisplayName}", () =>
+        {
+            _cars.Upsert(before.CloneForUndo());
+            activeCar.PutBack();
+        });
 
         // The photographs are left on disk: an undo has to put the car back
         // whole, and a deleted file cannot be un-deleted.
         _cars.Delete(_car.Id);
+        activeCar.Settle();
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1518,8 +1576,23 @@ internal sealed class CarDetailForm : Form
         _car.LoanedToTransponder = edited.LoanedToTransponder;
         _car.LoanedForEventId = edited.LoanedForEventId;
         _car.Retired = edited.Retired;
+        _car.Transfers = edited.Transfers.Select(t => t with { }).ToList();
 
         RefreshAll();
+    }
+
+    /// <summary>Gives the car to someone else for good (CarTransferring), and shows it as it now is.</summary>
+    private void TransferCar()
+    {
+        if (!CarTransferring.Run(this, _car, _cars, _profiles, _undo))
+        {
+            return;
+        }
+
+        if (_cars.Get(_car.Id) is { } live)
+        {
+            Apply(live.CloneForUndo());
+        }
     }
 
     // ---------------------------------------------------------- setups

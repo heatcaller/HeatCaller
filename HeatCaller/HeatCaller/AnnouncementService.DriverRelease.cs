@@ -100,7 +100,7 @@ public sealed partial class AnnouncementService
 
         return profile.SanitiseForModel(template
             .Replace("{driver}", DisplayNameFor(transponderId), StringComparison.OrdinalIgnoreCase)
-            .Replace("{car}", AnnouncementText.OrMissing(driverProfile?.CarModel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(transponderId)), StringComparison.OrdinalIgnoreCase)
             .WithDriverDetails(driverProfile)
             .TidyTemplate());
     }

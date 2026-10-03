@@ -449,7 +449,7 @@ public sealed partial class AnnouncementService
 
         var text = _voiceStore.Current.SanitiseForModel(template
             .Replace("{driver}", DisplayNameFor(transponderId), StringComparison.OrdinalIgnoreCase)
-            .Replace("{car}", AnnouncementText.OrMissing(driverProfile?.CarModel), StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(transponderId)), StringComparison.OrdinalIgnoreCase)
             .Replace("{badge}", AnnouncementText.OrMissing(badgeName), StringComparison.OrdinalIgnoreCase)
             .WithDriverDetails(driverProfile)
             .TidyTemplate());

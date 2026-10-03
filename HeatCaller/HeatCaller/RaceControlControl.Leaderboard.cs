@@ -626,9 +626,10 @@ public sealed partial class RaceControlControl
             parts.Add($"#{profile!.RaceNumber.Trim()}");
         }
 
-        if (!string.IsNullOrWhiteSpace(profile?.CarModel))
+        // The car this row's transponder is fitted to, or their active car.
+        if (_profiles.CarModelFor(transponder) is { Length: > 0 } car && car.Trim().Length > 0)
         {
-            parts.Add(profile!.CarModel.Trim());
+            parts.Add(car.Trim());
         }
 
         if (!string.IsNullOrWhiteSpace(profile?.ClassName))
