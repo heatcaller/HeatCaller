@@ -206,7 +206,6 @@ public partial class MainForm : Form
     /// <summary>Refresh actions for the sub-tabs of Race Day and Championship, keyed by tab - the same idea as _navRefreshHooks one level down.</summary>
     private readonly Dictionary<TabPage, Action> _subTabRefresh = new();
     private readonly Panel pageHandicaps = new();
-    private readonly Panel pageBatteries = new();
 
     private readonly RentalTransponderStore _rentals = RentalTransponderStore.Load();
     private readonly TechInspectionStore _techInspections = TechInspectionStore.Load();
@@ -400,6 +399,19 @@ public partial class MainForm : Form
             _settings.Save();
         }
 
+        // Pages folded into another, whose names are simply dropped rather
+        // than renamed: Batteries became the Batteries tab on Driver Hub
+        // and Club Batteries on the Garage. Renamed to Driver Hub, a club
+        // that had hidden Batteries would have had Driver Hub hidden too.
+        var foldedPages = new[] { "Batteries" };
+
+        if (_settings.NavOrder.Concat(_settings.HiddenTabs).Any(n => foldedPages.Contains(n, StringComparer.Ordinal)))
+        {
+            _settings.NavOrder = _settings.NavOrder.Where(n => !foldedPages.Contains(n, StringComparer.Ordinal)).ToList();
+            _settings.HiddenTabs = _settings.HiddenTabs.Where(n => !foldedPages.Contains(n, StringComparer.Ordinal)).ToList();
+            _settings.Save();
+        }
+
         // A saved sidebar order from before the Garage existed does not
         // mention it. NavOrder appends unknown names, so this is only about
         // the rename above having produced a duplicate: "Setup Log" and
@@ -499,6 +511,11 @@ public partial class MainForm : Form
         // Garage. Once. See CatchUpOnce for who it leaves alone.
         GarageMigration.CatchUpOnce(_settings, _cars, _profiles);
 
+        // Setups logged before setups belonged to cars, linked to the car
+        // they were for wherever that is certain. Once. The rest wait on
+        // the Garage page's Setups Without a Car. See SetupLinking.
+        SetupLinking.LinkOnce(_settings, _setupLog, _profiles, _cars);
+
         // And from now on as they arrive: a driver named from the
         // new-transponder prompt, added on Driver Hub, imported,
         // signed up on a phone or entered on Race Day gets their car in the
@@ -542,6 +559,14 @@ public partial class MainForm : Form
         _soundStore = SoundEffectsStore.Load();
         _trackLayouts = TrackLayoutStore.Load();
         _sessionHistory = SessionHistoryStore.Load();
+
+        // Battery tags from before they were per driver: the ones on a
+        // session one driver ran alone become that driver's, and a pack
+        // only ever tagged for one driver becomes theirs. Once - here,
+        // straight after the history it reads is loaded. See
+        // BatteryPackStore.ConvertOnce.
+        _batteryPacks.ConvertOnce(_sessionHistory, _profiles);
+
         _raceClasses = RaceClassStore.Load();
 
         // What a class with no format of its own runs under, read fresh each

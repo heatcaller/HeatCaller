@@ -2869,17 +2869,6 @@ public static class AppTheme
                 });
                 break;
 
-            case "Batteries":
-            {
-                // Battery: body, positive nub, two charge segments.
-                var battRect = new RectangleF(b.Left + 2, cy - r * 0.55f, b.Width - 6, r * 1.1f);
-                g.DrawRectangle(pen, battRect.X, battRect.Y, battRect.Width, battRect.Height);
-                g.FillRectangle(brush, battRect.Right, cy - r * 0.2f, 2.5f, r * 0.4f);
-                g.FillRectangle(brush, battRect.X + battRect.Width * 0.18f, battRect.Y + 2, battRect.Width * 0.22f, battRect.Height - 4);
-                g.FillRectangle(brush, battRect.X + battRect.Width * 0.5f, battRect.Y + 2, battRect.Width * 0.22f, battRect.Height - 4);
-                break;
-            }
-
             case "Lap Beeps":
                 // Bell - an audible per-driver cue, distinct from the
                 // musical note (Sound Effects) and megaphone (Voice
@@ -3136,8 +3125,27 @@ public static class AppTheme
         e.Graphics.DrawLine(gridPen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
 
         var textRect = new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 10, e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? string.Empty, BodyFont, textRect, TextDark,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+
+        // A column set to the right or the centre is drawn that way - the
+        // first never is, as Windows itself has it.
+        var align = e.ColumnIndex == 0
+            ? TextFormatFlags.Left
+            : e.Header?.TextAlign switch
+            {
+                HorizontalAlignment.Right => TextFormatFlags.Right,
+                HorizontalAlignment.Center => TextFormatFlags.HorizontalCenter,
+                _ => TextFormatFlags.Left,
+            };
+
+        // A line given a colour or a bold face of its own (a retired pack
+        // greyed, the pack in the car in bold) is drawn in it; every other
+        // line keeps the list's colour, which items take by default.
+        var item = e.Item;
+        var ink = item is not null && sender is ListView owner && item.ForeColor != owner.ForeColor ? item.ForeColor : TextDark;
+        var face = item?.Font is { Bold: true } ? BoldFont : BodyFont;
+
+        TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? string.Empty, face, textRect, ink,
+            TextFormatFlags.VerticalCenter | align | TextFormatFlags.EndEllipsis);
     }
 
     /// <summary>

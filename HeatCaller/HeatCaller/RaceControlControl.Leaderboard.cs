@@ -851,6 +851,12 @@ public sealed partial class RaceControlControl
         var excludeFromRecords = new ToolStripMenuItem("Exclude from records") { CheckOnClick = false };
         excludeFromRecords.Click += (_, _) => ToggleExcludeFromRecords();
 
+        // Filled each time the menu opens, for the driver under the pointer
+        // - see FillPackItems. The placeholder stops WinForms treating it as
+        // a plain item with no arrow before the first fill.
+        var pack = new ToolStripMenuItem("Pack");
+        pack.DropDownItems.Add(new ToolStripMenuItem("..."));
+
         var copyId = new ToolStripMenuItem("Copy transponder ID");
         copyId.Click += (_, _) =>
         {
@@ -882,6 +888,7 @@ public sealed partial class RaceControlControl
             new ToolStripSeparator(),
             warn,
             new ToolStripSeparator(),
+            pack,
             excludeFromRecords,
             copyId,
         });
@@ -946,6 +953,16 @@ public sealed partial class RaceControlControl
             warn.Text = warnings == 0 ? $"Warn {name}" : $"Warn {name} ({Plural.Of(warnings, "warning")} so far)";
             warn.Enabled = standing is not null;
             FillWarningItems(warn.DropDownItems, transponder);
+
+            // Kept in a local: Visible reads false until the menu is on
+            // screen, which it is not yet while it is opening.
+            var showPack = BatteryPacks is not null && profile is not null && !GhostService.IsGhost(transponder);
+            pack.Visible = showPack;
+
+            if (showPack)
+            {
+                FillPackItems(pack, transponder, profile!, name);
+            }
         };
 
         // Drawn by AppTheme rather than by Windows. Without this the menu is

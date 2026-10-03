@@ -1042,6 +1042,13 @@ public sealed class AppSettings
     public bool HasCaughtUpGarageFromProfiles { get; set; }
 
     /// <summary>
+    /// Set once the setups logged before setups belonged to cars have been
+    /// linked to the garage car they were for, where that can be told for
+    /// certain. One pass, like the two flags above. See SetupLinking.LinkOnce.
+    /// </summary>
+    public bool HasLinkedSetupsToCars { get; set; }
+
+    /// <summary>
     /// Set once the race-day setup wizard has been finished OR skipped, so
     /// it is only ever offered unprompted the once.
     ///

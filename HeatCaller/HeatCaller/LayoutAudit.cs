@@ -64,9 +64,6 @@ internal static class LayoutAudit
         // The drivers of a class and their handicaps (HandicapControl).
         "Handicaps",
 
-        // The packs, the pace by pack and the sessions to tag (BatteryPackControl).
-        "Batteries",
-
         // The layouts beside the one selected (TrackLayoutManagerControl, in TrackLayoutForms).
         "Track Layouts",
 
@@ -318,8 +315,14 @@ internal static class LayoutAudit
         // A battery pack's details changed, or retired (BatteryPackEditForm, titled "Edit <pack>").
         "Edit Pack",
 
-        // The packs in rotation, to tag a session with the one in the car, from Batteries' Set Pack... (BatteryPackControl.PackPicker).
+        // A driver's packs and the club's, to say which a session was run on, from the Batteries tab's Set Pack... (PackPickerForm).
         "Which pack?",
+
+        // Who a pack goes to for good, from Transfer... on a driver's Batteries tab or Club Batteries (PackTransferForm, titled "Transfer <pack>").
+        "Transfer Pack",
+
+        // The club's own packs and their buttons, from the Garage's Club Batteries... (ClubBatteriesForm).
+        "Club Batteries",
 
         // The club tools (30 Sep).
 

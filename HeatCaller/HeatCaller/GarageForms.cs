@@ -1750,7 +1750,7 @@ internal sealed class CarDetailForm : Form
         // save of any setup wrote them to disk. A new entry is not stored
         // yet, so it needs no copy.
         using var form = new SetupEntryForm(isNew ? entry : SetupLogStore.CopyOf(entry),
-            _chassisTemplates, _history, _profiles, _trackLayouts);
+            _chassisTemplates, _history, _profiles, _trackLayouts, _cars, defaultCarId: _car.Id);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {

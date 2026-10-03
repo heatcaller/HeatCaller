@@ -19,9 +19,13 @@ internal sealed class DriverSetupsPanel : UserControl
     private readonly SetupLogStore _setups;
     private readonly ChassisTemplateStore _templates;
     private readonly Action<Car> _openCar;
+    private readonly UndoService _undo;
 
     private readonly ListView _list = new();
     private readonly Button _btnOpen = new() { Text = "Open Car..." };
+
+    /// <summary>For a setup with no car in the garage (SetupLinking): which car it was for.</summary>
+    private readonly Button _btnLink = new() { Text = "Link to Car..." };
     private readonly Label _lblEmpty = new() { AutoSize = true };
 
     private string? _driver;
@@ -29,8 +33,9 @@ internal sealed class DriverSetupsPanel : UserControl
     /// <summary>Raised after Open Car closed - anything may have changed in it.</summary>
     public event Action? Changed;
 
-    public DriverSetupsPanel(ProfileStore profiles, CarStore cars, SetupLogStore setups, ChassisTemplateStore templates, Action<Car> openCar)
+    public DriverSetupsPanel(ProfileStore profiles, CarStore cars, SetupLogStore setups, ChassisTemplateStore templates, Action<Car> openCar, UndoService undo)
     {
+        _undo = undo;
         _profiles = profiles;
         _cars = cars;
         _setups = setups;
@@ -47,16 +52,27 @@ internal sealed class DriverSetupsPanel : UserControl
         _list.Columns.Add("Car");
         _list.Columns.Add("Track");
         _list.Columns.Add("Setup");
-        _list.SelectedIndexChanged += (_, _) => _btnOpen.Enabled = PickedCar() is not null;
-        _list.DoubleClick += (_, _) => OpenPicked();
+        _list.SelectedIndexChanged += (_, _) => UpdateButtons();
+        _list.DoubleClick += (_, _) =>
+        {
+            if (PickedCar() is not null)
+            {
+                OpenPicked();
+            }
+            else
+            {
+                LinkPicked();
+            }
+        };
         _list.ClientSizeChanged += (_, _) => FitColumns();
 
         _btnOpen.Click += (_, _) => OpenPicked();
+        _btnLink.Click += (_, _) => LinkPicked();
 
         var page = new FillPage();
         page.Add(_lblEmpty, gapBelow: UiLayout.HintGap);
         page.AddFill(_list, _ => UiLayout.AtTextSize(140), gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar().With(_btnOpen), gapBelow: 0);
+        page.Add(new ButtonBar().With(_btnOpen, _btnLink), gapBelow: 0);
 
         Controls.Add(page);
 
@@ -104,7 +120,11 @@ internal sealed class DriverSetupsPanel : UserControl
         foreach (var entry in mine)
         {
             var car = string.IsNullOrEmpty(entry.CarId) ? null : _cars.Get(entry.CarId);
-            var carName = car?.DisplayName ?? entry.CarModel ?? string.Empty;
+
+            // One with no car in the garage says so, with the car as it was
+            // typed: Link to Car gives it one.
+            var carName = car?.DisplayName
+                          ?? (string.IsNullOrWhiteSpace(entry.CarModel) ? "(no car)" : $"(no car) {entry.CarModel.Trim()}");
             var summary = entry.Summarise(_templates.Get(entry.ChassisTemplateId));
 
             _list.Items.Add(new ListViewItem(new[]
@@ -124,9 +144,33 @@ internal sealed class DriverSetupsPanel : UserControl
             ? string.Empty
             : mine.Count == 0
                 ? "No setups logged yet. Open one of their cars on the Garage tab and click Log a Setup."
-                : $"{Plural.Of(mine.Count, "setup")}, newest first. Double-click one to open its car.";
+                : $"{Plural.Of(mine.Count, "setup")}, newest first. Double-click one to open its car, or to link one with no car to the car it was for.";
 
+        UpdateButtons();
+    }
+
+    private void UpdateButtons()
+    {
         _btnOpen.Enabled = PickedCar() is not null;
+        _btnLink.Enabled = PickedEntry() is { } entry && !SetupLinking.HasCar(entry, _cars);
+    }
+
+    private SetupEntry? PickedEntry() =>
+        _list.SelectedItems.Count == 1 ? _list.SelectedItems[0].Tag as SetupEntry : null;
+
+    /// <summary>Links the highlighted setup, one with no car, to the car it was for (SetupLinking).</summary>
+    private void LinkPicked()
+    {
+        if (PickedEntry() is not { } entry || SetupLinking.HasCar(entry, _cars))
+        {
+            return;
+        }
+
+        if (SetupLinking.LinkByHand(this, entry, _setups, _cars, _profiles, _undo))
+        {
+            Fill();
+            Changed?.Invoke();
+        }
     }
 
     private Car? PickedCar() =>

@@ -320,6 +320,47 @@ public sealed class RaceNightTests : IDisposable
         }
     }
 
+    [Fact]
+    public void A_phone_puts_a_pack_in_a_drivers_car_and_only_one_they_can_run() => OnUiThread(() =>
+    {
+        var laptop = new Laptop();
+
+        try
+        {
+            laptop.Ask("driver.add", new { transponder = "S01", name = "Ava" });
+            laptop.Ask("driver.add", new { transponder = "S02", name = "Ben" });
+
+            laptop.Batteries.Upsert(new BatteryPack { Id = "ava1", Label = "Ava 1", OwnerTransponder = "S01" });
+            laptop.Batteries.Upsert(new BatteryPack { Id = "club", Label = "Club 7" });
+            laptop.Batteries.Upsert(new BatteryPack { Id = "ben1", Label = "Ben 1", OwnerTransponder = "S02" });
+
+            var ava = laptop.Phone.DriverIdFor("S01");
+
+            // The list carries what she can run - hers, then the club's.
+            var row = laptop.Ask("drivers.search", new { query = "Ava" }).GetProperty("data").GetProperty("drivers")[0];
+            Assert.Equal(new[] { "ava1", "club" }, row.GetProperty("packs").EnumerateArray().Select(p => p.GetProperty("id").GetString()));
+            Assert.Equal(string.Empty, row.GetProperty("packId").GetString());
+
+            laptop.Ask("driver.setPack", new { driverId = ava, packId = "club" });
+            Assert.Equal("club", laptop.Batteries.CurrentPackId("S01"));
+            Assert.Contains("Phone: Put pack Club 7 in Ava's car", laptop.Undo.PendingDescriptions);
+
+            // Somebody else's pack: refused, nothing changed.
+            Assert.Contains("can run", laptop.Refused("driver.setPack", new { driverId = ava, packId = "ben1" }));
+            Assert.Equal("club", laptop.Batteries.CurrentPackId("S01"));
+
+            // "" takes it out; Undo puts it back.
+            laptop.Ask("driver.setPack", new { driverId = ava, packId = "" });
+            Assert.Null(laptop.Batteries.CurrentPackId("S01"));
+            Assert.NotNull(laptop.Undo.Undo());
+            Assert.Equal("club", laptop.Batteries.CurrentPackId("S01"));
+        }
+        finally
+        {
+            laptop.Dispose();
+        }
+    });
+
     // --- Checks ------------------------------------------------------------------------------
 
     private static void AssertRoster(Laptop laptop, string className, string label, params string[] expected)
@@ -362,6 +403,7 @@ public sealed class RaceNightTests : IDisposable
         public readonly TechInspectionStore Tech = TechInspectionStore.Load();
         public readonly DayScheduleStore Schedule = DayScheduleStore.Load();
         public readonly TrackLayoutStore Tracks = TrackLayoutStore.Load();
+        public readonly BatteryPackStore Batteries = BatteryPackStore.Load();
         public readonly RaceControlSession Race = new();
         public readonly RaceJournal Journal = new();
         public readonly List<string> Log = new();
@@ -394,6 +436,7 @@ public sealed class RaceNightTests : IDisposable
                 CheckIns = CheckIns,
                 Tech = Tech,
                 Schedule = Schedule,
+                Batteries = Batteries,
                 Program = Program,
 
                 // Only the race.* ops use it, and this night never sends one.

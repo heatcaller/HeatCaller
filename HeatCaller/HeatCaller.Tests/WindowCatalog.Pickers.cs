@@ -131,7 +131,7 @@ internal static partial class WindowCatalog
     private static string[] PickerNavPages() => new[]
     {
         "Race Control", "Race Day", "Championship", "Driver Hub", "Classes", "Rentals", "Handicaps",
-        "Batteries", "Track Layouts", "Race History", "Race Analytics", "Achievements", "Garage", "Practice",
+        "Track Layouts", "Race History", "Race Analytics", "Achievements", "Garage", "Practice",
         "Ghost Cars", "Demo Mode", "Venues", "Themes", "Sponsors", "Local Screens", "Club Website", "Voice",
         "Sounds", "Backup & Restore",
     };

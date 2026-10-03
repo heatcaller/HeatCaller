@@ -4033,7 +4033,39 @@ function renderEntries() {
       '<span class="chip">' + (row.checkedIn ? 'HERE' : 'TAP') + '</span>';
     el.addEventListener('click', () => toggleCheckIn(row));
     list.appendChild(el);
+    addPackLine(list, row);
   });
+}
+// The pack in the driver's car - what each race they run is recorded on.
+// Only for a driver with packs to choose from (theirs or the club's):
+// driver.setPack, as Use This One on Driver Hub does.
+function addPackLine(list, row) {
+  const packs = row.packs || [];
+  if (!packs.length) return;
+  const line = document.createElement('div');
+  line.className = 'packline';
+  const caption = document.createElement('span');
+  caption.textContent = 'Pack in the car';
+  const sel = document.createElement('select');
+  const opts = ['<option value="">None</option>'];
+  packs.forEach((p) => {
+    opts.push('<option value="' + esc(p.id) + '"' + (p.id === row.packId ? ' selected' : '') + '>' +
+      esc(p.label) + (p.club ? ' (club)' : '') + '</option>');
+  });
+  sel.innerHTML = opts.join('');
+  sel.value = row.packId || '';
+  sel.addEventListener('change', () => {
+    // doOp, less its confirm (this op never asks), so that a refusal puts
+    // the list back on the pack that is really in the car.
+    const args = { driverId: row.id, packId: sel.value };
+    call('driver.setPack', args).then((d) => {
+      handleOpResult('driver.setPack', args, d, refreshEntries);
+      if (!d.ok) sel.value = row.packId || '';
+    });
+  });
+  line.appendChild(caption);
+  line.appendChild(sel);
+  list.appendChild(line);
 }
 function toggleCheckIn(row) {
   doOp('checkin.set', { driverId: row.id, checkedIn: !row.checkedIn }, refreshEntries);
@@ -4468,6 +4500,9 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
 .row.on { background: var(--on-tint); border-color: var(--on-edge); }
 .lt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .nm { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.packline { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            margin: -3px 4px 9px; font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
+.packline select { min-height: 40px; max-width: 60%; font-size: 16px; }
 .cl { font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
 .rt { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 

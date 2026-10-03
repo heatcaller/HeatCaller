@@ -152,6 +152,7 @@ Each row is a driver profile. The class shown is the class on the driver's profi
 | **Driver** | The driver's name. |
 | **Class** | The driver's class. |
 | **Tech** | The result of the inspection that counts for this driver in their class: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. Passes are green, fails red. Double-click the cell to inspect the car. |
+| **Pack** | The battery pack in the driver's car, which each race they run tonight is recorded on. Click the cell to pick one of their packs or the club's, or **No pack in the car**. It reads **Pick...** when they have packs and none is in, and is blank when there are none to pick. See [A driver's batteries](drivers-and-classes.md#a-drivers-batteries). |
 
 A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet.
 

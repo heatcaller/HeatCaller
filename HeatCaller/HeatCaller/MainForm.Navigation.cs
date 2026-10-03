@@ -122,7 +122,11 @@ public partial class MainForm
             // it has to land.
             "announcer", "announcer screen", "spotlight", "mc", "microphone", "mic", "talking points" },
         ["Connection"] = new[] { "connect", "decoder", "easylap", "i-lap", "ilap", "com port", "serial", "baud", "auto-connect", "console", "quick race" },
-        ["Driver Hub"] = new[] { "transponder", "car", "name", "roster", "import", "export", "driver profiles", "profile", "setups", "transfer" },
+        ["Driver Hub"] = new[]
+        {
+            "transponder", "car", "name", "roster", "import", "export", "driver profiles", "profile", "setups", "transfer",
+            "battery", "batteries", "pack", "packs", "cell", "nimh", "lipo", "rotation", "charge",
+        },
         // Race Day swallowed four pages, so it answers for all four
         // pages' words - someone searching "check-in" is not wrong just
         // because it became a tab.
@@ -156,7 +160,6 @@ public partial class MainForm
         },
         ["Rentals"] = new[] { "rental", "transponder", "loan", "loaner", "borrow", "deposit", "hire", "equipment" },
         ["Handicaps"] = new[] { "handicap", "hcp", "credit", "even", "mixed", "ability", "novice", "stagger" },
-        ["Batteries"] = new[] { "battery", "batteries", "pack", "packs", "cell", "nimh", "lipo", "rotation", "charge" },
         ["Track Layouts"] = new[] { "record", "photo", "map", "average lap", "length" },
         ["Race History"] = new[] { "results", "past", "notes", "export", "csv", "delete session" },
         // Personal Bests, Lap Times, Head to Head and Trends used to be

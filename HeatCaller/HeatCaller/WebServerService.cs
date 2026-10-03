@@ -3345,6 +3345,9 @@ public sealed class WebServerService
         .nm { font-size:16px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .cl { font-size:12px; color:var(--muted); letter-spacing:.05em; }
         .rt { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+        .packline { display:flex; align-items:center; justify-content:space-between; gap:10px;
+                    margin:-3px 4px 9px; font-size:12px; color:var(--muted); letter-spacing:.05em; }
+        .packline select { min-height:40px; max-width:60%; font-size:16px; }
 
         .chip { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.09em;
                 padding:6px 10px; border-radius:20px; background:var(--raised); color:var(--muted);
@@ -3691,7 +3694,40 @@ public sealed class WebServerService
               '<span class="chip">' + (row.checkedIn ? 'HERE' : 'TAP') + '</span>';
             el.addEventListener('click', function(){ toggleCheckIn(row); });
             list.appendChild(el);
+            addPackLine(list, row);
           });
+        }
+        // The pack in the driver's car - what each race they run is recorded
+        // on. Only for a driver with packs to choose from (theirs or the
+        // club's): driver.setPack, as Use This One on Driver Hub does.
+        function addPackLine(list, row){
+          var packs = row.packs || [];
+          if (!packs.length) { return; }
+          var line = document.createElement('div');
+          line.className = 'packline';
+          var caption = document.createElement('span');
+          caption.textContent = 'Pack in the car';
+          var sel = document.createElement('select');
+          var opts = ['<option value="">None</option>'];
+          packs.forEach(function(p){
+            opts.push('<option value="' + esc(p.id) + '"' + (p.id === row.packId ? ' selected' : '') + '>'
+              + esc(p.label) + (p.club ? ' (club)' : '') + '</option>');
+          });
+          sel.innerHTML = opts.join('');
+          sel.value = row.packId || '';
+          sel.addEventListener('change', function(){
+            // doOp, less its confirm (this op never asks), so that a refusal
+            // puts the list back on the pack that is really in the car.
+            var args = { driverId: row.id, packId: sel.value };
+            say('');
+            call('driver.setPack', args).then(function(d){
+              handleOpResult('driver.setPack', args, d, refreshEntries);
+              if (!d.ok) { sel.value = row.packId || ''; }
+            });
+          });
+          line.appendChild(caption);
+          line.appendChild(sel);
+          list.appendChild(line);
         }
         function toggleCheckIn(row){
           doOp('checkin.set', { driverId: row.id, checkedIn: !row.checkedIn }, refreshEntries);

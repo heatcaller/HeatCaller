@@ -68,6 +68,21 @@ public sealed class SetupEntryForm : Form
     private readonly ComboBox _cmbSession = new();
     private readonly TextBox _txtCar = new();
 
+    /// <summary>
+    /// The car, picked from the garage - when the window is given the garage
+    /// (CarStore): a setup belongs to a car (SetupEntry.CarId). Without it -
+    /// the window catalogue - the old typed box.
+    /// </summary>
+    private readonly ComboBox _cmbCar = new();
+
+    private readonly CarStore? _cars;
+
+    /// <summary>One car in the Car drop-down.</summary>
+    private sealed record CarItem(Car Car, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
     private readonly ChassisCanvas _canvas = new();
 
     /// <summary>
@@ -116,9 +131,14 @@ public sealed class SetupEntryForm : Form
     /// </summary>
     private void HoldUntilSized(FillPage page) => LayoutFreeze.Freeze(page);
 
+    /// <param name="cars">The garage, for the Car drop-down. Null keeps a typed car instead.</param>
+    /// <param name="defaultCarId">The car picked when the entry has none of its own yet - the car whose window it was opened from.</param>
     public SetupEntryForm(SetupEntry? existing, ChassisTemplateStore templates,
-        SessionHistoryStore history, ProfileStore profiles, TrackLayoutStore trackLayouts)
+        SessionHistoryStore history, ProfileStore profiles, TrackLayoutStore trackLayouts,
+        CarStore? cars = null, string? defaultCarId = null)
     {
+        _cars = cars;
+
         // How the time goes while it opens, for the session log - see
         // WhereTimeGoes. It took 4 to 5 seconds, and holding its layout
         // while it was built did not change that.
@@ -151,7 +171,7 @@ public sealed class SetupEntryForm : Form
 
             _editorWidth = UiLayout.AtTextSize(EditorWidth);
 
-            var (who, sheet) = BuildHeader(profiles, trackLayouts);
+            var (who, sheet) = BuildHeader(profiles, trackLayouts, defaultCarId);
             BuildCanvas();
             var footer = BuildButtons();
             WhereTimeGoes.Mark("header");
@@ -208,7 +228,7 @@ public sealed class SetupEntryForm : Form
     /// the face or the list changes (Pieces.PickerWidth). The car and the
     /// session run on to the right-hand edge, never narrower than they were.
     /// </summary>
-    private (FieldRow Who, FieldRow Sheet) BuildHeader(ProfileStore profiles, TrackLayoutStore trackLayouts)
+    private (FieldRow Who, FieldRow Sheet) BuildHeader(ProfileStore profiles, TrackLayoutStore trackLayouts, string? defaultCarId)
     {
         _cmbDriver.DropDownStyle = ComboBoxStyle.DropDown;
         foreach (var name in profiles.All.Select(p => p.DriverName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
@@ -238,6 +258,11 @@ public sealed class SetupEntryForm : Form
 
         _txtCar.Text = Result.CarModel;
         _txtCar.PlaceholderText = "e.g. MR-03 / Audi R8";
+
+        if (_cars is not null)
+        {
+            FillCars(profiles, Result.CarId is { Length: > 0 } own && _cars.Get(own) is not null ? own : defaultCarId);
+        }
 
         _cmbTemplate.DropDownStyle = ComboBoxStyle.DropDownList;
         RefreshTemplateList();
@@ -281,7 +306,14 @@ public sealed class SetupEntryForm : Form
         var who = new FieldRow();
         who.Add(Caption("Driver:"), _cmbDriver, Picker(_cmbDriver, DriverWidth, Result.DriverName));
         who.Add(Caption("Track:"), _cmbTrack, Picker(_cmbTrack, TrackWidth));
-        who.AddLast(Caption("Car:"), _txtCar, () => UiLayout.AtTextSize(CarWidth));
+        if (_cars is not null)
+        {
+            who.AddLast(Caption("Car:"), _cmbCar, Picker(_cmbCar, CarWidth));
+        }
+        else
+        {
+            who.AddLast(Caption("Car:"), _txtCar, () => UiLayout.AtTextSize(CarWidth));
+        }
 
         var sheet = new FieldRow();
         sheet.Add(Caption("Chassis sheet:"), _cmbTemplate, Picker(_cmbTemplate, TemplateWidth));
@@ -811,6 +843,51 @@ public sealed class SetupEntryForm : Form
         _cmbSession.SelectedIndex = 0;
     }
 
+    /// <summary>
+    /// The garage's cars in use, the driver's own first - and the entry's
+    /// own car even when it has since been retired, so editing an old setup
+    /// never moves it off its car - with <paramref name="selectId"/> picked.
+    /// </summary>
+    private void FillCars(ProfileStore profiles, string? selectId)
+    {
+        var cars = _cars!;
+        var driver = profiles.All.FirstOrDefault(p =>
+            !string.IsNullOrWhiteSpace(p.DriverName)
+            && string.Equals(p.DriverName.Trim(), Result.DriverName?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        var picked = selectId is null ? null : cars.Get(selectId);
+        var owner = picked is { IsClubCar: false } ? profiles.Get(picked.OwnerTransponder) : driver;
+
+        var theirs = owner is null ? new List<Car>() : cars.OwnedBy(owner).Where(c => !c.Retired).ToList();
+        var others = cars.InUse.Where(c => !theirs.Any(t => t.Id == c.Id)).ToList();
+        var list = theirs.Concat(others).ToList();
+
+        if (picked is not null && !list.Any(c => c.Id == picked.Id))
+        {
+            list.Insert(0, picked);
+        }
+
+        string OwnerName(Car car) =>
+            car.IsClubCar ? "club"
+            : profiles.Get(car.OwnerTransponder) is { } p && !string.IsNullOrWhiteSpace(p.DriverName) ? p.DriverName.Trim()
+            : car.OwnerTransponder;
+
+        _cmbCar.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbCar.Items.Clear();
+
+        foreach (var car in list)
+        {
+            _cmbCar.Items.Add(new CarItem(car, $"{car.DisplayName} ({OwnerName(car)}){(car.Retired ? " - retired" : string.Empty)}"));
+        }
+
+        _cmbCar.SelectedItem = _cmbCar.Items.Cast<CarItem>().FirstOrDefault(i => i.Car.Id == picked?.Id);
+
+        if (_cmbCar.SelectedIndex < 0 && _cmbCar.Items.Count > 0)
+        {
+            _cmbCar.SelectedIndex = 0;
+        }
+    }
+
     private void BtnSave_Click(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_cmbDriver.Text))
@@ -839,7 +916,18 @@ public sealed class SetupEntryForm : Form
         Result.DriverName = _cmbDriver.Text.Trim();
         var track = _cmbTrack.SelectedItem as string;
         Result.TrackLayoutName = track is null or "(none)" ? string.Empty : track;
-        Result.CarModel = _txtCar.Text.Trim();
+        if (_cars is not null && _cmbCar.SelectedItem is CarItem picked)
+        {
+            // Its car, and the car's name as it is now for anything that
+            // still reads the typed one.
+            Result.CarId = picked.Car.Id;
+            Result.CarModel = picked.Car.DisplayName;
+        }
+        else if (_cars is null)
+        {
+            Result.CarModel = _txtCar.Text.Trim();
+        }
+
         Result.ChassisTemplateId = _template.Id;
         Result.LinkedSessionId = (_cmbSession.SelectedItem as SessionItem)?.Id;
 

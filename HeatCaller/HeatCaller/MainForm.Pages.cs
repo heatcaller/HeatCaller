@@ -44,6 +44,9 @@ public partial class MainForm
     {
         var raceControl = new RaceControlControl(_race, _announcer, _profiles, _raceClasses, _trackLayouts, _sessionHistory, _settings, _undo, _daySchedule, _sponsors, _rounds, () => _activeRound, _commentary, _transponderWatch, _raceEvents, _checkInStore, _seasonStore, techInspections: _techInspections) { Dock = DockStyle.Fill };
         _raceControlControl = raceControl;
+
+        // Pack, on a row's right-click - see RaceControlControl.Packs.
+        raceControl.BatteryPacks = _batteryPacks;
         raceControl.StatusMessage += OnClientRawMessage;
         raceControl.AttachUnknownTransponders(_unknownTransponders);
 
@@ -123,7 +126,7 @@ public partial class MainForm
             Templates = _chassisTemplates,
             MakeGarage = () => new GarageControl(
                 _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
-                _trackLayouts, _chassisTemplates, _undo, _raceEvents, forOneDriver: true),
+                _trackLayouts, _chassisTemplates, _undo, _raceEvents, forOneDriver: true, batteries: _batteryPacks),
             OpenCar = (car, owner) =>
             {
                 using var form = new CarDetailForm(
@@ -131,6 +134,8 @@ public partial class MainForm
                     _trackLayouts, _chassisTemplates, _undo, _raceEvents);
                 form.ShowDialog(owner);
             },
+            Batteries = _batteryPacks,
+            History = _sessionHistory,
         };
 
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings, driverGarage) { Dock = DockStyle.Fill };
@@ -271,7 +276,7 @@ public partial class MainForm
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
         // list; the gate itself is one sheet.
-        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents) { Dock = DockStyle.Fill };
+        var checkIn = new CheckInControl(_profiles, _checkInStore, _raceClasses, _settings, _undo, _techInspections, _webServer, _raceEvents, _batteryPacks) { Dock = DockStyle.Fill };
         _checkInControl = checkIn;
 
         // The banner this page shows when check-ins have nowhere to go.
@@ -291,7 +296,6 @@ public partial class MainForm
 
         ConfigurePage(pageRentals);
         ConfigurePage(pageHandicaps);
-        ConfigurePage(pageBatteries);
 
         var rentals = new RentalTransponderControl(_rentals, _profiles, _undo) { Dock = DockStyle.Fill };
         pageRentals.Controls.Add(rentals);
@@ -414,10 +418,6 @@ public partial class MainForm
         subPageCalendar.Controls.Add(eventsPage);
         _subTabRefresh[subPageCalendar] = eventsPage.RefreshAll;
 
-        var batteries = new BatteryPackControl(_batteryPacks, _sessionHistory, _profiles, _undo) { Dock = DockStyle.Fill };
-        pageBatteries.Controls.Add(batteries);
-        _navRefreshHooks["Batteries"] = batteries.RefreshAll;
-
         var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo) { Dock = DockStyle.Fill };
         pageTrackLayouts.Controls.Add(trackLayouts);
         _navRefreshHooks["Track Layouts"] = trackLayouts.RefreshAll;
@@ -441,7 +441,7 @@ public partial class MainForm
         // that half-know about each other.
         var garage = new GarageControl(
             _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
-            _trackLayouts, _chassisTemplates, _undo, _raceEvents) { Dock = DockStyle.Fill };
+            _trackLayouts, _chassisTemplates, _undo, _raceEvents, batteries: _batteryPacks) { Dock = DockStyle.Fill };
 
         pageSetupLog.Controls.Add(garage);
         _navRefreshHooks["Garage"] = garage.RefreshAll;
@@ -1726,7 +1726,6 @@ public partial class MainForm
             new("Classes", pageClasses),
             new("Rentals", pageRentals),
             new("Handicaps", pageHandicaps),
-            new("Batteries", pageBatteries),
             new("Track Layouts", pageTrackLayouts),
             new("Race History", pageRaceHistory),
             new("Race Analytics", pageAnalytics),

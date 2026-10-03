@@ -19,11 +19,10 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class ProfileManagerControl : UserControl
 {
-    private const int ThumbSize = 40;
 
-    /// <summary>The card's width range at the normal text size. It takes about two fifths of the page between these.</summary>
-    private const int MinCardWidth = 340;
-    private const int MaxCardWidth = 600;
+    /// <summary>The roster's width range at the normal text size. It takes about a quarter of the page between these.</summary>
+    private const int MinRosterWidth = 230;
+    private const int MaxRosterWidth = 320;
 
     /// <summary>
     /// Room between what is painted on the card and the canvas's edge. The
@@ -35,11 +34,11 @@ public sealed partial class ProfileManagerControl : UserControl
     /// <summary>The least the card's canvas can do with at the normal text size - a photo and a name. Below that the page scrolls instead.</summary>
     private const int LeastCanvasHeight = 200;
 
-    /// <summary>The roster's columns at the normal text size: driver, number, class, car, transponder. The driver's takes whatever the others leave instead - see FitColumns.</summary>
-    private static readonly int[] ColumnWidths = { 200, 42, 100, 150, 95 };
+    /// <summary>The roster's columns at the normal text size: driver and number. The driver's takes whatever the number leaves instead - see FitColumns.</summary>
+    private static readonly int[] ColumnWidths = { 160, 56 };
 
-    /// <summary>The least the driver column gets beside its photo at the normal text size - a short name. Past that, the list scrolls sideways.</summary>
-    private const int DriverNameLeast = 120;
+    /// <summary>The least the driver column gets at the normal text size - a short name. Past that, the list scrolls sideways.</summary>
+    private const int DriverNameLeast = 110;
 
     /// <summary>Set while the roster's columns are being sized - which can bring a scrollbar in or take it away, and so change the room they are being sized to. See FitColumns.</summary>
     private bool _fittingColumns;
@@ -52,30 +51,14 @@ public sealed partial class ProfileManagerControl : UserControl
     private readonly RaceClassStore _classStore;
     private readonly TextBox _txtSearch = new();
     private readonly ListView _list = new();
-    private readonly ImageList _thumbs = new() { ImageSize = new Size(ThumbSize, ThumbSize), ColorDepth = ColorDepth.Depth32Bit };
-
-    // The bitmaps behind _thumbs, kept alive for as long as the list can
-    // ask for them. ImageList.Images.Add does NOT copy an image while the
-    // list's native handle has yet to be created - it keeps a reference
-    // and reads it when the ListView first shows - so disposing straight
-    // after Add hands it a dead bitmap and GDI+ throws "Parameter is not
-    // valid" from inside WM_CREATE. Released only after Images.Clear has
-    // let go of them, and on Dispose.
-    private readonly List<Bitmap> _thumbBitmaps = new();
+    /// <summary>No pictures in it: it is there for the roster's row height - see FitRowHeight.</summary>
+    private readonly ImageList _thumbs = new() { ImageSize = new Size(1, 32), ColorDepth = ColorDepth.Depth32Bit };
 
     /// <summary>Where the driver is painted. Scrolls, because a driver with a long record is taller than any window.</summary>
     private readonly CardCanvas _cardScroll = new();
 
     private readonly Button _btnCardEdit = new();
     private readonly Button _btnCardPhoto = new();
-
-    /// <summary>
-    /// The card's two buttons, hidden together while there is nobody to
-    /// show. The bar is hidden rather than the buttons in it: a bar with
-    /// every button hidden is still on the page, zero pixels tall, and
-    /// squashed to nothing is what the layout test reports it as.
-    /// </summary>
-    private ButtonBar? _cardButtons;
 
     // ---- Stats ----
     //
@@ -166,20 +149,18 @@ public sealed partial class ProfileManagerControl : UserControl
         // off the bottom. A short window scrolls the page instead (FillPage).
         _textSize.Wear(this, () => AppTheme.BodyFont);
 
-        _txtSearch.PlaceholderText = "Search name, number, car, class, team...";
+        _txtSearch.PlaceholderText = "Name, number, car or transponder";
         _txtSearch.TextChanged += (_, _) => RefreshList();
 
         _list.View = View.Details;
         _list.FullRowSelect = true;
         // Ctrl-click for individual rows, Shift-click for a range.
         _list.MultiSelect = true;
-        _list.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        // No headings: a name and a number say what they are.
+        _list.HeaderStyle = ColumnHeaderStyle.None;
         _list.SmallImageList = _thumbs;
         _list.Columns.Add("Driver");
-        _list.Columns.Add("#");
-        _list.Columns.Add("Class");
-        _list.Columns.Add("Car / Model");
-        _list.Columns.Add("Transponder");
+        _list.Columns.Add("#", 50, HorizontalAlignment.Right);
         _list.DoubleClick += (_, _) => EditSelected();
         _list.SelectedIndexChanged += (_, _) => OnSelectionChanged();
 
@@ -256,24 +237,76 @@ public sealed partial class ProfileManagerControl : UserControl
 
     /// <summary>
     /// Two cards side by side, on the layout pieces (LayoutPieces.cs): the
-    /// roster - the search box, the list taking the height that is left, and
-    /// the buttons under it - and beside it the driver's card, as tall as the
-    /// page, its canvas taking the height that is left over its two buttons.
+    /// roster down the left - a heading with Add Driver, the search box,
+    /// the list taking the height that is left, and the buttons under it -
+    /// and beside it the driver's card, taking the rest of the width.
     /// Nothing is placed by hand.
     ///
-    /// It used to be, on every resize, against a floor of 900x480 that the
-    /// page kept however small its window: a card two fifths of the width,
-    /// the roster's buttons in a row that the card stopped short of when
-    /// they reached under it, and the card's canvas and buttons placed
-    /// inside a painted frame.
+    /// The roster is names and numbers only, and narrow (RosterWidth): the
+    /// driver is the page, and the list is how you get to them. It was the
+    /// wide one once, with class, car and transponder columns, and the card
+    /// squeezed into two fifths beside it.
+    ///
+    /// With the garage (the page MainForm builds), the card is a header -
+    /// the driver's picture, name and chips, with the Drivers | Garage
+    /// switch and Edit Profile - over the two views (see the Views half of
+    /// this class). Without it (the layout catalogue), the painted card is
+    /// the whole driver, picture first, with Edit Profile and Photo under it.
     /// </summary>
     private void BuildLayout()
     {
-        // --- The roster ---
-        var btnAdd = new Button { Text = "Add..." };
+        // --- The roster: names and numbers, and Find over them ---
+        var lblFind = new Label
+        {
+            Text = "Find",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        var roster = new Section();
+
+        roster.Add(lblFind, stretch: false, gapBelow: UiLayout.HintGap);
+        roster.Add(_txtSearch);
+        roster.AddFill(_list, LeastListHeight, gapBelow: 0);
+
+        // The columns fitted to the roster at the text size in use, and
+        // again whenever the roster's width changes; the rows as tall as
+        // two lines of it.
+        _textSize.Keep(FitColumns);
+        _textSize.Keep(FitRowHeight);
+        _list.ClientSizeChanged += (_, _) => FitColumns();
+
+        // --- The driver's card ---
+        var card = new Section();
+
+        if (_garageSources is not null)
+        {
+            // Their picture, name and chips, then the tabs.
+            card.Add(BuildHeader(), gapBelow: UiLayout.SectionGap);
+            card.AddFill(BuildDriversView(), DriversViewLeastHeight, gapBelow: 0);
+        }
+        else
+        {
+            // No caption: the driver's name is its heading.
+            card.AddFill(_cardScroll, () => UiLayout.AtTextSize(LeastCanvasHeight), gapBelow: 0);
+        }
+
+        Beside? band = null;
+
+        band = new Beside(() => RosterWidth(band?.Width ?? 0)) { SideOnLeft = true };
+
+        band.AddFill(card, card.LeastHeight);
+        band.AddSideFill(roster, roster.LeastHeight, gapBelow: 0);
+
+        // --- The buttons along the foot, each group under what it is about ---
+        //
+        // The roster's (a new driver, or the ones picked gone) on the left;
+        // the driver shown's, where their card starts; and the ones for the
+        // whole list at once - from a spreadsheet, or a blank one to fill
+        // in - against the right.
+        var btnAdd = new Button { Text = "Add Driver..." };
         btnAdd.Click += (_, _) => AddNew();
-        var btnEdit = new Button { Text = "Edit..." };
-        btnEdit.Click += (_, _) => EditSelected();
         var btnDelete = new Button { Text = "Delete" };
         btnDelete.Click += (_, _) => DeleteSelected();
         var btnImport = new Button { Text = "Import from CSV..." };
@@ -281,47 +314,17 @@ public sealed partial class ProfileManagerControl : UserControl
         var btnTemplate = new Button { Text = "Download Template..." };
         btnTemplate.Click += (_, _) => DownloadTemplate();
 
-        var roster = new Section("Roster");
+        SpreadBar? bottom = null;
 
-        roster.Add(_txtSearch);
-        roster.AddFill(_list, LeastListHeight);
-        roster.Add(new ButtonBar().With(btnAdd, btnEdit, btnDelete, btnImport, btnTemplate), gapBelow: 0);
-
-        // The columns fitted to the roster at the text size in use, and
-        // again whenever the roster's width changes.
-        _textSize.Keep(FitColumns);
-        _list.ClientSizeChanged += (_, _) => FitColumns();
-
-        // --- The driver's card ---
-        //
-        // No caption: the driver's name is its heading. The two buttons
-        // are hidden while there is nobody to show, and the canvas takes
-        // their room.
-        var card = new Section();
-
-        if (_garageSources is not null)
-        {
-            // The card's tabs - Profile, Garage, Transponders, Setups, Stats
-            // - over one body that shows whichever is chosen. See the Views
-            // half of this class.
-            card.Add(BuildCardTabs(), gapBelow: UiLayout.RowGap);
-            card.AddFill(BuildCardBody(), () => UiLayout.AtTextSize(LeastCanvasHeight));
-        }
-        else
-        {
-            card.AddFill(_cardScroll, () => UiLayout.AtTextSize(LeastCanvasHeight));
-        }
-
-        _cardButtons = card.Add(new ButtonBar().With(_btnCardEdit, _btnCardPhoto), gapBelow: 0);
+        bottom = new SpreadBar(
+            new ButtonBar().With(btnAdd, btnDelete),
+            new ButtonBar().With(_btnCardEdit, _btnCardPhoto),
+            new ButtonBar(alignRight: true).With(btnImport, btnTemplate),
+            () => bottom is { IsHandleCreated: true } && card.IsHandleCreated && card.Visible
+                ? bottom.PointToClient(card.PointToScreen(Point.Empty)).X + Section.Inset.Left
+                : 0);
 
         // --- The page ---
-        Beside? band = null;
-
-        band = new Beside(() => CardWidth(band?.Width ?? 0));
-
-        band.AddFill(roster, roster.LeastHeight);
-        band.AddSideFill(card, card.LeastHeight, gapBelow: 0);
-
         var page = new FillPage();
 
         // Transponders that crossed the line with no driver - see
@@ -330,27 +333,45 @@ public sealed partial class ProfileManagerControl : UserControl
 
         if (_garageSources is not null)
         {
-            // Hub (the roster and the driver's card) or Garage (one driver's
-            // cars, big) - see the Views half of this class.
-            page.Add(BuildViewSwitch(), gapBelow: UiLayout.RowGap);
-            page.AddFill(BuildViews(band), ViewsLeastHeight, gapBelow: 0);
+            // The Drivers | Garage switch in the upper left; the roster and
+            // the card, or one driver's cars filling the page; and the
+            // Drivers view's buttons along the foot.
+            page.Add(BuildTopRow(), gapBelow: UiLayout.RowGap);
+            page.AddFill(BuildViews(band, bottom), ViewsLeastHeight, gapBelow: UiLayout.RowGap);
         }
         else
         {
-            page.AddFill(band, band.LeastHeight, gapBelow: 0);
+            page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
         }
+
+        page.Add(bottom, gapBelow: 0);
 
         Controls.Add(page);
     }
 
     /// <summary>
-    /// The card's width: about two fifths of the page - a driver-first card
-    /// needs room for big type, but the roster is what gets scanned on a
-    /// race day - and between 340px and 600px at the normal text size, at
+    /// The roster's width: about a quarter of the page, between 230px and
+    /// 320px at the normal text size - names and numbers need no more - at
     /// the size in use.
     /// </summary>
-    private static int CardWidth(int pageWidth) =>
-        Math.Clamp((int)(pageWidth * 0.4f), UiLayout.AtTextSize(MinCardWidth), UiLayout.AtTextSize(MaxCardWidth));
+    private static int RosterWidth(int pageWidth) =>
+        Math.Clamp((int)(pageWidth * 0.24f), UiLayout.AtTextSize(MinRosterWidth), UiLayout.AtTextSize(MaxRosterWidth));
+
+    /// <summary>
+    /// The roster's rows as tall as two lines of its text - a list of names
+    /// to pick from, not a table to scan. A ListView takes its row height
+    /// from its small image list, so the list has one, of blank images that
+    /// height and a pixel wide.
+    /// </summary>
+    private void FitRowHeight()
+    {
+        var height = Math.Clamp((int)Math.Round(_list.Font.Height * 2.1f), 16, 256);
+
+        if (_thumbs.ImageSize.Height != height)
+        {
+            _thumbs.ImageSize = new Size(1, height);
+        }
+    }
 
     /// <summary>
     /// Fits the roster's columns to its width.
@@ -378,7 +399,7 @@ public sealed partial class ProfileManagerControl : UserControl
         try
         {
             var room = _list.ClientSize.Width;
-            var driverLeast = ThumbSize + UiLayout.AtTextSize(DriverNameLeast);
+            var driverLeast = UiLayout.AtTextSize(DriverNameLeast);
             var others = ColumnWidths.Length - 1;
 
             var wanted = new int[others];
@@ -432,7 +453,7 @@ public sealed partial class ProfileManagerControl : UserControl
 
     /// <summary>The least the roster can do with: its headings and three drivers. Below that the page scrolls instead - see FillPage.</summary>
     private int LeastListHeight() =>
-        _list.Font.Height * 2 + 3 * (Math.Max(ThumbSize, _list.Font.Height) + 4);
+        _list.Font.Height * 2 + 3 * (Math.Max(_thumbs.ImageSize.Height, _list.Font.Height) + 4);
 
     /// <summary>
     /// Called when this page becomes visible - profiles can be created
@@ -444,6 +465,7 @@ public sealed partial class ProfileManagerControl : UserControl
     {
         InvalidateStats();
         RefreshList();
+        RefreshHeader();
         RefreshGarageDriverPicker();
         ShowDriverInViews(CardProfile()?.Transponder);
 
@@ -468,16 +490,6 @@ public sealed partial class ProfileManagerControl : UserControl
 
     // ==================== The roster ====================
 
-    private void ReleaseThumbBitmaps()
-    {
-        foreach (var bitmap in _thumbBitmaps)
-        {
-            bitmap.Dispose();
-        }
-
-        _thumbBitmaps.Clear();
-    }
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -499,10 +511,9 @@ public sealed partial class ProfileManagerControl : UserControl
             _rememberTimer.Dispose();
 
             // The ListView goes first (base), then the list it borrowed
-            // images from, then the bitmaps the list was reading.
+            // its row height from.
             base.Dispose(disposing);
             _thumbs.Dispose();
-            ReleaseThumbBitmaps();
             return;
         }
 
@@ -516,8 +527,6 @@ public sealed partial class ProfileManagerControl : UserControl
 
         _list.BeginUpdate();
         _list.Items.Clear();
-        _thumbs.Images.Clear();
-        ReleaseThumbBitmaps();
 
         foreach (var p in _store.All)
         {
@@ -528,28 +537,9 @@ public sealed partial class ProfileManagerControl : UserControl
 
             var display = string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName;
 
-            // Rendered into the image list rather than drawn per-paint: a
-            // ListView caches its rows anyway, and this keeps the initials
-            // discs and the photos on exactly the same path.
-            var thumb = new Bitmap(ThumbSize, ThumbSize);
-            using (var g = Graphics.FromImage(thumb))
-            {
-                DriverPhotos.DrawAvatar(g, new Rectangle(0, 0, ThumbSize, ThumbSize), display, p.PhotoFileName, cornerRadius: 6);
-            }
-
-            _thumbBitmaps.Add(thumb);
-            _thumbs.Images.Add(p.Transponder, thumb);
-
-            var item = new ListViewItem(display) { Tag = p.Transponder, ImageKey = p.Transponder };
-            item.SubItems.Add(string.IsNullOrWhiteSpace(p.RaceNumber) ? "" : p.RaceNumber);
-            item.SubItems.Add(string.IsNullOrWhiteSpace(p.ClassName) ? "-" : p.ClassName);
-
-            // The active car, and how many others are in the garage.
-            var others = p.AllCars.Count - 1;
-            item.SubItems.Add(string.IsNullOrWhiteSpace(p.CarModel)
-                ? "-"
-                : others > 0 ? $"{p.CarModel} (+{others})" : p.CarModel);
-            item.SubItems.Add(p.Transponder);
+            // Names and numbers: everything else about them is on the card.
+            var item = new ListViewItem(display) { Tag = p.Transponder };
+            item.SubItems.Add(string.IsNullOrWhiteSpace(p.RaceNumber) ? string.Empty : "#" + p.RaceNumber.Trim());
 
             if (selected.Contains(p.Transponder))
             {
@@ -637,10 +627,9 @@ public sealed partial class ProfileManagerControl : UserControl
     {
         var profile = CardProfile();
 
-        if (_cardButtons is not null)
-        {
-            _cardButtons.Visible = profile is not null;
-        }
+        // The driver's own buttons only while there is a driver to act on.
+        _btnCardEdit.Enabled = profile is not null;
+        _btnCardPhoto.Enabled = profile is not null;
 
         // A different driver starts at the top of their card. Only when it
         // really is a different one: the roster clears and refills its
@@ -683,6 +672,7 @@ public sealed partial class ProfileManagerControl : UserControl
         RequestStats(profile);
         UpdateCardExtent();
         _cardScroll.Invalidate();
+        RefreshHeader();
 
         // The garage, transponders and setups follow the driver too.
         ShowDriverInViews(profile?.Transponder);
@@ -907,6 +897,9 @@ public sealed partial class ProfileManagerControl : UserControl
         {
             UpdateCardExtent();
             _cardScroll.Invalidate();
+
+            // Checked in is one of the header's chips, and comes with the stats.
+            RefreshHeader();
         }
     }
 
@@ -1073,69 +1066,42 @@ public sealed partial class ProfileManagerControl : UserControl
         var c = new CardCursor(g, draw, CardPad, inner) { Y = CardPad };
         var display = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName.Trim();
 
-        // --- The photo is the headline ---
-        //
-        // Its width is stepped in forties rather than following the card to
-        // the pixel: the photo cache keeps one scaled copy per size asked
-        // for, and a size per pixel of window width would fill it with
-        // near-identical bitmaps as the window is dragged.
-        var photoWidth = Math.Min((int)inner, Math.Max(120, Math.Min((int)inner, 480) / 40 * 40));
-        var photoHeight = (int)Math.Min(photoWidth * 0.8f, 320f);
-
-        if (draw)
-        {
-            var photoLeft = (int)(CardPad + (inner - photoWidth) / 2f);
-            DriverPhotos.DrawAvatar(g, new Rectangle(photoLeft, (int)c.Y, photoWidth, photoHeight), display, profile.PhotoFileName, cornerRadius: 10);
-        }
-
-        c.Y += photoHeight + 12f;
-
-        // --- Name, then who they are at a glance ---
-        Paragraph(c, display, AppTheme.TitleFont, AppTheme.TextDark, maxLines: 2);
-
-        if (!string.IsNullOrWhiteSpace(profile.AnnouncerName)
-            && !string.Equals(profile.AnnouncerName.Trim(), display, StringComparison.OrdinalIgnoreCase))
-        {
-            Paragraph(c, $"Announced as \"{profile.AnnouncerName.Trim()}\"", AppTheme.BodyFont, AppTheme.TextMuted, maxLines: 2);
-        }
-
-        c.Y += 4f;
-
-        var chips = new List<Chip>();
-
-        if (!string.IsNullOrWhiteSpace(profile.RaceNumber))
-        {
-            chips.Add(new Chip("#" + profile.RaceNumber.Trim(), AppTheme.Accent, AppTheme.OnAccent));
-        }
-
-        if (!string.IsNullOrWhiteSpace(profile.ClassName))
-        {
-            var raceClass = _classStore.All.FirstOrDefault(cls =>
-                string.Equals(cls.Name, profile.ClassName, StringComparison.OrdinalIgnoreCase));
-
-            // A class colour is the club's own, not a theme fill, so it
-            // keeps the white text it has everywhere else in the app.
-            chips.Add(new Chip(profile.ClassName, raceClass?.Colour ?? RaceClass.DefaultColourFor(profile.ClassName), Color.White));
-        }
-
         var stats = _sources?.History is null ? null : _statsCache.GetValueOrDefault(profile.Transponder);
 
-        if (stats?.RaceDay?.CheckedIn == true)
+        // --- The photo is the headline ---
+        //
+        // Only on a card without the header over it (no garage sources):
+        // with it, the picture, name and chips are in the header, and the
+        // card starts with what the tab is about.
+        if (PaintsHeaderOnCard)
         {
-            chips.Add(new Chip("Checked in", AppTheme.Success, AppTheme.OnSuccess));
-        }
+            // Its width is stepped in forties rather than following the card
+            // to the pixel: the photo cache keeps one scaled copy per size
+            // asked for, and a size per pixel of window width would fill it
+            // with near-identical bitmaps as the window is dragged.
+            var photoWidth = Math.Min((int)inner, Math.Max(120, Math.Min((int)inner, 480) / 40 * 40));
+            var photoHeight = (int)Math.Min(photoWidth * 0.8f, 320f);
 
-        if (profile.IsRental)
-        {
-            chips.Add(new Chip("Rental", AppTheme.Warning, AppTheme.OnWarning));
-        }
+            if (draw)
+            {
+                var photoLeft = (int)(CardPad + (inner - photoWidth) / 2f);
+                DriverPhotos.DrawAvatar(g, new Rectangle(photoLeft, (int)c.Y, photoWidth, photoHeight), display, profile.PhotoFileName, cornerRadius: 10);
+            }
 
-        if (profile.ExcludeFromRecords)
-        {
-            chips.Add(new Chip("Outside records and points", AppTheme.Warning, AppTheme.OnWarning));
-        }
+            c.Y += photoHeight + 12f;
 
-        Chips(c, chips);
+            // --- Name, then who they are at a glance ---
+            Paragraph(c, display, AppTheme.TitleFont, AppTheme.TextDark, maxLines: 2);
+
+            if (!string.IsNullOrWhiteSpace(profile.AnnouncerName)
+                && !string.Equals(profile.AnnouncerName.Trim(), display, StringComparison.OrdinalIgnoreCase))
+            {
+                Paragraph(c, $"Announced as \"{profile.AnnouncerName.Trim()}\"", AppTheme.BodyFont, AppTheme.TextMuted, maxLines: 2);
+            }
+
+            c.Y += 4f;
+            Chips(c, ChipsFor(profile));
+        }
 
         // --- Their record ---
         if (_sources?.History is null || !ShowsStats)

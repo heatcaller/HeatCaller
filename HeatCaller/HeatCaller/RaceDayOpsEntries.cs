@@ -5,7 +5,8 @@ namespace HeatCaller;
 /// <summary>
 /// The race-day manager's entries and check-in ops: finding drivers, adding
 /// one, putting a driver in a class, fixing a second car's transponder,
-/// and checking in. See raceday-protocol.md.
+/// checking in, and the battery pack in a driver's car. See
+/// raceday-protocol.md.
 ///
 /// Adding goes through ProfileStore.TryAdd - the desk's own add path, which
 /// refuses a transponder somebody already has - and a driver's MAIN
@@ -23,6 +24,7 @@ public sealed partial class RaceDayService
         Register("driver.setClass", OpKind.Change, DriverSetClass);
         Register("driver.setAltTransponder", OpKind.Change, DriverSetAltTransponder);
         Register("checkin.set", OpKind.Change, CheckInSet);
+        Register("driver.setPack", OpKind.Change, DriverSetPack);
     }
 
     /// <summary>
@@ -61,7 +63,64 @@ public sealed partial class RaceDayService
         // false, which is the honest answer: there is no waiver state any
         // more, not a negative one.
         tech = TechView(profile),
+
+        // What can go in their car - their packs in rotation, then the
+        // club's - and what is in it now ("" for none). Labels only: a
+        // pack's notes stay on the laptop.
+        packs = PackChoicesFor(profile),
+        packId = _host.Batteries?.CurrentPackId(BatteryPackStore.DriverKey(_host.Profiles, profile.Transponder)) ?? string.Empty,
     };
+
+    private IReadOnlyList<object> PackChoicesFor(DriverProfile profile)
+    {
+        if (_host.Batteries is not { } store)
+        {
+            return Array.Empty<object>();
+        }
+
+        var inCar = store.CurrentPackId(BatteryPackStore.DriverKey(_host.Profiles, profile.Transponder));
+
+        return store.ChoicesFor(profile, inCar)
+            .Select(pack => (object)new { id = pack.Id, label = pack.DisplayName, club = pack.IsClubPack })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Puts a pack in a driver's car ("" takes theirs out) - what each race
+    /// they run from now on is recorded on, as Use This One on Driver Hub,
+    /// the Pack column at check-in and Race Control's right-click do. Only a
+    /// pack that is theirs or the club's, and in rotation.
+    /// </summary>
+    private OpResult DriverSetPack(OpContext context)
+    {
+        var profile = RequireDriver(context);
+
+        if (_host.Batteries is not { } store)
+        {
+            throw new OpRefused("Battery packs aren't kept on this laptop.");
+        }
+
+        var key = BatteryPackStore.DriverKey(_host.Profiles, profile.Transponder);
+        var wanted = context.Text("packId")?.Trim() ?? string.Empty;
+        var pack = wanted.Length == 0 ? null : store.Get(wanted);
+
+        if (wanted.Length > 0 && (pack is null || store.ChoicesFor(profile).All(p => p.Id != pack.Id)))
+        {
+            throw new OpRefused($"That pack isn't one {NameOf(profile)} can run any more - reload the list.");
+        }
+
+        if (!BatteryActions.PutInCar(store, _host.Undo, key, NameOf(profile), pack?.Id, prefix: "Phone: "))
+        {
+            return OpResult.Read(new { changed = false, driver = DriverRow(profile, context.Channel) });
+        }
+
+        _host.RefreshDesk();
+
+        return OpResult.Done(
+            pack is null ? $"Took the pack out of {NameOf(profile)}'s car" : $"Put pack {pack.DisplayName} in {NameOf(profile)}'s car",
+            pack is null ? $"No pack in {NameOf(profile)}'s car." : $"Pack {pack.DisplayName} is in {NameOf(profile)}'s car - their races are recorded on it.",
+            new { changed = true, driver = DriverRow(profile, context.Channel) });
+    }
 
     /// <summary>
     /// Drivers matching some text - name, race number, car, and (on the
@@ -353,7 +412,7 @@ public sealed partial class RaceDayService
             return OpResult.Read(new { changed = false, driver = DriverRow(profile, context.Channel) });
         }
 
-        if (string.Equals(alternate, profile.Transponder?.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(alternate, profile.Transponder.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             throw new OpRefused($"{alternate} is already {NameOf(profile)}'s main transponder.");
         }

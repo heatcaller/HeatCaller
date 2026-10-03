@@ -493,6 +493,20 @@ internal sealed class ThinScrollBar : Control
         }
         else
         {
+            // A panel that scrolls by itself (AutoScroll) says whether it
+            // scrolls this way, and that is the answer. Its window's scroll
+            // information is not: one that has never needed to scroll this
+            // way still reports Windows' blank 0..100 with no page - which
+            // read as "a hundred to scroll" and showed a bar that never went
+            // away. Six of them stood round Driver Hub's garage, two on
+            // every scrolling part of it (3 Oct).
+            if (_target is ScrollableControl { AutoScroll: true } scroller
+                && !(_horizontal ? scroller.HorizontalScroll.Visible : scroller.VerticalScroll.Visible))
+            {
+                SetShown(false);
+                return;
+            }
+
             var info = new SCROLLINFO
             {
                 cbSize = Marshal.SizeOf<SCROLLINFO>(),

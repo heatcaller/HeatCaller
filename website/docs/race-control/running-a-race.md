@@ -254,7 +254,7 @@ Set the minimum a little under the quickest real lap anyone could do on your tra
 The board orders drivers by most laps, then by lowest total time. Total time includes penalties.
 
 - **Double-click** a driver to open their lap breakdown. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
-- **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, lap and penalty corrections, **Exclude from records**, and **Copy transponder ID**.
+- **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, lap and penalty corrections, their battery pack, **Exclude from records**, and **Copy transponder ID**. The pack item lists the driver's packs and the club's, with the one in use ticked. During a race it reads ***name*'s pack in the car**: picking one puts it in their car, so the race is recorded on it. Once the race is saved it reads ***name*'s pack for this race**: picking one records it for the race just run, or **No pack recorded**, and a pack also goes in their car. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
 - **Show {name}'s laps on the board** opens a strip of recent lap times under the driver's row. You can open strips for several drivers at once to compare them. In the strip, a star (★) marks a lap inside a clean run, and a broken circle (◌) marks the lap where a run ended.
 - The driver with the fastest lap of the race has their **Best Lap** highlighted.
 

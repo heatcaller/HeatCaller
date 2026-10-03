@@ -38,6 +38,9 @@ public sealed class RaceDayServiceHost
     public required TechInspectionStore Tech { get; init; }
     public required DayScheduleStore Schedule { get; init; }
 
+    /// <summary>The battery packs - a driver's packs and the one in their car (driver.setPack). Optional: without it a driver has none.</summary>
+    public BatteryPackStore? Batteries { get; init; }
+
     /// <summary>The Program tab. Its plan/apply methods are the programme logic; see RaceProgramControl.</summary>
     public required RaceProgramControl Program { get; init; }
 

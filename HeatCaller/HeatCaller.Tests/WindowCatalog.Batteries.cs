@@ -3,13 +3,14 @@ namespace HeatCaller.Tests;
 internal static partial class WindowCatalog
 {
     /// <summary>
-    /// The Batteries page's windows (BatteryPackControl.cs): Add Pack, and
-    /// the same window editing a retired pack with every field long - a type
-    /// typed in rather than picked, and notes running to more lines than the
-    /// box shows; and the picker Set Pack... opens (BatteryPackControl
-    /// .PackPicker), with more packs in rotation than it shows - some with
-    /// long labels and notes, the session's own pack near the end - and with
-    /// only one.
+    /// The battery windows (BatteryForms.cs, ClubBatteriesForm.cs): Add
+    /// Pack, and the same window editing a retired pack with every field
+    /// long - a type typed in rather than picked, and notes running to more
+    /// lines than the box shows; the picker a driver's Batteries tab opens
+    /// for a session (PackPickerForm), with more packs than it shows - some
+    /// with long labels and notes, the session's own pack near the end - and
+    /// with only one; Transfer, with the catalog's forty drivers to choose
+    /// from; and Club Batteries with a long list.
     /// </summary>
     private static IEnumerable<(string Name, Func<Form> Build)> BatteryWindows() => new (string, Func<Form>)[]
     {
@@ -17,13 +18,15 @@ internal static partial class WindowCatalog
         ("Edit Pack (every field long)", () => new BatteryPackEditForm(BatteryLongPack())),
         ("Which pack? (many packs, long names)", () => BatteryPicker(count: 18, tagged: true)),
         ("Which pack? (one pack)", () => BatteryPicker(count: 1, tagged: false)),
+        ("Transfer Pack", () => new PackTransferForm(BatteryLongPack(), GarageDriversOnFile())),
+        ("Club Batteries", BatteryClubList),
     };
 
     /// <summary>
     /// A retired pack with every field as long as a club would make it: a
     /// label that says whose it is and how to tell it apart, a type typed in
     /// that is not one of the four on the list, and notes running to more
-    /// lines than the box shows.
+    /// lines than the box shows. The club's, so Transfer lists every driver.
     /// </summary>
     private static BatteryPack BatteryLongPack() => new()
     {
@@ -64,10 +67,29 @@ internal static partial class WindowCatalog
     /// the last of them when <paramref name="tagged"/> - so the list opens
     /// with a pack out of sight selected - or with none, when the first is.
     /// </summary>
-    private static BatteryPackControl.PackPicker BatteryPicker(int count, bool tagged)
+    private static PackPickerForm BatteryPicker(int count, bool tagged)
     {
         var packs = BatteryPacks(count);
 
-        return new BatteryPackControl.PackPicker(packs, tagged ? packs[packs.Count - 1] : null);
+        return new PackPickerForm(packs, tagged ? packs[packs.Count - 1] : null);
+    }
+
+    /// <summary>Club Batteries over more club packs than it shows, a few of them in drivers' cars.</summary>
+    private static Form BatteryClubList()
+    {
+        var store = BatteryPackStore.Load();
+        var drivers = GarageDriversOnFile().All.Take(3).ToList();
+
+        foreach (var pack in BatteryPacks(14))
+        {
+            store.Upsert(pack);
+        }
+
+        foreach (var (pack, driver) in store.ClubPacks.Take(3).Zip(drivers))
+        {
+            store.SetCurrent(driver.Transponder, pack.Id);
+        }
+
+        return new ClubBatteriesForm(store, GarageDriversOnFile(), new UndoService());
     }
 }

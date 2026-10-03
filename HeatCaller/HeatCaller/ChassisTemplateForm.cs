@@ -493,10 +493,9 @@ public sealed class ChassisTemplateForm : Form
 /// <summary>
 /// The chassis setup sheets: every sheet the club has, and Edit..., New...,
 /// Duplicate and Delete for them - what Chassis Sheets... opens on the
-/// Garage page (GarageControl) and on the setup log (SetupLogControl). Each
-/// of the two used to build this window inside the method that showed it,
-/// line for line the same; it is one class now, so the two cannot drift
-/// apart, and internal so the layout test can build it (WindowCatalog).
+/// Garage page (GarageControl). It once had a second home on the setup log,
+/// which built it inline; it is one class, and internal so the layout test
+/// can build it (WindowCatalog).
 /// Whoever opens it refreshes what it shows once it closes.
 ///
 /// The undo here has two awkward corners - the editor saves as it goes, so

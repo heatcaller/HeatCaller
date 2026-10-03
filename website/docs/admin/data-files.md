@@ -59,7 +59,7 @@ All data files are plain JSON text, except where noted.
 | `pb-resets.json` | Personal-best resets. The lap history itself is untouched by a reset. |
 | `rental-transponders.json` | Rental transponders and their loan history (**Rentals** page). |
 | `tech-inspections.json` | Tech inspection records: the **Tech** column on **Race Day → Who's Racing**, and the **Scrutineering log** window (**Scrutineering Log** on the same tab). |
-| `battery-packs.json` | Battery packs (**Batteries** page). |
+| `battery-packs.json` | Battery packs, whose they are, which is in each driver's car, and the pack each driver ran each session on (the **Batteries** tab in **Driver Hub**, and **Club Batteries** on the **Garage** page). |
 | `garage.json` | The club's cars (**Garage** page). |
 | `CarPhotos\` | Photos of the cars in the **Garage**, resized when you added them. |
 | `chassis-types.json` | The chassis list the **Garage** offers for a car (**Chassis Types** on the **Garage** page). |

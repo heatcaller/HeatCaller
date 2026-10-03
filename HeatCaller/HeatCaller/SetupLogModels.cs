@@ -282,6 +282,33 @@ public sealed class SetupLogStore
         Save();
     }
 
+    /// <summary>
+    /// Links entries to garage cars in one save: each id to its car, and the
+    /// car's name written where the entry kept a typed one. Ids no longer
+    /// here are skipped. Returns how many were linked.
+    /// </summary>
+    public int LinkToCars(IReadOnlyList<(string Id, string CarId, string CarName)> links)
+    {
+        var linked = 0;
+
+        foreach (var (id, carId, carName) in links)
+        {
+            if (Get(id) is { } entry)
+            {
+                entry.CarId = carId;
+                entry.CarModel = carName;
+                linked++;
+            }
+        }
+
+        if (linked > 0)
+        {
+            Save();
+        }
+
+        return linked;
+    }
+
     // --- Undo -------------------------------------------------------------
 
     /// <summary>A detached copy of an entry, same id - for an edit dialog to work on and an undo to put back.</summary>

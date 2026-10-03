@@ -16,6 +16,13 @@ public sealed class CheckInControl : UserControl
     private readonly TechInspectionStore? _tech;
 
     /// <summary>
+    /// The battery packs, for the Pack column: which pack is in each
+    /// driver's car tonight - what each race they run is recorded on
+    /// (BatteryPackStore.AutoTag). None, and there is no such column.
+    /// </summary>
+    private readonly BatteryPackStore? _batteries;
+
+    /// <summary>
     /// The race days, so this page can say when it is filing check-ins
     /// against nothing.
     ///
@@ -144,8 +151,10 @@ public sealed class CheckInControl : UserControl
     private bool _suppressGridEvents;
 
     public CheckInControl(ProfileStore profiles, CheckInStore checkIns, RaceClassStore raceClasses, AppSettings settings, UndoService undo,
-        TechInspectionStore? tech = null, WebServerService? web = null, RaceEventStore? events = null)
+        TechInspectionStore? tech = null, WebServerService? web = null, RaceEventStore? events = null,
+        BatteryPackStore? batteries = null)
     {
+        _batteries = batteries;
         _web = web;
         _events = events;
         _profiles = profiles;
@@ -165,6 +174,23 @@ public sealed class CheckInControl : UserControl
 
         BuildLayout();
         RefreshAll();
+
+        // A pack put in a car anywhere else - Driver Hub, Race Control, the
+        // phone, an undo - shows in the column.
+        if (_batteries is not null)
+        {
+            _batteries.Changed += OnBatteriesChanged;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && _batteries is not null)
+        {
+            _batteries.Changed -= OnBatteriesChanged;
+        }
+
+        base.Dispose(disposing);
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -279,6 +305,13 @@ public sealed class CheckInControl : UserControl
             // showing one status per person - the same scoping tech
             // inspection itself uses, so the two pages can't disagree.
             _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "tech", HeaderText = "Tech", FillWeight = 35, ReadOnly = true });
+        }
+
+        if (_batteries is not null)
+        {
+            // Click it to pick: the pack in the car tonight is what each
+            // race they run is recorded on.
+            _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "pack", HeaderText = "Pack", FillWeight = 35, ReadOnly = true });
         }
         _grid.CellClick += Grid_CellClick;
         _grid.CellDoubleClick += Grid_CellDoubleClick;
@@ -914,6 +947,7 @@ public sealed class CheckInControl : UserControl
                         TechCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;
+                ShowPack(_grid.Rows[rowIndex]);
 
                 if (_tech is not null)
                 {
@@ -965,6 +999,12 @@ public sealed class CheckInControl : UserControl
 
     private void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
     {
+        if (e.RowIndex >= 0 && _batteries is not null && e.ColumnIndex == _grid.Columns["pack"]?.Index)
+        {
+            PickPack(e.RowIndex);
+            return;
+        }
+
         if (e.RowIndex < 0 || e.ColumnIndex != 0)
         {
             return;
@@ -1023,5 +1063,131 @@ public sealed class CheckInControl : UserControl
 
         _lblSummary.Text =
             $"{checkedInShown} of {shown.Count} checked in ({_checkIns.Count} total checked in across all classes){rule}";
+    }
+    // ------------------------------------------------------------ packs
+
+    /// <summary>
+    /// A row's Pack cell: the pack in the driver's car, "Pick..." when they
+    /// have packs to choose from (theirs or the club's) and none is in, or
+    /// blank when there is nothing to pick.
+    /// </summary>
+    private void ShowPack(DataGridViewRow row)
+    {
+        if (_batteries is null || _grid.Columns["pack"] is not { } column || row.Tag is not DriverProfile profile)
+        {
+            return;
+        }
+
+        var key = BatteryPackStore.DriverKey(_profiles, profile.Transponder);
+        var inCar = _batteries.CurrentPack(key);
+        var cell = row.Cells[column.Index];
+
+        if (inCar is not null)
+        {
+            cell.Value = inCar.DisplayName + (inCar.IsClubPack ? " (club)" : string.Empty);
+            cell.Style.ForeColor = AppTheme.TextDark;
+        }
+        else
+        {
+            cell.Value = _batteries.ChoicesFor(profile).Count > 0 ? "Pick..." : string.Empty;
+            cell.Style.ForeColor = AppTheme.TextMuted;
+        }
+    }
+
+    /// <summary>Posted, since the store does not promise which thread it changes on. Only the Pack cells change.</summary>
+    private void OnBatteriesChanged()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+
+                _suppressGridEvents = true;
+
+                try
+                {
+                    foreach (DataGridViewRow row in _grid.Rows)
+                    {
+                        ShowPack(row);
+                    }
+                }
+                finally
+                {
+                    _suppressGridEvents = false;
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            // The window went between the check and the post.
+        }
+    }
+
+    /// <summary>
+    /// The Pack cell clicked: the driver's packs in rotation and the club's,
+    /// the one in the car ticked, and - while one is in - "No pack in the
+    /// car". Picked, it goes in their car, with an undo.
+    /// </summary>
+    private void PickPack(int rowIndex)
+    {
+        if (_batteries is not { } store || _grid.Rows[rowIndex].Tag is not DriverProfile profile)
+        {
+            return;
+        }
+
+        var key = BatteryPackStore.DriverKey(_profiles, profile.Transponder);
+        var inCar = store.CurrentPackId(key);
+        var choices = store.ChoicesFor(profile);
+        var name = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName.Trim();
+
+        if (choices.Count == 0 && inCar is null)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+
+        void Add(string text, string? packId, bool ticked)
+        {
+            var item = new ToolStripMenuItem(text) { Checked = ticked };
+            item.Click += (_, _) =>
+            {
+                BatteryActions.PutInCar(store, _undo, key, name, packId);
+
+                if (!IsDisposed && rowIndex < _grid.Rows.Count && ReferenceEquals(_grid.Rows[rowIndex].Tag, profile))
+                {
+                    ShowPack(_grid.Rows[rowIndex]);
+                }
+            };
+            menu.Items.Add(item);
+        }
+
+        foreach (var pack in choices)
+        {
+            Add(pack.DisplayName + (pack.IsClubPack ? "  (club)" : string.Empty), pack.Id, pack.Id == inCar);
+        }
+
+        if (inCar is not null)
+        {
+            menu.Items.Add(new ToolStripSeparator());
+            Add("No pack in the car", null, ticked: false);
+        }
+
+        AppTheme.StyleContextMenu(menu);
+
+        // Let go once it has closed and its click has run.
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+
+        var cell = _grid.GetCellDisplayRectangle(_grid.Columns["pack"]!.Index, rowIndex, cutOverflow: true);
+        menu.Show(_grid, new Point(cell.Left, cell.Bottom));
     }
 }

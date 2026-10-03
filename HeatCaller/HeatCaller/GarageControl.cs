@@ -41,11 +41,32 @@ public sealed class GarageControl : UserControl
     /// <summary>Raised after anything here changed a car or a driver - for a host showing more of the driver than this.</summary>
     public event Action? Changed;
 
+    /// <summary>On a driver's page: the Batteries strip's button was clicked - the host shows their Batteries tab.</summary>
+    public event Action? OpenBatteries;
+
+    /// <summary>The battery packs - for the strip under a driver's cars, and Club Batteries on the Garage page. Null: neither.</summary>
+    private readonly BatteryPackStore? _batteries;
+
+    /// <summary>On a driver's page, under the wall: their packs, the one in the car marked.</summary>
+    private readonly Label _lblBatteries = new();
+
+    /// <summary>Club Batteries - on the Garage page.</summary>
+    private readonly Button _btnClubBatteries = new() { Text = "Club Batteries..." };
+
     private readonly ComboBox _cmbOwnerFilter = new();
     private readonly CheckBox _chkRetired = new ThemedCheckBox();
 
     /// <summary>Set while ShowDriver refills and moves the hidden owner filter, so the wall is built once, after.</summary>
     private bool _quietFilter;
+
+    /// <summary>Each car's newest setup, by car id - made once per wall on a driver's page, for the cards' lines.</summary>
+    private Dictionary<string, DateTime>? _lastSetups;
+
+    /// <summary>On a driver's page, over the wall: how many cars they have.</summary>
+    private readonly Label _lblDriverCars = new();
+
+    /// <summary>Setups Without a Car - on the Garage page, while there are any (SetupLinking).</summary>
+    private readonly Button _btnUnlinked = new() { Text = "Setups Without a Car...", Visible = false };
 
     /// <summary>Add a Car - on a driver's page, only while there is a driver to add it for.</summary>
     private Button? _btnAddCar;
@@ -96,9 +117,11 @@ public sealed class GarageControl : UserControl
         ChassisTemplateStore chassisTemplates,
         UndoService undo,
         RaceEventStore? events = null,
-        bool forOneDriver = false)
+        bool forOneDriver = false,
+        BatteryPackStore? batteries = null)
     {
         _forOneDriver = forOneDriver;
+        _batteries = batteries;
         _cars = cars;
         _chassisTypes = chassisTypes;
         _profiles = profiles;
@@ -120,6 +143,47 @@ public sealed class GarageControl : UserControl
 
         BuildLayout();
         RefreshAll();
+
+        // A pack changed anywhere - the Batteries tab, Race Control, the
+        // phone, an undo - shows on the strip.
+        if (_batteries is not null && _forOneDriver)
+        {
+            _batteries.Changed += OnBatteriesChanged;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && _batteries is not null)
+        {
+            _batteries.Changed -= OnBatteriesChanged;
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>Posted, since the store does not promise which thread it changes on.</summary>
+    private void OnBatteriesChanged()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (!IsDisposed)
+                {
+                    UpdateBatteryStrip();
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            // The window went between the check and the post.
+        }
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -216,6 +280,9 @@ public sealed class GarageControl : UserControl
         var btnSheets = new Button { Text = "Chassis Sheets..." };
         btnSheets.Click += (_, _) => ManageChassisSheets();
 
+        // Only while there are any - see SetupLinking.
+        _btnUnlinked.Click += (_, _) => ShowUnlinkedSetups();
+
         var page = new FillPage();
 
         // On a driver's page the driver is chosen there: no intro, no Show
@@ -229,12 +296,47 @@ public sealed class GarageControl : UserControl
         page.Add(filterRow, gapBelow: UiLayout.RowGap);
         filterRow.Visible = !_forOneDriver;
 
+        // On a driver's page: how many cars, what the active one is for,
+        // and Add a Car, over the wall.
+        if (_forOneDriver)
+        {
+            _lblDriverCars.AutoSize = true;
+            _lblDriverCars.ForeColor = AppTheme.TextMuted;
+            _lblDriverCars.Anchor = AnchorStyles.Left;
+            page.Add(new SplitBar(new ButtonBar().With(_lblDriverCars), new ButtonBar(alignRight: true).With(btnAdd)), gapBelow: UiLayout.RowGap);
+        }
+
         // At least a row of cars under a heading - below that the page
         // scrolls. Asked each time the page works out its range, so it is a
         // card at the text size in use; a larger one only makes the page's
         // least taller, and a window shorter than that scrolls the page.
-        page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
-        page.Add(_forOneDriver ? new ButtonBar().With(btnAdd) : new ButtonBar().With(btnAdd, btnChassis, btnSheets), gapBelow: 0);
+        if (_forOneDriver)
+        {
+            page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: _batteries is null ? 0 : UiLayout.RowGap);
+
+            // Their packs, under their cars: packs move between a driver's
+            // cars, so they belong to the driver rather than to any card.
+            if (_batteries is not null)
+            {
+                _lblBatteries.AutoSize = true;
+                _lblBatteries.ForeColor = AppTheme.TextMuted;
+                _lblBatteries.Anchor = AnchorStyles.Left;
+
+                var btnBatteries = new Button { Text = "Batteries..." };
+                btnBatteries.Click += (_, _) => OpenBatteries?.Invoke();
+
+                page.Add(new SplitBar(new ButtonBar().With(_lblBatteries), new ButtonBar(alignRight: true).With(btnBatteries)), gapBelow: 0);
+            }
+        }
+        else
+        {
+            page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
+
+            _btnClubBatteries.Click += (_, _) => ShowClubBatteries();
+            _btnClubBatteries.Visible = _batteries is not null;
+
+            page.Add(new ButtonBar().With(btnAdd, btnChassis, btnSheets, _btnClubBatteries, _btnUnlinked), gapBelow: 0);
+        }
 
         Controls.Add(page);
     }
@@ -263,6 +365,32 @@ public sealed class GarageControl : UserControl
     {
         RefreshOwnerFilter();
         BuildWall();
+        UpdateUnlinkedButton();
+    }
+
+    /// <summary>Setups Without a Car shown, with how many, while there are any - on the Garage page only.</summary>
+    private void UpdateUnlinkedButton()
+    {
+        var count = _forOneDriver ? 0 : SetupLinking.Unlinked(_setups, _cars).Count;
+        _btnUnlinked.Visible = count > 0;
+
+        var text = $"Setups Without a Car ({count})...";
+
+        if (count > 0 && !string.Equals(_btnUnlinked.Text, AppTheme.Caption(text), StringComparison.Ordinal))
+        {
+            _btnUnlinked.Text = text;
+            AppTheme.StyleButton(_btnUnlinked, AppTheme.ButtonKind.Secondary);
+        }
+    }
+
+    /// <summary>The setups that belong to no car, to link or delete (UnlinkedSetupsForm).</summary>
+    private void ShowUnlinkedSetups()
+    {
+        using var form = new UnlinkedSetupsForm(_setups, _cars, _profiles, _undo);
+        form.ShowDialog(this);
+
+        RefreshAll();
+        Changed?.Invoke();
     }
 
     private void RefreshOwnerFilter()
@@ -377,6 +505,19 @@ public sealed class GarageControl : UserControl
         var cars = VisibleCars();
         var eventId = CurrentEventId;
 
+        if (_forOneDriver)
+        {
+            _lastSetups = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+
+            foreach (var entry in _setups.All)
+            {
+                if (!string.IsNullOrEmpty(entry.CarId) && !_lastSetups.ContainsKey(entry.CarId))
+                {
+                    _lastSetups[entry.CarId] = entry.RecordedAtUtc;
+                }
+            }
+        }
+
         foreach (var className in GroupOrder(cars))
         {
             var inClass = cars
@@ -458,6 +599,13 @@ public sealed class GarageControl : UserControl
 
         _lblEmpty.Text = EmptyWallText();
         _lblEmpty.Visible = _groups.Count == 0;
+
+        if (_forOneDriver)
+        {
+            var count = VisibleCars().Count;
+            _lblDriverCars.Text = count == 0 ? string.Empty : $"{Plural.Of(count, "car")}  ·  the active one is announced";
+            UpdateBatteryStrip();
+        }
 
         // Back to the top when there is nothing to show: the label sits at
         // the top of the view, and a wall scrolled down before a filter
@@ -760,6 +908,66 @@ public sealed class GarageControl : UserControl
         BuildWall();
     }
 
+    /// <summary>The driver whose cars these are, on a driver's page - or null.</summary>
+    private DriverProfile? ShownDriver =>
+        _cmbOwnerFilter.SelectedItem is OwnerChoice { Transponder: var t } && t != EveryoneKey && t != ClubKey ? _profiles.Get(t) : null;
+
+    /// <summary>
+    /// The strip under a driver's cars: their packs in rotation, the one in
+    /// the car marked - and a club pack when that is what is in it.
+    /// </summary>
+    private void UpdateBatteryStrip()
+    {
+        if (_batteries is null || !_forOneDriver)
+        {
+            return;
+        }
+
+        var driver = ShownDriver;
+
+        if (driver is null)
+        {
+            _lblBatteries.Text = string.Empty;
+            return;
+        }
+
+        var key = BatteryPackStore.DriverKey(_profiles, driver.Transponder);
+        var inCar = _batteries.CurrentPack(key);
+        var packs = _batteries.OwnedBy(driver).Where(p => !p.Retired).ToList();
+
+        if (inCar is not null && packs.All(p => p.Id != inCar.Id))
+        {
+            packs.Insert(0, inCar);
+        }
+
+        const int Most = 8;
+
+        var names = packs.Take(Most)
+            .Select(p => p.DisplayName + (p.IsClubPack ? " (club)" : string.Empty) + (p.Id == inCar?.Id ? " - in the car" : string.Empty))
+            .ToList();
+
+        if (packs.Count > Most)
+        {
+            names.Add($"{packs.Count - Most} more");
+        }
+
+        _lblBatteries.Text = packs.Count == 0
+            ? "Batteries: none yet"
+            : "Batteries: " + string.Join("  ·  ", names) + (inCar is null ? "  ·  none in the car" : string.Empty);
+    }
+
+    /// <summary>Club Batteries: the club's own packs, kept here with the club's cars.</summary>
+    private void ShowClubBatteries()
+    {
+        if (_batteries is null)
+        {
+            return;
+        }
+
+        using var form = new ClubBatteriesForm(_batteries, _profiles, _undo);
+        form.ShowDialog(this);
+    }
+
     /// <summary>
     /// The line under a car's name on a driver's page: whether it is the car
     /// they are announced and recorded in, the transponders fitted to it,
@@ -780,6 +988,13 @@ public sealed class GarageControl : UserControl
             parts.AddRange(owner.Transponders
                 .Where(t => t is not null && !t.Retired && string.Equals(t.CarId, car.Id, StringComparison.Ordinal))
                 .Select(t => t.Id));
+        }
+
+        // When it was last set up - the car's newest setup (worked out once
+        // per wall, in BuildWall).
+        if (_lastSetups is not null && _lastSetups.TryGetValue(car.Id, out var lastSetup))
+        {
+            parts.Add($"Setup {lastSetup.ToLocalTime():d MMM}");
         }
 
         var driver = car.DriverFor(eventId);

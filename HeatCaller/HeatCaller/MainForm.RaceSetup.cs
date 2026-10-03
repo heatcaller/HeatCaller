@@ -326,6 +326,7 @@ public partial class MainForm
             CheckIns = _checkInStore,
             Tech = _techInspections,
             Schedule = _daySchedule,
+            Batteries = _batteryPacks,
             Program = _raceProgram,
             RaceControl = _raceControlControl,
             ActiveRound = () => _activeRound,

@@ -2,7 +2,7 @@
 
 This page covers the reference data you set up once and then keep up to date: the drivers who race, the classes they race in, and the club's gear — rental transponders, battery packs, venues, track layouts and car setups. Everything on the Race Day pages is built from this data, so it's worth getting right before your first race night.
 
-The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Rentals**, **Batteries**, **Venues**, **Track Layouts** and **Garage**.
+The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Rentals**, **Venues**, **Track Layouts** and **Garage**. Battery packs are on each driver's page in **Driver Hub**, and the club's own packs are on the **Garage** page.
 
 ## Driver Hub
 
@@ -10,27 +10,40 @@ A driver profile ties a transponder to a person. When the decoder reports a tran
 
 <!-- screenshot: Driver Hub page with the roster on the left and a driver card on the right -->
 
-The page has two views. The **Drivers** and **Garage** buttons at the top switch between them, and the page opens on the one you used last. Both show the same driver: pick a driver in one, and the other follows. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is at the top of both.
+The page has two views. **Drivers** and **Garage** in the upper left switch between them, and the page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of both.
 
 ### Drivers view
 
-- **The roster** on the left, with a photo (or an initials disc) and the columns **Driver**, **#**, **Class**, **Car / Model** and **Transponder**. If a driver has more than one car, the **Car / Model** column shows the active car and how many others they have, for example `MR-03 (+1)`.
-- **The driver card** on the right, with five tabs:
-    - **Profile**: the driver's photo, number, class (in the class's color), car, team, sponsors, home track, skill level, transponder, any flags and notes. Empty fields are left off the card.
-    - **Garage**: the driver's cars, as cards. See [A driver's garage](#a-drivers-garage).
-    - **Transponders**: every transponder the driver has. See [A driver's transponders](#a-drivers-transponders).
-    - **Setups**: every setup logged for the driver's cars, newest first, with the columns **Date**, **Car**, **Track** and **Setup**. Setups logged before they were linked to a car are listed when they carry the driver's name. Double-click one, or select it and click **Open Car**, to open its car.
-    - **Stats**: the driver's record — their results, recent form, personal bests, championships and earned badges.
+The roster is down the left and the driver you pick is beside it.
+
+**The roster** lists your drivers by name and number. **Find** filters it as you type: it matches the driver name, announcer name, any of their transponders, race number, class, team, sponsors, home track and any car in the driver's garage. You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
+
+**The driver's header** shows their photo (or initials), name and, as chips, their number, class (in the class's color), and whether they're checked in tonight, a rental or outside records and points. A name the announcer says differently shows under it. Click the photo to change it.
+
+**The buttons along the bottom** are grouped by what they act on:
+
+- Under the roster: **Add Driver** (see [Add a driver](#add-a-driver)) and **Delete**, for the drivers selected.
+- Under the driver: **Edit Profile**, which opens the profile form (double-clicking a driver in the roster does the same), and **Photo**.
+- On the right, for the whole list: **Import from CSV** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)).
+
+The driver has six tabs:
+
+- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
+- **Garage**: the driver's cars, as cards. See [A driver's garage](#a-drivers-garage).
+- **Transponders**: every transponder the driver has. See [A driver's transponders](#a-drivers-transponders).
+- **Setups**: every setup logged for the driver's cars or under their name, newest first, with the columns **Date**, **Car**, **Track** and **Setup**. Double-click one, or select it and click **Open Car**, to open its car. A setup with no car shows "(no car)"; double-click it, or select it and click **Link to Car**, to pick the car it was for (see [Setups without a car](#setups-without-a-car)).
+- **Batteries**: the driver's battery packs, which one is in the car, the pack each session was run on, and pace by pack. See [A driver's batteries](#a-drivers-batteries).
+- **Stats**: the driver's record — their results, recent form, personal bests, championships and earned badges.
 
 On the **Stats** tab, under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
 
 ### Garage view
 
-Pick a driver in **Driver:** at the top. Their cars fill the page, with their **Transponders** beside them. It's the same garage and transponder list as the tabs in the Drivers view, only bigger.
+One driver's cars fill the page. Pick whose in **Driver** at the top left, where **Find** is in the Drivers view; the Drivers view follows, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Drivers view.
 
 ### A driver's garage
 
-Each of the driver's cars is a card, grouped under its class. Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
+Each of the driver's cars is a card, grouped under its class, with how many they have and **Add a Car** above them. Under the cars, a **Batteries** line lists their packs and which one is in the car; **Batteries** beside it opens their [Batteries tab](#a-drivers-batteries). Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, when it last had a setup logged, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
 
 - Click a car to open it, the same window as on the [Garage](#garage) page: photos, details, lending, setups.
 - Right-click a car for **Open**, **Make Active Car** and **Transfer**. **Make Active Car** changes the car the driver is announced in. Undo puts back the car they had.
@@ -62,13 +75,38 @@ The list shows each transponder the driver has, which car it's **Fitted to** (or
 
 Each change is saved straight away, and Undo takes it back. A transponder that's already another driver's is refused, with a "Transponder already in use" message naming them.
 
-The **Search name, number, car, class, team...** box filters the roster as you type. It matches the driver name, announcer name, transponder, race number, class, team, sponsors, home track and any car in the driver's garage.
+### A driver's batteries
 
-You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
+The **Batteries** tab answers one question: is the driver slower on a particular pack? Packs belong to the driver, not to a car, so they move between their cars. There's no charge logging.
+
+<!-- screenshot: a driver's Batteries tab with Packs, Recent sessions and Pace by pack -->
+
+**Packs** lists the driver's packs with their **Type**, how many **Sessions** they've run on each, the **Avg best lap** (the average of each session's best lap) and **Notes**. The pack in the car now is in bold, marked "in the car". A club pack shows here while it's in their car.
+
+- **Add Pack** adds one: a **Label:** (whatever's written on it, like "3" or "Blue tape"), a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own) and **Notes:**. A driver's first pack goes straight in the car.
+- **Use This One** puts the selected pack in the car. On the pack that's in, it reads **Take Out of the Car**.
+- **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** act on the selected pack. A retired pack keeps its history but isn't offered any more, and comes out of the car. Deleting a pack removes it from every session it's recorded on, so its pace history is lost: retire it instead to keep the history. **Transfer** gives it to another driver or the club for good; the sessions run on it stay recorded.
+
+Every change can be undone.
+
+**The pack in the car is what gets recorded.** When a race or practice session is saved, each driver in it is recorded as running the pack in their car. You can set it in four places:
+
+- **Use This One** on this tab.
+- The **Pack** column on **Race Day → Who's Racing** at check-in. See [The Drivers card](events-and-entries.md#the-drivers-card).
+- Right-click the driver on the **Race Control** leaderboard and choose their pack. During a race it puts the pack in the car, so the race is recorded on it. After the flag, it records the pack for the race just run and puts it in the car too. See [Running a race](../race-control/running-a-race.md).
+- **Pack in the car** under the driver on the phone race manager's **Entries** tab. See [Phone and web](../screens/phone-and-web.md).
+
+Changing the pack in the car never changes sessions already recorded.
+
+**Recent sessions** lists the driver's sessions, newest first, with the **Pack** each was run on and **Recorded by**: **In the car** (the pack in the car when it was saved), **Race Control**, **By hand** (picked here), **Before** (from before packs were per driver) or **Whole session** (see below). Double-click a session, or select it and click **Set Pack**, to pick a different pack or **No pack recorded**. A pack picked by hand always wins over the one in the car.
+
+**Pace by pack** compares the driver's pace across packs: **Sessions**, **Best lap**, **Avg best lap** and the **Gap** to the quickest pack. A gap of 0.1 seconds or more is in red.
+
+Before this version a pack was recorded for a whole session, not for each driver. Those packs still count for every driver in the session (**Whole session**). The first time you start this version, a session one driver ran alone becomes that driver's own (**Before**), and a pack only ever recorded for one driver becomes theirs. Every other pack becomes the club's.
 
 ### Add a driver
 
-1. On the **Driver Hub** page, click **Add**.
+1. On the **Driver Hub** page, click **Add Driver**.
 2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
@@ -79,7 +117,7 @@ You can also add a driver from a transponder that crossed the line with no profi
 
 ### Edit or delete a driver
 
-- To edit, double-click a driver, or select one and click **Edit** (or **Edit Profile** on the card).
+- To edit, double-click a driver in the roster, or pick one and click **Edit Profile** at the bottom.
 - To delete, select one or more drivers and click **Delete**. You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
 
 Undo never overwrites a driver who has one of the deleted driver's transponders now, as their main or alternate transponder, and never puts two drivers on one transponder. A deleted driver whose transponder has been taken since stays deleted:
@@ -132,7 +170,7 @@ Each driver can have a photo. It appears in the roster, on the driver card and, 
 To add or change a photo:
 
 - In the profile dialog, click **Choose Photo**. Click **Remove Photo** to go back to the initials disc.
-- Or, to swap photos quickly without opening the whole profile, select the driver and click **Photo** on the card. This is handy when you're taking photos of a whole class at the pit table.
+- Or, to swap photos quickly without opening the whole profile, pick the driver and click **Photo** at the bottom, or their photo at the top. This is handy when you're taking photos of a whole class at the pit table.
 
 You can pick JPG, PNG, BMP or GIF files. HeatCaller makes its own copy of the picture: it rotates phone photos the right way up, scales them down so the longest side is 640 pixels, and stores the copy in its own data folder. Moving or deleting the original file afterwards doesn't affect the profile.
 
@@ -347,26 +385,6 @@ A unit that's already out can't be checked out again — issuing one transponder
 
 The event report also lists any units still out. See [Results and championships](../race-control/results-and-championships.md).
 
-## Batteries
-
-The **Batteries** page answers one question: are you slower on a particular battery pack? You tag each session with the pack that was in the car, and HeatCaller compares the lap times. There's no charge logging.
-
-<!-- screenshot: Batteries page with the Packs list, Pace by pack comparison and the session list -->
-
-### Set up your packs
-
-Under **Packs**, click **Add Pack**. Give it a **Label:** (whatever's written on the pack, like "3" or "Blue tape") and a **Type:** (NiMH, LiPo, LiFe, Alkaline, or type your own). Tick **Retired (out of rotation, keeps its history)** for a pack you've stopped using — it keeps its pace history but isn't offered when you tag sessions.
-
-Deleting a pack removes its tags from any sessions, so its pace history is lost. Retire it instead if you want to keep the history.
-
-### Tag sessions
-
-The **Tag a session** list shows your recent sessions with the columns **When**, **Session**, **Track**, **Drivers** and **Pack used**. Double-click a session (or select it and click **Set Pack**) and pick the pack. **Clear Pack** removes the tag. The line under the list shows how many sessions are tagged.
-
-### Compare pace
-
-Under **Pace by pack**, pick a **Driver:**. The comparison is per driver, because pack pace means nothing across different people. For each pack you see **Sessions**, **Best lap**, **Avg best lap** (the average of each session's best lap) and **Gap** to the quickest pack. A gap of 0.1 seconds or more is highlighted in red.
-
 ## Venues
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
@@ -466,7 +484,7 @@ At the bottom, **Show this plan as the track's main picture** (on by default) ma
 
 The **Garage** page shows all the club's cars. One driver's cars are also on their own page, in **Driver Hub** (see [A driver's garage](#a-drivers-garage)). Both show the same cars.
 
-The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be) and **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)).
+The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
 
 Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete**, and every setup logged for it.
 
@@ -485,7 +503,7 @@ The same changes are what the winner's mechanic talks about in the recap's inter
 ### Log a setup
 
 1. Click **Log a Setup**.
-2. Choose the **Driver:**, **Track:** and **Car:**.
+2. Choose the **Driver:** and **Track:**. **Car:** is the car whose window you're in; pick another of the garage's cars if the setup was for that one.
 3. Pick a **Chassis sheet:** — the template of fields to fill in.
 4. In **Ran in session:**, pick the session this setup ran in, or leave it at **(not linked to a session)**. Linking it is what fills in **Best Lap**.
 5. Fill in the fields. Click a callout on the chassis diagram to jump to its field; filled callouts are highlighted.
@@ -494,6 +512,18 @@ The same changes are what the winner's mechanic talks about in the recap's inter
 Most changes are small tweaks, so **Duplicate** copies the selected setup as a starting point for the next one. The copy keeps the driver, track, car, chassis sheet and values, but not the date or the session link. **Delete** removes the selected setups (you can select several); **Undo** brings them back.
 
 Setups saved before chassis sheets existed show as **(legacy entry)**. When you open one, its old values are copied into the matching fields of the sheet.
+
+### Setups without a car
+
+Every setup belongs to a car. Setups logged before that, which only have a driver's name and a car as somebody typed it, were linked to their car the first time this version started — wherever only one of that driver's cars has that name or shell. A setup whose car was deleted has no car either.
+
+When there are any left, the **Garage** page has a **Setups Without a Car** button with how many. It lists them with the date, driver, car as it was typed and track. Select one and click **Link to Car** (or double-click it), and pick the car it was for; the driver's own cars are listed first, and one that matches the typed name is already picked. **Delete** removes the ones you don't want. Undo takes back either. You can also link them from the driver's **Setups** tab.
+
+### Club batteries
+
+**Club Batteries** on the **Garage** page lists the club's own packs, with how many **Sessions** each has run on and whose car each is **In the car of**. **Add Pack**, **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** work as on a driver's [Batteries tab](#a-drivers-batteries), and can be undone. **Transfer** gives a pack to a driver for good.
+
+Any driver can run a club pack: put it in their car on their **Batteries** tab, at check-in, on **Race Control** or from the phone. No loan is recorded; the sessions run on it say who had it.
 
 ### Chassis sheets
 

@@ -1459,6 +1459,22 @@ public sealed partial class RaceControlControl
             {
                 _sessionStartedAtUtc = null;
 
+                // What a Pack picked on a row's right-click is recorded
+                // against from now until the next race: this one. Matched
+                // by the race's start, so a later race whose save failed is
+                // never mistaken for it. Not a demo: its laps are invented.
+                _filedSession = record.IsDemo ? null : (record.Id, record.Label, _race.RaceStartUtc);
+
+                // Each driver's pack in the car, recorded for them on this
+                // race or practice - one picked on a row's right-click during
+                // it is already there, and stays. Here, at the flag, rather
+                // than on every session added to the history: an Undo that
+                // puts back a deleted session from last month must not tag
+                // it with tonight's packs. Nor is a race saved late (see
+                // FileUnfiledRaces) - a pack swapped since would be wrong,
+                // and no pack is better than the wrong one.
+                BatteryPacks?.AutoTag(record, _profiles);
+
                 if (record.IsDemo)
                 {
                     // Cleared rather than left over from the last real race, so the
