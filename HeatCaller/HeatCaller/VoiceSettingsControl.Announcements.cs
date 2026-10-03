@@ -66,6 +66,14 @@ public sealed partial class VoiceSettingsControl
     private readonly Label _annHeadSpeed = new();
     private readonly Label _annHeadCaution = new();
 
+    /// <summary>
+    /// The tick boxes under the Race, Practice and Caution headings that tick
+    /// or clear that whole column (ColumnTickBox). Made with the headings.
+    /// </summary>
+    private ColumnTickBox? _annAllRace;
+    private ColumnTickBox? _annAllPractice;
+    private ColumnTickBox? _annAllCaution;
+
     /// <summary>The headings' track, and how much taller than it the strip holding it is (the rule under the headings).</summary>
     private Panel? _annHeadingsTrack;
     private int _annStripExtra;
@@ -501,9 +509,21 @@ public sealed partial class VoiceSettingsControl
         _annHeadRace, _annHeadPractice, _annHeadName, _annHeadPhrasing, _annHeadWeight, _annHeadSpeed, _annHeadCaution,
     };
 
-    /// <summary>The headings' track: a row pad above and below the tallest heading.</summary>
-    private int AnnouncementHeadingsHeight() =>
-        AnnRowPad * 2 + AnnouncementHeadings().Max(heading => heading.GetPreferredSize(Size.Empty).Height);
+    /// <summary>The tallest heading, at the text size in use.</summary>
+    private int AnnouncementHeadingTallest() =>
+        AnnouncementHeadings().Max(heading => heading.GetPreferredSize(Size.Empty).Height);
+
+    /// <summary>The column tick boxes made so far.</summary>
+    private IEnumerable<ColumnTickBox> AnnouncementColumnTicks() =>
+        new[] { _annAllRace, _annAllPractice, _annAllCaution }.OfType<ColumnTickBox>();
+
+    /// <summary>The headings' track: a row pad above and below the tallest heading and the column tick boxes under it.</summary>
+    private int AnnouncementHeadingsHeight()
+    {
+        var ticks = AnnouncementColumnTicks().Select(box => box.GetPreferredSize(Size.Empty).Height).DefaultIfEmpty(0).Max();
+
+        return AnnRowPad * 2 + AnnouncementHeadingTallest() + (ticks > 0 ? UiLayout.HintGap + ticks : 0);
+    }
 
     /// <summary>
     /// The column headings, on a track of their own for the strip above the
@@ -513,6 +533,62 @@ public sealed partial class VoiceSettingsControl
     /// </summary>
     private Panel BuildAnnouncementHeadings()
     {
+        // The column changed with auto-save held, then saved once; and one
+        // Undo that puts back the mix of ticks it had - while those rows are
+        // still on the page (a restore or a switch of context rebuilds them).
+        void Together(Action change, Func<List<CheckBox>> column, string forWhat)
+        {
+            var boxes = column();
+            var before = boxes.Select(box => box.Checked).ToList();
+
+            Ticks(change);
+
+            var after = boxes.Select(box => box.Checked).ToList();
+
+            if (_undo is null || before.SequenceEqual(after))
+            {
+                return;
+            }
+
+            var what = after.All(ticked => ticked)
+                ? $"Tick every announcement {forWhat}"
+                : $"Clear every announcement {forWhat}";
+
+            _undo.Capture(what, () =>
+            {
+                if (boxes.Any(box => box.IsDisposed) || !boxes.Select(box => box.Checked).SequenceEqual(after))
+                {
+                    throw new InvalidOperationException(
+                        $"The announcement ticks {forWhat} have been changed since, so undoing that now would undo those changes too. Nothing was changed.");
+                }
+
+                Ticks(() =>
+                {
+                    for (var i = 0; i < boxes.Count; i++)
+                    {
+                        boxes[i].Checked = before[i];
+                    }
+                });
+            });
+        }
+
+        void Ticks(Action change)
+        {
+            var wasLoading = _loadingSettings;
+            _loadingSettings = true;
+
+            try
+            {
+                change();
+            }
+            finally
+            {
+                _loadingSettings = wasLoading;
+            }
+
+            AutoSave();
+        }
+
         var track = new Panel();
 
         foreach (var (heading, text) in new[]
@@ -533,6 +609,26 @@ public sealed partial class VoiceSettingsControl
 
             track.Controls.Add(heading);
         }
+
+        // Under the three tick columns' headings: a box that ticks or clears
+        // the whole column. Changing thirty rows saves once, not thirty times
+        // (Together) - and the boxes themselves are not settings, so they are
+        // left out of auto-save.
+        ColumnTickBox Column(Func<AnnouncementRow, CheckBox> box, string name, string forWhat)
+        {
+            var all = new ColumnTickBox(() => _annRowList.Select(box), change => Together(change, () => _annRowList.Select(box).ToList(), forWhat))
+            {
+                AccessibleName = name,
+            };
+
+            _autoSaveWired.Add(all);
+            track.Controls.Add(all);
+            return all;
+        }
+
+        _annAllRace = Column(row => row.Race, "Tick or clear every announcement for races", "for races");
+        _annAllPractice = Column(row => row.Practice, "Tick or clear every announcement for practice", "for practice");
+        _annAllCaution = Column(row => row.Caution, "Tick or clear every announcement under caution", "under caution");
 
         track.Height = AnnouncementHeadingsHeight();
 
@@ -618,6 +714,12 @@ public sealed partial class VoiceSettingsControl
         {
             rows.ResumeLayout(true);
         }
+
+        // The column tick boxes show the rows as they are now.
+        foreach (var all in AnnouncementColumnTicks())
+        {
+            all.Sync();
+        }
     }
 
     /// <summary>
@@ -695,6 +797,9 @@ public sealed partial class VoiceSettingsControl
         rows.Controls.Add(chkPractice);
         rows.Controls.Add(lbl);
 
+        _annAllRace?.Follow(chkRace);
+        _annAllPractice?.Follow(chkPractice);
+
         NumericUpDown? numWeight = null;
 
         if (PerLapWeightedTypes.Contains(type))
@@ -739,6 +844,8 @@ public sealed partial class VoiceSettingsControl
 
         rows.Controls.Add(numSpeed);
         rows.Controls.Add(chkCaution);
+
+        _annAllCaution?.Follow(chkCaution);
         rows.Controls.Add(btnTest);
 
         _eventSpeeds[type] = numSpeed;
@@ -927,6 +1034,14 @@ public sealed partial class VoiceSettingsControl
         PlaceHeading(_annHeadSpeed, c.Speed);
         PlaceHeading(_annHeadCaution, c.Caution);
 
+        // The column tick boxes under their headings, at the column's left
+        // as the rows' ticks are.
+        var tickTop = AnnRowPad + AnnouncementHeadingTallest() + UiLayout.HintGap;
+
+        PlaceTick(_annAllRace, c.Race);
+        PlaceTick(_annAllPractice, c.Practice);
+        PlaceTick(_annAllCaution, c.Caution);
+
         // As wide as the rows, and the margin after them, so it covers them
         // however far they are scrolled.
         if (_annHeadingsTrack is { } track && track.Width != c.Right + UiLayout.PageRight)
@@ -944,6 +1059,16 @@ public sealed partial class VoiceSettingsControl
             if (row.Rule is { } rule)
             {
                 Put(rule, UiLayout.PageLeft + offset.X, y + offset.Y, c.Right - UiLayout.PageLeft, 1);
+            }
+        }
+
+        void PlaceTick(ColumnTickBox? box, int left)
+        {
+            if (box is not null)
+            {
+                var size = box.GetPreferredSize(Size.Empty);
+
+                Put(box, left, tickTop, size.Width, size.Height);
             }
         }
 

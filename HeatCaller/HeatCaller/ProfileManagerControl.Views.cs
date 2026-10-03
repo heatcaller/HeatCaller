@@ -57,8 +57,8 @@ public sealed partial class ProfileManagerControl
     private const string HubView = "Hub";
     private const string GarageView = "Garage";
 
-    /// <summary>The picture in the header at the normal text size.</summary>
-    private const int HeaderAvatar = 72;
+    /// <summary>The picture in the header at the normal text size - big enough to know the driver by.</summary>
+    private const int HeaderAvatar = 144;
 
     /// <summary>Null on a page built without them: then there are no views or tabs, and the card is the whole driver, as before.</summary>
     private readonly DriverGarageSources? _garageSources;
@@ -104,6 +104,14 @@ public sealed partial class ProfileManagerControl
     /// <summary>In the Garage view, where the Drivers view's search box is: whose cars it shows.</summary>
     private readonly ComboBox _cmbGarageDriver = new();
     private readonly Label _lblGarageDriver = new();
+
+    /// <summary>
+    /// What the Garage view shows in place of one driver - everyone's cars
+    /// or the club's own (GarageControl.EveryoneKey, ClubKey) - or null for
+    /// the driver on the card. Picked in its picker; a driver picked there,
+    /// or the Drivers view, puts it back to the driver.
+    /// </summary>
+    private string? _garageGroup;
 
     /// <summary>Set while the Garage view's driver picker is being filled or moved to follow the roster, so that changes nothing.</summary>
     private bool _syncingPicker;
@@ -195,20 +203,34 @@ public sealed partial class ProfileManagerControl
 
         var left = _headerAvatar.Right + ring + UiLayout.AtTextSize(18);
         var width = Math.Max(60, area.Right - left);
-        var c = new CardCursor(g, draw, left, width) { Y = area.Top };
 
-        Paragraph(c, display, AppTheme.TitleFont, AppTheme.TextDark, maxLines: 2);
-
-        if (!string.IsNullOrWhiteSpace(profile.AnnouncerName)
-            && !string.Equals(profile.AnnouncerName.Trim(), display, StringComparison.OrdinalIgnoreCase))
+        // The name, how they are announced and the chips, from this top -
+        // returns where they end.
+        float Words(bool paint, float top)
         {
-            Paragraph(c, $"Announced as \"{profile.AnnouncerName.Trim()}\"", AppTheme.SmallFont, AppTheme.TextMuted, maxLines: 2);
+            var c = new CardCursor(g, paint, left, width) { Y = top };
+
+            Paragraph(c, display, AppTheme.TitleFont, AppTheme.TextDark, maxLines: 2);
+
+            if (!string.IsNullOrWhiteSpace(profile.AnnouncerName)
+                && !string.Equals(profile.AnnouncerName.Trim(), display, StringComparison.OrdinalIgnoreCase))
+            {
+                Paragraph(c, $"Announced as \"{profile.AnnouncerName.Trim()}\"", AppTheme.SmallFont, AppTheme.TextMuted, maxLines: 2);
+            }
+
+            c.Y += 2f;
+            Chips(c, ChipsFor(profile));
+            return c.Y;
         }
 
-        c.Y += 2f;
-        Chips(c, ChipsFor(profile));
+        // Measured first, then set level with the middle of the picture
+        // when shorter than it, rather than along its top edge.
+        var wordsHeight = Words(paint: false, area.Top) - area.Top;
+        var pictureHeight = size + ring * 2;
+        var top = area.Top + Math.Max(0f, (pictureHeight - wordsHeight) / 2f);
+        var end = draw ? Words(paint: true, top) : top + wordsHeight;
 
-        var bottom = Math.Max(_headerAvatar.Bottom + ring, (int)Math.Ceiling(c.Y));
+        var bottom = Math.Max(_headerAvatar.Bottom + ring, (int)Math.Ceiling(end));
         return bottom - area.Top;
     }
 
@@ -433,7 +455,18 @@ public sealed partial class ProfileManagerControl
         _cmbGarageDriver.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbGarageDriver.SelectionChangeCommitted += (_, _) =>
         {
-            if (!_syncingPicker && _cmbGarageDriver.SelectedItem is DriverChoice choice)
+            if (_syncingPicker || _cmbGarageDriver.SelectedItem is not DriverChoice choice)
+            {
+                return;
+            }
+
+            if (choice.Transponder is GarageControl.EveryoneKey or GarageControl.ClubKey)
+            {
+                // Not a driver: the roster and the card stay where they are.
+                _garageGroup = choice.Transponder;
+                _bigGarage?.ShowDriver(choice.Transponder);
+            }
+            else
             {
                 SelectDriver(choice.Transponder);
             }
@@ -566,6 +599,13 @@ public sealed partial class ProfileManagerControl
         _garageViewWanted = garage;
         ApplyView();
 
+        // The Drivers view is about one driver: coming back to the Garage
+        // view from it shows theirs.
+        if (!garage)
+        {
+            _garageGroup = null;
+        }
+
         if (_settings is not null)
         {
             var name = garage ? GarageView : HubView;
@@ -612,16 +652,18 @@ public sealed partial class ProfileManagerControl
         {
             _syncingPicker = true;
 
+            var shown = _garageGroup ?? transponder;
+
             try
             {
-                PointPickerAt(transponder);
+                PointPickerAt(shown);
             }
             finally
             {
                 _syncingPicker = false;
             }
 
-            _bigGarage?.ShowDriver(transponder);
+            _bigGarage?.ShowDriver(shown);
             return;
         }
 
@@ -642,7 +684,7 @@ public sealed partial class ProfileManagerControl
         }
     }
 
-    /// <summary>One driver in the Garage view's picker.</summary>
+    /// <summary>One driver in the Garage view's picker - or everyone's cars, or the club's own.</summary>
     private sealed record DriverChoice(string Transponder, string Caption)
     {
         public override string ToString() => Caption;
@@ -663,6 +705,10 @@ public sealed partial class ProfileManagerControl
             _cmbGarageDriver.BeginUpdate();
             _cmbGarageDriver.Items.Clear();
 
+            // The whole garage first, as the Garage page's Show has them.
+            _cmbGarageDriver.Items.Add(new DriverChoice(GarageControl.EveryoneKey, "Everyone's cars"));
+            _cmbGarageDriver.Items.Add(new DriverChoice(GarageControl.ClubKey, "The club's own cars"));
+
             foreach (var profile in _store.All.OrderBy(p => p.DriverName, StringComparer.CurrentCultureIgnoreCase))
             {
                 var name = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName.Trim();
@@ -673,7 +719,7 @@ public sealed partial class ProfileManagerControl
             _cmbGarageDriver.EndUpdate();
             _garageDriverWidth = null;
             FitGarageDriverPicker();
-            PointPickerAt(CardProfile()?.Transponder);
+            PointPickerAt(_garageGroup ?? CardProfile()?.Transponder);
         }
         finally
         {
@@ -698,6 +744,10 @@ public sealed partial class ProfileManagerControl
     /// </summary>
     private void SelectDriver(string transponder)
     {
+        // A driver, so the Garage view shows theirs rather than a group.
+        var wasGroup = _garageGroup is not null;
+        _garageGroup = null;
+
         bool InList() => _list.Items.Cast<ListViewItem>()
             .Any(i => string.Equals((string)i.Tag!, transponder, StringComparison.OrdinalIgnoreCase));
 
@@ -711,6 +761,12 @@ public sealed partial class ProfileManagerControl
 
         if (item is null)
         {
+            // Not on the roster any more: the Garage view back on the card's driver.
+            if (wasGroup)
+            {
+                ShowDriverInViews(CardProfile()?.Transponder);
+            }
+
             return;
         }
 

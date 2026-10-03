@@ -517,6 +517,86 @@ internal class ThemedCheckBox : CheckBox
 }
 
 /// <summary>
+/// The tick box at the top of a column of them: ticks every box in the
+/// column, or clears them all when they are all ticked already. It shows
+/// the column - ticked when every box is, empty when none is, and the
+/// part-way mark when some are - and follows it as the boxes change
+/// (<see cref="Follow"/>).
+///
+/// It never ticks itself (AutoCheck off): a click sets the column, and the
+/// column sets this. The column is changed inside <c>together</c>, so a page
+/// that saves on every tick can save once for the lot.
+/// </summary>
+internal sealed class ColumnTickBox : ThemedCheckBox
+{
+    private readonly Func<IEnumerable<CheckBox>> _column;
+    private readonly Action<Action> _together;
+
+    public ColumnTickBox(Func<IEnumerable<CheckBox>> column, Action<Action>? together = null)
+    {
+        _column = column;
+        _together = together ?? (change => change());
+
+        AutoSize = true;
+        AutoCheck = false;
+        ThreeState = true;
+    }
+
+    /// <summary>The boxes in the column that can be changed now.</summary>
+    private List<CheckBox> Boxes() => _column().Where(box => !box.IsDisposed).ToList();
+
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+
+        var boxes = Boxes().Where(box => box.Enabled).ToList();
+
+        if (boxes.Count == 0)
+        {
+            return;
+        }
+
+        var tick = !boxes.All(box => box.Checked);
+
+        _together(() =>
+        {
+            foreach (var box in boxes)
+            {
+                box.Checked = tick;
+            }
+        });
+
+        Sync();
+    }
+
+    /// <summary>Shows how much of the column is ticked.</summary>
+    public void Sync()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        var boxes = Boxes();
+        var ticked = boxes.Count(box => box.Checked);
+
+        var state = ticked == 0
+            ? CheckState.Unchecked
+            : ticked == boxes.Count
+                ? CheckState.Checked
+                : CheckState.Indeterminate;
+
+        if (CheckState != state)
+        {
+            CheckState = state;
+        }
+    }
+
+    /// <summary>Keeps this in step with one of the column's boxes, however it is changed.</summary>
+    public void Follow(CheckBox box) => box.CheckedChanged += (_, _) => Sync();
+}
+
+/// <summary>
 /// A radio button drawn with the app's own <see cref="RadioDot"/> - see
 /// there for why. Everything else about it is Windows' RadioButton: picking
 /// it clears the others in the same container, its events, its arrow keys

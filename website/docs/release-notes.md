@@ -4,6 +4,10 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Tick a whole column at once.** On **Voice → Announcements**, the **Race**, **Practice** and **Caution** columns have a tick box under their headings that ticks every row, or clears them all when they're all ticked. The **Race** and **Practice** columns on **Sound Effects** have one too. Each shows a part-way mark when only some rows are ticked, and Undo puts back the ticks you had.
+
+- **Everyone's cars in Driver Hub's Garage view.** **Driver** in the **Garage** view now lists **Everyone's cars** and **The club's own cars** above the drivers, so the whole garage can fill the page. In a driver's garage, **Add a Car** is now under the cars, beside **Batteries**, and the driver's photo in the header is twice the size. See [Garage view](race-day/drivers-and-classes.md#garage-view).
+
 - **Badges for home tracks.** The **Achievements** page has a **Where you race:** choice, **Club** or **At home**, also asked in the first-run wizard. At home, practice earns the badges you can earn on your own (clean-lap runs, consistency, personal bests and lap totals), personal bests count practice laps, and the club-sized badges aren't on offer. A club works as before. Badges already earned always show. See [At a club or at home](race-control/results-and-championships.md#at-a-club-or-at-home).
 - **Nine new badges:** **Ghost Buster** and **Shadow Boxer** for beating ghosts, **Practice Makes Perfect** and **Regular at the Track** for practice at home, **Dialled In** (a personal best soon after logging a setup), **Fresh Legs** and **Pack Rotation** for battery packs, **Garage Tour** (personal bests in three cars) and **Back to Back** (personal bests two days running).
 - **A race alone is no longer a win.** Lapping a Quick Race on your own used to count as a win and a podium, and could earn **Winner**, **On the Box** and **Hat-trick**. First place now needs another real car in the race.

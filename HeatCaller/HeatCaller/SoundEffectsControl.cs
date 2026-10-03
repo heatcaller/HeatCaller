@@ -34,6 +34,10 @@ public sealed class SoundEffectsControl : UserControl
     private readonly Label _lblColumnFile = new();
     private readonly Label _lblColumnWeight = new();
 
+    /// <summary>Under the Race and Practice headings: ticks or clears that whole column (ColumnTickBox). Made with the headings.</summary>
+    private ColumnTickBox? _allRace;
+    private ColumnTickBox? _allPractice;
+
     /// <summary>
     /// One sound's controls, and the own file it plays.
     ///
@@ -476,7 +480,13 @@ public sealed class SoundEffectsControl : UserControl
                 _rowsPanel.Controls.Add(rule);
                 row.Rule = rule;
             }
+
+            _allRace?.Follow(row.Race);
+            _allPractice?.Follow(row.Practice);
         }
+
+        _allRace?.Sync();
+        _allPractice?.Sync();
 
         // --- The page-level settings, a line each ---
         //
@@ -699,6 +709,61 @@ public sealed class SoundEffectsControl : UserControl
 
         _tips.SetToolTip(_lblColumnRace, "Ticked sounds play during races.");
         _tips.SetToolTip(_lblColumnPractice, "Ticked sounds play during practice.");
+
+        // Under each tick column's heading, a box that ticks or clears the
+        // whole column. The ticks queue the save themselves; this adds the
+        // one Undo, as Enable All does.
+        ColumnTickBox Column(Func<EffectRow, CheckBox> box, bool race)
+        {
+            var forWhat = race ? "races" : "practice";
+
+            var all = new ColumnTickBox(() => _rows.Values.Select(box), change =>
+            {
+                var before = _rows.ToDictionary(r => r.Key, r => box(r.Value).Checked);
+
+                change();
+
+                if (before.All(b => box(_rows[b.Key]).Checked == b.Value))
+                {
+                    return;
+                }
+
+                var ticked = _rows.Values.All(row => box(row).Checked);
+
+                // Undo goes back to the saved profile - the row's ticks
+                // follow it when the page reloads (CaptureUndo).
+                _lblStatus.Text = ticked ? $"Every sound ticked for {forWhat}." : $"Every sound unticked for {forWhat}.";
+                _lblStatus.ForeColor = AppTheme.TextMuted;
+
+                CaptureUndo(ticked ? $"Tick every sound for {forWhat}" : $"Untick every sound for {forWhat}", profile =>
+                {
+                    foreach (var (key, was) in before)
+                    {
+                        if (profile.Effects.TryGetValue(key.ToString(), out var config) && config is not null)
+                        {
+                            if (race)
+                            {
+                                config.Enabled = was;
+                            }
+                            else
+                            {
+                                config.EnabledInPractice = was;
+                            }
+                        }
+                    }
+                });
+            })
+            {
+                AccessibleName = $"Tick or clear every sound for {forWhat}",
+            };
+
+            _tips.SetToolTip(all, $"Tick every sound for {forWhat} - or, when they're all ticked, clear them.");
+            _track.Controls.Add(all);
+            return all;
+        }
+
+        _allRace = Column(row => row.Race, race: true);
+        _allPractice = Column(row => row.Practice, race: false);
     }
 
     /// <summary>
@@ -910,7 +975,24 @@ public sealed class SoundEffectsControl : UserControl
         var tallest = new[] { _lblColumnRace, _lblColumnPractice, _lblColumnSound, _lblColumnPack, _lblColumnFile, _lblColumnWeight }
             .Max(heading => heading.GetPreferredSize(Size.Empty).Height);
 
-        var trackSize = new Size(c.Right + RowPad, RowPad + tallest + RowPad);
+        // The column tick boxes under their headings, centred in the column
+        // as the rows' ticks are.
+        var tickTop = RowPad + tallest + UiLayout.HintGap;
+        var tickHeight = 0;
+
+        foreach (var (all, left, width) in new[] { (_allRace, c.Race, c.RaceWidth), (_allPractice, c.Practice, c.PracticeWidth) })
+        {
+            if (all is null)
+            {
+                continue;
+            }
+
+            var size = all.GetPreferredSize(Size.Empty);
+            all.SetBounds(left + Math.Max(0, (width - size.Width) / 2), tickTop, size.Width, size.Height);
+            tickHeight = Math.Max(tickHeight, size.Height);
+        }
+
+        var trackSize = new Size(c.Right + RowPad, RowPad + tallest + (tickHeight > 0 ? UiLayout.HintGap + tickHeight : 0) + RowPad);
 
         // The strip StickyHeadings put the track in is as tall as the track
         // and the rule under it, worked out once, when the list was wrapped -

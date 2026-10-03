@@ -360,6 +360,8 @@ With the HeatCaller voice chosen, the lines boxes are read-only, the **Speed** b
 
 Every row has two tick boxes side by side, **Race** and **Practice**, so you can see and change both at once and keep practice quieter. The lines themselves are shared between the two; as the note at the top of the tab puts it, "only the ticks differ". **Consistency streak** also has a separate cadence for each (see [Extra settings on some rows](#extra-settings-on-some-rows)).
 
+Under the **Race**, **Practice** and **Caution** headings is a tick box for the whole column. Click it to tick every announcement in that column, or to clear them all when they're all ticked. It shows a part-way mark when only some are ticked. Undo puts back the ticks you had.
+
 Earlier versions had an **Editing:** list that switched the whole page between race and practice ticks. It's gone, and the ticks you'd set for each are kept.
 
 ### Restoring the built-in lines

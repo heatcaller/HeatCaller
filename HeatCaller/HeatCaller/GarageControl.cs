@@ -95,8 +95,25 @@ public sealed class GarageControl : UserControl
     /// <summary>The filter's line - held so a refilled list can re-measure it.</summary>
     private FieldRow? _filterRow;
 
-    private const string EveryoneKey = "\u0000everyone";
-    private const string ClubKey = "\u0000club";
+    /// <summary>Everyone's cars, in Show - and for ShowDriver, which Driver Hub's Garage view also offers.</summary>
+    internal const string EveryoneKey = "\u0000everyone";
+
+    /// <summary>The club's own cars, in Show and for ShowDriver.</summary>
+    internal const string ClubKey = "\u0000club";
+
+    /// <summary>
+    /// On a driver's page: whose cars it was told to show (ShowDriver) - a
+    /// driver's main transponder, EveryoneKey or ClubKey - or null for
+    /// nobody's. Read rather than Show, which falls back to Everyone when
+    /// the driver it was on is deleted.
+    /// </summary>
+    private string? _shownKey;
+
+    /// <summary>A driver's page showing everyone's cars or the club's own rather than one driver's.</summary>
+    private bool ShowingGroup => _forOneDriver && _shownKey is EveryoneKey or ClubKey;
+
+    /// <summary>Batteries, beside Add a Car under a driver's cars - hidden while the page shows a group.</summary>
+    private Button? _btnBatteries;
 
     /// <summary>Cars with no class at all. A real state - a club car nobody has assigned, or a shelf queen.</summary>
     private const string Unassigned = "Unassigned";
@@ -296,14 +313,14 @@ public sealed class GarageControl : UserControl
         page.Add(filterRow, gapBelow: UiLayout.RowGap);
         filterRow.Visible = !_forOneDriver;
 
-        // On a driver's page: how many cars, what the active one is for,
-        // and Add a Car, over the wall.
+        // On a driver's page: how many cars, and what the active one is
+        // for, over the wall.
         if (_forOneDriver)
         {
             _lblDriverCars.AutoSize = true;
             _lblDriverCars.ForeColor = AppTheme.TextMuted;
             _lblDriverCars.Anchor = AnchorStyles.Left;
-            page.Add(new SplitBar(new ButtonBar().With(_lblDriverCars), new ButtonBar(alignRight: true).With(btnAdd)), gapBelow: UiLayout.RowGap);
+            page.Add(new ButtonBar().With(_lblDriverCars), gapBelow: UiLayout.RowGap);
         }
 
         // At least a row of cars under a heading - below that the page
@@ -312,21 +329,27 @@ public sealed class GarageControl : UserControl
         // least taller, and a window shorter than that scrolls the page.
         if (_forOneDriver)
         {
-            page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: _batteries is null ? 0 : UiLayout.RowGap);
+            page.AddFill(_wall, _ => WallPad * 2 + BandHeight + 6 + CarCard.CardHeight, gapBelow: UiLayout.RowGap);
 
-            // Their packs, under their cars: packs move between a driver's
-            // cars, so they belong to the driver rather than to any card.
+            // Under their cars: their packs - packs move between a driver's
+            // cars, so they belong to the driver rather than to any card -
+            // and Batteries and Add a Car side by side.
+            var buttons = new ButtonBar(alignRight: true);
+
+            _lblBatteries.AutoSize = true;
+            _lblBatteries.ForeColor = AppTheme.TextMuted;
+            _lblBatteries.Anchor = AnchorStyles.Left;
+
             if (_batteries is not null)
             {
-                _lblBatteries.AutoSize = true;
-                _lblBatteries.ForeColor = AppTheme.TextMuted;
-                _lblBatteries.Anchor = AnchorStyles.Left;
-
-                var btnBatteries = new Button { Text = "Batteries..." };
-                btnBatteries.Click += (_, _) => OpenBatteries?.Invoke();
-
-                page.Add(new SplitBar(new ButtonBar().With(_lblBatteries), new ButtonBar(alignRight: true).With(btnBatteries)), gapBelow: 0);
+                _btnBatteries = new Button { Text = "Batteries..." };
+                _btnBatteries.Click += (_, _) => OpenBatteries?.Invoke();
+                buttons.With(_btnBatteries);
             }
+
+            buttons.With(btnAdd);
+
+            page.Add(new SplitBar(new ButtonBar().With(_lblBatteries), buttons), gapBelow: 0);
         }
         else
         {
@@ -348,7 +371,15 @@ public sealed class GarageControl : UserControl
     /// read as an empty garage next to a count of the cars in it.
     /// </summary>
     private string EmptyWallText() =>
-        _forOneDriver
+        ShowingGroup
+            ? _shownKey == ClubKey
+                ? _cars.ClubCars.Count == 0
+                    ? "The club has no cars of its own yet. Click Add a Car, and it appears here."
+                    : "The club's own cars are all retired."
+                : _cars.All.Count == 0
+                    ? "No cars yet. Click Add a Car, and it appears here."
+                    : "Every car in the garage is retired."
+            : _forOneDriver
             ? "No cars yet. Click Add a Car, and it appears here."
             : _cars.All.Count == 0
             ? "No cars yet. Add one, and it appears here under its class."
@@ -425,13 +456,23 @@ public sealed class GarageControl : UserControl
 
     private IReadOnlyList<Car> VisibleCars()
     {
-        var chosen = (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder ?? EveryoneKey;
-
-        // A driver's page shows nobody's cars until it is told whose.
-        if (_forOneDriver && chosen is EveryoneKey or ClubKey)
+        // A driver's page shows what it was told to (ShowDriver), and
+        // nobody's cars until it is told. A driver's retired cars are shown,
+        // marked Retired on the card: no longer used, but still theirs and
+        // still openable. Everyone's or the club's leave them out, as the
+        // Garage page does unless asked.
+        if (_forOneDriver)
         {
-            return Array.Empty<Car>();
+            return _shownKey switch
+            {
+                null => Array.Empty<Car>(),
+                EveryoneKey => _cars.All.Where(c => !c.Retired).ToList(),
+                ClubKey => _cars.ClubCars.Where(c => !c.Retired).ToList(),
+                _ => _profiles.Get(_shownKey) is { } driver ? _cars.OwnedBy(driver) : Array.Empty<Car>(),
+            };
         }
+
+        var chosen = (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder ?? EveryoneKey;
 
         var cars = chosen switch
         {
@@ -440,9 +481,7 @@ public sealed class GarageControl : UserControl
             _ => _profiles.Get(chosen) is { } owner ? _cars.OwnedBy(owner) : _cars.OwnedBy(chosen),
         };
 
-        // A driver's page shows their retired cars too, marked Retired on
-        // the card: no longer used, but still theirs and still openable.
-        return _forOneDriver || _chkRetired.Checked ? cars : cars.Where(c => !c.Retired).ToList();
+        return _chkRetired.Checked ? cars : cars.Where(c => !c.Retired).ToList();
     }
 
     /// <summary>
@@ -505,7 +544,11 @@ public sealed class GarageControl : UserControl
         var cars = VisibleCars();
         var eventId = CurrentEventId;
 
-        if (_forOneDriver)
+        // One driver's cards say when each was last set up; a group's say
+        // whose each is, as the Garage page's do.
+        var oneDriver = _forOneDriver && !ShowingGroup;
+
+        if (oneDriver)
         {
             _lastSetups = new Dictionary<string, DateTime>(StringComparer.Ordinal);
 
@@ -567,12 +610,12 @@ public sealed class GarageControl : UserControl
             {
                 var card = new CarCard(
                     car,
-                    _forOneDriver ? DriverLine(car, eventId) : WhoHasIt(car, eventId),
+                    oneDriver ? DriverLine(car, eventId) : WhoHasIt(car, eventId),
                     _chassisTypes.NameOf(car.ChassisTypeId));
 
                 card.Opened += OpenCar;
 
-                if (_forOneDriver)
+                if (oneDriver)
                 {
                     card.ContextMenuStrip = CarMenu(card.Car);
                 }
@@ -602,8 +645,15 @@ public sealed class GarageControl : UserControl
 
         if (_forOneDriver)
         {
-            var count = VisibleCars().Count;
-            _lblDriverCars.Text = count == 0 ? string.Empty : $"{Plural.Of(count, "car")}  ·  the active one is announced";
+            var count = cars.Count;
+            _lblDriverCars.Text = count == 0
+                ? string.Empty
+                : _shownKey switch
+                {
+                    EveryoneKey => $"{Plural.Of(count, "car")} in the garage" + (_cars.All.Count > count ? ", not counting retired ones" : string.Empty),
+                    ClubKey => $"{Plural.Of(count, "car")}, the club's own",
+                    _ => $"{Plural.Of(count, "car")}  ·  the active one is announced",
+                };
             UpdateBatteryStrip();
         }
 
@@ -757,14 +807,18 @@ public sealed class GarageControl : UserControl
 
     private void AddCar()
     {
-        var chosenOwner = (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder;
-        var owner = chosenOwner is null or EveryoneKey or ClubKey ? string.Empty : chosenOwner;
+        var chosenOwner = _forOneDriver ? _shownKey : (_cmbOwnerFilter.SelectedItem as OwnerChoice)?.Transponder;
 
-        // A driver's page adds cars for its driver, never for the club.
-        if (_forOneDriver && owner.Length == 0)
+        // A driver's page adds cars for whoever it shows - the club's, or
+        // anyone's (owned by nobody until the form says whose), when it
+        // shows a group - and nothing while it shows nobody.
+        if (_forOneDriver
+            && (chosenOwner is null || (chosenOwner is not (EveryoneKey or ClubKey) && _profiles.Get(chosenOwner) is null)))
         {
             return;
         }
+
+        var owner = chosenOwner is null or EveryoneKey or ClubKey ? string.Empty : chosenOwner;
 
         var car = new Car
         {
@@ -876,8 +930,9 @@ public sealed class GarageControl : UserControl
     // ------------------------------------------------- a driver's page
 
     /// <summary>
-    /// Shows one driver's cars - for the garage on a driver's page. Null or
-    /// a driver not on file shows none.
+    /// Shows one driver's cars - for the garage on a driver's page - or,
+    /// given EveryoneKey or ClubKey (Driver Hub's Garage view), everyone's
+    /// or the club's own. Null or a driver not on file shows none.
     /// </summary>
     public void ShowDriver(string? transponder)
     {
@@ -891,9 +946,10 @@ public sealed class GarageControl : UserControl
                 .Cast<OwnerChoice>()
                 .FirstOrDefault(c => string.Equals(c.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
 
-            // Everyone, which a driver's page shows as no cars, when there
-            // is nobody to show.
+            // Show is kept in step, though hidden; what the page shows is
+            // _shownKey, and nobody's cars when there is nobody to show.
             _cmbOwnerFilter.SelectedItem = match ?? _cmbOwnerFilter.Items[0];
+            _shownKey = match?.Transponder;
 
             if (_btnAddCar is not null)
             {
@@ -910,7 +966,7 @@ public sealed class GarageControl : UserControl
 
     /// <summary>The driver whose cars these are, on a driver's page - or null.</summary>
     private DriverProfile? ShownDriver =>
-        _cmbOwnerFilter.SelectedItem is OwnerChoice { Transponder: var t } && t != EveryoneKey && t != ClubKey ? _profiles.Get(t) : null;
+        _forOneDriver && _shownKey is { } t && t != EveryoneKey && t != ClubKey ? _profiles.Get(t) : null;
 
     /// <summary>
     /// The strip under a driver's cars: their packs in rotation, the one in
@@ -921,6 +977,12 @@ public sealed class GarageControl : UserControl
         if (_batteries is null || !_forOneDriver)
         {
             return;
+        }
+
+        // Packs are a driver's: nothing to say, or open, for a group.
+        if (_btnBatteries is not null)
+        {
+            _btnBatteries.Visible = !ShowingGroup;
         }
 
         var driver = ShownDriver;

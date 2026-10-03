@@ -18,7 +18,7 @@ The roster is down the left and the driver you pick is beside it.
 
 **The roster** lists your drivers by name and number. **Find** filters it as you type: it matches the driver name, announcer name, any of their transponders, race number, class, team, sponsors, home track and any car in the driver's garage. You can select several rows with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click (useful for deleting several drivers at once).
 
-**The driver's header** shows their photo (or initials), name and, as chips, their number, class (in the class's color), and whether they're checked in tonight, a rental or outside records and points. A name the announcer says differently shows under it. Click the photo to change it.
+**The driver's header** shows their photo (or initials), large, then their name and, as chips, their number, class (in the class's color), and whether they're checked in tonight, a rental or outside records and points. A name the announcer says differently shows under it. Click the photo to change it.
 
 **The buttons along the bottom** are grouped by what they act on:
 
@@ -43,9 +43,11 @@ On the **Stats** tab, under the driver's recent form, **Recent activity** lists 
 
 One driver's cars fill the page. Pick whose in **Driver** at the top left, where **Find** is in the Drivers view; the Drivers view follows, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Drivers view.
 
+**Driver** also has **Everyone's cars** and **The club's own cars** at the top of its list. They show every car in the garage, or the club's own, as cards that say whose each car is, as on the [Garage](#garage) page. Retired cars are left out. **Add a Car** adds a car for the club, or for a driver you pick in **Owner:**. Picking one of these doesn't change the driver in the Drivers view, and switching to the Drivers view and back shows that driver's cars again.
+
 ### A driver's garage
 
-Each of the driver's cars is a card, grouped under its class, with how many they have and **Add a Car** above them. Under the cars, a **Batteries** line lists their packs and which one is in the car; **Batteries** beside it opens their [Batteries tab](#a-drivers-batteries). Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, when it last had a setup logged, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
+Each of the driver's cars is a card, grouped under its class, with how many they have above them. Under the cars, a **Batteries** line lists their packs and which one is in the car, with **Batteries** and **Add a Car** beside it. **Batteries** opens their [Batteries tab](#a-drivers-batteries). Under the car's name, the card says whether it's their **Active** car (the one they're announced and recorded in), which of their transponders are fitted to it, when it last had a setup logged, who it's lent to tonight, and whether it's **Retired**. Retired cars are always shown here, so you can still open them.
 
 - Click a car to open it, the same window as on the [Garage](#garage) page: photos, details, lending, setups.
 - Right-click a car for **Open**, **Make Active Car** and **Transfer**. **Make Active Car** changes the car the driver is announced in. Undo puts back the car they had.

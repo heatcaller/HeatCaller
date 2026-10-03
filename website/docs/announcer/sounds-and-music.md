@@ -12,7 +12,7 @@ None of these sounds use the internet. They play on the laptop, through whatever
 
 The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pack**, **Your own file (optional)** and **Weight**. Hover over most things on a row for a tip saying what they do. Each row has:
 
-- **Race** and **Practice** tick boxes: the first plays the sound in races, the second in practice. A sound with only the practice box ticked stays silent on race night.
+- **Race** and **Practice** tick boxes: the first plays the sound in races, the second in practice. A sound with only the practice box ticked stays silent on race night. Under each heading is a tick box for the whole column: click it to tick every sound in that column, or to clear them all when they're all ticked. It shows a part-way mark when only some are ticked, and Undo puts back the ticks you had.
 - **Sound**: the sound's name. A longer explanation, such as "all-time best on this track" for **Track record**, sits on a smaller line underneath (shown in brackets in the table below).
 - **Pack**: the built-in sound this row plays, **Classic tones** or a pack.
 - **Your own file (optional)**: shows **(optional own file)** until you choose one. Once set, the box shows just the file's name; hover over it to see the full path. Click into the box and it shows the full path, so you can type or paste one.
