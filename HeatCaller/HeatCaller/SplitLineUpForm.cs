@@ -9,6 +9,14 @@ namespace HeatCaller;
 /// A pass is paired with the other loop's nearest unpaired pass by the same
 /// driver within <see cref="Window"/>, whichever arrives first. The answer
 /// is the median gap, so one odd reading can't move it.
+///
+/// A split transponder nobody has yet - the usual case the first time, with
+/// the car's second transponder just fitted - is paired with the nearest
+/// line pass by anybody. When every such pairing names the same split
+/// transponder and the same driver, at least <see cref="LeastToAdd"/>
+/// times, that is <see cref="NewSplit"/>: those gaps count, and Line Up
+/// offers to add it to that driver. Mixed up (two unknown transponders, or
+/// one paired with two drivers) and they don't count.
 /// </summary>
 public sealed class LineUpPairing
 {
@@ -18,24 +26,73 @@ public sealed class LineUpPairing
     /// <summary>Gaps needed before there is an answer.</summary>
     public const int Least = 3;
 
-    private readonly List<(string Driver, long Ms)> _line = new();
-    private readonly List<(string Driver, long Ms)> _split = new();
-    private readonly List<(string Driver, long GapMs)> _gaps = new();
+    /// <summary>Pairings needed before an unknown split transponder is taken as a driver's.</summary>
+    public const int LeastToAdd = 2;
+
+    /// <summary>One crossing found: whose, the gap, and the split transponder when it is nobody's yet.</summary>
+    public sealed record Gap(string Driver, long GapMs, string? NewSplitId);
+
+    /// <summary>A pass waiting for the other loop's. Driver is null for a split transponder nobody has.</summary>
+    private sealed record Waiting(string? Driver, long Ms, string? SplitId);
+
+    private readonly List<Waiting> _line = new();
+    private readonly List<Waiting> _split = new();
+    private readonly List<Gap> _gaps = new();
 
     /// <summary>Every gap found so far, oldest first: positive when the split loop read the car later than the line.</summary>
-    public IReadOnlyList<(string Driver, long GapMs)> Gaps => _gaps;
+    public IReadOnlyList<Gap> Gaps => _gaps;
 
-    /// <summary>The median gap, rounded to a millisecond, or null with fewer than <see cref="Least"/>.</summary>
-    public int? Answer
+    /// <summary>
+    /// The split transponder nobody has that has been paired with one
+    /// driver's line passes, and only theirs - at least
+    /// <see cref="LeastToAdd"/> times. Null when there is none, or it is
+    /// mixed up.
+    /// </summary>
+    public (string SplitId, string Driver)? NewSplit
     {
         get
         {
-            if (_gaps.Count < Least)
+            var unknown = _gaps.Where(g => g.NewSplitId is not null).ToList();
+
+            if (unknown.Count < LeastToAdd)
             {
                 return null;
             }
 
-            var sorted = _gaps.Select(g => g.GapMs).OrderBy(ms => ms).ToList();
+            var ids = unknown.Select(g => g.NewSplitId!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var drivers = unknown.Select(g => g.Driver).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            return ids.Count == 1 && drivers.Count == 1 ? (ids[0], drivers[0]) : null;
+        }
+    }
+
+    /// <summary>The gaps the answer is taken from: every known split's, and an unknown one's only when it is <see cref="NewSplit"/>.</summary>
+    public IReadOnlyList<Gap> Counted
+    {
+        get
+        {
+            var added = NewSplit;
+
+            return _gaps
+                .Where(g => g.NewSplitId is null
+                            || added is { } a && string.Equals(g.NewSplitId, a.SplitId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    /// <summary>The median of the <see cref="Counted"/> gaps, rounded to a millisecond, or null with fewer than <see cref="Least"/>.</summary>
+    public int? Answer
+    {
+        get
+        {
+            var counted = Counted;
+
+            if (counted.Count < Least)
+            {
+                return null;
+            }
+
+            var sorted = counted.Select(g => g.GapMs).OrderBy(ms => ms).ToList();
             var middle = sorted.Count / 2;
 
             var median = sorted.Count % 2 == 1
@@ -47,37 +104,78 @@ public sealed class LineUpPairing
     }
 
     /// <summary>A line pass by this driver at this time on the line's clock. Returns the gap when it paired.</summary>
-    public long? AddLine(string driver, long lineMs) => Add(driver, lineMs, isLine: true);
-
-    /// <summary>A split pass by this driver at this time on the line's clock (before calibration). Returns the gap when it paired.</summary>
-    public long? AddSplit(string driver, long lineMs) => Add(driver, lineMs, isLine: false);
-
-    private long? Add(string driver, long ms, bool isLine)
+    public long? AddLine(string driver, long lineMs)
     {
-        var mine = isLine ? _line : _split;
-        var theirs = isLine ? _split : _line;
+        Forget(_split, lineMs);
 
-        // Forget what is too old to pair with anything any more.
-        theirs.RemoveAll(p => Math.Abs(ms - p.Ms) > Window * 4);
+        // Their own split transponder, or one nobody has.
+        var match = Nearest(_split, lineMs, p => p.Driver is null || Same(p.Driver, driver));
 
-        var match = theirs
-            .Where(p => string.Equals(p.Driver, driver, StringComparison.OrdinalIgnoreCase) && Math.Abs(ms - p.Ms) <= Window)
-            .OrderBy(p => Math.Abs(ms - p.Ms))
-            .Select(p => ((string Driver, long Ms)?)p)
-            .FirstOrDefault();
-
-        if (match is not { } other)
+        if (match is null)
         {
-            mine.Add((driver, ms));
+            _line.Add(new Waiting(driver, lineMs, null));
             return null;
         }
 
-        theirs.Remove(other);
+        _split.Remove(match);
+        return Found(driver, match.Ms - lineMs, match.SplitId);
+    }
 
-        var gap = isLine ? other.Ms - ms : ms - other.Ms;
-        _gaps.Add((driver, gap));
+    /// <summary>A split pass by this driver at this time on the line's clock (before calibration). Returns the gap when it paired.</summary>
+    public long? AddSplit(string driver, long lineMs)
+    {
+        Forget(_line, lineMs);
+
+        var match = Nearest(_line, lineMs, p => Same(p.Driver, driver));
+
+        if (match is null)
+        {
+            _split.Add(new Waiting(driver, lineMs, null));
+            return null;
+        }
+
+        _line.Remove(match);
+        return Found(driver, lineMs - match.Ms, null);
+    }
+
+    /// <summary>
+    /// A split pass by a split transponder nobody has, at this time on the
+    /// line's clock (before calibration) - paired with anybody's line pass.
+    /// Returns the gap when it paired.
+    /// </summary>
+    public long? AddUnknownSplit(string splitId, long lineMs)
+    {
+        Forget(_line, lineMs);
+
+        var match = Nearest(_line, lineMs, _ => true);
+
+        if (match?.Driver is not { } driver)
+        {
+            _split.Add(new Waiting(null, lineMs, splitId));
+            return null;
+        }
+
+        _line.Remove(match);
+        return Found(driver, lineMs - match.Ms, splitId);
+    }
+
+    private long Found(string driver, long gap, string? newSplitId)
+    {
+        _gaps.Add(new Gap(driver, gap, newSplitId));
         return gap;
     }
+
+    /// <summary>Forgets what is too old to pair with anything any more.</summary>
+    private static void Forget(List<Waiting> waiting, long ms) =>
+        waiting.RemoveAll(p => Math.Abs(ms - p.Ms) > Window * 4);
+
+    private static Waiting? Nearest(List<Waiting> waiting, long ms, Func<Waiting, bool> fits) =>
+        waiting
+            .Where(p => fits(p) && Math.Abs(ms - p.Ms) <= Window)
+            .OrderBy(p => Math.Abs(ms - p.Ms))
+            .FirstOrDefault();
+
+    private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -107,6 +205,13 @@ public sealed class SplitLineUpForm : Form
     /// <summary>What to save: the measured gap, or 0 for Set to Zero - null when nothing was saved.</summary>
     public int? OffsetMs { get; private set; }
 
+    /// <summary>
+    /// A split transponder nobody had, to add to this driver (their main
+    /// transponder) - the one the crossings were measured with. Set by
+    /// Save only.
+    /// </summary>
+    public (string SplitId, string Driver)? AddSplit { get; private set; }
+
     public SplitLineUpForm(
         SplitLoop splitLoop,
         ProfileStore profiles,
@@ -128,6 +233,7 @@ public sealed class SplitLineUpForm : Form
             Text = "Lay the split loop right beside the start/finish line, at the same spot. Then drive a car with both of its "
                    + "transponders fitted across them, five or six times. Each crossing both loops read is listed below with how "
                    + "much later the split loop read it. Save keeps the middle one, and it's taken off every split time. "
+                   + "If the car's split transponder isn't added to its driver yet, Save adds it. "
                    + "Then put the split loop back in its place round the track.",
             AutoSize = true,
         };
@@ -159,6 +265,7 @@ public sealed class SplitLineUpForm : Form
             }
 
             OffsetMs = answer;
+            AddSplit = _pairing.NewSplit;
             DialogResult = DialogResult.OK;
             Close();
         };
@@ -208,43 +315,78 @@ public sealed class SplitLineUpForm : Form
             return;
         }
 
-        Show(driver, _pairing.AddLine(driver.Transponder, lap.DeviceTimeMs));
+        ShowCrossing(_pairing.AddLine(driver.Transponder, lap.DeviceTimeMs));
     }
 
     private void OnSplitPass(SplitPass pass)
     {
-        if (pass.Driver is null || pass.RawLineMs is not { } raw || _profiles.Get(pass.Driver) is not { } driver)
+        if (pass.RawLineMs is not { } raw)
         {
             return;
         }
 
-        Show(driver, _pairing.AddSplit(driver.Transponder, raw));
+        // A split transponder nobody has yet - most likely the one just
+        // fitted to the car being driven over: paired with whoever crossed
+        // the line, and offered to them on Save.
+        if (pass.Driver is null)
+        {
+            if (pass.Transponder.Length > 0)
+            {
+                ShowCrossing(_pairing.AddUnknownSplit(pass.Transponder, raw));
+            }
+
+            return;
+        }
+
+        if (_profiles.Get(pass.Driver) is not { } driver)
+        {
+            return;
+        }
+
+        ShowCrossing(_pairing.AddSplit(driver.Transponder, raw));
     }
 
-    private void Show(DriverProfile driver, long? gap)
+    private string NameOf(string transponder) =>
+        _profiles.Get(transponder) is { } driver && !string.IsNullOrWhiteSpace(driver.DriverName)
+            ? driver.DriverName.Trim()
+            : transponder;
+
+    private void ShowCrossing(long? paired)
     {
-        if (gap is not { } ms || IsDisposed)
+        if (paired is null || IsDisposed || _pairing.Gaps.Count == 0)
         {
             return;
         }
 
-        var name = string.IsNullOrWhiteSpace(driver.DriverName) ? driver.Transponder : driver.DriverName.Trim();
-        var said = ms >= 0 ? $"{ms} ms later" : $"{-ms} ms earlier";
+        var gap = _pairing.Gaps[^1];
+        var name = NameOf(gap.Driver);
+
+        if (gap.NewSplitId is { } id)
+        {
+            name += $" (split {id}, not added yet)";
+        }
+
+        var said = gap.GapMs >= 0 ? $"{gap.GapMs} ms later" : $"{-gap.GapMs} ms earlier";
 
         var item = _list.Items.Add(new ListViewItem(new[] { name, said }));
         item.EnsureVisible();
 
-        var count = _pairing.Gaps.Count;
+        var count = _pairing.Counted.Count;
 
         if (_pairing.Answer is { } answer)
         {
-            _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far. The split loop reads {answer} ms "
-                              + $"{(answer >= 0 ? "late" : "early")} - click Save to keep it.";
+            var adding = _pairing.NewSplit is { } added
+                ? $" and add split transponder {added.SplitId} to {NameOf(added.Driver)}"
+                : string.Empty;
+
+            _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far. The split loop reads {Math.Abs(answer)} ms "
+                              + $"{(answer >= 0 ? "late" : "early")} - click Save to keep it{adding}.";
             _btnSave.Enabled = true;
         }
         else
         {
             _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far - {LineUpPairing.Least} are needed.";
+            _btnSave.Enabled = false;
         }
     }
 

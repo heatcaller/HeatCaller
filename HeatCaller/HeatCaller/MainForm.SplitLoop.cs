@@ -439,7 +439,74 @@ public partial class MainForm
         _settings.SplitLoopOffsetMs = measured;
         _settings.Save();
         OnClientRawMessage($"{AppTime.LogStampNow()}  [split] Lined up: the split loop reads {measured} ms late; that is taken off every split time.");
+
+        if (form.AddSplit is { } add)
+        {
+            AddSplitFromLineUp(add.SplitId, add.Driver);
+        }
+
         RenderSplitStatus();
+    }
+
+    /// <summary>
+    /// Adds the split transponder Line Up measured with to its driver, the
+    /// way Add Split Transponder on their Transponders tab does: fitted to
+    /// their car when they have just the one, refused when somebody else has
+    /// it, and with an undo that puts the list back while it is still as
+    /// this left it.
+    /// </summary>
+    private void AddSplitFromLineUp(string splitId, string driverKey)
+    {
+        if (_profiles.Get(driverKey) is not { } current)
+        {
+            return;
+        }
+
+        var who = string.IsNullOrWhiteSpace(current.DriverName) ? current.Transponder : current.DriverName.Trim();
+
+        // Added since, from the Driver Hub - nothing to do.
+        if (current.SplitEntry(splitId) is not null)
+        {
+            return;
+        }
+
+        var cars = _cars.OwnedBy(current).Where(c => !c.Retired).ToList();
+        var updated = ProfileStore.Snapshot(current);
+        (updated.SplitTransponders ??= new List<OwnedTransponder>()).Add(new OwnedTransponder
+        {
+            Id = splitId,
+            CarId = cars.Count == 1 ? cars[0].Id : string.Empty,
+            AddedUtc = DateTime.UtcNow,
+        });
+
+        if ((_profiles.DescribeClash(updated, editing: updated.Transponder)
+             ?? _profiles.DescribeSplitClash(updated, editing: updated.Transponder)) is { } clash)
+        {
+            AppDialog.Show(this, $"The offset was saved, but split transponder {splitId} wasn't added to {who}: {clash}",
+                "Line Up", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var splitBefore = System.Text.Json.JsonSerializer.Serialize(current.SplitTransponders ?? new List<OwnedTransponder>());
+        var splitAfter = System.Text.Json.JsonSerializer.Serialize(updated.SplitTransponders);
+        var key = updated.Transponder;
+        var profiles = _profiles;
+
+        _undo.Capture($"Add split transponder {splitId} to {who}", () =>
+        {
+            if (profiles.Get(key) is not { } now
+                || System.Text.Json.JsonSerializer.Serialize(now.SplitTransponders ?? new List<OwnedTransponder>()) != splitAfter)
+            {
+                throw new InvalidOperationException($"{who}'s split transponders have been changed again since, and undoing this now would undo that too. Nothing was changed.");
+            }
+
+            var restored = ProfileStore.Snapshot(now);
+            restored.SplitTransponders = System.Text.Json.JsonSerializer.Deserialize<List<OwnedTransponder>>(splitBefore) ?? new List<OwnedTransponder>();
+            profiles.Upsert(restored);
+        });
+
+        _profiles.Upsert(updated);
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [split] Added split transponder {splitId} to {who}.");
     }
 
     /// <summary>

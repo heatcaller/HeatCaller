@@ -250,6 +250,62 @@ public sealed class SplitLoopTests : IDisposable
         Assert.Empty(pairing.Gaps);
     }
 
+    [Fact]
+    public void Line_up_pairs_a_split_transponder_nobody_has_and_offers_it_to_the_driver()
+    {
+        var pairing = new LineUpPairing();
+
+        Assert.Null(pairing.AddLine("100", 10_000));
+        Assert.Equal(180, pairing.AddUnknownSplit("841AC2", 10_180));
+
+        // One pairing isn't enough to take it as theirs, nor to count.
+        Assert.Null(pairing.NewSplit);
+        Assert.Empty(pairing.Counted);
+
+        // The split read first this time.
+        Assert.Null(pairing.AddUnknownSplit("841AC2", 20_120));
+        Assert.Equal(120, pairing.AddLine("100", 20_000));
+
+        Assert.Equal(("841AC2", "100"), pairing.NewSplit);
+        Assert.Null(pairing.Answer);
+
+        Assert.Null(pairing.AddLine("100", 30_000));
+        Assert.Equal(260, pairing.AddUnknownSplit("841AC2", 30_260));
+
+        Assert.Equal(3, pairing.Counted.Count);
+        Assert.Equal(180, pairing.Answer);
+        Assert.All(pairing.Gaps, g => Assert.Equal("841AC2", g.NewSplitId));
+    }
+
+    [Fact]
+    public void Line_up_does_not_count_an_unknown_split_transponder_paired_with_two_drivers()
+    {
+        var pairing = new LineUpPairing();
+
+        Assert.Null(pairing.AddLine("100", 10_000));
+        Assert.Equal(100, pairing.AddUnknownSplit("841AC2", 10_100));
+        Assert.Null(pairing.AddLine("500", 20_000));
+        Assert.Equal(100, pairing.AddUnknownSplit("841AC2", 20_100));
+
+        Assert.Null(pairing.NewSplit);
+        Assert.Empty(pairing.Counted);
+
+        // Known split transponders still count on their own.
+        Assert.Null(pairing.AddLine("100", 30_000));
+        Assert.Equal(20, pairing.AddSplit("100", 30_020));
+        Assert.Single(pairing.Counted);
+    }
+
+    [Fact]
+    public void Line_up_pairs_an_unknown_split_only_within_the_window()
+    {
+        var pairing = new LineUpPairing();
+
+        Assert.Null(pairing.AddLine("100", 10_000));
+        Assert.Null(pairing.AddUnknownSplit("841AC2", 10_000 + LineUpPairing.Window + 1));
+        Assert.Empty(pairing.Gaps);
+    }
+
     // ------------------------------------------------- a pass and its copies
 
     [Fact]

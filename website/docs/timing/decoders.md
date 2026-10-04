@@ -133,6 +133,7 @@ Each decoder takes a moment to report a car, and the I-Lap's serial line adds a 
 1. Lay the split loop right beside the start/finish line, at the same spot.
 2. Click **Line Up**, then drive a car with both its transponders across them five or six times. Each crossing both loops read is listed.
 3. Click **Save**. The middle reading is kept and taken off every split time. **Set to Zero** clears it.
+   If the car's split transponder isn't added to its driver yet, the crossings are listed as, for example, "Frank (split 841AC2, not added yet)", and **Save** adds it to them too, as **Add Split Transponder** would. The car's line transponder must already be a driver's.
 4. Put the split loop back in its place round the track.
 
 ### Split times
