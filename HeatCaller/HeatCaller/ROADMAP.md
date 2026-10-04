@@ -1236,7 +1236,7 @@ real photo.
 
 ## Finding your way around
 
-**The three biggest classes are split into partial files by area**
+**The biggest classes are split into partial files by area**
 (26 Sep 2026). The main file of each holds the fields, the constructor and
 what didn't fit an area:
 
@@ -1245,6 +1245,7 @@ what didn't fit an area:
 | `MainForm` | `MainForm.cs`, `.Audio`, `.Chrome`, `.Commentary`, `.Connection`, `.Console`, `.Ghosts`, `.Keyboard`, `.LayoutCheck`, `.Navigation`, `.Pages`, `.RaceSetup`, `.Relay`, `.TimingWatch`, plus `MainForm.Designer.cs` |
 | `AnnouncementService` | `AnnouncementService.cs`, `.DriverRelease`, `.HeatCallerVoice`, `.LapCalls`, `.Playback`, `.PreparedLines`, `.RaceEvents`, `.Sounds`, `.Synthesis`, `.VoiceQueue` |
 | `RaceControlControl` | `RaceControlControl.cs`, `.AfterRace`, `.Layout`, `.Leaderboard`, `.NextUp`, `.RaceEvents`, `.StartSequence`, plus `RaceControlShortcuts.cs` and `RaceControlWarnings.cs` |
+| `RaceControlSession` | `RaceControlSession.cs`, `.Laps` (a pass from the decoder: alternate transponders, judging and counting it - `ProcessLapEvent`). Split by area a piece at a time, whenever a change is already in that part (3 Oct 2026); the fields stay in the main file |
 
 ### Extension points
 
