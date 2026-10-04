@@ -687,7 +687,7 @@ public sealed partial class RaceControlControl
 
         // Its sectors when it had some - for record pace at the split. A
         // record set without them clears the old record's.
-        track.RecordSectorsMs = RecordLapSectors(standing.Transponder, standing.FastLapMs);
+        track.KeepRecordSectors(RecordLapSectors(standing.Transponder, standing.FastLapMs));
         _trackLayouts.Upsert(track);
 
         _announcer.NotifyTrackRecord(standing);

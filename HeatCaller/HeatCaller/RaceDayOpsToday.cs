@@ -78,7 +78,7 @@ public sealed partial class RaceDayService
                     name,
                     drivers = _host.Program.ClassRoster(name).Count,
                     checkedIn = _host.Profiles.All.Count(p =>
-                        string.Equals(p.ClassName, name, StringComparison.OrdinalIgnoreCase)
+                        p.RunsClass(name)
                         && _host.CheckIns.IsCheckedIn(p.Transponder)),
                 })
                 .ToList(),
@@ -623,7 +623,7 @@ public sealed partial class RaceDayService
         {
             name = raceClass.Name,
             racingToday = racing,
-            drivers = _host.Profiles.All.Count(p => string.Equals(p.ClassName, raceClass.Name, StringComparison.OrdinalIgnoreCase)),
+            drivers = _host.Profiles.All.Count(p => p.RunsClass(raceClass.Name)),
             rosterToday = _host.Program.ClassRoster(raceClass.Name).Count,
             qualifyingMethod = Camel(raceClass.QualifyingMethod.ToString()),
             consecutiveLaps = raceClass.ConsecutiveLapCount,

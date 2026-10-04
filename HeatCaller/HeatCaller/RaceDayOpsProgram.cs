@@ -140,7 +140,7 @@ public sealed partial class RaceDayService
                     // sent through the relay in full (see ShownName).
                     name = ShownName(profile?.DriverName, profile?.Transponder ?? t, context.Channel),
                     className = profile?.ClassName ?? string.Empty,
-                    inClass = profile is not null && string.Equals(profile.ClassName, round.ClassName, StringComparison.OrdinalIgnoreCase),
+                    inClass = profile is not null && profile.RunsClass(round.ClassName),
                     checkedIn = _host.CheckIns.IsCheckedIn(profile?.Transponder ?? t),
                     tech = profile is null ? null : TechView(profile),
                 };

@@ -54,7 +54,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     private static string VoiceSignature(VoiceProfile profile, AnnouncementEventConfig config) =>
         string.Join("|",
-            profile.EffectiveEngine, profile.WindowsVoiceName,
+            profile.EffectiveEngine, profile.WindowsVoiceName, profile.KokoroVoiceName,
             profile.HeatCallerVoice, profile.HeatCallerRev,
             profile.VoiceId, profile.ModelId, profile.Stability, profile.SimilarityBoost,
             profile.Style, profile.Speed, profile.SpeakerBoost, profile.TextNormalization,
@@ -258,7 +258,10 @@ public sealed partial class AnnouncementService
             ? !profile.HeatCallerReady
             : string.IsNullOrWhiteSpace(profile.VoiceId);
 
-        if (nothingToRenderWith || profile.EffectiveEngine == VoiceEngine.Windows)
+        // Nor for Kokoro: it renders on this PC as well, and its lines are
+        // never kept in the saved-voice library - preparing would render
+        // ElevenLabs lines with the club's key, for a voice it isn't using.
+        if (nothingToRenderWith || profile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
         {
             return Array.Empty<PlannedLine>();
         }
@@ -384,6 +387,11 @@ public sealed partial class AnnouncementService
             if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Windows)
             {
                 return new PrepareOutcome(rendered, alreadySaved, failed, "the Windows voice was chosen on Voice Settings");
+            }
+
+            if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
+            {
+                return new PrepareOutcome(rendered, alreadySaved, failed, "the Kokoro voice was chosen on Voice Settings");
             }
 
             try

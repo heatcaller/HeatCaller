@@ -46,6 +46,9 @@ public partial class MainForm
                     ? _demoControl.SelectedTrackName
                     : cmbTrackLayout.SelectedItem as string;
 
+            _ghostsOnlyThese = onlyThese;
+            _ghostsStartedFor = GhostsWanted(onlyThese);
+
             _ghosts.Start(trackName, onlyThese);
         }
         else if (state is RaceState.Idle or RaceState.Finished or RaceState.Staging or RaceState.Countdown)
@@ -81,6 +84,8 @@ public partial class MainForm
 
         EnsureGhostProfiles();
 
+        KeepRunningGhostsInStep();
+
         // Rebuild the pickers immediately. They cache their driver list
         // when built and only rebuild on navigation, so a ghost added
         // while another page was open wouldn't appear until that page
@@ -98,6 +103,66 @@ public partial class MainForm
                 // One page failing to refresh must not stop the others.
             }
         }
+    }
+
+    /// <summary>The demo's ghost selection the running ghosts were started with; null for a real race.</summary>
+    private IReadOnlyCollection<string>? _ghostsOnlyThese;
+
+    /// <summary>Which ghosts were switched on when the running ones were started, by transponder.</summary>
+    private HashSet<string> _ghostsStartedFor = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The ghosts the switches say should run: on, and (in a demo) ticked for it.</summary>
+    private HashSet<string> GhostsWanted(IReadOnlyCollection<string>? onlyThese) =>
+        _ghostStore.Current.Enabled
+            ? _ghostStore.Current.Ghosts
+                .Where(g => g.Enabled
+                    && (onlyThese is null || onlyThese.Contains(g.Transponder, StringComparer.OrdinalIgnoreCase)))
+                .Select(g => g.Transponder)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Ghosts switched off (or on) while they are racing are taken off (or
+    /// put on) track there and then.
+    ///
+    /// WHY. The ghosts were only ever started and stopped with the race, and
+    /// the service reads the switches only when it starts - so unticking
+    /// "Enable ghost cars", a ghost's On/Off button or the Practice page's
+    /// "Race ghost cars" mid-race changed the page to say the ghosts were
+    /// off while they went on lapping, on every board and called by the PA,
+    /// until the race ended. Now a save that changes which ghosts should be
+    /// running stops them all, or restarts them - and a restart in a running
+    /// race carries each remaining ghost on from its last crossing (see
+    /// GhostService.Start), so they do not jump back to the line. A save
+    /// that changes nothing about who runs (a ghost renamed, its pace
+    /// nudged) leaves them alone. Ghosts that were not running are left for
+    /// the next green, as before.
+    /// </summary>
+    private void KeepRunningGhostsInStep()
+    {
+        if (_ghosts is null || !_ghosts.IsRunning || _race.State != RaceState.Racing)
+        {
+            return;
+        }
+
+        var wanted = GhostsWanted(_ghostsOnlyThese);
+
+        if (wanted.SetEquals(_ghostsStartedFor))
+        {
+            return;
+        }
+
+        if (wanted.Count == 0)
+        {
+            _ghosts.Stop();
+            _ghostWasAhead.Clear();
+            _ghostsStartedFor = wanted;
+            OnClientRawMessage("[ghost] Ghost cars switched off mid-race - taken off track.");
+            return;
+        }
+
+        OnClientRawMessage("[ghost] Ghost cars changed mid-race - restarting the ones still switched on.");
+        HandleGhosts(RaceState.Racing);
     }
 
     private GhostService CreateGhostService()

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -36,6 +37,26 @@ public sealed class RaceJournal
 
     /// <summary>Where a journal goes when it cannot be deleted after the race is saved - anywhere but the name that means "unfinished".</summary>
     private static string ClearedPath => FilePath.Replace(".json", "-cleared.json");
+
+    /// <summary>
+    /// Written when Clear could neither delete nor move the journal: the hash
+    /// of what was last written, so the next launch can tell that the file
+    /// still under the "unfinished" name is a race that WAS saved - see Clear.
+    /// </summary>
+    private static string FiledMarkerPath => FilePath.Replace(".json", "-filed.txt");
+
+    /// <summary>
+    /// The hash of the last thing this wrote that landed on disk, or null when
+    /// nothing has this race. Only Clear reads it - see FiledMarkerPath.
+    /// </summary>
+    private string? _lastWrittenHash;
+
+    /// <summary>
+    /// Set when the journal was there at startup but could not be read, so
+    /// whatever race was in it was never offered back. The first write of the
+    /// next race keeps a copy of it before writing over it - see Unfinished.
+    /// </summary>
+    private static bool _keepUnreadJournal;
 
     /// <summary>
     /// When the last write landed, as <see cref="Environment.TickCount64"/>,
@@ -340,6 +361,15 @@ public sealed class RaceJournal
             return;
         }
 
+        // The journal from before this launch could not be read, so its race
+        // may never have been filed. This write would replace the only copy
+        // of it - see Unfinished.
+        if (_keepUnreadJournal && !TryKeepUnreadJournal())
+        {
+            NoteWriteFailed();
+            return;
+        }
+
         try
         {
             var snapshot = race.CreateSnapshot();
@@ -423,6 +453,7 @@ public sealed class RaceJournal
 
             if (written)
             {
+                _lastWrittenHash = HashOf(json);
                 NoteWriteSucceeded();
             }
             else
@@ -447,6 +478,44 @@ public sealed class RaceJournal
     private static bool IsWithin(long? sinceTicks, TimeSpan span) =>
         sinceTicks is { } since
         && Environment.TickCount64 - since < (long)span.TotalMilliseconds;
+
+    private static string HashOf(string json) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+
+    /// <summary>
+    /// Copies a journal that could not be read at startup aside, before the
+    /// first write of a new race goes over it. Says where it went, so it can
+    /// be put back by hand. False when the copy could not be made - the race
+    /// is then not written, rather than written over the old one.
+    /// </summary>
+    private bool TryKeepUnreadJournal()
+    {
+        try
+        {
+            if (!File.Exists(FilePath))
+            {
+                _keepUnreadJournal = false;
+                return true;
+            }
+
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var target = FilePath.Replace(".json", $"-unread-{stamp}.json");
+            for (var n = 2; File.Exists(target); n++)
+            {
+                target = FilePath.Replace(".json", $"-unread-{stamp}-{n}.json");
+            }
+
+            File.Copy(FilePath, target, overwrite: false);
+            _keepUnreadJournal = false;
+            RaiseStatus($"The race journal that could not be read at startup was kept as \"{Path.GetFileName(target)}\" before this race was written. "
+                + "If a race was lost, close HeatCaller and rename that file back to race-in-progress.json to be offered it again.");
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private void NoteWriteSucceeded()
     {
@@ -584,6 +653,8 @@ public sealed class RaceJournal
     /// <summary>The race is safely in the history - there is nothing left to recover.</summary>
     public void Clear()
     {
+        var lastWrittenHash = _lastWrittenHash;
+        _lastWrittenHash = null;
         _lastWriteTicks = null;
         _writePending = false;
 
@@ -598,23 +669,72 @@ public sealed class RaceJournal
             {
                 File.Delete(FilePath);
             }
+
+            DeleteFiledMarker();
         }
-        catch
+        catch (Exception deleteEx)
         {
             // Could not be deleted - most often something holding it open
             // for a moment. Left under its own name it would offer this
             // race back at the next launch, although the race is already in
             // the history, so it is moved out of the way instead. A rename
-            // can succeed where a delete did not, and if neither works there
-            // is nothing more to do from here.
+            // can succeed where a delete did not.
             try
             {
                 File.Move(FilePath, ClearedPath, overwrite: true);
+                DeleteFiledMarker();
             }
-            catch
+            catch (Exception moveEx)
             {
-                // ignore
+                // Neither worked - something held the file without letting
+                // it be deleted or renamed. This used to be ignored, and the
+                // race just saved was offered back at the next launch as "a
+                // race that was still running": its last write is made as
+                // the checkered goes out, before the state says Finished, so
+                // nothing in Unfinished could tell. Restored and flagged, it
+                // was filed a second time and its heat re-pointed at the
+                // copy. So the hash of what is in the file is written beside
+                // it, and Unfinished sets a journal that matches it aside.
+                var marked = lastWrittenHash is not null
+                             && SafeFile.WriteAllText(FiledMarkerPath, lastWrittenHash);
+
+                RaiseStatus($"Race journal could not be cleared ({deleteEx.Message} / {moveEx.Message}). "
+                    + (marked
+                        ? "It has been marked as done with, so the next launch will not offer this race back."
+                        : "If the next launch offers this race back and it is already in Race History, choose No."));
             }
+        }
+    }
+
+    private static void DeleteFiledMarker()
+    {
+        try
+        {
+            if (File.Exists(FiledMarkerPath))
+            {
+                File.Delete(FiledMarkerPath);
+            }
+        }
+        catch
+        {
+            // Harmless left behind: it only matches the file it was written for.
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="json"/> is the journal Clear could not get rid
+    /// of after its race was saved - see Clear. Never throws.
+    /// </summary>
+    private static bool WasFiled(string json)
+    {
+        try
+        {
+            return File.Exists(FiledMarkerPath)
+                   && string.Equals(File.ReadAllText(FiledMarkerPath).Trim(), HashOf(json), StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -628,7 +748,35 @@ public sealed class RaceJournal
                 return null;
             }
 
-            var entry = JsonSerializer.Deserialize<Entry>(File.ReadAllText(FilePath));
+            // With retries, as every store reads at startup. A plain read
+            // failed outright when a backup or sync tool, or the copy of the
+            // app that was killed, still had the file open for a moment -
+            // and the failure was taken for "no race was running", with
+            // nothing said. The next race's first write then replaced the
+            // only copy of the race that had been lost.
+            var json = SafeFile.ReadAllTextWithRetry(FilePath);
+
+            // A race already in the history, whose journal Clear could not
+            // delete or move. Moved aside now that it may be free, and not
+            // offered back - see Clear.
+            if (WasFiled(json))
+            {
+                try
+                {
+                    File.Move(FilePath, ClearedPath, overwrite: true);
+                    DeleteFiledMarker();
+                }
+                catch
+                {
+                    // Still in the way; the marker keeps matching it until
+                    // the next race's first write replaces it.
+                }
+
+                SessionLog.Write("[race] The race journal left from last time is a race that was already saved - not offered back.");
+                return null;
+            }
+
+            var entry = JsonSerializer.Deserialize<Entry>(json);
 
             // Practice is never offered back: it is not a race, and
             // restoring it only locked Race Control - see Record. A journal
@@ -640,9 +788,10 @@ public sealed class RaceJournal
             }
 
             // A race that had finished is not unfinished. Record no longer
-            // writes one, but a journal left from before that change - or a
-            // Clear that could not delete or move its file - must not offer
-            // to "recover" a race that is already in the history.
+            // writes one, but a journal left from before that change must
+            // not offer to "recover" a race that is already in the history.
+            // (A Clear that could not delete or move its file is caught by
+            // WasFiled above: its last write still says Racing.)
             if (entry.State == RaceState.Finished)
             {
                 return null;
@@ -680,8 +829,24 @@ public sealed class RaceJournal
             // dialog about it.
             return entry.State == RaceState.Idle || entry.LapCount == 0 ? null : entry;
         }
-        catch
+        catch (FileNotFoundException)
         {
+            // Gone between the check and the read - nothing to offer back.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // There, but could not be read - so a race may have been lost,
+            // and this used to return null with nothing said. The usual
+            // cause is something still holding it, which a copy kept now
+            // may get past; and if not, the next race keeps one before it
+            // writes over this - see Record.
+            if (SafeFile.HoldWritesAfterUnreadable(FilePath, ex))
+            {
+                _keepUnreadJournal = true;
+            }
+
+            SessionLog.Write($"[race] The race journal could not be read at startup ({ex.GetType().Name}: {ex.Message}) - any race in it was not offered back.");
             return null;
         }
     }

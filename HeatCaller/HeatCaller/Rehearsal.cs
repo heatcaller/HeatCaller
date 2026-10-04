@@ -28,11 +28,13 @@ namespace HeatCaller;
 ///    club's Documents folders, where backup pruning would delete the club's
 ///    real backups to make room for the rehearsal's.
 ///  - Nothing is emailed (PinMailer): the drivers are the club's real ones.
-///  - Publishing to the club website is switched OFF in the copy when it is
-///    made. The copy has the club's own relay settings, so switched back on
-///    (Club Website page) it publishes to the club's real website - which is
-///    what a rehearsal of online check-in or the race-day manager needs, and
-///    is said in the startup note so it is never a surprise.
+///  - Publishing to the club website is switched OFF in the copy every time
+///    a rehearsal starts - when the copy is made and again on every later
+///    rehearsal that carries on from it. The copy has the club's own relay
+///    settings, so switched back on (Club Website page) it publishes to the
+///    club's real website - which is what a rehearsal of online check-in or
+///    the race-day manager needs, and is said in the startup note so it is
+///    never a surprise - but only for that rehearsal.
 ///  - The title bar and the console say REHEARSAL.
 ///
 /// Not copied: the undo holding folder, the crash log, and a race journal -
@@ -98,7 +100,9 @@ internal static class Rehearsal
                         ? " - copied from the club's data just now. Publishing to the club website has been switched off in the copy"
                           + " (turn it on from the Club Website page to rehearse online check-in or the phone manager - it then"
                           + " publishes to the club's real website)."
-                        : " - the copy made by an earlier rehearsal. Delete that folder to start again from the club's data.")
+                        : " - the copy made by an earlier rehearsal. Publishing to the club website has been switched off in it again"
+                          + " (turn it on from the Club Website page to rehearse online check-in or the phone manager - it then"
+                          + " publishes to the club's real website). Delete that folder to start again from the club's data.")
                     + " Nothing is emailed, and backups and results cards stay in the rehearsal's own folder."
                     + " The club's real data is not touched.";
 
@@ -117,13 +121,25 @@ internal static class Rehearsal
     /// <summary>
     /// Copies <paramref name="realData"/> into <paramref name="copy"/> when
     /// the copy does not exist yet or is empty, and switches publishing off
-    /// in it. True when a copy was made; false when an earlier one was kept.
+    /// in it - in a copy that was kept as well. True when a copy was made;
+    /// false when an earlier one was kept.
     /// Separate from Start so it can be tested on folders of its own.
     /// </summary>
     internal static bool Prepare(string realData, string copy)
     {
         if (Directory.Exists(copy) && Directory.EnumerateFileSystemEntries(copy).Any())
         {
+            // Switched off again in the kept copy, every time. WHY: it used
+            // to be switched off only when the copy was made, so a rehearsal
+            // that turned publishing on (to rehearse online check-in, as the
+            // startup note suggests) saved RelayEnabled:true into the copy,
+            // and every later rehearsal started publishing its invented heats
+            // to the club's real website at once - while the note said the
+            // club's real data was not touched. The relay's own paths check
+            // only RelayEnabled, so this is the one place it can be held.
+            // A settings.json that cannot be read throws, and Start then
+            // refuses to run rather than run with publishing perhaps on.
+            TurnPublishingOff(Path.Combine(copy, "settings.json"));
             return false;
         }
 
@@ -208,9 +224,25 @@ internal static class Rehearsal
             return;
         }
 
+        // Already off - every rehearsal after the first, usually - leaves the
+        // file alone: it holds the copy's sealed keys, and a write that is
+        // not needed is one more chance to be cut off half-way through.
+        if (IsFalse(settings["RelayEnabled"]) && IsFalse(settings["RacerPinsEmailAutomatically"]))
+        {
+            return;
+        }
+
         settings["RelayEnabled"] = false;
         settings["RacerPinsEmailAutomatically"] = false;
 
         File.WriteAllText(settingsPath, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
+
+    /// <summary>
+    /// True when a setting is missing (AppSettings then loads it as false)
+    /// or is the JSON value false. Anything else - true, or a value of the
+    /// wrong kind - counts as on, so it is written over.
+    /// </summary>
+    private static bool IsFalse(JsonNode? value) =>
+        value is null || (value is JsonValue v && v.TryGetValue<bool>(out var on) && !on);
 }

@@ -132,16 +132,23 @@ internal static class RelayResultsIndex
     /// relay does, and an index naming results the relay has never held
     /// would offer race days that come back empty.
     /// </param>
+    /// <param name="onRelay">
+    /// Whether the relay holds a session's result, when the caller knows
+    /// better than one instant can - see Ledger. Applied as well as
+    /// <paramref name="from"/>, so the app passes this and no window.
+    /// </param>
     internal static string Build(
         string year,
         IEnumerable<SessionRecord> all,
         Func<string?, string?> seasonNameFor,
         bool abbreviate,
-        DateTime? from)
+        DateTime? from,
+        Func<SessionRecord, bool>? onRelay = null)
     {
         var mine = all
             .Where(s => !s.IsDemoSession() && YearOf(s) == year)
             .Where(s => from is null || EffectiveStart(s) >= from.Value)
+            .Where(s => onRelay is null || onRelay(s))
 
             // Oldest first here; the page sorts for display. A stable
             // order means the same history builds the same document, so
@@ -297,5 +304,158 @@ internal static class RelayResultsIndex
             sessions,
             days,
         });
+    }
+
+    /// <summary>
+    /// Which sessions the relay holds, where RelayResultsFromUtc alone
+    /// cannot say.
+    ///
+    /// The window was one instant - "everything raced since this is on the
+    /// relay" - and nothing recorded a gap in it. A session raced while
+    /// publishing was unticked was never sent, yet sat inside the window,
+    /// so the next index listed it and the archive offered a race day that
+    /// came back "that result is not on the relay any more". The other way
+    /// round, re-sending one old session from the phone dragged the window
+    /// back past every session between it and the old start, none of which
+    /// the relay had ever been given. This keeps the exceptions instead:
+    /// sessions inside the window the relay was not given, and sessions
+    /// before it that it was. Ids only, so a season of them is a few
+    /// kilobytes.
+    ///
+    /// Its own file rather than settings, and kept by RelayPublisher, which
+    /// is where it is known whether a result is going anywhere at all. A
+    /// file that is missing or unreadable is the window alone - exactly
+    /// what was there before this existed.
+    /// </summary>
+    internal sealed class Ledger
+    {
+        /// <summary>Inside the window, but never given to the relay. Left out of the index.</summary>
+        public HashSet<string> Withheld { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>Before the window, but given to the relay since. Listed in the index.</summary>
+        public HashSet<string> Extra { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Corrections to a result the relay holds, made while it could not
+        /// be sent. The relay still has the uncorrected copy, so these are
+        /// sent again the next time results are - see
+        /// MainForm.RepublishRecentResults.
+        /// </summary>
+        public HashSet<string> Owed { get; set; } = new(StringComparer.Ordinal);
+
+        internal static string FilePath => Path.Combine(AppPaths.Root, "relay-results.json");
+
+        /// <summary>Whether the relay holds this session's result, by the window and the exceptions to it.</summary>
+        public bool Listed(string sessionId, DateTime startedUtc, DateTime? from)
+        {
+            if (Extra.Contains(sessionId))
+            {
+                return true;
+            }
+
+            // No window is nothing published yet - see AppSettings. It used
+            // to mean "no filter", so an index built before the first publish
+            // to a new relay, or after Delete Everything Published, listed
+            // the club's whole history.
+            return from is { } start && startedUtc >= start && !Withheld.Contains(sessionId);
+        }
+
+        /// <summary>
+        /// A result has been queued for the relay. Returns the window as it
+        /// now stands - opened at this session if there was none.
+        ///
+        /// A session from before the window is noted as an exception rather
+        /// than moving the window back to it: moving it claimed every session
+        /// in between as well.
+        /// </summary>
+        public DateTime? NoteSent(string sessionId, DateTime startedUtc, DateTime? from, out bool changed)
+        {
+            changed = Withheld.Remove(sessionId);
+            changed |= Owed.Remove(sessionId);
+
+            if (startedUtc <= DateTime.MinValue)
+            {
+                return from;
+            }
+
+            if (from is null)
+            {
+                return startedUtc;
+            }
+
+            if (startedUtc < from.Value)
+            {
+                changed |= Extra.Add(sessionId);
+            }
+
+            return from;
+        }
+
+        /// <summary>
+        /// A result could not be queued - publishing off, the relay not set
+        /// up, or the document too big. Returns whether anything changed.
+        /// </summary>
+        /// <param name="correction">
+        /// The session had been saved before. A first save that was withheld
+        /// is already here, and one that went is on the relay - so a
+        /// correction is owed rather than withheld, or the index would drop
+        /// a result the relay still holds.
+        /// </param>
+        public bool NoteWithheld(string sessionId, DateTime startedUtc, DateTime? from, bool correction)
+        {
+            if (!Listed(sessionId, startedUtc, from))
+            {
+                return false;
+            }
+
+            return correction ? Owed.Add(sessionId) : Withheld.Add(sessionId);
+        }
+
+        /// <summary>Forgets every exception, for when the window itself is cleared.</summary>
+        public bool Clear()
+        {
+            var had = Withheld.Count + Extra.Count + Owed.Count > 0;
+
+            Withheld.Clear();
+            Extra.Clear();
+            Owed.Clear();
+            return had;
+        }
+
+        /// <summary>The ledger on disk, or an empty one. Never throws.</summary>
+        public static Ledger Load()
+        {
+            try
+            {
+                if (File.Exists(FilePath))
+                {
+                    var loaded = JsonSerializer.Deserialize<Ledger>(SafeFile.ReadAllTextWithRetry(FilePath));
+
+                    if (loaded is not null)
+                    {
+                        // Deserialised sets compare by default, which for
+                        // strings is ordinal - but say so rather than rely on it.
+                        return new Ledger
+                        {
+                            Withheld = new HashSet<string>(loaded.Withheld ?? new(), StringComparer.Ordinal),
+                            Extra = new HashSet<string>(loaded.Extra ?? new(), StringComparer.Ordinal),
+                            Owed = new HashSet<string>(loaded.Owed ?? new(), StringComparer.Ordinal),
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // The window alone, as before this file existed. Kept aside
+                // first, as every store does, so the next save does not
+                // write an empty ledger over one that was only locked.
+                SafeFile.PreserveUnreadable(FilePath, ex);
+            }
+
+            return new Ledger();
+        }
+
+        /// <summary>Writes the ledger. Never throws; SafeFile reports a failed write.</summary>
+        public void Save() => SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(this));
     }
 }

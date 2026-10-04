@@ -87,8 +87,11 @@ public partial class MainForm
     /// <summary>Makes the split loop and hooks it to the decoders. Called once, from the constructor, after both exist.</summary>
     private void WireSplitLoop()
     {
-        var split = new SplitLoop(_profiles)
+        var split = new SplitLoop(_profiles.SplitOwnerOf)
         {
+            // Only so the console can say a read is contested, not unowned.
+            ClaimantsOf = transponder => _profiles.SplitOwnersOf(transponder).Count,
+
             // An EasyLap's own clock mapped onto the app's; an I-Lap's
             // passes are already on it (when they arrived).
             AppTimeOf = pass => pass.Decoder == DecoderConnection.EasyLap
@@ -223,6 +226,26 @@ public partial class MainForm
 
         if (on == _settings.SplitLoopEnabled)
         {
+            return;
+        }
+
+        // Not mid-race: switching the split loop on or off changes how the
+        // race's laps are cut into sectors partway through, and off
+        // disconnects the second decoder. Put back, and said why.
+        if (RaceUnderWay)
+        {
+            _fillingSplitChoices = true;
+
+            try
+            {
+                cmbSplitLoop.SelectedIndex = _settings.SplitLoopEnabled ? 1 : 0;
+            }
+            finally
+            {
+                _fillingSplitChoices = false;
+            }
+
+            RefuseDecoderChangeMidRace("split loop");
             return;
         }
 
@@ -429,10 +452,29 @@ public partial class MainForm
             return;
         }
 
+        // Not while a race or practice is on. The offset is applied as each
+        // split is recorded, so changing it mid-race split one session's
+        // sectors between two calibrations - sectors that still added up to
+        // the lap, so nothing caught them, and a "fastest sector" that was
+        // only the recalibration was called and kept as a record. Every
+        // other change to timing refuses mid-race; this one did not.
+        if (RaceUnderWay)
+        {
+            RefuseDecoderChangeMidRace("split loop's Line Up");
+            return;
+        }
+
         using var form = new SplitLineUpForm(_splitLoop, _profiles, _settings.SplitLoopOffsetMs, handler => LinePassSeen += handler, handler => LinePassSeen -= handler);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.OffsetMs is not { } measured)
         {
+            return;
+        }
+
+        // A race started while the window was open: kept as it was.
+        if (RaceUnderWay)
+        {
+            RefuseDecoderChangeMidRace("split loop's Line Up");
             return;
         }
 
@@ -466,12 +508,22 @@ public partial class MainForm
             : null;
     }
 
+    /// <summary>How long "split loop not connected" stays on the Next Up bar each time it is noticed in a race.</summary>
+    private const long SplitDownShownMs = 15_000;
+
+    /// <summary>When, in this run of racing, the split loop was first seen not connected - or null.</summary>
+    private long? _splitDownSince;
+
+    /// <summary>Whether the console has been told the split loop is still down, since it was last seen up.</summary>
+    private bool _splitDownLogged;
+
     /// <summary>The split loop's decoder gone, or nothing read at the split for three typical laps while cars cross the line.</summary>
     private TimingWatch.Problem? SplitLoopDown(TimingWatch.Situation situation, long now)
     {
         if (!situation.Racing || !_settings.SplitLoopEnabled || _splitLoop is null)
         {
             _splitWatchSince = null;
+            _splitDownSince = null;
             return null;
         }
 
@@ -479,8 +531,30 @@ public partial class MainForm
 
         if (StateOf(OtherDecoder(SelectedDecoder)) != DecoderConnectionState.Connected)
         {
-            return new TimingWatch.Problem("split-down", "Split loop not connected - laps are still timed, splits are not");
+            // Said for a while, then left to the console and Mission Control.
+            // It is shown on the Next Up bar's alarm, which means "laps are
+            // not being counted" - and a split loop not plugged in costs only
+            // sector times. Shown all race it turned every heat's one status
+            // strip into a red alarm nobody could clear, and taught the
+            // director to stop reading it.
+            _splitDownSince ??= now;
+
+            if (now - _splitDownSince.Value < SplitDownShownMs)
+            {
+                return new TimingWatch.Problem("split-down", "Split loop not connected - laps are still timed, splits are not");
+            }
+
+            if (!_splitDownLogged)
+            {
+                _splitDownLogged = true;
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [split] The split loop is still not connected - laps are timed, sectors are not. Set Split loop to None on the Connection page if it isn't in use tonight.");
+            }
+
+            return null;
         }
+
+        _splitDownSince = null;
+        _splitDownLogged = false;
 
         var field = situation.Cars.Select(c => c.TypicalLapMs).Where(ms => ms > 0).DefaultIfEmpty(0).Max();
         var quietFor = Math.Max(30_000L, field * 3);

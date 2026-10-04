@@ -215,6 +215,14 @@ public sealed partial class AnnouncementService
         // The beep alone is what a countdown actually needs; the announcer
         // has already said the interesting part at staging.
         //
+        // Said in the log, though, when the club has switched the line on:
+        // the settings still offer it, test it and record it, and it used to
+        // go unsaid every race with nothing anywhere to say why.
+        if (!Muted && _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.CountdownStarted))?.IsEnabledFor(IsPracticeMode) == true)
+        {
+            StatusMessage?.Invoke("[voice] CountdownStarted not spoken - the countdown is sound only, so the green is not held behind a spoken line. Put the words in Race staging instead.");
+        }
+
         // And only when the ticks are off. With both, every race heard two
         // countdowns back to back - three quick beeps, then five slow ones -
         // and the ticks are the one that ends on the green.
@@ -860,9 +868,9 @@ public sealed partial class AnnouncementService
         // because those events have their own enable switches.
         if (IsQualifyingMode)
         {
-            // The same lap has just been called as taking pole, from the
-            // race's fastest lap (see HandleGatePassed, which the session
-            // reports first). Calling it an improvement as well would be the
+            // The same lap has just been called as taking pole, from its
+            // crossing (see HandleGatePassed, which the session reports
+            // first). Calling it an improvement as well would be the
             // same lap announced twice.
             if (string.Equals(_poleCalledFromGateFor, transponderId, StringComparison.Ordinal))
             {
@@ -1016,6 +1024,7 @@ public sealed partial class AnnouncementService
     {
         _provisionalPoleTransponder = null;
         _poleCalledFromGateFor = null;
+        _qualifyingLaps.Clear();
     }
 
     /// <summary>
@@ -1032,16 +1041,17 @@ public sealed partial class AnnouncementService
     /// qualifying order and somebody else held it. Records the pole holder
     /// either way. True when the call was made.
     ///
-    /// Reached from two places, because neither sees every pole on its
-    /// own: a personal best (the usual way to go top), and the race's
-    /// fastest lap - a driver's FIRST flying lap is never reported as a
-    /// personal best, since there was nothing of their own to beat, so a
-    /// driver who went straight to the top first time out was never called
-    /// and the pole holder kept pointing at whoever they had just beaten.
+    /// Reached from two places: every crossing (HandleGatePassed - under
+    /// the default most-laps rule a driver goes top by completing a lap,
+    /// fast or not), and a personal best, which finds the call already
+    /// made for the same lap. "On top" is the class's own qualifying order
+    /// (see QualifyingLeader); it used to be the quickest single lap.
     /// </summary>
-    private bool CallProvisionalPoleIfTaken(string transponderId, RaceStanding standing, long lapMs)
+    private bool CallProvisionalPoleIfTaken(string transponderId, RaceStanding standing, long? lapMs)
     {
-        if (!IsRaceFastest(lapMs))
+        var field = _standings.Values.Where(s => !MutedGhost(s.Transponder));
+        var top = QualifyingLeader(field, _qualifyingLaps, _qualifyingMethod, _qualifyingConsecutiveLaps);
+        if (!string.Equals(top, transponderId, StringComparison.Ordinal))
         {
             return false;
         }
@@ -1054,8 +1064,59 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        EnqueueVoice(AnnouncementEventType.ProvisionalPole, standing, null, lapMs);
+        // Weighed with the lap's other lines against the per-lap limit, as
+        // the lead change it stands in for is (see HandleStandingUpdated):
+        // it now comes as often as the order changes hands, and queued
+        // straight in it would add a line on every one of those laps.
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole));
+        if (VoiceCandidateCanSpeak(AnnouncementEventType.ProvisionalPole, config))
+        {
+            ConsiderPerLapAction("voice", transponderId, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
+                () => EnqueueVoice(AnnouncementEventType.ProvisionalPole, standing, null, lapMs));
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Who tops a qualifier's running order, ranked the way
+    /// QualifyingCalculator ranks a heat: most laps then lowest elapsed
+    /// time, or under BestConsecutiveLaps the quickest run of that many
+    /// flying laps, with drivers yet to complete a run behind on laps and
+    /// time. Null for an empty field.
+    /// </summary>
+    internal static string? QualifyingLeader(IEnumerable<RaceStanding> field,
+        IReadOnlyDictionary<string, List<long>> flyingLaps, QualifyingMethod method, int consecutiveLaps)
+    {
+        var standings = field.ToList();
+        if (standings.Count == 0)
+        {
+            return null;
+        }
+
+        if (method == QualifyingMethod.BestConsecutiveLaps)
+        {
+            var n = Math.Max(1, consecutiveLaps);
+            var bestRun = standings
+                .Select(s => (Standing: s, RunMs: flyingLaps.TryGetValue(s.Transponder, out var laps)
+                    ? QualifyingCalculator.BestConsecutiveWindow(laps, n).TotalMs
+                    : 0))
+                .Where(x => x.RunMs > 0)
+                .OrderBy(x => x.RunMs)
+                .Select(x => x.Standing)
+                .FirstOrDefault();
+
+            if (bestRun is not null)
+            {
+                return bestRun.Transponder;
+            }
+        }
+
+        return standings
+            .OrderByDescending(s => s.Laps)
+            .ThenBy(s => s.ElapsedMs)
+            .First()
+            .Transponder;
     }
 
     /// <summary>True when no other tracked racer has gone quicker.</summary>

@@ -45,6 +45,21 @@ public sealed class AppSettings
     public bool DirectDecoderAutoConnect { get; set; }
 
     /// <summary>
+    /// Connect the line decoder - and the split loop with it, when that is
+    /// on - by itself when HeatCaller starts, on the decoder and COM port
+    /// last used. On by default: a race night should not depend on someone
+    /// remembering to press Connect, and an older settings file that has
+    /// never heard of this gets it on too.
+    ///
+    /// An I-Lap is connected only on the port it was last connected on,
+    /// never on whichever port happens to be there, and is waited for if
+    /// that port isn't there yet (a USB adapter plugged in after start-up).
+    /// It is tried once, not every few seconds: a port that refuses to open
+    /// says so once. An EasyLap's retrying is DirectDecoderAutoConnect's.
+    /// </summary>
+    public bool ConnectDecodersAtStartup { get; set; } = true;
+
+    /// <summary>
     /// The decoder last chosen, as DecoderConnection's saved number (1 =
     /// EasyLap, 2 = I-Lap) - remembered so auto-connect still means
     /// something on the next launch. 0 was Next Level Timing, retired in
@@ -425,6 +440,7 @@ public sealed class AppSettings
     public string MechanicHeatCallerVoiceName { get; set; } = string.Empty;
     public string MechanicHeatCallerRev { get; set; } = string.Empty;
     public string MechanicWindowsVoiceName { get; set; } = string.Empty;
+    public string MechanicKokoroVoiceName { get; set; } = string.Empty;
 
     /// <summary>The mechanic's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
@@ -434,7 +450,8 @@ public sealed class AppSettings
         MechanicHeatCallerVoice ?? string.Empty,
         MechanicHeatCallerVoiceName ?? string.Empty,
         MechanicHeatCallerRev ?? string.Empty,
-        MechanicWindowsVoiceName ?? string.Empty);
+        MechanicWindowsVoiceName ?? string.Empty,
+        MechanicKokoroVoiceName ?? string.Empty);
     /// <summary>Whether reaching a lap or time limit puts the checkered out rather than stopping the race on the spot.</summary>
     public bool RaceFinishOnNextCrossing { get; set; } = true;
 

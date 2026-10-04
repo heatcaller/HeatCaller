@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The Kokoro voice: natural-sounding and free.** **Voice → Voice Settings** has a new choice in **Speak with**: **Kokoro voice**. It runs on the laptop itself, so after a one-off download (about 310 MB, with the **Download** button beside **Kokoro voice:**) it needs no account and no internet, and nothing is ever billed however much the announcer talks. Pick from American and British voices and press **Test Kokoro Voice** to hear one. Until it's downloaded, or if it can't say a line, the Windows voice says it, so a flag call is never silent. Applying a style keeps your Kokoro voice, and the mechanic in the recap's interview can have one too. See [Use the Kokoro voice](announcer/voice.md#use-the-kokoro-voice).
+
 - **Fixes to the new race-night features.**
   - **Track map:** a red flag no longer makes every car look stopped when racing resumes, a car that has taken the checkered flag is no longer called stopped while the others finish, and a countdown started straight after a race no longer shows the last race's cars.
   - **Big Screen:** sponsor slides switched on or off on the **Sponsors** page now take effect on an open Big Screen, the track map no longer squeezes a sponsor slide between races, the map keeps its share of the width when the window is only made wider, <kbd>F11</kbd> on a maximized window now covers the taskbar, and a long "IF IT ENDED NOW" line ends in "..." instead of being cut through.

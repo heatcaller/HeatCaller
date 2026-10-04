@@ -45,13 +45,31 @@ public sealed class SplitLoop
     /// <summary>How long a transponder nobody has stays on the "seen at the split" list.</summary>
     private static readonly long UnknownKeptMs = 10 * 60_000;
 
-    private readonly ProfileStore _profiles;
+    private readonly SplitOwnerLookup _splitOwnerOf;
     private readonly List<SplitPass> _recent = new();
     private readonly Dictionary<string, long> _unknown = new(StringComparer.OrdinalIgnoreCase);
 
-    public SplitLoop(ProfileStore profiles)
+    /// <summary>
+    /// Who a split transponder is fitted to, or null when it is nobody's.
+    /// ProfileStore.SplitOwnerOf in the app.
+    /// </summary>
+    public delegate (DriverProfile Driver, OwnedTransponder Entry)? SplitOwnerLookup(string transponder);
+
+    /// <summary>
+    /// The one thing the split loop needs to know about drivers: whose
+    /// split transponder a number is.
+    ///
+    /// A lookup rather than a ProfileStore, for the same reason AppTimeOf,
+    /// LineTimeOf and OffsetMs below are callbacks: this class works out
+    /// what a split read means and nothing else, and it was reaching into a
+    /// 950-line store that loads and saves driver profiles on disk to call
+    /// exactly one method on it. Taking the lookup instead means a test -
+    /// or a replay of a recorded night - can hand it two transponders
+    /// without a profiles file existing anywhere.
+    /// </summary>
+    public SplitLoop(SplitOwnerLookup splitOwnerOf)
     {
-        _profiles = profiles;
+        _splitOwnerOf = splitOwnerOf;
     }
 
     /// <summary>
@@ -75,6 +93,13 @@ public sealed class SplitLoop
     /// split time. Set by MainForm from the settings.
     /// </summary>
     public Func<int>? OffsetMs { get; set; }
+
+    /// <summary>
+    /// How many drivers claim a split transponder - ProfileStore.SplitOwnersOf
+    /// in the app. Only for the console: a read nobody owns because two
+    /// drivers claim it is told apart from one nobody has been given yet.
+    /// </summary>
+    public Func<string, int>? ClaimantsOf { get; set; }
 
     /// <summary>Raised for every pass, once it is understood.</summary>
     public event Action<SplitPass>? PassRecorded;
@@ -109,7 +134,7 @@ public sealed class SplitLoop
         }
 
         // Taken since it was read: no longer unknown.
-        foreach (var taken in _unknown.Keys.Where(id => _profiles.SplitOwnerOf(id) is not null).ToList())
+        foreach (var taken in _unknown.Keys.Where(id => _splitOwnerOf(id) is not null).ToList())
         {
             _unknown.Remove(taken);
         }
@@ -132,7 +157,7 @@ public sealed class SplitLoop
         var offset = OffsetMs?.Invoke() ?? 0;
         var rawLine = appKnown is null ? null : LineTimeOf?.Invoke(app);
 
-        var owner = _profiles.SplitOwnerOf(id);
+        var owner = _splitOwnerOf(id);
         var point = pass.Point == TimingPoint.Line ? TimingPoint.Split1 : pass.Point;
 
         var understood = new SplitPass(
@@ -157,16 +182,18 @@ public sealed class SplitLoop
             _unknown[id] = arrived;
         }
 
-        Log?.Invoke(Describe(understood, owner?.Driver));
+        Log?.Invoke(Describe(understood, owner?.Driver, owner is null ? ClaimantsOf?.Invoke(id) ?? 0 : 1));
         PassRecorded?.Invoke(understood);
         return understood;
     }
 
-    private static string Describe(SplitPass pass, DriverProfile? driver)
+    private static string Describe(SplitPass pass, DriverProfile? driver, int claimants)
     {
-        var who = driver is null
-            ? "nobody's split transponder yet (add it on the driver's Transponders tab)"
-            : string.IsNullOrWhiteSpace(driver.DriverName) ? driver.Transponder : driver.DriverName.Trim();
+        var who = driver is not null
+            ? string.IsNullOrWhiteSpace(driver.DriverName) ? driver.Transponder : driver.DriverName.Trim()
+            : claimants > 1
+                ? $"claimed by {claimants} drivers, so used by none - keep it on one driver's Transponders tab"
+                : "nobody's split transponder yet (add it on the driver's Transponders tab)";
 
         var when = pass.LineMs is { } line
             ? $"line clock {line}ms"

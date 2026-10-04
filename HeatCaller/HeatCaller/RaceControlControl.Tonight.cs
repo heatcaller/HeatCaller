@@ -112,8 +112,11 @@ public sealed partial class RaceControlControl
             AutoAdvancePinnedClass,
             _race.GetOrderedStandings()
                 .Where(s => !GhostService.IsGhost(s.TransponderId))
-                .Select(s => _profiles.Get(s.TransponderId)?.ClassName),
-            _ => { });
+                .SelectMany(s => _profiles.Get(s.TransponderId)?.AllClasses ?? (IReadOnlyList<string>)Array.Empty<string>()),
+            _ => { },
+            _race.GetOrderedStandings()
+                .Where(s => !GhostService.IsGhost(s.TransponderId))
+                .Select(s => _profiles.Get(s.TransponderId)?.Transponder ?? s.TransponderId));
     }
 
     /// <summary>

@@ -97,7 +97,15 @@ public sealed class DecoderClockMap
         {
             var gap = arrivedMs - (long)deviceMs;
 
-            if (_readings.Count >= Least)
+            // Judged against whatever is already here - one reading is
+            // enough to judge by. It used to wait for Least, so the first
+            // three after every Reset (every connect, every reconnect) went
+            // in unchecked: one misframed heartbeat among them and the map
+            // trusted a clock 24 days out, and a split was given a line time
+            // that never happened. A bad first reading is held back by the
+            // good ones that follow it, which then start the map afresh -
+            // the same way a decoder restart is recognised.
+            if (_readings.Count > 0)
             {
                 var best = _readings.Min(r => r.Arrived - r.Device);
 
@@ -179,6 +187,13 @@ public sealed class DecoderClockMap
                 .ToList();
 
             if (gaps.Count < Least)
+            {
+                return null;
+            }
+
+            // Readings that disagree with each other by more than Jump are
+            // not a clock to trust, however they got in.
+            if (gaps[^1] - gaps[0] > Jump)
             {
                 return null;
             }

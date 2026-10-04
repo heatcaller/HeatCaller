@@ -348,6 +348,10 @@ public static class SafeFile
         {
             Notify($"[storage] Couldn't read \"{name}\" ({ReasonFor(ex)}). Started with defaults instead; the original was kept as \"{copyName}\".");
         }
+        else
+        {
+            NotifyIfEmpty(path, ex);
+        }
     }
 
     /// <summary>
@@ -388,8 +392,44 @@ public static class SafeFile
         {
             Notify($"[storage] Couldn't read \"{name}\" ({ReasonFor(ex)}). Started with defaults instead; the original was kept as \"{copyName}\".");
         }
+        else
+        {
+            NotifyIfEmpty(path, ex);
+        }
 
         return hold;
+    }
+
+    /// <summary>
+    /// The load failed and KeepCopy found nothing to copy because the file is
+    /// there but zero-length. Both methods above used to say nothing at all
+    /// then: a race-history.json left empty by a sync stub or a disk check
+    /// loaded as a fresh install, the first race of the night was saved over
+    /// it and reported as saved, and the only clue was a Race History page
+    /// that looked new hours later. There is nothing left to protect, so
+    /// writes carry on as before; the operator is just told, so a backup can
+    /// be put back before the club's records are rebuilt on top of nothing.
+    /// A file that isn't there at all stays quiet, as it always has - that is
+    /// a first run, not a problem.
+    /// </summary>
+    private static void NotifyIfEmpty(string path, Exception? ex)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length != 0)
+            {
+                return;
+            }
+        }
+        catch
+        {
+            return;
+        }
+
+        Notify($"[storage] Couldn't read \"{Path.GetFileName(path)}\" ({ReasonFor(ex)}): the file is empty, so there was "
+            + "nothing to keep a copy of and HeatCaller started with defaults. If it should have held anything, close "
+            + "HeatCaller and restore it from a backup before the next save writes over it.");
     }
 
     /// <summary>

@@ -647,6 +647,100 @@ public sealed class CarStore
         RaiseChanged();
     }
 
+    /// <summary>
+    /// Moves every car from one class name to another, for a class rename
+    /// (ClassRenameCascade). A car's class is held as its name, like
+    /// everything else's; before this was here a rename left every car on
+    /// the old name, and the Garage showed the renamed class empty beside a
+    /// leftover band under the old one with no colour. Returns the ids of
+    /// the cars that moved.
+    ///
+    /// Nothing is moved while garage.json couldn't be read: nothing would
+    /// be saved, and the cars in memory are not the club's.
+    /// </summary>
+    public IReadOnlyList<string> RenameClass(string oldName, string newName)
+    {
+        var moved = new List<string>();
+
+        if (_loadedUnreadable || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return moved;
+        }
+
+        lock (_gate)
+        {
+            foreach (var car in _cars)
+            {
+                if (string.Equals(car.ClassName?.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    car.ClassName = newName;
+                    moved.Add(car.Id);
+                }
+            }
+        }
+
+        if (moved.Count > 0)
+        {
+            Save();
+            RaiseChanged();
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// The ids of the cars carrying this class name now. Taken just before a
+    /// rename, so its undo can leave alone a car that was already under the
+    /// new name.
+    /// </summary>
+    public IReadOnlyList<string> WithClassName(string className)
+    {
+        lock (_gate)
+        {
+            return _cars
+                .Where(c => string.Equals(c.ClassName?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Id)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// The undo half of RenameClass: every car carrying
+    /// <paramref name="newName"/> NOW goes back to <paramref name="oldName"/>,
+    /// except those in <paramref name="leaveAlone"/>, which carried the new
+    /// name before the rename - judged by what each car holds now, like the
+    /// drivers and rounds.
+    /// </summary>
+    public void UndoRenameClass(string newName, string oldName, IReadOnlyCollection<string> leaveAlone)
+    {
+        if (_loadedUnreadable || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        var keep = leaveAlone.ToHashSet(StringComparer.Ordinal);
+        var changed = false;
+
+        lock (_gate)
+        {
+            foreach (var car in _cars)
+            {
+                if (string.Equals(car.ClassName?.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase)
+                    && !keep.Contains(car.Id))
+                {
+                    car.ClassName = oldName;
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            Save();
+            RaiseChanged();
+        }
+    }
+
     public void Save()
     {
         if (_loadedUnreadable)

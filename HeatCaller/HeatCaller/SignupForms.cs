@@ -705,6 +705,7 @@ internal sealed class ApproveSignupForm : Form
 {
     private readonly RelaySignupRequest _request;
     private readonly ProfileStore _profiles;
+    private readonly RentalTransponderStore _rentals;
     private readonly TextBox _txtName = new();
     private readonly ComboBox _cmbClass = new();
     private readonly TextBox _txtTransponder = new();
@@ -724,6 +725,7 @@ internal sealed class ApproveSignupForm : Form
     {
         _request = request;
         _profiles = profiles;
+        _rentals = rentals;
 
         Text = $"Approve {request.Name}";
         Font = AppTheme.BodyFont;
@@ -926,7 +928,30 @@ internal sealed class ApproveSignupForm : Form
         }
 
         var car = _txtCar.Text.Trim();
-        var rental = _cmbRental.SelectedItem as RentalChoice;
+
+        // A club rental whether it was picked below or its number typed in
+        // the box, as the introduction invites. It is lent by name, as at
+        // the counter, and the driver is given no profile on it: profiles
+        // are keyed by transponder, and one on the club's unit used to name
+        // every later borrower's laps after this driver, refuse the next
+        // sign-up lent the same unit, and keep this driver out of records
+        // for good. A unit registered as a Club Rental already has its own
+        // "Rental R4" profile, which is not a clash here.
+        var rental = (_cmbRental.SelectedItem as RentalChoice)?.Unit ?? _rentals.Get(transponder);
+
+        if (rental is { Retired: true })
+        {
+            _lblError.Text = $"{rental.DisplayName} is one of the club's rentals and is retired. Pick another, or type their own transponder.";
+            return;
+        }
+
+        if (rental is { IsOut: true })
+        {
+            _lblError.Text = $"{rental.DisplayName} is one of the club's rentals and is out"
+                + (rental.CurrentHolderName.Length > 0 ? $" with {rental.CurrentHolderName}" : string.Empty)
+                + ". Check it in on the Rentals page first, or pick another.";
+            return;
+        }
 
         var profile = new DriverProfile
         {
@@ -942,14 +967,14 @@ internal sealed class ApproveSignupForm : Form
             FirstSeenUtc = DateTime.UtcNow,
         };
 
-        if (_profiles.DescribeClash(profile, editing: null) is { } clash)
+        if (rental is null && _profiles.DescribeClash(profile, editing: null) is { } clash)
         {
             _lblError.Text = clash;
             return;
         }
 
         Result = profile;
-        RentalUnit = rental?.Unit.Transponder;
+        RentalUnit = rental?.Transponder;
         DialogResult = DialogResult.OK;
         Close();
     }

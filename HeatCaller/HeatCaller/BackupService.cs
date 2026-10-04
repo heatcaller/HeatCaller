@@ -520,7 +520,8 @@ public static class BackupService
         // backup, even - so a bad backup is refused whole rather than
         // half-restored over good data.
         RequireAppBackup(archive);
-        var destinations = SafeDestinations(archive);
+        var allowance = RestoreAllowance(zipPath);
+        var destinations = SafeDestinations(archive, allowance);
 
         var safetyBackupPath = string.Empty;
         if (Directory.Exists(DataDirectory) && Directory.EnumerateFileSystemEntries(DataDirectory).Any())
@@ -546,7 +547,7 @@ public static class BackupService
         {
             var root = Path.GetFullPath(DataDirectory);
             var staged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            long remaining = MaxRestoreBytes;
+            long remaining = allowance;
 
             foreach (var (entry, destination) in destinations)
             {
@@ -781,6 +782,34 @@ public static class BackupService
     private const long MaxRestoreBytes = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
+    /// How many times its own size a backup over MaxRestoreBytes may unpack
+    /// to. The club's data is mostly text, which squashes perhaps ten to one;
+    /// music, audio and photos barely squash at all. A crafted zip that
+    /// fills the disk inflates by hundreds or thousands to one.
+    /// </summary>
+    private const long MaxRestoreRatio = 20;
+
+    /// <summary>
+    /// The most this particular backup may unpack to: MaxRestoreBytes, or
+    /// more for a backup that is itself big.
+    ///
+    /// The allowance used to be MaxRestoreBytes flat, while backups are made
+    /// with no limit at all - and the music library lives in the data
+    /// folder, with nothing capping it. A club with a couple of GB of
+    /// race-night playlist got a "successful" backup every night that every
+    /// restore then refused as too big, the Pre-Restore Safety Backups
+    /// included. What tells a crafted zip from a real one is how far it
+    /// inflates, not how much it holds, so a big backup is allowed what its
+    /// own size on disk accounts for. The size is the zip file's real one,
+    /// not anything the zip says about itself.
+    /// </summary>
+    private static long RestoreAllowance(string zipPath)
+    {
+        var zipBytes = new FileInfo(zipPath).Length;
+        return Math.Max(MaxRestoreBytes, zipBytes > long.MaxValue / MaxRestoreRatio ? long.MaxValue : zipBytes * MaxRestoreRatio);
+    }
+
+    /// <summary>
     /// Where each entry in a backup would land - or an exception, before
     /// anything is written, if any of them would land anywhere else.
     ///
@@ -790,10 +819,11 @@ public static class BackupService
     /// backup somebody sent you could have put a file anywhere this
     /// Windows account can write. Every entry must resolve to somewhere
     /// inside the app's own data folder, and the whole backup must unpack
-    /// to a sane size - a small zip that inflates to fill the disk is the
-    /// other way a crafted file hurts.
+    /// to a sane size (<paramref name="allowance"/>, see RestoreAllowance) -
+    /// a small zip that inflates to fill the disk is the other way a crafted
+    /// file hurts.
     /// </summary>
-    private static Dictionary<ZipArchiveEntry, string> SafeDestinations(ZipArchive archive)
+    private static Dictionary<ZipArchiveEntry, string> SafeDestinations(ZipArchive archive, long allowance)
     {
         var root = Path.GetFullPath(DataDirectory);
 
@@ -822,7 +852,7 @@ public static class BackupService
 
             total += entry.Length;
 
-            if (total > MaxRestoreBytes)
+            if (total > allowance)
             {
                 throw new InvalidDataException("That backup unpacks to far more than any real backup could. Nothing has been restored.");
             }
@@ -870,9 +900,10 @@ public static class BackupService
     /// modified time changes when it's copied between drives or machines,
     /// which is exactly what people do with backups - so ordering by it
     /// could make pruning delete the newest. Falls back to it only for a
-    /// name without a readable time.
+    /// name without a readable time. Also what the Backups page shows, so
+    /// the date beside each backup is the one it is sorted by.
     /// </summary>
-    private static DateTime BackupTime(FileInfo file)
+    internal static DateTime BackupTime(FileInfo file)
     {
         var prefix = BackupPrefix(file);
         if (prefix is not null)

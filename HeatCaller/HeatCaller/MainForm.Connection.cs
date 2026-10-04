@@ -242,7 +242,8 @@ public partial class MainForm
         if (!_settings.PracticeAutoStartOnGatePass
             || !_recoveryDecided
             || _practiceControl is null
-            || _race.State != RaceState.Idle)
+            || _race.State != RaceState.Idle
+            || _race.IsWarmingUp)
         {
             return;
         }
@@ -288,12 +289,25 @@ public partial class MainForm
 
             _splitLoop?.Clear();
 
-            if (_settings.SplitLoopOffsetMs != 0)
-            {
-                _settings.SplitLoopOffsetMs = -_settings.SplitLoopOffsetMs;
-            }
-
             OnClientRawMessage($"{AppTime.LogStampNow()}  [split] The line and the split loop swapped decoders - both disconnected. Click Connect to connect them in their new places, and run Line Up again to be sure.");
+        }
+
+        // The Line Up offset measured one decoder against the other, so it
+        // runs the other way whenever the line moves to the other decoder -
+        // whether or not the split loop is on at that moment. It used to be
+        // turned round only while the split loop was on: take the loop off,
+        // swap the line, put the loop back, and the roles had swapped with
+        // the offset still the old way round - every split out by twice the
+        // offset, in sectors that still added up to the lap and so were
+        // believed, and saved as records.
+        if (_lineDecoderKnown && decoder != _lineDecoder && _settings.SplitLoopOffsetMs != 0)
+        {
+            _settings.SplitLoopOffsetMs = -_settings.SplitLoopOffsetMs;
+
+            if (!_settings.SplitLoopEnabled)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [split] The line moved to the other decoder, so the split loop's Line Up now runs the other way ({_settings.SplitLoopOffsetMs} ms). Run Line Up again when the split loop is next on, to be sure.");
+            }
         }
 
         _lineDecoder = decoder;
@@ -366,9 +380,171 @@ public partial class MainForm
         RenderSplitStatus();
     }
 
-    private void CmbConnectionType_SelectedIndexChanged(object? sender, EventArgs e) => UpdateConnectionModeUi();
+    /// <summary>
+    /// A race or practice is on - the states the Venues page and Backup
+    /// already refuse in (venues.IsRaceUnderWay). Changing which decoder is
+    /// the line or the split loop then is refused too.
+    /// </summary>
+    private bool RaceUnderWay =>
+        _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+    /// <summary>True while a picker is being put back after a refusal, so the put-back is not taken for a change.</summary>
+    private bool _revertingDecoderPicker;
+
+    /// <summary>
+    /// Says why a decoder picker change was refused - in the console and in
+    /// a message, since the picker has just jumped back under the mouse.
+    /// </summary>
+    private void RefuseDecoderChangeMidRace(string what)
+    {
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] Refused: {what} while a race or practice is running - it would stop laps being counted.");
+        AppDialog.Show(this,
+            $"The {what} can't be changed while a race or practice is running - it would disconnect the decoder timing it, and laps would stop being counted.\r\n\r\nFinish or reset the session first.",
+            "Race under way", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    private void CmbConnectionType_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_revertingDecoderPicker)
+        {
+            return;
+        }
+
+        // One change of "Connect via:" mid-race - a mis-click, or the mouse
+        // wheel over the focused box - disconnected the decoder timing the
+        // heat, with nothing said, and auto-connect did not bring it back.
+        // The Venues page already refused the same switch; this is the same
+        // rule at the other door.
+        if (_lineDecoderKnown && SelectedDecoder != _lineDecoder && RaceUnderWay)
+        {
+            _revertingDecoderPicker = true;
+
+            try
+            {
+                cmbConnectionType.SelectedIndex = DecoderConnection.IndexOf(_lineDecoder);
+            }
+            finally
+            {
+                _revertingDecoderPicker = false;
+            }
+
+            RefuseDecoderChangeMidRace("decoder");
+            return;
+        }
+
+        UpdateConnectionModeUi();
+    }
+
+    /// <summary>
+    /// True from start-up while an I-Lap is still to be connected by itself
+    /// - waiting for the port it was last on to appear. Cleared once it is
+    /// connected, and by Connect, Disconnect or unticking "Connect when
+    /// HeatCaller starts", any of which means somebody has taken over.
+    /// </summary>
+    private bool _startupConnectPending;
+
+    /// <summary>
+    /// "Connect when HeatCaller starts" (AppSettings.ConnectDecodersAtStartup):
+    /// connects the line decoder, and the split loop with it, as Connect
+    /// would. Called once, from RaiseReady, so the window is up and the
+    /// console shows what happened - never in the layout test, which never
+    /// raises Ready.
+    ///
+    /// Before this only an EasyLap could connect by itself (its auto-connect
+    /// tick); the I-Lap, the line decoder now, waited for somebody to press
+    /// Connect every race night.
+    /// </summary>
+    private void ConnectAtStartup()
+    {
+        if (!_settings.ConnectDecodersAtStartup)
+        {
+            return;
+        }
+
+        _startupConnectPending = true;
+        TryStartupConnect(firstTry: true);
+    }
+
+    /// <summary>
+    /// One go at the start-up connect: at start-up, and then on the
+    /// auto-connect timer's tick while an I-Lap's port has yet to appear.
+    /// </summary>
+    private void TryStartupConnect(bool firstTry)
+    {
+        if (!_startupConnectPending || IsDisposed)
+        {
+            return;
+        }
+
+        if (!_settings.ConnectDecodersAtStartup)
+        {
+            _startupConnectPending = false;
+            return;
+        }
+
+        if (SelectedDecoder == DecoderConnection.ILap)
+        {
+            if (_ilapClient.State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
+            {
+                _startupConnectPending = false;
+                return;
+            }
+
+            // The port it was last connected on, and no other: the picker
+            // falls back to the last port listed when that one is missing,
+            // and connecting to a stranger's Bluetooth port by ourselves
+            // would be worse than not connecting.
+            var port = _settings.ILapPort?.Trim() ?? string.Empty;
+
+            if (port.Length == 0)
+            {
+                _startupConnectPending = false;
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] No I-Lap port remembered yet - pick it and press Connect once; from then on it connects by itself.");
+                return;
+            }
+
+            if (!ILapClient.AvailablePorts().Contains(port, StringComparer.OrdinalIgnoreCase))
+            {
+                if (firstTry)
+                {
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] Waiting for the I-Lap on {port} - it connects as soon as the port appears. Plug it in, or press Connect to choose another port.");
+                }
+
+                return;
+            }
+
+            _startupConnectPending = false;
+            RefreshSerialPorts();
+
+            if (!string.Equals(cmbSerialPort.SelectedItem as string, port, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] Connecting the I-Lap on {port}.");
+            ConnectLine();
+            return;
+        }
+
+        _startupConnectPending = false;
+
+        // An EasyLap that auto-connect has already started on is left to it.
+        if (_decoderClient.State is DecoderConnectionState.Disconnected or DecoderConnectionState.Error)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] Connecting the EasyLap.");
+            ConnectLine();
+        }
+    }
 
     private void BtnConnect_Click(object? sender, EventArgs e)
+    {
+        // Somebody pressed Connect: the start-up connect stands down.
+        _startupConnectPending = false;
+        ConnectLine();
+    }
+
+    /// <summary>Connects the line decoder, and the split loop with it - Connect's work, for the button and for the start-up connect.</summary>
+    private void ConnectLine()
     {
         if (SelectedDecoder == DecoderConnection.ILap)
         {
@@ -406,6 +582,9 @@ public partial class MainForm
 
     private void BtnDisconnect_Click(object? sender, EventArgs e)
     {
+        // Disconnect sticks: no start-up connect after it.
+        _startupConnectPending = false;
+
         // The split loop goes with the line: it has nothing to time against.
         // An EasyLap split loop would otherwise be opened again by
         // auto-connect a few seconds later.

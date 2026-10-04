@@ -104,7 +104,7 @@ public sealed class SignupInvite
     public SignupInviteState State { get; set; } = SignupInviteState.Open;
     public DateTime? AnsweredUtc { get; set; }
 
-    /// <summary>The driver an approved sign-up became.</summary>
+    /// <summary>The driver an approved sign-up became - or the club rental they were lent, when they were given no profile of their own.</summary>
     public string Transponder { get; set; } = string.Empty;
 
     /// <summary>What the phone was told with the answer, kept so the answer can be sent again exactly.</summary>
@@ -238,8 +238,20 @@ public sealed class SignupStore
     /// <summary>Let new drivers sign up online with an invite. Off until the club switches it on.</summary>
     public bool Enabled { get; set; }
 
-    /// <summary>True when the codes were sealed on another PC or Windows account and could not be opened here.</summary>
-    public bool CodesLocked { get; private set; }
+    /// <summary>
+    /// True while an invite still out with a driver has a code that was
+    /// sealed on another PC or Windows account and could not be opened here.
+    ///
+    /// Worked out from the invites rather than kept as a flag about the
+    /// file. It used to be the flag (now _sealedElsewhere), cleared by the
+    /// first save that sealed a new code - so making one invite here hid
+    /// the only standing explanation for the others, which still could not
+    /// be shown, emailed, published or matched to a sign-up.
+    /// </summary>
+    public bool CodesLocked => _invites.Any(i => i.IsUsable && i.Code.Length == 0);
+
+    /// <summary>The codes in the file as read were sealed somewhere they can't be opened, and nothing has been sealed here since (see Save).</summary>
+    private bool _sealedElsewhere;
 
     public static SignupStore Load()
     {
@@ -290,7 +302,7 @@ public sealed class SignupStore
         }
         catch (Exception ex) when (ex is CryptographicException or JsonException)
         {
-            CodesLocked = true;
+            _sealedElsewhere = true;
         }
     }
 
@@ -305,13 +317,13 @@ public sealed class SignupStore
         // Sealed afresh unless this file's codes came from somewhere they
         // cannot be opened and nothing new has been made since: then the
         // original goes back untouched, still openable where it was made.
-        if (!CodesLocked || codes.Count > 0)
+        if (!_sealedElsewhere || codes.Count > 0)
         {
             try
             {
                 sealedCodes = codes.Count == 0 ? string.Empty : SecretBox.Seal(JsonSerializer.Serialize(codes));
                 _sealedAsRead = sealedCodes;
-                CodesLocked = false;
+                _sealedElsewhere = false;
             }
             catch (CryptographicException)
             {

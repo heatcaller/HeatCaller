@@ -303,10 +303,18 @@ internal static class AppDataMigration
                 }
 
                 // Written beside and swapped in, so a failure halfway leaves
-                // the original untouched.
-                var temp = file + ".migrating";
-                File.WriteAllText(temp, after, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                File.Move(temp, file, overwrite: true);
+                // the original untouched - through SafeFile, which pushes the
+                // new text out to the disk before the swap. This used to write
+                // the temp file and rename it straight over the original, and
+                // the rename can reach the disk before the text does: a power
+                // cut in the seconds after the first launch (or the launch
+                // after a restore) could leave settings.json empty, and the
+                // next start then saved defaults over it.
+                if (!SafeFile.WriteAllText(file, after))
+                {
+                    // SafeFile has already said why on the console.
+                    throw new IOException("couldn't be updated; the original was left as it was.");
+                }
             }
             catch (Exception ex)
             {

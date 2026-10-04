@@ -272,7 +272,7 @@ public partial class MainForm : Form
     private const int DuckOnsetDelayMs = 60;
     private readonly CommentaryService _commentary;
     private readonly DirectDecoderClient _decoderClient = new();
-    private readonly ILapClient _ilapClient = new();
+    private readonly ILapClient _ilapClient = new(AppPaths.Root);
     private readonly System.Windows.Forms.Timer _decoderAutoConnectRetryTimer = new() { Interval = 3000 };
     private readonly AnnouncementService _announcer;
 
@@ -672,7 +672,7 @@ public partial class MainForm : Form
         // the Classes page and the dialog inside a driver's profile - use
         // it. After every store is loaded, and these are the same store
         // objects the pages are given, so no page keeps an old copy.
-        var classRenameCascade = new ClassRenameCascade(_profiles, _rounds, _seasonStore, _techInspections, _raceEvents, _daySchedule);
+        var classRenameCascade = new ClassRenameCascade(_profiles, _rounds, _seasonStore, _techInspections, _raceEvents, _daySchedule, _cars);
         _raceClasses.RenameCascade = classRenameCascade;
         classRenameCascade.Renamed += (oldName, newName) =>
         {
@@ -863,6 +863,20 @@ public partial class MainForm : Form
             // page and every link preview would go on showing the name of
             // whoever the result USED to say had won.
             PublishResultsIndexFor(record);
+
+            // A correction that took off the lap holding the layout's
+            // all-time record - a phantom crossing, say - leaves that record
+            // standing, from a lap that no longer exists, and no real lap can
+            // beat it. A layout keeps no earlier record to go back to, so it
+            // is said here, with where to clear it, rather than guessed at.
+            foreach (var track in _trackLayouts.All)
+            {
+                if (ResultEditor.RecordLapTakenOff(record, track) is { } holder)
+                {
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [race] {track.Name}'s track record ({holder.DriverName}, {track.RecordLapMs / 1000.0:0.000}s) "
+                                       + "was set on a lap this correction has taken off. It still stands - clear it on Track Layouts if it should go.");
+                }
+            }
         };
 
         _webServer = new WebServerService(_race, _profiles, _daySchedule, _sponsors, _settings);
@@ -1340,9 +1354,29 @@ public partial class MainForm : Form
 
                 _decoderClient.Connect();
             }
+
+            // An I-Lap waited for at start-up, whose port has not appeared
+            // yet - see TryStartupConnect.
+            TryStartupConnect(firstTry: false);
         };
         _decoderAutoConnectRetryTimer.Start();
         chkAutoConnect.Checked = _settings.DirectDecoderAutoConnect; // fires CheckedChanged, which connects if already in EasyLap mode
+
+        // Set before it is wired, so reading the setting in is not taken for
+        // somebody changing it. Acted on once the window is up - see
+        // ConnectAtStartup, called from RaiseReady.
+        chkConnectAtStartup.Checked = _settings.ConnectDecodersAtStartup;
+        chkConnectAtStartup.CheckedChanged += (_, _) =>
+        {
+            _settings.ConnectDecodersAtStartup = chkConnectAtStartup.Checked;
+            _settings.Save();
+
+            // Unticked while still waiting for the I-Lap's port: stop waiting.
+            if (!chkConnectAtStartup.Checked)
+            {
+                _startupConnectPending = false;
+            }
+        };
 
         // Race control's own logic (time limits, lap counting, etc.) runs
         // continuously regardless of whether the Race Control window is
@@ -2050,6 +2084,10 @@ public partial class MainForm : Form
         // of the startup steps Ready runs (ShowDroppedSecrets), once this
         // window is visible and the startup screen has gone.
         _droppedSecrets = droppedSecrets;
+
+        // The decoders, by themselves, now the window is up and its log can
+        // be read - see ConnectAtStartup.
+        ConnectAtStartup();
 
         Ready?.Invoke(this, EventArgs.Empty);
     }

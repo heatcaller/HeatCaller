@@ -614,7 +614,17 @@ public partial class MainForm
             // name the first one wrote, and that moves nobody's car.
             for (var pass = 0; pass < 2; pass++)
             {
-                GarageSync.SyncAll(_profiles, _cars, now);
+                // No changes to a car's name, owner or retirement (lending it,
+                // its notes, its photos) is nothing for the drivers' car lists
+                // to follow. An empty list here used to be taken for the pass
+                // at startup, which makes every list again from the garage -
+                // so lending any car rewrote drivers' lists, under an undo
+                // that only covered the car. That pass is MainForm's alone,
+                // once, at startup.
+                if (now.Count > 0)
+                {
+                    GarageSync.SyncAll(_profiles, _cars, now);
+                }
 
                 if (_carChangesPending.Count == 0)
                 {

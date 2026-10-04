@@ -174,20 +174,24 @@ public sealed class SetupEntry
     /// <summary>
     /// Copy for "duplicate as a starting point". Deliberately drops the id,
     /// timestamp and session link - those belong to the original run, not
-    /// the new one.
+    /// the new one. Everything else comes with it, the car included: a
+    /// duplicate is the next setup on the same car, which is the whole
+    /// reason for duplicating one.
+    ///
+    /// Made from a whole copy (SetupLogStore.CopyOf, as Edit uses) rather
+    /// than field by field. The field-by-field copy left out the six legacy
+    /// fields, so duplicating a setup logged before chassis sheets opened a
+    /// blank sheet - and a field added later would have been lost the same
+    /// way. A new field now comes along unless it is taken out here.
     /// </summary>
-    public SetupEntry CloneForNewEntry() => new()
+    public SetupEntry CloneForNewEntry()
     {
-        DriverName = DriverName,
-        TrackLayoutName = TrackLayoutName,
-        CarModel = CarModel,
-
-        // The car comes with it: a duplicate is the next setup on the same
-        // car, which is the whole reason for duplicating one.
-        CarId = CarId,
-        ChassisTemplateId = ChassisTemplateId,
-        Values = new Dictionary<string, string>(Values),
-    };
+        var copy = SetupLogStore.CopyOf(this);
+        copy.Id = Guid.NewGuid().ToString("N");
+        copy.RecordedAtUtc = DateTime.UtcNow;
+        copy.LinkedSessionId = null;
+        return copy;
+    }
 }
 
 /// <summary>Loads/saves setup entries to %AppData%\HeatCaller\setup-log.json.</summary>

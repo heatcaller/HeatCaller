@@ -914,7 +914,7 @@ public sealed class RaceProgramControl : UserControl
         var drivers = _profiles.AllRaceable;
 
         var inAClass = drivers
-            .Where(p => !string.IsNullOrWhiteSpace(p.ClassName) && real.Contains(p.ClassName.Trim()))
+            .Where(p => p.AllClasses.Any(real.Contains))
             .ToList();
 
         return new ProgramNextStep.SetupFacts(
@@ -927,12 +927,14 @@ public sealed class RaceProgramControl : UserControl
 
     /// <summary>
     /// The drivers a class can put on track, after the race day's
-    /// checked-in-only rule.
+    /// checked-in-only rule: everyone who races the class, as their main
+    /// class or one of their others (DriverProfile.RunsClass). A driver in
+    /// two classes is dealt into both classes' heats.
     /// </summary>
     private List<DriverProfile> RosterFor(string className)
     {
         var roster = _profiles.AllRaceable
-            .Where(p => string.Equals(p.ClassName, className, StringComparison.OrdinalIgnoreCase));
+            .Where(p => p.RunsClass(className));
 
         if (ActiveDay?.CheckedInDriversOnly == true)
         {
@@ -2368,9 +2370,12 @@ public sealed class RaceProgramControl : UserControl
         // tonight is offered as "A-Main" even if the class ran mains last week.
         var existingMains = DayRoundsForClass(className).Count(r => r.Kind == RoundKind.Main);
 
-        var defaultLabel = existingMains == 0 ? "A-Main"
-            : existingMains == 1 ? "B-Main"
-            : $"Main {existingMains + 1}";
+        // A lettered label for every main, the way MainsBuilder names the
+        // ones it builds. The third used to be offered as "Main 3", which
+        // MainRoundForm reads as untiered - so a director who took the
+        // offered label got a final that sat outside the bump-up chain, and
+        // the B-main above it was told there was no main below it.
+        var defaultLabel = $"{MainsBuilder.SeedPlan.LetterFor(existingMains)}-Main";
 
         using var form = new MainRoundForm(className, roster, ranked, _trackLayouts, defaultLabel);
 
@@ -2409,9 +2414,68 @@ public sealed class RaceProgramControl : UserControl
             });
 
             _rounds.Add(added);
+
+            // Lower mains run first - MainsBuilder.BuildRounds schedules the
+            // ones it builds that way so the top finishers can bump up before
+            // the main above runs. Add puts a round at the end, and the
+            // dialog offers "A-Main" before "B-Main", so mains added by hand
+            // used to run A first: the A-main was started, its bump-ups were
+            // refused for good as "already run", and nothing said why. A new
+            // tiered main now goes in front of the first higher main still to
+            // run (the one on track has started, so it is passed over).
+            var placed = PlaceMainBeforeHigherTiers(added, className);
+
             _events?.AddRoundsToActive(new[] { added.Id });
             RefreshAll();
+
+            if (placed is not null)
+            {
+                _lblStatus.Text = placed;
+            }
         }
+    }
+
+    /// <summary>
+    /// Moves a hand-added tiered main in front of the first main above it
+    /// (a lower tier number) that has still to run, and says what it did -
+    /// or, when every main above it has already run or is on track, that
+    /// its finishers can no longer bump up into them. Null when there was
+    /// nothing above it to worry about.
+    /// </summary>
+    private string? PlaceMainBeforeHigherTiers(RoundDefinition added, string className)
+    {
+        if (added.MainTier < 0)
+        {
+            return null;
+        }
+
+        var onTrackId = RoundOnTrackId?.Invoke();
+
+        var higher = DayRoundsForClass(className)
+            .Where(r => r.Kind == RoundKind.Main && r.Id != added.Id
+                        && r.MainTier >= 0 && r.MainTier < added.MainTier)
+            .ToList();
+
+        if (higher.Count == 0)
+        {
+            return null;
+        }
+
+        var anchor = higher
+            .Where(r => !r.IsRecorded && !string.Equals(r.Id, onTrackId, StringComparison.Ordinal))
+            .OrderBy(r => r.Order)
+            .FirstOrDefault();
+
+        if (anchor is null)
+        {
+            return $"Added {added.RoundLabel}. Every main above it has already run or is on track, "
+                   + "so its finishers can't bump up into them.";
+        }
+
+        _rounds.MoveBefore(new[] { added.Id }, anchor.Id);
+
+        return $"Added {added.RoundLabel} ahead of {anchor.RoundLabel} - lower mains run first so bump-ups "
+               + "can happen before the main above runs.";
     }
 
     // ------------------------------------------------------------------

@@ -35,6 +35,21 @@ public sealed class RacerStanding
     public long LastLapDeviceTimeMs { get; set; }
 
     /// <summary>
+    /// True when this driver's start lap was credited at the green because
+    /// they were past the line (a jump start - see GreenFlag). Their next
+    /// crossing then runs from wherever they crossed before the green, which
+    /// may be a car being set on its grid slot across the loop: a dash of a
+    /// few seconds, not a lap. So that crossing is treated as their start
+    /// lap too and never competes for best lap.
+    ///
+    /// Without it, the credited zero made the dash look like a flying lap:
+    /// it became the race's fastest lap - no real lap could beat it, so the
+    /// fastest-lap call never fired again - and was saved as a personal
+    /// best and a track record.
+    /// </summary>
+    public bool StartLapCredited { get; set; }
+
+    /// <summary>
     /// Device time of the most recent pass of ANY kind - valid or rejected -
     /// used only for the minimum-lap-time validity check. See the note on
     /// MinLapTimeMs below for why this has to be separate from
@@ -333,7 +348,7 @@ public sealed partial class RaceControlSession
             || State != RaceState.Racing
             || Flag == FlagState.Red
             || !_standings.TryGetValue(rowTransponder, out var standing)
-            || GhostService.IsGhost(standing.TransponderId)
+            || Ghosts.IsGhost(standing.TransponderId)
             || HasTakenFlag(standing.TransponderId))
         {
             return false;
@@ -1215,9 +1230,9 @@ public sealed partial class RaceControlSession
         // Ghosts never hold the race's fastest lap while there is a real
         // car in the race - the same rule the lap itself follows in
         // ProcessLapEvent.
-        var realCarsRacing = _standings.Keys.Any(k => !GhostService.IsGhost(k));
+        var realCarsRacing = _standings.Keys.Any(k => !Ghosts.IsGhost(k));
         var holder = _standings.Values
-            .Where(s => s.FastestLapMs > 0 && !(realCarsRacing && GhostService.IsGhost(s.TransponderId)))
+            .Where(s => s.FastestLapMs > 0 && !(realCarsRacing && Ghosts.IsGhost(s.TransponderId)))
             .OrderBy(s => s.FastestLapMs)
 
             // On a tie the lap that got there first keeps it, which is the
@@ -1715,7 +1730,7 @@ public sealed partial class RaceControlSession
     public RacerStanding? RaceLeader()
     {
         var ordered = GetOrderedStandings();
-        return ordered.FirstOrDefault(s => !GhostService.IsGhost(s.TransponderId)) ?? ordered.FirstOrDefault();
+        return ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId)) ?? ordered.FirstOrDefault();
     }
 
     /// <summary>
@@ -2218,6 +2233,7 @@ public sealed partial class RaceControlSession
                 jumper.ElapsedMs = 0;
                 jumper.LapTimesMs.Clear();
                 jumper.LapTimesMs.Add(0);
+                jumper.StartLapCredited = true;
 
                 // The start lap is the first lap of their run, exactly as it
                 // is for everybody whose start lap comes through

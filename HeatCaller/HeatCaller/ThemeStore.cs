@@ -491,6 +491,7 @@ public sealed class ThemeStore
                 voice.Engine = now.Engine;
                 voice.WindowsVoiceName = now.WindowsVoiceName;
                 voice.WindowsVoiceStandsIn = now.WindowsVoiceStandsIn;
+                voice.KokoroVoiceName = now.KokoroVoiceName;
                 voice.HeatCallerVoice = now.HeatCallerVoice;
                 voice.HeatCallerVoiceName = now.HeatCallerVoiceName;
                 voice.HeatCallerRev = now.HeatCallerRev;
@@ -611,6 +612,7 @@ public sealed class ThemeStore
         voiceCopy.Engine = current.EffectiveEngine;
         voiceCopy.WindowsVoiceName = current.WindowsVoiceName;
         voiceCopy.WindowsVoiceStandsIn = current.WindowsVoiceStandsIn;
+        voiceCopy.KokoroVoiceName = current.KokoroVoiceName;
         voiceCopy.HeatCallerVoice = current.HeatCallerVoice;
         voiceCopy.HeatCallerVoiceName = current.HeatCallerVoiceName;
         voiceCopy.HeatCallerRev = current.HeatCallerRev;

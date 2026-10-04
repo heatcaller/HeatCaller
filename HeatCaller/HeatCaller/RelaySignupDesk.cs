@@ -227,7 +227,17 @@ internal sealed class RelaySignupDesk
     /// <summary>An approval, sent (or sent again) from the invite's own record and the driver as they are now.</summary>
     private void SendApproved(SignupInvite invite)
     {
-        var profile = _profiles.Get(invite.Transponder);
+        // Only the driver whose OWN transponder this is. Get also follows an
+        // alternate transponder to its owner, so once the approved driver
+        // was deleted and their old transponder became somebody else's
+        // second car, a re-sent answer used to hand this phone that other
+        // driver's name and working check-in link. A club rental's own
+        // profile ("Rental R4") isn't the person who signed up either, and
+        // its check-in link would check in whoever has the unit next.
+        var profile = _profiles.Get(invite.Transponder) is { IsRental: false } found
+            && string.Equals(found.Transponder, invite.Transponder, StringComparison.OrdinalIgnoreCase)
+                ? found
+                : null;
         object? driver = null;
 
         if (profile is not null && _settings.RelayCheckInEnabled && !string.IsNullOrWhiteSpace(_settings.RelayCheckInSecret))
@@ -261,9 +271,10 @@ internal sealed class RelaySignupDesk
         && !current.ClassNames.Contains(className.Trim(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Approves a sign-up: adds the driver, lends them a club rental if one
-    /// was picked, puts them in today's event and checks them in when asked
-    /// to, gives them their PIN and tells their phone. False, with the
+    /// Approves a sign-up: adds the driver - or, when a club rental was
+    /// picked, lends it to them by name instead, with no profile of their
+    /// own - puts them in today's event and checks them in when asked to,
+    /// gives them their PIN and tells their phone. False, with the
     /// reason, when the driver could not be added - their transponder is
     /// somebody else's, most likely - and nothing has changed.
     /// </summary>
@@ -284,11 +295,6 @@ internal sealed class RelaySignupDesk
             return false;
         }
 
-        if (!_profiles.TryAdd(profile, out refusal))
-        {
-            return false;
-        }
-
         var name = NameOf(profile);
 
         // Noted as each step is taken, for UndoApprove.
@@ -297,18 +303,41 @@ internal sealed class RelaySignupDesk
         string? eventWithClassAdded = null;
         string? classAdded = null;
 
+        // The transponder they race on today: their own, or the club's unit.
+        var transponder = profile.Transponder;
+        var profileAdded = false;
+
         if (!string.IsNullOrWhiteSpace(rentalUnit))
         {
-            if (_rentals.CheckOut(rentalUnit, name, string.Empty))
+            // Lent by name only, as at the counter - no profile for them on
+            // the club's unit. One used to be added, keyed on the rental's
+            // transponder: every later borrower's laps were then announced
+            // and published under this driver's name, the next sign-up lent
+            // that unit was refused as a clash, and this driver was kept out
+            // of records for good. Refused before anything changes when the
+            // unit can't be lent, since without the loan nothing would
+            // record who has it.
+            if (_rentals.Get(rentalUnit) is not { } unit || !_rentals.CheckOut(unit.Transponder, name, string.Empty))
             {
-                rentalLent = rentalUnit;
-                rentalOutUtc = _rentals.Get(rentalUnit)?.CheckedOutUtc;
+                refusal = $"Rental {rentalUnit} can't be lent out - it may be out already, or retired. Check the Rentals page, then approve them again.";
+                return false;
             }
-            else
-            {
-                _log($"[signup] {name} was added, but rental {rentalUnit} could not be lent out - it may be out already. Check the Rentals page.");
-            }
+
+            transponder = unit.Transponder;
+            rentalLent = unit.Transponder;
+            rentalOutUtc = unit.CheckedOutUtc;
         }
+        else
+        {
+            if (!_profiles.TryAdd(profile, out refusal))
+            {
+                return false;
+            }
+
+            profileAdded = true;
+        }
+
+        refusal = string.Empty;
 
         var checkedIn = false;
 
@@ -325,13 +354,13 @@ internal sealed class RelaySignupDesk
                 _log($"[signup] Added {profile.ClassName.Trim()} to {current.DisplayName} for {name}.");
             }
 
-            CheckIn?.Invoke(profile.Transponder, true);
-            checkedIn = _checkIns.IsCheckedIn(profile.Transponder);
+            CheckIn?.Invoke(transponder, true);
+            checkedIn = _checkIns.IsCheckedIn(transponder);
         }
 
         invite.State = SignupInviteState.Approved;
         invite.AnsweredUtc = DateTime.UtcNow;
-        invite.Transponder = profile.Transponder;
+        invite.Transponder = transponder;
         invite.AnswerCheckedIn = checkedIn;
 
         // Decided by what the PIN step actually did, not guessed from the
@@ -344,7 +373,9 @@ internal sealed class RelaySignupDesk
         bool pinComing;
         try
         {
-            pinComing = RacerAdded?.Invoke(profile.Transponder) ?? false;
+            // A PIN belongs to a profile, and a driver on a rental has none
+            // of their own to give one to.
+            pinComing = profileAdded && (RacerAdded?.Invoke(transponder) ?? false);
         }
         catch (Exception ex)
         {
@@ -358,10 +389,13 @@ internal sealed class RelaySignupDesk
         SendApproved(invite);
 
         _waiting.RemoveAll(w => string.Equals(w.Hash, request.Hash, StringComparison.OrdinalIgnoreCase));
-        _log($"[signup] Approved {name}'s online sign-up{(checkedIn ? " and checked them in" : string.Empty)}.");
+        _log($"[signup] Approved {name}'s online sign-up{(checkedIn ? " and checked them in" : string.Empty)}"
+            + (rentalLent is null
+                ? "."
+                : $", lending them rental {rentalLent}. They have no profile of their own until they bring their own transponder - its laps go under the rental's name."));
 
-        LastApproval = new ApprovalReceipt(invite.Id, name, profile.Transponder, rentalLent, rentalOutUtc,
-            eventWithClassAdded, classAdded, checkedIn, _checkIns.CurrentEventId);
+        LastApproval = new ApprovalReceipt(invite.Id, name, transponder, rentalLent, rentalOutUtc,
+            eventWithClassAdded, classAdded, checkedIn, _checkIns.CurrentEventId, profileAdded);
 
         Changed?.Invoke();
         return true;
@@ -390,7 +424,8 @@ internal sealed class RelaySignupDesk
         string? EventWithClassAdded,
         string? ClassAdded,
         bool CheckedIn,
-        string CheckInEventId);
+        string CheckInEventId,
+        bool ProfileAdded = true);
 
     /// <summary>What the last successful Approve did - read straight after it, for the undo.</summary>
     public ApprovalReceipt? LastApproval { get; private set; }
@@ -439,7 +474,11 @@ internal sealed class RelaySignupDesk
             _log($"[signup] Rental {unit} has changed hands since {receipt.Name} was approved, so it was left as it is.");
         }
 
-        if (_profiles.Get(transponder) is { } profile && string.Equals(profile.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+        // Only a profile this approval added: one lent a rental added none,
+        // and the unit's own "Rental R4" profile must stay.
+        if (receipt.ProfileAdded
+            && _profiles.Get(transponder) is { } profile
+            && string.Equals(profile.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
         {
             _profiles.Delete(transponder);
         }

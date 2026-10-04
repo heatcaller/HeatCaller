@@ -283,12 +283,27 @@ internal static class RaceDayDeleter
         var rounds = gathered.Rounds;
         var sessionIds = gathered.SessionIds;
         var sessions = gathered.Sessions;
-        var recordTracks = gathered.RecordTracks;
         var seasons = gathered.Seasons;
+
+        // Worked out again now, not taken from Gather. Gather runs before the
+        // dialog, and a heat of tonight's day can take the record on the same
+        // layout while it is up - Race Control writes it the moment the lap
+        // is seen. Clearing the layouts gathered then blanked that new record
+        // along with the old one, although nothing being deleted had set it.
+        // The sector records below were always worked out again here.
+        var recordTracks = TracksWithRecordsFrom(layouts, sessions);
 
         // --- Snapshot, for the undo ---
 
         var dayId = day.Id;
+
+        // Whether the day was the current one, read before it goes. The undo
+        // used to decide from the state at undo time alone - nothing current
+        // and the day open - and after Close Day nothing is current, so
+        // undoing the delete of an old open day made THAT the current race
+        // day, and the next rounds built joined it. A day that was current
+        // but closed was, the other way round, never made current again.
+        var wasCurrent = string.Equals(events.Active?.Id, dayId, StringComparison.Ordinal);
 
         var dayJson = System.Text.Json.JsonSerializer.Serialize(day);
         var roundsJson = System.Text.Json.JsonSerializer.Serialize(rounds);
@@ -301,9 +316,9 @@ internal static class RaceDayDeleter
         // which was Id and nothing else.
         var recordsBefore = clearRecords
             ? recordTracks
-                .Select(t => (Id: t.Id, Ms: t.RecordLapMs, Holder: t.RecordHolderName, SetUtc: t.RecordSetUtc, Sectors: t.RecordSectorsMs?.ToList()))
+                .Select(t => (Id: t.Id, Ms: t.RecordLapMs, Holder: t.RecordHolderName, SetUtc: t.RecordSetUtc, Sectors: t.RecordSectorsMs?.ToList(), Cut: t.RecordSectorCut))
                 .ToList()
-            : new List<(string Id, long Ms, string Holder, DateTime? SetUtc, List<long>? Sectors)>();
+            : new List<(string Id, long Ms, string Holder, DateTime? SetUtc, List<long>? Sectors, string? Cut)>();
 
         // The sector records these sessions set (TrackLayout.SectorRecordsByCut):
         // a record whose holder ran exactly that time through that sector in
@@ -393,7 +408,11 @@ internal static class RaceDayDeleter
                 track.RecordLapMs = record.Ms;
                 track.RecordHolderName = record.Holder;
                 track.RecordSetUtc = record.SetUtc;
-                track.RecordSectorsMs = record.Sectors?.ToList();
+
+                // With the cut they were taken under, not the loops as they
+                // are now - see TrackLayout.RecordSectorsAsCutNow.
+                track.KeepRecordSectors(record.Sectors);
+                track.RecordSectorCut = record.Cut;
                 layouts.Upsert(track);
             }
 
@@ -439,9 +458,10 @@ internal static class RaceDayDeleter
                 live.Save();
             }
 
-            // Current again only if nothing else has been made current
-            // since - that later choice is not this undo's to take back.
-            if (events.Active is null && events.Get(dayId) is { IsOpen: true })
+            // Current again only if it was current when it was deleted, and
+            // nothing else has been made current since - that later choice
+            // is not this undo's to take back. Open or closed as it was then.
+            if (wasCurrent && events.Active is null && events.Get(dayId) is not null)
             {
                 events.SetActive(dayId);
             }
@@ -511,7 +531,7 @@ internal static class RaceDayDeleter
                 track.RecordLapMs = 0;
                 track.RecordHolderName = string.Empty;
                 track.RecordSetUtc = null;
-                track.RecordSectorsMs = null;
+                track.KeepRecordSectors(null);
                 layouts.Upsert(track);
             }
 
@@ -575,6 +595,12 @@ internal static class RaceDayDeleter
     ///
     /// Together they are as close as the stored data allows, and the dialog
     /// says how many it found so nobody agrees to a number they cannot see.
+    ///
+    /// The lap time is matched against the best lap as raced too. Taking a
+    /// phantom crossing off a result in Edit Result makes its best lap
+    /// slower (ResultEditor.RebuildLapTimes), and a record set by that
+    /// crossing then matched nothing here - so deleting the day with
+    /// "clear records" ticked left it standing.
     /// </summary>
     private static List<TrackLayout> TracksWithRecordsFrom(TrackLayoutStore layouts, IReadOnlyCollection<SessionRecord> sessions)
     {
@@ -586,7 +612,8 @@ internal static class RaceDayDeleter
         return layouts.All
             .Where(track => track.RecordLapMs > 0
                             && sessions.Any(s => RanOn(s, track) && s.Results.Any(r =>
-                                r.FastLapMs == track.RecordLapMs
+                                (r.FastLapMs == track.RecordLapMs
+                                 || r.AsRaced?.FastLapMs == track.RecordLapMs)
                                 && string.Equals(
                                     r.DriverName.Trim(),
                                     track.RecordHolderName.Trim(),

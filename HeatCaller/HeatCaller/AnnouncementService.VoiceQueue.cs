@@ -349,9 +349,12 @@ public sealed partial class AnnouncementService
         // for a club with no key - would have skipped every line.
         if (!CanSpeak(currentProfile))
         {
-            StatusMessage?.Invoke(currentProfile.EffectiveEngine == VoiceEngine.Windows
-                ? $"[voice] Skipped announcement - {WindowsVoice.UnavailableReason ?? "the Windows voice can't speak on this PC"}."
-                : skippedLogMessage);
+            StatusMessage?.Invoke(currentProfile.EffectiveEngine switch
+            {
+                VoiceEngine.Windows => $"[voice] Skipped announcement - {WindowsVoice.UnavailableReason ?? "the Windows voice can't speak on this PC"}.",
+                VoiceEngine.Kokoro => $"[voice] Skipped announcement - {KokoroSpeech.UnavailableReason ?? "the Kokoro voice can't speak on this PC"}, and there's no Windows voice to stand in.",
+                _ => skippedLogMessage,
+            });
             return;
         }
 
@@ -492,6 +495,13 @@ public sealed partial class AnnouncementService
         if (StandInReasonFor(profile) is not null)
         {
             return null;
+        }
+
+        // Kokoro can speak, or the Windows voice is standing in (above) - so
+        // the only way this cannot speak is neither being there.
+        if (profile.EffectiveEngine == VoiceEngine.Kokoro)
+        {
+            return KokoroSpeech.UnavailableReason;
         }
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
@@ -835,6 +845,17 @@ public sealed partial class AnnouncementService
             try
             {
                 await work();
+            }
+            catch (Exception ex) when (IsQuotaExceeded(ex))
+            {
+                // The same handling the queue gives its lines. Flag calls
+                // never reach the queue, so a spent quota met here was never
+                // recorded: the Mixer never said the quota was gone, and every
+                // press of a flag dumped ElevenLabs' raw JSON in the console.
+                if (!NoteQuotaExceeded(standingIn: false))
+                {
+                    StatusMessage?.Invoke($"[voice] Still over quota - skipping {type}.");
+                }
             }
             catch (Exception ex)
             {

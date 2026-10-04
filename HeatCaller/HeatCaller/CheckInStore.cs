@@ -112,19 +112,43 @@ public sealed class CheckInStore
             return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)) { LoadedUnreadable = hold };
         }
 
-        // Current format first, recognised by the Events object rather than
-        // by whether anything is in it - an event with an empty sheet is a
-        // real state and must not be mistaken for an old file.
+        // Which shape the file is, decided by what is actually in it rather
+        // than by which deserializer happens not to throw. Current format
+        // first, recognised by the Events object rather than by whether
+        // anything is in it - an event with an empty sheet is a real state
+        // and must not be mistaken for an old file.
+        //
+        // This used to try each shape in turn and take the first that did
+        // not throw. The older one-sheet shape accepts any JSON object at
+        // all (names it does not know are skipped, and its list starts
+        // empty), so a file whose Events had been turned into a list - a
+        // hand-edit, a script, an odd restore - "loaded" as an empty sheet:
+        // no copy kept, nothing said, writes allowed, and the first check-in
+        // at the desk replaced every earlier race day's attendance. A file
+        // that is none of the three shapes is now damaged, and is treated
+        // like every other store's damaged file.
         try
         {
-            var file = JsonSerializer.Deserialize<CheckInFile>(json);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
 
-            if (file?.Events is { Count: > 0 })
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("Events", out var events)
+                && events.ValueKind == JsonValueKind.Object)
             {
+                var file = JsonSerializer.Deserialize<CheckInFile>(json)!;
                 var sheets = new Dictionary<string, Sheet>(StringComparer.Ordinal);
 
                 foreach (var (eventId, data) in file.Events)
                 {
+                    // A null sheet has nobody on it; leaving it out loses
+                    // nothing, where letting it throw would have lost the
+                    // whole file.
+                    if (data?.CheckedIn is null)
+                    {
+                        continue;
+                    }
+
                     sheets[eventId] = new Sheet
                     {
                         CheckedIn = new HashSet<string>(data.CheckedIn, StringComparer.OrdinalIgnoreCase),
@@ -133,60 +157,44 @@ public sealed class CheckInStore
 
                 return new CheckInStore(sheets);
             }
-        }
-        catch
-        {
-            // Fall through to the older shapes.
-        }
 
-        // The global sheet, and before that a bare array of transponders.
-        // Both land in the legacy event, which is where everything that
-        // pre-dates events belongs.
-        var legacy = new Sheet();
-        var unreadable = false;
+            // The global sheet, and before that a bare array of transponders.
+            // Both land in the legacy event, which is where everything that
+            // pre-dates events belongs.
+            List<string>? legacy = null;
 
-        try
-        {
-            var data = JsonSerializer.Deserialize<LegacyCheckInData>(json);
-
-            if (data is not null && data.CheckedIn.Count > 0)
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("CheckedIn", out var checkedIn)
+                && checkedIn.ValueKind == JsonValueKind.Array)
             {
-                legacy = new Sheet
+                legacy = JsonSerializer.Deserialize<LegacyCheckInData>(json)!.CheckedIn;
+            }
+            else if (root.ValueKind == JsonValueKind.Array)
+            {
+                legacy = JsonSerializer.Deserialize<List<string>>(json);
+            }
+
+            if (legacy is null)
+            {
+                throw new JsonException("not a check-in file: no Events object, no CheckedIn list, and not a list of transponders");
+            }
+
+            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)
+            {
+                [RaceEventStore.LegacyEventId] = new Sheet
                 {
-                    CheckedIn = new HashSet<string>(data.CheckedIn, StringComparer.OrdinalIgnoreCase),
-                };
-            }
+                    CheckedIn = new HashSet<string>(legacy, StringComparer.OrdinalIgnoreCase),
+                },
+            });
         }
-        catch
+        catch (Exception ex)
         {
-            try
-            {
-                var bare = JsonSerializer.Deserialize<List<string>>(json);
-
-                if (bare is not null)
-                {
-                    legacy = new Sheet
-                    {
-                        CheckedIn = new HashSet<string>(bare, StringComparer.OrdinalIgnoreCase),
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                // Unreadable in every shape: start empty rather than
-                // refusing to open - but, when no copy of it could be kept,
-                // never save over it this session (see LoadedUnreadable).
-                unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
-            }
+            // Unreadable in every shape: start empty rather than refusing to
+            // open - but, when no copy of it could be kept, never save over
+            // it this session (see LoadedUnreadable).
+            var unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
+            return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)) { LoadedUnreadable = unreadable };
         }
-
-        return new CheckInStore(new Dictionary<string, Sheet>(StringComparer.Ordinal)
-        {
-            [RaceEventStore.LegacyEventId] = legacy,
-        })
-        {
-            LoadedUnreadable = unreadable,
-        };
     }
 
     /// <summary>

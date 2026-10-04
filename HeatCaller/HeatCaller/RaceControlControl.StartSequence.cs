@@ -958,10 +958,27 @@ public sealed partial class RaceControlControl
         // can be audio in memory before the first one is needed - a release
         // is the one line where a second of synthesis is a second of a car
         // sitting still waiting to be told.
-        if (_race.StartType != RaceStartType.Standard)
+        //
+        // Not for a qualifier either: everyone goes on the green and nobody
+        // is ever released, so nothing would play them. The roster falls
+        // back to the whole grid, and every qualifying heat used to pay for
+        // a "go!" line per car at the green, taking a synthesis slot from
+        // the start call.
+        if (_race.StartType is not (RaceStartType.Standard or RaceStartType.Qualifier))
         {
             _announcer.PrimeReleaseLines(_race.ReleaseRoster());
         }
+
+        // The class's qualifying rule, so provisional pole is called on the
+        // order the board and the qualifying projection show. The announcer
+        // knows nothing of classes, so it is told at each green, as the
+        // jump-start rules are given to the session.
+        var round = _activeRound?.Invoke();
+        var raceClass = round is not null && _raceClasses is not null
+            ? _raceClasses.All.FirstOrDefault(rc => string.Equals(rc.Name, round.ClassName, StringComparison.OrdinalIgnoreCase))
+            : null;
+        _announcer.SetQualifyingRule(raceClass?.QualifyingMethod ?? QualifyingMethod.TotalLaps,
+            raceClass?.ConsecutiveLapCount ?? 3);
     }
 
     /// <summary>

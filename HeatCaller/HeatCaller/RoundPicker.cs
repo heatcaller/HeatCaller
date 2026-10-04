@@ -27,8 +27,13 @@ internal static class RoundPicker
 
     /// <param name="scope"><see cref="ByDrivers"/>, <see cref="ByClass"/>, or anything else for the next round overall.</param>
     /// <param name="pinnedClass">The class <see cref="ByClass"/> is pinned to; blank means the next round overall.</param>
-    /// <param name="classesOnTrack">The class each racer's profile gives, null or blank where it gives none.</param>
+    /// <param name="classesOnTrack">The classes the racers' profiles give - every class each one races - null or blank where one gives none.</param>
     /// <param name="log">Where to say why nothing was picked, when that is not obvious.</param>
+    /// <param name="transpondersOnTrack">
+    /// Who was on track, by main transponder. With <see cref="ByDrivers"/>, the
+    /// unrecorded round whose roster holds the most of them is the answer,
+    /// before any class is guessed at.
+    /// </param>
     /// <returns>The round, or null - with no race day open, always null.</returns>
     public static RoundDefinition? Next(
         RoundDefinitionStore rounds,
@@ -36,7 +41,8 @@ internal static class RoundPicker
         string scope,
         string pinnedClass,
         IEnumerable<string?> classesOnTrack,
-        Action<string> log)
+        Action<string> log,
+        IEnumerable<string>? transpondersOnTrack = null)
     {
         // A real race day or nothing. RaceFiling says so in the log when the
         // race is saved without a round.
@@ -67,7 +73,36 @@ internal static class RoundPicker
 
             case ByDrivers:
             {
-                // Whichever class most of the drivers on track belong to.
+                // The heat these drivers were put in, when one of tonight's
+                // unrun rounds has them: the round whose roster holds the most
+                // of the cars that were on track, the earliest in the
+                // programme on a tie. Rosters are what a heat IS, so this
+                // answers the question directly. Guessing from each driver's
+                // class came second-hand: a heat run mostly by drivers added
+                // to it from another class was filed against that other
+                // class's next round, and the next round of the right class
+                // was taken even when the drivers on track were the ones in
+                // a later heat.
+                var onTrack = (transpondersOnTrack ?? Enumerable.Empty<string>())
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                if (onTrack.Count > 0)
+                {
+                    var theirs = unrecorded
+                        .Select(r => (Round: r, Overlap: r.AssignedTransponders.Count(onTrack.Contains)))
+                        .Where(x => x.Overlap > 0)
+                        .OrderByDescending(x => x.Overlap)
+                        .Select(x => x.Round)
+                        .FirstOrDefault();
+
+                    if (theirs is not null)
+                    {
+                        return theirs;
+                    }
+                }
+
+                // No round has them: whichever class most of the drivers on track belong to.
                 // A majority rather than the first match, so one driver with
                 // a stale or missing class doesn't decide it.
                 var className = classesOnTrack

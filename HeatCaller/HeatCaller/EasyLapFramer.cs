@@ -172,7 +172,14 @@ internal sealed class EasyLapFramer
             // car joined the race and its saved result. So until the framing
             // has proved itself, a candidate is checked first, and on a
             // failure one byte is dropped and the scan goes on.
-            if (!InStep && !LooksLikeAMessage(msgLen))
+            // In step, only the second check: the byte after the message must
+            // start the next one, when it has arrived. Without it, once in
+            // step any 13 bytes starting 0x0D were taken whole - a byte lost
+            // to an overrun made one pass swallow the start of the next, and
+            // the result was a phantom transponder with a counted lap and
+            // both real passes gone. The first check (bytes 5 and 6) stays
+            // out-of-step only, for the reason given at LooksLikeAMessage.
+            if (InStep ? !NextStartsAMessage(msgLen) : !LooksLikeAMessage(msgLen))
             {
                 LoseStep();
                 skipped++;
@@ -220,9 +227,13 @@ internal sealed class EasyLapFramer
     ///    message often ends at the end of a report - and the message is not
     ///    held back waiting for it, which would delay the call of a lap.
     ///
-    /// A heartbeat has nothing in it to check. One taken wrongly costs
-    /// nothing - only its arrival is used, never the clock in it - and the
-    /// framer stays out of step, so the passes after it are still checked.
+    /// A heartbeat has nothing in it to check that is known to hold on
+    /// every decoder (bytes 7 to 10 are the same in all of rehearsal 3's,
+    /// but may be this unit's own). One taken wrongly is not harmless - its
+    /// clock IS used, by DirectDecoderClient for the clock map - so the map
+    /// guards itself: a reading that disagrees with the others is held back
+    /// from the very first one (DecoderClockMap.Add), and the framer stays
+    /// out of step, so the passes after it are still checked.
     ///
     /// Only applied while out of step. In step, every message is taken as
     /// it comes, as it always was - a decoder whose passes use bytes 5 and 6
@@ -236,6 +247,16 @@ internal sealed class EasyLapFramer
             return false;
         }
 
+        return NextStartsAMessage(msgLen);
+    }
+
+    /// <summary>
+    /// Whether the byte after a message of this length at the front of the
+    /// buffer starts another message (0x0D or 0x0B) - true when it has not
+    /// arrived yet, so a message at the end of a report is not held back.
+    /// </summary>
+    private bool NextStartsAMessage(int msgLen)
+    {
         if (_buffer.Count > msgLen)
         {
             var next = _buffer[msgLen];

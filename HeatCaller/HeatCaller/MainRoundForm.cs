@@ -210,12 +210,18 @@ public sealed class MainRoundForm : Form
             return -1;
         }
 
-        // Only treat it as a tier when the letter is followed by a
-        // separator or "main" - otherwise "Consolation" would read as tier 2.
-        var rest = trimmed[1..].TrimStart();
-        var looksLikeTier = rest.StartsWith("-") || rest.StartsWith(" ")
+        // Only treat it as a tier when the letter stands alone, or is
+        // followed by a hyphen, or by "Main" or "Final" - otherwise
+        // "Consolation" would read as tier 2. The space check this used to
+        // have looked at the text after its spaces had been trimmed off, so
+        // it never matched, and "A Final" - what many clubs call it - was
+        // read as untiered and left out of the bump-up chain.
+        var after = trimmed[1..];
+        var rest = after.TrimStart();
+        var looksLikeTier = after.Length == 0
+                            || after.StartsWith("-")
                             || rest.StartsWith("main", StringComparison.OrdinalIgnoreCase)
-                            || rest.Length == 0;
+                            || rest.StartsWith("final", StringComparison.OrdinalIgnoreCase);
 
         return looksLikeTier ? first - 'A' : -1;
     }

@@ -148,6 +148,31 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// The teams and sponsors <see cref="DriverDetailLinesFor"/> puts in the
+    /// facts for these drivers, one name each, cleaned the same way - for
+    /// TidyIntro to give back their own spelling.
+    /// </summary>
+    private IEnumerable<string> TeamAndSponsorNamesFor(IEnumerable<string> transponders)
+    {
+        foreach (var transponder in transponders.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var profile = _profiles.Get(transponder);
+            var team = Field(profile?.Team);
+
+            if (team.Length > 0)
+            {
+                yield return team;
+            }
+
+            // FieldList splits on commas, so no sponsor has one of its own.
+            foreach (var sponsor in FieldList(profile?.Sponsors).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                yield return sponsor;
+            }
+        }
+    }
+
+    /// <summary>
     /// Whether a known rivalry has both its drivers among these - asked
     /// before a round intro is written, for the setting that keeps intros to
     /// mains and rivalries (27 Sep 2026). Matched exactly as the intro's own
@@ -207,6 +232,32 @@ public sealed class CommentaryService
     }
 
     private const string SummaryKind = "Summary";
+
+    /// <summary>
+    /// Takes back a recap that was written but never spoken - dropped
+    /// because the next race was called to the grid first. Without this it
+    /// stayed the "last race summary", and the Announcer page offered to
+    /// repeat over the PA a recap nobody had heard. Only if it is still the
+    /// one held, so a later race's recap is never cleared by an earlier one.
+    /// </summary>
+    public void ForgetRaceSummary(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        if (string.Equals(LastRaceSummary, line, StringComparison.Ordinal))
+        {
+            LastRaceSummary = null;
+        }
+
+        if (LastLineKind == SummaryKind && string.Equals(LastLine, line, StringComparison.Ordinal))
+        {
+            LastLine = null;
+            LastLineKind = null;
+        }
+    }
 
     /// <summary>
     /// Built fresh per call rather than cached, since it reads live settings
@@ -556,11 +607,15 @@ public sealed class CommentaryService
         if (!string.IsNullOrWhiteSpace(answer))
         {
             // The same names the model was given, spelled the way the
-            // facts spell them, for TidyIntro to put back.
+            // facts spell them, for TidyIntro to put back. Teams and
+            // sponsors too: they were left off, so a shouted "TEAM HFCC"
+            // was calmed to "team hfcc" for good and the PA read it as a
+            // word rather than four letters.
             var properNames = names
                 .Append(Field(round.ClassName))
                 .Append(Field(round.RoundLabel))
                 .Append(Field(round.TrackLayoutName))
+                .Concat(TeamAndSponsorNamesFor(onTrack))
                 .ToList();
 
             var notes = new List<string>();
@@ -576,10 +631,23 @@ public sealed class CommentaryService
     }
 
     /// <summary>
-    /// How many shouted words in a row make a shouted passage rather than
-    /// emphasis. "RIGHT there" and "NEW HEIGHTS" are emphasis, and stay.
+    /// The fewest letters a word in capitals on its own needs to count as
+    /// shouted. Shorter ones - "RC", "GP", "BMX" - are as likely to be
+    /// initials as shouting, and are left alone; two or more in a row are
+    /// shouting whatever their length.
+    ///
+    /// Until rehearsal 4 (4 Oct 2026) only a run of four or more counted,
+    /// and "XSpeed CLASSIC CAR RACING", "HIGH-Octane" and "IT'S TIIIIIME!"
+    /// all went out over the PA as written: the voice model reads capitals
+    /// as shouting, however few of them there are.
     /// </summary>
-    private const int ShoutedRunWords = 4;
+    private const int ShoutedLoneLetters = 4;
+
+    /// <summary>A word for CalmShouting: letters and digits, joined through apostrophes and hyphens - "IT'S", "HIGH-Octane", "A-Main".</summary>
+    private static readonly Regex ShoutWord = new(@"[\p{L}\p{N}]+(?:['\u2019\-][\p{L}\p{N}]+)*", RegexOptions.Compiled);
+
+    /// <summary>The same vowel three or more times over - "TIIIIIME", "GOOOO". No English word has one.</summary>
+    private static readonly Regex StretchedVowel = new(@"([aeiouyAEIOUY])\1{2,}", RegexOptions.Compiled);
 
     /// <summary>
     /// How far past the word limit an intro may run before it is cut back.
@@ -616,10 +684,10 @@ public sealed class CommentaryService
     ///
     /// In this order, because each step reads the one before:
     ///
-    ///  1. Shouting - a run of <see cref="ShoutedRunWords"/> or more words in
-    ///     capitals - goes to lower case, then the names from the facts get
-    ///     their own spelling back and each sentence its capital. A word or
-    ///     two in capitals is emphasis and is left alone.
+    ///  1. Shouting - see <see cref="CalmShouting(string, IEnumerable{string}?, out bool, out bool)"/> -
+    ///     goes to lower case and stretched words ("TIIIIIME") to their
+    ///     spelling, with the names from the facts kept as written, and each
+    ///     sentence then gets its capital.
     ///  2. A heat number that is not the round's is replaced by the round's
     ///     own label. Only when the label has a heat number to compare with.
     ///  3. Past the word limit (with <see cref="IntroWordSlack"/>), whole
@@ -636,29 +704,25 @@ public sealed class CommentaryService
             return null;
         }
 
-        // 1. Shouting.
-        var calmed = CalmShouting(text);
+        // 1. Shouting. The names are kept out of the lowering rather than
+        // put back after it: put back, only the ones on the list came back,
+        // and anything the model was given that wasn't on it - a team, a
+        // sponsor - stayed lower-cased for good.
+        var calmed = CalmShouting(text, properNames, out var shouted, out var stretched);
 
-        if (!string.Equals(calmed, text, StringComparison.Ordinal))
+        if (shouted || stretched)
         {
-            // Longest first, so "Test Class" is restored before a "Test"
-            // inside it could be.
-            foreach (var name in properNames
-                         .Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().Length >= 2)
-                         .Select(n => n.Trim())
-                         .Distinct(StringComparer.OrdinalIgnoreCase)
-                         .OrderByDescending(n => n.Length))
+            text = LowerCaseI.Replace(calmed, "I");
+
+            if (shouted)
             {
-                calmed = Regex.Replace(
-                    calmed,
-                    $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
-                    name.Replace("$", "$$"),
-                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                notes.Add("was in capitals - put back into normal case");
             }
 
-            calmed = LowerCaseI.Replace(calmed, "I");
-            text = calmed;
-            notes.Add("was in capitals - put back into normal case");
+            if (stretched)
+            {
+                notes.Add("had stretched words (\"TIIIIIME\") - put back to their spelling");
+            }
         }
 
         // 2. The heat number.
@@ -725,93 +789,188 @@ public sealed class CommentaryService
     }
 
     /// <summary>
-    /// Lower-cases every run of <see cref="ShoutedRunWords"/> or more words
-    /// written in capitals, from its first such word to its last. A word
-    /// counts when it has two or more letters and all of them are capitals;
-    /// numbers, single letters ("A", "I") and dashes neither count nor break
-    /// a run, but are lowered with it when they sit inside one. Everything
-    /// between the words - spaces, punctuation - is kept exactly.
+    /// Takes the shouting out of a line the model wrote, for the voice:
+    ///
+    ///  - Stretched words go back to their spelling - "TIIIIIME" to "TIME",
+    ///    "GOOOO" to "GO" - a vowel three or more times over being in no
+    ///    English word (<see cref="StretchedVowel"/>).
+    ///  - A word in capitals is lowered when it sits next to another word in
+    ///    capitals ("CLASSIC CAR RACING", "IT'S TIME"), or has
+    ///    <see cref="ShoutedLoneLetters"/> or more letters on its own
+    ///    ("KILLING us"). A short one alone - "RC", "GP", "BMX" - is as likely
+    ///    initials as shouting, and is kept. A hyphenated word is lowered whole
+    ///    when a shouted part of it is ("HIGH-Octane" to "high-octane").
+    ///  - The <paramref name="keep"/> names - the drivers, class, round,
+    ///    track, teams and sponsors the model was given - are left exactly as
+    ///    the facts spell them wherever they appear, in any case, so "TEAM
+    ///    HFCC" stays "HFCC" and a driver's name shouted comes back as written.
+    ///
+    /// Words with fewer than two letters ("A", "I", numbers) neither count
+    /// nor break a run. Everything between words - spaces, punctuation - is
+    /// kept exactly. <paramref name="shouted"/> and <paramref name="stretched"/>
+    /// say which of the two it found.
     /// </summary>
-    internal static string CalmShouting(string text)
+    internal static string CalmShouting(string text, IEnumerable<string>? keep, out bool shouted, out bool stretched)
     {
-        var tokens = TokenPattern.Matches(text);
-        var lower = new bool[tokens.Count];
+        shouted = false;
+        stretched = false;
 
-        var runStart = -1;
-        var runEnd = -1;
-        var runWords = 0;
-
-        void CloseRun()
-        {
-            if (runWords >= ShoutedRunWords)
-            {
-                for (var k = runStart; k <= runEnd; k++)
-                {
-                    lower[k] = true;
-                }
-            }
-
-            runStart = -1;
-            runEnd = -1;
-            runWords = 0;
-        }
-
-        for (var i = 0; i < tokens.Count; i++)
-        {
-            var letters = 0;
-            var capitals = 0;
-
-            foreach (var ch in tokens[i].Value)
-            {
-                if (char.IsLetter(ch))
-                {
-                    letters++;
-
-                    if (char.IsUpper(ch))
-                    {
-                        capitals++;
-                    }
-                }
-            }
-
-            if (letters < 2)
-            {
-                continue;
-            }
-
-            if (capitals == letters)
-            {
-                if (runStart < 0)
-                {
-                    runStart = i;
-                }
-
-                runEnd = i;
-                runWords++;
-            }
-            else
-            {
-                CloseRun();
-            }
-        }
-
-        CloseRun();
-
-        if (!lower.Any(l => l))
+        if (string.IsNullOrEmpty(text))
         {
             return text;
         }
 
+        // Where the kept names are, longest first so "Test Class" is taken
+        // before a "Test" inside it could be - each written back as spelled.
+        var kept = new List<(int Start, int End, string Name)>();
+
+        foreach (var name in (keep ?? Enumerable.Empty<string>())
+                     .Where(n => !string.IsNullOrWhiteSpace(n) && n.Trim().Length >= 2)
+                     .Select(n => n.Trim())
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderByDescending(n => n.Length))
+        {
+            foreach (Match m in Regex.Matches(text, $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
+                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                var end = m.Index + m.Length;
+
+                if (!kept.Any(k => m.Index < k.End && end > k.Start))
+                {
+                    kept.Add((m.Index, end, name));
+                }
+            }
+        }
+
+        bool InKept(int index) => kept.Any(k => index >= k.Start && index < k.End);
+
+        var words = ShoutWord.Matches(text).Where(w => !InKept(w.Index)).ToList();
+        var replaced = new string[words.Count];
+        var caps = new bool[words.Count];
+        var counts = new bool[words.Count];
+        var lowered = new bool[words.Count];
+
+        static bool AllCapitals(string part)
+        {
+            var letters = part.Count(char.IsLetter);
+            return letters >= 2 && part.Where(char.IsLetter).All(char.IsUpper);
+        }
+
+        for (var i = 0; i < words.Count; i++)
+        {
+            var value = words[i].Value;
+            var unstretched = StretchedVowel.Replace(value, m => m.Groups[1].Value);
+
+            if (!string.Equals(unstretched, value, StringComparison.Ordinal))
+            {
+                stretched = true;
+            }
+
+            replaced[i] = unstretched;
+            counts[i] = unstretched.Count(char.IsLetter) >= 2;
+
+            // A hyphenated word shouts when any part of it does.
+            caps[i] = counts[i] && unstretched.Split('-').Any(AllCapitals);
+        }
+
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (!caps[i])
+            {
+                continue;
+            }
+
+            // The nearest words either side that count, skipping "A", "I"
+            // and numbers - next to one in capitals, this is a run.
+            var before = i - 1;
+            while (before >= 0 && !counts[before])
+            {
+                before--;
+            }
+
+            var after = i + 1;
+            while (after < words.Count && !counts[after])
+            {
+                after++;
+            }
+
+            var inRun = (before >= 0 && caps[before]) || (after < words.Count && caps[after]);
+            var longAlone = replaced[i].Split('-').Any(part => AllCapitals(part) && part.Count(char.IsLetter) >= ShoutedLoneLetters);
+
+            // A stretched word in capitals ("GOOOO") was shouted however
+            // short it comes back.
+            var wasStretched = !string.Equals(replaced[i], words[i].Value, StringComparison.Ordinal);
+
+            if (inRun || longAlone || wasStretched)
+            {
+                replaced[i] = replaced[i].ToLowerInvariant();
+                lowered[i] = true;
+                shouted = true;
+            }
+        }
+
+        // A single capital letter inside a shouted passage goes down with it:
+        // "A BARN BURNER OF A RIVALRY" is "a barn burner of a rivalry", not
+        // "A barn burner of A rivalry". It is lowered when the nearest words
+        // that count on both sides were lowered (or there is none on that
+        // side, at the start or end of the line). "I" comes back as a
+        // capital afterwards (LowerCaseI); one at a sentence's start gets
+        // its capital back with the rest of the sentence.
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (counts[i] || replaced[i].Length != 1 || !char.IsUpper(replaced[i][0]))
+            {
+                continue;
+            }
+
+            var before = i - 1;
+            while (before >= 0 && !counts[before])
+            {
+                before--;
+            }
+
+            var after = i + 1;
+            while (after < words.Count && !counts[after])
+            {
+                after++;
+            }
+
+            var hasBefore = before >= 0;
+            var hasAfter = after < words.Count;
+
+            if ((hasBefore || hasAfter)
+                && (!hasBefore || lowered[before])
+                && (!hasAfter || lowered[after]))
+            {
+                replaced[i] = replaced[i].ToLowerInvariant();
+            }
+        }
+
+        if (!shouted && !stretched && kept.All(k => string.Equals(text.Substring(k.Start, k.End - k.Start), k.Name, StringComparison.Ordinal)))
+        {
+            return text;
+        }
+
+        // Written back in order: the words as calmed, the kept names as
+        // spelled, everything else as it was.
+        var edits = words.Select((w, i) => (Start: w.Index, End: w.Index + w.Length, Text: replaced[i]))
+            .Concat(kept.Select(k => (k.Start, k.End, Text: k.Name)))
+            .OrderBy(e => e.Start)
+            .ToList();
+
         var result = new System.Text.StringBuilder(text.Length);
         var at = 0;
 
-        for (var i = 0; i < tokens.Count; i++)
+        foreach (var (editStart, editEnd, editText) in edits)
         {
-            var token = tokens[i];
+            if (editStart < at)
+            {
+                continue;
+            }
 
-            result.Append(text, at, token.Index - at);
-            result.Append(lower[i] ? token.Value.ToLowerInvariant() : token.Value);
-            at = token.Index + token.Length;
+            result.Append(text, at, editStart - at);
+            result.Append(editText);
+            at = editEnd;
         }
 
         result.Append(text, at, text.Length - at);
@@ -945,7 +1104,13 @@ public sealed class CommentaryService
         // The prompt tells the model to match its language to what actually
         // happened, which it can only do if it KNOWS - lap counts and times
         // alone leave it guessing, and a guessing model defaults to hype.
-        var closeness = DescribeMargin(ordered);
+        //
+        // From the whole field, not the finishers the recap names. With
+        // "Mention up to" set to 1 the list above holds the winner alone,
+        // and every recap was told "only one finisher - there was no
+        // contest" - over a photo finish, and against the mechanic's
+        // interview, which reads the full result.
+        var closeness = DescribeMargin(session.Results.OrderBy(r => r.Position).ToList());
 
         // The winner's team and sponsors only. The whole field's would turn
         // a sign-off into a list of names; the winner is who gets credited.

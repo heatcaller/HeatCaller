@@ -239,6 +239,36 @@ public sealed partial class AnnouncementService
     private string? _provisionalPoleTransponder;
 
     /// <summary>
+    /// How the class now qualifying is scored, so provisional pole goes to
+    /// whoever tops the order the board and the qualifying projection show.
+    /// It used to go to the quickest single lap, which no class scores by:
+    /// under the default most-laps rule a driver with nine laps and one
+    /// lucky tour was called "P1 in qualifying" while the board had them
+    /// fifth, and the real leader was never called at all. Set by Race
+    /// Control at each green (SetQualifyingRule); until then, the class
+    /// default.
+    /// </summary>
+    private QualifyingMethod _qualifyingMethod = QualifyingMethod.TotalLaps;
+
+    /// <summary>How many laps make a run under BestConsecutiveLaps - the class's ConsecutiveLapCount.</summary>
+    private int _qualifyingConsecutiveLaps = 3;
+
+    /// <summary>
+    /// Each driver's flying laps this session, in order - the same list the
+    /// qualifying calculator scores a best-consecutive run from. Kept from
+    /// the session's own lap times on the gate pass; only read under
+    /// BestConsecutiveLaps.
+    /// </summary>
+    private readonly Dictionary<string, List<long>> _qualifyingLaps = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Tells the announcer how this race's class scores qualifying - see _qualifyingMethod.</summary>
+    public void SetQualifyingRule(QualifyingMethod method, int consecutiveLaps)
+    {
+        _qualifyingMethod = method;
+        _qualifyingConsecutiveLaps = Math.Max(1, consecutiveLaps);
+    }
+
+    /// <summary>
     /// The current flag, so everything routine can be held while a caution
     /// is out. Supplied by the app rather than read from a session, because
     /// this service is deliberately ignorant of where its events come from.
@@ -781,7 +811,15 @@ public sealed partial class AnnouncementService
     /// recap's interview. Null for the announcer. Only the part picked for
     /// the engine in use changes anything.
     /// </param>
-    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null)
+    /// <param name="showOnScreens">
+    /// True for a line that would have gone to the screens had it been
+    /// rendered ahead - the recap, the teaser and the lines that stand in
+    /// for SpeakPrepared when its render failed. SpeakPrepared shows its
+    /// text; this did not, so a recap spoken the slow way never reached the
+    /// Big Screen or the Announcer page's feed. Off by default: the level
+    /// check, the soundscape preview and the day's timers are not race calls.
+    /// </param>
+    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -790,7 +828,8 @@ public sealed partial class AnnouncementService
 
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice));
+            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice),
+            displayText: showOnScreens ? text : null);
     }
 
     /// <summary>A line already rendered to audio, ready to play the instant it's wanted.</summary>
@@ -868,7 +907,9 @@ public sealed partial class AnnouncementService
     /// StingerLibrary), in that soundscape's delivery.
     ///
     /// Only a real announcer voice is kept - ElevenLabs on the club's key or
-    /// the HeatCaller voice. Null when the Windows voice would say it,
+    /// the HeatCaller voice. Null when the Windows or Kokoro voice would say
+    /// it - both speak any line for free on this PC, so there is nothing to
+    /// keep -
     /// including the Windows voice standing in because ElevenLabs couldn't:
     /// a recording is played for good, and a stand-in take recorded by
     /// accident would replace the announcer on that line every race.
@@ -876,7 +917,7 @@ public sealed partial class AnnouncementService
     public async Task<byte[]?> RecordVoiceLineAsync(string text, double stability, double style)
     {
         var profile = _voiceStore.Current.CloneForDelivery(stability, style);
-        if (profile.EffectiveEngine == VoiceEngine.Windows || string.IsNullOrWhiteSpace(text))
+        if (profile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro || string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
@@ -1059,6 +1100,16 @@ public sealed partial class AnnouncementService
         WindowsVoice.Log = message => StatusMessage?.Invoke(message);
         WindowsVoice.WarmUp();
 
+        // Kokoro too - but its model is only loaded when it is the voice
+        // chosen: it takes a few hundred MB of memory, which a club on
+        // another voice has no reason to give up. Choosing it on Voice
+        // Settings loads it then.
+        KokoroSpeech.Log = message => StatusMessage?.Invoke(message);
+        if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
+        {
+            KokoroSpeech.WarmUp();
+        }
+
         // Two independent background loops, each waiting on its own
         // semaphore for work. This replaces an earlier "check a boolean
         // flag" approach that had a race condition: a loop could decide its
@@ -1211,6 +1262,7 @@ public sealed partial class AnnouncementService
             _lapTimeCounts.Clear();
             _lastLapElapsedMs.Clear();
             _lapCrossings.Clear();
+            _qualifyingLaps.Clear();
             _streakCounts.Clear();
             _rivalryLastAhead.Clear();
             _lappedAnnounced.Clear();

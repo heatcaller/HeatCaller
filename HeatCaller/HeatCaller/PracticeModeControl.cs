@@ -667,7 +667,13 @@ public sealed class PracticeModeControl : UserControl
         // Only from a genuinely idle session. A car crossing the gate while
         // a race is staged, counting down, running - or finished and still
         // on the board - is part of that race, and nothing here may clear it.
-        if (_active || _race.State != RaceState.Idle)
+        //
+        // A race's warm-up is not a RaceState of its own - the session stays
+        // Idle through it - so it is asked about separately. A car on its
+        // warm-up laps used to start practice here, which cancelled the
+        // warm-up and the Stage waiting behind it, and left Race Control
+        // refusing to stage until someone found the Practice page.
+        if (_active || _race.State != RaceState.Idle || _race.IsWarmingUp)
         {
             return false;
         }
@@ -952,7 +958,20 @@ public sealed class PracticeModeControl : UserControl
         // at Idle, which the journal never writes, so nothing re-creates
         // the file after this. (Its path is fixed; a fresh instance clears
         // the same file Race Control's writes to.)
-        new RaceJournal().Clear();
+        //
+        // Not while a finished race is still waiting to get into the race
+        // history: the journal is then that race's only copy on disk (Race
+        // Control's own clears all wait for it). Stopping practice used to
+        // delete it regardless, and a crash before the next Stage lost the
+        // race for good.
+        if (HasUnfiledRaces?.Invoke() != true)
+        {
+            new RaceJournal().Clear();
+        }
+        else
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [practice] Crash journal kept - an earlier race still has to get into the race history.");
+        }
 
         // Handed back rather than cleared - Reset() doesn't touch these, a
         // practice target left here would leak into the next race, and
@@ -1107,12 +1126,9 @@ public sealed class PracticeModeControl : UserControl
             .OrderBy(s => s.FastestLapMs == 0 ? long.MaxValue : s.FastestLapMs)
             .ToList();
 
-        // Session-wide quickest lap, for the gap-to-leader column.
-        var fastestOverall = standings
-            .Where(s => s.FastestLapMs > 0)
-            .Select(s => s.FastestLapMs)
-            .DefaultIfEmpty(0)
-            .Min();
+        // Session-wide quickest lap, for the gap-to-leader column - a ghost's
+        // left out while a real car is out (Ghosts.FastestLapMs).
+        var fastestOverall = Ghosts.FastestLapMs(standings);
 
         _tracker.Observe(standings, _race.SessionGeneration);
 
@@ -1212,6 +1228,13 @@ public sealed class PracticeModeControl : UserControl
     /// earn alone (AchievementEvaluator.EvaluatePractice); at a club it is not.
     /// </summary>
     public AchievementContext? AchievementStores { get; set; }
+
+    /// <summary>
+    /// Whether Race Control has a finished race still to get into the race
+    /// history (RaceControlControl.HasUnfiledRaces) - while it does, Stop
+    /// leaves the crash journal alone. Set by MainForm.
+    /// </summary>
+    public Func<bool>? HasUnfiledRaces { get; set; }
 
     /// <summary>A line for the console - the badges a practice earned.</summary>
     public event Action<string>? StatusMessage;

@@ -132,7 +132,12 @@ public sealed partial class RaceDayService
 
         // Race Control refuses these during practice WITH A DIALOG on the
         // laptop; refused here instead, where the person asking can see why.
-        if (race.IsPracticeMode && flag is "stage" or "countdown" or "green" or "checkered" or "reset")
+        //
+        // Red too, now that Race Control refuses it in practice (a red in
+        // practice used to stop every lap counting, with no green that could
+        // clear it) - otherwise the phone read "RED sent" for a flag the
+        // laptop had turned down with a dialog nobody near the phone saw.
+        if (race.IsPracticeMode && flag is "stage" or "countdown" or "green" or "checkered" or "reset" or "red")
         {
             throw new OpRefused("Practice is running - stop it on the Practice page first.");
         }

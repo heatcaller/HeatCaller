@@ -150,6 +150,46 @@ public sealed class QualifyingStandingsForm : Form
             }
         }
 
+        // The time, lap and heat cells are formatted strings, and a header
+        // click sorted them as text - "10.123s" above "9.500s", lap 10
+        // above lap 2, "2/3" above "3" - so a slower driver was read out
+        // above a quicker one. Those columns now sort on the figures behind
+        // them, taken from the entry on each row. A dash (no figure) sorts
+        // after every real one. Pos, Best Laps and the text columns already
+        // sort correctly and are left to the grid.
+        grid.SortCompare += (_, args) =>
+        {
+            if (grid.Rows[args.RowIndex1].Tag is not QualifyingCalculator.Entry a
+                || grid.Rows[args.RowIndex2].Tag is not QualifyingCalculator.Entry b)
+            {
+                return;
+            }
+
+            static long OrLast(long value) => value > 0 ? value : long.MaxValue;
+
+            int? order = args.Column.Name switch
+            {
+                "window" => OrLast(a.BestConsecutiveMs).CompareTo(OrLast(b.BestConsecutiveMs)),
+                "windowavg" => OrLast(a.ConsecutiveAverageMs(lapCount)).CompareTo(OrLast(b.ConsecutiveAverageMs(lapCount))),
+                "fromlap" => OrLast(a.ConsecutiveStartLap).CompareTo(OrLast(b.ConsecutiveStartLap)),
+                "fast" => OrLast(a.BestFastLapMs).CompareTo(OrLast(b.BestFastLapMs)),
+                "heats" => a.HeatsCounted != b.HeatsCounted
+                    ? a.HeatsCounted.CompareTo(b.HeatsCounted)
+                    : a.HeatsRun.CompareTo(b.HeatsRun),
+                _ => (int?)null,
+            };
+
+            if (order is not { } result)
+            {
+                return;
+            }
+
+            // Ties fall back to the computed standing, so equal figures keep
+            // their ranked order rather than shuffling.
+            args.SortResult = result != 0 ? result : entries.IndexOf(a).CompareTo(entries.IndexOf(b));
+            args.Handled = true;
+        };
+
         var lblRule = new Label
         {
             Text = countBest > 1

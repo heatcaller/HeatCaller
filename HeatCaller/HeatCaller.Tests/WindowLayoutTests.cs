@@ -27,6 +27,30 @@ namespace HeatCaller.Tests;
 /// </summary>
 public sealed partial class LayoutTests
 {
+    /// <summary>
+    /// Every window on LayoutAudit.ConvertedWindows is built by the window
+    /// sweep. One on the list with no builder in WindowCatalog was never
+    /// measured at all, and nothing noticed: it produced no findings, so it
+    /// passed. "Line Up the Split Loop" sat on the list like that, its
+    /// comment saying the test held it to its size while nothing did.
+    /// </summary>
+    [Fact]
+    public void Every_guarded_window_is_built_by_the_sweep()
+    {
+        var built = WindowCatalog.All.Select(entry => entry.Name).ToList();
+
+        var never = LayoutAudit.ConvertedWindows
+            .Where(window => !built.Any(name =>
+                string.Equals(name, window, StringComparison.Ordinal)
+                || name.StartsWith(window + " (", StringComparison.Ordinal)
+                || name.StartsWith(window + LayoutAudit.Separator, StringComparison.Ordinal)))
+            .ToList();
+
+        Assert.True(never.Count == 0,
+            "On LayoutAudit.ConvertedWindows but never built by the window sweep - give each a WindowCatalog entry: "
+            + string.Join(", ", never));
+    }
+
     [Fact]
     public void EveryConvertedWindowFitsAtEverySize()
     {
@@ -124,6 +148,9 @@ internal static partial class WindowCatalog
 
         // Mission Control and Photo Finish, which sit beside Race Control (4 Oct).
         all.AddRange(RaceNightScreenWindows());
+
+        // Line Up, from the Connection page (4 Oct).
+        all.AddRange(SplitLoopWindows());
 
         // The garage, setup sheets and batteries (30 Sep).
         all.AddRange(GarageWindows());
@@ -266,6 +293,9 @@ internal sealed class WindowSweepResult
 
     /// <summary>How long each window took at each size - its building, sizing, checking and putting away - for the report's slowest, with how long each of those parts took.</summary>
     public List<(string Where, TimeSpan Took, string Parts)> Timed { get; } = new();
+
+    /// <summary>The windows that had to scroll at a size - their page taller than the screen leaves them, so their buttons open below the fold.</summary>
+    public List<string> Scrolled { get; } = new();
 }
 
 /// <summary>Builds each window at each size, inside a screen-sized panel of an off-screen window, and measures it.</summary>
@@ -393,16 +423,22 @@ internal static class WindowSweep
                 desk.Controls.Add(inside);
                 Settle();
 
-                var size = DialogFit.FitForLayoutCheck(window, inside, screen);
+                var size = DialogFit.FitForLayoutCheck(window, inside, screen, out var scrolls);
 
                 Settle();
 
-                if (size.Width > screen.Width || size.Height > screen.Height)
+                // A window can never come out bigger than the screen here -
+                // DialogFit clamps it to the screen first - so a check for
+                // that could never fire. What can happen is that its page
+                // needs more height than the screen leaves it, and the
+                // window scrolls: DialogFit's deliberate fallback, so not a
+                // finding, but its buttons then open below the fold, which
+                // LayoutAudit.Check does not see inside a scrolling page.
+                // Listed in the report, so a window that should have room
+                // and still scrolls is noticed.
+                if (scrolls)
                 {
-                    result.Findings.Add(new SweepFinding(view, name, new LayoutAudit.Finding(
-                        name,
-                        LayoutAudit.TooBig,
-                        $"{size.Width}x{size.Height}, on a screen with {screen.Width}x{screen.Height} to open in")));
+                    result.Scrolled.Add($"{view.Name}: {name} ({size.Width}x{size.Height} on {screen.Width}x{screen.Height})");
                 }
 
                 var shown = inside;
@@ -522,6 +558,12 @@ internal static class WindowReport
 
         text.AppendLine();
         text.AppendLine("Windows that must be clean (LayoutAudit.ConvertedWindows): " + string.Join(", ", LayoutAudit.ConvertedWindows) + ".");
+
+        // Not failures - DialogFit scrolls on purpose when a screen can't
+        // hold a window - but each one opens with its buttons out of sight.
+        text.AppendLine(sweep.Scrolled.Count == 0
+            ? "Scrolled: none - every window showed all of itself at every size."
+            : $"Scrolled ({sweep.Scrolled.Count}, buttons below the fold until scrolled): " + string.Join("; ", sweep.Scrolled) + ".");
         text.AppendLine("Took: " + string.Join(", ", sweep.Sweep.Timings.Select(t => $"{t.Key.Heading} {t.Value.TotalSeconds:0.0}s")) + ".");
 
         if (sweep.Timed.Count > 0)

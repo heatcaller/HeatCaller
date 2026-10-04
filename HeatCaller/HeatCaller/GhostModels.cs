@@ -81,7 +81,7 @@ public sealed class GhostCar
     /// Prefixed so it can never collide with real hardware, and so anything
     /// reading standings can tell a ghost from a car on track.
     /// </summary>
-    public string Transponder { get; set; } = $"GHOST-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+    public string Transponder { get; set; } = $"{Ghosts.Prefix}{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
 
     public string Name { get; set; } = "Ghost";
     public bool Enabled { get; set; } = true;

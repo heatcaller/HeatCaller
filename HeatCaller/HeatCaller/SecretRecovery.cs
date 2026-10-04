@@ -47,11 +47,18 @@ internal static class SecretRecovery
     private static bool _lockedAtStart;
     private static bool _resolved;
 
+    // Set when Run leaves the locked settings and secrets.hgk for the next
+    // launch rather than deciding anything (see Run). Pending then stays
+    // true for the rest of the session.
+    private static bool _postponed;
+
     /// <summary>
     /// True from a locked startup until RunIfNeeded has finished - dialog
-    /// included. Anything that would MAKE a secret in that window (a new
+    /// included - and for the whole session when it put recovery off to the
+    /// next launch. Anything that would MAKE a secret in that window (a new
     /// set of racer PINs, emailed out) waits, or it would hand out values
-    /// the recovery is about to replace.
+    /// the recovery is about to replace - and, while the settings are still
+    /// locked, re-seal them with only that one value in them.
     /// </summary>
     public static bool Pending => _lockedAtStart && !_resolved;
 
@@ -76,11 +83,25 @@ internal static class SecretRecovery
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[secrets] Recovery failed: {ex}");
+            SessionLog.Write($"[secrets] Recovery failed: {ex.Message}");
+
+            // Failed part-way with the settings still locked: treated as put
+            // off, for the same reason as the postponed paths in Run.
+            _postponed |= settings.SecretsLocked;
             return false;
         }
         finally
         {
-            _resolved = true;
+            // Only resolved when something was actually decided. This used to
+            // be set on every return, including the two that deliberately
+            // leave the settings locked and secrets.hgk on disk for the next
+            // launch. Pending then went false, the two-second roster tick
+            // minted a racer PIN for everybody, and the save re-sealed the
+            // settings with ONLY those PINs in them - the relay token, every
+            // PIN, the email and backup passwords and the QR check-in key
+            // gone, the lock cleared, and secrets.hgk deleted as no longer
+            // needed on the following launch, without a word to the club.
+            _resolved = !_postponed;
         }
     }
 
@@ -109,10 +130,14 @@ internal static class SecretRecovery
         // settings.json readable and unlocked, found nothing locked at all -
         // and then deleted secrets.hgk, the only copy of the ElevenLabs key
         // this PC could ever open. Nothing is lost by waiting: settings that
-        // are still locked keep their sealed text on every save, and the
+        // are still locked keep their sealed text on every save - but only
+        // while nothing in them has been filled in, which is why Pending is
+        // kept true for the rest of the session (see RunIfNeeded) - and the
         // file is asked about again on the next launch.
         if (settings.LoadedUnreadable || voice.LoadedUnreadable)
         {
+            SessionLog.Write("[secrets] Recovery put off to the next launch: settings.json or voice-settings.json could not be read.");
+            _postponed = true;
             return false;
         }
 
@@ -147,9 +172,12 @@ internal static class SecretRecovery
         // So the file and the locked state are both left exactly as they
         // are, and the next launch asks again. Nothing is lost by waiting:
         // settings that are still locked keep their sealed text on every
-        // save (the same reasoning as LoadedUnreadable above).
-        // RunIfNeeded's finally still marks recovery as resolved for this
-        // session, so anything waiting on Pending is not held up.
+        // save (the same reasoning as LoadedUnreadable above). That holds
+        // only while nothing makes a secret, so recovery is NOT marked
+        // resolved here: Pending stays true for this session and the racer
+        // PINs, badge key and auto backup keep waiting. This used to let them
+        // go, and the first racer PIN minted re-sealed the settings without
+        // every other key.
         string envelope;
         try
         {
@@ -165,6 +193,8 @@ internal static class SecretRecovery
                 + "If this keeps happening, close anything that might have the HeatCaller data folder open (a backup or "
                 + "sync tool is the usual cause) and restart HeatCaller.",
                 "Keys not recovered yet", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            SessionLog.Write($"[secrets] Recovery put off to the next launch: secrets.hgk could not be read ({ex.Message}).");
+            _postponed = true;
             return false;
         }
 

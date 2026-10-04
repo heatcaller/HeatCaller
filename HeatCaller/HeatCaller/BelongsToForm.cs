@@ -196,9 +196,40 @@ internal sealed class BelongsToForm : Form
     }
 
     /// <summary>Fills the car and "replaces" lists for the driver picked.</summary>
+    /// <summary>The driver the car and "it replaces" boxes were last filled for - see OnDriverPicked.</summary>
+    private string? _filledFor;
+
+    /// <summary>The index of the item with this value in a box, or -1.</summary>
+    private static int IndexOfValue(ComboBox box, string? value)
+    {
+        if (value is null)
+        {
+            return -1;
+        }
+
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is Item item && string.Equals(item.Value, value, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private void OnDriverPicked()
     {
         var profile = (_lstDrivers.SelectedItem as DriverChoice)?.Profile;
+
+        // The same driver as before - the list refilled by a letter typed in
+        // Find, say: the car and "it replaces" stay as they were chosen. They
+        // used to go back to the first of each on every keystroke, without a
+        // word, and the transponder was then given to the wrong car.
+        var sameDriver = profile is not null && string.Equals(profile.Transponder, _filledFor, StringComparison.OrdinalIgnoreCase);
+        var carBefore = sameDriver ? (_cmbCar.SelectedItem as Item)?.Value : null;
+        var replacesBefore = sameDriver ? (_cmbReplaces.SelectedItem as Item)?.Value : null;
+        _filledFor = profile?.Transponder;
 
         _cmbCar.Items.Clear();
         _cmbReplaces.Items.Clear();
@@ -221,7 +252,7 @@ internal sealed class BelongsToForm : Form
 
         if (_cmbCar.Items.Count > 0)
         {
-            _cmbCar.SelectedIndex = 0;
+            _cmbCar.SelectedIndex = Math.Max(0, IndexOfValue(_cmbCar, carBefore));
         }
         else
         {
@@ -229,7 +260,7 @@ internal sealed class BelongsToForm : Form
         }
 
         _cmbCar.Enabled = _rdoInCar.Checked && _cmbCar.Items.Count > 0;
-        _cmbReplaces.SelectedIndex = 0;
+        _cmbReplaces.SelectedIndex = Math.Max(0, IndexOfValue(_cmbReplaces, replacesBefore));
 
         _btnGive.Enabled = profile is not null;
         _btnGive.Text = GiveCaption(profile);

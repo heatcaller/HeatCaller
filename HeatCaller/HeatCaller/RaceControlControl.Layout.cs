@@ -499,7 +499,21 @@ public sealed partial class RaceControlControl
         _btnYellow.Click += (_, _) => _actYellow();
 
         _btnRed.Text = "Red";
-        _actRed = () => { CancelAutoStart(); _race.RedFlag(); };
+        _actRed = () =>
+        {
+            // Practice runs on this session under green, and a red stops
+            // every lap counting until a green - which is refused while
+            // practice runs. A RED from the phone, the button or F5 used to
+            // go through anyway: practice laps silently stopped counting,
+            // with nothing on screen to say so and no green to clear it.
+            if (RefuseIfPracticeRunning("throw the red flag"))
+            {
+                return;
+            }
+
+            CancelAutoStart();
+            _race.RedFlag();
+        };
         _btnRed.Click += (_, _) => _actRed();
 
         _btnCheckered.Text = "Checkered";
@@ -673,7 +687,19 @@ public sealed partial class RaceControlControl
             {
                 // Nothing of the race to put back - it was already idle and
                 // empty - but the round binding still is.
-                _undo.Capture("Reset race", restoreBinding);
+                //
+                // Refused once another race has been started, as the full
+                // undo above is. It used to be captured bare, and "Reset
+                // race" stays top of the stack through a whole race (filing
+                // one pushes nothing), so pressed after the next heat had
+                // run it put the OLD round back in the box - and that heat's
+                // result was then saved under the old round, which was
+                // marked as run with a race it never held.
+                _undo.Capture("Reset race", () =>
+                {
+                    RefuseStaleResetUndo(generationAfterReset);
+                    restoreBinding();
+                });
             }
 
             CancelAutoStart();

@@ -63,7 +63,17 @@ public static class ResultsCardRenderer
             ? 1 + Math.Min(unlocks.Count, MaxCardBadges) + (unlocks.Count > MaxCardBadges ? 1 : 0)
             : 0;
 
-        var height = headerHeight + results.Count * rowHeight + footerHeight + badgeLines * 21;
+        // Past maxRows the rest of the field was dropped without a word, and
+        // the card still looked like the whole result - and a disqualified
+        // driver, whom Edit Result puts last, is exactly who went. So the
+        // card says how many it leaves out, and names any DNF or DQ among them.
+        var hidden = session.Results.OrderBy(r => r.Position).Skip(results.Count).ToList();
+        var hiddenLine = hidden.Count == 0
+            ? null
+            : $"+{hidden.Count} more not shown"
+              + (OutcomeCounts(hidden) is { Length: > 0 } outcomes ? $", including {outcomes}" : string.Empty);
+
+        var height = headerHeight + results.Count * rowHeight + footerHeight + badgeLines * 21 + (hiddenLine is null ? 0 : 21);
 
         var bitmap = new Bitmap(width, height);
 
@@ -160,7 +170,16 @@ public static class ResultsCardRenderer
 
             using (var cellBrush = new SolidBrush(textColor))
             {
-                g.DrawString(result.Laps.ToString(), cellFont, cellBrush, new PointF(width - 260, y + 18));
+                // The DNF or DQ from Edit Result, where the laps go. Left out,
+                // a DQ was drawn as "0" laps beside a real fastest lap and a
+                // DNF as an ordinary finisher - on the image that is posted
+                // to the club chat as the night's result.
+                var outcome = ResultEditor.NormaliseOutcome(result.Outcome) ?? string.Empty;
+                var lapsText = outcome == ResultEditor.Dq ? outcome
+                    : outcome.Length > 0 ? $"{result.Laps} {outcome}"
+                    : result.Laps.ToString();
+
+                g.DrawString(lapsText, cellFont, cellBrush, new PointF(width - 260, y + 18));
 
                 var fastLapText = result.FastLapMs > 0 ? $"{result.FastLapMs / 1000.0:0.000}s" : "-";
                 g.DrawString(fastLapText, cellFont, cellBrush, new PointF(width - 170, y + 18));
@@ -173,6 +192,12 @@ public static class ResultsCardRenderer
         using (var linePen = new Pen(rowAltColor))
         {
             g.DrawLine(linePen, 32, y + 8, width - 32, y + 8);
+
+            if (hiddenLine is not null)
+            {
+                g.DrawString(hiddenLine, footerFont, footerBrush, new PointF(32, y + 20));
+                y += 21;
+            }
 
             // Badges under the result, two to a line, capped so a big night
             // can't push the card off its own canvas.
@@ -213,6 +238,18 @@ public static class ResultsCardRenderer
         }
 
         return bitmap;
+    }
+
+    /// <summary>"1 DQ", "2 DNF and 1 DQ" - the outcomes among these results, or empty when there are none.</summary>
+    private static string OutcomeCounts(IEnumerable<SessionResultEntry> results)
+    {
+        var outcomes = results.Select(r => ResultEditor.NormaliseOutcome(r.Outcome)).ToList();
+        var parts = new[] { ResultEditor.Dnf, ResultEditor.Dq }
+            .Select(o => (Outcome: o, Count: outcomes.Count(x => x == o)))
+            .Where(x => x.Count > 0)
+            .Select(x => $"{x.Count} {x.Outcome}");
+
+        return string.Join(" and ", parts);
     }
 
     /// <summary>

@@ -79,6 +79,19 @@ public static partial class AchievementEvaluator
 
         int PlaceOf(SessionResultEntry entry) => results.IndexOf(entry) + 1;
 
+        // How many cars actually raced: the field every "not alone" test
+        // below is judged against. The saved results carry a row for every
+        // car on the board - a hand-released grid files the whole roster at
+        // the green, and a black flag leaves the DQ'd car in with no laps -
+        // so counting rows let cars that never crossed the line make up the
+        // numbers. One driver lapping a hand-released heat while five sat on
+        // the line was awarded Winner, On the Box, Quickest of the Day, A Lap
+        // Clear (over a car on no laps) and Full House "6 on track", and had
+        // a win and a podium added to totals nothing rebuilds. Those rows
+        // always sort to the bottom, so PlaceOf is unchanged for anyone who
+        // raced.
+        var field = results.Count(r => r.Laps >= MinimumLapsToCount);
+
         // Where a driver started, counted among the real cars the same way
         // PlaceOf counts where they finished - zero when the grid was never
         // known. The stored slot is the roster's, ghosts included, so a
@@ -198,12 +211,12 @@ public static partial class AchievementEvaluator
             // driver lapping a Quick Race on their own was awarded Winner
             // and On the Box - and every race alone after that walked them
             // on towards Serial Winner.
-            if (PlaceOf(entry) == 1 && results.Count > 1)
+            if (PlaceOf(entry) == 1 && field > 1)
             {
                 driver.Wins++;
             }
 
-            if (PlaceOf(entry) is >= 1 and <= 3 && results.Count > 1)
+            if (PlaceOf(entry) is >= 1 and <= 3 && field > 1)
             {
                 driver.Podiums++;
             }
@@ -233,7 +246,7 @@ public static partial class AchievementEvaluator
                 Award(AchievementCatalogue.CleanTen, $"{streak} laps");
             }
 
-            var setFastestLap = entry.FastLapMs > 0 && entry.FastLapMs == fastestOfRace && results.Count > 1;
+            var setFastestLap = entry.FastLapMs > 0 && entry.FastLapMs == fastestOfRace && field > 1;
 
             if (setFastestLap)
             {
@@ -249,7 +262,7 @@ public static partial class AchievementEvaluator
             // Won by a clear lap. Measured against whoever finished second
             // rather than against the field, since that is the gap that was
             // actually raced.
-            if (PlaceOf(entry) == 1 && results.Count > 1)
+            if (PlaceOf(entry) == 1 && field > 1)
             {
                 var second = results.Count > 1 ? results[1] : null;
 
@@ -288,9 +301,9 @@ public static partial class AchievementEvaluator
                     }
                 }
 
-                if (results.Count >= 6)
+                if (field >= 6)
                 {
-                    Award(AchievementCatalogue.FullHouse, $"{results.Count} on track");
+                    Award(AchievementCatalogue.FullHouse, $"{field} on track");
                 }
             }
 
@@ -326,7 +339,7 @@ public static partial class AchievementEvaluator
                 // Led at the end of every lap they completed, and won.
                 // Leading throughout and then losing it on the last lap is a
                 // different story, and not this badge.
-                if (PlaceOf(entry) == 1 && entry.Laps > 1 && entry.LapsLed == entry.Laps && results.Count > 1)
+                if (PlaceOf(entry) == 1 && entry.Laps > 1 && entry.LapsLed == entry.Laps && field > 1)
                 {
                     Award(AchievementCatalogue.WireToWire, $"{entry.LapsLed} laps led");
                 }
@@ -341,14 +354,14 @@ public static partial class AchievementEvaluator
 
                 // Pole converted. The opposite story to the one above, and
                 // the one that is quietly harder to do than it sounds.
-                if (PlaceOf(entry) == 1 && GridOf(entry) == 1 && results.Count > 1)
+                if (PlaceOf(entry) == 1 && GridOf(entry) == 1 && field > 1)
                 {
                     Award(AchievementCatalogue.PoleConverted);
                 }
 
                 // Won having led almost none of it - the late pass, which is
                 // the race everybody remembers.
-                if (PlaceOf(entry) == 1 && entry.Laps >= 4 && entry.LapsLed <= 1 && results.Count > 1)
+                if (PlaceOf(entry) == 1 && entry.Laps >= 4 && entry.LapsLed <= 1 && field > 1)
                 {
                     Award(AchievementCatalogue.LateShow, entry.LapsLed == 0 ? "led none of it" : "led one lap");
                 }
@@ -363,7 +376,7 @@ public static partial class AchievementEvaluator
                 // Everything at once: pole, the win, the fastest lap, and in
                 // front at every crossing. Needs laps led and the grid, which
                 // is why it lives inside this check.
-                if (PlaceOf(entry) == 1 && results.Count > 1 && GridOf(entry) == 1
+                if (PlaceOf(entry) == 1 && field > 1 && GridOf(entry) == 1
                     && setFastestLap && entry.Laps > 1 && entry.LapsLed == entry.Laps)
                 {
                     Award(AchievementCatalogue.GrandSlam, $"{entry.Laps} laps led");
@@ -384,7 +397,7 @@ public static partial class AchievementEvaluator
             // races before it that this driver actually appeared in, so a
             // night off does not break the run - only a race they entered
             // and did not win.
-            if (PlaceOf(entry) == 1 && results.Count > 1 && WonTheLastTwo(earlier, entry.Transponder))
+            if (PlaceOf(entry) == 1 && field > 1 && WonTheLastTwo(earlier, entry.Transponder))
             {
                 Award(AchievementCatalogue.HatTrick);
             }
@@ -406,7 +419,7 @@ public static partial class AchievementEvaluator
                 // lined up behind - rather than by slot number: ghosts on
                 // the grid push real slots back, and a slot number would
                 // then call the middle of the field the back.
-                if (results.Count >= 5 && PlaceOf(entry) <= 3
+                if (field >= 5 && PlaceOf(entry) <= 3
                     && !results.Any(o => o.StartPosition > entry.StartPosition))
                 {
                     Award(AchievementCatalogue.ComebackKid, $"P{GridOf(entry)} to P{PlaceOf(entry)}");
@@ -428,7 +441,7 @@ public static partial class AchievementEvaluator
             // on the winner's lap or one behind it. For the driver who kept
             // at it when it would have been easy to park - never for a
             // two-car race, where last is also second.
-            if (results.Count >= 4 && PlaceOf(entry) == results.Count && entry.Laps >= 5
+            if (field >= 4 && PlaceOf(entry) == field && entry.Laps >= 5
                 && results[0].Laps - entry.Laps <= 1)
             {
                 Award(AchievementCatalogue.NeverSayDie, $"{entry.Laps} laps");
@@ -522,7 +535,7 @@ public static partial class AchievementEvaluator
             // running total: history alone would call a veteran a rookie on
             // a fresh install, and the total alone would do the same for
             // anyone who raced before badges existed.
-            if (PlaceOf(entry) == 1 && results.Count > 1 && myEarlier.Count <= 4 && driver.RacesFinished <= 5)
+            if (PlaceOf(entry) == 1 && field > 1 && myEarlier.Count <= 4 && driver.RacesFinished <= 5)
             {
                 Award(AchievementCatalogue.RookieSensation, $"in race {myEarlier.Count + 1}");
             }
@@ -542,7 +555,7 @@ public static partial class AchievementEvaluator
                     Award(AchievementCatalogue.IronDriver, $"{racedToday.Count + 1} races in a day");
                 }
 
-                if (PlaceOf(entry) == 1 && results.Count > 1)
+                if (PlaceOf(entry) == 1 && field > 1)
                 {
                     var winsToday = racedToday.Count(r => WonOutright(r, entry.Transponder)) + 1;
 
@@ -609,7 +622,7 @@ public static partial class AchievementEvaluator
                 Award(AchievementCatalogue.CarCollector, $"{cars} cars");
             }
 
-            if (PlaceOf(entry) == 1 && results.Count > 1 && !string.IsNullOrWhiteSpace(record.TrackLayoutName))
+            if (PlaceOf(entry) == 1 && field > 1 && !string.IsNullOrWhiteSpace(record.TrackLayoutName))
             {
                 var winsHere = myEarlier.Count(r =>
                     string.Equals(r.TrackLayoutName, record.TrackLayoutName, StringComparison.OrdinalIgnoreCase)
@@ -775,7 +788,7 @@ public static partial class AchievementEvaluator
 
             // Back on the box after a dry spell. Four or more on track, or
             // third place is simply where everybody finishes.
-            if (PlaceOf(entry) <= 3 && results.Count >= 4)
+            if (PlaceOf(entry) <= 3 && field >= 4)
             {
                 var drought = myPlaces.TakeWhile(p => p is > 3).Count();
 
@@ -871,7 +884,16 @@ public static partial class AchievementEvaluator
             EvaluateHomeAndGarage(entry, record, bestsPool, context, Award, practice: false);
         }
 
-        store.Save();
+        // Nothing is announced that wasn't kept. When the write fails the
+        // badges are not on anyone's record, and the next race - loading the
+        // file as it still is - finds them unearned and unlocks them again,
+        // so announcing them here meant the PA called "First Timer" for the
+        // same drivers after every race of the night. The console already
+        // carries SafeFile's reason for the failed write.
+        if (!store.Save())
+        {
+            return new List<AchievementUnlock>();
+        }
 
         // Rarest first. Race Control reads out only the first few, and in
         // the order they were worked out a Grand Slam came after the
@@ -1226,12 +1248,16 @@ public static partial class AchievementEvaluator
 
     /// <summary>
     /// Who won a past race among real cars - null when fewer than two real
-    /// cars took part, since a race alone is not a race won.
+    /// cars took part, since a race alone is not a race won. Only cars that
+    /// turned a lap count, as for the field tonight: a grid row that never
+    /// left the line used to make a lone run a win in history, feeding
+    /// Hat-trick, Payback and the rest.
     /// </summary>
     private static string? WinnerOf(SessionRecord race)
     {
         var ranked = race.Results
-            .Where(e => !GhostService.IsGhost(e.Transponder) && !string.IsNullOrWhiteSpace(e.Transponder))
+            .Where(e => !GhostService.IsGhost(e.Transponder) && !string.IsNullOrWhiteSpace(e.Transponder)
+                        && e.Laps >= MinimumLapsToCount)
             .OrderBy(e => e.Position)
             .ToList();
 

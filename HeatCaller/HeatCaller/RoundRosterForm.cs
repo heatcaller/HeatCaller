@@ -77,7 +77,18 @@ public sealed class RoundRosterForm : Form
 
         foreach (var transponder in round.AssignedTransponders)
         {
-            _list.Items.Add(new RosterItem(transponder, LookupName(transponder, classRoster), InClass: true), isChecked: true);
+            // Marked as it was when they were added: a round keeps only
+            // transponders, so "not in this class" has to be worked out
+            // again on every opening. It used to be taken as read, and a
+            // driver added from another class lost the marker the next time
+            // the round was opened. In the class roster, or racing the class
+            // by their profile, is in it; a transponder with no profile at
+            // all (a rental, a ghost) is left unmarked, as it always was.
+            var inClass = classRoster.Any(d => string.Equals(d.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+                          || _profiles.Get(transponder) is not { } owner
+                          || owner.RunsClass(round.ClassName);
+
+            _list.Items.Add(new RosterItem(transponder, LookupName(transponder, classRoster), inClass), isChecked: true);
             seen.Add(transponder);
         }
 

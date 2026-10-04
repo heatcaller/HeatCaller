@@ -157,6 +157,12 @@ public sealed class ProfileStore
             .Where(car => car is not null)
             .ToList();
 
+        // The same for the other classes: a file written before the list
+        // existed has none, which is an empty list, not a null.
+        profile.Classes = (profile.Classes ?? new List<string>())
+            .Where(c => c is not null)
+            .ToList();
+
         profile.DriverName ??= string.Empty;
         profile.CarModel ??= string.Empty;
         profile.ClassName ??= string.Empty;
@@ -374,25 +380,42 @@ public sealed class ProfileStore
     /// Only split transponders are looked at: a line transponder with the
     /// same number is a different transponder (see
     /// DriverProfile.SplitTransponders).
+    ///
+    /// Null too when MORE than one driver claims it - which the editors
+    /// refuse, but an undo or a transfer could once let through. The first
+    /// claimant used to win, silently: the other driver's split times went
+    /// into the wrong row, a sector record was kept under the wrong name and
+    /// "read at the split twice without crossing the line" invited a lap to
+    /// be added that was never run. Unowned, the read shows as an unknown
+    /// transponder at the split - visible, and fixed on a Transponders tab -
+    /// as a contested line alternate does (RebuildAlternateIndex).
     /// </summary>
     public (DriverProfile Driver, OwnedTransponder Entry)? SplitOwnerOf(string transponder)
     {
+        var owners = SplitOwnersOf(transponder);
+        return owners.Count == 1 ? owners[0] : null;
+    }
+
+    /// <summary>Every driver claiming this split transponder - more than one only when something has gone wrong.</summary>
+    public IReadOnlyList<(DriverProfile Driver, OwnedTransponder Entry)> SplitOwnersOf(string transponder)
+    {
         var id = transponder?.Trim() ?? string.Empty;
+        var owners = new List<(DriverProfile Driver, OwnedTransponder Entry)>();
 
         if (id.Length == 0)
         {
-            return null;
+            return owners;
         }
 
         foreach (var profile in _profiles.Values)
         {
             if (profile.SplitEntry(id) is { } entry)
             {
-                return (profile, entry);
+                owners.Add((profile, entry));
             }
         }
 
-        return null;
+        return owners;
     }
 
     /// <summary>
@@ -409,10 +432,12 @@ public sealed class ProfileStore
                 continue;
             }
 
-            if (SplitOwnerOf(entry.Id) is { } owner
-                && !string.Equals(owner.Driver.Transponder, editing, StringComparison.OrdinalIgnoreCase))
+            foreach (var owner in SplitOwnersOf(entry.Id))
             {
-                return $"Split transponder {entry.Id.Trim()} is already {DescribeOwner(owner.Driver)}'s. Remove it from {DescribeOwner(owner.Driver)} first.";
+                if (!string.Equals(owner.Driver.Transponder, editing, StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"Split transponder {entry.Id.Trim()} is already {DescribeOwner(owner.Driver)}'s. Remove it from {DescribeOwner(owner.Driver)} first.";
+                }
             }
         }
 
@@ -661,7 +686,11 @@ public sealed class ProfileStore
                 continue;
             }
 
-            if (DescribeTakenSince(profile, restoringTogether) is { } reason)
+            // Split transponders as well as line ones: a split transponder
+            // given to somebody else since the delete would otherwise come
+            // back with two drivers claiming it (see SplitOwnerOf).
+            if ((DescribeTakenSince(profile, restoringTogether)
+                 ?? DescribeSplitClash(profile, editing: profile.Transponder)) is { } reason)
             {
                 refused.Add((profile, reason));
             }
@@ -840,9 +869,30 @@ public sealed class ProfileStore
 
         foreach (var profile in _profiles.Values)
         {
-            if (string.Equals(profile.ClassName, oldName, StringComparison.OrdinalIgnoreCase))
+            var hit = false;
+
+            if (string.Equals(profile.ClassName?.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 profile.ClassName = newName;
+                hit = true;
+            }
+
+            // Their other classes too - a driver entered for the renamed class
+            // as a second class is in it just as much. A list that already
+            // had the new name as well is merged into one entry.
+            if (profile.Classes is { Count: > 0 } others
+                && others.Any(c => string.Equals(c.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                profile.Classes = others
+                    .Select(c => string.Equals(c.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase) ? newName : c)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                hit = true;
+            }
+
+            if (hit)
+            {
                 moved.Add(profile.Transponder);
             }
         }
@@ -863,7 +913,7 @@ public sealed class ProfileStore
     /// </summary>
     public IReadOnlyList<string> WithClassName(string className) =>
         _profiles.Values
-            .Where(p => string.Equals(p.ClassName, className, StringComparison.OrdinalIgnoreCase))
+            .Where(p => p.RunsClass(className))
             .Select(p => p.Transponder)
             .ToList();
 
@@ -885,10 +935,25 @@ public sealed class ProfileStore
 
         foreach (var profile in _profiles.Values)
         {
-            if (string.Equals(profile.ClassName, newName, StringComparison.OrdinalIgnoreCase)
-                && !keep.Contains(profile.Transponder))
+            if (keep.Contains(profile.Transponder))
+            {
+                continue;
+            }
+
+            if (string.Equals(profile.ClassName?.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 profile.ClassName = oldName;
+                changed = true;
+            }
+
+            if (profile.Classes is { Count: > 0 } others
+                && others.Any(c => string.Equals(c.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                profile.Classes = others
+                    .Select(c => string.Equals(c.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase) ? oldName : c)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 changed = true;
             }
         }

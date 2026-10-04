@@ -37,6 +37,7 @@ The **Speak with** card at the top of **Voice → Voice Settings** decides what 
 |---|---|
 | **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **Announcer voice:**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
 | **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up on the **ElevenLabs connection** card below. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
+| **Kokoro voice - free, natural-sounding, runs on this PC. One download, then no account or internet needed** | A natural-sounding voice that runs on the laptop itself. It's a one-off download (about 310 MB); after that there's nothing to sign up for, no internet needed and nothing to pay, however much the announcer talks. The wording is yours to change. See [Use the Kokoro voice](#use-the-kokoro-voice). |
 | **Windows voice - free, built into Windows, no account or internet needed** | A speech voice already installed in Windows, spoken on the laptop itself. There's nothing to sign up for and nothing to pay, and the wording is yours to change. |
 
 Under the ElevenLabs choice, **If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the Windows voice says it instead** is ticked by default. It makes the Windows voice a stand-in, so a flag call is never silent. See [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line). The box only matters with ElevenLabs chosen: it's grayed out, keeping its tick, while the HeatCaller voice or the Windows voice is chosen, or when the PC has no Windows voice. With the HeatCaller voice it isn't a choice at all — the Windows voice always stands in, because there's no key of your own to fall back on.
@@ -63,6 +64,21 @@ A voice the relay has since dropped from its catalog stays in the list, chosen, 
 
 !!! note
     Choosing the HeatCaller voice while you have wording of your own on the page puts the standard lines back, after asking: "The HeatCaller voice speaks the standard announcer lines, so the wording on this page will go back to them. Your own wording is kept if you use your own ElevenLabs key, or the free Windows voice, instead. Use the HeatCaller voice and the standard lines?" Answer **No** and nothing changes. The lines of a built-in [soundscape](sounds-and-music.md#soundscapes) aren't wording of your own: they ship with the app, so they're the same words at every club, and they're kept without asking. Applying a soundscape *after* you're on the HeatCaller voice is different — it brings its sounds, but nothing from the **Announcements** tab.
+
+### Use the Kokoro voice
+
+Kokoro sounds far closer to ElevenLabs than the Windows voice does, and like the Windows voice it costs nothing to run.
+
+1. Choose **Kokoro voice** in **Speak with**.
+2. Press **Download (about 310 MB)** beside **Kokoro voice:** and answer **Yes**. The line under it counts up while it downloads. Press **Cancel Download** to stop; nothing is kept and you can start again. You only download it once per PC.
+3. Pick a voice in **Kokoro voice:**. **Michael (American, male)** is chosen to begin with. There are American and British voices, women and men.
+4. Press **Test Kokoro Voice**. You should hear "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!" The first test after starting HeatCaller takes a few seconds while Kokoro loads.
+
+Until Kokoro is downloaded, or if it ever can't say a line, the Windows voice says it instead, so a flag call is never silent. The console says why, once. **Prepare Lines** isn't needed with Kokoro: it speaks each line on the laptop as it's wanted, and a line it has said once plays straight away for the rest of the session.
+
+Kokoro uses the same settings as the Windows voice (see [What the Windows voice uses](#what-the-windows-voice-uses)): **Speed:**, **Playback volume (%):**, each announcement's own **Speed**, and **Max spoken announcements per lap:**. Audio tags such as `[excited]` are taken out before it speaks. Nothing it says is kept with the [saved voice lines](#saved-voice-lines). The download is kept in `%LocalAppData%\HeatCaller\Kokoro`, on that PC only, and isn't part of a backup.
+
+The mechanic in the recap's interview can have a Kokoro voice of their own: with Kokoro chosen, pick one in **Mechanic's voice:** on the **Commentary** page.
 
 ### Pick a Windows voice
 

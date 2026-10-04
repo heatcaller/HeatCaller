@@ -103,7 +103,7 @@ public static class Sectors
 
         foreach (var standing in standings)
         {
-            if (GhostService.IsGhost(standing.TransponderId) || Bests(standing) is not { } mine || mine.Length != count)
+            if (Ghosts.IsGhost(standing.TransponderId) || Bests(standing) is not { } mine || mine.Length != count)
             {
                 continue;
             }
@@ -134,7 +134,7 @@ public static class Sectors
         }
 
         var laps = standings
-            .Where(s => !GhostService.IsGhost(s.TransponderId))
+            .Where(s => !Ghosts.IsGhost(s.TransponderId))
             .SelectMany(s => LapsOf(s).Where(l => l.Lap > 0).Select(l => l.Sectors))
             .Where(sectors => sectors.Length == count)
             .ToList();

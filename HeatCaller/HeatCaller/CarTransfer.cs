@@ -276,6 +276,13 @@ internal static class CarTransferring
     /// <summary>Both drivers' car names in step with the garage - done here as well as by the app's own listener, so it holds wherever this is called from.</summary>
     private static void SyncBoth(string? fromKey, string toKey, ProfileStore profiles, CarStore cars, IReadOnlyList<CarChange> changes)
     {
+        // Nothing changed that the lists follow: an empty list means "make
+        // them again from the garage" to SyncNames, which is for startup only.
+        if (changes.Count == 0)
+        {
+            return;
+        }
+
         foreach (var key in new[] { fromKey, toKey })
         {
             if (!string.IsNullOrEmpty(key)

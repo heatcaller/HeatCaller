@@ -52,6 +52,9 @@ internal static partial class WindowCatalog
                 Email = "alexandria.montgomery-fitzwilliam.12@example.com",
                 AlternateTransponder = (4_000_000 + 99 * 137).ToString(),
                 ClassName = "Kyosho Mini-Z MR-03 Stock 70T Touring Cup (Juniors)",
+
+                // Three other classes, the "Also races" line at its longest.
+                Classes = new List<string> { "Mini-Z MR-03 Modified", "Stock Buggy", "Novice" },
                 SetupConfiguration = "Front: 2.5 springs, 0.5mm camber shims, 20 shore tires" + nl
                     + "Rear: medium spring, 64T spur, 8T pinion, 30 shore tires" + nl
                     + "Ride height 3.2mm all round, diff at three clicks" + nl
@@ -154,6 +157,13 @@ internal static partial class WindowCatalog
                 AchievementCatalogue.FastestLap,
                 AchievementCatalogue.Flawless,
             })),
+
+            // Choose... beside "Also races": every class but the main one,
+            // the longest name among them, one already ticked.
+            ("Other Classes", () => new OtherClassesForm(
+                "Stock Buggy",
+                ClubClasses(withLongName: true),
+                new[] { "Novice" })),
         };
     }
 }

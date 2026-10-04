@@ -863,8 +863,7 @@ internal sealed class RaceDaySetupWizard : Form
         var chosenClass = _cmbWhoClass.SelectedIndex > 0 ? _cmbWhoClass.SelectedItem as string : null;
 
         foreach (var profile in _profiles.All
-                     .Where(p => chosenClass is null
-                                 || string.Equals(p.ClassName, chosenClass, StringComparison.OrdinalIgnoreCase))
+                     .Where(p => chosenClass is null || p.RunsClass(chosenClass))
                      .OrderBy(p => p.DriverName, StringComparer.CurrentCultureIgnoreCase))
         {
             var here = _checkIns.IsCheckedIn(profile.Transponder);

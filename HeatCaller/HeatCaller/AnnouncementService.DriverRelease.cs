@@ -326,10 +326,11 @@ public sealed partial class AnnouncementService
 
         _ = Task.Run(async () =>
         {
-            // The Windows voice chosen: no saved lines and no batch - the
-            // library holds ElevenLabs lines only, and each release call is
-            // simply rendered here on this PC, one after another.
-            var windows = renderProfile.EffectiveEngine == VoiceEngine.Windows;
+            // The Windows or Kokoro voice chosen: no saved lines and no
+            // batch - the library holds ElevenLabs lines only, and each
+            // release call is simply rendered here on this PC, one after
+            // another.
+            var windows = renderProfile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro;
 
             // Nor with the HeatCaller voice's allowance spent: saved lines
             // are passed over then, exactly as RenderWithHeatCallerAsync

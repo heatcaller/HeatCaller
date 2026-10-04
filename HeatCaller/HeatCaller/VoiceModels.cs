@@ -290,6 +290,15 @@ public enum VoiceEngine
     /// voice, where both are theirs to spend.
     /// </summary>
     HeatCaller = 2,
+
+    /// <summary>
+    /// Kokoro: a free, natural-sounding voice that runs on this PC. No
+    /// account, no internet once downloaded, and nothing billed however much
+    /// the announcer talks. The model is a one-off download from Voice
+    /// Settings (see KokoroSpeech); until it is there the Windows voice says
+    /// what Kokoro would have.
+    /// </summary>
+    Kokoro = 3,
 }
 
 /// <summary>
@@ -304,7 +313,8 @@ public sealed record SecondVoice(
     string HeatCallerVoice,
     string HeatCallerVoiceName,
     string HeatCallerRev,
-    string WindowsVoiceName)
+    string WindowsVoiceName,
+    string KokoroVoiceName = "")
 {
     /// <summary>Whether a voice has been picked for this engine - otherwise the announcer's own is used.</summary>
     public bool IsSetFor(VoiceEngine engine) => engine switch
@@ -312,6 +322,7 @@ public sealed record SecondVoice(
         VoiceEngine.ElevenLabs => !string.IsNullOrWhiteSpace(ElevenLabsVoiceId),
         VoiceEngine.HeatCaller => !string.IsNullOrWhiteSpace(HeatCallerVoice),
         VoiceEngine.Windows => !string.IsNullOrWhiteSpace(WindowsVoiceName),
+        VoiceEngine.Kokoro => !string.IsNullOrWhiteSpace(KokoroVoiceName),
         _ => false,
     };
 
@@ -321,6 +332,7 @@ public sealed record SecondVoice(
         VoiceEngine.ElevenLabs => ElevenLabsVoiceName,
         VoiceEngine.HeatCaller => HeatCallerVoiceName,
         VoiceEngine.Windows => WindowsVoiceName,
+        VoiceEngine.Kokoro => KokoroSpeech.Describe(KokoroVoiceName),
         _ => string.Empty,
     };
 }
@@ -471,6 +483,7 @@ public sealed class VoiceProfile
         VoiceEngine.ElevenLabs => VoiceEngine.ElevenLabs,
         VoiceEngine.Windows => VoiceEngine.Windows,
         VoiceEngine.HeatCaller => VoiceEngine.HeatCaller,
+        VoiceEngine.Kokoro => VoiceEngine.Kokoro,
         _ => InferEngine(),
     };
 
@@ -519,6 +532,13 @@ public sealed class VoiceProfile
     /// silent. Means nothing with the Windows voice chosen.
     /// </summary>
     public bool WindowsVoiceStandsIn { get; set; } = true;
+
+    /// <summary>
+    /// The Kokoro voice to speak with, by Kokoro's own name for it
+    /// ("am_michael"). Blank means KokoroSpeech.DefaultVoice. Kept whichever
+    /// engine is chosen, so switching back doesn't mean choosing again.
+    /// </summary>
+    public string KokoroVoiceName { get; set; } = string.Empty;
 
     /// <summary>
     /// Whether this profile's model understands inline emotion tags like
@@ -618,6 +638,7 @@ public sealed class VoiceProfile
         Engine = EffectiveEngine,
         WindowsVoiceName = WindowsVoiceName,
         WindowsVoiceStandsIn = WindowsVoiceStandsIn,
+        KokoroVoiceName = KokoroVoiceName,
 
         // The HeatCaller voice and its revision go too: they are what a
         // saved line is keyed by in this mode, so a copy without them would
@@ -655,6 +676,11 @@ public sealed class VoiceProfile
         if (!string.IsNullOrWhiteSpace(voice.WindowsVoiceName))
         {
             copy.WindowsVoiceName = voice.WindowsVoiceName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(voice.KokoroVoiceName))
+        {
+            copy.KokoroVoiceName = voice.KokoroVoiceName;
         }
 
         return copy;

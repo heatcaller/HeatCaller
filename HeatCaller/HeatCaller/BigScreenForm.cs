@@ -979,7 +979,7 @@ public sealed class BigScreenForm : Form
             Ordered = ordered,
             Profiles = _profiles,
             Tracker = _kpiTracker,
-            FastestOverall = ordered.Where(s => s.FastestLapMs > 0).Select(s => s.FastestLapMs).DefaultIfEmpty(0).Min(),
+            FastestOverall = Ghosts.FastestLapMs(ordered),
             StreakThreshold = _race.StreakThreshold,
             SectorLengthsFeet = _race.SectorLengthsFeet,
 

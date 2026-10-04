@@ -29,20 +29,43 @@ public sealed class RoundIntroTidyTests
 
         Assert.Equal(
             "It's Q3 Heat 1 of the Test Class round here at Drift 1.0 and we've got a barn burner of a rivalry on our hands! "
-            + "The intense battle between Asher and Frank is about to reach NEW HEIGHTS!",
+            + "The intense battle between Asher and Frank is about to reach new heights!",
             text);
 
         Assert.Equal(3, notes.Count);
     }
 
     [Fact]
-    public void A_word_or_two_of_emphasis_is_left_alone()
+    public void A_short_word_in_capitals_on_its_own_is_left_alone()
     {
+        // Since rehearsal 4 a word of four letters or more in capitals is
+        // shouting even on its own (the voice reads it that way); a short
+        // one is as likely initials - "RC", "GP" - and stays.
         var notes = new List<string>();
-        const string line = "Sam's hanging on by three tenths - Bill is RIGHT there!";
+        const string line = "Sam's hanging on by three tenths in the RC final - Bill is right there!";
 
         Assert.Equal(line, CommentaryService.TidyIntro(line, Label, Names, 45, notes));
         Assert.Empty(notes);
+    }
+
+    [Fact]
+    public void A_long_word_in_capitals_on_its_own_is_calmed()
+    {
+        var notes = new List<string>();
+
+        Assert.Equal(
+            "Sam's hanging on by three tenths - Bill is right there!",
+            CommentaryService.TidyIntro("Sam's hanging on by three tenths - Bill is RIGHT there!", Label, Names, 45, notes));
+    }
+
+    [Fact]
+    public void A_single_letter_inside_shouting_is_lowered_with_it()
+    {
+        var notes = new List<string>();
+
+        Assert.Equal(
+            "What a race, a barn burner of a final!",
+            CommentaryService.TidyIntro("WHAT A RACE, A BARN BURNER OF A FINAL!", Label, Names, 45, notes));
     }
 
     [Fact]

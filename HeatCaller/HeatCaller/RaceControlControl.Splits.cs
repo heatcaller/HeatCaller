@@ -96,9 +96,24 @@ public partial class RaceControlControl
             return;
         }
 
+        // A sector the mark may take: not a sliver of its own lap, and not a
+        // quarter quicker than the mark already set - the same doubts the
+        // sector records have (TrackLayout.OfferSectors). One split heard
+        // early used to set a mark no real sector could beat, and the
+        // fastest-sector call went quiet for the rest of the race.
+        var lap = sectors.Sum();
+
+        bool Believable(int i, long? mark) =>
+            sectors[i] >= lap / (sectors.Length * 4.0)
+            && (mark is not { } set || sectors[i] >= set * TrackLayout.LeastBelievableSectorShare);
+
         if (_sessionSectorBest is null || _sessionSectorBest.Length != sectors.Length)
         {
-            _sessionSectorBest = sectors.ToArray();
+            // No mark yet is long.MaxValue: the first believable sector then
+            // sets it without being called, as the first of a session should.
+            _sessionSectorBest = Enumerable.Range(0, sectors.Length)
+                .Select(i => Believable(i, null) ? sectors[i] : long.MaxValue)
+                .ToArray();
             return;
         }
 
@@ -107,9 +122,11 @@ public partial class RaceControlControl
 
         for (var i = 0; i < sectors.Length; i++)
         {
-            if (sectors[i] < _sessionSectorBest[i])
+            var hasMark = _sessionSectorBest[i] != long.MaxValue;
+
+            if (sectors[i] < _sessionSectorBest[i] && Believable(i, hasMark ? _sessionSectorBest[i] : null))
             {
-                if (_sessionSectorBest[i] - sectors[i] > by)
+                if (hasMark && _sessionSectorBest[i] - sectors[i] > by)
                 {
                     by = _sessionSectorBest[i] - sectors[i];
                     improved = i;
@@ -189,16 +206,26 @@ public partial class RaceControlControl
 
         var trackName = SelectedTrackName();
 
+        // The record's sectors as cut by the loops where they are now - a
+        // record taken with a loop somewhere else says nothing about here.
         if (string.IsNullOrWhiteSpace(trackName)
-            || _trackLayouts.All.FirstOrDefault(t => t.Name == trackName)?.RecordSectors() is not { } record
-            || record.Length != standing.SplitReadsMs.Length + 1)
+            || _trackLayouts.All.FirstOrDefault(t => t.Name == trackName)?.RecordSectorsAsCutNow(standing.SplitReadsMs.Length + 1) is not { } record)
         {
             return null;
         }
 
         var recordToHere = record.Take(slot + 1).Sum();
 
-        return toHere > 0 && recordToHere - toHere > 0 ? recordToHere - toHere : null;
+        // As Sectors.LiveDelta judges a gap: a read further round than a
+        // whole record lap belongs to another lap, and one a quarter
+        // quicker to here than the record is a misread (or a record kept
+        // from before loops' places were) - not pace to call.
+        if (toHere <= 0 || toHere > record.Sum() || toHere < recordToHere * TrackLayout.LeastBelievableSectorShare)
+        {
+            return null;
+        }
+
+        return recordToHere - toHere > 0 ? recordToHere - toHere : null;
     }
 
     /// <summary>
@@ -233,7 +260,7 @@ public partial class RaceControlControl
             return;
         }
 
-        track.RecordSectorsMs = sectors.ToList();
+        track.KeepRecordSectors(sectors);
         _trackLayouts.Upsert(track);
     }
 

@@ -76,6 +76,12 @@ public sealed class ProfileForm : Form
     private readonly CheckBox _chkRental = new ThemedCheckBox();
     private readonly CheckBox _chkExcludeRecords = new ThemedCheckBox();
     private readonly ComboBox _cmbClass = new();
+
+    /// <summary>The other classes they race, as "Also races" shows them - chosen with Choose... (OtherClassesForm), saved as DriverProfile.Classes.</summary>
+    private List<string> _otherClasses = new();
+
+    /// <summary>"Also races": the other classes, or "none".</summary>
+    private readonly Label _lblOtherClasses = new() { AutoSize = true };
     private readonly TextBox _txtSetupConfiguration = new();
     private readonly TextBox _txtNotes = new();
     private readonly TextBox _txtTeam = new();
@@ -123,6 +129,10 @@ public sealed class ProfileForm : Form
         _profiles = profiles;
         _editingTransponder = existing?.Transponder;
         Result = existing ?? new DriverProfile { Transponder = fixedTransponder ?? string.Empty };
+        _otherClasses = (Result.Classes ?? new List<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.Trim())
+            .ToList();
         _transponders = System.Text.Json.JsonSerializer.Deserialize<List<OwnedTransponder>>(
                             System.Text.Json.JsonSerializer.Serialize(Result.Transponders ?? new List<OwnedTransponder>()))
                         ?? new List<OwnedTransponder>();
@@ -261,6 +271,16 @@ public sealed class ProfileForm : Form
                 {
                     selected = newName;
                 }
+
+                // The other classes too - a rename made in there must not
+                // leave "Also races" naming a class that has gone.
+                for (var i = 0; i < _otherClasses.Count; i++)
+                {
+                    if (string.Equals(_otherClasses[i], oldName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _otherClasses[i] = newName;
+                    }
+                }
             }
 
             var cascade = _classStore.RenameCascade;
@@ -284,6 +304,7 @@ public sealed class ProfileForm : Form
             }
 
             RefreshClassCombo(selected);
+            ShowOtherClasses();
 
             // A class added or renamed may be longer than any before it.
             FitPicker(_cmbClass, keepToRow: true);
@@ -291,6 +312,16 @@ public sealed class ProfileForm : Form
 
         RefreshClassCombo(Result.ClassName, keepIfUnlisted: true);
         captions.Add(fields.AddRow("Class:", ButtonsBeside(_cmbClass, btnManageClasses)));
+
+        // Any other classes they race. Wraps rather than running past the
+        // edge when there are several.
+        _lblOtherClasses.MaximumSize = new Size(UiLayout.AtTextSize(UiLayout.FieldWidth), 0);
+        var btnOtherClasses = new Button { Text = "Choose..." };
+        btnOtherClasses.Click += (_, _) => ChooseOtherClasses();
+        _cmbClass.SelectedIndexChanged += (_, _) => ShowOtherClasses();
+        ShowOtherClasses();
+        captions.Add(fields.AddRow("Also races:", new ButtonBar(tight: true).With(_lblOtherClasses, btnOtherClasses)));
+        fields.AddHint("Other classes they race besides their main one - they go into those classes' heats as well.");
 
         _txtSetupConfiguration.Multiline = true;
         _txtSetupConfiguration.AcceptsReturn = true;
@@ -668,6 +699,36 @@ public sealed class ProfileForm : Form
         _cmbClass.SelectedIndex = idx >= 0 ? idx : 0;
     }
 
+    /// <summary>The class in the Class box now, or empty for "(none)".</summary>
+    private string MainClassShown() =>
+        _cmbClass.SelectedItem as string is { } shown && shown != "(none)" ? shown.Trim() : string.Empty;
+
+    /// <summary>"Also races": the other classes, less the main one, or "none".</summary>
+    private void ShowOtherClasses()
+    {
+        var main = MainClassShown();
+        var others = _otherClasses
+            .Where(c => !string.Equals(c, main, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        _lblOtherClasses.Text = others.Count == 0 ? "none" : string.Join(", ", others);
+    }
+
+    /// <summary>Choose... beside "Also races".</summary>
+    private void ChooseOtherClasses()
+    {
+        using var form = new OtherClassesForm(
+            MainClassShown(),
+            _classStore.All.Select(c => c.Name).ToList(),
+            _otherClasses);
+
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            _otherClasses = form.Result.ToList();
+            ShowOtherClasses();
+        }
+    }
+
     /// <summary>Where a class of this name is in the drop-down, ignoring case and spaces, or -1. "(none)" is never a match.</summary>
     private int IndexOfClass(string name)
     {
@@ -861,6 +922,8 @@ public sealed class ProfileForm : Form
             return;
         }
 
+        var mainClass = _cmbClass.SelectedItem as string == "(none)" ? string.Empty : (string)(_cmbClass.SelectedItem ?? string.Empty);
+
         var saved = new DriverProfile
         {
             Transponder = transponder,
@@ -874,7 +937,14 @@ public sealed class ProfileForm : Form
                 .Where(car => !string.IsNullOrWhiteSpace(car))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            ClassName = _cmbClass.SelectedItem as string == "(none)" ? string.Empty : (string)(_cmbClass.SelectedItem ?? string.Empty),
+            ClassName = mainClass,
+
+            // The other classes, less the main one if it was ticked there too.
+            Classes = _otherClasses
+                .Where(c => !string.IsNullOrWhiteSpace(c) && !string.Equals(c.Trim(), mainClass.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             SetupConfiguration = _txtSetupConfiguration.Text,
             Notes = _txtNotes.Text,
 

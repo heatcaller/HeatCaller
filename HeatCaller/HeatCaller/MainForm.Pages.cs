@@ -1139,6 +1139,7 @@ public partial class MainForm
 
         raceControl.AchievementStores = badgeStores;
         practice.AchievementStores = badgeStores;
+        practice.HasUnfiledRaces = () => raceControl.HasUnfiledRaces;
         practice.BatteryPacks = _batteryPacks;
         practice.StatusMessage += OnClientRawMessage;
         practice.BadgesAwarded += raceControl.ReloadAchievements;

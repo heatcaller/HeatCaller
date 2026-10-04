@@ -98,6 +98,9 @@ public sealed partial class AnnouncementService
 
         /// <summary>The Windows voice standing in for ElevenLabs, which couldn't speak the line.</summary>
         StandIn,
+
+        /// <summary>The Kokoro voice, on this PC, because it is the voice chosen on Voice Settings.</summary>
+        Kokoro,
     }
 
     /// <summary>What a synthesis handed back, and who made it.</summary>
@@ -249,6 +252,11 @@ public sealed partial class AnnouncementService
             return await RenderWithWindowsAsync(profile, text, LineSource.Windows);
         }
 
+        if (profile.EffectiveEngine == VoiceEngine.Kokoro)
+        {
+            return await RenderWithKokoroAsync(profile, text);
+        }
+
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
         {
             return await RenderWithHeatCallerAsync(profile, text);
@@ -322,6 +330,38 @@ public sealed partial class AnnouncementService
 
     private static async Task<SynthesisResult> RenderWithWindowsAsync(VoiceProfile profile, string text, LineSource source) =>
         new SynthesisResult(await WindowsVoice.RenderAsync(profile, text), source);
+
+    /// <summary>
+    /// A line in the Kokoro voice, on this PC. When Kokoro can't say it - not
+    /// downloaded yet, the model wouldn't load, a render that stuck - the
+    /// Windows voice says it instead, as it does for ElevenLabs and the
+    /// HeatCaller voice, so a flag call is never silent. The reason is said
+    /// once, not every line. Throws only when neither can speak.
+    /// </summary>
+    private async Task<SynthesisResult> RenderWithKokoroAsync(VoiceProfile profile, string text)
+    {
+        if (KokoroSpeech.UnavailableReason is { } unavailable)
+        {
+            if (!WindowsVoice.IsAvailable)
+            {
+                throw new InvalidOperationException($"The Kokoro voice can't speak - {unavailable}.");
+            }
+
+            LogStandInOnce("kokoro-setup", $"[voice] {Capitalised(unavailable)} - the free Windows voice is speaking instead.");
+            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+        }
+
+        try
+        {
+            return new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text), LineSource.Kokoro);
+        }
+        catch (Exception ex) when (WindowsVoice.IsAvailable)
+        {
+            LogStandInOnce("kokoro:" + ex.Message,
+                $"[voice] Kokoro couldn't speak a line ({ex.Message}) - the free Windows voice said it. Said once for this reason, not for every line.");
+            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+        }
+    }
 
     /// <summary>
     /// Whether this exact line is one of the announcer's fixed lines - a
@@ -442,6 +482,10 @@ public sealed partial class AnnouncementService
         {
             VoiceEngine.HeatCaller => WindowsVoice.IsAvailable,
             VoiceEngine.ElevenLabs => profile.WindowsVoiceStandsIn && WindowsVoice.IsAvailable,
+
+            // Like the HeatCaller voice, not a choice: a club on Kokoro with
+            // the model not yet downloaded would otherwise hear nothing.
+            VoiceEngine.Kokoro => WindowsVoice.IsAvailable,
             _ => false,
         };
 
@@ -456,6 +500,7 @@ public sealed partial class AnnouncementService
         profile.EffectiveEngine switch
         {
             VoiceEngine.Windows => WindowsVoice.IsAvailable,
+            VoiceEngine.Kokoro => KokoroSpeech.IsAvailable || WindowsVoice.IsAvailable,
 
             // The relay may still refuse - the allowance, the club's plan -
             // but the Windows voice covers every one of those, so a club on
@@ -908,6 +953,14 @@ public sealed partial class AnnouncementService
         if (!StandInAllowed(profile))
         {
             return null;
+        }
+
+        // Kokoro stands aside for the Windows voice while it can't speak at
+        // all on this PC - not downloaded, or a model that wouldn't load. A
+        // single line that failed is not a state, as for ElevenLabs.
+        if (profile.EffectiveEngine == VoiceEngine.Kokoro)
+        {
+            return KokoroSpeech.UnavailableReason;
         }
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)

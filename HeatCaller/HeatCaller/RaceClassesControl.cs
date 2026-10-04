@@ -408,6 +408,16 @@ public sealed class RaceClassesControl : UserControl
                 moved.Add(Plural.Of(receipt.RunSheetLines.Count, "run sheet line"));
             }
 
+            if (receipt.Cars is { Count: > 0 } cars)
+            {
+                moved.Add(Plural.Of(cars.Count, "car"));
+            }
+
+            if (receipt.PinnedRaceDays is { Count: > 0 } pinned)
+            {
+                moved.Add(Plural.Of(pinned.Count, "race day's auto-advance pin", "race days' auto-advance pins"));
+            }
+
             AppDialog.Show(this,
                 $"Renamed \"{oldName}\" to \"{newName}\"."
                 + (moved.Count > 0 ? $"\r\n\r\nMoved to the new name: {string.Join(", ", moved)}." : string.Empty)

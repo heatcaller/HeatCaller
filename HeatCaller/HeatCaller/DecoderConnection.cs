@@ -47,8 +47,16 @@ internal static class DecoderConnection
         (ILap, "I-Lap Decoder (Serial)"),
     };
 
-    /// <summary>The picker entries, in picker order.</summary>
-    internal static object[] Items() => Offered.Select(o => (object)o.Label).ToArray();
+    /// <summary>
+    /// The picker entries, in picker order.
+    ///
+    /// Strings, not object[]. A ComboBox takes a string[] just as happily -
+    /// array covariance - so nothing at the pickers changes, and the decoder
+    /// list stops being shaped like a control's item collection. The timing
+    /// code is being moved out into a layer of its own, and anything in it
+    /// that is secretly a UI type has to come back out before it can go.
+    /// </summary>
+    internal static string[] Items() => Offered.Select(o => o.Label).ToArray();
 
     /// <summary>
     /// The saved number a picker position stands for. A position that lists

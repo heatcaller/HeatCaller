@@ -567,7 +567,7 @@ public sealed partial class ProfileManagerControl : UserControl
 
     private static bool Matches(DriverProfile p, string filter) =>
         Has(p.DriverName, filter) || Has(p.AnnouncerName, filter) || p.AllTransponderIds.Any(id => Has(id, filter))
-        || Has(p.RaceNumber, filter) || Has(p.ClassName, filter) || Has(p.Team, filter)
+        || Has(p.RaceNumber, filter) || p.AllClasses.Any(c => Has(c, filter)) || Has(p.Team, filter)
         || Has(p.Sponsors, filter) || Has(p.HomeTrack, filter)
         || p.AllCars.Any(car => Has(car, filter));
 
@@ -1625,9 +1625,10 @@ public sealed partial class ProfileManagerControl : UserControl
             KeyValue(c, "Race number", "#" + profile.RaceNumber.Trim());
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.ClassName))
+        // Every class they race, the main one first.
+        if (profile.AllClasses is { Count: > 0 } classes)
         {
-            KeyValue(c, "Class", profile.ClassName);
+            KeyValue(c, classes.Count > 1 ? "Classes" : "Class", string.Join(", ", classes));
         }
 
         if (!string.IsNullOrWhiteSpace(profile.Team))
@@ -2105,7 +2106,10 @@ public sealed partial class ProfileManagerControl : UserControl
                 {
                     // The alt transponder the old profile had may be somebody
                     // else's by now; putting it back would give one car two owners.
-                    if (store.DescribeClash(before, editing: before.Transponder) is { } clash)
+                    // Split transponders too: one put back that another driver
+                    // has been given since would leave two drivers claiming it.
+                    if ((store.DescribeClash(before, editing: before.Transponder)
+                         ?? store.DescribeSplitClash(before, editing: before.Transponder)) is { } clash)
                     {
                         throw new InvalidOperationException($"the old details can't come back - {clash}");
                     }
@@ -2449,7 +2453,25 @@ public sealed partial class ProfileManagerControl : UserControl
                 profile.AnnouncerName = MergeField(profile.AnnouncerName, fields, announcerCol);
                 profile.RaceNumber = MergeField(profile.RaceNumber, fields, numberCol);
                 profile.CarModel = MergeField(profile.CarModel, fields, carCol);
-                profile.ClassName = MergeField(profile.ClassName, fields, classCol);
+                // A second row for a driver already read from this sheet, in
+                // a different class, is a driver entered in two classes -
+                // what a club's export does for someone running two cars.
+                // That class is added as one of their others rather than
+                // overwriting the first row's. Any other row sets the main
+                // class, as it always did.
+                var rowClass = GetField(fields, classCol);
+
+                if (pending is not null
+                    && !string.IsNullOrWhiteSpace(rowClass)
+                    && !string.IsNullOrWhiteSpace(profile.ClassName)
+                    && !profile.RunsClass(rowClass))
+                {
+                    profile.Classes = (profile.Classes ?? new List<string>()).Append(rowClass.Trim()).ToList();
+                }
+                else
+                {
+                    profile.ClassName = MergeField(profile.ClassName, fields, classCol);
+                }
                 profile.Team = MergeField(profile.Team, fields, teamCol);
                 profile.Sponsors = MergeField(profile.Sponsors, fields, sponsorsCol);
                 profile.Notes = MergeField(profile.Notes, fields, notesCol);
@@ -2459,8 +2481,27 @@ public sealed partial class ProfileManagerControl : UserControl
             }
 
             // --- Points so far ---
-            if (pointsCol < 0 || !DriverImport.TryParsePoints(GetField(fields, pointsCol), out var points))
+            if (pointsCol < 0)
             {
+                continue;
+            }
+
+            var pointsText = GetField(fields, pointsCol);
+
+            if (!DriverImport.TryParsePoints(pointsText, out var points))
+            {
+                // A blank cell means nothing to carry in. Anything else - "DSQ",
+                // "n/a" - used to be dropped without a word, so the driver
+                // started the championship on nothing and the summary looked
+                // complete. Say which rows, as the points dialog would.
+                if (!string.IsNullOrWhiteSpace(pointsText))
+                {
+                    var who = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName.Trim() : sheetName;
+                    pointsSkipped.Add(who.Length == 0
+                        ? $"Row {line}: points \"{pointsText.Trim()}\" aren't a number"
+                        : $"Row {line}: {who}'s points \"{pointsText.Trim()}\" aren't a number");
+                }
+
                 continue;
             }
 

@@ -69,18 +69,26 @@ public sealed class AchievementStore
     /// </summary>
     public bool LoadedUnreadable { get; private init; }
 
-    public void Save()
+    /// <summary>
+    /// Writes the store. False when nothing reached the disk - held after an
+    /// unreadable load, or the write failed (SafeFile has already put the
+    /// reason on the console). The answer used to be thrown away, so a
+    /// night of failed writes announced every badge over the PA as if it
+    /// were recorded, and the next race's fresh load, missing it, announced
+    /// "First Timer" to the same drivers again - race after race.
+    /// </summary>
+    public bool Save()
     {
         // Not written: the real file is almost certainly fine, and saving
         // this near-empty store would replace it. The console has already
         // said why.
         if (LoadedUnreadable)
         {
-            return;
+            return false;
         }
 
         var json = JsonSerializer.Serialize(_drivers, new JsonSerializerOptions { WriteIndented = true });
-        SafeFile.WriteAllText(FilePath, json);
+        return SafeFile.WriteAllText(FilePath, json);
     }
 
     /// <summary>This driver's record, created empty if they've never raced.</summary>

@@ -303,6 +303,7 @@ public sealed class MixerControl : UserControl
                     {
                         VoiceEngine.Windows => "Ready - Windows voice",
                         VoiceEngine.HeatCaller => "Ready - HeatCaller voice",
+                        VoiceEngine.Kokoro => "Ready - Kokoro voice",
                         _ => "Ready",
                     },
             () =>

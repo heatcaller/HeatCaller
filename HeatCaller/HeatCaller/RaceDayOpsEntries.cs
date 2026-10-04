@@ -34,7 +34,13 @@ public sealed partial class RaceDayService
     /// </summary>
     private object TechView(DriverProfile profile)
     {
-        var inspection = _host.Tech.Latest(profile.Transponder, profile.ClassName);
+        // Across every class they race that runs tech, as the check-in desk
+        // asks (TechInspectionStore.LatestForDriver) - their main class
+        // alone said "cleared" for a driver Race Control would then flag in
+        // their second class.
+        var inspection = _host.Tech.LatestForDriver(profile, name =>
+            _host.Classes.All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) is { } raceClass
+            && RaceControlControl.TechIsRunFor(raceClass, _host.Tech));
 
         return new
         {
@@ -51,6 +57,10 @@ public sealed partial class RaceDayService
         // transponder, which must not go out through the relay.
         name = ShownName(profile.DriverName, profile.Transponder, channel),
         className = profile.ClassName,
+
+        // Every class they race, the main one first - for a page that shows
+        // more than the main one. className stays as it was.
+        classes = profile.AllClasses,
         car = profile.CarModel,
         raceNumber = profile.RaceNumber,
         transponder = ShowTransponder(profile.Transponder, channel),
@@ -152,8 +162,8 @@ public sealed partial class RaceDayService
         var found = _host.Profiles.All
             .Where(p => className is null
                         || (className.Length == 0
-                            ? string.IsNullOrWhiteSpace(p.ClassName)
-                            : string.Equals(p.ClassName, className, StringComparison.OrdinalIgnoreCase)))
+                            ? p.AllClasses.Count == 0
+                            : p.RunsClass(className)))
             .Where(p => checkedIn is null || _host.CheckIns.IsCheckedIn(p.Transponder) == checkedIn)
             .Where(Matches)
             .OrderBy(NameOf, StringComparer.CurrentCultureIgnoreCase)
@@ -186,8 +196,7 @@ public sealed partial class RaceDayService
         return OpResult.Read(new
         {
             driver = DriverRow(profile, context.Channel),
-            racingToday = profile.ClassName.Length > 0
-                          && _host.Program.TodaysClassNames().Contains(profile.ClassName, StringComparer.OrdinalIgnoreCase),
+            racingToday = profile.AllClasses.Any(c => _host.Program.TodaysClassNames().Contains(c, StringComparer.OrdinalIgnoreCase)),
             heatsToday = heats,
         });
     }
@@ -331,12 +340,14 @@ public sealed partial class RaceDayService
     }
 
     /// <summary>
-    /// Enters a driver in a class, or takes them out of every class ("").
+    /// Sets a driver's MAIN class, or clears it ("").
     ///
-    /// A driver has ONE class - that is how the whole app is built (the
-    /// class roster is everyone whose class it is) - so "entering" a driver
-    /// for today is setting their class. When the class is not one of
-    /// today's, the answer says so rather than quietly adding it to the day.
+    /// A driver has one main class and may race others besides
+    /// (DriverProfile.Classes, chosen on the laptop's profile window). This
+    /// moves the main one only; the others are left as they are, so a
+    /// driver moved from Stock to Modified here still races any second
+    /// class they had. When the class is not one of today's, the answer
+    /// says so rather than quietly adding it to the day.
     /// </summary>
     private OpResult DriverSetClass(OpContext context)
     {
@@ -378,8 +389,12 @@ public sealed partial class RaceDayService
         var racing = className.Length > 0
                      && _host.Program.TodaysClassNames().Contains(className, StringComparer.OrdinalIgnoreCase);
 
+        var stillRaces = profile.AllClasses;
+
         var message = className.Length == 0
-            ? $"{NameOf(profile)} is no longer in a class."
+            ? stillRaces.Count == 0
+                ? $"{NameOf(profile)} is no longer in a class."
+                : $"{NameOf(profile)} has no main class now - still races {string.Join(", ", stillRaces)}."
             : racing
                 ? $"{NameOf(profile)} is entered in {className}."
                 : $"{NameOf(profile)} is entered in {className} - but {className} isn't racing today. Add it to the day on Next Steps if it should be.";

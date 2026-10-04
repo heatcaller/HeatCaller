@@ -477,6 +477,26 @@ public sealed partial class AnnouncementService
 
         MaybeAnnouncePositions(ordered, leader);
 
+        // Everything below is about the real field while ghosts are not
+        // announced, the same rule as the session's RaceLeader(). A pace
+        // ghost on top used to become the remembered leader: its own lead
+        // call was rightly dropped, but a real driver then taking the lead
+        // behind it was never called, and the call came laps late when the
+        // ghost dropped back. It could also be named as a rival or chaser.
+        ordered = ordered.Where(s => !MutedGhost(s.Transponder)).ToList();
+        leader = ordered.FirstOrDefault();
+        if (leader is null)
+        {
+            return;
+        }
+
+        // In a most-laps qualifier the lead IS provisional pole, called from
+        // the same crossing (CallProvisionalPoleIfTaken). Saying both put two
+        // lines in the queue for one pass, so the lead change keeps its chime
+        // and leaves the words to the pole call while that is switched on.
+        var poleSaysIt = IsQualifyingMode && _qualifyingMethod == QualifyingMethod.TotalLaps
+            && _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole))?.IsEnabledFor(IsPracticeMode) == true;
+
         if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
         {
             // Only offered when they could be heard - see VoiceCandidateCanSpeak.
@@ -488,7 +508,7 @@ public sealed partial class AnnouncementService
             }
 
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
-            if (VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
+            if (!poleSaysIt && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
             {
                 ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
                     () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null));
@@ -513,7 +533,10 @@ public sealed partial class AnnouncementService
         {
             foreach (var (other, entry) in _currentStreaks)
             {
+                // A muted ghost is not the driver to beat - it would be
+                // named aloud as the chaser of a real driver's run.
                 if (string.Equals(other, transponder, StringComparison.OrdinalIgnoreCase)
+                    || MutedGhost(other)
                     || entry.Count <= bestCount
                     || entry.AtUtc < cutoff)
                 {
@@ -1369,20 +1392,36 @@ public sealed partial class AnnouncementService
                 ConsiderPerLapAction("voice", transponder, fastLapVoiceCfg.Weight, maxVoicePerLap,
                     () => EnqueueVoice(AnnouncementEventType.FastLap, standing, gate));
             }
+        }
 
-            // In a qualifier the race's fastest lap is also the top of the
-            // order - and for a driver's first flying lap it is the ONLY
-            // report there is: the session never calls a first flying lap a
-            // personal best, so pole taken first time out used to go
-            // uncalled, and the pole holder was left as whoever had just
-            // been beaten. Not while muted, the same as the personal-best
-            // route. When a personal best for this same lap follows, it
-            // finds the call already made (see _poleCalledFromGateFor).
-            if (IsQualifyingMode && !Muted && standing is not null && lapTimeMs is > 0
-                && CallProvisionalPoleIfTaken(transponder, standing, lapTimeMs.Value))
+        // The flying laps a best-consecutive qualifier is scored on. Only the
+        // session's own lap times: the start lap has none, and the qualifying
+        // calculator leaves it out too (BestFlyingWindow).
+        if (gate.Valid && gate.LapTimeMs is > 0)
+        {
+            if (!_qualifyingLaps.TryGetValue(transponder, out var flyingLaps))
             {
-                _poleCalledFromGateFor = transponder;
+                flyingLaps = new List<long>();
+                _qualifyingLaps[transponder] = flyingLaps;
             }
+
+            flyingLaps.Add(gate.LapTimeMs.Value);
+        }
+
+        // Pole is checked on every crossing, not only on the race's fastest
+        // lap. That was the only place it was looked at, so under the
+        // default most-laps rule the driver who actually went top - by
+        // completing a lap, quick or not - was never called. The first
+        // flying lap is still covered: it is never reported as a personal
+        // best, so this is the only report of it. Not while muted, the same
+        // as the personal-best route, and only on a timed lap - the start
+        // crossing puts nobody on pole. When a personal best for this same
+        // lap follows, it finds the call already made (see
+        // _poleCalledFromGateFor).
+        if (IsQualifyingMode && !Muted && standing is not null && lapTimeMs is > 0
+            && CallProvisionalPoleIfTaken(transponder, standing, lapTimeMs))
+        {
+            _poleCalledFromGateFor = transponder;
         }
     }
 }

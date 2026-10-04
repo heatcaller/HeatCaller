@@ -424,6 +424,17 @@ internal static class LayoutAudit
 
         // The finish camera's shots: the night across the top, the list of shots beside the picture, the slider and its time under it (PhotoFinishForm).
         "Photo Finish",
+
+        // Lining the split loop up against the line: the crossings paired so
+        // far, the answer under them, and Save / Set to Zero / Cancel
+        // (SplitLineUpForm). It used DialogFit from the day it was written
+        // but was never added here, so nothing held it to anything - and its
+        // Save button sat off the bottom of the window unnoticed.
+        "Line Up the Split Loop",
+
+        // Choose... beside "Also races" on a driver's profile (4 Oct):
+        // DialogFit from the start, and on the list from the start.
+        "Other Classes",
     };
 
     /// <summary>

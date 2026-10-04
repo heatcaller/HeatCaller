@@ -115,11 +115,30 @@ internal static class Program
                 ApplicationConfiguration.Initialize();
             }
 
+            // Before anything reads a file: data saved under the app's
+            // earlier names is moved into HeatCaller's folders, once.
+            //
+            // Before the rehearsal switch, and in a rehearsal too. It used to
+            // be skipped in a rehearsal and run after it, so a laptop whose
+            // first start of a HeatCaller-named build was --rehearsal still
+            // had the club's data under the old folder name: the rehearsal
+            // found no %AppData%\HeatCaller to copy, made an EMPTY copy, said
+            // it had copied the club's data, and the first-run wizard's saves
+            // then pinned that blank copy for every later rehearsal. Run here,
+            // AppPaths still points at the real folders, so it moves the real
+            // data into the real HeatCaller folder - exactly what the next
+            // ordinary start would have done - and never into the rehearsal's.
+            if (!AppDataMigration.Run())
+            {
+                return;
+            }
+
             // HeatCaller.exe --rehearsal: the rehearsal copy - the club's data
             // copied once into a folder of its own, for practising a race night
             // without touching the real one. After the single-instance check,
             // so the club's data is never copied while the real app is writing
-            // it. See Rehearsal.
+            // it, and after the migration, so it copies the club's data from
+            // where HeatCaller keeps it. See Rehearsal.
             if (Rehearsal.Wanted(Environment.GetCommandLineArgs()))
             {
                 if (!Rehearsal.Start(out var problem))
@@ -132,15 +151,6 @@ internal static class Program
                         "HeatCaller rehearsal", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-            }
-
-            // Before anything reads a file: data saved under the app's
-            // earlier names is moved into HeatCaller's folders, once. Not
-            // in a rehearsal - it moves the REAL folders, and would move
-            // them into the rehearsal's.
-            if (!AppPaths.IsRehearsal && !AppDataMigration.Run())
-            {
-                return;
             }
 
             // The console, also written to a file as it goes - so a freeze

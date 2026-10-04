@@ -729,9 +729,15 @@ public sealed class GhostService : IDisposable
         _ => "its pace couldn't be worked out",
     };
 
-    /// <summary>Whether a transponder belongs to a ghost rather than real hardware.</summary>
-    public static bool IsGhost(string? transponder) =>
-        transponder is not null && transponder.StartsWith("GHOST-", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether a transponder belongs to a ghost rather than real hardware.
+    ///
+    /// Forwards to <see cref="Ghosts.IsGhost"/>, which is where the check
+    /// now lives: the timing code needs to ask it and has no business
+    /// needing the simulator and its four stores to do so. Kept here so
+    /// every caller that already goes through GhostService stays as it is.
+    /// </summary>
+    public static bool IsGhost(string? transponder) => Ghosts.IsGhost(transponder);
 
     public void Dispose() => Stop();
 }

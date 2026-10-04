@@ -66,6 +66,9 @@ public partial class MainForm
     /// SizeConnectionFields again once the page is in the window, whose font
     /// the pickers are measured in.
     /// </summary>
+    /// <summary>"Connect when HeatCaller starts" - AppSettings.ConnectDecodersAtStartup. Here rather than in the Designer file, which is not touched.</summary>
+    private readonly CheckBox chkConnectAtStartup = new ThemedCheckBox();
+
     private void BuildConnectionPage()
     {
         // --- The decoder ---
@@ -112,6 +115,12 @@ public partial class MainForm
         serialPortRow = FieldGrid.Inline(cmbSerialPort, btnRefreshPorts);
         lblSerialPort = grid.AddRow("COM port:", serialPortRow);
         lblBaud = grid.AddRow("Baud:", cmbBaud);
+
+        // Whichever decoder: the line (and the split loop with it) connects
+        // as HeatCaller starts. Set from the settings in the constructor.
+        chkConnectAtStartup.Text = "Connect when HeatCaller starts";
+        chkConnectAtStartup.AutoSize = true;
+        grid.AddField(chkConnectAtStartup);
 
         grid.AddField(chkAutoConnect);
         grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);

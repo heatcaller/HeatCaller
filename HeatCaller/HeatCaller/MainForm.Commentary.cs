@@ -83,6 +83,15 @@ public partial class MainForm
                     .ToList();
             }
 
+            case VoiceEngine.Kokoro:
+            {
+                // Read from the names of the files beside the exe - nothing
+                // to download or ask for, so this can't fail.
+                return KokoroSpeech.InstalledVoices()
+                    .Select(v => new CommentaryControl.VoiceChoice(v.Name, v.Name, string.Empty, v.Display))
+                    .ToList();
+            }
+
             case VoiceEngine.HeatCaller:
             {
                 var catalogue = await _heatCallerVoice.CatalogueAsync();

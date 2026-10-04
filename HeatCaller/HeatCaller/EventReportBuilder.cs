@@ -306,8 +306,19 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                     : HandicapCalculator.Apply(session.Results, handicaps!, mode)
                         .ToDictionary(a => a.Result.Transponder, a => a, StringComparer.OrdinalIgnoreCase);
 
+                // The DNF or DQ set in Edit Result, and why. Left out, a DNF
+                // printed as an ordinary finisher and a DQ as a row of no laps
+                // beside a full race time and a best lap - this report is the
+                // one sent round as the meeting's record, and it was the one
+                // place that contradicted the ruling. The CSV export, the
+                // phone and the results site already show it. A column only
+                // for a race that has one, so an uncorrected race reads as
+                // it always did.
+                var hasOutcome = session.Results.Any(r => OutcomeOf(r).Length > 0);
+
                 sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th>Car</th>"
                               + "<th class=\"num\">Laps</th><th class=\"num\">Time</th><th class=\"num\">Best lap</th>"
+                              + (hasOutcome ? "<th>Status</th>" : string.Empty)
                               + (adjusted is not null ? "<th class=\"num\">Handicap pos</th>" : string.Empty)
                               + "</tr>");
 
@@ -334,15 +345,35 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                                   + $"<td class=\"num\">{result.Laps}</td>"
                                   + $"<td class=\"num\">{result.ElapsedMs / 1000.0:0.000}s</td>"
                                   + $"<td class=\"num\">{(result.FastLapMs > 0 ? $"{result.FastLapMs / 1000.0:0.000}s" : "-")}</td>"
+                                  + (hasOutcome ? $"<td>{Esc(OutcomeOf(result))}</td>" : string.Empty)
                                   + adjCell
                                   + "</tr>");
                 }
 
                 sb.AppendLine("</table>");
+
+                // The correction log, so the order above can be explained.
+                if (session.Edits is { Count: > 0 } edits)
+                {
+                    sb.AppendLine("<p class=\"sub\">Corrected after the race:</p><ul class=\"sub\">");
+
+                    foreach (var edit in edits)
+                    {
+                        sb.AppendLine($"<li>{Esc(NameFor(edit.Transponder, edit.DriverName, profiles))}: {Esc(edit.Change)}"
+                                      + (string.IsNullOrWhiteSpace(edit.Reason) ? string.Empty : $" - {Esc(edit.Reason)}")
+                                      + "</li>");
+                    }
+
+                    sb.AppendLine("</ul>");
+                }
             }
         }
     }
 
+
+    /// <summary>"DNF", "DQ", or empty for a finisher - see ResultEditor.</summary>
+    private static string OutcomeOf(SessionResultEntry result) =>
+        ResultEditor.NormaliseOutcome(result.Outcome) ?? string.Empty;
 
     /// <summary>
     /// Qualifying standings per class, using the same calculator and rules

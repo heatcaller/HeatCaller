@@ -52,7 +52,7 @@ public sealed partial class RaceControlControl
     /// when it has none - the Tech Log
     /// also allows a plain pass/fail with no checklist.
     /// </summary>
-    private static bool TechIsRunFor(RaceClass raceClass, TechInspectionStore tech)
+    internal static bool TechIsRunFor(RaceClass raceClass, TechInspectionStore tech)
     {
         if (raceClass.TechCheckItems.Count > 0)
         {
@@ -652,11 +652,27 @@ public sealed partial class RaceControlControl
 
         foreach (var classGroup in pending.GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase))
         {
+            // Everyone checked in who races the class - as their main class
+            // or one of their others - and then anyone checked in who is in
+            // one of these heats already without racing the class: a driver
+            // added to a heat by hand (RoundRosterForm's Add Driver, for a
+            // class they aren't registered in). This used to rebuild from
+            // the main class alone, and silently dropped every one of those
+            // from every heat it redid.
             var roster = _profiles.All
-                .Where(p => string.Equals(p.ClassName, classGroup.Key, StringComparison.OrdinalIgnoreCase)
-                            && _checkIns.IsCheckedIn(p.Transponder))
+                .Where(p => p.RunsClass(classGroup.Key) && _checkIns.IsCheckedIn(p.Transponder))
                 .Select(p => p.Transponder)
                 .ToList();
+
+            var addedByHand = classGroup
+                .SelectMany(r => r.AssignedTransponders)
+                .Where(t => !string.IsNullOrWhiteSpace(t)
+                            && !roster.Contains(t, StringComparer.OrdinalIgnoreCase)
+                            && _checkIns.IsCheckedIn(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            roster.AddRange(addedByHand);
 
             if (roster.Count == 0)
             {
@@ -926,8 +942,9 @@ public sealed partial class RaceControlControl
                 _events,
                 AutoAdvanceScope,
                 AutoAdvancePinnedClass,
-                ordered.Select(s => _profiles.Get(s.TransponderId)?.ClassName),
-                message => StatusMessage?.Invoke(message));
+                ordered.SelectMany(s => _profiles.Get(s.TransponderId)?.AllClasses ?? (IReadOnlyList<string>)Array.Empty<string>()),
+                message => StatusMessage?.Invoke(message),
+                ordered.Select(s => _profiles.Get(s.TransponderId)?.Transponder ?? s.TransponderId));
 
 
     /// <summary>

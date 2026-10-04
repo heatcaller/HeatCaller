@@ -337,11 +337,16 @@ public sealed class HandicapSuggestForm : Form
         {
             Accepted = new List<HandicapStore.Suggestion>();
 
-            for (var i = 0; i < _grid.Rows.Count && i < _suggestions.Count; i++)
+            // Each row carries its own suggestion. They used to be matched
+            // by position, so once a header click had sorted the list a
+            // tick credited whoever sat at that place in the original
+            // order - a locked driver left unticked could be given another
+            // driver's credit, and the one ticked got nothing.
+            foreach (DataGridViewRow row in _grid.Rows)
             {
-                if (_grid.Rows[i].Cells[0].Value is true)
+                if (row.Cells[0].Value is true && row.Tag is HandicapStore.Suggestion suggestion)
                 {
-                    Accepted.Add(_suggestions[i]);
+                    Accepted.Add(suggestion);
                 }
             }
 
@@ -397,6 +402,8 @@ public sealed class HandicapSuggestForm : Form
                 suggestion.SessionsUsed,
                 suggestion.CurrentSeconds != 0 ? $"-{suggestion.CurrentSeconds:0.0}s" : "-",
                 suggestion.SuggestedSeconds > 0 ? $"-{suggestion.SuggestedSeconds:0.0}s" : "scratch");
+
+            _grid.Rows[rowIndex].Tag = suggestion;
 
             if (locked)
             {

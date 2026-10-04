@@ -85,10 +85,10 @@ public sealed class RaceStatStrip : Control
         // frequently set by someone two positions back, and showing the
         // leader's best here would quietly contradict the leaderboard's
         // own best-lap highlight.
-        var fastestMs = ordered.Where(s => s.FastestLapMs > 0)
-            .Select(s => s.FastestLapMs)
-            .DefaultIfEmpty(0)
-            .Min();
+        //
+        // Ghosts out while a real car is on track, as the race's own fastest
+        // lap leaves them out (Ghosts.FastestLapMs).
+        var fastestMs = Ghosts.FastestLapMs(ordered);
 
         const int gap = 8;
         var tileWidth = (Width - gap) / 2f;

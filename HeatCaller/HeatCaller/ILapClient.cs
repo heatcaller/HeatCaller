@@ -35,6 +35,7 @@ public sealed class ILapClient : IDisposable
     private StreamWriter? _rawCapture;
     private readonly object _captureLock = new();
     private long _captureBytes; // guarded by _captureLock
+    private readonly string _captureFolder;
 
     /// <summary>
     /// A decoder that streams garbage (wrong baud rate, a noisy line) would
@@ -106,8 +107,29 @@ public sealed class ILapClient : IDisposable
         }
     }
 
-    private static string CapturePath => Path.Combine(
-        AppPaths.Root,
+    /// <summary>
+    /// Where the raw capture log is written.
+    ///
+    /// Passed in rather than read from AppPaths, because this class decodes
+    /// a serial line and should not also know where the app keeps the
+    /// club's data. It was the last thing tying the line decoder to the
+    /// app's storage layout, and that mattered: the I-Lap is the LINE
+    /// decoder now, so a test wants to build one, feed it a recorded night
+    /// and check the laps - which it cannot do if constructing one reaches
+    /// for the real data folder.
+    ///
+    /// Left optional so a test can build one without choosing a folder; it
+    /// then captures under the temp directory, where it is harmless. The
+    /// app passes AppPaths.Root, so the club's capture files land exactly
+    /// where they always have.
+    /// </summary>
+    public ILapClient(string? captureFolder = null)
+    {
+        _captureFolder = captureFolder ?? Path.Combine(Path.GetTempPath(), "HeatCaller", "ilap-capture");
+    }
+
+    private string CapturePath => Path.Combine(
+        _captureFolder,
         $"ilap-raw-{DateTime.Now:yyyy-MM-dd}.log");
 
     public void Connect(string portName, int baudRate)
@@ -205,16 +227,23 @@ public sealed class ILapClient : IDisposable
         // all from it. Polling every 20ms is well inside one character's
         // worth of club-racing precision and does not depend on the USB
         // serial driver raising the event.
+        //
+        // Connected is said BEFORE the reader starts, as DirectDecoderClient
+        // does. The other way round, a read that failed in the moment
+        // between the two found the state still Connecting, said nothing,
+        // and the reader ended - then Connected was published over it: a
+        // green light with nothing reading the port.
         var port = _port;
         _reading = true;
+
+        SetState(DecoderConnectionState.Connected,
+            $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
+
         new Thread(() => ReadLoop(port, portName))
         {
             IsBackground = true,
             Name = "I-Lap reader",
         }.Start();
-
-        SetState(DecoderConnectionState.Connected,
-            $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
     }
 
     /// <summary>
@@ -237,7 +266,7 @@ public sealed class ILapClient : IDisposable
             }
             catch (Exception ex)
             {
-                if (_reading && ReferenceEquals(_port, port) && State == DecoderConnectionState.Connected)
+                if (_reading && ReferenceEquals(_port, port) && State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
                 {
                     SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
                 }
@@ -308,7 +337,7 @@ public sealed class ILapClient : IDisposable
         }
         catch (Exception ex)
         {
-            if (_reading && ReferenceEquals(_port, port) && State == DecoderConnectionState.Connected)
+            if (_reading && ReferenceEquals(_port, port) && State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
             {
                 SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
             }

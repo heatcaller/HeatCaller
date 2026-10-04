@@ -1034,7 +1034,8 @@ public sealed partial class WebServerService
     /// <summary>
     /// The race-control buttons' brake: one command at a time, and so many
     /// a minute per device and from all of them together. See
-    /// RemoteCommandGate and HandleCommand.
+    /// RemoteCommandGate, HandleCommand and - for the Race tab's flags on
+    /// /manage, which share it - HandleManageAsync.
     /// </summary>
     private readonly RemoteCommandGate _commands = new();
 
@@ -1908,7 +1909,8 @@ public sealed partial class WebServerService
     /// <summary>
     /// The race-day manager's one JSON endpoint. Thin on purpose - the only
     /// thing this method decides is who may ask (the CSRF header, the
-    /// manager PIN, a body that isn't absurd); what a request means,
+    /// manager PIN, a body that isn't absurd, and for race.flag the same
+    /// RemoteCommandGate as /api/command); what a request means,
     /// whether it needs a yes first, and whether the laptop is too busy for
     /// it are all RaceDayService.HandleJsonAsync's job, and it always
     /// answers with well-formed JSON, never an exception - so whatever it
@@ -1954,14 +1956,129 @@ public sealed partial class WebServerService
             return;
         }
 
-        // The server's own stop token: if the laptop stops the web server
-        // mid-request, this unblocks rather than riding out its own
-        // ten-to-seventy-second timeouts for an answer nobody can send any
-        // more.
-        var answer = await manager.HandleJsonAsync(body, RaceDayChannel.WiFi, _cts?.Token ?? CancellationToken.None)
-            .ConfigureAwait(false);
+        // A flag from the Race tab goes through the same gate as the flag
+        // remote's (/api/command): one command at a time across both pages,
+        // and the same per-device and all-devices counts. This endpoint used
+        // to have none. Each race.flag is answered "sent" at once and posts
+        // Race Control's trigger to the UI thread unconditionally, so a
+        // marshal tapping RED five times on laggy Wi-Fi got five red flags,
+        // five announcements and five forced journal writes mid-race - and a
+        // script with the manager PIN could queue hundreds ahead of the race
+        // tick, the very flood RemoteCommandGate closed on /api/command. The
+        // rest of /manage is left as it was: those ops change the program or
+        // results, not the race on track, and RaceDayService checks them.
+        var (isFlag, flagName, requestId) = ManageFlagRequest(body);
+        var gated = false;
+
+        if (isFlag)
+        {
+            switch (_commands.TryBegin(ClientKey(context), flagName, out var running))
+            {
+                case RemoteCommandGate.Answer.Busy:
+                    context.Response.StatusCode = 503;
+                    context.Response.AddHeader("Retry-After", "1");
+                    WriteJson(context, JsonSerializer.Serialize(new
+                    {
+                        id = requestId,
+                        ok = false,
+                        error = $"NOT sent - the laptop is still carrying out {running}. "
+                            + "Check the flag, then press again if it is still needed.",
+                    }));
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Race-day manager flag: {flagName} - turned away, {running} was still being carried out.");
+                    return;
+
+                case RemoteCommandGate.Answer.TooMany:
+                    context.Response.StatusCode = 429;
+                    context.Response.AddHeader("Retry-After", "60");
+                    WriteJson(context, JsonSerializer.Serialize(new
+                    {
+                        id = requestId,
+                        ok = false,
+                        error = "NOT sent - too many commands in the last minute. Wait a minute, and check the laptop.",
+                    }));
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [web] Race-day manager flag: {flagName} - turned away, too many commands in the last minute.");
+                    return;
+            }
+
+            gated = true;
+        }
+
+        string answer;
+
+        try
+        {
+            // The server's own stop token: if the laptop stops the web server
+            // mid-request, this unblocks rather than riding out its own
+            // ten-to-seventy-second timeouts for an answer nobody can send any
+            // more.
+            answer = await manager.HandleJsonAsync(body, RaceDayChannel.WiFi, _cts?.Token ?? CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            // Held until the op has run on the UI thread, which posts the
+            // flag's trigger there before it answers. The next command's op
+            // is posted behind that trigger, so it cannot run until the flag
+            // has been carried out - at most one flag is ever waiting.
+            if (gated)
+            {
+                _commands.End();
+            }
+        }
 
         WriteJson(context, answer);
+    }
+
+    /// <summary>
+    /// Whether a /manage body asks for race.flag, and if so the flag as the
+    /// phone shows it ("RED") and the request's id to echo back. Only a peek
+    /// for the gate - anything unreadable is left for RaceDayService to turn
+    /// down in its own words.
+    /// </summary>
+    internal static (bool IsFlag, string Name, string? Id) ManageFlagRequest(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = 16 });
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("op", out var op) || op.ValueKind != JsonValueKind.String
+                || op.GetString()?.Trim() != "race.flag")
+            {
+                return (false, string.Empty, null);
+            }
+
+            string? id = null;
+
+            if (root.TryGetProperty("id", out var idValue))
+            {
+                id = idValue.ValueKind switch
+                {
+                    JsonValueKind.String => idValue.GetString(),
+                    JsonValueKind.Number => idValue.GetRawText(),
+                    _ => null,
+                };
+
+                if (id is { Length: > 100 })
+                {
+                    id = id[..100];
+                }
+            }
+
+            var name = root.TryGetProperty("args", out var args) && args.ValueKind == JsonValueKind.Object
+                && args.TryGetProperty("flag", out var flag) && flag.ValueKind == JsonValueKind.String
+                ? (flag.GetString() ?? string.Empty).Trim().ToUpperInvariant()
+                : string.Empty;
+
+            // Counted even with no readable flag: it is still a race.flag
+            // request, and a junk one should not be a way round the count.
+            return (true, name.Length is > 0 and <= 20 ? name : "a flag", id);
+        }
+        catch (JsonException)
+        {
+            return (false, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -2303,7 +2420,16 @@ public sealed partial class WebServerService
         var shortened = abbreviateNames || forRelay ? ShortNames(ordered, abbreviateNames, forRelay) : null;
 
         // Session-wide fastest lap, so the page can highlight whoever holds it.
-        var bestLapMs = ordered.Where(s => s.FastestLapMs > 0)
+        //
+        // Never a ghost's while there is a real car out - the rule the race's
+        // own fastest lap follows (RaceControlSession.ProcessLapEvent). A
+        // Quick Rival laps faster than its driver by design, and its lap
+        // used to be highlighted here as the session's quickest, with every
+        // real driver's Best Pace Gap measured from a lap nobody drove,
+        // while the PA called a real driver's lap as the fastest. A field of
+        // nothing but ghosts still shows its own best.
+        var realCarsRacing = ordered.Any(s => !Ghosts.IsGhost(s.TransponderId));
+        var bestLapMs = ordered.Where(s => s.FastestLapMs > 0 && !(realCarsRacing && Ghosts.IsGhost(s.TransponderId)))
             .Select(s => s.FastestLapMs)
             .DefaultIfEmpty(0)
             .Min();

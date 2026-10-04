@@ -916,6 +916,7 @@ public sealed class CommentaryControl : UserControl
     {
         VoiceEngine.Windows => "Windows",
         VoiceEngine.HeatCaller => "HeatCaller",
+        VoiceEngine.Kokoro => "Kokoro",
         _ => "ElevenLabs",
     };
 
@@ -931,6 +932,10 @@ public sealed class CommentaryControl : UserControl
             VoiceEngine.Windows => string.IsNullOrWhiteSpace(voice.WindowsVoiceName)
                 ? AnnouncersVoice
                 : new VoiceChoice(voice.WindowsVoiceName, voice.WindowsVoiceName, string.Empty, voice.WindowsVoiceName),
+
+            VoiceEngine.Kokoro => string.IsNullOrWhiteSpace(voice.KokoroVoiceName)
+                ? AnnouncersVoice
+                : new VoiceChoice(voice.KokoroVoiceName, voice.KokoroVoiceName, string.Empty, KokoroSpeech.Describe(voice.KokoroVoiceName)),
 
             VoiceEngine.HeatCaller => string.IsNullOrWhiteSpace(voice.HeatCallerVoice)
                 ? AnnouncersVoice
@@ -1005,6 +1010,10 @@ public sealed class CommentaryControl : UserControl
         {
             case VoiceEngine.Windows:
                 _settings.MechanicWindowsVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.Kokoro:
+                _settings.MechanicKokoroVoiceName = choice.Id;
                 break;
 
             case VoiceEngine.HeatCaller:

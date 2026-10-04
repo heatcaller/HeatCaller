@@ -927,7 +927,16 @@ public sealed class BackupRestoreControl : UserControl
               + "if you have used Reissue All QR Check-ins since it was made, QR check-ins printed after that stop working - "
               + "print them again, or reissue again on the Club Website page.\n\n";
 
+        // Which backup, and when it was taken, said in the question itself.
+        // It used to name neither, so the only check on picking last March's
+        // backup instead of last week's was a date column that could be
+        // wrong (see BackupListItem) - and Delete, which is far less harm,
+        // named its file when this did not.
+        var backupFile = new FileInfo(zipPath);
+        var whichBackup = $"Backup: {backupFile.Name}\nTaken: {BackupService.BackupTime(backupFile):yyyy-MM-dd HH:mm}\n\n";
+
         var confirm = AppDialog.Show(this,
+            whichBackup +
             "Restoring will overwrite your current driver profiles, race classes, session history, track layouts, and settings with the contents of this backup.\n\n" +
             badgeNote +
             "A safety backup of your CURRENT data will be taken first - the Undo button can't reverse a restore, but restoring that safety backup can. The app will need to restart afterward for the restored data to take effect.\n\n" +
@@ -1168,9 +1177,17 @@ public sealed class BackupRestoreControl : UserControl
         }
     }
 
+    /// <summary>
+    /// One row of the list. The date is when the backup was taken, from its
+    /// name - the time the list is sorted by. It used to be the file's own
+    /// modified time, which changes whenever the zip is copied or synced: on
+    /// a new PC every OneDrive backup showed the day it was downloaded, and a
+    /// March backup brought back on a USB stick showed today's date while
+    /// sorting below October's.
+    /// </summary>
     private sealed record BackupListItem(FileInfo File)
     {
         public override string ToString() =>
-            $"{File.LastWriteTime:yyyy-MM-dd HH:mm}   {File.Length / 1024.0:0.#} KB   {File.Name}";
+            $"{BackupService.BackupTime(File):yyyy-MM-dd HH:mm}   {File.Length / 1024.0:0.#} KB   {File.Name}";
     }
 }

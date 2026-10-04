@@ -100,6 +100,10 @@ internal static class PinKdf
     /// hash - so it is an ordinary setting and travels in backups as one.
     /// Changing it would change every hash at once and sign every phone
     /// out, so nothing does.
+    ///
+    /// Empty when a new salt could not be saved: every caller then makes the
+    /// older unsalted hash, which the relay still tries, and the next call
+    /// makes a salt again.
     /// </summary>
     public static string EnsureSalt(AppSettings settings)
     {
@@ -109,8 +113,30 @@ internal static class PinKdf
         }
 
         settings.RelayPinSalt = Convert.ToHexString(RandomNumberGenerator.GetBytes(SaltBytes)).ToLowerInvariant();
-        settings.Save();
 
+        if (!settings.Save())
+        {
+            // Not handed out, as RelayCheckIn does with a badge key that did
+            // not reach the disk. Save's answer used to be ignored, and the
+            // salt went on being used for the rest of the session: sign-up
+            // invites made then kept it in signups.json, the next launch made
+            // a different one, and every one of those codes was "invalid" on
+            // the sign-up page for good, with nothing to say why.
+            settings.RelayPinSalt = string.Empty;
+
+            if (!_saidNotSaved)
+            {
+                _saidNotSaved = true;
+                SessionLog.Write("[relay] The club's PIN salt couldn't be saved to settings.json, so PIN and invite hashes stay unsalted until it can be.");
+            }
+
+            return string.Empty;
+        }
+
+        _saidNotSaved = false;
         return settings.RelayPinSalt;
     }
+
+    // Said once per run of failures, not on every publish that asks.
+    private static bool _saidNotSaved;
 }

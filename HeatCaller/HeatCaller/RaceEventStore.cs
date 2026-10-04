@@ -650,6 +650,84 @@ public sealed class RaceEventStore
         }
     }
 
+    /// <summary>
+    /// Moves each race day's auto-advance pin (AutoAdvanceClassName) from
+    /// one class name to another, for a class rename. Returns the ids of the
+    /// days whose pin moved.
+    ///
+    /// Kept apart from RenameClass, which only ever rewrote ClassNames: a
+    /// day pinned to a renamed class went on naming the old one, matched no
+    /// round, and auto-advance quietly stopped picking races for that day
+    /// ("pinned to class ..., which has no unrecorded rounds left"). Only
+    /// the club-wide default was being followed (MainForm's Renamed handler).
+    /// A day can be pinned to a class it does not list, so the pin has its
+    /// own before-and-after rather than riding on ClassNames'.
+    /// </summary>
+    public IReadOnlyList<string> RenamePinnedClass(string oldName, string newName)
+    {
+        var moved = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return moved;
+        }
+
+        foreach (var raceEvent in _events)
+        {
+            if (string.Equals(raceEvent.AutoAdvanceClassName?.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                raceEvent.AutoAdvanceClassName = newName;
+                moved.Add(raceEvent.Id);
+            }
+        }
+
+        if (moved.Count > 0)
+        {
+            Save();
+        }
+
+        return moved;
+    }
+
+    /// <summary>The ids of the days pinned to this class now - taken just before a rename, for its undo.</summary>
+    public IReadOnlyList<string> WithPinnedClass(string className) =>
+        _events
+            .Where(e => string.Equals(e.AutoAdvanceClassName?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Id)
+            .ToList();
+
+    /// <summary>
+    /// The undo half of RenamePinnedClass: every day pinned to
+    /// <paramref name="newName"/> NOW goes back to <paramref name="oldName"/>,
+    /// except those in <paramref name="leaveAlone"/>, which were pinned to
+    /// the new name before the rename.
+    /// </summary>
+    public void UndoRenamePinnedClass(string newName, string oldName, IReadOnlyCollection<string> leaveAlone)
+    {
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        var keep = leaveAlone.ToHashSet(StringComparer.Ordinal);
+        var changed = false;
+
+        foreach (var raceEvent in _events)
+        {
+            if (string.Equals(raceEvent.AutoAdvanceClassName?.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase)
+                && !keep.Contains(raceEvent.Id))
+            {
+                raceEvent.AutoAdvanceClassName = oldName;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            Save();
+        }
+    }
+
     /// <summary>Which event a round belongs to, or null.</summary>
     public RaceEvent? EventForRound(string roundId) =>
         _events.FirstOrDefault(e => e.RoundIds.Contains(roundId));

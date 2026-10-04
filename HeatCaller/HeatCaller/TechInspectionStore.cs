@@ -164,6 +164,49 @@ public sealed class TechInspectionStore
     public bool IsClearedToday(string transponder, string? className = null) =>
         Cleared(transponder, className) is not null;
 
+    /// <summary>
+    /// The inspection the check-in desk and the phone show for a driver,
+    /// across every class they race: the one for the first class they are
+    /// NOT cleared in (null when that class has no inspection yet), or,
+    /// cleared in all of them, the most recent of those. Only classes that
+    /// <paramref name="techIsRunFor"/> says run tech are asked about; with
+    /// none of those, it is their main class's latest, as it always was.
+    ///
+    /// Race Control asks about the round's class (UninspectedDrivers), and
+    /// these used to ask about the driver's main class alone. A driver
+    /// cleared in their main class but not in the other one they were
+    /// racing showed as cleared at the desk, and then held up the start.
+    /// Asking about every class they race makes the two agree.
+    /// </summary>
+    public TechInspection? LatestForDriver(DriverProfile profile, Func<string, bool> techIsRunFor)
+    {
+        var classes = profile.AllClasses.Where(techIsRunFor).ToList();
+
+        if (classes.Count == 0)
+        {
+            return Latest(profile.Transponder, profile.ClassName ?? string.Empty);
+        }
+
+        TechInspection? newest = null;
+
+        foreach (var className in classes)
+        {
+            var latest = Latest(profile.Transponder, className);
+
+            if (latest is not { IsCleared: true })
+            {
+                return latest;
+            }
+
+            if (newest is null || latest.InspectedAtUtc > newest.InspectedAtUtc)
+            {
+                newest = latest;
+            }
+        }
+
+        return newest;
+    }
+
     /// <summary>Every inspection carried out at an event, newest first.</summary>
     public IReadOnlyList<TechInspection> ForEvent(string eventId) =>
         _inspections

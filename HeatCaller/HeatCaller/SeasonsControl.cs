@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace HeatCaller;
 
 /// <summary>
@@ -69,6 +71,7 @@ public sealed class SeasonsControl : UserControl
 
     /// <summary>Rows of the points scheme shown without scrolling - the rest are a scroll away.</summary>
     private const int SchemeRowsShown = 5;
+    private const string SchemeHintText = "Type in the Points column to change what each place scores.";
 
     /// <summary>The championships' buttons - while there is room, the column is no narrower than the widest of them. See ColumnWidths.</summary>
     private ButtonBar? _seasonButtons;
@@ -137,7 +140,7 @@ public sealed class SeasonsControl : UserControl
         _seasonButtons = seasons.Add(new ButtonBar(tight: true).With(btnNew, btnRename, btnDeleteSeason), gapBelow: 0);
 
         // --- The points scheme ---
-        var schemeHint = new Label { Text = "Type in the Points column to change what each place scores.", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        var schemeHint = new Label { Text = SchemeHintText, AutoSize = true, ForeColor = AppTheme.TextMuted };
 
         _dgvPointsScheme.AllowUserToAddRows = false;
         _dgvPointsScheme.AllowUserToDeleteRows = false;
@@ -145,6 +148,38 @@ public sealed class SeasonsControl : UserControl
         _dgvPointsScheme.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _dgvPointsScheme.Columns.Add(new DataGridViewTextBoxColumn { Name = "position", HeaderText = "Finishing Position", ReadOnly = true, FillWeight = 130 });
         _dgvPointsScheme.Columns.Add(new DataGridViewTextBoxColumn { Name = "points", HeaderText = "Points", FillWeight = 70 });
+        // A Points cell that isn't a whole number is refused where it was
+        // typed. It used to be saved as 0 without a word, so "1O" for "10"
+        // left every race winner scoring nothing for the win, on disk, and
+        // the cell showed 0 next time with no trace of the typo.
+        _dgvPointsScheme.CellValidating += (_, e) =>
+        {
+            if (_suppressEvents || _dgvPointsScheme.Columns[e.ColumnIndex].Name != "points")
+            {
+                return;
+            }
+
+            var typed = e.FormattedValue?.ToString()?.Trim() ?? string.Empty;
+
+            if (int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out int _))
+            {
+                return;
+            }
+
+            e.Cancel = true;
+            var problem = typed.Length == 0
+                ? "Points can't be blank - type 0 for none, or press Esc to put back what was there."
+                : $"Points must be a whole number - \"{typed}\" isn't one. Fix it, or press Esc to put back what was there.";
+            _dgvPointsScheme.Rows[e.RowIndex].Cells[e.ColumnIndex].ErrorText = problem;
+            schemeHint.Text = problem;
+            schemeHint.ForeColor = AppTheme.Danger;
+        };
+        _dgvPointsScheme.CellEndEdit += (_, e) =>
+        {
+            _dgvPointsScheme.Rows[e.RowIndex].Cells[e.ColumnIndex].ErrorText = string.Empty;
+            schemeHint.Text = SchemeHintText;
+            schemeHint.ForeColor = AppTheme.TextMuted;
+        };
         _dgvPointsScheme.CellEndEdit += (_, _) => { if (!_suppressEvents) { SaveCurrentSeasonFromUi(); RecomputeStandings(); } };
 
         var btnResetScheme = new Button { Text = "Reset to Default" };
@@ -536,7 +571,12 @@ public sealed class SeasonsControl : UserControl
                 continue;
             }
             var position = Convert.ToInt32(row.Cells["position"].Value);
-            var points = int.TryParse(row.Cells["points"].Value?.ToString(), out var p) ? p : 0;
+            // The grid refuses a non-number as it is typed; should one reach
+            // here anyway, keep what is on file for that place rather than
+            // quietly scoring it 0.
+            var points = int.TryParse(row.Cells["points"].Value?.ToString()?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var p)
+                ? p
+                : season.PointsScheme.FirstOrDefault(e => e.Position == position)?.Points ?? 0;
             scheme.Add(new PointsSchemeEntry { Position = position, Points = points });
         }
 

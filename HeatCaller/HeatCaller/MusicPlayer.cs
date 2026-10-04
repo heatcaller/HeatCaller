@@ -343,7 +343,25 @@ public sealed class MusicPlayer : IDisposable
         {
             if (_output?.PlaybackState == PlaybackState.Playing)
             {
-                _output.Pause();
+                // Guarded as the track start and DisposePlaybackLocked are: a
+                // device that has just gone (a Bluetooth PA switched off) makes
+                // waveOutPause throw, and it used to escape to the sidebar's
+                // Mute - a crash dialog in front of the club, voice muted and
+                // the music still playing. The device is let go instead, which
+                // stops the music as the pause meant to, and Resume moves on to
+                // the next track on whatever device there is then.
+                try
+                {
+                    _output.Pause();
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage?.Invoke($"[music] The sound device wouldn't pause ({ex.Message}) - the music is stopped instead, and carries on with the next track when it is resumed.");
+                    DisposePlaybackLocked();
+                    _generation++;
+                    _retryPending = false;
+                    _pausedBetweenTracks = true;
+                }
             }
             else if (_retryPending || (_running && _output?.PlaybackState == PlaybackState.Stopped))
             {
@@ -370,7 +388,19 @@ public sealed class MusicPlayer : IDisposable
         {
             if (_output?.PlaybackState == PlaybackState.Paused)
             {
-                _output.Play();
+                // A device gone while paused: on to the next track, which opens
+                // whatever device there is now, rather than an exception on the
+                // UI thread (see Pause).
+                try
+                {
+                    _output.Play();
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage?.Invoke($"[music] The sound device wouldn't resume ({ex.Message}) - moving on to the next track.");
+                    DisposePlaybackLocked();
+                    nextUnder = ++_generation;
+                }
             }
             else if (_pausedBetweenTracks)
             {
@@ -421,9 +451,19 @@ public sealed class MusicPlayer : IDisposable
             // TotalTime fires PlaybackStopped and skips the track, which is
             // not what dragging to the end of the bar should do.
             var limit = _reader.TotalTime - TimeSpan.FromMilliseconds(250);
-            _reader.CurrentTime = position < TimeSpan.Zero
-                ? TimeSpan.Zero
-                : position > limit ? limit : position;
+
+            // A seek the file or device refuses is said, not thrown at the
+            // Music page's position bar.
+            try
+            {
+                _reader.CurrentTime = position < TimeSpan.Zero
+                    ? TimeSpan.Zero
+                    : position > limit ? limit : position;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[music] Couldn't move within the track: {ex.Message}");
+            }
         }
     }
 
@@ -851,20 +891,39 @@ public sealed class MusicPlayer : IDisposable
 
     private void DisposePlaybackLocked()
     {
-        try
+        // Each in its own guard. They were in one, so a Stop that threw on a
+        // device already gone skipped both Disposes - the track's file stayed
+        // open until the next garbage collection, long enough to stop it
+        // being moved on the Music page or a backup being restored over it.
+        if (_output is not null)
         {
-            if (_output is not null)
+            try
             {
                 _output.PlaybackStopped -= OnPlaybackStopped;
                 _output.Stop();
-                _output.Dispose();
+            }
+            catch
+            {
+                // Stopping a device that's already gone is not worth reporting.
             }
 
+            try
+            {
+                _output.Dispose();
+            }
+            catch
+            {
+                // Nor is disposing one.
+            }
+        }
+
+        try
+        {
             _reader?.Dispose();
         }
         catch
         {
-            // Disposing a device that's already gone is not worth reporting.
+            // The file is let go of either way.
         }
 
         _output = null;

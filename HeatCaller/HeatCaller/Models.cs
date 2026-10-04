@@ -97,7 +97,70 @@ public sealed class DriverProfile
         CarModel = trimmed;
         return true;
     }
+
+    /// <summary>
+    /// The driver's main class - what their profile, the check-in sheet,
+    /// badges, results headings and the announcer give as "their class".
+    ///
+    /// Kept as the one main answer, as CarModel is for cars, rather than
+    /// replaced by the list below: about seventy places read it, and most of
+    /// them want a single answer. The ones that ask "does this driver run
+    /// class X?" - who goes in a class's heats, who a class's pages list -
+    /// ask <see cref="RunsClass"/> instead, which counts the others too.
+    /// </summary>
     public string ClassName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Any other classes this driver races, besides the main one.
+    ///
+    /// Someone running a stock car and a modified car is in two classes,
+    /// and one class per profile left two bad choices: two profiles, which
+    /// split their history and personal bests in two (the reason Cars is a
+    /// list), or adding them to the other class's heats by hand every week.
+    ///
+    /// The main class is not repeated here - it is <see cref="ClassName"/>.
+    /// Changing the main class therefore never drops these, and a class in
+    /// both places is counted once (<see cref="AllClasses"/>).
+    /// </summary>
+    public List<string> Classes { get; set; } = new();
+
+    /// <summary>
+    /// Every class this driver races, the main one first. Older profiles
+    /// have a ClassName and no list at all; this folds the two together, as
+    /// AllCars does, so no caller has to.
+    /// </summary>
+    public IReadOnlyList<string> AllClasses
+    {
+        get
+        {
+            var all = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(ClassName))
+            {
+                all.Add(ClassName.Trim());
+            }
+
+            foreach (var other in Classes ?? new List<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(other)
+                    && !all.Any(c => string.Equals(c, other.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    all.Add(other.Trim());
+                }
+            }
+
+            return all;
+        }
+    }
+
+    /// <summary>
+    /// Whether this driver races <paramref name="className"/> - their main
+    /// class or one of the others. By name, ignoring case and spaces at the
+    /// ends, as every class comparison in the app is.
+    /// </summary>
+    public bool RunsClass(string? className) =>
+        !string.IsNullOrWhiteSpace(className)
+        && AllClasses.Any(c => string.Equals(c, className.Trim(), StringComparison.OrdinalIgnoreCase));
     public string SetupConfiguration { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
 

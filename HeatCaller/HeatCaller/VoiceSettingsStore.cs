@@ -190,7 +190,7 @@ public sealed class VoiceSettingsStore
         // a choice this test did not list would be "inferred" back to
         // ElevenLabs or Windows on every single load, and the club would
         // find its voice changed each time the app started.
-        if (loaded.Engine is VoiceEngine.ElevenLabs or VoiceEngine.Windows or VoiceEngine.HeatCaller)
+        if (loaded.Engine is VoiceEngine.ElevenLabs or VoiceEngine.Windows or VoiceEngine.HeatCaller or VoiceEngine.Kokoro)
         {
             return false;
         }

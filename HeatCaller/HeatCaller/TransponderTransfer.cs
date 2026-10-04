@@ -15,8 +15,16 @@ namespace HeatCaller;
 /// which would keep it theirs - and joins the new owner's, fitted to one of
 /// their cars or moving between them, and replacing (retiring) one of theirs
 /// if it is a replacement, as Belongs To does for a transponder nobody has.
-/// Laps timed on it from then on are the new owner's. Races already run
-/// stay with whoever ran them: they are filed under the main transponder.
+/// Laps timed on it from then on are the new owner's. Races already run are
+/// not rewritten - they are what happened - but only some of them stay with
+/// whoever ran them. Where it was merged into its owner's main transponder
+/// the race is filed under that main one and stays theirs. Where it was
+/// timed as a car of its own (both of their cars out, or named mid-race)
+/// the race is filed under this transponder itself, and qualifying and the
+/// mains look up whose it is NOW - so those races count for the new owner.
+/// That used to happen with the operator told the opposite; Run now says so,
+/// and given the race history names those races (RacesFiledUnder) and asks
+/// before anything moves.
 /// </summary>
 internal static class TransponderTransferring
 {
@@ -179,8 +187,34 @@ internal static class TransponderTransferring
         return null;
     }
 
-    /// <summary>Asks who it goes to (BelongsToForm), and transfers it. True when it was.</summary>
-    public static bool Run(IWin32Window owner, string id, DriverProfile from, ProfileStore profiles, CarStore cars, UndoService undo)
+    /// <summary>
+    /// The races already run with a row filed under <paramref name="id"/>
+    /// itself - timed as a car of its own rather than merged into its
+    /// owner's main transponder. Oldest first.
+    /// </summary>
+    public static IReadOnlyList<SessionRecord> RacesFiledUnder(string id, IEnumerable<SessionRecord> sessions)
+    {
+        var wanted = id?.Trim() ?? string.Empty;
+
+        if (wanted.Length == 0)
+        {
+            return Array.Empty<SessionRecord>();
+        }
+
+        return sessions
+            .Where(s => s.Results.Any(r => string.Equals(r.Transponder?.Trim(), wanted, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(s => s.StartedAtUtc)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Asks who it goes to (BelongsToForm), and transfers it. True when it
+    /// was. Given the race history, a transponder that was timed as a car of
+    /// its own in races already run is not moved until the operator has been
+    /// told those races will count for the new owner and says go ahead.
+    /// </summary>
+    public static bool Run(IWin32Window owner, string id, DriverProfile from, ProfileStore profiles, CarStore cars, UndoService undo,
+        SessionHistoryStore? history = null)
     {
         if (WhyNot(id, from) is { } refused)
         {
@@ -188,14 +222,37 @@ internal static class TransponderTransferring
             return false;
         }
 
+        // This used to promise that races already run stay with whoever ran
+        // them, which is only true where the transponder was merged into
+        // its owner's main one - see the class comment.
         var lead = $"Give transponder {id} to another driver for good - sold, given or swapped. It's {NameOf(from)}'s now. "
-                   + "Laps timed on it from then on count for the new owner; races already run stay with whoever ran them.";
+                   + "Laps timed on it from then on count for the new owner. Races already run where it was timed as a car of its own "
+                   + $"are saved under {id} itself, so qualifying and the mains will count those for the new owner too.";
 
         using var form = new BelongsToForm(id, lead, profiles, cars, fromDriver: from.Transponder);
 
         if (form.ShowDialog(owner) != DialogResult.OK)
         {
             return false;
+        }
+
+        if (history is not null && RacesFiledUnder(id, history.All) is { Count: > 0 } races)
+        {
+            var toName = profiles.Get(form.DriverKey) is { } to ? NameOf(to) : form.DriverKey;
+            var named = string.Join("\n", races.Take(8).Select(s =>
+                $"  {(string.IsNullOrWhiteSpace(s.Label) ? s.SessionType.ToString() : s.Label.Trim())} - {s.StartedAtUtc.ToLocalTime():d MMM yyyy HH:mm}"));
+            var more = races.Count > 8 ? $"\n  ...and {races.Count - 8} more." : string.Empty;
+
+            var ask = $"{id} was timed as a car of its own in {Plural.Of(races.Count, "race")} already run, so "
+                      + $"{(races.Count == 1 ? "that race is" : "those races are")} saved under {id} itself rather than {NameOf(from)}'s main transponder:\n"
+                      + named + more + "\n\n"
+                      + $"Once {id} is {toName}'s, qualifying and the mains will count {(races.Count == 1 ? "it" : "them")} for {toName}, not {NameOf(from)}. "
+                      + "Transfer it anyway?";
+
+            if (AppDialog.Show(owner, ask, "Transfer transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            {
+                return false;
+            }
         }
 
         if (Apply(new Plan(id, from.Transponder, form.DriverKey, form.CarId, form.Replaces), profiles, cars, undo) is { } refusal)

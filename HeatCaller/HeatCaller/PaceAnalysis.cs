@@ -29,7 +29,9 @@ public static class PaceAnalysis
     ///
     /// Three is the smallest run that cannot be a fluke - one tow, one
     /// lucky line - and short enough that a driver who only completed a
-    /// handful of laps still gets a figure.
+    /// handful of laps still gets a figure. A driver with fewer counted
+    /// laps than this gets no figure at all (0, shown as "-"), not an
+    /// average of whatever they did manage.
     /// </summary>
     public const int Window = 3;
 
@@ -198,9 +200,15 @@ public static class PaceAnalysis
             return 0;
         }
 
+        // Fewer laps than the window is no run at all. This used to return
+        // the plain average of the one or two laps there were, which then
+        // printed under "Best 3 in a row" and - being the pace table's sort
+        // key - put a driver who crashed out after two flying laps at the
+        // top of it. QualifyingCalculator.BestConsecutiveWindow already
+        // says "no window" for the same laps; this now agrees with it.
         if (laps.Count < window)
         {
-            return (long)laps.Average();
+            return 0;
         }
 
         var running = 0L;
@@ -232,14 +240,14 @@ public static class PaceAnalysis
     /// </summary>
     public static long QuickestAverage(List<long> laps, int window)
     {
-        if (laps.Count == 0)
+        // Same rule as the consecutive figure: "Best 3 any" from two laps
+        // used to be a two-lap mean under a three-lap heading.
+        if (laps.Count < window)
         {
             return 0;
         }
 
-        var take = Math.Min(window, laps.Count);
-
-        return (long)laps.OrderBy(l => l).Take(take).Average();
+        return (long)laps.OrderBy(l => l).Take(window).Average();
     }
 
     /// <summary>

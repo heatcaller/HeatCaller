@@ -829,9 +829,21 @@ public sealed class CheckInControl : UserControl
         // Latest, the same inspection Race Control's tech warning goes by -
         // by race day, not calendar date - so the desk and the gate never
         // disagree about whether a car is cleared.
-        var inspection = _tech!.Latest(profile.Transponder, profile.ClassName);
+        var inspection = TechFor(profile);
         return inspection is null ? "-" : inspection.ResultText;
     }
+
+    /// <summary>
+    /// The inspection the desk goes by for a driver: across every class they
+    /// race that runs tech (TechInspectionStore.LatestForDriver), judged
+    /// class by class as Race Control judges a heat. It used to be their
+    /// main class only, so a driver cleared there but not in their second
+    /// class read as cleared here and was then flagged at the start.
+    /// </summary>
+    private TechInspection? TechFor(DriverProfile profile) =>
+        _tech!.LatestForDriver(profile, name =>
+            _raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) is { } raceClass
+            && RaceControlControl.TechIsRunFor(raceClass, _tech!));
 
     public void RefreshAll()
     {
@@ -927,8 +939,8 @@ public sealed class CheckInControl : UserControl
         var needsTech = _tech is not null && _chkNeedsTech.Checked;
 
         return _profiles.All
-            .Where(p => classFilter is null || string.Equals(p.ClassName, classFilter, StringComparison.OrdinalIgnoreCase))
-            .Where(p => !needsTech || _tech!.Latest(p.Transponder, p.ClassName) is not { IsCleared: true })
+            .Where(p => classFilter is null || p.RunsClass(classFilter))
+            .Where(p => !needsTech || TechFor(p) is not { IsCleared: true })
             .ToList();
     }
 
@@ -952,7 +964,7 @@ public sealed class CheckInControl : UserControl
                 if (_tech is not null)
                 {
                     var techCol = _grid.Columns["tech"]!.Index;
-                    var inspection = _tech.Latest(profile.Transponder, profile.ClassName);
+                    var inspection = TechFor(profile);
 
                     _grid.Rows[rowIndex].Cells[techCol].Style.ForeColor = inspection switch
                     {

@@ -54,8 +54,21 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>While the Windows voice test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
     private bool _windowsTestRunning;
 
-    /// <summary>What the Prepare row says while the Windows voice is chosen - and how the page knows it said it.</summary>
-    private const string PrepareNotNeededText = "Not needed with the Windows voice - it speaks each line as it's wanted.";
+    // --- Kokoro: free and natural, on this PC (see KokoroSpeech) ---
+    private readonly RadioButton _rdoKokoro = new ThemedRadioButton();
+    private readonly ComboBox _cmbKokoroVoice = new();
+    private readonly Button _btnTestKokoroVoice = new();
+    private readonly Button _btnDownloadKokoro = new();
+    private readonly Label _lblKokoroStatus = new();
+
+    /// <summary>While the Kokoro test is speaking - as _windowsTestRunning.</summary>
+    private bool _kokoroTestRunning;
+
+    /// <summary>The model download in progress, if one is; its button cancels it.</summary>
+    private CancellationTokenSource? _kokoroDownload;
+
+    /// <summary>What the Prepare row says while a voice on this PC is chosen - and how the page knows it said it.</summary>
+    private const string PrepareNotNeededText = "Not needed with the Windows or Kokoro voice - they speak each line on this PC as it's wanted.";
 
     private readonly TextBox _txtApiKey = new();
     private readonly CheckBox _chkShowApiKey = new ThemedCheckBox();
@@ -179,6 +192,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled (RefitPickers).</summary>
     private (Font Font, int Count, int Width)? _heatCallerVoiceWidth;
     private (Font Font, int Count, int Width)? _windowsVoiceWidth;
+    private (Font Font, int Count, int Width)? _kokoroVoiceWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _modelWidth;
     private (Font Font, int Count, int Width)? _normalizationWidth;
@@ -439,6 +453,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         FitVoicePicker(_cmbHeatCallerVoice, ref _heatCallerVoiceWidth);
         FitVoicePicker(_cmbWindowsVoice, ref _windowsVoiceWidth);
+        FitVoicePicker(_cmbKokoroVoice, ref _kokoroVoiceWidth);
         FitVoicePicker(_cmbVoice, ref _voiceWidth);
 
         Fit(_cmbModel, Math.Max(field, Pieces.PickerWidth(_cmbModel, ref _modelWidth)));
@@ -496,7 +511,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private void RefitPickers()
     {
-        _heatCallerVoiceWidth = _windowsVoiceWidth = _voiceWidth = _savedLinesWidth = null;
+        _heatCallerVoiceWidth = _windowsVoiceWidth = _kokoroVoiceWidth = _voiceWidth = _savedLinesWidth = null;
         SizeFields();
     }
 
@@ -570,6 +585,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         $"speaking with {profile.EffectiveEngine switch
         {
             VoiceEngine.Windows => "the Windows voice",
+            VoiceEngine.Kokoro => $"the Kokoro voice ({KokoroSpeech.Describe(string.IsNullOrWhiteSpace(profile.KokoroVoiceName) ? KokoroSpeech.DefaultVoice : profile.KokoroVoiceName)})",
             VoiceEngine.HeatCaller => $"the HeatCaller voice ({(profile.HeatCallerReady ? profile.HeatCallerVoice : "none chosen")})",
             _ => "ElevenLabs",
         }}"
@@ -851,6 +867,30 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         windows.AddRow("Windows voice:", FieldGrid.Inline(_cmbWindowsVoice, _btnTestWindowsVoice));
 
+        // --- Kokoro: free and natural, on this PC ---
+        //
+        // Between ElevenLabs and Windows on purpose: it sounds far closer to
+        // the first and costs what the second does - nothing. The one catch
+        // is a download, once, which the button beside the voice does.
+        _rdoKokoro.Text = "Kokoro voice - free, natural-sounding, runs on this PC. One download, then no account or internet needed";
+        _rdoKokoro.AutoSize = true;
+
+        _cmbKokoroVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        FillKokoroVoices(current.KokoroVoiceName);
+
+        _btnTestKokoroVoice.Text = "Test Kokoro Voice";
+        _btnTestKokoroVoice.Click += BtnTestKokoroVoice_Click;
+
+        _btnDownloadKokoro.Click += BtnDownloadKokoro_Click;
+        ShowKokoroDownloadButton();
+
+        var kokoro = new FieldGrid();
+
+        kokoro.AddRow("Kokoro voice:", FieldGrid.Inline(_cmbKokoroVoice, _btnTestKokoroVoice, _btnDownloadKokoro));
+
+        _lblKokoroStatus.AutoSize = true;
+        _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
+
         // What the Windows voice can do on this PC, and the last test. A
         // reason or a test failure can run long, so it wraps to the card;
         // two lines are kept for it (BuildLayout) so a longer one does not
@@ -861,8 +901,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         var lblHint = _textSize.Wear(
             new Label
             {
-                Text = "The Windows voice uses the Speed and Playback volume below, and each announcement's own speed. "
-                     + "Audio tags like [excited] are left out for it, and what it says is never kept with the saved ElevenLabs lines. "
+                Text = "The Windows and Kokoro voices use the Speed and Playback volume below, and each announcement's own speed. "
+                     + "Audio tags like [excited] are left out for them, and what they say is never kept with the saved ElevenLabs lines. "
+                     + "While Kokoro isn't downloaded, or can't say a line, the Windows voice says it. "
                      + "The ElevenLabs settings below are kept whichever voice is chosen. "
                      + "With the HeatCaller voice the wording and the voice settings are fixed, and the free Windows voice says anything it can't - "
                      + "a flag call is never silent.",
@@ -876,12 +917,25 @@ public sealed partial class VoiceSettingsControl : UserControl
         _rdoHeatCaller.Checked = current.EffectiveEngine == VoiceEngine.HeatCaller;
         _rdoElevenLabs.Checked = current.EffectiveEngine == VoiceEngine.ElevenLabs;
         _rdoWindows.Checked = current.EffectiveEngine == VoiceEngine.Windows;
+        _rdoKokoro.Checked = current.EffectiveEngine == VoiceEngine.Kokoro;
 
         // Saving is wired by WireAutoSave, with everything else on the page.
         // These only keep the rest of the page in step with the choice.
         _rdoElevenLabs.CheckedChanged += (_, _) => UpdateEngineControls();
         _rdoWindows.CheckedChanged += (_, _) => UpdateEngineControls();
         _chkWindowsStandsIn.CheckedChanged += (_, _) => UpdateEngineControls();
+
+        // Kokoro chosen by hand: the model is loaded now, in the background,
+        // so the first line of the night doesn't wait for it.
+        _rdoKokoro.CheckedChanged += (_, _) =>
+        {
+            UpdateEngineControls();
+
+            if (_rdoKokoro.Checked && !_loadingSettings)
+            {
+                KokoroSpeech.WarmUp();
+            }
+        };
 
         // Chosen, rather than merely kept in step: moving to the HeatCaller
         // voice puts the standard lines back, after asking, because those
@@ -908,12 +962,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(_chkWindowsStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
 
+        card.Add(_rdoKokoro, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(card.Add(kokoro));
+        card.Add(_lblKokoroStatus, gapBelow: UiLayout.SectionGap);
+
         card.Add(_rdoWindows, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(windows));
         card.Add(_lblWindowsVoiceStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblHint, gapBelow: 0);
 
-        return (card, new[] { heatCaller, relay, windows });
+        return (card, new[] { heatCaller, relay, kokoro, windows });
     }
 
     /// <summary>
@@ -952,6 +1010,222 @@ public sealed partial class VoiceSettingsControl : UserControl
         // The picker and its open list are sized to the voices in it
         // (SizeFields), measured afresh the next time the fields are sized.
         _windowsVoiceWidth = null;
+    }
+
+    // --- The Kokoro voice ---------------------------------------------------
+
+    /// <summary>
+    /// The Kokoro voice list: every English voice KokoroSharp ships, with the
+    /// saved one chosen - or the default announcer voice when none is. A saved
+    /// voice this PC doesn't have stays in the list, and chosen, like the
+    /// Windows list; the default speaks for it meanwhile.
+    /// </summary>
+    private void FillKokoroVoices(string? savedName)
+    {
+        var saved = string.IsNullOrWhiteSpace(savedName) ? KokoroSpeech.DefaultVoice : savedName.Trim();
+
+        _cmbKokoroVoice.Items.Clear();
+
+        var selected = -1;
+
+        foreach (var voice in KokoroSpeech.InstalledVoices())
+        {
+            var index = _cmbKokoroVoice.Items.Add(voice);
+
+            if (string.Equals(voice.Name, saved, StringComparison.OrdinalIgnoreCase))
+            {
+                selected = index;
+            }
+        }
+
+        if (selected < 0)
+        {
+            selected = _cmbKokoroVoice.Items.Add(new KokoroVoiceChoice(saved, $"{saved} (not on this PC - {KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)} speaks instead)"));
+        }
+
+        _cmbKokoroVoice.SelectedIndex = selected;
+        _kokoroVoiceWidth = null;
+    }
+
+    /// <summary>The download button: what pressing it would do now, and hidden once there's nothing to download.</summary>
+    private void ShowKokoroDownloadButton()
+    {
+        var downloading = _kokoroDownload is not null;
+
+        _btnDownloadKokoro.Text = downloading ? "Cancel Download" : $"Download ({KokoroSpeech.DownloadSizeText})";
+        _btnDownloadKokoro.Visible = downloading || !KokoroSpeech.IsModelDownloaded;
+    }
+
+    /// <summary>
+    /// Keeps the Kokoro row in step: Test once there is a model to test, the
+    /// download button while there isn't, and a line saying where it stands.
+    /// Part of UpdateEngineControls. Changes nothing that is saved.
+    /// </summary>
+    private void UpdateKokoroControls(bool kokoroChosen)
+    {
+        var downloading = _kokoroDownload is not null;
+        var downloaded = KokoroSpeech.IsModelDownloaded;
+
+        _btnTestKokoroVoice.Enabled = downloaded && !downloading && !_kokoroTestRunning;
+        ShowKokoroDownloadButton();
+
+        // A test or a download owns the line while it runs.
+        if (_kokoroTestRunning || downloading)
+        {
+            return;
+        }
+
+        if (!downloaded)
+        {
+            _lblKokoroStatus.Text = kokoroChosen
+                ? $"Kokoro isn't downloaded on this PC yet - press Download ({KokoroSpeech.DownloadSizeText}, once). Until then the Windows voice speaks."
+                : $"Needs a one-off download ({KokoroSpeech.DownloadSizeText}). After that it works with no internet at all.";
+            _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Warning : AppTheme.TextMuted;
+        }
+        else if (KokoroSpeech.UnavailableReason is { } reason)
+        {
+            _lblKokoroStatus.Text = $"Kokoro can't speak - {reason}.";
+            _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Danger : AppTheme.Warning;
+        }
+        else
+        {
+            _lblKokoroStatus.Text = kokoroChosen
+                ? "Speaking with Kokoro - downloaded and ready on this PC. Nothing is billed, however much the announcer talks."
+                : "Downloaded and ready on this PC.";
+            _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
+        }
+    }
+
+    /// <summary>
+    /// Fetches the Kokoro model once, after asking - it is a big download
+    /// for a track PC on a phone hotspot. Pressed again while it runs, it
+    /// cancels.
+    /// </summary>
+    private async void BtnDownloadKokoro_Click(object? sender, EventArgs e)
+    {
+        if (_kokoroDownload is { } running)
+        {
+            running.Cancel();
+            return;
+        }
+
+        var answer = AppDialog.Show(this,
+            $"Download the Kokoro voice now? It's {KokoroSpeech.DownloadSizeText}, downloaded once and kept on this PC only.\n\n"
+            + "After that Kokoro speaks with no internet and no account, and nothing is ever billed. "
+            + "It runs on this PC's processor - an ordinary laptop says a race line in well under a second.",
+            "Kokoro voice", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes || Gone)
+        {
+            return;
+        }
+
+        using var download = new CancellationTokenSource();
+        _kokoroDownload = download;
+        UpdateEngineControls();
+
+        _lblKokoroStatus.Text = "Downloading Kokoro...";
+        _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
+
+        // Made here, on the UI thread, so each report comes back to it.
+        var progress = new Progress<double>(fraction =>
+        {
+            if (!Gone && _kokoroDownload is not null)
+            {
+                _lblKokoroStatus.Text = $"Downloading Kokoro... {fraction:P0}";
+            }
+        });
+
+        string? outcome = null;
+        Color outcomeColour = AppTheme.Success;
+
+        try
+        {
+            await KokoroSpeech.DownloadModelAsync(progress, download.Token);
+            Status("Kokoro voice downloaded.");
+            outcome = _rdoKokoro.Checked
+                ? "Downloaded - Kokoro is speaking from now on."
+                : "Downloaded. Choose Kokoro above to speak with it.";
+
+            if (_rdoKokoro.Checked)
+            {
+                KokoroSpeech.WarmUp();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = "Download cancelled - nothing was kept. Press Download to start again.";
+            outcomeColour = AppTheme.TextMuted;
+        }
+        catch (Exception ex)
+        {
+            // An async void handler: anything escaping it takes the app down.
+            Status($"Kokoro download failed - {ex.GetType().Name}: {ex.Message}");
+            outcome = $"Download failed: {ex.Message}";
+            outcomeColour = AppTheme.Danger;
+        }
+        finally
+        {
+            _kokoroDownload = null;
+        }
+
+        if (Gone)
+        {
+            return;
+        }
+
+        UpdateEngineControls();
+        _lblKokoroStatus.Text = outcome;
+        _lblKokoroStatus.ForeColor = outcomeColour;
+    }
+
+    /// <summary>
+    /// Speaks a sample in the Kokoro voice picked above, at the Speed and
+    /// Playback volume on screen - saved or not, like every test here. Kokoro
+    /// itself, never the Windows stand-in: a test shows what Kokoro says, or
+    /// why it can't.
+    /// </summary>
+    private async void BtnTestKokoroVoice_Click(object? sender, EventArgs e)
+    {
+        var profile = BuildProfileFromControls();
+        var voice = _cmbKokoroVoice.SelectedItem as KokoroVoiceChoice;
+
+        _kokoroTestRunning = true;
+        _btnTestKokoroVoice.Enabled = false;
+        _lblKokoroStatus.Text = "Speaking a sample with Kokoro... (the first one after starting takes a few seconds to load)";
+        _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
+
+        try
+        {
+            var audio = await KokoroSpeech.RenderAsync(profile, "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!");
+            if (Gone) { return; }
+
+            await PlayTestAudioAsync(audio, profile.Volume);
+            if (Gone) { return; }
+
+            _lblKokoroStatus.Text = $"Done - that was {voice?.Display ?? KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)}.";
+            _lblKokoroStatus.ForeColor = AppTheme.Success;
+        }
+        catch (Exception ex)
+        {
+            // An async void handler: anything escaping it takes the app down.
+            Status($"Kokoro voice test failed - {ex.GetType().Name}: {ex.Message}");
+
+            if (!Gone)
+            {
+                _lblKokoroStatus.Text = $"Test failed: {ex.Message}";
+                _lblKokoroStatus.ForeColor = AppTheme.Danger;
+            }
+        }
+        finally
+        {
+            _kokoroTestRunning = false;
+
+            if (!Gone)
+            {
+                _btnTestKokoroVoice.Enabled = KokoroSpeech.IsModelDownloaded && _kokoroDownload is null;
+            }
+        }
     }
 
     // --- The HeatCaller voice -----------------------------------------------
@@ -1452,6 +1726,10 @@ public sealed partial class VoiceSettingsControl : UserControl
                 case VoiceEngine.Windows:
                     _rdoWindows.Checked = true;
                     break;
+
+                case VoiceEngine.Kokoro:
+                    _rdoKokoro.Checked = true;
+                    break;
             }
 
             return;
@@ -1558,13 +1836,16 @@ public sealed partial class VoiceSettingsControl : UserControl
     {
         var windowsChosen = _rdoWindows.Checked;
         var heatCallerChosen = _rdoHeatCaller.Checked;
+        var kokoroChosen = _rdoKokoro.Checked;
         var reason = WindowsVoice.UnavailableReason;
         var available = reason is null;
 
         // Can't be picked with no Windows voice to speak - unless it already
         // is, so the choice can still be seen and changed.
         _rdoWindows.Enabled = available || windowsChosen;
-        _chkWindowsStandsIn.Enabled = available && !windowsChosen && !heatCallerChosen;
+        _chkWindowsStandsIn.Enabled = available && !windowsChosen && !heatCallerChosen && !kokoroChosen;
+
+        UpdateKokoroControls(kokoroChosen);
         _cmbWindowsVoice.Enabled = available;
         _btnTestWindowsVoice.Enabled = available && !_windowsTestRunning;
 
@@ -1584,7 +1865,9 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // out is what the line says - not that ElevenLabs is fine.
                 _lblWindowsVoiceStatus.Text = windowsChosen
                     ? $"No Windows voice can speak on this PC - {reason}. Choose ElevenLabs above to speak with it instead."
-                    : $"No Windows voice can speak on this PC - {reason}. ElevenLabs works as normal.";
+                    : kokoroChosen
+                        ? $"No Windows voice can speak on this PC - {reason}. Kokoro works as normal, but nothing can stand in for a line it can't say."
+                        : $"No Windows voice can speak on this PC - {reason}. ElevenLabs works as normal.";
 
                 // Red only when nothing can speak because of it.
                 _lblWindowsVoiceStatus.ForeColor = windowsChosen ? AppTheme.Danger : AppTheme.Warning;
@@ -1603,6 +1886,8 @@ public sealed partial class VoiceSettingsControl : UserControl
                     ? elevenLabsSetUp
                         ? $"Speaking with the Windows voice - {count} on this PC. ElevenLabs is set up below too: choose it above to use it."
                         : $"Speaking with the Windows voice - {count} on this PC."
+                    : kokoroChosen
+                        ? $"Speaking with Kokoro, with the Windows voice standing by for any line it can't say - {count} on this PC."
                     : _chkWindowsStandsIn.Checked
                         ? $"Speaking with ElevenLabs, with the Windows voice standing by - {count} on this PC."
                         : $"Speaking with ElevenLabs. A line it can't speak is skipped - {count} on this PC.";
@@ -1614,9 +1899,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Prepare Lines renders through whichever voice is chosen - it is
         // the cheapest thing a club on the HeatCaller voice can do, because
         // the relay keeps one copy of every fixed line for every club - so
-        // only the Windows voice has nothing for it to do. Left alone while
-        // a run is going: that run stops itself before its next line.
-        if (windowsChosen)
+        // only the Windows and Kokoro voices have nothing for it to do. Left
+        // alone while a run is going: that run stops itself before its next
+        // line.
+        if (windowsChosen || kokoroChosen)
         {
             if (_prepareCancel is null)
             {
@@ -1696,7 +1982,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private void RestorePrepareButton()
     {
-        if (_rdoWindows.Checked)
+        if (_rdoWindows.Checked || _rdoKokoro.Checked)
         {
             _btnPrepareLines.Enabled = false;
             _lblPrepareProgress.Text = PrepareNotNeededText;
@@ -2206,10 +2492,11 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // The button is disabled with the Windows voice chosen; this is for
         // the moment between choosing it and the page catching up.
-        if (saved.EffectiveEngine == VoiceEngine.Windows)
+        if (saved.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
         {
             AppDialog.Show(this,
-                "Prepare Lines renders lines in your ElevenLabs voice. With the Windows voice chosen at the top of the page, "
+                "Prepare Lines renders lines in your ElevenLabs voice. With the "
+                + (saved.EffectiveEngine == VoiceEngine.Kokoro ? "Kokoro" : "Windows") + " voice chosen at the top of the page, "
                 + "every line is spoken as it's needed, so there is nothing to prepare.",
                 "Not needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
@@ -2694,8 +2981,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             // here, so leaving one out would reset it on the next save.
             Engine = _rdoHeatCaller.Checked ? VoiceEngine.HeatCaller
                 : _rdoWindows.Checked ? VoiceEngine.Windows
+                : _rdoKokoro.Checked ? VoiceEngine.Kokoro
                 : VoiceEngine.ElevenLabs,
             WindowsVoiceName = (_cmbWindowsVoice.SelectedItem as WindowsVoiceChoice)?.Name ?? _original.WindowsVoiceName,
+            KokoroVoiceName = (_cmbKokoroVoice.SelectedItem as KokoroVoiceChoice)?.Name ?? _original.KokoroVoiceName,
             WindowsVoiceStandsIn = _chkWindowsStandsIn.Checked,
 
             // The HeatCaller voice: the club's choice, and the relay's
@@ -2809,9 +3098,23 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Built from the controls, so unsaved edits are what gets spoken -
         // the voice chosen at the top of the page included.
         var profile = BuildProfileFromControls();
-        var windows = profile.EffectiveEngine == VoiceEngine.Windows;
+        var kokoro = profile.EffectiveEngine == VoiceEngine.Kokoro;
 
-        if (windows)
+        // "On this PC" for everything below that isn't ElevenLabs: Kokoro's
+        // test is Kokoro itself, never the stand-in, so a test shows what
+        // Kokoro says - or why it can't.
+        var windows = profile.EffectiveEngine == VoiceEngine.Windows || kokoro;
+
+        if (kokoro)
+        {
+            if (KokoroSpeech.UnavailableReason is { } unavailable)
+            {
+                _lblTestStatus.Text = $"Kokoro can't speak yet - {unavailable}.";
+                _lblTestStatus.ForeColor = AppTheme.Danger;
+                return;
+            }
+        }
+        else if (windows)
         {
             if (WindowsVoice.UnavailableReason is { } unavailable)
             {
@@ -2879,7 +3182,13 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             byte[] audio;
 
-            if (windows)
+            if (kokoro)
+            {
+                // Kokoro, as a race would use it - and, like the Windows
+                // voice, nothing saved and nothing held for the race let go.
+                audio = await KokoroSpeech.RenderAsync(testProfile, spoken);
+            }
+            else if (windows)
             {
                 // The Windows voice, as a race would use it. Nothing is saved
                 // and nothing held for the race is let go - there is no

@@ -302,7 +302,13 @@ public static partial class AchievementEvaluator
             EvaluateHomeAndGarage(entry, record, pool, context, Award, practice: true);
         }
 
-        store.Save();
+        // Not announced unless kept, as for a race (EvaluateFinishedRace): a
+        // badge whose save failed was called over the PA and then called
+        // again after every practice, because the file never held it.
+        if (!store.Save())
+        {
+            return new List<AchievementUnlock>();
+        }
 
         return unlocks
             .OrderByDescending(unlock => (int)unlock.Badge.Tier)

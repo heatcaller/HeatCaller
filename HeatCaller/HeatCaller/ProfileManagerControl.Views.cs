@@ -252,14 +252,15 @@ public sealed partial class ProfileManagerControl
             chips.Add(new Chip("#" + profile.RaceNumber.Trim(), AppTheme.Accent, AppTheme.OnAccent));
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.ClassName))
+        // A chip for every class they race, the main one first.
+        foreach (var className in profile.AllClasses)
         {
             var raceClass = _classStore.All.FirstOrDefault(cls =>
-                string.Equals(cls.Name, profile.ClassName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(cls.Name, className, StringComparison.OrdinalIgnoreCase));
 
             // A class colour is the club's own, not a theme fill, so it
             // keeps the white text it has everywhere else in the app.
-            chips.Add(new Chip(profile.ClassName, raceClass?.Colour ?? RaceClass.DefaultColourFor(profile.ClassName), Color.White));
+            chips.Add(new Chip(className, raceClass?.Colour ?? RaceClass.DefaultColourFor(className), Color.White));
         }
 
         var stats = _sources?.History is null ? null : _statsCache.GetValueOrDefault(profile.Transponder);

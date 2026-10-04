@@ -274,10 +274,10 @@ public sealed partial class RaceControlControl
 
         _ = Task.Run(async () =>
         {
-            // The writing and rendering of the interview and the sign-off:
-            // stopped with the next race, and also once the sequence has
-            // given up on them, so nothing goes on costing characters or
-            // holding the local model after it is over.
+            // The writing and rendering of the recap, the interview and the
+            // sign-off: stopped with the next race, and also once the
+            // sequence has given up on them, so nothing goes on costing
+            // characters or holding the local model after it is over.
             using var followOnWork = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
 
             // Whether this sequence raised the recap's deep duck and has yet
@@ -321,9 +321,32 @@ public sealed partial class RaceControlControl
                 // Everything below - the finish call, the pause, the teaser -
                 // is time the recap can be generating in, and it used to sit
                 // idle through all of it.
+                //
+                // On followOnWork, like the interview and the sign-off. It
+                // used to run on no token at all, so a recap the sequence had
+                // dropped for the next race went on generating in the local
+                // model for up to a minute - and the next heat's round intro,
+                // queued behind it, ran out of time and was logged as the
+                // model being slow. Nothing cancels followOnWork until the
+                // recap has been awaited, except the next race or the
+                // sequence giving up.
                 var generation = commentaryAvailable
-                    ? _commentary!.BuildRaceSummaryAsync(record, championship, plan?.Context)
+                    ? _commentary!.BuildRaceSummaryAsync(record, championship, plan?.Context, followOnWork.Token)
                     : null;
+
+                // A recap that was written but never spoken is not "the last
+                // race summary". It used to be kept as one regardless, and
+                // during the next heat the Announcer page offered to repeat
+                // over the PA a recap the club had never heard. Waits for the
+                // writing to finish, since it may still be on its way out.
+                void ForgetUnheardRecap()
+                {
+                    generation?.ContinueWith(
+                        written => _commentary!.ForgetRaceSummary(written.Result),
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnRanToCompletion,
+                        TaskScheduler.Default);
+                }
 
                 if (generation is not null)
                 {
@@ -407,13 +430,14 @@ public sealed partial class RaceControlControl
                             // Voice not configured, muted, or the render failed -
                             // the teaser still speaks, just with the round trip
                             // in front of it.
-                            _announcer.SpeakReminder(teaser);
+                            _announcer.SpeakReminder(teaser, showOnScreens: true);
                         }
                     }, nextRace.Token);
 
                     if (!teaserQueued)
                     {
                         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Teaser and recap dropped - the next race was called to the grid.");
+                        ForgetUnheardRecap();
                         return;
                     }
 
@@ -460,10 +484,12 @@ public sealed partial class RaceControlControl
                 if (recap.Spoken is null)
                 {
                     // Silence was the only symptom before: the recap simply
-                    // never arrived and nothing said why.
-                    StatusMessage?.Invoke(
-                        $"{AppTime.LogStampNow()}  [commentary] No recap after {tookSeconds:0.0}s - the model returned nothing. "
-                        + "Any [llm] line above says whether it timed out, refused, or wasn't reachable.");
+                    // never arrived and nothing said why. Called off by the
+                    // next race is said as such, not blamed on the model.
+                    StatusMessage?.Invoke(nextRace.IsCancellationRequested
+                        ? $"{AppTime.LogStampNow()}  [commentary] Recap called off after {tookSeconds:0.0}s - the next race was called to the grid before it was written."
+                        : $"{AppTime.LogStampNow()}  [commentary] No recap after {tookSeconds:0.0}s - the model returned nothing. "
+                          + "Any [llm] line above says whether it timed out, refused, or wasn't reachable.");
 
                     // The end is signalled in the finally below, once the
                     // teaser has actually been spoken.
@@ -507,7 +533,7 @@ public sealed partial class RaceControlControl
                     {
                         // Render failed, or voice isn't configured - the recap
                         // still speaks, just with the round trip in front of it.
-                        _announcer.SpeakReminder(recap.Spoken, delivery);
+                        _announcer.SpeakReminder(recap.Spoken, delivery, showOnScreens: true);
                     }
                 }, nextRace.Token);
 
@@ -516,6 +542,7 @@ public sealed partial class RaceControlControl
                     StatusMessage?.Invoke(
                         $"{AppTime.LogStampNow()}  [commentary] Recap dropped - the next race was called to the grid before it was ready "
                         + $"(it took {tookSeconds:0.0}s to write and render).");
+                    ForgetUnheardRecap();
                     return;
                 }
 
@@ -725,6 +752,7 @@ public sealed partial class RaceControlControl
     {
         VoiceEngine.Windows => "the Windows voice",
         VoiceEngine.HeatCaller => "the HeatCaller voice",
+        VoiceEngine.Kokoro => "the Kokoro voice",
         _ => "ElevenLabs",
     };
 
@@ -1077,7 +1105,7 @@ public sealed partial class RaceControlControl
         }
         else
         {
-            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice);
+            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice, showOnScreens: true);
         }
     }
 
@@ -1397,8 +1425,14 @@ public sealed partial class RaceControlControl
             SignalSessionAudioFinishedAfterFinishCall();
 
             // Finished, and nothing to save - a ghost-only race's journal
-            // was left behind and offered back on the next launch.
-            _journal.Clear();
+            // was left behind and offered back on the next launch. Not while
+            // an earlier race is still unfiled, though: the journal is then
+            // that race's only copy on disk, as at the other clears here.
+            if (_unfiledRaces.Count == 0)
+            {
+                _journal.Clear();
+            }
+
             return;
         }
 
@@ -1617,6 +1651,14 @@ public sealed partial class RaceControlControl
     /// UI thread only, like everything else in the filing.
     /// </summary>
     private readonly List<UnfiledRace> _unfiledRaces = new();
+
+    /// <summary>
+    /// Whether a finished race is still waiting to get into the race
+    /// history - and so its crash journal is its only copy on disk, which
+    /// nothing may clear. Asked by the Practice page before it clears the
+    /// journal on Stop (PracticeModeControl.HasUnfiledRaces).
+    /// </summary>
+    public bool HasUnfiledRaces => _unfiledRaces.Count > 0;
 
     /// <summary>The session generation FileUnfiledRaces was last tried for from WriteJournal - once per race is enough.</summary>
     private int _unfiledRetryGeneration = -1;

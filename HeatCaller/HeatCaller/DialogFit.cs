@@ -270,7 +270,16 @@ internal static class DialogFit
     /// panel can be any size. Call it with the client on screen, as the
     /// dialog counts as shown when it is sized (see the class notes).
     /// </summary>
-    internal static Size FitForLayoutCheck(Form dialog, Control client, Rectangle area)
+    internal static Size FitForLayoutCheck(Form dialog, Control client, Rectangle area) =>
+        FitForLayoutCheck(dialog, client, area, out _);
+
+    /// <summary>
+    /// As above, and whether the dialog had to scroll on that screen: its
+    /// page needs more height than the screen leaves it (DialogFit's
+    /// deliberate fallback), so anything at its foot - the buttons - opens
+    /// out of sight.
+    /// </summary>
+    internal static Size FitForLayoutCheck(Form dialog, Control client, Rectangle area, out bool scrolls)
     {
         if (!Fittings.TryGetValue(dialog, out var fitting))
         {
@@ -291,7 +300,8 @@ internal static class DialogFit
         dialog.ClientSize = inside;
         var frame = dialog.Size - inside;
 
-        SizeClient(client, fitting, Most(area, frame));
+        var (_, least) = SizeClient(client, fitting, Most(area, frame));
+        scrolls = least > client.ClientSize.Height;
         LetGo(fitting.Page);
 
         return client.Size + frame;

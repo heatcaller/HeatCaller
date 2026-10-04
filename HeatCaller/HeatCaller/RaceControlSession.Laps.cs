@@ -38,6 +38,21 @@ public sealed partial class RaceControlSession
     private DirectLapEvent ResolveAlternateTransponder(DirectLapEvent lap)
     {
         var id = lap.TransponderId;
+
+        // Already being filed under a driver this race: under that driver for
+        // the rest of it, whoever the transponder belongs to now. Only
+        // WHETHER it was merged used to be kept; WHO it was merged into was
+        // looked up afresh on every pass, so a transponder transferred to
+        // another driver mid-heat moved its laps into that driver's row from
+        // then on - someone not even on track - and one that stopped being
+        // an alternate split the driver's laps into a second row halfway.
+        if (_alternateMerged.TryGetValue(id, out var decidedMerge) && decidedMerge
+            && _heardAsByRow.FirstOrDefault(row => string.Equals(row.Value, id, StringComparison.OrdinalIgnoreCase)).Key is { Length: > 0 } mergedInto)
+        {
+            _heardThisRace.Add(id);
+            return lap.WithTransponder(mergedInto);
+        }
+
         var primary = AlternateTransponderOwner?.Invoke(id);
 
         if (string.IsNullOrWhiteSpace(primary))
@@ -160,6 +175,20 @@ public sealed partial class RaceControlSession
             return;
         }
 
+        // Under a red, a car still waiting for its own release keeps its run
+        // of sightings going, silently, as it does between races. Its run is
+        // the only thing that says it is parked on the loop rather than
+        // moving. A red stopped the count, the run aged past the repeat gap
+        // while the red lasted, and the car's first sighting after it was
+        // booked as a jump start - penalty, call and red row - for a car that
+        // had never moved.
+        if (State == RaceState.Racing && Flag == FlagState.Red && _raceStartDeviceTimeMs is not null
+            && !lap.IsSynthetic && !IsReleased(lap.TransponderId))
+        {
+            CountSightingInARow(lap.TransponderId, lap.DeviceTimeMs);
+            return;
+        }
+
         if (State != RaceState.Racing || Flag == FlagState.Red || _raceStartDeviceTimeMs is null)
         {
             return; // not actively racing - ignore passes
@@ -222,9 +251,9 @@ public sealed partial class RaceControlSession
             // real field was still on its way to the line would otherwise
             // keep it, and be the lap every real one was measured against,
             // until somebody beat it.
-            if (!GhostService.IsGhost(lap.TransponderId)
-                && GhostService.IsGhost(_raceFastestLapTransponder)
-                && _standings.Keys.All(k => GhostService.IsGhost(k)))
+            if (!Ghosts.IsGhost(lap.TransponderId)
+                && Ghosts.IsGhost(_raceFastestLapTransponder)
+                && _standings.Keys.All(k => Ghosts.IsGhost(k)))
             {
                 _raceFastestLapMs = 0;
                 _raceFastestLapTransponder = string.Empty;
@@ -518,8 +547,8 @@ public sealed partial class RaceControlSession
         // Only when there IS a real field. A race of nothing but ghosts has
         // no real race to protect, and left to this rule it could never
         // reach its lap limit at all.
-        var realCarsRacing = _standings.Keys.Any(k => !GhostService.IsGhost(k));
-        var isGhost = realCarsRacing && GhostService.IsGhost(standing.TransponderId);
+        var realCarsRacing = _standings.Keys.Any(k => !Ghosts.IsGhost(k));
+        var isGhost = realCarsRacing && Ghosts.IsGhost(standing.TransponderId);
 
         if (isValid)
         {
@@ -569,7 +598,14 @@ public sealed partial class RaceControlSession
             //
             // Still counted as a lap and still in LapTimesMs - lap counts and
             // gaps depend on it - but it never competes for best lap.
-            var isStartLap = standing.LapTimesMs.Count == 0;
+            //
+            // A start lap credited at the green to a car past the line (a
+            // jump start) is a zero; the crossing after it runs from wherever
+            // the car crossed before the green - perhaps being set on its
+            // grid slot - so that one is the start lap in effect, and does not
+            // compete either. See RacerStanding.StartLapCredited.
+            var isStartLap = standing.LapTimesMs.Count == 0
+                             || (standing.StartLapCredited && standing.LapTimesMs.Count == 1);
 
             // The first lap after a crash recovery is not a timed lap either:
             // it runs through the stoppage. See where it is worked out above.

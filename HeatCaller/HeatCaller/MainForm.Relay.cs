@@ -1099,6 +1099,27 @@ public partial class MainForm
             _lastRelayDocuments.Remove(RelayChannel.Manage);
             _lastRelayDocuments.Remove(RelayChannel.Signup);
             _lastRelayRoster = string.Empty;
+
+            // Standings and the results index were left out, and both change
+            // only when a session is saved or a championship edited - weeks,
+            // between meetings. After a relay redeploy the rest came back
+            // within ten minutes and the standings page and the whole
+            // archive stayed empty. Standings are rebuilt on the throttled
+            // pass anyway, so forgetting them costs one send. The index is
+            // sent again for every year sent this run, and this year's
+            // whatever happened - not every year of history, which is the
+            // burst RepublishRecentResults was written to avoid.
+            _lastRelayDocuments.Remove(RelayChannel.Standings);
+
+            var years = new HashSet<string>(_relayIndexSent.Keys, StringComparer.Ordinal)
+            {
+                DateTime.Now.Year.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
+            };
+
+            foreach (var year in years)
+            {
+                PublishResultsIndexForYear(year);
+            }
         }
 
         var abbreviate = _settings.RelayAbbreviateNames;
@@ -1206,8 +1227,18 @@ public partial class MainForm
 
             // Saved, not All: a race whose filing failed was never sent by
             // SessionAdded, and is not to be sent this way either.
+            //
+            // A session corrected in that time counts as recent too, however
+            // long ago it was raced, and so does one whose correction could
+            // not be sent at all. A correction goes once, from the same
+            // queue in memory, and a race only 36 hours old was the whole
+            // test - so Saturday's heat corrected on Monday with the relay
+            // asleep, the laptop then shut, was never sent again, and the
+            // relay served the uncorrected result for good.
             var sent = _sessionHistory.Saved
-                .Where(s => (s.EndedAtUtc > s.StartedAtUtc ? s.EndedAtUtc : s.StartedAtUtc) >= since)
+                .Where(s => (s.EndedAtUtc > s.StartedAtUtc ? s.EndedAtUtc : s.StartedAtUtc) >= since
+                    || (s.Edits is { } edits && edits.Any(e => e.AtUtc >= since))
+                    || _relayPublisher.ResultIsOwed(s.Id))
 
                 // Oldest first, so they land in the order they were raced.
                 .OrderBy(RelayResultsIndex.EffectiveStart)
@@ -1301,8 +1332,15 @@ public partial class MainForm
             // Saved, not All: a race Add could not write would otherwise
             // change the year's ids and send an index listing a result the
             // relay was never given - see SessionHistoryStore.Saved.
+            //
+            // And only those the relay holds, as the index itself lists. A
+            // result re-sent from a phone (results.publish) or sent again
+            // once publishing is back on changes the year's index without
+            // changing its ids, and nothing else republished it - the
+            // re-sent result could not be found from the archive.
             var now = _sessionHistory.Saved
                 .Where(s => !s.IsDemoSession())
+                .Where(s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)))
                 .GroupBy(s => RelayResultsIndex.YearOf(s), StringComparer.Ordinal)
                 .ToDictionary(
                     g => g.Key,
@@ -1380,7 +1418,13 @@ public partial class MainForm
                 // meeting's own name is the fallback for a one-off.
                 roundId => SeasonLabelFor(roundId),
                 _settings.RelayAbbreviateNames,
-                _settings.RelayResultsFromUtc);
+
+                // What the relay was given, not merely everything since the
+                // first session it was given: one raced while publishing
+                // was unticked sat inside that window, and the archive
+                // offered it with no result behind it.
+                from: null,
+                onRelay: s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)));
 
             if (onlyIfChanged && _relayIndexSent.TryGetValue(year, out var last) && last == json)
             {
@@ -1498,7 +1542,12 @@ public partial class MainForm
             // session is DateTime.MinValue, which PublishResult's window
             // ignores, so the index then left out a session whose result
             // the relay had been given.
-            _relayPublisher.PublishResult(session.Id, document, RelayResultsIndex.EffectiveStart(session));
+            //
+            // Whether it has been corrected, so a correction that cannot go
+            // is remembered as owed rather than the session dropped from
+            // the index - the relay still holds the copy from before.
+            _relayPublisher.PublishResult(
+                session.Id, document, RelayResultsIndex.EffectiveStart(session), correction: session.Edits is { Count: > 0 });
         }
         catch (Exception ex)
         {

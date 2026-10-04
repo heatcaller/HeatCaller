@@ -1067,11 +1067,11 @@ public sealed class ThemesControl : UserControl
             return;
         }
 
-        if (voice.EffectiveEngine == VoiceEngine.Windows)
+        if (voice.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
         {
             AppDialog.Show(this,
                 "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. "
-                + "This PC speaks with the Windows voice, which already says these lines for free. "
+                + $"This PC speaks with the {(voice.EffectiveEngine == VoiceEngine.Kokoro ? "Kokoro" : "Windows")} voice, which already says these lines for free. "
                 + "Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing.",
                 "Voice lines", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;

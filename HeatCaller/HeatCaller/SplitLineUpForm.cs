@@ -1,86 +1,6 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Pairs the line's passes with the split loop's for Line Up: with both
-/// loops at the same spot, one car crossing is read by both, and the gap
-/// between the two readings is how late the split loop reads (its decoder's
-/// own delay, the serial line's, and whatever the clock tie leaves).
-///
-/// A pass is paired with the other loop's nearest unpaired pass by the same
-/// driver within <see cref="Window"/>, whichever arrives first. The answer
-/// is the median gap, so one odd reading can't move it.
-/// </summary>
-public sealed class LineUpPairing
-{
-    /// <summary>The furthest apart the two readings of one crossing can be.</summary>
-    public const long Window = 1500;
-
-    /// <summary>Gaps needed before there is an answer.</summary>
-    public const int Least = 3;
-
-    private readonly List<(string Driver, long Ms)> _line = new();
-    private readonly List<(string Driver, long Ms)> _split = new();
-    private readonly List<(string Driver, long GapMs)> _gaps = new();
-
-    /// <summary>Every gap found so far, oldest first: positive when the split loop read the car later than the line.</summary>
-    public IReadOnlyList<(string Driver, long GapMs)> Gaps => _gaps;
-
-    /// <summary>The median gap, rounded to a millisecond, or null with fewer than <see cref="Least"/>.</summary>
-    public int? Answer
-    {
-        get
-        {
-            if (_gaps.Count < Least)
-            {
-                return null;
-            }
-
-            var sorted = _gaps.Select(g => g.GapMs).OrderBy(ms => ms).ToList();
-            var middle = sorted.Count / 2;
-
-            var median = sorted.Count % 2 == 1
-                ? sorted[middle]
-                : (sorted[middle - 1] + sorted[middle]) / 2.0;
-
-            return (int)Math.Round((double)median, MidpointRounding.AwayFromZero);
-        }
-    }
-
-    /// <summary>A line pass by this driver at this time on the line's clock. Returns the gap when it paired.</summary>
-    public long? AddLine(string driver, long lineMs) => Add(driver, lineMs, isLine: true);
-
-    /// <summary>A split pass by this driver at this time on the line's clock (before calibration). Returns the gap when it paired.</summary>
-    public long? AddSplit(string driver, long lineMs) => Add(driver, lineMs, isLine: false);
-
-    private long? Add(string driver, long ms, bool isLine)
-    {
-        var mine = isLine ? _line : _split;
-        var theirs = isLine ? _split : _line;
-
-        // Forget what is too old to pair with anything any more.
-        theirs.RemoveAll(p => Math.Abs(ms - p.Ms) > Window * 4);
-
-        var match = theirs
-            .Where(p => string.Equals(p.Driver, driver, StringComparison.OrdinalIgnoreCase) && Math.Abs(ms - p.Ms) <= Window)
-            .OrderBy(p => Math.Abs(ms - p.Ms))
-            .Select(p => ((string Driver, long Ms)?)p)
-            .FirstOrDefault();
-
-        if (match is not { } other)
-        {
-            mine.Add((driver, ms));
-            return null;
-        }
-
-        theirs.Remove(other);
-
-        var gap = isLine ? other.Ms - ms : ms - other.Ms;
-        _gaps.Add((driver, gap));
-        return gap;
-    }
-}
-
-/// <summary>
 /// Line Up, from the Connection page: measures how much later the split
 /// loop reads a car than the line, so split times can be corrected for it.
 ///
@@ -93,8 +13,15 @@ public sealed class LineUpPairing
 /// </summary>
 public sealed class SplitLineUpForm : Form
 {
-    private const int DialogWidth = 520;
-    private const int DialogHeight = 420;
+    // Wide enough that Save, Set to Zero and Cancel stay on ONE line at the
+    // normal text size: at 520 the three ran out of room, the bar wrapped,
+    // and Save - added last, so furthest left - went onto a second row below
+    // the fold, where a race director lining the loop up never found it.
+    // Tall enough that the intro, the list and the answer do not push the
+    // buttons out of view either. Held to this at every text size by the
+    // layout test, now that the window is on LayoutAudit.ConvertedWindows.
+    private const int DialogWidth = 620;
+    private const int DialogHeight = 480;
 
     private readonly SplitLoop _splitLoop;
     private readonly ProfileStore _profiles;
@@ -241,6 +168,12 @@ public sealed class SplitLineUpForm : Form
             _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far. The split loop reads {answer} ms "
                               + $"{(answer >= 0 ? "late" : "early")} - click Save to keep it.";
             _btnSave.Enabled = true;
+        }
+        else if (count >= LineUpPairing.Least)
+        {
+            // Enough of them, but they don't agree - a car read twice, or
+            // one crossing that only one loop saw cleanly. More settle it.
+            _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far, but they don't agree yet - drive across a few more times.";
         }
         else
         {

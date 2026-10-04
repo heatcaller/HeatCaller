@@ -274,6 +274,37 @@ public static class ResultEditor
         record.Edits = data.Edits ?? new List<ResultEdit>();
     }
 
+    /// <summary>
+    /// The result in this session whose best lap, as raced, is the record
+    /// standing on <paramref name="track"/> - and which a correction has
+    /// since taken off it. Null when there is none.
+    ///
+    /// Taking a phantom crossing off makes the best lap slower (see
+    /// RebuildLapTimes), and the record that crossing set used to be left
+    /// on the layout: an all-time record from a lap that no longer exists
+    /// anywhere in the history, which no real lap could ever beat, shown on
+    /// Track Layouts and the results site while Personal Bests disagreed.
+    /// A layout keeps no earlier record to fall back to, so this cannot put
+    /// it right by itself - it is for whoever saves the correction to say
+    /// so, and offer to clear it. Matched as RaceDayDeleter matches a
+    /// record to a race: the layout, the time and the holder's name.
+    /// </summary>
+    public static SessionResultEntry? RecordLapTakenOff(SessionRecord record, TrackLayout track)
+    {
+        if (track.RecordLapMs <= 0
+            || (!string.IsNullOrWhiteSpace(record.TrackLayoutName)
+                && !string.Equals(record.TrackLayoutName.Trim(), track.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return record.Results.FirstOrDefault(e =>
+            e.AsRaced is { FastLapMs: > 0 } raced
+            && raced.FastLapMs == track.RecordLapMs
+            && e.FastLapMs != track.RecordLapMs
+            && string.Equals((e.DriverName ?? string.Empty).Trim(), (track.RecordHolderName ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>"DNF", "DQ", or "finished".</summary>
     public static string OutcomeText(string? outcome) =>
         string.IsNullOrEmpty(outcome) ? "finished" : outcome;

@@ -100,6 +100,10 @@ public sealed class RelayPublisher : IDisposable
     private readonly object _gate = new();
     private readonly Dictionary<string, Pending> _snapshots = new(StringComparer.Ordinal);
     private readonly Queue<Pending> _results = new();
+
+    /// <summary>The exceptions to RelayResultsFromUtc. Read and written under its own lock. See RelayResultsIndex.Ledger.</summary>
+    private readonly RelayResultsIndex.Ledger _ledger = RelayResultsIndex.Ledger.Load();
+    private readonly object _ledgerGate = new();
     private readonly ManualResetEventSlim _wake = new(false);
     private readonly CancellationTokenSource _stopping = new();
     private readonly Thread _worker;
@@ -819,6 +823,7 @@ public sealed class RelayPublisher : IDisposable
             // ever held.
             _settings.RelayResultsFromUtc = null;
             _settings.Save();
+            ForgetLedger();
         }
 
         // A lockout said by the relay or club this laptop may just have
@@ -895,7 +900,8 @@ public sealed class RelayPublisher : IDisposable
 
     /// <summary>Queues one finished session's results. These are never dropped for being superseded.</summary>
     /// <param name="startedUtc">When that session was raced, so the results index knows how far back the relay has been given. See NoteResultsWindow.</param>
-    public void PublishResult(string sessionId, string json, DateTime startedUtc)
+    /// <param name="correction">The session has been corrected since it was saved. See RelayResultsIndex.Ledger.NoteWithheld.</param>
+    public void PublishResult(string sessionId, string json, DateTime startedUtc, bool correction = false)
     {
         var id = SafeItemId(sessionId);
 
@@ -904,12 +910,33 @@ public sealed class RelayPublisher : IDisposable
             return;
         }
 
-        NoteResultsWindow(startedUtc);
-        Enqueue("results", id, json);
+        NoteResultsWindow(sessionId, startedUtc, Enqueue("results", id, json), correction);
     }
 
     /// <summary>
-    /// Widens the window the results index covers to take in this session.
+    /// Whether the relay was given this session's result, for the results
+    /// index: inside the window and not withheld from it, or sent since
+    /// from before it. See RelayResultsIndex.Ledger.
+    /// </summary>
+    internal bool ResultIsOnRelay(string sessionId, DateTime startedUtc)
+    {
+        lock (_ledgerGate)
+        {
+            return _ledger.Listed(sessionId, startedUtc, _settings.RelayResultsFromUtc);
+        }
+    }
+
+    /// <summary>Whether a correction to this session could not be sent, so the relay still has the old result. See RelayResultsIndex.Ledger.Owed.</summary>
+    internal bool ResultIsOwed(string sessionId)
+    {
+        lock (_ledgerGate)
+        {
+            return _ledger.Owed.Contains(sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Records whether this session's result went, for the results index.
     ///
     /// HERE rather than at the call site, because here is where it is known
     /// whether the session is going anywhere at all. Enqueue drops silently
@@ -920,25 +947,69 @@ public sealed class RelayPublisher : IDisposable
     /// every past race night, each full of "that result is not on the relay
     /// any more".
     ///
-    /// Only ever moves backwards. Re-sending an older session widens the
-    /// window; nothing narrows it but leaving this relay behind, or the
-    /// club's published data being deleted - see SettingsChanged and
-    /// DeletePublishedAsync, which both clear it.
+    /// The window opens at the first session sent and is never moved after
+    /// that; what does not fit it is kept in the ledger instead. It used to
+    /// be widened back to any older session re-sent, which claimed every
+    /// session in between, and nothing recorded one withheld inside it -
+    /// publishing unticked for a few weeks and ticked again put those weeks
+    /// in the archive with no results behind them. Nothing clears either
+    /// but leaving this relay behind, or the club's published data being
+    /// deleted - see SettingsChanged and DeletePublishedAsync.
     /// </summary>
-    private void NoteResultsWindow(DateTime startedUtc)
+    private void NoteResultsWindow(string sessionId, DateTime startedUtc, bool queued, bool correction)
     {
-        if (startedUtc <= DateTime.MinValue || !_settings.RelayEnabled || !IsConfigured())
+        try
         {
-            return;
-        }
+            lock (_ledgerGate)
+            {
+                var from = _settings.RelayResultsFromUtc;
+                bool changed;
 
-        if (_settings.RelayResultsFromUtc is { } from && from <= startedUtc)
+                if (queued)
+                {
+                    var now = _ledger.NoteSent(sessionId, startedUtc, from, out changed);
+
+                    if (now != from)
+                    {
+                        _settings.RelayResultsFromUtc = now;
+                        _settings.Save();
+                    }
+                }
+                else
+                {
+                    changed = _ledger.NoteWithheld(sessionId, startedUtc, from, correction);
+                }
+
+                if (changed)
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
         {
-            return;
+            // Like Enqueue: nothing here may throw into the race path. The
+            // ledger's own write reports itself through SafeFile.
         }
+    }
 
-        _settings.RelayResultsFromUtc = startedUtc;
-        _settings.Save();
+    /// <summary>Clears the ledger with the window it qualifies. Never throws.</summary>
+    private void ForgetLedger()
+    {
+        try
+        {
+            lock (_ledgerGate)
+            {
+                if (_ledger.Clear())
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // As ForgetResultsWindow: cleared in memory, written next time.
+        }
     }
 
     /// <summary>
@@ -1108,6 +1179,8 @@ public sealed class RelayPublisher : IDisposable
             // The file couldn't be written. The window is cleared in memory,
             // and the next save of settings writes it.
         }
+
+        ForgetLedger();
     }
 
     /// <summary>
@@ -1187,13 +1260,14 @@ public sealed class RelayPublisher : IDisposable
     /// <param name="Reissued">Already sent once with a fresh seq after the relay said it held a newer one. See Drain.</param>
     private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false);
 
-    private void Enqueue(string channel, string? itemId, string json)
+    /// <returns>Whether it was queued - false when it was dropped, which PublishResult has to know. See NoteResultsWindow.</returns>
+    private bool Enqueue(string channel, string? itemId, string json)
     {
         try
         {
             if (!_settings.RelayEnabled || !IsConfigured() || string.IsNullOrWhiteSpace(json))
             {
-                return;
+                return false;
             }
 
             if (Encoding.UTF8.GetByteCount(json) > MaxPayloadBytes)
@@ -1205,7 +1279,7 @@ public sealed class RelayPublisher : IDisposable
                 }
 
                 RefreshStatus();
-                return;
+                return false;
             }
 
             lock (_gate)
@@ -1232,12 +1306,14 @@ public sealed class RelayPublisher : IDisposable
             }
 
             _wake.Set();
+            return true;
         }
         catch
         {
             // A publisher that can throw into the race path is a publisher
             // that will eventually stop a race. There is nothing here
             // worth propagating.
+            return false;
         }
     }
 

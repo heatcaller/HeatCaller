@@ -63,6 +63,17 @@ public sealed class TrackLayout
     public List<long>? RecordSectorsMs { get; set; }
 
     /// <summary>
+    /// How the lap was cut (<see cref="CutFor"/>) when RecordSectorsMs were
+    /// taken - where the split loops sat. Null for a record kept before this
+    /// was, which is taken as it always was.
+    ///
+    /// Without it, moving a split loop left "record pace at the split"
+    /// comparing tonight's times to the loop's old place: a loop moved
+    /// nearer the line had every car "up 2.9 seconds on the record pace".
+    /// </summary>
+    public string? RecordSectorCut { get; set; }
+
+    /// <summary>
     /// The length of each sector in feet, from the split loops placed on the
     /// layout's plan and the racing line through them (RcpPlan.MeasureSectors)
     /// - or null without a plan that measures.
@@ -276,8 +287,25 @@ public sealed class TrackLayout
                 continue;
             }
 
-            if (typical is { } usual && usual.Length == sectors.Length && usual[i] > 0
-                && sectors[i] < usual[i] * LeastBelievableSectorShare)
+            var hasUsual = typical is { } known && known.Length == sectors.Length && known[i] > 0;
+
+            if (hasUsual && sectors[i] < typical![i] * LeastBelievableSectorShare)
+            {
+                continue;
+            }
+
+            // Nothing to judge it by at all - no record for this sector yet,
+            // and too few laps through it this session to say what is usual
+            // (Sectors.Typical needs three). Both checks above used to be
+            // skipped then, so a cut's very first sector laps went straight
+            // in: one split heard two seconds early became a 1.00 s record no
+            // real sector could ever beat, kept on the layout for good. With
+            // nothing else to go by, the lap itself is the yardstick: a sector
+            // that is a sliver of its own lap (under a quarter of an even
+            // share) is not taken as a first record. A loop really placed
+            // that close to the line still gets its record a few laps in,
+            // once the usual times are there to judge it by.
+            if (current[i] is null && !hasUsual && sectors[i] < sectors.Sum() / (sectors.Length * 4.0))
             {
                 continue;
             }
@@ -345,6 +373,24 @@ public sealed class TrackLayout
 
     /// <summary>The record lap's sectors, when they still belong to it.</summary>
     public long[]? RecordSectors() => Sectors.Checked(RecordSectorsMs?.ToArray(), RecordLapMs);
+
+    /// <summary>
+    /// The record lap's sectors when they still belong to it AND were taken
+    /// with the split loops where they are now (RecordSectorCut) - or null.
+    /// </summary>
+    public long[]? RecordSectorsAsCutNow(int sectors) =>
+        RecordSectors() is { } record
+        && record.Length == sectors
+        && (RecordSectorCut is null || RecordSectorCut == CutFor(sectors))
+            ? record
+            : null;
+
+    /// <summary>Keeps a record lap's sectors with the cut they were taken with - null clears both.</summary>
+    public void KeepRecordSectors(IReadOnlyList<long>? sectors)
+    {
+        RecordSectorsMs = sectors?.ToList();
+        RecordSectorCut = sectors is { Count: >= 2 } ? CutFor(sectors.Count) : null;
+    }
 
     // Optional reference figures for this track, used by Demo Mode to
     // simulate a realistic pace instead of an arbitrary made-up one.

@@ -223,7 +223,11 @@ public sealed record ClassRenameReceipt(
     IReadOnlyList<string> AlreadyChampionships,
     IReadOnlyList<string> AlreadyInspections,
     IReadOnlyList<string> AlreadyRaceDays,
-    IReadOnlyList<string> AlreadyRunSheetLines);
+    IReadOnlyList<string> AlreadyRunSheetLines,
+    IReadOnlyList<string>? Cars = null,
+    IReadOnlyList<string>? AlreadyCars = null,
+    IReadOnlyList<string>? PinnedRaceDays = null,
+    IReadOnlyList<string>? AlreadyPinnedRaceDays = null);
 
 /// <summary>
 /// Carries a class's new name into everything that holds it as text.
@@ -246,6 +250,12 @@ public sealed record ClassRenameReceipt(
 /// Race days and run sheet lines used to be among those reached through
 /// Renamed, and so were moved back by the undo wholesale - everything
 /// under the new name, including what had carried it all along.
+///
+/// Garage cars and each race day's auto-advance pin were the last two
+/// things a rename left behind: cars stayed under the old name (the Garage
+/// grew a leftover band beside the renamed, empty class) and a day pinned
+/// to the class stopped auto-advancing. Both are moved here now, with the
+/// same before-and-after as the rest.
 /// </summary>
 public sealed class ClassRenameCascade
 {
@@ -255,19 +265,22 @@ public sealed class ClassRenameCascade
     private readonly TechInspectionStore? _techInspections;
     private readonly RaceEventStore? _raceEvents;
     private readonly DayScheduleStore? _daySchedule;
+    private readonly CarStore? _cars;
 
     /// <param name="raceEvents">
     /// The race days. When they are given here, a Renamed handler must not
     /// rename them too: the undo would then move back what this leaves alone.
     /// </param>
     /// <param name="daySchedule">The run sheet lines - the same goes for these.</param>
+    /// <param name="cars">The garage's cars - the same goes for these.</param>
     public ClassRenameCascade(
         ProfileStore profiles,
         RoundDefinitionStore rounds,
         SeasonStore seasons,
         TechInspectionStore? techInspections = null,
         RaceEventStore? raceEvents = null,
-        DayScheduleStore? daySchedule = null)
+        DayScheduleStore? daySchedule = null,
+        CarStore? cars = null)
     {
         _profiles = profiles;
         _rounds = rounds;
@@ -275,6 +288,7 @@ public sealed class ClassRenameCascade
         _techInspections = techInspections;
         _raceEvents = raceEvents;
         _daySchedule = daySchedule;
+        _cars = cars;
     }
 
     /// <summary>
@@ -298,6 +312,8 @@ public sealed class ClassRenameCascade
         var alreadyInspections = caseOnly ? Array.Empty<string>() : _techInspections?.WithClassName(newName) ?? Array.Empty<string>();
         var alreadyRaceDays = caseOnly ? Array.Empty<string>() : _raceEvents?.WithClassName(newName) ?? Array.Empty<string>();
         var alreadyRunSheetLines = caseOnly ? Array.Empty<string>() : _daySchedule?.WithClassName(newName) ?? Array.Empty<string>();
+        var alreadyCars = caseOnly ? Array.Empty<string>() : _cars?.WithClassName(newName) ?? Array.Empty<string>();
+        var alreadyPinned = caseOnly ? Array.Empty<string>() : _raceEvents?.WithPinnedClass(newName) ?? Array.Empty<string>();
 
         var drivers = _profiles.RenameClass(oldName, newName);
         var rounds = _rounds.RenameClass(oldName, newName);
@@ -305,11 +321,14 @@ public sealed class ClassRenameCascade
         var inspections = _techInspections?.RenameClass(oldName, newName) ?? Array.Empty<string>();
         var raceDays = _raceEvents?.RenameClass(oldName, newName) ?? Array.Empty<string>();
         var runSheetLines = _daySchedule?.RenameClass(oldName, newName) ?? Array.Empty<string>();
+        var cars = _cars?.RenameClass(oldName, newName) ?? Array.Empty<string>();
+        var pinned = _raceEvents?.RenamePinnedClass(oldName, newName) ?? Array.Empty<string>();
 
         Renamed?.Invoke(oldName, newName);
 
         return new ClassRenameReceipt(oldName, newName, drivers, rounds, championships, inspections, raceDays, runSheetLines,
-            alreadyDrivers, alreadyRounds, alreadyChampionships, alreadyInspections, alreadyRaceDays, alreadyRunSheetLines);
+            alreadyDrivers, alreadyRounds, alreadyChampionships, alreadyInspections, alreadyRaceDays, alreadyRunSheetLines,
+            cars, alreadyCars, pinned, alreadyPinned);
     }
 
     /// <summary>
@@ -332,6 +351,8 @@ public sealed class ClassRenameCascade
         _techInspections?.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyInspections);
         _raceEvents?.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyRaceDays, receipt.RaceDays);
         _daySchedule?.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyRunSheetLines);
+        _cars?.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyCars ?? Array.Empty<string>());
+        _raceEvents?.UndoRenamePinnedClass(receipt.NewName, receipt.OldName, receipt.AlreadyPinnedRaceDays ?? Array.Empty<string>());
 
         Renamed?.Invoke(receipt.NewName, receipt.OldName);
     }

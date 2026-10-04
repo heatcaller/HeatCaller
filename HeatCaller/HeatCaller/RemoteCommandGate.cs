@@ -1,7 +1,10 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The brake on /api/command - the remote page's race-control buttons.
+/// The brake on /api/command - the remote page's race-control buttons -
+/// and on race.flag through /api/manage, the race-day manager's Race tab,
+/// which reaches the same Trigger methods. One gate for both, so a RED from
+/// each page at once is still one command at a time.
 ///
 /// There was none (25 Sep audit). The check-in endpoint, which can only
 /// sign a driver in, was rate-limited; this one, which can reset a running

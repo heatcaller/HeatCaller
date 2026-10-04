@@ -170,7 +170,7 @@ public sealed class SplitLoopTests : IDisposable
 
         // An I-Lap split (passes on the app clock), an EasyLap line whose
         // clock is 5000 behind the app's, lined up at 30 ms late.
-        var split = new SplitLoop(profiles)
+        var split = new SplitLoop(profiles.SplitOwnerOf)
         {
             AppTimeOf = pass => pass.ReceivedMs,
             LineTimeOf = app => app - 5_000,
@@ -199,7 +199,7 @@ public sealed class SplitLoopTests : IDisposable
     {
         var profiles = Profiles();
 
-        var split = new SplitLoop(profiles)
+        var split = new SplitLoop(profiles.SplitOwnerOf)
         {
             AppTimeOf = pass => pass.ReceivedMs,
             LineTimeOf = _ => null,

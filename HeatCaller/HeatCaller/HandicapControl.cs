@@ -256,7 +256,7 @@ public sealed class HandicapControl : UserControl
         _lblMode.ForeColor = AppTheme.Accent;
 
         var roster = _profiles.AllRaceable
-            .Where(p => string.Equals(p.ClassName, raceClass.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(p => p.RunsClass(raceClass.Name))
             .OrderBy(p => p.DriverName)
             .ToList();
 
@@ -376,7 +376,7 @@ public sealed class HandicapControl : UserControl
         }
 
         var roster = _profiles.AllRaceable
-            .Where(p => string.Equals(p.ClassName, raceClass.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(p => p.RunsClass(raceClass.Name))
             .ToList();
 
         var withHandicap = roster.Count(p => _store.Get(p.Transponder)?.HasAny == true);
@@ -416,7 +416,7 @@ public sealed class HandicapControl : UserControl
         }
 
         var roster = _profiles.AllRaceable
-            .Where(p => string.Equals(p.ClassName, raceClass.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(p => p.RunsClass(raceClass.Name))
             .ToList();
 
         using var form = new HandicapSuggestForm(_store, roster, _history, raceClass.Name);
