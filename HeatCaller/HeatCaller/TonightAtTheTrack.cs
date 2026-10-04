@@ -130,9 +130,15 @@ public static class TonightAtTheTrack
         return list.OrderBy(e => e.ClassName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
-    /// <summary>The fastest lap in each class tonight, quickest class first.</summary>
+    /// <summary>
+    /// The fastest lap in each class tonight, quickest class first. Not a
+    /// ghost's, not a disqualified result's, and not a driver kept out of
+    /// records (<paramref name="excluded"/>, by transponder). A rental's
+    /// counts: it was raced tonight, even if it can't hold a track record.
+    /// </summary>
     public static IReadOnlyList<FastestTonight> FastestLaps(
-        IEnumerable<SessionRecord> history, Func<string, RoundDefinition?> roundOf, DateTime nowLocal)
+        IEnumerable<SessionRecord> history, Func<string, RoundDefinition?> roundOf, DateTime nowLocal,
+        Func<string, bool>? excluded = null)
     {
         var list = new List<FastestTonight>();
 
@@ -141,6 +147,8 @@ public static class TonightAtTheTrack
             var best = group
                 .SelectMany(r => r.Session.Results
                     .Where(x => x.FastLapMs > 0 && !GhostService.IsGhost(x.Transponder))
+                    .Where(x => ResultEditor.NormaliseOutcome(x.Outcome) != ResultEditor.Dq)
+                    .Where(x => excluded?.Invoke(x.Transponder) != true)
                     .Select(x => (Result: x, r.Session)))
                 .OrderBy(x => x.Result.FastLapMs)
                 .FirstOrDefault();

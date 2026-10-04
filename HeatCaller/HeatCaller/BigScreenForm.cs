@@ -587,6 +587,10 @@ public sealed class BigScreenForm : Form
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
         _lblOnDeck.Dock = DockStyle.Fill;
+
+        // The championship ticker can be longer than the bar is wide: cut
+        // with "..." rather than wrapped half off the bottom.
+        _lblOnDeck.AutoEllipsis = true;
         _lblOnDeck.TextAlign = ContentAlignment.MiddleCenter;
         _lblOnDeck.Text = string.Empty;
         _pnlOnDeck.Controls.Add(_lblOnDeck);
@@ -645,6 +649,10 @@ public sealed class BigScreenForm : Form
             return;
         }
 
+        // The map's share of the width follows every resize - a window made
+        // only wider leaves the scale where it is, and returns just below.
+        _mapView.Width = (int)(client.Width * MapShare);
+
         var scale = Math.Clamp(
             Math.Min(
                 client.Width / (float)UiLayout.AtDpi(DesignClientWidth),
@@ -683,7 +691,6 @@ public sealed class BigScreenForm : Form
             }
 
             _pnlOnDeck.Height = Sized(62);
-            _mapView.Width = (int)(client.Width * MapShare);
             _lblWarning.Height = Sized(84);
 
             // The faces made again at this size; the old ones disposed once
@@ -762,7 +769,12 @@ public sealed class BigScreenForm : Form
     /// </summary>
     private void StartSponsorRotationIfConfigured()
     {
-        if (_sponsors is null || !_sponsors.Current.Enabled || _sponsors.SlideFileNames.Count == 0)
+        // Started whenever there is a sponsor store, switched on or not: the
+        // Sponsors page changes the same settings while this window is up,
+        // and the tick reads them each time (SponsorTimer_Tick) - slides
+        // switched on start without reopening the window, and switched off
+        // stop.
+        if (_sponsors is null)
         {
             return;
         }
@@ -783,6 +795,14 @@ public sealed class BigScreenForm : Form
         if (_showingSponsor)
         {
             ShowLeaderboardAgain();
+            return;
+        }
+
+        // Switched off, or no slides, since the window opened: keep checking
+        // at the board's pace, and show nothing.
+        if (!_sponsors.Current.Enabled || _sponsors.SlideFileNames.Count == 0)
+        {
+            _sponsorTimer.Interval = SponsorIntervalMs(_sponsors.Current.LeaderboardSeconds);
             return;
         }
 
@@ -853,6 +873,7 @@ public sealed class BigScreenForm : Form
         _picSponsor.Visible = true;
         _showingSponsor = true;
         _sponsorTimer.Interval = SponsorIntervalMs(_sponsors!.Current.SlideSeconds);
+        UpdateTrackMap();
     }
 
     private void ShowLeaderboardAgain()
@@ -1224,7 +1245,11 @@ public sealed class BigScreenForm : Form
 
         try
         {
-            show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && !_attractShowing && _trackMap().Line is not null;
+            // Not beside a sponsor slide between races either: there is no
+            // race to show, and the slide would lose a third of its width.
+            show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && !_attractShowing
+                   && !(_showingSponsor && _race.State is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
+                   && _trackMap().Line is not null;
         }
         catch
         {
@@ -1376,6 +1401,10 @@ public sealed class BigScreenForm : Form
     {
         if (_isFullscreen)
         {
+            // Normal first, for the same reason as below: going back to
+            // Maximized from Maximized changes nothing, and the window kept
+            // the whole monitor under its restored frame.
+            WindowState = FormWindowState.Normal;
             FormBorderStyle = _restoreBorderStyle;
             WindowState = _restoreWindowState;
             _isFullscreen = false;
@@ -1384,6 +1413,14 @@ public sealed class BigScreenForm : Form
         {
             _restoreBorderStyle = FormBorderStyle;
             _restoreWindowState = WindowState;
+
+            // Already maximised, Maximized again changes nothing and the
+            // window keeps the work area - the taskbar stays over its foot.
+            if (WindowState == FormWindowState.Maximized)
+            {
+                WindowState = FormWindowState.Normal;
+            }
+
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             _isFullscreen = true;

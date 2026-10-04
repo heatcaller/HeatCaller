@@ -517,14 +517,19 @@ internal static class RaceDayDeleter
 
             foreach (var track in SectorRecordsFrom(layouts, sessions))
             {
-                foreach (var (cut, list) in track.SectorRecordsByCut!.ToList())
+                if (track.SectorRecordsByCut is not { } byCut)
+                {
+                    continue;
+                }
+
+                foreach (var (cut, list) in byCut.ToList())
                 {
                     var count = TrackLayout.CountOfCut(cut);
                     list?.RemoveAll(r => r is null || SetIn(sessions, track, count, r));
 
                     if (list is not { Count: > 0 })
                     {
-                        track.SectorRecordsByCut.Remove(cut);
+                        byCut.Remove(cut);
                     }
                 }
 

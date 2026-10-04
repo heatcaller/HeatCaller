@@ -59,7 +59,7 @@ When the server is running, the page lists one address for each page:
 | **Driver check-in:** | `http://<laptop address>:<port>/checkin` | **Copy**, **QR code** |
 | **Race manager:** | `http://<laptop address>:<port>/manage` | **Copy**, **QR code** |
 | **OBS overlay:** | `http://<laptop address>:<port>/?overlay=1` | **Copy** |
-| **Broadcast graphics:** | `http://<laptop address>:<port>/broadcast` | **Copy** |
+| **Broadcast graphics:** | `http://localhost:<port>/broadcast` | **Copy** |
 
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
 
@@ -140,7 +140,7 @@ The overlay address (`/?overlay=1`) is the same live results page with a transpa
 
 ### Broadcast graphics
 
-The page at `/broadcast` is TV-style graphics for a stream, over your camera in OBS. Add a **Browser** source, paste the **Broadcast graphics:** address, and set it to the size of your canvas (1920 × 1080 is usual). Everything except the graphics is see-through, and they're sized to the source, so they fit any canvas.
+The page at `/broadcast` is TV-style graphics for a stream, over your camera in OBS. Its address uses `localhost`, for OBS on the timing laptop itself, so a saved OBS source keeps working when the laptop gets a different network address at another venue. For OBS on another PC, use the laptop's address instead, as on the other pages. Add a **Browser** source, paste the **Broadcast graphics:** address, and set it to the size of your canvas (1920 × 1080 is usual). Everything except the graphics is see-through, and they're sized to the source, so they fit any canvas.
 
 <!-- screenshot: Broadcast graphics over a track camera: timing tower top left and a battle bar at the bottom -->
 

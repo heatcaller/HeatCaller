@@ -138,6 +138,40 @@ public sealed class TrackMapTests
     }
 
     [Fact]
+    public void Time_under_a_red_flag_does_not_make_the_field_look_stopped()
+    {
+        var line = TrackLine.From(Square(withSplit: false))!;
+        var positions = new TrackPositions();
+
+        var car = new RacerStanding { TransponderId = "A", Laps = 3, ElapsedMs = 24_000 };
+        car.LapTimesMs.AddRange(new long[] { 8000, 8000, 8000 });
+
+        positions.Crossed("A", TimingPoint.Line, 1000);
+
+        // Two minutes stopped, from two seconds after the line: back on, the
+        // car is two seconds round, not two minutes overdue.
+        positions.Resumed(120_000);
+
+        var placed = Assert.Single(positions.Estimate(new[] { car }, line, 123_000, racing: true));
+        Assert.False(placed.Stopped);
+        Assert.Equal(0.25f, placed.Fraction, 3);
+    }
+
+    [Fact]
+    public void A_car_that_has_taken_the_flag_is_never_called_stopped()
+    {
+        var line = TrackLine.From(Square(withSplit: false))!;
+        var positions = new TrackPositions();
+
+        var car = new RacerStanding { TransponderId = "A", Laps = 3, ElapsedMs = 24_000 };
+        car.LapTimesMs.AddRange(new long[] { 8000, 8000, 8000 });
+        positions.Crossed("A", TimingPoint.Line, 1000);
+
+        Assert.True(Assert.Single(positions.Estimate(new[] { car }, line, 60_000, racing: true)).Stopped);
+        Assert.False(Assert.Single(positions.Estimate(new[] { car }, line, 60_000, racing: true, finished: _ => true)).Stopped);
+    }
+
+    [Fact]
     public void A_car_not_yet_heard_this_race_is_not_placed()
     {
         var line = TrackLine.From(Square())!;

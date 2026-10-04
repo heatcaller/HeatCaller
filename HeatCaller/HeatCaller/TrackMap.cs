@@ -197,19 +197,40 @@ public sealed class TrackPositions
     private readonly Dictionary<string, Seen> _seen = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _saidStopped = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>When the red flag came out (TimingClock), while it is out - see Resumed.</summary>
+    private long? _redSince;
+
     /// <summary>A car has just been worked out to have stopped - once per stop. The host says so in the console.</summary>
     public event Action<RacerStanding, string>? CarStopped;
 
-    /// <summary>Follows <paramref name="race"/>: every counted crossing and every split, and a fresh start when a race is staged or reset.</summary>
+    /// <summary>
+    /// Follows <paramref name="race"/>: every counted crossing and every
+    /// split, a fresh start when a race is staged, counted down or reset, and
+    /// the time under a red flag taken out (see Resumed).
+    /// </summary>
     public void Attach(RaceControlSession race)
     {
         race.LapProcessed += (standing, _, _) => Crossed(standing.TransponderId, TimingPoint.Line, TimingClock.NowMs);
         race.SplitCrossed += (standing, point, _) => Crossed(standing.TransponderId, point, TimingClock.NowMs);
         race.StateChanged += state =>
         {
-            if (state is RaceState.Idle or RaceState.Staging)
+            // A countdown can start straight from a finished race, whose
+            // cars would otherwise crawl round the map until the green.
+            if (state is RaceState.Idle or RaceState.Staging or RaceState.Countdown)
             {
                 Clear();
+            }
+        };
+        race.FlagChanged += flag =>
+        {
+            if (flag == FlagState.Red)
+            {
+                _redSince ??= TimingClock.NowMs;
+            }
+            else if (_redSince is { } since)
+            {
+                _redSince = null;
+                Resumed(TimingClock.NowMs - since);
             }
         };
     }
@@ -217,6 +238,37 @@ public sealed class TrackPositions
     public void Clear()
     {
         _seen.Clear();
+        _saidStopped.Clear();
+        _redSince = null;
+    }
+
+    /// <summary>
+    /// The race is back on after <paramref name="stoppedMs"/> under a red
+    /// flag. Nobody was going round meanwhile, so every car's last loop is
+    /// moved on by that much: counted from the stoppage, every car was well
+    /// overdue at its next loop, and the whole field was called stopped the
+    /// moment the flag went green.
+    /// </summary>
+    public void Resumed(long stoppedMs)
+    {
+        if (stoppedMs <= 0)
+        {
+            return;
+        }
+
+        foreach (var seen in _seen.Values)
+        {
+            if (seen.LineAt != 0)
+            {
+                seen.LineAt += stoppedMs;
+            }
+
+            if (seen.SplitAt != 0)
+            {
+                seen.SplitAt += stoppedMs;
+            }
+        }
+
         _saidStopped.Clear();
     }
 
@@ -247,9 +299,11 @@ public sealed class TrackPositions
     /// Every car on <paramref name="ordered"/> that can be placed on
     /// <paramref name="line"/> now: one that has crossed a loop in this race
     /// and has a usual lap (its own, or the field's). Stopped is only
-    /// decided while <paramref name="racing"/>.
+    /// decided while <paramref name="racing"/>, and never for a car that has
+    /// taken the flag (<paramref name="finished"/>) - its crossings after
+    /// that are not counted, so it would look overdue while the rest finish.
     /// </summary>
-    public IReadOnlyList<Car> Estimate(IReadOnlyList<RacerStanding> ordered, TrackLine line, long nowMs, bool racing)
+    public IReadOnlyList<Car> Estimate(IReadOnlyList<RacerStanding> ordered, TrackLine line, long nowMs, bool racing, Func<string, bool>? finished = null)
     {
         var cars = new List<Car>();
 
@@ -272,7 +326,8 @@ public sealed class TrackPositions
                 continue;
             }
 
-            var car = Place(standing.TransponderId, i + 1, seen, line.SplitAt, typical, nowMs, racing);
+            var stillRacing = racing && finished?.Invoke(standing.TransponderId) != true;
+            var car = Place(standing.TransponderId, i + 1, seen, line.SplitAt, typical, nowMs, stillRacing);
 
             if (!car.Stopped && BestLap(standing) is var best and > 0)
             {

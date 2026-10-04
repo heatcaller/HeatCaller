@@ -300,15 +300,30 @@ public sealed partial class RaceControlControl
     internal IReadOnlyList<UpcomingRace> UpcomingRaces(int count)
     {
         var active = _activeRound?.Invoke();
-        var onTrack = (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing) && !_race.IsPracticeMode;
 
-        return OrderedProgram()
+        // Not a demo: a rehearsal on the selected round is not that round on
+        // track, and real drivers' phones said "On track now".
+        var onTrack = (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+                      && !_race.IsPracticeMode && !_race.IsDemoMode;
+
+        var unrun = OrderedProgram()
             .Where(r => !r.IsRecorded && r.AssignedTransponders.Count > 0)
+            .ToList();
+
+        // The round on track first, wherever it sits in the program: run out
+        // of order, it could fall past the end of the list and its drivers
+        // were never told it was theirs.
+        var onTrackRound = onTrack && active is not null
+            ? unrun.FirstOrDefault(r => string.Equals(r.Id, active.Id, StringComparison.Ordinal))
+            : null;
+
+        var ordered = onTrackRound is null
+            ? unrun
+            : unrun.Where(r => !ReferenceEquals(r, onTrackRound)).Prepend(onTrackRound).ToList();
+
+        return ordered
             .Take(Math.Max(0, count))
-            .Select(r => new UpcomingRace(
-                RoundTitle(r),
-                r.AssignedTransponders.ToList(),
-                onTrack && string.Equals(r.Id, active?.Id, StringComparison.Ordinal)))
+            .Select(r => new UpcomingRace(RoundTitle(r), r.AssignedTransponders.ToList(), ReferenceEquals(r, onTrackRound)))
             .ToList();
     }
 
@@ -1071,6 +1086,12 @@ public sealed partial class RaceControlControl
                 string.IsNullOrWhiteSpace(round.RoundLabel) ? "round roster" : $"roster for {round.RoundLabel}");
         }
 
-        return (_race.GetOrderedStandings().Select(s => s.TransponderId).ToList(), "drivers already on the board");
+        // Not the ghosts: they are never heard (their passes are the app's
+        // own), so they were always "not heard" on Mission Control and the
+        // roll call.
+        return (_race.GetOrderedStandings()
+            .Select(s => s.TransponderId)
+            .Where(id => !GhostService.IsGhost(id))
+            .ToList(), "drivers already on the board");
     }
 }

@@ -51,9 +51,13 @@ public sealed class PhotoFinish
     public sealed record Shot(int Id, long AtUnixMs, string Transponder, string Name, int Position, int Lap, bool Finish);
 
     private readonly object _gate = new();
+    private readonly object _diskGate = new();
     private readonly List<Shot> _shots = new();
     private readonly Dictionary<int, string> _folders = new();
     private int _nextId = 1;
+
+    /// <summary>This run of the app, for the camera page: a new one means the shots are numbered from 1 again.</summary>
+    private readonly string _run = Guid.NewGuid().ToString("N")[..8];
     private DateTime _lastPollUtc = DateTime.MinValue;
 
     /// <summary>Where shots are kept: a folder a night under the app's data folder.</summary>
@@ -183,6 +187,7 @@ public sealed class PhotoFinish
 
         return JsonSerializer.Serialize(new
         {
+            run = _run,
             latest,
             shots = shots.Select(s => new { id = s.Id, at = s.AtUnixMs, name = s.Name, pos = s.Position, lap = s.Lap, finish = s.Finish }),
         });
@@ -222,31 +227,60 @@ public sealed class PhotoFinish
             _folders[shotId] = folder;
         }
 
-        Directory.CreateDirectory(folder);
+        string? said = null;
 
-        // Written aside and moved into place, so the Photo Finish window
-        // never reads a frame half-written.
-        var frame = Path.Combine(folder, FrameName(offsetMs));
-        var aside = frame + ".tmp";
-        File.WriteAllBytes(aside, jpeg);
-        File.Move(aside, frame, overwrite: true);
-
-        // Its details with its first frame - or a later one, if writing them
-        // failed the first time: without them the shot is never listed.
-        var details = Path.Combine(folder, "shot.json");
-
-        if (!File.Exists(details))
+        // One write at a time: a second camera tab posts the same frames,
+        // and two writers on one file fail each other.
+        lock (_diskGate)
         {
-            var at = DateTimeOffset.FromUnixTimeMilliseconds(shot.AtUnixMs).UtcDateTime;
-            var info = new SavedShot(folder, shot.Name, shot.Transponder, shot.Position, shot.Lap, shot.Finish, at);
-            File.WriteAllText(details, JsonSerializer.Serialize(info));
+            Directory.CreateDirectory(folder);
 
-            Saved?.Invoke(shot.Finish
-                ? $"[camera] Photo finish kept for {shot.Name} (P{shot.Position}, lap {shot.Lap}) - Connection → Photo Finish to look."
-                : $"[camera] Crossing kept for {shot.Name} (lap {shot.Lap}).");
+            // The frame first, then the details: the Photo Finish window
+            // counts shots by their details, so a shot it counts always has
+            // a frame to show. Written with the first frame - or a later one,
+            // if writing them failed the first time: without them the shot is
+            // never listed.
+            WriteAside(Path.Combine(folder, FrameName(offsetMs)), jpeg);
+
+            var details = Path.Combine(folder, "shot.json");
+
+            if (!File.Exists(details))
+            {
+                var at = DateTimeOffset.FromUnixTimeMilliseconds(shot.AtUnixMs).UtcDateTime;
+                var info = new SavedShot(folder, shot.Name, shot.Transponder, shot.Position, shot.Lap, shot.Finish, at);
+                WriteAside(details, System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(info)));
+
+                said = shot.Finish
+                    ? $"[camera] Photo finish kept for {shot.Name} (P{shot.Position}, lap {shot.Lap}) - Connection → Photo Finish to look."
+                    : $"[camera] Crossing kept for {shot.Name} (lap {shot.Lap}).";
+            }
+        }
+
+        if (said is not null)
+        {
+            Saved?.Invoke(said);
         }
 
         return true;
+    }
+
+    /// <summary>Written aside and moved into place, so the Photo Finish window never reads a file half-written.</summary>
+    private static void WriteAside(string path, byte[] bytes)
+    {
+        var aside = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+
+        try
+        {
+            File.WriteAllBytes(aside, bytes);
+            File.Move(aside, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(aside))
+            {
+                File.Delete(aside);
+            }
+        }
     }
 
     /// <summary>"photo-finish\2026-10-03\21-14-05.123 P1 Sam Smith" - by the night it was, the time and who.</summary>

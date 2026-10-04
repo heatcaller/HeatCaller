@@ -107,6 +107,49 @@ public sealed class BetweenRacesTests : IDisposable
         Assert.Null(ChampionshipLive.Compute(new[] { Result(1, "Sam", laps: 0) }, main, seasons, rounds, null, history));
     }
 
+    [Fact]
+    public void A_heat_run_again_counts_once_in_a_championship()
+    {
+        var rounds = RoundDefinitionStore.Load();
+        var main = new RoundDefinition { ClassName = "Stock", RoundLabel = "A-Main", Kind = RoundKind.Main };
+        rounds.Add(main);
+
+        var season = new Season { Name = "Stock Series", ClassName = "Stock", AutoInclude = true, MainsOnly = true };
+
+        // The first run, then the re-run the round now names - the first put
+        // back by an undo, still carrying the round's id.
+        var first = Race(main.Id, DateTime.UtcNow.AddHours(-1), Result(1, "Alex"), Result(2, "Sam"));
+        var again = Race(main.Id, DateTime.UtcNow, Result(1, "Sam"), Result(2, "Alex"));
+        rounds.MarkRecorded(main.Id, again.Id);
+
+        var counted = EventSpine.SessionsFor(season, null, rounds, SessionHistoryStore.FromSessions(new[] { first, again }));
+
+        Assert.Equal(again.Id, Assert.Single(counted).Id);
+
+        // Ticked in by hand, it still counts.
+        season.IncludedSessionIds.Add(first.Id);
+        Assert.Equal(2, EventSpine.SessionsFor(season, null, rounds, SessionHistoryStore.FromSessions(new[] { first, again })).Count);
+    }
+
+    [Fact]
+    public void Tonights_fastest_lap_is_never_a_disqualified_or_excluded_drivers()
+    {
+        var q1 = new RoundDefinition { ClassName = "Stock", RoundLabel = "Heat 1" };
+        RoundDefinition? RoundOf(string id) => id == q1.Id ? q1 : null;
+        var night = new DateTime(2026, 10, 3, 19, 0, 0, DateTimeKind.Local);
+
+        var dq = Result(1, "Dee", 10, 18_000);
+        dq.Outcome = ResultEditor.Dq;
+
+        var history = new[]
+        {
+            Race(q1.Id, night.ToUniversalTime(), dq, Result(2, "Guest", 10, 18_500), Result(3, "Sam", 10, 19_000)),
+        };
+
+        var fastest = Assert.Single(TonightAtTheTrack.FastestLaps(history, RoundOf, night, t => t == "T-Guest"));
+        Assert.Equal("Sam", fastest.DriverName);
+    }
+
     // ------------------------------------------------------------------
     //  The best-lap ghost
     // ------------------------------------------------------------------

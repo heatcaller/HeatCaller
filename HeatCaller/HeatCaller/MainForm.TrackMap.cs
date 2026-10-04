@@ -45,7 +45,7 @@ public partial class MainForm
 
         var racing = _race.State == RaceState.Racing && _race.Flag != FlagState.Red && !_race.IsPracticeMode && !_race.IsDemoMode;
 
-        return (line, _trackPositions.Estimate(_race.GetOrderedStandings(), line, TimingClock.NowMs, racing));
+        return (line, _trackPositions.Estimate(_race.GetOrderedStandings(), line, TimingClock.NowMs, racing, _race.HasTakenFlag));
     }
 
     private TrackLine? CurrentTrackLine()

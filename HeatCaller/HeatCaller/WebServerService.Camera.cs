@@ -177,7 +177,7 @@ public sealed partial class WebServerService
         const cams = document.getElementById('cams');
         const every = document.getElementById('every');
         const CAM_KEY = 'hcCamera', EVERY_KEY = 'hcCameraEvery';
-        let frames = [], stream = null, last = -1, pending = [], keptCount = 0, cameraOk = false, appOk = false, polling = false;
+        let frames = [], stream = null, last = -1, run = '', pending = [], keptCount = 0, cameraOk = false, appOk = false, polling = false;
         const queued = new Set();
 
         try { every.checked = localStorage.getItem(EVERY_KEY) === '1'; } catch(e) {}
@@ -196,6 +196,15 @@ public sealed partial class WebServerService
             stream = await navigator.mediaDevices.getUserMedia({ video: video_, audio: false });
             video.srcObject = stream;
             cameraOk = true;
+            // Unplugged, or asleep: say so and try again, rather than going on
+            // stamping the last picture with the time as if it were live.
+            const mine = stream;
+            mine.getVideoTracks()[0].addEventListener('ended', () => {
+              if (stream !== mine) return;
+              cameraOk = false; frames = [];
+              state('The camera stopped - trying it again...', false);
+              setTimeout(() => start(cams.value), 2000);
+            });
             const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
             const using = stream.getVideoTracks()[0].getSettings().deviceId || '';
             cams.innerHTML = devices.map((d, i) =>
@@ -206,6 +215,9 @@ public sealed partial class WebServerService
             // A camera remembered from before that isn't plugged in now: any camera instead.
             if (deviceId && e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) { start(''); return; }
             state('No camera: ' + (e && e.name === 'NotAllowedError' ? 'the browser was not allowed to use it.' : (e && e.message || e)), false);
+            // Not plugged in yet, or being replugged: keep trying. Refused
+            // by the browser is for the person at the laptop to fix.
+            if (!e || e.name !== 'NotAllowedError') setTimeout(() => { if (!cameraOk) start(''); }, 5000);
           }
         }
 
@@ -240,11 +252,15 @@ public sealed partial class WebServerService
           if (polling) return;
           polling = true;
           try {
-            const r = await fetch('/api/camera/shots?after=' + Math.max(0, last), { cache: 'no-store' });
+            const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
+            let r;
+            try { r = await fetch('/api/camera/shots?after=' + Math.max(0, last), { cache: 'no-store', signal: stop.signal }); }
+            finally { clearTimeout(timer); }
             const d = await r.json();
             appOk = true;
-            // HeatCaller restarted: its shots are numbered from 1 again.
-            if (last < 0 || d.latest < last) { last = d.latest; }
+            // First answer, or HeatCaller restarted - its shots are numbered
+            // from 1 again, so what was queued under the old numbers goes.
+            if (last < 0 || d.run !== run) { last = d.latest; run = d.run; queued.clear(); pending = []; }
             else {
               (d.shots || []).forEach(s => {
                 last = Math.max(last, s.id);
@@ -264,8 +280,12 @@ public sealed partial class WebServerService
           const now = Date.now();
           const ready = pending.filter(s => now >= s.at + AFTER + 150);
           pending = pending.filter(s => now < s.at + AFTER + 150);
-          for (const s of ready){
-            const picked = frames.filter(f => f.t >= s.at - BEFORE && f.t <= s.at + AFTER);
+
+          // Every ready shot's frames picked now, before any is sent: a pack
+          // crossing together is many uploads, and the frames before the
+          // later shots would be gone from the buffer by their turn.
+          const jobs = ready.map(s => ({ s, picked: frames.filter(f => f.t >= s.at - BEFORE && f.t <= s.at + AFTER) }));
+          for (const { s, picked } of jobs){
             if (!picked.length) continue;
             let sent = 0;
             for (const f of picked){
@@ -376,9 +396,21 @@ public sealed partial class WebServerService
         function gapSecs(g){ const m = /^\+(\d+([.,]\d+)?)$/.exec(g || ''); return m ? parseFloat(m[1].replace(',', '.')) : null; }
         function nameOf(d, id){ const p = (d.people || []).find(x => x.id === id); return p ? p.name : id; }
 
+        // One poll at a time, none left hanging - an older answer arriving
+        // after a newer one would bring a fastest lap back round.
+        let ticking = false;
         async function tick(){
+          if (ticking) return;
+          ticking = true;
+          try { await draw(); } finally { ticking = false; }
+        }
+
+        async function draw(){
           let d;
-          try { d = await (await fetch('/api/state', { cache: 'no-store' })).json(); } catch(e) { return; }
+          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
+          try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
+          catch(e) { return; }
+          finally { clearTimeout(timer); }
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
           const rows = (d.standings || []).filter(s => s.id);
           const cards = d.cards || {};
@@ -437,7 +469,8 @@ public sealed partial class WebServerService
 
           // A new fastest lap of the race - not the ones already set when the page opened.
           let top = { ms: 0, id: '' };
-          rows.forEach(s => { if (s.best > 0 && (!top.ms || s.best < top.ms)) top = { ms: s.best, id: s.id }; });
+          // Ghosts set the pace; they don't hold the fastest lap.
+          rows.forEach(s => { if (s.best > 0 && !/^GHOST-/i.test(s.id) && (!top.ms || s.best < top.ms)) top = { ms: s.best, id: s.id }; });
           if (!racing && !finished) top = { ms: 0, id: '' };
           if (top.ms > 0 && (top.ms < best.ms || !best.ms) && !first && racing && want('fastest')){
             const row = rows.find(s => s.id === top.id);

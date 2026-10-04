@@ -2985,9 +2985,16 @@ public sealed partial class WebServerService
         // pages without needing a refresh or a server restart.
         let leaderboardSecs = 60, slideSecs = 8, pauseDuringRace = true;
 
+        // One poll at a time, and none left hanging: on poor Wi-Fi an older
+        // answer arriving after a newer one read a lap out twice and buzzed
+        // twice, and hung requests used up the phone's connections.
+        let ticking = false;
         async function tick(){
+          if (ticking) return;
+          ticking = true;
+          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
-            const r = await fetch('/api/state'); const d = await r.json();
+            const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
             document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
             document.getElementById('countdown').textContent = d.countdown || '';
 
@@ -3017,6 +3024,7 @@ public sealed partial class WebServerService
             pauseDuringRace = d.sponsorPauseDuringRace !== false;
             if (!overlay) rotateSponsors(d.state);
           }catch(e){}
+          finally { clearTimeout(timer); ticking = false; }
         }
 
         function rotateSponsors(state){
@@ -3053,9 +3061,15 @@ public sealed partial class WebServerService
         // Canvases are sized in CSS pixels but drawn in device pixels -
         // without this a chart is a blurry mess on any phone, which is all
         // of them.
+        // The height each chart was laid out with (its height attribute),
+        // kept from the first draw: the attribute is the drawing size after
+        // that, and dividing it by the screen's pixel ratio again shrank a
+        // chart to a third of its height on a phone.
         function prep(cv){
           const dpr = window.devicePixelRatio || 1;
-          const w = cv.clientWidth, h = cv.height / dpr || 300;
+          if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height') || '300';
+          const w = cv.clientWidth, h = +cv.dataset.h;
+          cv.style.height = h + 'px';
           cv.width = w * dpr; cv.height = h * dpr;
           const g = cv.getContext('2d');
           g.setTransform(dpr,0,0,dpr,0,0);
@@ -3285,10 +3299,19 @@ public sealed partial class WebServerService
         pick.addEventListener('change', () => {
           following = pick.value;
           try { localStorage.setItem(FOLLOW_KEY, following); } catch(e) {}
-          try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+          wakeAudio();
           lastCallKey = '';
           tick();
         });
+
+        // The beep's player, made - or woken - by a tap: phones only allow
+        // sound after one, and after a reload there has been none yet.
+        function wakeAudio(){
+          try {
+            audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+            if (audio.state !== 'running') audio.resume();
+          } catch(e) {}
+        }
 
         function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
 
@@ -3366,7 +3389,10 @@ public sealed partial class WebServerService
           speakBtn.classList.toggle('on', speaking);
         }
 
-        document.addEventListener('pointerdown', e => {
+        // A click, not a touch going down: iPhones only count a finished tap
+        // as one that lets a page speak or play sound.
+        document.addEventListener('click', e => {
+          wakeAudio();
           if (unlocked || e.target === speakBtn) return;
           unlocked = true;
           if (speaking) sayAloud(' ');
@@ -3423,6 +3449,7 @@ public sealed partial class WebServerService
           try { if (navigator.vibrate) navigator.vibrate([250,120,250,120,400]); } catch(e) {}
           try {
             if (!audio) return;
+            if (audio.state !== 'running') audio.resume();
             [0, 0.25].forEach(at => {
               const o = audio.createOscillator(), g = audio.createGain();
               o.frequency.value = 880; o.connect(g); g.connect(audio.destination);

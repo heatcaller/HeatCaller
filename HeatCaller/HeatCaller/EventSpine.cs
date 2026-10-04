@@ -344,7 +344,19 @@ public static class EventSpine
                     continue;
                 }
 
-                Take(session.Id);
+                // Ticked in by hand, below, a race run over still counts.
+                if (SupersededByRerun(session, rounds, history))
+                {
+                    continue;
+                }
+
+                // The race in hand, rather than looked up again by its id:
+                // a lookup that walks the whole history, for every race in
+                // it, every time a table is worked out.
+                if (!session.IsDemoSession())
+                {
+                    byId.TryAdd(session.Id, session);
+                }
             }
         }
 
@@ -358,6 +370,37 @@ public static class EventSpine
 
         return byId.Values.OrderBy(s => s.StartedAtUtc).ToList();
     }
+
+    /// <summary>
+    /// Whether the rule takes a saved race: <see cref="RuleAccepts"/>, and
+    /// not a race its round has since been run again for. The one test the
+    /// championship's own list (SessionsFor) and the Seasons page's ticks
+    /// both use, so a tick never disagrees with what counts.
+    /// </summary>
+    public static bool RuleTakes(
+        Season season,
+        SessionRecord session,
+        RoundDefinitionStore rounds,
+        RaceEventStore? events,
+        SessionHistoryStore history) =>
+        RuleAccepts(season, session, rounds, events) && !SupersededByRerun(session, rounds, history);
+
+    /// <summary>
+    /// Whether a saved race's round has been run again since: the round now
+    /// names a later race. The earlier one still carries the round's id - put
+    /// back by an undo, say - and counting it as well scored the heat twice.
+    ///
+    /// Only for a later race that is really there: a round naming a race
+    /// that has gone, or an earlier one, leaves this race counting - which
+    /// is also what keeps a race being filed now (saved a moment before its
+    /// round is pointed at it) in the table straight after the flag.
+    /// </summary>
+    public static bool SupersededByRerun(SessionRecord session, RoundDefinitionStore rounds, SessionHistoryStore history) =>
+        !string.IsNullOrEmpty(session.RoundId)
+        && rounds.Get(session.RoundId) is { LinkedSessionId: { Length: > 0 } linked }
+        && !string.Equals(linked, session.Id, StringComparison.Ordinal)
+        && history.Get(linked) is { } later
+        && later.StartedAtUtc > session.StartedAtUtc;
 
     /// <summary>
     /// Whether a recorded race is one this championship's rule would take.

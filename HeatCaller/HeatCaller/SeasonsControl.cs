@@ -557,7 +557,10 @@ public sealed class SeasonsControl : UserControl
             }
 
             var ticked = _clbSessions.GetItemChecked(i);
-            var byRule = season.AutoInclude && EventSpine.RuleAccepts(season, item.Session, _rounds, _events);
+            // The same test the table counts by - a race whose heat was run
+            // again is not the rule's, so leaving it unticked excludes
+            // nothing and ticking it puts it in by hand.
+            var byRule = season.AutoInclude && EventSpine.RuleTakes(season, item.Session, _rounds, _events, _history);
 
             if (byRule && !ticked)
             {

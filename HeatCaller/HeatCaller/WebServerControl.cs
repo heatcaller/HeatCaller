@@ -722,7 +722,10 @@ public sealed class WebServerControl : UserControl
             _txtCheckInUrl.Text = _server.LocalUrl() + "checkin";
             _txtManageUrl.Text = _server.LocalUrl() + "manage";
             _txtOverlayUrl.Text = _server.LocalUrl() + "?overlay=1";
-            _txtBroadcastUrl.Text = _server.LocalUrl() + "broadcast";
+            // localhost, not the network address: OBS runs on this PC, and a
+            // saved source must not break when the venue's Wi-Fi hands the
+            // laptop a different address.
+            _txtBroadcastUrl.Text = $"http://localhost:{_server.Port}/broadcast";
         }
         else
         {

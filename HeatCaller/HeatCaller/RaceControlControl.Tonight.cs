@@ -52,7 +52,7 @@ public sealed partial class RaceControlControl
 
         var now = Environment.TickCount64;
 
-        var round = RoundForThisRace();
+        var round = RoundForThisRace() ?? RoundThisRaceWillBeFiledUnder();
         var fresh = _championshipCandidates is { } held
             && held.Generation == _race.SessionGeneration
             && string.Equals(held.RoundId, round?.Id, StringComparison.Ordinal);
@@ -79,7 +79,7 @@ public sealed partial class RaceControlControl
                 .ToList();
 
             _ifItEndedNow = ChampionshipLive.FromCandidates(
-                _championshipCandidates!.Value.List, RaceFiling.ResultsFrom(racers, _profiles), round, _profiles);
+                _championshipCandidates!.Value.List, WithBlackFlags(RaceFiling.ResultsFrom(racers, _profiles)), round, _profiles);
         }
         catch
         {
@@ -88,6 +88,59 @@ public sealed partial class RaceControlControl
         }
 
         return _ifItEndedNow;
+    }
+
+    /// <summary>
+    /// With nothing in the Round box, the round the race will be filed under
+    /// when it is saved - the next one, when auto-advance applies (see
+    /// SaveCompletedSessionToHistory) - so the table shows for the first race
+    /// of a night started without picking one. Asked quietly: this runs every
+    /// couple of seconds, and the picker says in the console why it found
+    /// nothing.
+    /// </summary>
+    private RoundDefinition? RoundThisRaceWillBeFiledUnder()
+    {
+        if (_rounds is null || !AutoAdvanceWanted || _currentRaceIsDemo || _currentRaceIsQuick)
+        {
+            return null;
+        }
+
+        return RoundPicker.Next(
+            _rounds,
+            _events,
+            AutoAdvanceScope,
+            AutoAdvancePinnedClass,
+            _race.GetOrderedStandings()
+                .Where(s => !GhostService.IsGhost(s.TransponderId))
+                .Select(s => _profiles.Get(s.TransponderId)?.ClassName),
+            _ => { });
+    }
+
+    /// <summary>
+    /// The results as they will be saved: a driver black-flagged by race
+    /// control is marked DQ when the race is saved (ApplyBlackFlags), which
+    /// takes their laps and puts them last - so they score as that, not as
+    /// where they are running.
+    /// </summary>
+    private static List<SessionResultEntry> WithBlackFlags(List<SessionResultEntry> results)
+    {
+        var flagged = results.Where(r => r.Warnings.Any(w => w.Action == WarningAction.BlackFlag)).ToList();
+
+        if (flagged.Count == 0)
+        {
+            return results;
+        }
+
+        var record = new SessionRecord { SessionType = RaceSessionType.Race, Results = results };
+        var adjustments = flagged.Select(r => ResultEditor.CurrentOf(r) with { Outcome = ResultEditor.Dq }).ToList();
+
+        if (ResultEditor.Validate(record, adjustments) is not null)
+        {
+            return results;
+        }
+
+        ResultEditor.Apply(record, adjustments, "Black flag", "Laptop");
+        return record.Results;
     }
 
     /// <summary>Tonight's figures, worked out at most every fifteen seconds. UI thread.</summary>
@@ -109,7 +162,8 @@ public sealed partial class RaceControlControl
             Func<string, RoundDefinition?> roundOf = id => _rounds?.Get(id);
 
             evolution = TonightAtTheTrack.Evolution(history, roundOf, DateTime.Now);
-            fastest = TonightAtTheTrack.FastestLaps(history, roundOf, DateTime.Now);
+            fastest = TonightAtTheTrack.FastestLaps(history, roundOf, DateTime.Now,
+                t => !string.IsNullOrEmpty(t) && _profiles.Get(t) is { ExcludeFromRecords: true });
         }
         catch
         {

@@ -8,7 +8,7 @@ namespace HeatCaller;
 /// Not modal, and one at a time (MainForm.ShowPhotoFinish): it is opened in
 /// the moments after a close finish, next to Race Control. It looks for new
 /// shots every couple of seconds, so a finish just kept appears without
-/// asking - by counting the night's folders, which costs nothing, and
+/// asking - by counting the night's shots, which costs nothing, and
 /// reading them again only when that changes.
 ///
 /// On the layout pieces: the night and its buttons across the top, the list
@@ -176,10 +176,17 @@ public sealed class PhotoFinishForm : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    /// <summary>
+    /// How many shots the night has: folders with their details written.
+    /// The details go in before any frame, and whole (PhotoFinish), so a
+    /// shot counted here is one ShotsOn lists.
+    /// </summary>
     private static int FoldersOn(string night)
     {
         var folder = Path.Combine(PhotoFinish.Root, night);
-        return Directory.Exists(folder) ? Directory.GetDirectories(folder).Length : 0;
+        return Directory.Exists(folder)
+            ? Directory.GetDirectories(folder).Count(dir => File.Exists(Path.Combine(dir, "shot.json")))
+            : 0;
     }
 
     /// <summary>Shots kept since the list was read, tonight - the newest picked, so a finish just in is on screen.</summary>
@@ -199,7 +206,7 @@ public sealed class PhotoFinishForm : Form
                 var atEnd = _lstShots.SelectedIndex < 0 || _lstShots.SelectedIndex == _shots.Count - 1;
                 LoadShots(keepSelection: !atEnd);
             }
-            else if (_frames.Count > 0 && _lstShots.SelectedIndex >= 0)
+            else if (_lstShots.SelectedIndex >= 0 && _lstShots.SelectedIndex < _shots.Count)
             {
                 // The camera sends a shot's frames one by one: the last few
                 // arrive after it is first listed.
