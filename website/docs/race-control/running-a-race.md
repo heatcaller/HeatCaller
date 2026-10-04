@@ -321,7 +321,7 @@ The bar across the top of the page has three parts, and a fourth when timing goe
 - **TIMING**: when HeatCaller thinks laps aren't being counted, or won't be. The whole bar then turns into an alarm. See [Timing warnings](#timing-warnings).
 - **NOW**: the round or session that's running and its state, for example "Q1 Heat 2 (Stock) · racing".
 - **NEXT**: the next round that hasn't run yet, how many drivers are in it, how many of them aren't checked in (shown in amber), and who marshals it (the heat before). When there are no rounds left it says "program complete". With no program it says "no program - Quick Race is one press away".
-- **DAY**: how many rounds have been recorded, for example "6/14 recorded". If the timetable gives the next round a time, it also shows how far ahead or behind you are, once that's 3 minutes or more.
+- **DAY**: how many rounds have been recorded, for example "6/14 recorded". If the timetable gives the next round a time, it also shows how far ahead or behind you are, once that's 3 minutes or more. Once drivers in the next round's class have raced twice tonight, it also shows how the track has changed for that class, for example "Stock: track 0.31s quicker since Q1 Heat 1". See [Track evolution](../screens/big-screen.md#track-evolution).
 
 If the next round's class runs tech and someone in it hasn't passed tech today, **NEXT** also shows "· N not through tech", ahead of time. See [Tech warnings on Race Control](../race-day/events-and-entries.md#tech-warnings-on-race-control).
 
@@ -375,6 +375,27 @@ The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to r
 | **Sound** | The announcer will be heard. | The announcer is muted. | |
 
 **Next race** uses the same drivers as the pre-race check: the selected round's roster, or the drivers on the leaderboard when no round is selected.
+## Photo finish
+
+A webcam pointed along the finish line, and HeatCaller keeps the frames from a second before to half a second after each car takes the checkered flag. When a finish is too close to call, or a lap may have been missed, you can look.
+
+<!-- screenshot: Photo Finish window with a list of shots and a frame of two cars at the line -->
+
+1. Plug a webcam into the timing laptop and point it along the line.
+2. Start the web server on the **Local Screens** page, if it isn't running.
+3. On the **Connection** page, next to **Finish camera:**, click **Open Camera Page**. It opens in the laptop's browser. Allow the camera when the browser asks, and pick the camera from the list at the top if you have more than one.
+4. Leave that page open all night, and on screen: a small window in a corner is fine, but the browser slows a minimized or hidden window down and frames are missed. The page says "Ready" and how many shots it has kept, or warns you when its window is hidden.
+
+The camera page only works on the timing laptop itself: browsers only let a page use a camera when it comes from the same computer. It keeps the last 4 seconds of the camera, at 15 frames a second, with the time written on each frame.
+
+By default it keeps each car's crossing as it takes the checkered flag, including the crossing that brought the flag out. Ghost cars aren't kept. If HeatCaller is restarted, the camera page carries on by itself. Tick **Keep every crossing** to keep every lap. The console says "Photo finish kept for ..." as each one is kept.
+
+To look at them, click **Photo Finish** next to **Finish camera:**. Pick the night and a shot (each is listed with its time, position, driver and lap). The frame nearest the moment the line counted the car is shown first; drag the slider, or press <kbd>Left</kbd> and <kbd>Right</kbd>, to step a frame at a time. A new shot appears in the list by itself. **Open Folder** opens the shot's folder, to copy a picture out.
+
+The frames are kept in the `photo-finish` folder in HeatCaller's data folder, a folder for each night. See [Data files](../admin/data-files.md).
+
+Practice and Demo Mode don't keep shots.
+
 ## The clock column buttons
 
 - **Quick Race** (<kbd>F8</kbd>) runs a race with whoever is on track. See [Other ways to start](#other-ways-to-start).

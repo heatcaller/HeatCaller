@@ -59,6 +59,7 @@ When the server is running, the page lists one address for each page:
 | **Driver check-in:** | `http://<laptop address>:<port>/checkin` | **Copy**, **QR code** |
 | **Race manager:** | `http://<laptop address>:<port>/manage` | **Copy**, **QR code** |
 | **OBS overlay:** | `http://<laptop address>:<port>/?overlay=1` | **Copy** |
+| **Broadcast graphics:** | `http://<laptop address>:<port>/broadcast` | **Copy** |
 
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
 
@@ -78,6 +79,7 @@ The page at `/` is a read-only view of the race, for spectators' phones or a dis
 
 - The top bar shows "LIVE RESULTS", the race state and flag (for example "Racing - Green flag") and the race clock.
 - An "ON DECK:" line shows what's next on the race day's **Timetable**, when there is something.
+- During a race that counts towards a championship, an "IF IT ENDED NOW" line shows the championship as it would stand if the race ended now: who'd lead, and the top six with their points and how many places they'd move. Drivers in this race are highlighted. See [If it ended now](big-screen.md#if-it-ended-now).
 - Swipe left and right between four views:
     - The **standings** table. Choose its columns with **Choose Web Columns** on the **Local Screens** page.
     - **Lap times**: a line chart of each driver's laps (up to ten drivers). It needs two laps before it has anything to draw.
@@ -101,7 +103,7 @@ While that driver is racing, a card shows:
 - their lap and last lap time,
 - the gap to the car ahead ("Leading" for the leader) and to the car behind, in seconds, or in laps when they're lapped ("+1L").
 
-Their row on the standings is outlined, and on the track map their dot has a ring.
+Their row on the standings is outlined, and on the track map their dot has a ring. A dotted ring in their color is their best-lap ghost: where they'd be on their best lap of the race. Ahead of it, they're on a personal best lap.
 
 Under it, the call-up says when they race next and where they grid:
 
@@ -117,11 +119,41 @@ When their race becomes the next one, the phone buzzes and beeps. Phones only al
 
 The phone remembers who it's following, so it's still following them after a reload. Pick **Follow a driver...** to stop.
 
+#### Lap times in your ear
+
+Once you're following a driver, a **Lap times in my ear: off** button appears beside the **Follow a driver...** list. Tap it (it changes to "on") and the phone reads out each new lap of that driver in its own voice, for example "Lap 7, 19.42, best lap, P2, 0.4 seconds behind":
+
+- the lap and its time,
+- "best lap" when it's their quickest of the race so far,
+- their position,
+- the gap to the car ahead, in seconds or laps. Nothing is said about the gap for the leader.
+
+Put earbuds in and the driver on the rostrum can hear their own laps. The phone says "Lap times on" when you turn it on, which is what lets it speak later. If the page reloads, the button reads "Lap times in my ear: tap to resume" until you tap the page, since phones only let a page speak after a tap. It stays quiet for laps already run when you start following, and starts again from the next one. The phone remembers the setting.
+
+Keep the screen on: most phones stop a page running when the screen goes off.
+
 The follow view is only on the club Wi-Fi page, not on your club's online pages, and never in the OBS overlay.
 
 ### OBS overlay
 
 The overlay address (`/?overlay=1`) is the same live results page with a transparent background and no sponsor slides, so it sits cleanly over video. In OBS, add a **Browser** source and paste the **OBS overlay:** address.
+
+### Broadcast graphics
+
+The page at `/broadcast` is TV-style graphics for a stream, over your camera in OBS. Add a **Browser** source, paste the **Broadcast graphics:** address, and set it to the size of your canvas (1920 × 1080 is usual). Everything except the graphics is see-through, and they're sized to the source, so they fit any canvas.
+
+<!-- screenshot: Broadcast graphics over a track camera: timing tower top left and a battle bar at the bottom -->
+
+| Graphic | When | What it shows |
+|---|---|---|
+| Timing tower (top left) | Racing and finished | The race name and clock, then the top 8: the leader's lap, and each car's gap to the one ahead. Rows slide as places change, a car that's just gained a place flashes green, and the fastest lap holder has a purple mark. |
+| If it ended now (under the tower) | Racing, in a championship race | Who'd lead the championship. See [If it ended now](big-screen.md#if-it-ended-now). |
+| Battle (bottom) | Racing | The closest two cars in the top 8, when they're less than a second apart: "BATTLE FOR P2  Alex vs Sam  0.42s". |
+| Fastest lap (bottom right) | Racing | Pops up for 6 seconds with each new fastest lap of the race. |
+| The grid (middle) | Staging and countdown | The race name and its grid in order. |
+| The podium (middle) | Finished | The top three, with their laps and best lap. |
+
+To leave graphics out, add `?hide=` and their names to the address, separated by commas: `tower`, `champ`, `battle`, `fastest`, `grid` and `podium`. For example, `/broadcast?hide=grid,podium`.
 
 ### Race remote
 

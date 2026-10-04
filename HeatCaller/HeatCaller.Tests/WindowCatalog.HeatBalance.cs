@@ -9,7 +9,8 @@ internal static partial class WindowCatalog
     /// nine heats that scroll sideways, with a late arrival put in the first
     /// round only (listed as not in the other two); and a night where the
     /// first heat has been recorded and the second is out on track, both
-    /// locked. Every fourth driver has the catalog's longest name.
+    /// locked. Every fourth driver has the catalog's longest name. Each has
+    /// the Group by pace and Spread by pace buttons.
     /// </summary>
     private static IEnumerable<(string Name, Func<Form> Build)> HeatBalanceWindows() => new (string, Func<Form>)[]
     {
@@ -75,6 +76,12 @@ internal static partial class WindowCatalog
             ProfileStore.Load(),
             Color.FromArgb(0xE0, 0x4E, 0x39),
             roundsAreOneRaceDay: true,
-            onTrackRoundId: onTrack);
+            onTrackRoundId: onTrack,
+
+            // A recent best lap for all but the last four, so Group by pace
+            // and Spread by pace are on the form as a club with history sees it.
+            pace: roster.Take(roster.Count - 4)
+                .Select((d, i) => (d.Transponder, Ms: 18_000L + i * 137))
+                .ToDictionary(x => x.Transponder, x => x.Ms, StringComparer.OrdinalIgnoreCase));
     }
 }

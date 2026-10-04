@@ -27,6 +27,7 @@ public sealed class WebServerControl : UserControl
     private readonly TextBox _txtCheckInUrl = new();
     private readonly TextBox _txtManageUrl = new();
     private readonly TextBox _txtOverlayUrl = new();
+    private readonly TextBox _txtBroadcastUrl = new();
 
     // The relay's one line on this page. It is a shortcut to the Online
     // page, never the only door to it - somebody who never opens Phone &
@@ -472,14 +473,15 @@ public sealed class WebServerControl : UserControl
         var btnCopyManage = new Button { Text = "Copy" };
         var btnQrManage = new Button { Text = "QR code" };
         var btnCopyOverlay = new Button { Text = "Copy" };
+        var btnCopyBroadcast = new Button { Text = "Copy" };
 
-        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl })
+        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
         {
             box.ReadOnly = true;
         }
 
         // One column for every caption, as wide as the widest - which is
-        // what makes the five boxes line up rather than each starting
+        // what makes the six boxes line up rather than each starting
         // wherever its own caption happened to end.
         var grid = new FieldGrid();
 
@@ -489,11 +491,15 @@ public sealed class WebServerControl : UserControl
         grid.AddRow("Race manager:", FieldGrid.Inline(_txtManageUrl, btnCopyManage, btnQrManage));
         grid.AddRow("OBS overlay:", FieldGrid.Inline(_txtOverlayUrl, btnCopyOverlay));
 
+        // The broadcast graphics for a stream - see WebServerService.Camera.
+        grid.AddRow("Broadcast graphics:", FieldGrid.Inline(_txtBroadcastUrl, btnCopyBroadcast));
+
         btnCopyResults.Click += (_, _) => CopyIfPresent(_txtResultsUrl.Text);
         btnCopyRemote.Click += (_, _) => CopyIfPresent(_txtRemoteUrl.Text);
         btnCopyCheckIn.Click += (_, _) => CopyIfPresent(_txtCheckInUrl.Text);
         btnCopyManage.Click += (_, _) => CopyIfPresent(_txtManageUrl.Text);
         btnCopyOverlay.Click += (_, _) => CopyIfPresent(_txtOverlayUrl.Text);
+        btnCopyBroadcast.Click += (_, _) => CopyIfPresent(_txtBroadcastUrl.Text);
 
         btnQrResults.Click += (_, _) => ShowPoster(
             _txtResultsUrl.Text, "LIVE RESULTS", "Scan with your phone camera. Same Wi-Fi as this laptop.");
@@ -553,7 +559,7 @@ public sealed class WebServerControl : UserControl
             Fit(box, pin);
         }
 
-        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl })
+        foreach (var box in new[] { _txtResultsUrl, _txtRemoteUrl, _txtCheckInUrl, _txtManageUrl, _txtOverlayUrl, _txtBroadcastUrl })
         {
             Fit(box, url);
         }
@@ -716,6 +722,7 @@ public sealed class WebServerControl : UserControl
             _txtCheckInUrl.Text = _server.LocalUrl() + "checkin";
             _txtManageUrl.Text = _server.LocalUrl() + "manage";
             _txtOverlayUrl.Text = _server.LocalUrl() + "?overlay=1";
+            _txtBroadcastUrl.Text = _server.LocalUrl() + "broadcast";
         }
         else
         {
@@ -727,6 +734,7 @@ public sealed class WebServerControl : UserControl
             _txtCheckInUrl.Text = string.Empty;
             _txtManageUrl.Text = string.Empty;
             _txtOverlayUrl.Text = string.Empty;
+            _txtBroadcastUrl.Text = string.Empty;
         }
     }
 

@@ -2961,7 +2961,13 @@ public sealed class RaceProgramControl : UserControl
 
             // The heat out on track is locked on the form, as the phone
             // refuses to change it: its race is running against that roster.
-            onTrackRoundId: RoundOnTrackId?.Invoke());
+            onTrackRoundId: RoundOnTrackId?.Invoke(),
+
+            // Recent form in this class, for Group by pace and Spread by
+            // pace - see HeatSeeding.
+            // Null - no buttons - when nobody in the class has a lap on record.
+            pace: HeatSeeding.BestLaps(className, _sessionHistory.All, _rounds.Get,
+                DateTime.UtcNow - HeatSeeding.RecentForm) is { Count: > 0 } recent ? recent : null);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
         {

@@ -418,6 +418,12 @@ internal static class LayoutAudit
 
         // The announcer's window: the running order beside the talking points, the spotlight and the feed (AnnouncerControl, measured in a stand-in window of the same title and size - see the test's AnnouncerHost).
         "Announcer",
+
+        // Every check before a green flag as a wall of tiles, the headline over them and Close under them (MissionControlForm).
+        "Mission Control",
+
+        // The finish camera's shots: the night across the top, the list of shots beside the picture, the slider and its time under it (PhotoFinishForm).
+        "Photo Finish",
     };
 
     /// <summary>

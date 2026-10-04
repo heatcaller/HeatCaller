@@ -181,7 +181,10 @@ public sealed class TrackPositions
     /// <param name="Where">The stretch of track it stopped in - "between Split 1 and the line" - or empty when it is moving.</param>
     /// <param name="Rate">How far round it goes a second at its usual pace (0 when stopped), and <paramref name="Cap"/>
     /// how far it may go before the next loop must hear it - so a page polled once a second can move it smoothly between polls.</param>
-    public sealed record Car(string Transponder, int Position, float Fraction, bool Stopped, string Where, float Rate = 0, float Cap = 1);
+    /// <param name="Ghost">Where the car would be on this lap if it were running its best lap of the race (0..1), or -1 when it
+    /// has no best lap yet or has stopped - the best-lap ghost. <paramref name="GhostRate"/> is how far round the ghost goes a second.</param>
+    public sealed record Car(string Transponder, int Position, float Fraction, bool Stopped, string Where, float Rate = 0, float Cap = 1,
+        float Ghost = -1, float GhostRate = 0);
 
     /// <summary>When a car last crossed the line and its last split loop (TimingClock).</summary>
     internal sealed class Seen
@@ -270,6 +273,12 @@ public sealed class TrackPositions
             }
 
             var car = Place(standing.TransponderId, i + 1, seen, line.SplitAt, typical, nowMs, racing);
+
+            if (!car.Stopped && BestLap(standing) is var best and > 0)
+            {
+                car = car with { Ghost = GhostAt(seen.LineAt, best, nowMs), GhostRate = 1000f / best };
+            }
+
             cars.Add(car);
 
             if (car.Stopped && _saidStopped.Add(standing.TransponderId))
@@ -311,6 +320,19 @@ public sealed class TrackPositions
 
     internal static Car Place(string transponder, int position, long lineAt, int split, long splitAt, IReadOnlyList<float> splitFractions, long typicalMs, long nowMs, bool racing) =>
         Place(transponder, position, new Seen { LineAt = lineAt, Split = split, SplitAt = splitAt }, splitFractions, typicalMs, nowMs, racing);
+
+    /// <summary>
+    /// The best-lap ghost: how far round the car would be by
+    /// <paramref name="nowMs"/> had it left the line at
+    /// <paramref name="lineAt"/> on its best lap. It waits at the line once
+    /// a best lap's time has passed - from there on the car is down on it.
+    /// </summary>
+    internal static float GhostAt(long lineAt, long bestMs, long nowMs) =>
+        bestMs <= 0 ? -1 : (float)Math.Clamp((nowMs - lineAt) / (double)bestMs, 0, 1);
+
+    /// <summary>A car's best timed lap this race - the start lap, from the green, is not one. 0 before it has one.</summary>
+    private static long BestLap(RacerStanding standing) =>
+        RaceGaps.PaceLaps(standing).Where(ms => ms > 0).DefaultIfEmpty(0).Min();
 
     /// <summary>The stretch after loop <paramref name="fromSplit"/> (0 = the line), in words.</summary>
     internal static string Stretch(int fromSplit, int splits)

@@ -154,6 +154,13 @@ public sealed class HeatBalanceForm : Form
     private readonly string? _onTrackRoundId;
 
     /// <summary>
+    /// Each driver's recent best lap in the class, by transponder, for Group
+    /// by pace and Spread by pace (HeatSeeding). Null when the caller has no
+    /// history to give - the two buttons are then not shown.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, long>? _pace;
+
+    /// <summary>
     /// With no race day open, how recently a run heat must have been made
     /// to count as tonight's. Long enough for the longest meeting, short
     /// enough that last week's heats never do.
@@ -177,9 +184,11 @@ public sealed class HeatBalanceForm : Form
         ProfileStore profiles,
         Color accent,
         bool roundsAreOneRaceDay = false,
-        string? onTrackRoundId = null)
+        string? onTrackRoundId = null,
+        IReadOnlyDictionary<string, long>? pace = null)
     {
         _accent = accent;
+        _pace = pace;
         _roundsAreOneRaceDay = roundsAreOneRaceDay;
         _onTrackRoundId = onTrackRoundId;
 
@@ -250,6 +259,22 @@ public sealed class HeatBalanceForm : Form
 
         btnSave.Click += (_, _) => Commit();
 
+        // Re-sorting each round's heats by pace (HeatSeeding) - only when
+        // there is history to take the pace from. Like a drag, it edits the
+        // copies: nothing is saved until Save.
+        var spreadBar = new ButtonBar().With(_lblSpread);
+
+        if (_pace is not null)
+        {
+            var btnGroup = new Button { Text = "Group by pace" };
+            var btnSpread = new Button { Text = "Spread by pace" };
+
+            btnGroup.Click += (_, _) => SeedByPace(group: true);
+            btnSpread.Click += (_, _) => SeedByPace(group: false);
+
+            spreadBar = new ButtonBar().With(btnGroup, btnSpread, _lblSpread);
+        }
+
         var page = new FillPage();
         page.Add(lblTitle, gapBelow: UiLayout.HintGap);
         page.Add(lblHint, gapBelow: UiLayout.RowGap);
@@ -265,7 +290,7 @@ public sealed class HeatBalanceForm : Form
         // they were added.
         page.Add(
             new SplitBar(
-                new ButtonBar().With(_lblSpread),
+                spreadBar,
                 new ButtonBar(alignRight: true).With(btnCancel, btnSave)),
             gapBelow: 0);
         btnSave.TabIndex = 0;
@@ -1060,11 +1085,11 @@ public sealed class HeatBalanceForm : Form
     /// because this runs inside the drop itself and a modal dialog opened
     /// there holds the drag open behind it.
     /// </summary>
-    private void Refuse(string message)
+    private void Refuse(string message, string title = "Already in that round")
     {
         BeginInvoke(() =>
         {
-            AppDialog.Show(this, message, "Already in that round", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AppDialog.Show(this, message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         });
     }
 
@@ -1172,6 +1197,71 @@ public sealed class HeatBalanceForm : Form
     /// <summary>Sorts "Q2" before "Q10", and the unnumbered round first.</summary>
     private static int RoundKeyOrder(string key) =>
         key.Length > 1 && int.TryParse(key.AsSpan(1), out var number) ? number : 0;
+
+    /// <summary>
+    /// Re-sorts every qualifying round's heats by pace: similar pace together
+    /// with the fastest in the last heat (<paramref name="group"/>), or a
+    /// snake draft that matches the heats evenly. Only the heats that can
+    /// still change - a recorded heat, or the one on track, keeps its
+    /// drivers - and each keeps the number of drivers it had. Mains are
+    /// left alone: they are filled from qualifying, not by pace.
+    /// </summary>
+    private void SeedByPace(bool group)
+    {
+        if (_pace is null)
+        {
+            return;
+        }
+
+        var rounds = _columns
+            .Where(c => !c.IsSpares && !c.Locked && RoundKeyOf(c) is not null)
+            .GroupBy(c => RoundKeyOf(c)!, StringComparer.Ordinal)
+            .Select(g => g.ToList())
+            .Where(heats => heats.Count >= 2)
+            .ToList();
+
+        if (rounds.Count == 0)
+        {
+            Refuse("Sorting by pace needs two or more qualifying heats in the same round that haven't run yet.", "Nothing to sort");
+            return;
+        }
+
+        var drivers = rounds.SelectMany(heats => heats.SelectMany(c => c.Current)).ToList();
+
+        if (!drivers.Any(d => _pace.TryGetValue(d, out var ms) && ms > 0))
+        {
+            Refuse("None of these drivers has a lap in this class in the last "
+                   + $"{(int)HeatSeeding.RecentForm.TotalDays} days, so there is no pace to sort by.", "No lap times yet");
+            return;
+        }
+
+        foreach (var heats in rounds)
+        {
+            var sizes = heats.Select(c => c.List.Items.Count).ToList();
+            var pool = heats.SelectMany(c => c.Current).ToList();
+
+            var seeded = group
+                ? HeatSeeding.Group(sizes, pool, _pace)
+                : HeatSeeding.Spread(sizes, pool, _pace);
+
+            for (var i = 0; i < heats.Count; i++)
+            {
+                var list = heats[i].List;
+
+                list.BeginUpdate();
+                list.Items.Clear();
+
+                foreach (var transponder in seeded[i])
+                {
+                    list.Items.Add(new Entry(transponder, NameOf(transponder)));
+                }
+
+                list.EndUpdate();
+            }
+        }
+
+        AfterChange();
+    }
 
     private void AfterChange()
     {

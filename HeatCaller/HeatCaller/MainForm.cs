@@ -352,6 +352,9 @@ public partial class MainForm : Form
 
     /// <summary>Where each car is on the track, for the live track map - see TrackPositions and MainForm.TrackMap.</summary>
     private readonly TrackPositions _trackPositions = new();
+
+    /// <summary>The webcam photo finish - which crossings the camera page should keep. See PhotoFinish and MainForm.PhotoFinish.</summary>
+    private readonly PhotoFinish _photoFinish = new();
     private SoundEffectsControl _soundEffectsControl = null!;
 
     /// <summary>
@@ -1313,6 +1316,7 @@ public partial class MainForm : Form
 
         // The live track map: following the race's crossings - see MainForm.TrackMap.
         WireTrackMap();
+        WirePhotoFinish();
 
         _decoderAutoConnectRetryTimer.Tick += (_, _) =>
         {

@@ -279,7 +279,13 @@ public sealed partial class RaceControlControl
             () => _achievements,
             watch: _transponderWatch,
             roster: () => PreRaceRoster().Roster,
-            trackMap: TrackMap).Show();
+            trackMap: TrackMap,
+
+            // Between races, the attract cards; during one that counts
+            // towards a championship, "if it ended now" - see
+            // RaceControlControl.Tonight.
+            attract: AttractCards,
+            ifItEndedNow: ChampionshipIfItEndedNow).Show();
         _btnBigScreen.Click += (_, _) => _actBigScreen();
 
         // --- The flags ---

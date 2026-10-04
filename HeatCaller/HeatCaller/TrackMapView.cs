@@ -3,7 +3,8 @@ namespace HeatCaller;
 /// <summary>
 /// The live track map, drawn: the racing line from the Track Designer, the
 /// finish line and split loops across it, and a dot for each car moving
-/// round at its pace - its race position in the dot. A car that seems to have
+/// round at its pace - its race position in the dot - with a dotted ring
+/// for each of the leaders' best laps (the best-lap ghost). A car that seems to have
 /// stopped turns red and pulses where it stopped (TrackPositions), so a
 /// marshal can be sent before anyone has asked where it went.
 ///
@@ -34,6 +35,14 @@ internal sealed class TrackMapView : Control
     public Color Track { get; set; } = Color.FromArgb(60, 60, 60);
     public Color Ink { get; set; } = Color.White;
     public Color Muted { get; set; } = Color.Gray;
+
+    /// <summary>
+    /// The best-lap ghosts are drawn for the cars this high up the order - a
+    /// faint ring in the car's colour where it would be on its best lap of
+    /// the race. Ahead of its ring, a car is on a personal best; behind it,
+    /// it isn't. Only the top few, so the map stays readable. 0 for none.
+    /// </summary>
+    public int GhostsFor { get; set; } = 3;
 
     public TrackMapView()
     {
@@ -117,6 +126,18 @@ internal sealed class TrackMapView : Control
         var radius = Math.Max(7f, width * 1.15f);
         using var label = new Font(AppTheme.BoldFont.FontFamily, Math.Max(6f, radius * 0.95f), FontStyle.Bold, GraphicsUnit.Pixel);
         var pulse = (float)NextUpBar.PulseAt(Environment.TickCount64 - _started);
+
+        // The ghosts first, under every car.
+        foreach (var car in now.Cars.Where(c => c.Ghost >= 0 && !c.Stopped && c.Position <= GhostsFor))
+        {
+            var ghost = Screen(line.At(car.Ghost));
+            var colour = DriverColours[(car.Position - 1) % DriverColours.Length];
+
+            using var ghostPen = new Pen(Color.FromArgb(150, colour), Math.Max(1.5f, radius / 4)) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dot };
+            // Wider than a car, so it still shows round one running right on it.
+            var ring = radius * 1.5f;
+            g.DrawEllipse(ghostPen, ghost.X - ring, ghost.Y - ring, ring * 2, ring * 2);
+        }
 
         foreach (var car in now.Cars.OrderByDescending(c => c.Position))
         {

@@ -95,6 +95,7 @@ All data files are plain JSON text, except where noted.
 | `sponsors.json` | Sponsor slide settings (**Sponsors** page). |
 | `Sponsors\` | Sponsor slide images. The `_removed` subfolder keeps slides you removed so the removal can be undone. |
 | `DriverPhotos\` | Driver photos, resized when you added them. |
+| `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
 | `club-logo-*.png` | The club logo (**Themes** page), used in the app, on the Big Screen, the Wi-Fi pages and the online pages. Only a logo file HeatCaller made itself is used. |
 
 ### Settings, logs and recovery files

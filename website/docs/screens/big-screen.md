@@ -25,10 +25,10 @@ From top to bottom:
 - **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
 - **Countdown** on the right, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit.
 - **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news, such as the quickest lap of the session, is highlighted in color. Warnings aren't shown on the Big Screen, so it stays readable from across the room.
-- **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable).
+- **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable). During a race that counts towards a championship, the bar shows the championship instead. See [If it ended now](#if-it-ended-now).
 - **Track map**, down the right-hand side, when the layout you're racing on has a plan. See [Track map](#track-map).
 
-Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call).
+Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call). Between races, it gives way to the [between-races cards](#between-races).
 
 If you've set a club logo, it sits in the top-left corner. Untick **Show the logo on the Big Screen and Wi-Fi pages** on the **Themes** page to hide it. A logo that would vanish on the background, such as a black logo on a black screen, is put on a plate.
 
@@ -53,6 +53,45 @@ The headline counts them in, for example "ROLL CALL - 6 OF 8 CARS HEARD", and re
 
 The roll call doesn't run in practice or Demo Mode, or on a Big Screen opened from the **Practice** page.
 
+## Between races
+
+With no race on, and once a finished race's result has been on screen for 45 seconds, the Big Screen turns over a card every 8 seconds instead of showing the board. A card slides in, and dots in the top-right corner show which card of how many it is.
+
+<!-- screenshot: Big Screen between races showing the UP NEXT card with the grid listed -->
+
+| Card | What's on it |
+|---|---|
+| **UP NEXT - *race*** | The next race to run and its grid in order, with the two races after it underneath ("Then: ..."). |
+| **TONIGHT'S FASTEST LAPS** | The quickest single lap in each class tonight, and who set it. |
+| **THE TRACK TONIGHT** | How much quicker or slower each class is running than in its first race tonight, for example "Track 0.31s quicker since Q1 Heat 1". See [Track evolution](#track-evolution). |
+| **CHAMPIONSHIP - *name*** | The championship's top five and their points: the championship for the next race's class, or else the one raced in most recently. |
+
+A card with nothing to say is left out. With no card at all, the board stays up. The cards always start from **UP NEXT**.
+
+- The grid roll call and sponsor slides come first: the cards wait while either is up.
+- The cards don't show in practice, Demo Mode or a warm-up.
+- The track map is hidden while the cards are up.
+
+"Tonight" runs from 6 a.m. to 6 a.m., so a club night that goes past midnight is one night. A race counts for its class through the round it was run for, so a freeform race with no round isn't on the cards.
+
+### Track evolution
+
+To see how the track is changing, HeatCaller compares each driver with themselves. For every driver in the class who has raced more than once tonight, it takes their middle lap (their laps after the first, put in order, and the one in the middle) in their first race and in their latest, and sees how much it changed. The middle of those changes is the figure. One flyer or one crash lap doesn't move a middle lap, and comparing drivers with themselves means a heat of quicker drivers doesn't look like a quicker track. It needs at least two drivers who have raced twice, each with 3 or more laps after the first in both races.
+
+Race Control's Next Up bar shows the same figure for the next race's class. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
+
+## If it ended now
+
+During a race that counts towards a championship, the **ON DECK:** bar shows the championship table as it would stand if the race ended now, for example:
+
+"IF IT ENDED NOW:  Sam would take the Winter Series lead from Alex   •   1. Sam 19 ▲1   2. Alex 18 ▼1   3. Dan 9 NEW"
+
+Each driver has their points with this race counted at their current place, and how many places they'd move: ▲ up, ▼ down, NEW for their first points. It's worked out again every couple of seconds as the order changes, scored exactly as the result will be when it's saved (best rounds, drivers kept out of records, and so on).
+
+<!-- screenshot: Big Screen during a race with the IF IT ENDED NOW bar at the bottom -->
+
+It only shows for a championship whose rule takes the race: its class, **Mains only** and race days, on the **Championship** page. A race only ticked into a championship by hand doesn't show it, since it can't be ticked until it's saved. It doesn't show in practice, Demo Mode or a warm-up. When the race ends, the bar goes back to **ON DECK:**.
+
 ## Track map
 
 If the layout you're racing on has a plan in the Track Designer with the racing line and the finish line drawn, the Big Screen shows a live map down its right-hand side. Each car is a dot going round, colored by its place in the race, with its position in the dot. The finish line is marked "S/F" and any split loops "S1", "S2" and "S3".
@@ -60,6 +99,8 @@ If the layout you're racing on has a plan in the Track Designer with the racing 
 <!-- screenshot: Big Screen with the leaderboard on the left and the track map on the right -->
 
 Press <kbd>M</kbd> to hide the map and give the leaderboard the whole width; press it again to bring the map back.
+
+A dotted ring in each of the top three cars' colors is that car's best-lap ghost: where it would be on this lap if it were running its best lap of the race. A car ahead of its ring is on a personal best lap. The ring waits at the finish line once the best lap's time has passed. A car has no ghost until it has a timed lap (the lap from the start doesn't count).
 
 The layout is the one picked in **Track:** on the **Race Control** page. For the map to appear, its plan needs:
 

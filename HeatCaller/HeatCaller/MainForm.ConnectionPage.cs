@@ -122,6 +122,14 @@ public partial class MainForm
         btnMissionControl.Click += (_, _) => ShowMissionControl();
         grid.AddRow("Before a race:", FieldGrid.Inline(btnMissionControl));
 
+        // The webcam photo finish: the camera page in this PC's browser, and
+        // the pictures it keeps - see PhotoFinish.
+        var btnCamera = new Button { Text = "Open Camera Page" };
+        btnCamera.Click += (_, _) => OpenCameraPage();
+        var btnPhotoFinish = new Button { Text = "Photo Finish..." };
+        btnPhotoFinish.Click += (_, _) => ShowPhotoFinish();
+        grid.AddRow("Finish camera:", FieldGrid.Inline(btnCamera, btnPhotoFinish));
+
         // The split loop: the other decoder, partway round the track - see
         // MainForm.SplitLoop. Its light and line show only while it is on.
         cmbSplitLoop.DropDownStyle = ComboBoxStyle.DropDownList;

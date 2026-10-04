@@ -31,7 +31,7 @@ namespace HeatCaller;
 /// Start() surfaces that clearly rather than failing silently - see the
 /// UrlReservationHint below.
 /// </summary>
-public sealed class WebServerService
+public sealed partial class WebServerService
 {
     private readonly RaceControlSession _race;
     private readonly ProfileStore _profiles;
@@ -100,6 +100,14 @@ public sealed class WebServerService
     /// the live state is built. Never in the relay's copy.
     /// </summary>
     public Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? TrackMap { get; set; }
+
+    /// <summary>
+    /// The championship as it would stand if the race on track ended now
+    /// (ChampionshipLive), for the Live Results page - null when no race that
+    /// counts towards one is on. Asked on the UI thread as the LAN copy of
+    /// the live state is built. Never in the relay's copy.
+    /// </summary>
+    public Func<IfItEndedNow?>? IfItEndedNow { get; set; }
 
     private volatile bool _hostReady;
 
@@ -1449,6 +1457,16 @@ public sealed class WebServerService
             case "/logo.png":
                 HandleLogo(context);
                 break;
+            case "/broadcast":
+                // The broadcast graphics for OBS - see WebServerService.Camera.
+                WriteHtml(context, BuildBroadcastPage());
+                break;
+            case "/camera":
+            case "/api/camera/shots":
+            case "/api/camera/frame":
+                // The photo-finish camera, on this PC only - see WebServerService.Camera.
+                HandleCamera(context, path);
+                break;
             default:
                 context.Response.StatusCode = 404;
                 WriteText(context, "Not found");
@@ -2413,6 +2431,15 @@ public sealed class WebServerService
             // The board without the track map, rather than no board.
         }
 
+        try
+        {
+            AddIfItEndedNow(node);
+        }
+        catch
+        {
+            // The board without the championship, rather than no board.
+        }
+
         return node.ToJsonString();
     }
 
@@ -2453,6 +2480,11 @@ public sealed class WebServerService
                 ["cap"] = Round(c.Cap),
                 ["stop"] = c.Stopped,
                 ["where"] = c.Where,
+
+                // The best-lap ghost: where it would be on its best lap, and
+                // how fast that ghost goes round. -1 for none.
+                ["g"] = Round(c.Ghost),
+                ["gr"] = Math.Round(c.GhostRate, 5),
             })
             .ToArray());
 
@@ -2461,6 +2493,36 @@ public sealed class WebServerService
             ["pts"] = points,
             ["splits"] = splits,
             ["cars"] = placed,
+        };
+    }
+
+    /// <summary>
+    /// Adds the championship as it would stand if the race ended now: its
+    /// name, the headline, and the top of the table with each move. Null
+    /// when no race that counts towards one is on.
+    /// </summary>
+    private void AddIfItEndedNow(System.Text.Json.Nodes.JsonObject node)
+    {
+        if (IfItEndedNow?.Invoke() is not { } table)
+        {
+            node["champ"] = null;
+            return;
+        }
+
+        node["champ"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["season"] = table.SeasonName,
+            ["headline"] = table.Headline,
+            ["rows"] = new System.Text.Json.Nodes.JsonArray(table.Rows
+                .Select(r => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["pos"] = r.Position,
+                    ["name"] = r.DriverName,
+                    ["pts"] = r.Points,
+                    ["move"] = ChampionshipLive.Arrow(r).Trim(),
+                    ["racing"] = r.InThisRace,
+                })
+                .ToArray()),
         };
     }
 
@@ -2485,6 +2547,15 @@ public sealed class WebServerService
 
         var cards = new System.Text.Json.Nodes.JsonObject();
 
+        // Each car's best lap too, for the lap times spoken in a follower's
+        // earbuds ("best lap") and the broadcast graphics.
+        var bestOf = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var standing in ordered)
+        {
+            bestOf.TryAdd(standing.TransponderId, standing.FastestLapMs);
+        }
+
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
         {
             cards[id] = new System.Text.Json.Nodes.JsonObject
@@ -2492,6 +2563,7 @@ public sealed class WebServerService
                 ["pos"] = card.Position,
                 ["laps"] = card.Laps,
                 ["last"] = card.LastLapMs,
+                ["best"] = bestOf.GetValueOrDefault(id),
                 ["ahead"] = card.Ahead,
                 ["behind"] = card.Behind,
             };
@@ -2844,13 +2916,27 @@ public sealed class WebServerService
         @keyframes callpulse { 0%,100% { box-shadow:0 0 0 0 transparent; } 50% { box-shadow:0 0 0 6px var(--accent); } }
         tr.me td { outline:2px solid var(--accent); outline-offset:-2px; }
         body.overlay .follow { display:none; }
+        /* Lap times read out on the phone, for earbuds. */
+        .speak { font:inherit; font-size:14px; margin-left:8px; padding:6px 10px; border-radius:8px; cursor:pointer;
+                 background:var(--bg); color:var(--soft); border:1px solid var(--border); }
+        .speak.on { color:var(--accent); border-color:var(--accent); font-weight:700; }
+        /* If it ended now: the championship with this race counted as it stands. */
+        .champ { display:none; background:var(--surface); border-bottom:1px solid var(--border); padding:8px 18px; font-size:14px; }
+        .champ .chead { font-weight:800; color:var(--accent); letter-spacing:.04em; }
+        .champ .crow { display:inline-block; margin:4px 14px 0 0; color:var(--soft); }
+        .champ .crow b { color:var(--text); }
+        .champ .crow.racing b { color:var(--accent); }
+        .champ .up { color:var(--good); } .champ .down { color:var(--bad); }
+        body.overlay .champ { display:none !important; }
         </style></head><body data-look="{{look.Fingerprint}}">
         <div class="bar"><h1>{{look.Logo}}LIVE RESULTS</h1>
           <div><span class="state" id="state">-</span> &nbsp; <span class="countdown" id="countdown"></span></div>
         </div>
         <div class="ondeck" id="ondeck" style="display:none"></div>
+        <div class="champ" id="champ"></div>
         <div class="follow" id="follow">
           <select id="followPick"><option value="">Follow a driver...</option></select>
+          <button type="button" class="speak" id="speakBtn" style="display:none">Lap times in my ear: off</button>
           <div class="fcard" id="fcard"><span class="fpos" id="fpos"></span>
             <span><span class="fname" id="fname"></span><br><span class="fstat" id="fstat"></span></span></div>
           <div class="callup" id="callup"></div>
@@ -2919,6 +3005,7 @@ public sealed class WebServerService
 
             showFollowing(d);
             takeMap(d.map);
+            showChamp(d.champ);
 
             window.lastRows = d.standings;
             drawLaps(d.standings);
@@ -3086,8 +3173,21 @@ public sealed class WebServerService
             const stopped = (map.cars || []).filter(c => c.stop);
             document.getElementById('mapLegend').innerHTML = stopped.length
               ? stopped.map(c => `<span style="color:var(--bad)">${esc(nameOf(c.id))} may have stopped ${esc(c.where)}</span>`).join('')
-              : '<span>Each dot is a car, its number its place in the race.</span>';
+              : '<span>Each dot is a car, its number its place in the race.' +
+                (following ? ' The dotted ring is your driver on their best lap of the race.' : '') + '</span>';
           }
+        }
+
+        // --- If it ended now ---------------------------------------------
+        function showChamp(c){
+          const el = document.getElementById('champ');
+          if (!c || !c.rows || !c.rows.length){ el.style.display = 'none'; return; }
+          el.innerHTML = `<div class="chead">IF IT ENDED NOW - ${esc(c.headline)}</div>` + c.rows.slice(0, 6).map(r => {
+            const cls = r.move.startsWith('\u25B2') ? 'up' : r.move.startsWith('\u25BC') ? 'down' : '';
+            return `<span class="crow${r.racing ? ' racing' : ''}">${r.pos}. <b>${esc(r.name)}</b> ${r.pts}` +
+              (r.move ? ` <span class="${cls}">${esc(r.move)}</span>` : '') + '</span>';
+          }).join('');
+          el.style.display = 'block';
         }
 
         function nameOf(id){
@@ -3139,6 +3239,16 @@ public sealed class WebServerService
           (map.splits || []).forEach((f,i) => mark(f, 'S' + (i+1), INK.soft));
 
           const secs = (performance.now() - mapAt) / 1000, pulse = (1 - Math.cos(performance.now()/1100*2*Math.PI))/2;
+
+          // The followed driver's best-lap ghost: a dotted ring where they
+          // would be on their best lap of the race. Ahead of it, a PB lap.
+          const mine = (map.cars || []).find(c => c.id === following && !c.stop && c.g >= 0);
+          if (mine){
+            const q = P(pointAt(pts, cum, Math.min(1, mine.g + mine.gr * secs)));
+            g.setLineDash([3, 4]); g.strokeStyle = COLOURS[(mine.pos-1) % COLOURS.length]; g.lineWidth = 2.5;
+            g.beginPath(); g.arc(q[0], q[1], 17, 0, Math.PI*2); g.stroke(); g.setLineDash([]);
+          }
+
           [...(map.cars || [])].sort((a,b) => b.pos - a.pos).forEach(c => {
             const f = c.stop ? c.f : Math.min(c.cap, c.f + c.rate * secs);
             const q = P(pointAt(pts, cum, f));
@@ -3208,6 +3318,8 @@ public sealed class WebServerService
             fc.style.display = 'none';
           }
 
+          speakLap(card);
+
           const call = (d.callups || {})[following];
           const cu = document.getElementById('callup');
           if (following && call){
@@ -3223,6 +3335,88 @@ public sealed class WebServerService
             cu.style.display = 'none';
             lastCallKey = lastCallKey || 'none';
           }
+        }
+
+        // --- Lap times in your ear ---------------------------------------
+        // Each new lap of the driver being followed, read out by the phone's
+        // own voice: "Lap 7, 19.42, best lap, P2, 0.4 seconds behind". On
+        // with the button, remembered on this phone. Turning it on speaks
+        // once straight away, which is what lets a phone speak later.
+        const SPEAK_KEY = 'hcSpeak';
+        const speakBtn = document.getElementById('speakBtn');
+        let speaking = false, unlocked = false;
+        try { speaking = localStorage.getItem(SPEAK_KEY) === '1'; } catch(e) {}
+        let spokenFor = '', spokenLap = -1;
+        const canSpeak = 'speechSynthesis' in window;
+
+        function sayAloud(text){
+          try {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 1.1;
+            window.speechSynthesis.speak(u);
+          } catch(e) {}
+        }
+
+        // A phone only lets a page speak once it has been tapped since it
+        // loaded - so after a reload with this on, it waits for a tap.
+        function showSpeak(){
+          speakBtn.style.display = canSpeak && following ? 'inline-block' : 'none';
+          speakBtn.textContent = 'Lap times in my ear: ' + (!speaking ? 'off' : unlocked ? 'on' : 'tap to resume');
+          speakBtn.classList.toggle('on', speaking);
+        }
+
+        document.addEventListener('pointerdown', e => {
+          if (unlocked || e.target === speakBtn) return;
+          unlocked = true;
+          if (speaking) sayAloud(' ');
+          showSpeak();
+        }, true);
+
+        // Not reloaded for a change of look while it is talking.
+        function lookBusy(){ return speaking; }
+
+        speakBtn.addEventListener('click', () => {
+          // On, but waiting for a tap since a reload: this tap resumes it.
+          if (speaking && !unlocked){
+            unlocked = true; spokenFor = '';
+            sayAloud('Lap times on'); showSpeak();
+            return;
+          }
+          unlocked = true;
+          speaking = !speaking;
+          try { localStorage.setItem(SPEAK_KEY, speaking ? '1' : '0'); } catch(e) {}
+          if (speaking) sayAloud('Lap times on'); else { try { window.speechSynthesis.cancel(); } catch(e) {} }
+          spokenFor = '';
+          showSpeak();
+        });
+
+        function gapWords(gap){
+          const laps = /^\+(\d+)L$/.exec(gap || '');
+          if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
+          const secs = /^\+(\d+([.,]\d+)?)$/.exec(gap || '');
+          return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
+        }
+
+        function speakLap(card){
+          showSpeak();
+          if (!speaking || !unlocked || !following || !card) return;
+
+          // A new driver, or a new race: start counting from here, quietly.
+          if (spokenFor !== following || card.laps < spokenLap){
+            spokenFor = following; spokenLap = card.laps;
+            return;
+          }
+
+          if (card.laps <= spokenLap || !(card.last > 0)) return;
+          spokenLap = card.laps;
+
+          const parts = ['Lap ' + card.laps, (card.last / 1000).toFixed(2)];
+          if (card.best > 0 && card.last <= card.best && card.laps > 1) parts.push('best lap');
+          parts.push('P' + card.pos);
+          const gap = gapWords(card.ahead);
+          if (gap) parts.push(gap);
+          sayAloud(parts.join(', '));
         }
 
         function buzz(){

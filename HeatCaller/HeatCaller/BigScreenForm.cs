@@ -137,6 +137,25 @@ public sealed class BigScreenForm : Form
     /// <summary>How much of the board's width the map takes.</summary>
     private const float MapShare = 0.36f;
 
+    /// <summary>
+    /// The between-races cards (AttractMode): up when no race is on, or a
+    /// finished one's board has had its time - never over the roll call or a
+    /// sponsor slide. <see cref="_attractShowing"/> while they are up.
+    /// </summary>
+    private readonly AttractBoard _attractBoard = new();
+    private readonly Func<IReadOnlyList<AttractCard>>? _attract;
+    private bool _attractShowing;
+    private DateTime? _finishedSinceUtc;
+
+    /// <summary>
+    /// The championship as it would stand if the race ended now
+    /// (ChampionshipLive), shown in the bottom bar in place of On Deck while
+    /// a race that counts towards one is on. <see cref="_tickerShowing"/>
+    /// while it is.
+    /// </summary>
+    private readonly Func<IfItEndedNow?>? _ifItEndedNow;
+    private bool _tickerShowing;
+
     private bool _isFullscreen;
     private FormBorderStyle _restoreBorderStyle;
     private FormWindowState _restoreWindowState;
@@ -145,9 +164,12 @@ public sealed class BigScreenForm : Form
         DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null,
         QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null,
         TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
-        Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null)
+        Func<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>? trackMap = null,
+        Func<IReadOnlyList<AttractCard>>? attract = null, Func<IfItEndedNow?>? ifItEndedNow = null)
     {
         _trackMap = trackMap;
+        _attract = attract;
+        _ifItEndedNow = ifItEndedNow;
         _watch = watch;
         _roster = roster;
         _projector = projector;
@@ -549,6 +571,11 @@ public sealed class BigScreenForm : Form
         _mapView.Visible = false;
         _mapView.Source = _trackMap;
 
+        _attractBoard.Dock = DockStyle.Fill;
+        _attractBoard.Visible = false;
+        _attractBoard.Source = _attract;
+
+        _pnlLeaderboardArea.Controls.Add(_attractBoard);
         _pnlLeaderboardArea.Controls.Add(_rollCall);
         _pnlLeaderboardArea.Controls.Add(_picSponsor);
         _pnlLeaderboardArea.Controls.Add(_grid);
@@ -703,7 +730,8 @@ public sealed class BigScreenForm : Form
     /// <summary>Shows whatever's next on the day schedule, so racers can be called to the table. Hidden entirely when no schedule was passed in.</summary>
     private void RefreshOnDeck()
     {
-        if (_schedule is null)
+        // The championship ticker has the bar while a race is on (UpdateTicker).
+        if (_schedule is null || _tickerShowing)
         {
             return;
         }
@@ -820,6 +848,8 @@ public sealed class BigScreenForm : Form
         }
 
         _grid.Visible = false;
+        _attractBoard.Visible = false;
+        _attractShowing = false;
         _picSponsor.Visible = true;
         _showingSponsor = true;
         _sponsorTimer.Interval = SponsorIntervalMs(_sponsors!.Current.SlideSeconds);
@@ -834,6 +864,10 @@ public sealed class BigScreenForm : Form
         _grid.Visible = _rollCallSinceUtc is null;
         _showingSponsor = false;
         _sponsorTimer.Interval = SponsorIntervalMs(_sponsors!.Current.LeaderboardSeconds);
+
+        // Straight back to the cards when it is their time, rather than the
+        // board for half a second first.
+        UpdateAttract();
     }
 
     /// <summary>
@@ -1112,7 +1146,9 @@ public sealed class BigScreenForm : Form
         _lblElapsed.Text = ElapsedText();
 
         UpdateRollCall();
+        UpdateAttract();
         UpdateTrackMap();
+        UpdateTicker();
 
         // Also refresh the banner here, not just on lap events - otherwise
         // it goes stale between laps, and never recovers once a displayed
@@ -1188,7 +1224,7 @@ public sealed class BigScreenForm : Form
 
         try
         {
-            show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && _trackMap().Line is not null;
+            show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && !_attractShowing && _trackMap().Line is not null;
         }
         catch
         {
@@ -1198,6 +1234,117 @@ public sealed class BigScreenForm : Form
         if (_mapView.Visible != show)
         {
             _mapView.Visible = show;
+        }
+    }
+
+    /// <summary>
+    /// Shows the between-races cards in place of the board when it is their
+    /// time (AttractMode.Showing) and there are any to show; the board again
+    /// when it isn't. The roll call and a sponsor slide both come first. A
+    /// card that fails must not take the Big Screen with it: the board is
+    /// shown instead.
+    /// </summary>
+    private void UpdateAttract()
+    {
+        if (_race.State == RaceState.Finished)
+        {
+            _finishedSinceUtc ??= DateTime.UtcNow;
+        }
+        else
+        {
+            _finishedSinceUtc = null;
+        }
+
+        bool show;
+
+        try
+        {
+            var finishedFor = _finishedSinceUtc is { } since ? DateTime.UtcNow - since : TimeSpan.Zero;
+
+            show = _attract is not null
+                && _rollCallSinceUtc is null
+                && !_showingSponsor
+                && AttractMode.Showing(_race.State, finishedFor, _race.IsWarmingUp, _race.IsPracticeMode, _race.IsDemoMode);
+
+            if (show && !_attractShowing)
+            {
+                // Only when there is a card to show - otherwise the board stays.
+                _attractBoard.Reload();
+                show = _attractBoard.HasCards;
+            }
+            else if (show && !_attractBoard.HasCards)
+            {
+                // The cards ran out while up (the last race run, say): the board again.
+                show = false;
+            }
+        }
+        catch
+        {
+            show = false;
+        }
+
+        if (show == _attractShowing)
+        {
+            return;
+        }
+
+        _attractShowing = show;
+
+        if (show)
+        {
+            ColourRollCall();
+            _grid.Visible = false;
+            _attractBoard.Visible = true;
+        }
+        else
+        {
+            _attractBoard.Visible = false;
+            _grid.Visible = _rollCallSinceUtc is null && !_showingSponsor;
+        }
+
+        // The map goes with the board, and comes back with it.
+        UpdateTrackMap();
+    }
+
+    /// <summary>
+    /// The bottom bar during a race that counts towards a championship: the
+    /// table as it would stand if the race ended now, in place of On Deck.
+    /// Back to On Deck when the race is over or counts towards none.
+    /// </summary>
+    private void UpdateTicker()
+    {
+        IfItEndedNow? table = null;
+
+        try
+        {
+            table = _ifItEndedNow?.Invoke();
+        }
+        catch
+        {
+            // No ticker rather than no Big Screen.
+        }
+
+        if (table is not null)
+        {
+            _tickerShowing = true;
+            _pnlOnDeck.Visible = true;
+
+            var text = ChampionshipLive.Ticker(table, 3);
+
+            if (_lblOnDeck.Text != text)
+            {
+                _lblOnDeck.Text = text;
+            }
+
+            return;
+        }
+
+        if (_tickerShowing)
+        {
+            _tickerShowing = false;
+            _pnlOnDeck.Visible = _schedule is not null;
+            _lblOnDeck.Text = string.Empty;
+            RefreshOnDeck();
         }
     }
 
@@ -1216,6 +1363,13 @@ public sealed class BigScreenForm : Form
         _mapView.Ink = TextColor;
         _mapView.Muted = MutedColor;
         _mapView.Invalidate();
+
+        _attractBoard.Canvas = CanvasColor;
+        _attractBoard.Ink = TextColor;
+        _attractBoard.Muted = MutedColor;
+        _attractBoard.Highlight = HighlightColor;
+        _attractBoard.Rule = GridLineColor;
+        _attractBoard.Invalidate();
     }
 
     private void ToggleFullscreen()

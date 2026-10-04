@@ -442,6 +442,15 @@ public sealed partial class RaceControlControl
             }
         }
 
+        // Track evolution for the next race's class (TonightAtTheTrack): how
+        // much quicker or slower the class is running than in its first race
+        // tonight - what the drivers ask each other in the pits.
+        if (EvolutionFor(next?.ClassName) is { } evolution)
+        {
+            var words = evolution.Words;
+            day += $"{(day.Length > 0 ? " · " : string.Empty)}{evolution.ClassName}: {char.ToLowerInvariant(words[0])}{words[1..]}";
+        }
+
         // --- Is anything owed before the next race can go out? ---
         //
         // The rule lives in ProgramNextStep, which puts bump-ups ahead of

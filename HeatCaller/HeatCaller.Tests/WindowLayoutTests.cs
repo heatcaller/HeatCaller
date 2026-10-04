@@ -122,6 +122,9 @@ internal static partial class WindowCatalog
         all.AddRange(ReportWindows());
         all.AddRange(RaceControlPopupWindows());
 
+        // Mission Control and Photo Finish, which sit beside Race Control (4 Oct).
+        all.AddRange(RaceNightScreenWindows());
+
         // The garage, setup sheets and batteries (30 Sep).
         all.AddRange(GarageWindows());
         all.AddRange(ChassisSheetWindows());

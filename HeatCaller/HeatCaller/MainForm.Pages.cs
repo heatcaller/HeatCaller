@@ -62,6 +62,10 @@ public partial class MainForm
         // their next race and where do they grid. See PhoneFollow.
         _webServer.UpcomingRaces = () => raceControl.UpcomingRaces(8);
 
+        // The championship as it would stand if the race ended now, for the
+        // Live Results page - see ChampionshipLive.
+        _webServer.IfItEndedNow = raceControl.ChampionshipIfItEndedNow;
+
         // The live track map, for the Big Screen this page opens - see MainForm.TrackMap.
         raceControl.TrackMap = TrackMapNow;
 

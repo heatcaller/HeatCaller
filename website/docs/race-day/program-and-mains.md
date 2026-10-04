@@ -154,8 +154,20 @@ For a no-show or a late entry across every heat still to run, **Redo Remaining H
 - A driver can only be in one heat of each qualifying round. Dropping a driver on a heat they're already in, or on a heat in a qualifying round they already have a heat in, is refused with a message saying where they are. That includes a heat they've already raced tonight ("... has already raced ..., which is in the same round as ..."). Mains aren't limited this way.
 - Rounds that have already been recorded are marked "recorded, locked" and can't be changed.
 - The line at the bottom shows the spread, for example "3 heats, between 6 and 7 drivers each."
+- **Group by pace** and **Spread by pace** re-sort every qualifying round's heats by pace. See [Heats by pace](#heats-by-pace).
 
 Nothing is saved until you click **Save**, and **Cancel** discards everything. If a heat ends up empty, HeatCaller asks before saving. The whole session's changes are one step for **Undo**.
+
+#### Heats by pace
+
+Two buttons at the bottom of **Move Drivers Between Heats...** sort the drivers in each qualifying round's heats by pace:
+
+- **Group by pace** puts drivers of similar pace together, with the quickest in the last heat. That's close racing in every heat, and the quickest cars on track last.
+- **Spread by pace** makes every heat as evenly matched as the next. The quickest goes to the first heat, the next to the second, and so on to the last heat and back again.
+
+Pace is each driver's best lap in this class in the races saved over the last 60 days. Drivers with no lap in that time go after everyone who has one. The buttons are only there once someone in the class has a lap from that time. Each heat keeps the number of drivers it had, and each heat's order (its grid) is quickest first.
+
+Only heats that can still change are sorted: a recorded heat, or the one on track, keeps its drivers. Each qualifying round is sorted on its own, and mains aren't touched. With no round of two or more such heats, or no lap times for these drivers, HeatCaller says so and changes nothing. As with a drag, nothing is saved until you click **Save**.
 
 ### Change the running order
 
