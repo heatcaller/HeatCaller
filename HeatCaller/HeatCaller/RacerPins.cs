@@ -446,6 +446,20 @@ internal static class RacerPins
             .Where(p => p.Length > 0)
             .ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Whether some racer already has this as their personal PIN. A new
+    /// staff, Wi-Fi or manager PIN is refused when it is (RelaySettingsControl,
+    /// WebServerControl.SavePins). EnsurePins then used to give the racer a
+    /// new PIN, but the old one may already have been emailed - and typed at
+    /// the check-in page it opened the whole list, the manager or the remote.
+    /// </summary>
+    internal static bool IsHeldByRacer(AppSettings settings, string pin)
+    {
+        var wanted = (pin ?? string.Empty).Trim();
+
+        return wanted.Length > 0 && settings.RacerPins.Values.Contains(wanted, StringComparer.Ordinal);
+    }
+
     /// <summary>Every racer who gets a PIN: every real driver (All leaves the ghosts out), by transponder.</summary>
     private static HashSet<string> Racers(ProfileStore profiles) =>
         profiles.All

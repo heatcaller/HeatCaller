@@ -72,7 +72,11 @@ public sealed partial class RaceDayService
     {
         position = entry.Position,
         id = DriverIdFor(entry.Transponder),
-        name = string.IsNullOrWhiteSpace(entry.DriverName) ? ShowTransponder(entry.Transponder, channel) : entry.DriverName,
+        // ShownName, not a blank check: an unnamed car's result is saved
+        // with the transponder AS its name (RaceFiling), which is not blank,
+        // so the whole number went through the relay beside a transponder
+        // column careful to show only its last three characters.
+        name = ShownName(entry.DriverName, entry.Transponder, channel),
         car = entry.CarModel,
         laps = entry.Laps,
         fastLapMs = entry.FastLapMs,
@@ -139,7 +143,10 @@ public sealed partial class RaceDayService
             edits = session.Edits.Select(e => new
             {
                 atUtc = e.AtUtc,
-                name = e.DriverName,
+
+                // The edit log keeps the name ResultEditor gave it, which for
+                // an unnamed car is the whole transponder. See ResultRow.
+                name = ShownName(e.DriverName, e.Transponder, context.Channel),
                 change = e.Change,
                 reason = e.Reason,
                 source = e.Source,
@@ -205,16 +212,21 @@ public sealed partial class RaceDayService
 
         var adjustments = ReadAdjustments(context, session);
 
-        if (ResultEditor.Validate(session, adjustments) is { } invalid)
+        // Named as this phone may see them - the refusal goes back to it.
+        if (ResultEditor.Validate(session, adjustments, e => ShownName(e.DriverName, e.Transponder, context.Channel)) is { } invalid)
         {
             throw new OpRefused(invalid);
         }
 
         var changes = ResultEditor.DescribeChanges(session, adjustments);
 
+        // Said, and as a refusal. It used to answer ok with nothing to say,
+        // and the phone showed "Done" - to a steward who had typed 1 for one
+        // more lap on a driver already given one, believing it was added.
         if (changes.Count == 0)
         {
-            return OpResult.Read(new { changed = false });
+            throw new OpRefused("Nothing to change - the result already has those values. Each one is the driver's correction "
+                                + "in total, not an amount to add on.");
         }
 
         if (!context.Confirmed)

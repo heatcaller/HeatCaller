@@ -223,6 +223,7 @@ public static class SafeFile
     private static Exception? WriteAtomically(string path, string contents)
     {
         string? temp = null;
+        var swapping = false;
 
         try
         {
@@ -257,14 +258,8 @@ public static class SafeFile
                 stream.Flush(flushToDisk: true);
             }
 
-            if (File.Exists(path))
-            {
-                File.Replace(temp, path, destinationBackupFileName: null);
-            }
-            else
-            {
-                File.Move(temp, path);
-            }
+            swapping = true;
+            SwapIn(temp, path);
 
             temp = null;
             return null;
@@ -277,7 +272,14 @@ public static class SafeFile
         {
             // Only still set if the swap never happened. A stray temp file
             // is harmless but would pile up one per failed save.
-            if (temp is not null)
+            //
+            // Kept, though, when the swap was tried and left nothing at
+            // path - above all one that took the old file away, with the
+            // move-in after it failing too (see SwapIn). The temp file is
+            // then the only copy of either, and deleting it here lost both:
+            // the next start loaded an empty history without a word. It
+            // stays under its temp name instead, where it can still be found.
+            if (temp is not null && !(swapping && !File.Exists(path)))
             {
                 try
                 {
@@ -293,6 +295,85 @@ public static class SafeFile
             }
         }
     }
+
+    /// <summary>
+    /// Puts a finished temp file in the place of <paramref name="path"/>:
+    /// swapped over the file that is there, or moved in when there is none.
+    /// Throws when it could not; the temp file is then the caller's to
+    /// delete - unless nothing is left at <paramref name="path"/>, when it
+    /// is the only copy and stays. RaceJournal's quiet retry swaps its
+    /// journal in through here too.
+    /// </summary>
+    internal static void SwapIn(string temp, string path)
+    {
+        if (!File.Exists(path))
+        {
+            File.Move(temp, path);
+            return;
+        }
+
+        try
+        {
+            ReplaceFile(temp, path);
+        }
+        catch (Exception) when (!File.Exists(path))
+        {
+            // A swap that fails this way - ERROR_UNABLE_TO_MOVE_REPLACEMENT,
+            // another program holding the new file open - has already taken
+            // the old file away, so the temp file is the only copy of
+            // either. The failure used to go straight back to the caller,
+            // which deleted the temp: race-history.json was simply gone, and
+            // the next start loaded an empty history without a word. The new
+            // text is moved into the empty place instead.
+            if (!MoveInAfterFailedSwap(temp, path))
+            {
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Moves <paramref name="temp"/> to <paramref name="path"/> after a swap
+    /// that left nothing at <paramref name="path"/>, trying again for about
+    /// a second while the temp file is still held. Never over a file: a
+    /// save of the same file that has put one there since is newer than
+    /// this. True when it landed.
+    /// </summary>
+    private static bool MoveInAfterFailedSwap(string temp, string path)
+    {
+        // About a second in all. It was a fifth of that, less than an
+        // antivirus scan of the new file often takes.
+        const int attempts = 5;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            if (File.Exists(path) || !File.Exists(temp))
+            {
+                return false;
+            }
+
+            try
+            {
+                File.Move(temp, path, overwrite: false);
+                return true;
+            }
+            catch (Exception ex) when (attempt < attempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(250);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The swap itself: File.Replace, with no backup copy. Only a test
+    /// changes it, to fail the way Windows sometimes does.
+    /// </summary>
+    internal static Action<string, string> ReplaceFile { get; set; } =
+        (temp, path) => File.Replace(temp, path, destinationBackupFileName: null);
 
     /// <summary>
     /// Reads a whole text file, trying again briefly if it's in use.

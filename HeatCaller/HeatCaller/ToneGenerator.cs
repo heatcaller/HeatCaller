@@ -364,6 +364,9 @@ public static class ToneGenerator
         SoundEffectKind.YellowFlag => PlayYellowFlagAsync(volume, cancellationToken),
         SoundEffectKind.RedFlag => PlayRedFlagAsync(volume, cancellationToken),
         SoundEffectKind.GreenFlagResumed => PlayGreenFlagResumedAsync(volume, cancellationToken),
+
+        // The invalid-lap buzzer, which a warning played before it was a sound of its own.
+        SoundEffectKind.Warning => PlayInvalidLapAsync(volume, cancellationToken),
         _ => Task.CompletedTask,
     };
 

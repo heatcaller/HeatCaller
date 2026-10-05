@@ -42,6 +42,14 @@ public enum SoundEffectKind
     /// <summary>Green again after a yellow or red. The first green of a race is RaceStarted.</summary>
     GreenFlagResumed,
 
+    /// <summary>
+    /// A warning or black flag from race control. Played the invalid-lap
+    /// buzzer until it had a sound of its own - see
+    /// SoundEffectsStore.FillMissing, which keeps a club that heard that
+    /// buzzer hearing the same one.
+    /// </summary>
+    Warning,
+
     RaceTimeOver,
     RaceCompleted,
 }
@@ -190,6 +198,13 @@ public sealed class SoundEffectsProfile
         p.Effects[nameof(SoundEffectKind.YellowFlag)] = new SoundEffectConfig { Enabled = false };
         p.Effects[nameof(SoundEffectKind.RedFlag)] = new SoundEffectConfig { Enabled = false };
         p.Effects[nameof(SoundEffectKind.GreenFlagResumed)] = new SoundEffectConfig { Enabled = false };
+
+        // On: a warning is called on purpose, and the buzzer ahead of the
+        // line is what makes drivers look up. It borrowed the invalid-lap
+        // buzzer before, which is off by default, so a new install never
+        // heard it. A file from before it existed takes whatever that
+        // buzzer was set to - see FillMissing.
+        p.Effects[nameof(SoundEffectKind.Warning)] = new SoundEffectConfig { Enabled = true };
         return p;
     }
 
@@ -225,6 +240,7 @@ public sealed class SoundEffectsProfile
         SoundEffectKind.YellowFlag => "Yellow flag",
         SoundEffectKind.RedFlag => "Red flag",
         SoundEffectKind.GreenFlagResumed => "Green flag (racing resumes after a yellow or red)",
+        SoundEffectKind.Warning => "Warning or black flag (from race control)",
         SoundEffectKind.RaceTimeOver => "Race time over (last lap)",
         SoundEffectKind.RaceCompleted => "Race completed",
         _ => kind.ToString(),

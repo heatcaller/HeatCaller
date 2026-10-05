@@ -349,7 +349,7 @@ public sealed partial class ProfileManagerControl
         _hubGarage.Changed += OnDriverThingsChanged;
         _cardBody.Controls.Add(_hubGarage);
 
-        _hubTransponders = new DriverTransponderPanel(_store, sources.Cars, _undo) { Visible = false, SplitSeenRecently = sources.SplitSeenRecently };
+        _hubTransponders = new DriverTransponderPanel(_store, sources.Cars, sources.History, _undo) { Visible = false, SplitSeenRecently = sources.SplitSeenRecently };
         _hubTransponders.Changed += OnDriverThingsChanged;
         _cardBody.Controls.Add(_hubTransponders);
 

@@ -236,7 +236,12 @@ public sealed partial class AnnouncementService
     ///
     /// Throws only when no voice could say it.
     /// </summary>
-    private async Task<SynthesisResult> RenderLineAsync(VoiceProfile profile, string text)
+    /// <param name="fresh">
+    /// ElevenLabs only: pass over the saved-voice library and ask for a new
+    /// take, which replaces the saved one only once it has come back (see
+    /// SynthesizeOrReuseAsync). For Re-record all - see RecordVoiceLineAsync.
+    /// </param>
+    private async Task<SynthesisResult> RenderLineAsync(VoiceProfile profile, string text, bool fresh = false)
     {
         // A line recorded for a soundscape plays as recorded, whichever
         // voice is chosen - that is the point of recording it (see
@@ -264,10 +269,10 @@ public sealed partial class AnnouncementService
 
         if (!StandInAllowed(profile))
         {
-            return await SynthesizeGatedResultAsync(profile, text);
+            return await SynthesizeGatedResultAsync(profile, text, reuseSaved: !fresh);
         }
 
-        if (await VoiceLibrary.Shared.TryLoadAsync(profile, text) is { } saved)
+        if (!fresh && await VoiceLibrary.Shared.TryLoadAsync(profile, text) is { } saved)
         {
             return new SynthesisResult(saved, LineSource.Library);
         }
@@ -957,10 +962,14 @@ public sealed partial class AnnouncementService
 
         // Kokoro stands aside for the Windows voice while it can't speak at
         // all on this PC - not downloaded, or a model that wouldn't load. A
-        // single line that failed is not a state, as for ElevenLabs.
+        // single line that failed is not a state, as for ElevenLabs. The load
+        // failure is the one kept until a load works: UnavailableReason lets
+        // it go between tries, which had the Mixer say "Ready - Kokoro voice"
+        // while the Windows voice said every line (as for the HeatCaller
+        // voice below).
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
         {
-            return KokoroSpeech.UnavailableReason;
+            return KokoroSpeech.UnavailableReason ?? KokoroSpeech.LoadFailure;
         }
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)

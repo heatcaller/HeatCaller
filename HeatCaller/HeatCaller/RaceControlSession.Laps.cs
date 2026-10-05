@@ -124,7 +124,7 @@ public sealed partial class RaceControlSession
         if (!lap.IsSynthetic)
         {
             LastKnownDeviceTimeMs = lap.DeviceTimeMs;
-            _lastKnownDeviceWallUtc = DateTime.UtcNow;
+            _lastKnownDeviceClockMs = TimingClock.NowMs;
 
             lap = ResolveAlternateTransponder(lap);
         }
@@ -332,6 +332,9 @@ public sealed partial class RaceControlSession
                 : lap.DeviceTimeMs - _raceStartDeviceTimeMs.Value - releaseZeroMs;
         }
 
+        // Set when the check below moves the start reference on this pass.
+        var startReferenceCorrected = false;
+
         // Sanity check on the first real pass of the race. If the start
         // reference disagrees with the wall clock by more than a few
         // seconds, it came from a different clock - no pass seen since the
@@ -340,10 +343,14 @@ public sealed partial class RaceControlSession
         // would be off by that amount (or negative, rejecting every lap).
         // Re-anchor from this pass instead. Skipped for the demo, whose
         // simulated clock intentionally doesn't track wall time.
-        if (!lap.IsSynthetic && !_startReferenceChecked && !IsDemoMode && RaceStartUtc is { } startUtc)
+        if (!lap.IsSynthetic && !_startReferenceChecked && !IsDemoMode && RaceStartUtc.HasValue)
         {
             _startReferenceChecked = true;
-            var wallSinceStartMs = (long)(DateTime.UtcNow - startUtc).TotalMilliseconds;
+
+            // "Wall" in name only now: the monotonic clock, so a time sync
+            // since the green is not read as a broken reference - see
+            // _raceStartClockMs.
+            var wallSinceStartMs = MsSinceGreen;
 
             // Compared against time since THIS driver's release, since that
             // is what elapsedSinceStart now measures. Comparing against the
@@ -367,6 +374,7 @@ public sealed partial class RaceControlSession
             if (Math.Abs(decoderSaysMs - wallSaysMs) > 5000)
             {
                 Log($"Start reference corrected: decoder said {decoderSaysMs}ms since {(StartType == RaceStartType.Qualifier ? "the green" : "release")}, wall clock says {wallSaysMs}ms.");
+                startReferenceCorrected = true;
 
                 // The stored reference stays anchored to the GREEN - it is
                 // shared by every driver, and only the per-driver offset
@@ -393,6 +401,49 @@ public sealed partial class RaceControlSession
                     elapsedSinceStart = Math.Max(0, correctedSinceGreen - releaseZeroMs);
                 }
             }
+        }
+
+        // A car credited with the start lap at the green (see GreenFlag) that
+        // crosses again just after the green was never past the line. It was
+        // read in the countdown and was behind the line by the green: moved
+        // back off the loop, or rolled over the line and reversed. The credit
+        // used to stand, and this crossing, judged only on its gap from the
+        // countdown read, counted as a second lap - a lap up on the field all
+        // race, with the dash to the line kept as a flying lap.
+        //
+        // So the credit is withdrawn and this crossing is the start lap, as
+        // for everyone else; a jump-start flag and penalty stay. Only when
+        // the gap would otherwise have counted it: a car parked on the loop,
+        // read every couple of seconds, is thrown out as before and keeps
+        // its credit. Not when the start reference was corrected on this
+        // very pass, which leaves no time since the green to trust.
+        //
+        // "Just after" is a short fixed window, never more than the minimum
+        // lap time. It used to be the minimum lap time itself, but a real
+        // jumper that went seconds early on a short lap comes round inside
+        // that - a 7 s lap after a 4.2 s jump is 2.8 s after the green - and
+        // lost the lap it had earned. A credited car whose first crossing
+        // comes later than the window (stalled on the grid) still keeps the
+        // lap - nothing tells it apart from a real jumper.
+        if (standing.StartLapCredited && standing.Laps == 1 && standing.LapTimesMs.Count == 1
+            && !lap.IsSynthetic && !startReferenceCorrected
+            && elapsedSinceStart > 0 && elapsedSinceStart < Math.Min(MinLapTimeMs, BehindTheLineAtTheGreenWindowMs)
+            && lap.DeviceTimeMs - standing.LastSeenDeviceTimeMs >= MinLapTimeMs)
+        {
+            standing.Laps = 0;
+            standing.LapTimesMs.Clear();
+            standing.StreakAtLap.Clear();
+            standing.SectorsAtLap.Clear();
+            standing.ClearSplitReads();
+            standing.ConsecutiveValidLaps = 0;
+            standing.StreakLapTimeSumMs = 0;
+            standing.StreakLapCount = 0;
+            standing.StreakBaselineLapMs = 0;
+            standing.StartLapCredited = false;
+            standing.LastLapDeviceTimeMs = 0;
+            standing.LastSeenDeviceTimeMs = 0;
+
+            Log($"{lap.TransponderId} was behind the line at the green - start lap credit withdrawn, this crossing is its start lap.");
         }
 
         long lapTimeMs;
@@ -520,9 +571,9 @@ public sealed partial class RaceControlSession
             // within each lap stopped meaning anything. Moved once, from the
             // wall clock, the same way the start-reference check above does
             // it; the next driver through finds it already right.
-            if (!lap.IsSynthetic && !IsDemoMode && RaceStartUtc is { } resetStartUtc && elapsedSinceStart < 0)
+            if (!lap.IsSynthetic && !IsDemoMode && RaceStartUtc.HasValue && elapsedSinceStart < 0)
             {
-                var wallSinceGreenMs = (long)(DateTime.UtcNow - resetStartUtc).TotalMilliseconds;
+                var wallSinceGreenMs = MsSinceGreen;
                 _raceStartDeviceTimeMs = lap.DeviceTimeMs - Math.Max(1, wallSinceGreenMs);
                 Log($"Race start reference moved onto the decoder's new clock ({wallSinceGreenMs}ms since the green).");
             }

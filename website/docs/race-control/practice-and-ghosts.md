@@ -25,7 +25,7 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
     Practice and races use the same timing session, so HeatCaller keeps them apart:
 
     - **Start Practice** is refused while a race is staged, counting down or running: "Finish the race or reset it on Race Control first". If a finished race is still showing on the **Race Control** board, it asks before clearing it.
-    - While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
+    - While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
     - **Start automatically when a car crosses the gate** only starts practice when nothing else is going on.
     - When practice stops, the next race goes back to its own lap or time limit and start type.
 
@@ -34,7 +34,7 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
 | Setting | What it does | Default |
 |---|---|---|
 | **Save automatically on stop** | Saves the session to **Race History** when you press **Stop**. The status line confirms how many drivers were saved. A session with no laps is skipped without a message. | Off |
-| **Start automatically when a car crosses the gate** | Starts practice when a car crosses the line and nothing else is running. It never interrupts a race, a countdown or a practice session that's already going. The crossing that starts it counts as that car's first pass, so that car doesn't lose a lap. When HeatCaller opens with an unfinished race to offer back, it waits until you've answered that question. | Off |
+| **Start automatically when a car crosses the gate** | Starts practice when a car crosses the line and nothing else is running. It never interrupts a race, a countdown or a practice session that's already going. The crossing that starts it counts as that car's first pass, so that car doesn't lose a lap. When HeatCaller opens with an unfinished race to offer back, it waits until you've answered that question. It also waits while the split loop's **Line Up** window is open. | Off |
 | **Race ghost cars** | In the **Ghost cars** card, beside **Setup**. Adds the ticked ghosts to the session. This is the same switch as **Enable ghost cars** on the **Ghost Cars** page. **Manage** opens that page. | Off |
 | **Track:** | The track layout the session is saved against. It's remembered between sessions. | (none) |
 | **Choose Columns** | Under the **This session** table. Picks the columns for the table. See [Running a race](running-a-race.md#columns) for what each column shows. | See below |
@@ -112,12 +112,12 @@ The **Your ghosts** list shows **On**, **Name**, **Car**, **Pace from**, **Adjus
 | **A fixed lap time** | The **Lap time:** you enter, in seconds. |
 | **A driver's personal best on this track** | That driver's best saved lap on the track in **Track:** on the Race Control **Session** row, or on any track if none is selected. It respects personal-best resets. |
 | **A driver's personal best within a date range** | That driver's best lap set between the two dates in **Laps set between:**. |
-| **A driver's recent average pace** | That driver's average lap from the most recent session they raced in. |
+| **A driver's recent average pace** | That driver's average lap from the most recent session they raced in. The lap from the start to their first crossing, and stops such as a battery change, are left out. |
 | **The track record for this layout** | The all-time record on the track layout in **Track:** on the Race Control **Session** row. |
 | **Live: a driver's pace in this session** | The driver's pace in the session that's running, re-read every lap. **Follows:** picks their best lap so far or their recent average. The ghost gets faster as the driver does. |
 | **Live: whatever the leader is running** | The pace of the leading real car, re-read every lap. |
 
-Ghosts take their track from the Race Control **Session** row even during practice, not from the Practice page's own **Track:**.
+During practice, ghosts take their track from the Practice page's own **Track:** instead, and in a demo from the Demo Mode page's **Track layout:**. The speed columns and the live track map use the same track.
 
 A live ghost has nothing to follow until laps come in, so it starts at the driver's personal best, or at the time in **Until laps come in:**.
 
@@ -131,6 +131,8 @@ A live ghost has nothing to follow until laps come in, so it starts at the drive
 If a ghost's pace can't be worked out when the session starts, that ghost sits out, and the console says why. For example, the driver may have no personal best on this track yet, or no track is selected for a track-record ghost. Each ghost that does start is listed in the console with the lap time it's running.
 
 Ghosts don't slow down for a yellow or stop for a red. Their laps aren't counted while the red flag is out.
+
+Switching a ghost off during a session (with **On / Off**, **Enable ghost cars** or **Race ghost cars**) takes it off the track and off the board at once. Switching one on during practice puts it on track straight away. During a race, a ghost you switch on joins straight away if other ghosts are already racing; otherwise it waits for the next race. A ghost that joins a race part-way through doesn't count for **Ghost Buster** or **Shadow Boxer**.
 
 Ghosts from the previous race stop as soon as you stage the next race. If you undo that **Stage** (or a **Countdown** over a running race, or a **Reset**), the old race comes back with its ghosts carrying on mid-lap, on their own rhythm, as though they had kept lapping. The crossings they would have made in the gap aren't counted, the same as for real cars, so each ghost's lap across the gap comes out long. The console says, for example, "[ghost] *name* back on track at 6.500s, carrying on from 12 laps - ...".
 

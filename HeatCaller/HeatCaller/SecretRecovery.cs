@@ -87,7 +87,12 @@ internal static class SecretRecovery
 
             // Failed part-way with the settings still locked: treated as put
             // off, for the same reason as the postponed paths in Run.
-            _postponed |= settings.SecretsLocked;
+            if (settings.SecretsLocked)
+            {
+                PutOff(settings);
+                TellPutOff(owner, settings);
+            }
+
             return false;
         }
         finally
@@ -130,14 +135,15 @@ internal static class SecretRecovery
         // settings.json readable and unlocked, found nothing locked at all -
         // and then deleted secrets.hgk, the only copy of the ElevenLabs key
         // this PC could ever open. Nothing is lost by waiting: settings that
-        // are still locked keep their sealed text on every save - but only
-        // while nothing in them has been filled in, which is why Pending is
-        // kept true for the rest of the session (see RunIfNeeded) - and the
-        // file is asked about again on the next launch.
+        // are still locked keep their sealed text on every save, even once a
+        // key has been typed in (see PutOff), Pending is kept true for the
+        // rest of the session (see RunIfNeeded), and the file is asked about
+        // again on the next launch.
         if (settings.LoadedUnreadable || voice.LoadedUnreadable)
         {
             SessionLog.Write("[secrets] Recovery put off to the next launch: settings.json or voice-settings.json could not be read.");
-            _postponed = true;
+            PutOff(settings);
+            TellPutOff(owner, settings);
             return false;
         }
 
@@ -188,13 +194,13 @@ internal static class SecretRecovery
             AppDialog.Show(owner,
                 $"The backup's locked copy of the keys couldn't be opened just now ({ex.Message}).\n\n"
                 + "Nothing has been lost: it has been left where it is, and HeatCaller will ask for the backup password "
-                + "again the next time it starts. Until then the keys, tokens and PINs from the backup are not in use - leave them "
-                + "blank rather than typing new ones in, or HeatCaller will take that as starting afresh and delete the backup's copy.\n\n"
+                + "again the next time it starts. Until then the keys, tokens and PINs from the backup are not in use. Leave them "
+                + "blank rather than typing new ones in: the backup's are put back once its copy can be opened.\n\n"
                 + "If this keeps happening, close anything that might have the HeatCaller data folder open (a backup or "
                 + "sync tool is the usual cause) and restart HeatCaller.",
                 "Keys not recovered yet", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             SessionLog.Write($"[secrets] Recovery put off to the next launch: secrets.hgk could not be read ({ex.Message}).");
-            _postponed = true;
+            PutOff(settings);
             return false;
         }
 
@@ -258,6 +264,12 @@ internal static class SecretRecovery
                 // just typed is the one that is known to work.
                 settings.ApplySecrets(bundle.App, includeBackupPassword: false);
                 settings.BackupPassword = typedPassword;
+
+                // The check-in PIN is the backup's again - blank only if the
+                // club had it blank - so check-in may open. Only here: the
+                // branches that clear the lock without the keys leave it shut
+                // until a PIN is set (AppSettings.CheckInPinNeedsEntering).
+                settings.CheckInPinRestored();
 
                 // The badge key is now the one the backup was made with. This
                 // used to say "Printed badges still work." whatever happened,
@@ -344,7 +356,7 @@ internal static class SecretRecovery
 
         TryDelete(path);
 
-        var message = "The keys, tokens and PINs from the backup are back, locked to this PC.\n\nHeatCaller will now restart to load them.";
+        var message = RecoveredOpening(settingsLocked, voiceLocked, bundle);
         if (notes.Count > 0)
         {
             message += "\n\n" + string.Join("\n\n", notes);
@@ -352,6 +364,83 @@ internal static class SecretRecovery
 
         AppDialog.Show(owner, message, "Keys recovered", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return true;
+    }
+
+    /// <summary>
+    /// How the "Keys recovered" message opens: only what really came back.
+    ///
+    /// When the settings opened here, at most the ElevenLabs key came from
+    /// the backup, and when the backup had none of the app's keys
+    /// (bundle.App null) none of them came back either - its note says to
+    /// enter them again. This used to say the app's keys, tokens and PINs
+    /// were back whatever happened, and then still did in that second case.
+    /// The ElevenLabs key is only put back when it was locked here.
+    /// </summary>
+    internal static string RecoveredOpening(bool settingsLocked, bool voiceLocked, BackupSecrets bundle) =>
+        settingsLocked && bundle.App is not null
+            ? "The keys, tokens and PINs from the backup are back, locked to this PC.\n\nHeatCaller will now restart to load them."
+            : voiceLocked && !string.IsNullOrEmpty(bundle.ElevenLabsKey)
+                ? "The ElevenLabs key from the backup is back, locked to this PC.\n\nHeatCaller will now restart to load it."
+                : "The backup password was right, but there was nothing in the backup's copy of the keys to bring back.\n\nHeatCaller will now restart.";
+
+    /// <summary>
+    /// What to tell the club when recovery has been put off with the
+    /// settings still locked and held (see PutOff) - the only time a key,
+    /// PIN or backup password typed in this session isn't saved. Null when
+    /// nothing is held.
+    /// </summary>
+    internal static string? PutOffNotice(AppSettings settings) =>
+        settings.SecretsLocked && settings.HoldLockedSecrets
+            ? "The keys, tokens and PINs from the restored backup couldn't be recovered just now - a file HeatCaller needs "
+              + "may be in use - so it will try again the next time it starts.\n\n"
+              + "Nothing has been lost. Until then they are not in use, and anything typed in their place (a PIN, the relay "
+              + "token, the backup password) works only until HeatCaller closes: it isn't saved. Leave them blank if you can.\n\n"
+              + "If this keeps happening, close anything that might have the HeatCaller data folder open (a backup or "
+              + "sync tool is the usual cause) and restart HeatCaller."
+            : null;
+
+    /// <summary>
+    /// Shows PutOffNotice, when there is one. Only an unreadable secrets.hgk
+    /// used to say anything. Recovery put off over an unreadable settings or
+    /// voice file, or a failure part-way, went only to the session log, so a
+    /// club that set a backup password or typed a PIN that session found it
+    /// gone at the next start without having been told. Never throws: it
+    /// runs from RunIfNeeded's catch too.
+    /// </summary>
+    private static void TellPutOff(IWin32Window owner, AppSettings settings)
+    {
+        if (PutOffNotice(settings) is not { } notice)
+        {
+            return;
+        }
+
+        try
+        {
+            AppDialog.Show(owner, notice, "Keys not recovered yet", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            SessionLog.Write($"[secrets] Couldn't say that recovery was put off: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Leaves the locked settings and secrets.hgk for the next launch, and
+    /// has the settings keep their sealed text through every save until
+    /// then (AppSettings.HoldLockedSecrets).
+    ///
+    /// Pending alone only held back what the app makes by itself - racer
+    /// PINs, the badge key, the automatic backup. A backup password or a
+    /// PIN typed on the Backup or Local Screens page that session still
+    /// re-sealed the settings with only that value in them, so the next
+    /// launch found them unlocked, deleted secrets.hgk as no longer needed,
+    /// and every other key was gone. What is typed in still works for the
+    /// rest of this session; it just isn't saved over the backup's keys.
+    /// </summary>
+    private static void PutOff(AppSettings settings)
+    {
+        _postponed = true;
+        settings.HoldLockedSecrets = true;
     }
 
     /// <summary>

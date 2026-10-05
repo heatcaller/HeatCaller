@@ -57,9 +57,14 @@ public sealed partial class RaceControlControl
     /// when not given - enough for any call. Longer only for staging with a
     /// round intro being written (see StagingWaitWithIntro).
     /// </param>
-    private void ChainAfterAudio(RaceState waitingIn, Action next, TimeSpan? maxWait = null)
+    /// <param name="mutedSeconds">
+    /// The format's length for this step, which it lasts at least while the
+    /// announcer is muted - see StartStepFloor. Read here, on the UI thread.
+    /// </param>
+    private void ChainAfterAudio(RaceState waitingIn, Action next, TimeSpan? maxWait = null, int mutedSeconds = 0)
     {
         var wait = maxWait ?? TimeSpan.FromSeconds(20);
+        var stepStartedUtc = DateTime.UtcNow;
 
         // A token of its own, held where CancelAutoStart can reach it. The
         // wait below used to take CancellationToken.None, so pressing a
@@ -102,6 +107,16 @@ public sealed partial class RaceControlControl
                 // countdown-to-green gap dragged - noticeably worse than
                 // the demo, which pays neither.
                 await _announcer.WaitForAudioAsync(wait, token);
+
+                // Muted, there was no audio to wait for - so the step still
+                // gets its set length. In here, so a cancel during it is
+                // caught by the token check in Advance, as one above is.
+                var floor = StartStepFloor(_announcer.Muted, DateTime.UtcNow - stepStartedUtc, mutedSeconds);
+
+                if (floor > TimeSpan.Zero)
+                {
+                    await Task.Delay(floor, token);
+                }
             }
             catch
             {
@@ -132,6 +147,31 @@ public sealed partial class RaceControlControl
                 // left to advance.
             }
         });
+    }
+
+    /// <summary>
+    /// How much longer a step of the automatic start waits, after its audio,
+    /// before moving on.
+    ///
+    /// The chain follows the announcer, and a muted announcer has nothing
+    /// to follow: every wait returned at once, so Stage went to Countdown to
+    /// green in a fraction of a second - the clock running with cars still
+    /// being carried to the grid, and a countdown too short to catch a jump
+    /// start. So, muted, a step lasts at least the format's Stage (s) or
+    /// Countdown (s). Never with the announcer on, where the audio alone
+    /// decides, as before.
+    /// </summary>
+    /// <param name="elapsed">How long the step has lasted so far.</param>
+    /// <param name="formatSeconds">The step's length in the race format.</param>
+    internal static TimeSpan StartStepFloor(bool muted, TimeSpan elapsed, int formatSeconds)
+    {
+        if (!muted)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var left = TimeSpan.FromSeconds(Math.Max(0, formatSeconds)) - elapsed;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
     }
 
     /// <summary>
@@ -324,6 +364,12 @@ public sealed partial class RaceControlControl
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
 
+        // What kind of race it was: Stage clears these for the new race, and
+        // a Quick Race put back without them was filed against the next heat
+        // by auto-advance at the flag.
+        var wasQuick = _currentRaceIsQuick;
+        var wasRerun = _currentRaceIsRerun;
+
         // The rules the abandoned race was running under. The new start
         // writes its own format over these, and the race put back must not
         // finish under the next race's lap limit.
@@ -409,6 +455,8 @@ public sealed partial class RaceControlControl
             }
 
             _sessionStartedAtUtc = sessionStart;
+            _currentRaceIsQuick = wasQuick;
+            _currentRaceIsRerun = wasRerun;
             _promptedTransponders.Clear();
             foreach (var t in prompted)
             {
@@ -451,7 +499,12 @@ public sealed partial class RaceControlControl
     /// Public so the host can check before the programme or the Next Up
     /// bar sets up a round and speaks its grid call.
     /// </summary>
-    public bool RefuseIfPracticeRunning(string action)
+    /// <param name="why">
+    /// Why, for the box - when not given, that it would end the practice or
+    /// wipe its laps, which is not what a yellow or red would do (see
+    /// NoFlagsInPractice).
+    /// </param>
+    public bool RefuseIfPracticeRunning(string action, string? why = null)
     {
         if (!_race.IsPracticeMode)
         {
@@ -473,11 +526,14 @@ public sealed partial class RaceControlControl
         }
 
         AppDialog.Show(this,
-            $"Practice is running, so HeatCaller can't {action} yet - it would end the practice or wipe its laps.\n\n"
+            $"Practice is running, so HeatCaller can't {action} yet - {why ?? "it would end the practice or wipe its laps"}.\n\n"
             + "Stop practice first on the Practice page, then try again.",
             "Practice is running", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return true;
     }
+
+    /// <summary>Why a yellow or red is refused during practice, for RefuseIfPracticeRunning's box.</summary>
+    private const string NoFlagsInPractice = "practice has no flags, and nothing could clear one until practice stopped";
 
     /// <summary>
     /// True - after saying why - when there is no race running for the

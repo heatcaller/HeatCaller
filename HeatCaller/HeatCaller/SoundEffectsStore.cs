@@ -21,6 +21,8 @@ public sealed class SoundEffectsStore
 
     public static SoundEffectsStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -41,11 +43,20 @@ public sealed class SoundEffectsStore
         catch (Exception ex)
         {
             // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // But, when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new SoundEffectsStore(SoundEffectsProfile.CreateDefault());
+        return new SoundEffectsStore(SoundEffectsProfile.CreateDefault()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A briefly locked file used to load as the defaults,
+    /// and the next save replaced every sound the club had chosen.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     /// <summary>
     /// Gives a profile read from a file an entry for every kind of sound,
@@ -81,6 +92,7 @@ public sealed class SoundEffectsStore
         // keeps hearing one - its own new sound, switched on where the
         // buzzer was.
         var jumpStartIsNew = !profile.Effects.TryGetValue(nameof(SoundEffectKind.JumpStart), out var oldJump) || oldJump is null;
+        var warningIsNew = !profile.Effects.TryGetValue(nameof(SoundEffectKind.Warning), out var oldWarning) || oldWarning is null;
         profile.Effects.TryGetValue(nameof(SoundEffectKind.InvalidLap), out var invalidLap);
 
         foreach (var (key, value) in SoundEffectsProfile.CreateDefault().Effects)
@@ -97,6 +109,21 @@ public sealed class SoundEffectsStore
             var jump = profile.Effects[nameof(SoundEffectKind.JumpStart)];
             jump.Enabled = invalidLap.Enabled;
             jump.EnabledInPractice = invalidLap.EnabledInPractice;
+        }
+
+        // The same for a warning or black flag, which played that buzzer
+        // too - but on rather than off by default, so it is set from the
+        // buzzer even when the file had none (and so the default, off). And
+        // the same buzzer, the club's own file or pack included, so nothing
+        // about how a warning sounds changes until the club changes it.
+        if (warningIsNew)
+        {
+            var buzzer = profile.Effects[nameof(SoundEffectKind.InvalidLap)];
+            var warning = profile.Effects[nameof(SoundEffectKind.Warning)];
+            warning.Enabled = buzzer.Enabled;
+            warning.EnabledInPractice = buzzer.EnabledInPractice;
+            warning.CustomFilePath = buzzer.CustomFilePath;
+            warning.BuiltInSound = buzzer.BuiltInSound;
         }
 
         // Nulls under a key this version doesn't know are dropped, and blank
@@ -139,6 +166,15 @@ public sealed class SoundEffectsStore
     public void Save(SoundEffectsProfile profile)
     {
         Current = profile;
+
+        // Not written: the real file is almost certainly fine, and this
+        // profile was built on the defaults it loaded as. Kept in memory so
+        // the change still plays this session. The console has already said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
         SafeFile.WriteAllText(FilePath, json);
     }

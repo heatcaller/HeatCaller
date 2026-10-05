@@ -25,8 +25,12 @@ public sealed class Theme
     /// Video Game, Pro Broadcast - words only, no sounds of their own.
     /// 2: the six soundscapes with the bundled sound packs.
     /// 3: backgrounds - each pack's ambience bed and music.
+    /// 4: the Warning sound, on. Version 3's saved copies have no Warning
+    /// row, and the load gives a missing one Invalid lap's setting - off -
+    /// so applying a built-in switched warnings off on an updated PC while
+    /// a new install's copy left them on.
     /// </summary>
-    public const int CurrentBuiltInVersion = 3;
+    public const int CurrentBuiltInVersion = 4;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.

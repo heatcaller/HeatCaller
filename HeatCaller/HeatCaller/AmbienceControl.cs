@@ -1329,6 +1329,15 @@ public sealed class AmbienceControl : UserControl
         RefreshGrid();
     }
 
+    /// <summary>True while the page's Preview button is previewing - see TogglePreview.</summary>
+    private bool _pagePreviewing;
+
+    /// <summary>True when the Preview button started the ambience itself, so stopping the preview stops only that.</summary>
+    private bool _pagePreviewStartedAmbience;
+
+    /// <summary>The crowd's mood before the preview set it to Racing, put back when the preview stops.</summary>
+    private AmbienceService.Intensity _pagePreviewMoodBefore;
+
     /// <summary>
     /// Plays the ambience so it can be tuned by ear. Deliberately runs at
     /// "Racing" level - the middle of the range, and what you'll hear for
@@ -1336,21 +1345,50 @@ public sealed class AmbienceControl : UserControl
     /// </summary>
     private void TogglePreview(Button btnPreview)
     {
-        if (_ambience.IsRunning)
+        // Decided by whether THIS button is previewing, not by whether the
+        // crowd is playing. Going by IsRunning, Preview pressed mid-race -
+        // the button still said "Preview" - stopped the session crowd for
+        // the rest of the race.
+        if (_pagePreviewing)
         {
-            _ambience.Stop();
+            _pagePreviewing = false;
             btnPreview.Text = "Preview";
+
+            // Put the mood back first, as the Mixer's audition does: the
+            // preview set race level, and a stopped crowd kept it, so the
+            // next start between races came up at race level. Left alone if
+            // something has since moved the mood off Racing (a finish, a
+            // caution).
+            if (_ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
+            {
+                _ambience.SetIntensity(_pagePreviewMoodBefore);
+            }
+
+            // Only what this button started is stopped.
+            if (_pagePreviewStartedAmbience)
+            {
+                _ambience.Stop();
+            }
+
+            _pagePreviewStartedAmbience = false;
             return;
         }
 
-        _ambience.Settings = _store.Current;
+        _pagePreviewMoodBefore = _ambience.CurrentIntensity;
+        _pagePreviewStartedAmbience = !_ambience.IsRunning;
 
-        // Bypasses the enabled check so files can be auditioned before
-        // committing to switching ambience on.
-        _ambience.Start(ignoreEnabledSetting: true);
+        if (_pagePreviewStartedAmbience)
+        {
+            _ambience.Settings = _store.Current;
+
+            // Bypasses the enabled check so files can be auditioned before
+            // committing to switching ambience on.
+            _ambience.Start(ignoreEnabledSetting: true);
+        }
 
         if (_ambience.IsRunning)
         {
+            _pagePreviewing = true;
             _ambience.SetIntensity(AmbienceService.Intensity.Racing);
             btnPreview.Text = "Stop Preview";
         }

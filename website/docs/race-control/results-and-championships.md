@@ -101,7 +101,7 @@ All CSV exports are:
     - **Every lap time (makes the report much longer)** (off by default).
 4. Press **Generate**, choose where to save the report, and choose whether to open it.
 
-The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. Rentals still out come next, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions".
+The report starts with the day's totals: sessions, drivers, laps run and the fastest lap. Rentals still out come next, so they get noticed. After that come the qualifying standings (worked out the same way as the race program's **Standings**), the results grouped by class, the fastest laps of the day, the tech inspection summary and, if you ticked it, every lap. Races with no round are listed under "Other sessions". Each result shows the driver name saved with it, so a transponder that has since changed hands still shows who raced.
 
 **Which races the report covers.** When a race day (event) set up on **Race Day → Setup** raced on the chosen day, the report covers that race day's own rounds, including any that ran past midnight. Practice and races with no round are included when they ran on a day that race day raced. Otherwise the report covers everything saved on that date. If more than one race day raced on the chosen date, the report covers everything recorded on the date and says so at the top. The tech inspection summary always covers the same races as the rest of the report. Saved demo races are always left out, and ghost cars never appear in the fastest laps or the driver count.
 
@@ -128,7 +128,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 
 | Setting | What it does | Default for a new championship |
 |---|---|---|
-| **Add new races to this championship automatically** | Races that match the rules below join the championship as they're recorded. When it's off, you tick every race by hand. | On |
+| **Add new races to this championship automatically** | Races that match the rules below join the championship as they're recorded. When it's off, you tick every race by hand. Turning it off keeps the races it already counted ticked, so the table stays as it was. Turning it back on hands those races back to the rules, so a later change to the rules drops the ones that no longer match. | On |
 | **Class:** | Only count races from this class, or **(every class)**. If the class is no longer on the **Classes** page (it was deleted, say), it shows as "(missing class) *name*" and the championship keeps it. Renaming a class carries the new name to its championships. | (every class) |
 | **Only count mains - leave qualifying heats out** | Leaves qualifying heats out. | On |
 | **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
@@ -343,7 +343,8 @@ Some notes on how badges are earned:
 - **Only races count at a club.** At home, practice earns the badges you can earn alone (see above). Demo races never earn badges.
 - **A race alone isn't a win.** First place counts as a win, and the top three as a podium, only with another real car in the race.
 - **Ghosts are left out** before badges are worked out. A ghost can't earn badges or take one away from a real driver.
-- **A driver needs at least one lap** in a race for it to count toward anything.
+- **A driver needs at least one lap** in a race for it to count toward anything. Cars that never turned a lap don't count as opponents or grid places either.
+- **Record Holder follows Track Layouts.** It goes to the driver whose lap is the record shown on **Track Layouts**, so a lap Race Control refused as a phantom never earns it, and after **Reset Record** the next record does. The first race on a new layout doesn't earn it.
 - **Some badges need newer races.** **Spotless**, **Wire to Wire**, **Through the Field**, **Converted**, **Late Show**, **Quick and Tidy**, **Grand Slam** and **Clean Slate** need data that only races saved by newer versions carry (rejected passes, laps led and grid positions).
 - **Some badges need a grid.** Badges about where a driver started (**Through the Field**, **Converted**, **Through the Pack**, **Rocket Start**, **Comeback Kid**, **Grand Slam**) need a known grid, which comes from the round's roster or the previous race's result.
 - **Rivals** for **Bragging Rights** are set on **Voice → Rivalries**. See [Voice announcements](../announcer/voice.md).

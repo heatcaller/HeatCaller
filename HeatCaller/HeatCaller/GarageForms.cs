@@ -1584,7 +1584,7 @@ internal sealed class CarDetailForm : Form
     /// <summary>Gives the car to someone else for good (CarTransferring), and shows it as it now is.</summary>
     private void TransferCar()
     {
-        if (!CarTransferring.Run(this, _car, _cars, _profiles, _undo))
+        if (!CarTransferring.Run(this, _car, _cars, _profiles, _undo, _history))
         {
             return;
         }

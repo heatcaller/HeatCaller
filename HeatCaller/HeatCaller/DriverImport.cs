@@ -283,4 +283,62 @@ internal static class DriverImport
     /// <summary>A whole name from a first-name and a last-name column, either of which can be blank.</summary>
     internal static string JoinName(string? first, string? last) =>
         string.Join(" ", new[] { first?.Trim(), last?.Trim() }.Where(part => !string.IsNullOrEmpty(part)));
+
+    /// <summary>
+    /// A row's <b>Class</b> merged into the driver's profile. A blank cell
+    /// changes nothing. <paramref name="repeatRow"/> is a second row for a
+    /// driver already read from this sheet - a driver entered in two classes:
+    /// a class they don't race yet is added to their others, and one they
+    /// race already changes nothing. Any other row sets the main class.
+    /// </summary>
+    internal static void MergeClass(DriverProfile profile, bool repeatRow, string rowClass)
+    {
+        if (string.IsNullOrWhiteSpace(rowClass))
+        {
+            return;
+        }
+
+        // A class they race already used to fall through to setting the main
+        // class. Importing the same sheet again - or a driver who already had
+        // the second class ticked - left "Stock" with "Mod" among the others
+        // as "Mod" with "Mod": out of Stock's heats without a word.
+        if (repeatRow && !string.IsNullOrWhiteSpace(profile.ClassName))
+        {
+            if (!profile.RunsClass(rowClass))
+            {
+                profile.Classes = (profile.Classes ?? new List<string>()).Append(rowClass.Trim()).ToList();
+            }
+
+            return;
+        }
+
+        profile.ClassName = rowClass.Trim();
+    }
+
+    /// <summary>
+    /// A row's <b>Car</b> merged into the driver's profile, as MergeClass does
+    /// the class: a repeat row's car is added to their garage if it is new to
+    /// them, and any other row sets the active car.
+    /// </summary>
+    internal static void MergeCar(DriverProfile profile, bool repeatRow, string rowCar)
+    {
+        if (string.IsNullOrWhiteSpace(rowCar))
+        {
+            return;
+        }
+
+        // Every row used to set the active car, so the second car of someone
+        // running two replaced the first, which never reached the Garage.
+        if (repeatRow && !string.IsNullOrWhiteSpace(profile.CarModel))
+        {
+            if (!profile.AllCars.Any(car => string.Equals(car, rowCar.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                profile.Cars = (profile.Cars ?? new List<string>()).Append(rowCar.Trim()).ToList();
+            }
+
+            return;
+        }
+
+        profile.CarModel = rowCar.Trim();
+    }
 }

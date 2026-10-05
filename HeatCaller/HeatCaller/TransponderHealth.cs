@@ -96,13 +96,23 @@ public sealed class TransponderHealthStore
     private readonly Dictionary<string, List<Night>> _nights;
     private readonly object _gate = new();
     private readonly string? _path;
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A file locked by a backup or sync
+    /// tool as HeatCaller started used to load empty, and the first save
+    /// replaced up to twenty nights of history with tonight's.
+    /// </summary>
+    private readonly bool _holdWrites;
+
     private bool _dirty;
     private DateTime _lastSaveUtc = DateTime.MinValue;
 
-    private TransponderHealthStore(Dictionary<string, List<Night>> nights, string? path)
+    private TransponderHealthStore(Dictionary<string, List<Night>> nights, string? path, bool holdWrites = false)
     {
         _nights = nights;
         _path = path;
+        _holdWrites = holdWrites;
     }
 
     private static string FilePath => Path.Combine(AppPaths.Root, "transponder-health.json");
@@ -113,6 +123,7 @@ public sealed class TransponderHealthStore
     public static TransponderHealthStore Load()
     {
         var path = FilePath;
+        var hold = false;
 
         try
         {
@@ -130,12 +141,14 @@ public sealed class TransponderHealthStore
         }
         catch (Exception ex)
         {
-            // An unreadable record is set aside, not trusted: it is advice,
-            // and starting it again costs a few nights of history, nothing more.
-            SafeFile.PreserveUnreadable(path, ex);
+            // A damaged record is set aside, not trusted: it is advice, and
+            // starting it again costs a few nights of history, nothing more.
+            // But one that could not be read at all (locked) or kept aside is
+            // never saved over this session - see _holdWrites.
+            hold = SafeFile.HoldWritesAfterUnreadable(path, ex);
         }
 
-        return new TransponderHealthStore(new Dictionary<string, List<Night>>(StringComparer.OrdinalIgnoreCase), path);
+        return new TransponderHealthStore(new Dictionary<string, List<Night>>(StringComparer.OrdinalIgnoreCase), path, hold);
     }
 
     /// <summary>The night a moment belongs to, as yyyy-MM-dd: before 6am it is still last night.</summary>
@@ -274,6 +287,13 @@ public sealed class TransponderHealthStore
     /// <summary>Saves now if anything has changed - when the app closes.</summary>
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and this
+        // store holds only tonight. The console has already said why.
+        if (_holdWrites)
+        {
+            return;
+        }
+
         string json;
 
         lock (_gate)

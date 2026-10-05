@@ -37,10 +37,10 @@ public sealed partial class RaceDayService
         // Across every class they race that runs tech, as the check-in desk
         // asks (TechInspectionStore.LatestForDriver) - their main class
         // alone said "cleared" for a driver Race Control would then flag in
-        // their second class.
+        // their second class. Only the classes racing tonight, as the desk
+        // asks (RaceControlControl.DeskJudgesTechFor).
         var inspection = _host.Tech.LatestForDriver(profile, name =>
-            _host.Classes.All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) is { } raceClass
-            && RaceControlControl.TechIsRunFor(raceClass, _host.Tech));
+            RaceControlControl.DeskJudgesTechFor(name, _host.Classes.All, _host.Tech, _host.Events.Active));
 
         return new
         {
@@ -116,7 +116,7 @@ public sealed partial class RaceDayService
 
         if (wanted.Length > 0 && (pack is null || store.ChoicesFor(profile).All(p => p.Id != pack.Id)))
         {
-            throw new OpRefused($"That pack isn't one {NameOf(profile)} can run any more - reload the list.");
+            throw new OpRefused($"That pack isn't one {ShownNameOf(profile, context.Channel)} can run any more - reload the list.");
         }
 
         if (!BatteryActions.PutInCar(store, _host.Undo, key, NameOf(profile), pack?.Id, prefix: "Phone: "))
@@ -128,7 +128,7 @@ public sealed partial class RaceDayService
 
         return OpResult.Done(
             pack is null ? $"Took the pack out of {NameOf(profile)}'s car" : $"Put pack {pack.DisplayName} in {NameOf(profile)}'s car",
-            pack is null ? $"No pack in {NameOf(profile)}'s car." : $"Pack {pack.DisplayName} is in {NameOf(profile)}'s car - their races are recorded on it.",
+            pack is null ? $"No pack in {ShownNameOf(profile, context.Channel)}'s car." : $"Pack {pack.DisplayName} is in {ShownNameOf(profile, context.Channel)}'s car - their races are recorded on it.",
             new { changed = true, driver = DriverRow(profile, context.Channel) });
     }
 
@@ -291,8 +291,9 @@ public sealed partial class RaceDayService
         };
 
         // Checked before the undo is captured, so a refused add leaves no
-        // undo entry behind - TryAdd would refuse the same thing.
-        if (_host.Profiles.DescribeClash(profile, editing: null) is { } clash)
+        // undo entry behind - TryAdd would refuse the same thing. Worded for
+        // the phone's channel: see ClashForPhone.
+        if (ClashForPhone(_host.Profiles, profile, null, context.Channel, transponder, alternate) is { } clash)
         {
             throw new OpRefused(clash);
         }
@@ -335,7 +336,7 @@ public sealed partial class RaceDayService
 
         return OpResult.Done(
             $"Added driver {NameOf(profile)}" + (className.Length > 0 ? $" in {className}" : string.Empty) + (checkIn ? ", checked in" : string.Empty),
-            $"{NameOf(profile)} is added.",
+            $"{ShownNameOf(profile, context.Channel)} is added.",
             new { driver = DriverRow(profile, context.Channel) });
     }
 
@@ -391,13 +392,17 @@ public sealed partial class RaceDayService
 
         var stillRaces = profile.AllClasses;
 
+        // Back to the phone, so named as its channel may see them (see
+        // ShownNameOf); the change line below stays the laptop's own.
+        var shown = ShownNameOf(profile, context.Channel);
+
         var message = className.Length == 0
             ? stillRaces.Count == 0
-                ? $"{NameOf(profile)} is no longer in a class."
-                : $"{NameOf(profile)} has no main class now - still races {string.Join(", ", stillRaces)}."
+                ? $"{shown} is no longer in a class."
+                : $"{shown} has no main class now - still races {string.Join(", ", stillRaces)}."
             : racing
-                ? $"{NameOf(profile)} is entered in {className}."
-                : $"{NameOf(profile)} is entered in {className} - but {className} isn't racing today. Add it to the day on Next Steps if it should be.";
+                ? $"{shown} is entered in {className}."
+                : $"{shown} is entered in {className} - but {className} isn't racing today. Add it to the day on Next Steps if it should be.";
 
         return OpResult.Done(
             $"Moved {NameOf(profile)} from {(previous.Length > 0 ? previous : "no class")} to {(className.Length > 0 ? className : "no class")}",
@@ -429,12 +434,12 @@ public sealed partial class RaceDayService
 
         if (string.Equals(alternate, profile.Transponder.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            throw new OpRefused($"{alternate} is already {NameOf(profile)}'s main transponder.");
+            throw new OpRefused($"{alternate} is already {ShownNameOf(profile, context.Channel)}'s main transponder.");
         }
 
         var candidate = new DriverProfile { Transponder = profile.Transponder, AlternateTransponder = alternate };
 
-        if (_host.Profiles.DescribeClash(candidate, editing: profile.Transponder) is { } clash)
+        if (ClashForPhone(_host.Profiles, candidate, profile.Transponder, context.Channel, alternate) is { } clash)
         {
             throw new OpRefused(clash);
         }

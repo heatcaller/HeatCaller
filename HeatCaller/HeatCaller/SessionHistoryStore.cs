@@ -28,6 +28,18 @@ public sealed class SessionHistoryStore
     /// </summary>
     private readonly HashSet<SessionRecord> _unsaved = new(ReferenceEqualityComparer.Instance);
 
+    /// <summary>
+    /// Records Delete took out while they were still in _unsaved - never
+    /// filed. Delete used to forget that outright, so undoing it handed the
+    /// race straight to Add, which then wrote it: no round linked, its crash
+    /// journal left on disk, and the next launch offered it back to be filed
+    /// a second time. RestoreUnfiled puts such a record back exactly as it
+    /// was instead, still waiting for Race Control to file it properly.
+    /// ForgetDeletedUnfiled lets one go once nothing is waiting to file it
+    /// any more. By reference, like _unsaved.
+    /// </summary>
+    private readonly HashSet<SessionRecord> _deletedUnfiled = new(ReferenceEqualityComparer.Instance);
+
     private static string FilePath => Path.Combine(
         AppPaths.Root,
         "race-history.json");
@@ -261,6 +273,21 @@ public sealed class SessionHistoryStore
         // A retry of one that failed is already in the list.
         if (!_unsaved.Remove(record))
         {
+            // Already listed and not held back: filed before. An undo can
+            // file a race and then Race Control's own retry
+            // (FileUnfiledRaces) or a late "Save the restored session" step
+            // hands the same one in again - and appending it here put the
+            // same session in race-history.json twice, counted twice by
+            // qualifying, points and personal bests. It is on disk, so that
+            // is the answer; nothing is written and SessionAdded is not
+            // raised again. Matched by Id too, so another copy of a session
+            // already here is not listed beside it either - "saved" only
+            // when the one listed is not itself held back.
+            if (Get(record.Id) is { } listed)
+            {
+                return !_unsaved.Contains(listed);
+            }
+
             _sessions.Add(record);
         }
 
@@ -311,10 +338,47 @@ public sealed class SessionHistoryStore
     /// <summary>Removes a session. False when the write did not reach disk, so it is back on the next launch.</summary>
     public bool Delete(string id)
     {
+        // Remembered as never filed - see _deletedUnfiled. Races only: a
+        // practice has no crash journal and nothing in Race Control waiting
+        // to file it, so its undo goes on restoring it with Add.
+        foreach (var unfiled in _unsaved.Where(s => s.Id == id && s.SessionType != RaceSessionType.Practice))
+        {
+            _deletedUnfiled.Add(unfiled);
+        }
+
         _sessions.RemoveAll(s => s.Id == id);
         _unsaved.RemoveWhere(s => s.Id == id);
         return Save();
     }
+
+    /// <summary>
+    /// For an undo of a delete: puts back a record that was deleted before it
+    /// was ever filed (see _deletedUnfiled) as it was - listed, held out of
+    /// the file - and returns true, so Race Control files it the way every
+    /// race is filed, linking its round and letting go of its journal. False
+    /// for any other record, which the caller restores with Add as before,
+    /// and for one already back in the store.
+    /// </summary>
+    public bool RestoreUnfiled(SessionRecord record)
+    {
+        if (!_deletedUnfiled.Remove(record) || Get(record.Id) is not null)
+        {
+            return false;
+        }
+
+        _sessions.Add(record);
+        _unsaved.Add(record);
+        return true;
+    }
+
+    /// <summary>
+    /// Called when nothing is waiting to file this record any more - Race
+    /// Control has given up on a race deleted before it was filed, and the
+    /// crash journal holding it is about to be replaced. An undo of its
+    /// delete then restores it with Add, which writes it, rather than
+    /// putting it back to wait for a filing that will never come.
+    /// </summary>
+    public void ForgetDeletedUnfiled(SessionRecord record) => _deletedUnfiled.Remove(record);
 
     /// <summary>Persists changes made directly to a record already returned by Get() - e.g. editing its Notes - without adding a duplicate entry. False when the write did not reach disk.</summary>
     public bool SaveChanges() => Save();

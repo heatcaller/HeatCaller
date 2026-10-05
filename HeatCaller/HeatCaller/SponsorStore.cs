@@ -25,6 +25,8 @@ public sealed class SponsorStore
 
     public static SponsorStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -47,14 +49,30 @@ public sealed class SponsorStore
         catch (Exception ex)
         {
             // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // But, when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new SponsorStore(new SponsorSettings());
+        return new SponsorStore(new SponsorSettings()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A briefly locked file used to load empty and the
+    /// next save replaced the club's sponsor slide list with nothing.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // these defaults would replace it. The console has already said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true }));
     }
 

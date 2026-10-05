@@ -672,6 +672,15 @@ public sealed partial class AnnouncementService
     /// </summary>
     private void CheckStreakLead(string transponder, int streakCount, string? chaser, int chaserCount)
     {
+        // A ghost that isn't announced never holds the longest run. It used
+        // to become the holder - only its line was dropped - and a pace
+        // ghost lapping cleanly every lap then kept every real driver from
+        // being called as taking it over.
+        if (MutedGhost(transponder))
+        {
+            return;
+        }
+
         // StreakThresholdFor floors at two on its own now, so the clamp
         // that used to live here would be a second authority on the same
         // number - see the comment on it.
@@ -716,8 +725,10 @@ public sealed partial class AnnouncementService
         {
             var holder = _streakLeader;
 
+            // A muted ghost too: one holding it when "Announce ghosts like
+            // real drivers" was switched off mid-race.
             if (holder is not null
-                && !(_currentStreaks.TryGetValue(holder, out var held) && held.AtUtc >= cutoff))
+                && (MutedGhost(holder) || !(_currentStreaks.TryGetValue(holder, out var held) && held.AtUtc >= cutoff)))
             {
                 _streakLeader = null;
                 _streakLeaderCount = 0;

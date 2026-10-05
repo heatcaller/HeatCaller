@@ -1245,10 +1245,29 @@ public sealed class PracticeModeControl : UserControl
     /// <summary>
     /// The practice whose badges have been worked out - by when it started.
     /// Save Session part-way through and the save when it stops both file
-    /// the whole board, and judging both would count every lap of the first
-    /// twice towards the lap totals.
+    /// the whole board, and judging both as they stand would count every lap
+    /// of the first twice towards the lap totals. So a later save takes back
+    /// what the earlier judgement added (_judgedPracticeLaps) and judges the
+    /// whole board again - skipping it instead, as this once did, left every
+    /// lap run after the first save unjudged.
     /// </summary>
     private DateTime? _judgedPracticeStart;
+
+    /// <summary>
+    /// The laps the last judgement of _judgedPracticeStart's practice added
+    /// to each driver's lap total, by transponder - see _judgedPracticeStart.
+    /// </summary>
+    private Dictionary<string, int> _judgedPracticeLaps = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The record this practice was last saved as. Save Session part-way
+    /// through, then Stop's auto-save (or Save pressed twice), each filed the
+    /// whole board as a NEW session, so every lap before the first save was in
+    /// Race History twice - doubled in the Lap Times chart, the lap and
+    /// session totals and anything else that adds history up. A later save of
+    /// the same practice brings this record up to date instead.
+    /// </summary>
+    private SessionRecord? _savedPractice;
 
     /// <summary>
     /// Writes the current practice laps into race history, flagged as a
@@ -1355,7 +1374,43 @@ public sealed class PracticeModeControl : UserControl
         // two used to look the same there, and an auto-save that failed was
         // reported as a plain "Stopped" - the practice then vanished at the
         // next restart with nobody told.
-        if (!_history.Add(record))
+        //
+        // Already saved once (see _savedPractice): that record is brought up
+        // to date in place, as long as it is still in Race History - deleted
+        // there meanwhile, this is filed afresh - and nobody has corrected
+        // its result since, which overwriting would quietly throw away.
+        var earlier = _savedPractice is { } prior
+            && prior.StartedAtUtc == record.StartedAtUtc
+            && prior.Edits is not { Count: > 0 }
+            && ReferenceEquals(_history.Get(prior.Id), prior)
+                ? prior
+                : null;
+
+        bool saved;
+
+        if (earlier is not null)
+        {
+            earlier.TrackLayoutName = record.TrackLayoutName;
+            earlier.EndedAtUtc = record.EndedAtUtc;
+            earlier.Results = record.Results;
+            earlier.SectorCut = record.SectorCut;
+            record = earlier;
+
+            // One whose first write failed is still Add's to file (see
+            // SessionHistoryStore._unsaved), which takes it as a retry.
+            saved = _history.IsUnsaved(record) ? _history.Add(record) : _history.SaveEdited(record);
+        }
+        else
+        {
+            saved = _history.Add(record);
+        }
+
+        // Even when the write failed: Add keeps a failed record listed, and
+        // the next save of this practice must retry that one rather than
+        // list a second.
+        _savedPractice = record;
+
+        if (!saved)
         {
             if (!silent)
             {
@@ -1395,7 +1450,7 @@ public sealed class PracticeModeControl : UserControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [packs] Couldn't record the packs on this practice: {ex.Message}");
         }
 
-        if (_settings.RacingAt != RacingSetting.Home || _judgedPracticeStart == record.StartedAtUtc)
+        if (_settings.RacingAt != RacingSetting.Home)
         {
             return;
         }
@@ -1424,8 +1479,28 @@ public sealed class PracticeModeControl : UserControl
                 GhostsBeaten = beaten,
             };
 
+            // Judged already, part-way through: the whole board is judged
+            // again so the laps since count too, so first take back what that
+            // judgement added to each lap total, or those laps count twice.
+            // Badges already held are not awarded (or said) again.
+            if (_judgedPracticeStart == record.StartedAtUtc)
+            {
+                foreach (var (transponder, laps) in _judgedPracticeLaps)
+                {
+                    var driver = store.For(transponder);
+                    driver.TotalLaps = Math.Max(0, driver.TotalLaps - laps);
+                }
+            }
+
             var unlocks = AchievementEvaluator.EvaluatePractice(record, _history.All, store, context);
             _judgedPracticeStart = record.StartedAtUtc;
+
+            // What EvaluatePractice added to the totals: every real driver
+            // with a lap.
+            _judgedPracticeLaps = record.Results
+                .Where(e => e.Laps > 0 && !string.IsNullOrWhiteSpace(e.Transponder) && !GhostService.IsGhost(e.Transponder))
+                .GroupBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Sum(e => e.Laps), StringComparer.OrdinalIgnoreCase);
 
             if (unlocks.Count > 0)
             {

@@ -6,7 +6,7 @@ Reviewed at 0.52.0. The docs describe what the app does today; fixing any of the
 
 | Issue | Where it's documented |
 |---|---|
-| **Installer, everyday launch method and support/bug-report contact.** A proper installer (MSIX or Inno Setup) is planned as a job of its own. Until then the everyday launch method stays as documented. The support contact is deliberately left out of the published docs for now. | TODOs kept in getting-started/install.md, reference/faq.md, admin/troubleshooting.md |
+| **Installer and everyday launch method.** The installer is a job of its own, planned on **Velopack** (decided 27 Sep 2026 - not MSIX, which would delete the club's data on uninstall, and not Inno Setup, which has no updater). Until it exists the everyday launch method stays as documented. **The support contact is no longer missing**: support@heatcaller.com is in the app (Backup & Restore's **Getting help** card and the crash dialog) and in the docs, and those TODOs are gone. | getting-started/install.md; the faq.md and troubleshooting.md TODOs are answered |
 | **The Windows voice uses the classic SAPI desktop voices only**; Windows' newer natural voices aren't available to it. | announcer/voice.md (Which Windows voices you get) |
 | Low: **a move-driver or bump-up undo on the Program tab restores the whole heat roster**, even onto a heat that has since been run (the desk deliberately allows editing a run heat's roster). | Not documented (race-day/program-and-mains.md if it is) |
 

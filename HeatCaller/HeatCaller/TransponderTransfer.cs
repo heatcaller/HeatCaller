@@ -208,13 +208,47 @@ internal static class TransponderTransferring
     }
 
     /// <summary>
+    /// The question Run asks before moving a transponder that was timed as a
+    /// car of its own in <paramref name="races"/> (RacesFiledUnder): which
+    /// races, up to eight by name, and that they will count for
+    /// <paramref name="toName"/> from now on. Null when there are none, and
+    /// nothing needs asking. <paramref name="question"/> ends it - a car's
+    /// transfer (CarTransferring.AskFor) asks its own, once.
+    /// </summary>
+    public static string? AskFor(string id, string fromName, string toName, IReadOnlyList<SessionRecord> races,
+        string question = "Transfer it anyway?")
+    {
+        if (races.Count == 0)
+        {
+            return null;
+        }
+
+        var named = string.Join("\n", races.Take(8).Select(s =>
+            $"  {(string.IsNullOrWhiteSpace(s.Label) ? s.SessionType.ToString() : s.Label.Trim())} - {s.StartedAtUtc.ToLocalTime():d MMM yyyy HH:mm}"));
+        var more = races.Count > 8 ? $"\n  ...and {races.Count - 8} more." : string.Empty;
+
+        return $"{id} was timed as a car of its own in {Plural.Of(races.Count, "race")} already run, so "
+               + $"{(races.Count == 1 ? "that race is" : "those races are")} saved under {id} itself rather than {fromName}'s main transponder:\n"
+               + named + more + "\n\n"
+               + $"Once {id} is {toName}'s, qualifying and the mains will count {(races.Count == 1 ? "it" : "them")} for {toName}, not {fromName}. "
+               + question;
+    }
+
+    /// <summary>
     /// Asks who it goes to (BelongsToForm), and transfers it. True when it
-    /// was. Given the race history, a transponder that was timed as a car of
-    /// its own in races already run is not moved until the operator has been
-    /// told those races will count for the new owner and says go ahead.
+    /// was. A transponder that was timed as a car of its own in races already
+    /// run is not moved until the operator has been told those races will
+    /// count for the new owner and says go ahead.
+    ///
+    /// <paramref name="history"/> has no default on purpose. It used to be
+    /// optional, and the one caller - Transfer on a driver's Transponders tab
+    /// (DriverTransponderPanel) - left it out, so the question above was
+    /// never asked: the bug hunt that wrote it (4 Oct 2026) pinned
+    /// RacesFiledUnder, but nothing noticed it was never reached. Null still
+    /// means "no history to look in", but a caller now has to say so.
     /// </summary>
     public static bool Run(IWin32Window owner, string id, DriverProfile from, ProfileStore profiles, CarStore cars, UndoService undo,
-        SessionHistoryStore? history = null)
+        SessionHistoryStore? history)
     {
         if (WhyNot(id, from) is { } refused)
         {
@@ -236,20 +270,12 @@ internal static class TransponderTransferring
             return false;
         }
 
-        if (history is not null && RacesFiledUnder(id, history.All) is { Count: > 0 } races)
+        if (history is not null)
         {
             var toName = profiles.Get(form.DriverKey) is { } to ? NameOf(to) : form.DriverKey;
-            var named = string.Join("\n", races.Take(8).Select(s =>
-                $"  {(string.IsNullOrWhiteSpace(s.Label) ? s.SessionType.ToString() : s.Label.Trim())} - {s.StartedAtUtc.ToLocalTime():d MMM yyyy HH:mm}"));
-            var more = races.Count > 8 ? $"\n  ...and {races.Count - 8} more." : string.Empty;
 
-            var ask = $"{id} was timed as a car of its own in {Plural.Of(races.Count, "race")} already run, so "
-                      + $"{(races.Count == 1 ? "that race is" : "those races are")} saved under {id} itself rather than {NameOf(from)}'s main transponder:\n"
-                      + named + more + "\n\n"
-                      + $"Once {id} is {toName}'s, qualifying and the mains will count {(races.Count == 1 ? "it" : "them")} for {toName}, not {NameOf(from)}. "
-                      + "Transfer it anyway?";
-
-            if (AppDialog.Show(owner, ask, "Transfer transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            if (AskFor(id, NameOf(from), toName, RacesFiledUnder(id, history.All)) is { } ask
+                && AppDialog.Show(owner, ask, "Transfer transponder", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             {
                 return false;
             }

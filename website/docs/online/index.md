@@ -89,7 +89,7 @@ A car nobody has named yet raced under its transponder number. Online, that name
 The rest is your choice, on the Club Website page:
 
 - **Short names.** "Shorten published names to a first name and an initial" is **on** by default, so "Dana Sloane" appears as "Dana S" everywhere online. If two drivers would end up looking the same, they get more letters until they differ.
-- **The roster and heat line-ups** (who is entered, and who is in which heat) are **off** by default, with one checkbox for both. With it on, the Schedule page shows who is in each heat and gets a "Find your name" box. With it off, the schedule shows the heats but not who is in them. The roster itself (the list of who is entered and checked in) has no page of its own, and the relay only hands it out if the relay admin has also allowed it for your club, so both ends have to agree before that list is public.
+- **The roster and heat line-ups** (who is entered, and who is in which heat) are **off** by default, with one checkbox for both. With it on, the Schedule page shows who is in each heat and gets a "Find your name" box. With it off, the schedule shows the heats but not who is in them. The roster itself (the list of who is entered and checked in) has no page of its own. The relay only shows the line-ups, or hands out the roster, if the relay admin has also allowed it for your club, so both ends have to agree before any of those names are public. Until they do, the Schedule page shows the heats without who is in them, even with the box ticked.
 - **Photos** only go into the online check-in list if you tick "Include photos (drivers can be children - off unless you're sure)". They're small thumbnails, and only someone holding the staff PIN, that driver's QR check-in or that driver's personal PIN can see them.
 
 The online check-in list is private on the relay. It's never served whole to the public: the relay hands out one driver to a QR check-in link or a personal PIN, and the full list only to someone with the staff PIN. When you switch online check-in off, an empty list is published, which takes the names back off the relay.
@@ -114,7 +114,7 @@ When the app starts, or when you change the address, club, token or short-name s
 
 ## How long results stay online
 
-The relay keeps the newest **300** results per club. When the 301st arrives, the oldest is dropped. That's roughly ten race nights, depending on how many sessions you run. The laptop keeps every result it has ever recorded; the relay is a window, not the record.
+The relay keeps every result you publish, so drivers can look back through past seasons on the **Results** page. There's no limit on how many, only on space (below), and a session is only a kilobyte or two. The laptop still keeps every result it has ever recorded, so it stays the record.
 
 Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room.
 

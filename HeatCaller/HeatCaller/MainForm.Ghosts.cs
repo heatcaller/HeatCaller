@@ -40,11 +40,7 @@ public partial class MainForm
             // "(none)") paced a PB or track-record ghost from the wrong
             // track's laps, or skipped it as having no PB there. Practice
             // is checked first: it is the one most ghosts run in.
-            var trackName = _race.IsPracticeMode && _practiceControl is not null
-                ? _practiceControl.SelectedTrackName
-                : _race.IsDemoMode && _demoControl is not null
-                    ? _demoControl.SelectedTrackName
-                    : cmbTrackLayout.SelectedItem as string;
+            var trackName = RunningTrackName(cmbTrackLayout.SelectedItem as string);
 
             _ghostsOnlyThese = onlyThese;
             _ghostsStartedFor = GhostsWanted(onlyThese);
@@ -62,8 +58,38 @@ public partial class MainForm
             // Or the next race would open by announcing a pass that
             // happened in the last one.
             _ghostWasAhead.Clear();
+
+            // Forgotten with the race. A practice started with ghosts off
+            // never sets them, so the last race's set was left standing,
+            // and switching on the very ghosts it named looked like no
+            // change and started nothing (see KeepRunningGhostsInStep).
+            _ghostsStartedFor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _ghostsOnlyThese = null;
         }
     }
+
+    /// <summary>
+    /// The track of whatever is actually running: the Practice page's in
+    /// practice, the Demo Mode page's in a demo, otherwise
+    /// <paramref name="raceControlTrack"/>. One choice for the ghosts, the
+    /// speed columns and the track map, so they can't drift apart - the
+    /// speed columns and the map went on reading Race Control's layout in
+    /// practice after the ghosts had moved to the Practice page's.
+    /// </summary>
+    private string? RunningTrackName(string? raceControlTrack)
+    {
+        var practice = _race.IsPracticeMode && _practiceControl is not null;
+        var demo = _race.IsDemoMode && _demoControl is not null;
+
+        return RunningTrackName(practice, demo,
+            practice ? _practiceControl!.SelectedTrackName : null,
+            demo ? _demoControl!.SelectedTrackName : null,
+            raceControlTrack);
+    }
+
+    /// <summary>RunningTrackName's choice on its own, for testing. Practice first: it is the one most ghosts run in.</summary>
+    internal static string? RunningTrackName(bool practice, bool demo, string? practiceTrack, string? demoTrack, string? raceControlTrack) =>
+        practice ? practiceTrack : demo ? demoTrack : raceControlTrack;
 
     /// <summary>
     /// Ghost profiles kept in step as ghosts are added, edited and deleted -
@@ -135,35 +161,114 @@ public partial class MainForm
     /// race carries each remaining ghost on from its last crossing (see
     /// GhostService.Start), so they do not jump back to the line. A save
     /// that changes nothing about who runs (a ghost renamed, its pace
-    /// nudged) leaves them alone. Ghosts that were not running are left for
-    /// the next green, as before.
+    /// nudged) leaves them alone. In a race, ghosts that were not running
+    /// are left for the next green, as before.
+    ///
+    /// Practice has no next green - only Stop and Start, which ends and
+    /// saves the session, or Clear Stats - so there ghosts switched on with
+    /// none running are put on track straight away, as the Practice page
+    /// says they will be. They used to wait for a green that never came.
+    ///
+    /// A ghost switched off leaves the board too (RemoveGhostStanding). Its
+    /// frozen row used to stay there - see the session's summary of it.
     /// </summary>
     private void KeepRunningGhostsInStep()
     {
-        if (_ghosts is null || !_ghosts.IsRunning || _race.State != RaceState.Racing)
+        if (_ghosts is null)
         {
             return;
         }
 
         var wanted = GhostsWanted(_ghostsOnlyThese);
+        var change = GhostSwitchChangeFor(_race.State == RaceState.Racing, _race.IsPracticeMode, _ghosts.IsRunning, wanted, _ghostsStartedFor);
 
-        if (wanted.SetEquals(_ghostsStartedFor))
+        if (change == GhostSwitchChange.None)
         {
             return;
         }
 
-        if (wanted.Count == 0)
+        var switchedOff = _ghostsStartedFor.Where(t => !wanted.Contains(t)).ToList();
+        NoteGhostsSwitchedOn(wanted.Where(t => !_ghostsStartedFor.Contains(t)));
+
+        if (change == GhostSwitchChange.StopAll)
         {
             _ghosts.Stop();
             _ghostWasAhead.Clear();
             _ghostsStartedFor = wanted;
             OnClientRawMessage("[ghost] Ghost cars switched off mid-race - taken off track.");
-            return;
+        }
+        else
+        {
+            OnClientRawMessage(_ghosts.IsRunning
+                ? "[ghost] Ghost cars changed mid-race - restarting the ones still switched on."
+                : "[ghost] Ghost cars switched on mid-session - putting them on track.");
+            HandleGhosts(RaceState.Racing);
         }
 
-        OnClientRawMessage("[ghost] Ghost cars changed mid-race - restarting the ones still switched on.");
-        HandleGhosts(RaceState.Racing);
+        // After the restart, not before: taking the last car the finish was
+        // waiting on off the board ends the race, and the ghosts are stopped
+        // with it - a restart after that would set them lapping in a race
+        // that is over.
+        foreach (var transponder in switchedOff)
+        {
+            _ghostWasAhead.Remove(transponder);
+            _race.RemoveGhostStanding(transponder);
+        }
     }
+
+    /// <summary>What a save of the ghost switches does to the ghosts while a session runs - see KeepRunningGhostsInStep.</summary>
+    internal enum GhostSwitchChange
+    {
+        /// <summary>Nothing about who should be running has changed, or nothing is to be done about it now.</summary>
+        None,
+
+        /// <summary>Every ghost is switched off: all taken off track.</summary>
+        StopAll,
+
+        /// <summary>Some were switched on or off: the ones still on are (re)started.</summary>
+        Restart,
+    }
+
+    /// <summary>KeepRunningGhostsInStep's decision, on its own for testing.</summary>
+    internal static GhostSwitchChange GhostSwitchChangeFor(bool racing, bool practice, bool ghostsRunning,
+        IReadOnlySet<string> wanted, IReadOnlySet<string> startedFor)
+    {
+        // A race keeps "while ghosts are racing": with none running, the
+        // ones switched on wait for the next green. Practice has none.
+        if (!racing || (!ghostsRunning && !practice) || wanted.SetEquals(startedFor))
+        {
+            return GhostSwitchChange.None;
+        }
+
+        return wanted.Count == 0 ? GhostSwitchChange.StopAll : GhostSwitchChange.Restart;
+    }
+
+    /// <summary>
+    /// Ghosts switched on after the green of the race now running, and that
+    /// race's SessionGeneration - for the badges (GhostsSwitchedOnMidRace).
+    /// </summary>
+    private (int Generation, HashSet<string> Ghosts) _ghostsSwitchedOnMidRace = (-1, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+    private void NoteGhostsSwitchedOn(IEnumerable<string> transponders)
+    {
+        if (!_race.IsSameRace(_ghostsSwitchedOnMidRace.Generation))
+        {
+            _ghostsSwitchedOnMidRace = (_race.SessionGeneration, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        _ghostsSwitchedOnMidRace.Ghosts.UnionWith(transponders);
+    }
+
+    /// <summary>
+    /// The ghosts that joined the race now on the board part-way through.
+    /// One joins on no laps, so every driver was "ahead" of it at the flag
+    /// and was credited with beating it (Ghost Buster, Shadow Boxer) without
+    /// ever racing it. The badges leave these out.
+    /// </summary>
+    private IReadOnlyCollection<string> GhostsSwitchedOnMidRace() =>
+        _race.IsSameRace(_ghostsSwitchedOnMidRace.Generation)
+            ? _ghostsSwitchedOnMidRace.Ghosts
+            : Array.Empty<string>();
 
     private GhostService CreateGhostService()
     {

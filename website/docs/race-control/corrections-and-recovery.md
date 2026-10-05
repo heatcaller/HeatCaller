@@ -18,6 +18,8 @@ A correction updates the board and the announcer's running order straight away. 
 
 Use **+1 Lap** when the decoder missed a pass. The lap count goes up by one. A lap added by hand has no lap time, so it doesn't change best laps, averages or the lap chart.
 
+If the lap you add brings the driver to the race's lap limit, the checkered flag comes out just as if they had crossed the line. With **Leader takes the flag, others finish their lap** ticked, that driver has finished and everyone else finishes the next time they cross. With it unticked, the race ends. A lap added under a red flag doesn't bring the checkered flag out while the field is stopped. It comes out when you press **Green (Start)** to restart, in place of the green, and that driver has finished. With the box unticked, the race ends there.
+
 ### Removing a lap
 
 Use **-1 Lap** when a car was counted twice, for example a double read on the line.
@@ -25,6 +27,8 @@ Use **-1 Lap** when a car was counted twice, for example a double read on the li
 - Laps you added by hand are removed first.
 - After that, the driver's last lap is merged into the lap before it rather than thrown away. Two crossings a moment apart were really one lap, and adding their times together gives that lap back. The laps still add up to the driver's total time.
 - The driver's best lap, their clean run and the fastest lap of the race are then worked out again. If the phantom short "lap" had set the driver's best, or the race's fastest lap, it no longer counts.
+
+If a phantom lap brought the checkered flag out early in a lap race, for example a car carried back across the loop after a crash, use **-1 Lap** on that driver straight away, before they come round again. Their real last lap then counts: the next time they cross, they take the flag. The checkered flag stays out for everyone else. A crossing they make while they're marked as finished isn't counted, even once the lap comes off, so if they've already come round, leave their count alone: the phantom lap stands in for the one they just finished. A driver who took the flag after it came out has finished, so taking a lap off them doesn't give them another lap to run.
 
 The lap count never goes below zero.
 

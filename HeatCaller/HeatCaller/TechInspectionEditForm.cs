@@ -110,11 +110,15 @@ public sealed class TechInspectionEditForm : Form
     /// </summary>
     public TechInspection Result { get; private set; }
 
+    /// <summary>The class a new inspection opens on instead of the driver's main one - see FillFields.</summary>
+    private readonly string? _presetClass;
+
     public TechInspectionEditForm(TechInspection? existing, ProfileStore profiles, RaceClassStore classes,
-        string? presetTransponder = null)
+        string? presetTransponder = null, string? presetClass = null)
     {
         _profiles = profiles;
         _classes = classes;
+        _presetClass = presetClass;
 
         // presetTransponder only applies when this is genuinely a NEW
         // inspection - it pre-selects who it's for (jumping in from
@@ -301,9 +305,34 @@ public sealed class TechInspectionEditForm : Form
 
             _cmbClass.SelectedItem = match;
         }
-        _cmbClass.SelectedIndexChanged += (_, _) => BuildChecklist();
 
         _txtCar.Text = Result.CarModel;
+
+        // A new inspection takes its class and car from the driver it opens
+        // on, as picking a driver does. The driver is chosen above before
+        // OnDriverChanged is hooked (and before there are classes to pick),
+        // so one opened from Check-In came up with no class: its pass was
+        // saved against no class and never cleared the car. Before the
+        // class box's own handler is hooked - the constructor builds the
+        // checklist once everything is in place.
+        if (_original is null)
+        {
+            OnDriverChanged();
+
+            // Then the class Check-In is asking about, when it is not their
+            // main one - a driver through tech in Stock still to be inspected
+            // in Modified. After OnDriverChanged, which picks the main class.
+            var preset = _cmbClass.Items.Cast<object>()
+                .OfType<string>()
+                .FirstOrDefault(n => string.Equals(n, _presetClass, StringComparison.OrdinalIgnoreCase));
+
+            if (preset is not null)
+            {
+                _cmbClass.SelectedItem = preset;
+            }
+        }
+
+        _cmbClass.SelectedIndexChanged += (_, _) => BuildChecklist();
 
         _cmbManualVerdict.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbManualVerdict.Items.AddRange(new object[] { VerdictPassed, VerdictPassedWithNote, VerdictFailed });
@@ -324,6 +353,33 @@ public sealed class TechInspectionEditForm : Form
         _txtNotes.ScrollBars = ScrollBars.Vertical;
         _txtNotes.Text = Result.Notes;
     }
+
+    /// <summary>
+    /// What a check starts at with this class picked: as the inspection
+    /// recorded it, but only in the class it was recorded in.
+    ///
+    /// Every check used to be filled in from the inspection whatever class
+    /// was picked. Classes sharing check names (Add Common gives them all
+    /// the same six) came up with the other car's ticks already on, so one
+    /// click of Save passed a car nobody had looked at.
+    /// </summary>
+    internal static string StartingState(TechInspection inspection, string? className, string item)
+    {
+        if (className is null || !string.Equals(className, inspection.ClassName, StringComparison.OrdinalIgnoreCase))
+        {
+            return StateUnchecked;
+        }
+
+        return inspection.ItemsFailed.Contains(item) ? StateFailed
+            : inspection.ItemsPassed.Contains(item) ? StatePassed
+            : StateUnchecked;
+    }
+
+    /// <summary>Whether saving takes an inspection already on file out of its class and into another one.</summary>
+    internal static bool MovesToAnotherClass(TechInspection? original, string? className) =>
+        original is { ClassName.Length: > 0 }
+        && !string.IsNullOrEmpty(className)
+        && !string.Equals(className, original.ClassName, StringComparison.OrdinalIgnoreCase);
 
     private bool HasDriver(string transponder) =>
         _cmbDriver.Items.Cast<object>().OfType<DriverItem>()
@@ -425,9 +481,7 @@ public sealed class TechInspectionEditForm : Form
 
             row.Item.Text = _staleItems.Contains(item) ? $"{item}  (no longer on the checklist)" : item;
 
-            row.State.SelectedItem = Result.ItemsFailed.Contains(item) ? StateFailed
-                : Result.ItemsPassed.Contains(item) ? StatePassed
-                : StateUnchecked;
+            row.State.SelectedItem = StartingState(Result, className, item);
 
             row.Line.Visible = true;
 
@@ -559,6 +613,40 @@ public sealed class TechInspectionEditForm : Form
         {
             AppDialog.Show(this, "Pick a driver.", "No driver", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
+        }
+
+        // An inspection is matched to a car by its class, so one with no
+        // class clears the car for nothing. Asked rather than refused: a
+        // club with classes that don't run tech may still note a look-over.
+        if (_cmbClass.SelectedItem is not string { Length: > 0 } && _cmbClass.Items.Count > 0)
+        {
+            var noClass = AppDialog.Show(this,
+                "No class is picked. An inspection with no class doesn't count as tech for any class, "
+                + "so this car will still show as not inspected.\r\n\r\nSave it anyway?",
+                "No class", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (noClass != DialogResult.Yes)
+            {
+                return;
+            }
+        }
+
+        // An inspection already on file, saved under another class, MOVES
+        // there - how the Scrutineering log fixes one filed under the wrong
+        // class - and stops counting for the class it was in. Asked, because
+        // nothing on screen said so, and re-checking a driver's other car
+        // this way quietly lost the first car's pass.
+        if (MovesToAnotherClass(_original, _cmbClass.SelectedItem as string))
+        {
+            var move = AppDialog.Show(this,
+                $"This moves the inspection from {_original!.ClassName} to {_cmbClass.SelectedItem}, "
+                + $"so it no longer counts for {_original.ClassName}.\r\n\r\nSave it anyway?",
+                "Move inspection", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (move != DialogResult.Yes)
+            {
+                return;
+            }
         }
 
         var passed = _checkControls.Where(kv => (string?)kv.Value.SelectedItem == StatePassed).Select(kv => kv.Key).ToList();

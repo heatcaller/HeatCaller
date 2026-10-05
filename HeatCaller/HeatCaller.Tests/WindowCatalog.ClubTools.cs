@@ -3,10 +3,12 @@ namespace HeatCaller.Tests;
 internal static partial class WindowCatalog
 {
     /// <summary>
-    /// Three windows a club opens beside the racing rather than as part of
+    /// Four windows a club opens beside the racing rather than as part of
     /// it, each always the same shape: the ? cheat sheet (ShortcutSheetForm),
     /// every shortcut in the app in two columns; the glossary from Next
-    /// Steps' Glossary (RacingWordsForm), every word; and the scan-to-join
+    /// Steps' Glossary (RacingWordsForm), every word; the About box from
+    /// Backup &amp; Restore's Getting help card (AboutForm), every
+    /// third-party component with its licence; and the scan-to-join
     /// poster (JoinPosterForm, titled "&lt;heading&gt; - scan to join"),
     /// shown modeless from Who's Racing's Self Check-In Poster... and from
     /// Club Website's Show Poster - the second with the longest line under
@@ -17,6 +19,7 @@ internal static partial class WindowCatalog
     {
         ("Keyboard shortcuts", () => new ShortcutSheetForm()),
         ("What these words mean", () => new RacingWordsForm()),
+        ("About HeatCaller", () => new AboutForm()),
         ("Scan to join", () => new JoinPosterForm(
             "http://192.168.1.42:8080/checkin",
             "CHECK IN",

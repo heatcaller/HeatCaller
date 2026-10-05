@@ -191,8 +191,10 @@ public sealed class GhostStore
         catch (Exception ex)
         {
             // Unreadable file: start fresh rather than refusing to open,
-            // keeping a copy first so the next save doesn't lose it.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // keeping a copy first so the next save doesn't lose it. When it
+            // could not be read at all or no copy could be kept, never save
+            // over it this session (see LoadedUnreadable).
+            store.LoadedUnreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
         return store;
@@ -208,8 +210,24 @@ public sealed class GhostStore
     /// </summary>
     public event Action<GhostSettings>? Saved;
 
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A briefly locked file used to load empty and the
+    /// next save replaced every ghost the club had set up.
+    /// </summary>
+    public bool LoadedUnreadable { get; private set; }
+
     public void Save()
     {
+        // Not written, and Saved not raised either: the real file is almost
+        // certainly fine, and neither it nor the ghosts' driver profiles
+        // should be brought into line with these empty defaults. The
+        // console has already said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         SafeFile.WriteAllText(FilePath, System.Text.Json.JsonSerializer.Serialize(
             Current, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 

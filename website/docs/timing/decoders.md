@@ -26,6 +26,14 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 !!! tip
     If you race at more than one venue, save its decoder on the **Venues** page. Pressing **Apply This Venue** there sets **Connect via:** on the **Connection** page for you. See [Drivers, classes and venues](../race-day/drivers-and-classes.md).
 
+## Connect when HeatCaller starts
+
+**Connect when HeatCaller starts**, on the **Connection** page, connects the decoder in **Connect via:** (and the split loop with it, when one is set) as soon as HeatCaller opens, so nobody has to remember to press **Connect** on race night. It's ticked to begin with.
+
+- **I-Lap:** it connects on the COM port it was last connected on, and no other. If that port isn't there yet, for example a USB adapter plugged in after HeatCaller opened, the console says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears. Until you've connected once by hand there's no port to remember, and the console says to pick it and press **Connect** once.
+- **EasyLap:** it's tried once as HeatCaller opens. To keep trying until the decoder is found, and after a dropped connection, tick [Auto-connect](#auto-connect) as well.
+- Pressing **Connect** or **Disconnect** yourself, or unticking the box, stops it waiting.
+
 ## Direct EasyLap Decoder (USB)
 
 ### Before you start
@@ -104,7 +112,7 @@ Things to know about I-Lap:
 - **Lap times** are measured by the laptop, at the moment each line arrives from the decoder.
 - **Repeated reads** of the same transponder within 0.8 seconds are treated as one pass. The console shows "[ilap] Suppressed repeat of ...".
 - **Signal strength** isn't available from I-Lap, so the pre-race check never marks an I-Lap transponder as weak. See [Transponders](transponders.md#the-pre-race-check).
-- There's **no auto-connect** for I-Lap. If the port fails to open, you're told once.
+- I-Lap isn't retried: if the port fails to open, you're told once. To connect it as HeatCaller opens, use [Connect when HeatCaller starts](#connect-when-heatcaller-starts).
 
 ### The raw capture log
 
@@ -120,10 +128,11 @@ See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder lo
 With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/finish line, and the other can read cars partway round the track. Choose it in **Split loop:** (it lists the decoder that isn't the line).
 
 - **Connect** connects both. **Connect Split** connects the split loop on its own, for example after it was unplugged. **Disconnect** disconnects both.
+- When the line connects by itself (with **Connect when HeatCaller starts**, or the EasyLap's auto-connect), an I-Lap split loop uses the COM port it was last connected on. If that port isn't there yet, **Split status:** says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears.
 - **Split status:** has its own light. Once connected, it says how closely the two decoders' clocks are tied together, for example "Clocks tied together to within about 4 ms". HeatCaller works this out from the EasyLap's once-a-second clock reading; nothing needs setting.
 - **The split loop never counts a lap.** Laps, the minimum lap time, jump starts and the finish all come from the line, exactly as with one decoder. If the split loop unplugs or misreads, the race carries on as it would without it.
 - **Each car needs a transponder for each decoder:** one the line reads and one the split loop reads. Add the split loop's on the driver's **Transponders** tab with **Add Split Transponder**. See [A driver's transponders](../race-day/drivers-and-classes.md#a-drivers-transponders).
-- During a race, the TIMING line on the Next Up bar says "Split loop not connected" or "Split loop quiet" if the split loop stops. Laps are still timed.
+- During a race, the TIMING line on the Next Up bar says "Split loop quiet" if the split loop stops reading cars. If it isn't connected, the bar says "Split loop not connected" for 15 seconds, then leaves it to the console and Mission Control. Laps are still timed either way.
 - The console logs each split pass as `[split] Split 1: ...`, with whose transponder it is.
 
 ### Line Up
@@ -134,6 +143,8 @@ Each decoder takes a moment to report a car, and the I-Lap's serial line adds a 
 2. Click **Line Up**, then drive a car with both its transponders across them five or six times. Each crossing both loops read is listed.
 3. Click **Save**. The middle reading is kept and taken off every split time. **Set to Zero** clears it.
 4. Put the split loop back in its place round the track.
+
+Line Up waits until at least three crossings agree to within a tenth of a second, and says "they don't agree yet - drive across a few more times" until they do. A car sitting over both loops is read again and again; those repeat reads are ignored rather than taken for crossings. Line Up can't be opened or saved while a race or practice is running. While it's open, a car crossing the line doesn't start practice by itself, even with **Start automatically when a car crosses the gate** ticked.
 
 ### Split times
 
@@ -158,9 +169,12 @@ A lap gets no sectors when the split loop didn't read the car, when it's the sta
 The decoder chosen in **Connect via:** is the line; with **Split loop:** on, the other one is the split loop. Any other connection is disconnected. When you change **Connect via:**:
 
 - Any EasyLap or I-Lap connection that is neither the new line nor the split loop is disconnected. With the split loop on, the two decoders swap roles.
+- The Line Up measurement is turned round to match, whether or not the split loop is on at the time. Run Line Up again when you can, to be sure.
 - The **Status:** line switches to the new choice's own state (usually "Disconnected"). Click **Connect** to connect it.
 
 HeatCaller remembers your choice and uses it next time it opens.
+
+**Not during a race.** **Connect via:**, **Split loop:** and Line Up can't be changed while a race or practice is running, since a change would disconnect the decoder timing it. The choice jumps back, and a **Race under way** message says to finish or reset the session first.
 
 !!! note
     The first-run wizard offers both decoders, including I-Lap with its COM port and baud rate. Whatever you choose there is set on this page straight away. See [The first-run wizard](../getting-started/install.md#the-first-run-wizard).

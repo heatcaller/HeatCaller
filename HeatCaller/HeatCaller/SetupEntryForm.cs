@@ -117,6 +117,18 @@ public sealed class SetupEntryForm : Form
     /// </summary>
     private readonly HashSet<string> _abandonedFieldIds = new();
 
+    /// <summary>
+    /// For an entry from before sheets existed: the ids of the sheets its
+    /// old fixed fields have been folded into this time it was opened, or
+    /// null for any other entry. They are folded into the sheet it opens on;
+    /// switching to another sheet abandoned that sheet's fields, and Save
+    /// then dropped the old values with them, leaving the entry saved
+    /// against the new sheet with none of what it recorded. Each sheet
+    /// switched to gets them folded in too - once, so switching back and
+    /// forth doesn't add the old values to its notes a second time.
+    /// </summary>
+    private readonly HashSet<string>? _legacyFoldedInto;
+
     public SetupEntry Result { get; }
 
     /// <summary>
@@ -155,6 +167,7 @@ public sealed class SetupEntryForm : Form
         if (Result.IsLegacy)
         {
             Result.MigrateLegacyFields(_template);
+            _legacyFoldedInto = new HashSet<string> { _template.Id };
         }
 
         // Built with its layout held, and laid out once at the end - see
@@ -275,6 +288,19 @@ public sealed class SetupEntryForm : Form
                 ReadEditorsIntoResult();
                 _abandonedFieldIds.UnionWith(_template.AllFields.Select(field => field.Id));
                 _template = item.Template;
+
+                // An entry from before sheets: its old values go onto this
+                // sheet as well - see _legacyFoldedInto. Not onto a sheet
+                // that shares field ids with one already filled (a copied
+                // sheet): those fields have the values already, and its
+                // notes would get the old values a second time.
+                if (_legacyFoldedInto is not null
+                    && _legacyFoldedInto.Add(_template.Id)
+                    && !_template.AllFields.Any(field => Result.Values.ContainsKey(field.Id)))
+                {
+                    Result.MigrateLegacyFields(_template);
+                }
+
                 LoadTemplateIntoUi();
             }
         };

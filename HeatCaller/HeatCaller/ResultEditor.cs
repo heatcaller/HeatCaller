@@ -92,8 +92,19 @@ public static class ResultEditor
     /// Why these adjustments cannot be applied to this session, or null
     /// when they can. Checked by both callers before anything changes.
     /// </summary>
-    public static string? Validate(SessionRecord record, IReadOnlyList<ResultAdjustment> adjustments)
+    /// <param name="nameOf">
+    /// How the refusal names a driver. The laptop's own name by default;
+    /// the race-day manager passes its channel-aware one, because this
+    /// text goes back to a phone, possibly through the relay, and an
+    /// unnamed car's name here is its whole transponder.
+    /// </param>
+    public static string? Validate(
+        SessionRecord record,
+        IReadOnlyList<ResultAdjustment> adjustments,
+        Func<SessionResultEntry, string>? nameOf = null)
     {
+        Func<SessionResultEntry, string> name = nameOf ?? (e => NameOf(e));
+
         if (record.SessionType != RaceSessionType.Race || record.IsDemoSession())
         {
             return "Only a real race's result can be corrected - not practice, and not a demo race.";
@@ -112,27 +123,27 @@ public static class ResultEditor
 
             if (!seen.Add(entry.Transponder))
             {
-                return $"{NameOf(entry)} is in that correction twice.";
+                return $"{name(entry)} is in that correction twice.";
             }
 
             if (Math.Abs(adjustment.AddedLaps) > MaxLapChange)
             {
-                return $"{NameOf(entry)}: laps can be changed by at most {MaxLapChange}.";
+                return $"{name(entry)}: laps can be changed by at most {MaxLapChange}.";
             }
 
             if (adjustment.TimePenaltyMs < 0 || adjustment.TimePenaltyMs > MaxTimePenaltyMs)
             {
-                return $"{NameOf(entry)}: a time penalty has to be between 0 and 3600 seconds.";
+                return $"{name(entry)}: a time penalty has to be between 0 and 3600 seconds.";
             }
 
             if (adjustment.LapPenalty < 0 || adjustment.LapPenalty > MaxLapChange)
             {
-                return $"{NameOf(entry)}: a lap penalty has to be between 0 and {MaxLapChange}.";
+                return $"{name(entry)}: a lap penalty has to be between 0 and {MaxLapChange}.";
             }
 
             if (NormaliseOutcome(adjustment.Outcome) is null)
             {
-                return $"{NameOf(entry)}: the outcome has to be finished, DNF or DQ.";
+                return $"{name(entry)}: the outcome has to be finished, DNF or DQ.";
             }
         }
 

@@ -133,6 +133,16 @@ internal static class RoundPicker
         }
     }
 
-    /// <summary>A real race day is open - not the legacy holder, not nothing.</summary>
-    public static bool RaceDayOpen(RaceEventStore? events) => events?.Active is { IsLegacy: false };
+    /// <summary>A real race day is open - not the legacy holder, not nothing, and not ended.</summary>
+    /// <remarks>
+    /// Open, not just current. Picking a day on The Day makes it current,
+    /// closed days included - that is how a past meeting's results are
+    /// looked at - and a closed day picked to look at last week's results
+    /// had tonight's races filed into its leftover heats: the C-Main left
+    /// unrun when the light went was marked as run with tonight's laps and
+    /// counted in last week's meeting, the 25 Sep fault again by another
+    /// door. A heat on a closed day can still be run deliberately by
+    /// reopening the day.
+    /// </remarks>
+    public static bool RaceDayOpen(RaceEventStore? events) => events?.Active is { IsLegacy: false, IsOpen: true };
 }

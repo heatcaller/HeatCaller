@@ -130,7 +130,11 @@ public sealed partial class RaceDayService
                     className = runSheetNext.ClassName,
                     description = runSheetNext.Description,
                 },
-            undo = _host.Undo.PendingDescriptions,
+
+            // The entries themselves only on the track's Wi-Fi; through the
+            // relay, one line with the count - see UndoListFor.
+            undo = UndoListFor(_host.Undo.PendingDescriptions, context.Channel),
+            undoCount = _host.Undo.PendingDescriptions.Count,
             allowResultEditing = _host.Settings.AllowResultEditing,
             busy = LaptopBusy(),
         });
@@ -243,8 +247,61 @@ public sealed partial class RaceDayService
     /// </summary>
     private static readonly TimeSpan RepeatStartWindow = TimeSpan.FromMinutes(15);
 
-    /// <summary>What a race day started without a name is called: the date it was started, as the Event tab's New Race Day names it.</summary>
-    private static string DefaultDayName(DateTime local) => $"Race Day {local:d MMM yyyy}";
+    /// <summary>The most recently started real race day, or null on a club's first - what a new one copies its settings from, as on the Event tab (RaceDayEventControl.LastRealDay).</summary>
+    private static RaceEvent? LastRealDay(RaceEventStore events) =>
+        events.Real.OrderByDescending(e => e.StartedUtc).FirstOrDefault();
+
+    /// <summary>
+    /// Starts a race day called <paramref name="name"/> with everything else
+    /// carried forward from <paramref name="previous"/>, as the Event tab's
+    /// New Race Day does (RaceDayEventControl.StartDayFrom) - the kind of
+    /// night and the classes as well, which the phone doesn't ask about.
+    /// Only classes still on file; when that leaves none, every class, as
+    /// New Race Day ticks them all on a club's first day.
+    ///
+    /// It used to start a bare race day: no classes, venue, track or
+    /// championship, three qualifying rounds and check-in only, none of
+    /// which the phone can change - and the next New Race Day on the laptop
+    /// copied its blanks from it.
+    /// </summary>
+    internal static RaceEvent StartDayLike(RaceEventStore events, RaceClassStore classes, string name, RaceEvent? previous)
+    {
+        var onFile = classes.All.Select(c => c.Name).ToList();
+        var racing = onFile.Where(c => previous?.ClassNames?.Contains(c, StringComparer.OrdinalIgnoreCase) == true).ToList();
+
+        return EventSpine.StartEvent(
+            events,
+            name,
+            previous?.VenueName ?? string.Empty,
+            previous?.TrackLayoutName ?? string.Empty,
+            previous?.ChampionshipId ?? string.Empty,
+            previous?.Shape ?? RaceDayShape.RaceDay,
+            racing.Count > 0 ? racing : onFile,
+            previous?.QualifyingRounds ?? 0,
+            previous?.DriversPerHeat ?? 0);
+    }
+
+    /// <summary>
+    /// Whether a request to start a race day called <paramref name="requested"/>
+    /// ("" for no name) names this one. Compared the way day.update compares
+    /// names. With no name sent, the default is the one the day was given on
+    /// the date IT was started - so a request made just before midnight and
+    /// handed over again just after still matches - for either kind of
+    /// night, as the default follows the kind (EventSpine.DefaultDayName)
+    /// and the desk may have switched it since.
+    /// </summary>
+    internal static bool NamedAsAsked(RaceEvent day, string requested)
+    {
+        if (requested.Length > 0)
+        {
+            return string.Equals(day.Name, requested, StringComparison.Ordinal);
+        }
+
+        var started = day.StartedUtc.ToLocalTime();
+
+        return string.Equals(day.Name, EventSpine.DefaultDayName(started, RaceDayShape.RaceDay), StringComparison.Ordinal)
+               || string.Equals(day.Name, EventSpine.DefaultDayName(started, RaceDayShape.ClubNight), StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// A new race day, made current - the Event tab's New Race Day.
@@ -288,7 +345,11 @@ public sealed partial class RaceDayService
 
         RefuseWhileLive("start a new race day");
 
-        var name = requested.Length > 0 ? requested : DefaultDayName(DateTime.Now);
+        // What the new day copies from - see StartDayLike. Looked up before
+        // it is started, as the new day is the most recent once it is; its
+        // default name follows the kind of night, as the Event tab's does.
+        var previous = LastRealDay(_host.Events);
+        var name = requested.Length > 0 ? requested : EventSpine.DefaultDayName(DateTime.Now, previous?.Shape ?? RaceDayShape.RaceDay);
 
         // Which race day was current, and the new one as it started (filled
         // in below), for the undo: it takes back the new day, while nothing
@@ -341,7 +402,7 @@ public sealed partial class RaceDayService
             _host.RefreshDesk();
         });
 
-        var day = EventSpine.StartEvent(_host.Events, name);
+        var day = StartDayLike(_host.Events, _host.Classes, name, previous);
         started = day;
         asStarted = JsonSerializer.Serialize(day);
 
@@ -366,13 +427,8 @@ public sealed partial class RaceDayService
             return null;
         }
 
-        // Named the way DayCreate names it, and compared the way day.update
-        // compares names. With no name sent, the default is the one the day
-        // was given on the date IT was started - so a request made just
-        // before midnight and handed over again just after still matches.
-        var expected = requested.Length > 0 ? requested : DefaultDayName(day.StartedUtc.ToLocalTime());
-
-        if (!string.Equals(day.Name, expected, StringComparison.Ordinal))
+        // Named the way DayCreate names it - see NamedAsAsked.
+        if (!NamedAsAsked(day, requested))
         {
             return null;
         }

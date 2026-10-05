@@ -20,6 +20,14 @@ internal sealed class DriverTransponderPanel : UserControl
     private readonly CarStore _cars;
     private readonly UndoService _undo;
 
+    /// <summary>
+    /// The race history, for Transfer to find the races a transponder was
+    /// timed in as a car of its own (TransponderTransferring.RacesFiledUnder)
+    /// and ask before they start counting for the new owner. Null only where
+    /// there is no history to look in.
+    /// </summary>
+    private readonly SessionHistoryStore? _history;
+
     private readonly ListView _list = new();
     private readonly ComboBox _cmbFitted = new();
     private readonly Button _btnAdd = new() { Text = "Add Transponder..." };
@@ -45,10 +53,11 @@ internal sealed class DriverTransponderPanel : UserControl
     /// <summary>The split loop's recent unknown reads, most recent first - see DriverGarageSources.SplitSeenRecently.</summary>
     public Func<IReadOnlyList<string>>? SplitSeenRecently { get; init; }
 
-    public DriverTransponderPanel(ProfileStore profiles, CarStore cars, UndoService undo)
+    public DriverTransponderPanel(ProfileStore profiles, CarStore cars, SessionHistoryStore? history, UndoService undo)
     {
         _profiles = profiles;
         _cars = cars;
+        _history = history;
         _undo = undo;
 
         Dock = DockStyle.Fill;
@@ -504,7 +513,10 @@ internal sealed class DriverTransponderPanel : UserControl
             return;
         }
 
-        if (TransponderTransferring.Run(this, row.Id, profile, _profiles, _cars, _undo))
+        // With the history, so a transponder timed as a car of its own in
+        // races already run is asked about before those races count for the
+        // new owner. It was left out, and the question was never asked.
+        if (TransponderTransferring.Run(this, row.Id, profile, _profiles, _cars, _undo, _history))
         {
             Fill(keep: null);
             Changed?.Invoke();

@@ -175,6 +175,46 @@ public sealed class RaceClassStore
                                  && string.Equals(c.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// The undo of a rename made in the class editor (RaceClassesControl):
+    /// everything the rename moved goes back to <paramref name="oldName"/>
+    /// (<paramref name="cascade"/>, with its <paramref name="receipt"/>),
+    /// and so does the class itself.
+    ///
+    /// Refused, with nothing changed, when another class has been given the
+    /// old name since. Adding a class takes no undo step, so the rename can
+    /// still be next in line: undoing it used to leave two classes with the
+    /// same name, sharing one set of drivers, heats and championship.
+    /// </summary>
+    public void UndoRename(string classId, string oldName, RaceClass? before, string afterJson,
+        ClassRenameCascade cascade, ClassRenameReceipt? receipt)
+    {
+        // Before anything moves. The undo step is used up either way
+        // (UndoService), so say what to do by hand instead.
+        if (NameTaken(oldName, before?.Id ?? classId))
+        {
+            throw new InvalidOperationException($"a new class called \"{oldName.Trim()}\" has been added since, so the rename can't be undone without two classes sharing the name. Rename or delete the new one, then rename this class back by hand.");
+        }
+
+        if (receipt is not null)
+        {
+            cascade.Undo(receipt);
+        }
+
+        // The name, and whatever else the same dialog changed - it
+        // used to put back only the name, so a rename made together
+        // with a new main size or format kept those after the undo.
+        // Setting by setting (RevertEdit), not the whole pre-rename
+        // class: an edit made since to anything else survives. Only
+        // when the class has gone altogether is the snapshot used, so
+        // the drivers and rounds just moved back to the old name
+        // have a class to belong to.
+        if (before is not null && !RevertEdit(before, afterJson, keepName: false))
+        {
+            Upsert(before);
+        }
+    }
+
+    /// <summary>
     /// What else has to follow when a class is renamed. Set once at start-up
     /// by whoever owns the other stores (MainForm); null leaves a rename as
     /// a rename of the class alone, which is what it used to be.
@@ -227,7 +267,9 @@ public sealed record ClassRenameReceipt(
     IReadOnlyList<string>? Cars = null,
     IReadOnlyList<string>? AlreadyCars = null,
     IReadOnlyList<string>? PinnedRaceDays = null,
-    IReadOnlyList<string>? AlreadyPinnedRaceDays = null);
+    IReadOnlyList<string>? AlreadyPinnedRaceDays = null,
+    IReadOnlyList<string>? AlreadyMainDrivers = null,
+    IReadOnlyList<string>? AlreadyOtherDrivers = null);
 
 /// <summary>
 /// Carries a class's new name into everything that holds it as text.
@@ -315,6 +357,12 @@ public sealed class ClassRenameCascade
         var alreadyCars = caseOnly ? Array.Empty<string>() : _cars?.WithClassName(newName) ?? Array.Empty<string>();
         var alreadyPinned = caseOnly ? Array.Empty<string>() : _raceEvents?.WithPinnedClass(newName) ?? Array.Empty<string>();
 
+        // A driver's main class and other classes, each on its own: a driver
+        // can carry the new name in one and the old name in the other, and
+        // AlreadyDrivers alone had the undo leave both as they were.
+        var alreadyMainDrivers = caseOnly ? Array.Empty<string>() : _profiles.WithMainClassName(newName);
+        var alreadyOtherDrivers = caseOnly ? Array.Empty<string>() : _profiles.WithOtherClassName(newName);
+
         var drivers = _profiles.RenameClass(oldName, newName);
         var rounds = _rounds.RenameClass(oldName, newName);
         var championships = _seasons.RenameClass(oldName, newName);
@@ -328,7 +376,7 @@ public sealed class ClassRenameCascade
 
         return new ClassRenameReceipt(oldName, newName, drivers, rounds, championships, inspections, raceDays, runSheetLines,
             alreadyDrivers, alreadyRounds, alreadyChampionships, alreadyInspections, alreadyRaceDays, alreadyRunSheetLines,
-            cars, alreadyCars, pinned, alreadyPinned);
+            cars, alreadyCars, pinned, alreadyPinned, alreadyMainDrivers, alreadyOtherDrivers);
     }
 
     /// <summary>
@@ -345,7 +393,15 @@ public sealed class ClassRenameCascade
     /// </summary>
     public void Undo(ClassRenameReceipt receipt)
     {
-        _profiles.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyDrivers);
+        if (receipt.AlreadyMainDrivers is { } leaveMain && receipt.AlreadyOtherDrivers is { } leaveOther)
+        {
+            _profiles.UndoRenameClass(receipt.NewName, receipt.OldName, leaveMain, leaveOther);
+        }
+        else
+        {
+            _profiles.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyDrivers);
+        }
+
         _rounds.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyRounds);
         _seasons.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyChampionships);
         _techInspections?.UndoRenameClass(receipt.NewName, receipt.OldName, receipt.AlreadyInspections);

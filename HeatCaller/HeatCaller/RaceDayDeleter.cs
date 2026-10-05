@@ -234,10 +234,26 @@ internal static class RaceDayDeleter
             .Select(r => r!)
             .ToList();
 
+        // The sessions that name one of the day's rounds as well as the ones
+        // a round links to - either link is enough, as in
+        // EventReportBuilder.SessionsFor. A heat run again keeps only the
+        // newer run linked, and the earlier one, which still names the round,
+        // used to survive the delete: with its round gone it no longer read
+        // as superseded (EventSpine.SupersededByRerun), so rule-based
+        // championships began scoring the race that had been thrown away.
+        // Not a demo (never scored), and not one the history file has not
+        // got yet (SessionHistoryStore.IsUnsaved) - that race is still Race
+        // Control's to file, and is not one of the "saved races" the dialog
+        // offers to delete.
+        var dayRoundIds = day.RoundIds.ToHashSet(StringComparer.Ordinal);
+
         var sessionIds = rounds
             .Select(r => r.LinkedSessionId)
             .Where(id => !string.IsNullOrEmpty(id))
             .Select(id => id!)
+            .Concat(history.Saved
+                .Where(s => s.RoundId is not null && dayRoundIds.Contains(s.RoundId) && !s.IsDemoSession())
+                .Select(s => s.Id))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -631,14 +647,28 @@ internal static class RaceDayDeleter
     /// Whether the holder of this sector record, kept for laps of
     /// <paramref name="count"/> sectors, ran exactly that time through that
     /// sector on such a lap in one of these sessions, on this layout.
+    ///
+    /// The laps as raced count too. Taking a crossing off in Edit Result
+    /// folds the last lap into the one before it and leaves the sectors
+    /// alone, so that lap's sectors no longer add up to it and SectorsOf
+    /// gives none - and the lap folded away is gone from the list. A sector
+    /// record set on either was missed here, and left standing.
     /// </summary>
-    private static bool SetIn(IReadOnlyCollection<SessionRecord> sessions, TrackLayout track, int count, SectorRecord record) =>
+    internal static bool SetIn(IReadOnlyCollection<SessionRecord> sessions, TrackLayout track, int count, SectorRecord record) =>
         record.Sector >= 1 && record.Sector <= count
         && sessions.Any(s => RanOn(s, track) && s.Results.Any(r =>
             string.Equals((r.DriverName ?? string.Empty).Trim(), (record.Holder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
-            && Enumerable.Range(0, r.LapTimesMs.Count).Any(i => r.SectorsOf(i) is { } sectors
-                                                                && sectors.Length == count
-                                                                && sectors[record.Sector - 1] == record.Ms)));
+            && Enumerable.Range(0, Math.Max(r.LapTimesMs.Count, r.AsRaced?.LapTimesMs.Count ?? 0))
+                .Any(i => (r.SectorsOf(i) ?? RacedSectorsOf(r, i)) is { } sectors
+                          && sectors.Length == count
+                          && sectors[record.Sector - 1] == record.Ms)));
+
+    /// <summary>A lap's sectors checked against the lap as the race recorded it - Edit Result never changes the sectors, so they stay in step with that list.</summary>
+    private static long[]? RacedSectorsOf(SessionResultEntry result, int lapIndex) =>
+        result.AsRaced is { LapTimesMs: { } raced } && result.SectorTimesMs is { } all
+        && lapIndex >= 0 && lapIndex < all.Count && lapIndex < raced.Count
+            ? Sectors.Checked(all[lapIndex], raced[lapIndex])
+            : null;
 
     /// <summary>
     /// Whether this session could have set that layout's record - it named

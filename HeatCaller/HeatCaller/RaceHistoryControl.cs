@@ -586,7 +586,22 @@ public sealed class RaceHistoryControl : UserControl
 
             foreach (var session in removed)
             {
-                if (history.Get(session.Id) is null && !history.Add(session))
+                if (history.Get(session.Id) is not null)
+                {
+                    continue;
+                }
+
+                // A race deleted before it was ever filed goes back to
+                // waiting for Race Control to file it - linking its round and
+                // letting go of its crash journal - rather than being written
+                // here without either, to be offered back at the next launch
+                // and filed twice (see SessionHistoryStore._deletedUnfiled).
+                if (history.RestoreUnfiled(session))
+                {
+                    continue;
+                }
+
+                if (!history.Add(session))
                 {
                     unsaved.Add(session);
                 }
@@ -624,7 +639,8 @@ public sealed class RaceHistoryControl : UserControl
 
             foreach (var (roundId, sessionId) in relink)
             {
-                if (history.Get(sessionId) is null
+                if (history.Get(sessionId) is not { } back
+                    || history.IsUnsaved(back)
                     || unsaved.Any(s => string.Equals(s.Id, sessionId, StringComparison.Ordinal)))
                 {
                     continue;

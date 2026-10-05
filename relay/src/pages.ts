@@ -2401,11 +2401,38 @@ function section(el, html) {
   if (heading && heading.classList.contains('day')) heading.style.display = html ? '' : 'none';
 }
 
+// The three newest results, without the whole listing: that is every
+// result the club has ever published, megabytes of it, and this runs on
+// every phone every fifteen seconds. The meta listing names the newest
+// three, and their bodies are only fetched again when those change.
+let latestSig = null;
+let latestRes = null;
+
+async function latestResults() {
+  const meta = await grab('/collection/results?meta=1&limit=3').catch(() => null);
+
+  if (meta === null) return null;
+  if (meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return meta.missing ? meta : { body: { items: [] } };
+
+  const ids = meta.body.items.map((item) => String(item.id));
+  const sig = meta.body.items.map((item) => item.id + '@' + item.publishedAt).join('|');
+
+  if (sig === latestSig && latestRes !== null) return latestRes;
+
+  const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+
+  if (answer === null || answer.missing || !Array.isArray(answer.body.items)) return latestRes ?? answer;
+
+  latestSig = sig;
+  latestRes = answer;
+  return answer;
+}
+
 async function load() {
   const [state, prog, res] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
-    grab('/collection/results').catch(() => null),
+    latestResults().catch(() => null),
   ]);
 
   if (state === null && prog === null && res === null) {
@@ -3772,6 +3799,7 @@ function poll(load, everyMs) {
 }
 
 let polling = false;
+let ticking = null;
 function afterSignIn() {
   showApp();
   if (!polling) {
@@ -3780,7 +3808,16 @@ function afterSignIn() {
     // round trip now, not a call across the same room, and a manager
     // working at a human's pace is nowhere near manageTraffic's budget
     // even at this slower pace.
-    poll(() => { if (signedIn()) { loadHello(); refreshActive(); } }, 20000);
+    //
+    // One background refresh at a time. Each call() can wait up to ninety
+    // seconds for the laptop, so a tick that started a new one regardless
+    // piled up a chain every twenty seconds while the laptop was away -
+    // nine at once, hundreds of polls a minute - until manageTraffic
+    // answered 429 to everything, the manager's own taps included.
+    poll(() => {
+      if (!signedIn() || ticking) return;
+      ticking = Promise.all([loadHello(), refreshActive()]).finally(() => { ticking = null; });
+    }, 20000);
   } else {
     loadHello();
     refreshActive();
@@ -3822,8 +3859,11 @@ function awaitAnswer(reqId, deadline) {
     if (d._status === 403) { showSignIn('Signed out - sign in again.'); return { ok: false, error: 'Signed out' }; }
     if (d.ok && d.ready) return d.response;
     if (Date.now() > deadline) return { ok: false, error: 'The laptop did not answer in time.' };
+    // Backs off when the relay says it is busy: asking again at the same
+    // pace only keeps the limit spent, and the manager's next tap with it.
+    const wait = d._status === 429 ? 6000 : 1500;
     return new Promise((resolve) => {
-      setTimeout(() => resolve(awaitAnswer(reqId, deadline)), 1500);
+      setTimeout(() => resolve(awaitAnswer(reqId, deadline)), wait);
     });
   });
 }
@@ -3928,11 +3968,12 @@ function showTab(name) {
   refreshActive();
 }
 function refreshActive() {
-  if (fieldBusy()) return;
-  if (active === 'today') refreshToday();
-  else if (active === 'entries') refreshEntries();
-  else if (active === 'program') refreshProgram();
-  else if (active === 'results') refreshResults();
+  if (fieldBusy()) return Promise.resolve();
+  if (active === 'today') return refreshToday();
+  if (active === 'entries') return refreshEntries();
+  if (active === 'program') return refreshProgram();
+  if (active === 'results') return refreshResults();
+  return Promise.resolve();
 }
 document.querySelectorAll('.navbtn').forEach((btn) => {
   btn.addEventListener('click', () => showTab(btn.getAttribute('data-tab')));
@@ -3953,9 +3994,9 @@ function loadHello() {
 // ---- Today ------------------------------------------------------------------
 // Shape (RaceDayOpsToday.TodaySummary): { raceDay, classes:[{name,drivers,
 // checkedIn}], counts:{drivers,checkedIn,rounds,recorded}, race:{...},
-// nextStep:{headline,detail,...}, undo, busy }.
+// nextStep:{headline,detail,...}, undo, undoCount, busy }.
 function refreshToday() {
-  call('today.summary', {}).then((d) => {
+  return call('today.summary', {}).then((d) => {
     if (!d.ok) { if (signedIn()) say(d.error || 'Failed', false); return; }
     renderToday(d.data);
   });
@@ -3996,9 +4037,17 @@ function renderToday(d) {
 
   box.innerHTML = rows.join('');
 
+  // Only how many: what each change was is the laptop's own wording, which
+  // can name a transponder in full, so the laptop keeps it off the relay
+  // (RaceDayService.UndoListFor). A laptop from before undoCount sends the
+  // list, which is counted instead. One that sends undoCount puts a single
+  // line saying how many in undo, for a relay page from before this one,
+  // so undoCount wins here and the count is not said twice.
   const undoBox = document.getElementById('undoList');
-  const pending = d.undo || [];
-  undoBox.textContent = pending.length ? ('Undo stack (on the laptop only): ' + pending.join(' \\u2022 ')) : 'Nothing to undo.';
+  const waiting = typeof d.undoCount === 'number' ? d.undoCount : (d.undo || []).length;
+  undoBox.textContent = waiting
+    ? (waiting === 1 ? '1 change' : waiting + ' changes') + ' can be undone on the laptop.'
+    : 'Nothing to undo.';
 }
 document.getElementById('btnNewDay').addEventListener('click', () => {
   const name = prompt("Name for the new race day (blank = today's date):", '');
@@ -4020,7 +4069,7 @@ let entriesTimer = 0;
 function refreshEntries() {
   const mine = ++entriesAsked;
   const q = document.getElementById('entrySearch').value.trim();
-  call('drivers.search', { query: q, limit: 200 }).then((d) => {
+  return call('drivers.search', { query: q, limit: 200 }).then((d) => {
     if (!d.ok) { if (signedIn()) say(d.error || 'Failed', false); return; }
     if (mine !== entriesAsked) return;
     entriesData = d.data.drivers || [];
@@ -4100,7 +4149,7 @@ document.getElementById('btnAddDriver').addEventListener('click', () => {
 let programRounds = [];
 let programClasses = [];
 function refreshProgram() {
-  call('program.list', {}).then((d) => {
+  return call('program.list', {}).then((d) => {
     if (!d.ok) { if (signedIn()) say(d.error || 'Failed', false); return; }
     programRounds = d.data.rounds || [];
     programClasses = d.data.classes || [];
@@ -4311,7 +4360,7 @@ document.getElementById('btnBumpUps').addEventListener('click', () => {
 let resultsData = [];
 function refreshResults() {
   const todayOnly = document.getElementById('resultsTodayOnly').checked;
-  call('results.list', { todayOnly, limit: 50 }).then((d) => {
+  return call('results.list', { todayOnly, limit: 50 }).then((d) => {
     if (!d.ok) { if (signedIn()) say(d.error || 'Failed', false); return; }
     resultsData = d.data.sessions || [];
     renderResults();
@@ -4391,7 +4440,10 @@ function openEditResult() {
   const changes = [];
   for (let i = 0; i < currentResult.rows.length; i++) {
     const r = currentResult.rows[i];
-    const addedLaps = prompt('Added laps for ' + r.name + ' (0 = no change):', String(r.addedLaps || 0));
+    // A total, as the laptop takes it (ResultAdjust). This used to call 0
+    // no change, and a 1 typed for one more lap was read as the one lap
+    // the driver already had.
+    const addedLaps = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', String(r.addedLaps || 0));
     if (addedLaps === null) return;
     const outcome = prompt('Outcome for ' + r.name + ' (blank = finished, or DNF / DQ):', r.outcome || '');
     if (outcome === null) return;

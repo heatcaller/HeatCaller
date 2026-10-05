@@ -424,7 +424,7 @@ public sealed partial class WebServerService
 
         // The other half of CheckInLockedReason: said at the start, loudly,
         // because a server started automatically shows no warning dialog.
-        if (CheckInLockedReason(_settings?.SecretsLocked == true, CheckInPin) is { } locked)
+        if (CheckInClosedReason is { } locked)
         {
             StatusMessage?.Invoke("[web] " + locked);
         }
@@ -445,17 +445,37 @@ public sealed partial class WebServerService
     /// closed, while check-in quietly opened to everyone, so nobody noticed
     /// (25 Sep security audit). Until the secrets are unlocked or a PIN is
     /// entered again, check-in stays shut and says why.
+    ///
+    /// <paramref name="pinNeedsEntering"/> alone (AppSettings.
+    /// CheckInPinNeedsEntering, with the secrets no longer locked) means the
+    /// backup's keys were given up on, so there is nothing left to unlock.
+    /// It used to say to unlock them with the backup password all the same,
+    /// on every phone and at every server start, until a PIN was set.
     /// </summary>
-    internal static string? CheckInLockedReason(bool secretsLocked, string checkInPin) =>
-        secretsLocked && string.IsNullOrEmpty(checkInPin)
-            ? "Check-in is closed: this laptop's saved PINs are locked (usually a backup restored onto another PC). "
-              + "Unlock them on the laptop, or set the check-in PIN again on the Local Screens page."
-            : null;
+    internal static string? CheckInLockedReason(bool secretsLocked, string checkInPin, bool pinNeedsEntering = false) =>
+        !string.IsNullOrEmpty(checkInPin)
+            ? null
+            : secretsLocked
+                ? "Check-in is closed: the check-in PIN saved on this laptop couldn't be read (usually a backup restored onto another PC). "
+                  + "Unlock the saved PINs with the backup password, or set the check-in PIN again on the Local Screens page."
+                : pinNeedsEntering
+                    ? "Check-in is closed until a check-in PIN is set again on the Local Screens page (the one from the old PC couldn't be recovered)."
+                    : null;
+
+    /// <summary>
+    /// CheckInLockedReason for this server's settings and check-in PIN, as
+    /// they stand. Goes by CheckInPinNeedsEntering, not just SecretsLocked:
+    /// the lock is cleared by giving up on the backup's keys, or by any
+    /// other secret being saved, and check-in then opened to everybody on
+    /// the Wi-Fi though nobody had set its PIN again.
+    /// </summary>
+    internal string? CheckInClosedReason =>
+        CheckInLockedReason(_settings?.SecretsLocked == true, CheckInPin, _settings?.CheckInPinNeedsEntering == true);
 
     /// <summary>Answers a check-in request refused by CheckInLockedReason, and says whether it may go on.</summary>
     private bool CheckInOpen(HttpListenerContext context)
     {
-        if (CheckInLockedReason(_settings?.SecretsLocked == true, CheckInPin) is not { } reason)
+        if (CheckInClosedReason is not { } reason)
         {
             return true;
         }
@@ -1040,6 +1060,47 @@ public sealed partial class WebServerService
     private readonly RemoteCommandGate _commands = new();
 
     /// <summary>
+    /// The longest anything holds <see cref="_commands"/>: three seconds,
+    /// the same bound MainForm's RunCommand puts on /api/command. /manage's
+    /// race.flag lets go of the gate after this too, rather than holding it
+    /// for HandleJsonAsync's ten-plus-sixty-second timeouts.
+    /// </summary>
+    private static readonly TimeSpan CommandGateHold = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// <see cref="RemoteCommandGate.TryBegin"/>, except that a RED or YELLOW
+    /// is never turned away just because some OTHER command is in progress:
+    /// it waits its turn - at most <see cref="CommandGateHold"/> and a
+    /// little - and then goes. A marshal's RED used to be refused "NOT sent"
+    /// while a GREEN or a Race-tab flag was still being carried out, and if
+    /// that one then timed out neither flag reached the track. The same flag
+    /// already going out is still answered at once (two marshals pressing RED
+    /// together is one red flag), and the per-minute counts still apply.
+    /// Called on a request thread, never the UI thread.
+    /// </summary>
+    private RemoteCommandGate.Answer BeginCommand(string device, string command, out string? running)
+    {
+        var answer = _commands.TryBegin(device, command, out running);
+
+        if (answer != RemoteCommandGate.Answer.Busy || command is not ("RED" or "YELLOW"))
+        {
+            return answer;
+        }
+
+        var giveUp = DateTime.UtcNow + CommandGateHold + TimeSpan.FromSeconds(2);
+
+        while (answer == RemoteCommandGate.Answer.Busy
+            && !string.Equals(running, command, StringComparison.Ordinal)
+            && DateTime.UtcNow < giveUp)
+        {
+            Thread.Sleep(50);
+            answer = _commands.TryBegin(device, command, out running);
+        }
+
+        return answer;
+    }
+
+    /// <summary>
     /// Who a request is from, for counting: the device's own address.
     ///
     /// IPv6 addresses are counted whole. They used to be counted by /64,
@@ -1555,7 +1616,7 @@ public sealed partial class WebServerService
         // Here, just before Race Control is asked - the checks above cost
         // the laptop nothing, and the question over a running race is free
         // to ask. There used to be no limit at all: see RemoteCommandGate.
-        switch (_commands.TryBegin(ClientKey(context), name, out var running))
+        switch (BeginCommand(ClientKey(context), name, out var running))
         {
             case RemoteCommandGate.Answer.Busy:
                 context.Response.StatusCode = 503;
@@ -1972,7 +2033,7 @@ public sealed partial class WebServerService
 
         if (isFlag)
         {
-            switch (_commands.TryBegin(ClientKey(context), flagName, out var running))
+            switch (BeginCommand(ClientKey(context), flagName, out var running))
             {
                 case RemoteCommandGate.Answer.Busy:
                     context.Response.StatusCode = 503;
@@ -2003,28 +2064,43 @@ public sealed partial class WebServerService
             gated = true;
         }
 
-        string answer;
+        // The server's own stop token: if the laptop stops the web server
+        // mid-request, this unblocks rather than riding out its own
+        // ten-to-seventy-second timeouts for an answer nobody can send any
+        // more.
+        Task<string> pending;
 
         try
         {
-            // The server's own stop token: if the laptop stops the web server
-            // mid-request, this unblocks rather than riding out its own
-            // ten-to-seventy-second timeouts for an answer nobody can send any
-            // more.
-            answer = await manager.HandleJsonAsync(body, RaceDayChannel.WiFi, _cts?.Token ?? CancellationToken.None)
-                .ConfigureAwait(false);
+            // Inside the try: reading the token of a server being stopped
+            // can throw, and the gate must still be let go.
+            pending = manager.HandleJsonAsync(body, RaceDayChannel.WiFi, _cts?.Token ?? CancellationToken.None);
+
+            // Held until the op has run on the UI thread (which posts the
+            // flag's trigger there before it answers, so the next command's
+            // op lands behind it) - but no longer than CommandGateHold. It
+            // used to be held for the whole of HandleJsonAsync, up to ten
+            // seconds and then sixty more on a busy laptop, and a RED from
+            // the flag remote in that window was refused. Now, as on
+            // /api/command, a laptop that is not keeping up gets at most one
+            // flag every three seconds.
+            if (gated)
+            {
+                await Task.WhenAny(pending, Task.Delay(CommandGateHold)).ConfigureAwait(false);
+            }
         }
         finally
         {
-            // Held until the op has run on the UI thread, which posts the
-            // flag's trigger there before it answers. The next command's op
-            // is posted behind that trigger, so it cannot run until the flag
-            // has been carried out - at most one flag is ever waiting.
+            // Exactly once - End does not know whose command it is ending,
+            // so letting go again later could open the gate under the next
+            // one.
             if (gated)
             {
                 _commands.End();
             }
         }
+
+        var answer = await pending.ConfigureAwait(false);
 
         WriteJson(context, answer);
     }
@@ -2996,7 +3072,8 @@ public sealed partial class WebServerService
         .swatch { width:12px; height:3px; border-radius:2px; }
         """;
 
-    private string BuildLiveResultsPage()
+    // Internal rather than private so the tests can read its script (BugHunt4WebTests).
+    internal string BuildLiveResultsPage()
     {
         var look = CurrentPageLook();
 
@@ -3154,17 +3231,39 @@ public sealed partial class WebServerService
         }
 
         function rotateSponsors(state){
+          sponsorState = state;
           if (sponsorCount === 0) { hideSponsor(); return; }
           sinceSwap++;
           if (showingSponsor) {
             if (sinceSwap >= slideSecs) hideSponsor();
           } else if (sinceSwap >= leaderboardSecs && !(pauseDuringRace && state === 'Racing')) {
             sponsorIdx = (sponsorIdx + 1) % sponsorCount;
-            document.getElementById('sponsorImg').src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
-            document.getElementById('sponsor').style.display = 'flex';
-            showingSponsor = true; sinceSwap = 0;
+            // Put up only once it has arrived (sponsorImg.onload). The overlay
+            // used to go up as the slide was asked for, and a slide missing
+            // or too big to send - answered 404 - covered the standings with
+            // a blank screen for its whole turn, where the Big Screen skips it.
+            // The count starts again here, so the next slide isn't asked for
+            // while this one loads - only, a whole turn later, in place of
+            // one that never came.
+            loadingSponsor = true; sinceSwap = 0;
+            sponsorImg.src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
           }
         }
+        const sponsorImg = document.getElementById('sponsorImg');
+        let loadingSponsor = false, sponsorState = '';
+        sponsorImg.onload = function(){
+          if (!loadingSponsor) return;
+          loadingSponsor = false; sinceSwap = 0;
+          // Not over a race that went green while it loaded.
+          if (pauseDuringRace && sponsorState === 'Racing') return;
+          document.getElementById('sponsor').style.display = 'flex';
+          showingSponsor = true;
+        };
+        // Skipped: the board stays up for another full turn, as on the Big Screen.
+        sponsorImg.onerror = function(){
+          if (!loadingSponsor) return;
+          loadingSponsor = false; sinceSwap = 0;
+        };
 
         // Enough hues to tell a full grid apart, spaced around the wheel so
         // neighbouring cars never get neighbouring colours. These are the
@@ -3588,7 +3687,7 @@ public sealed partial class WebServerService
 
         function hideSponsor(){
           document.getElementById('sponsor').style.display = 'none';
-          showingSponsor = false; sinceSwap = 0;
+          showingSponsor = false; loadingSponsor = false; sinceSwap = 0;
         }
         tick(); setInterval(tick, 1000);
         </script><script>{{LookWatchScript}}</script></body></html>
@@ -3608,8 +3707,11 @@ public sealed partial class WebServerService
     /// The camera is still wired up behind a feature check, so it appears
     /// by itself if this is ever served over https, and stays invisible
     /// rather than broken until then.
+    ///
+    /// Internal rather than private so the tests can read its script
+    /// (BugHunt4WebTests).
     /// </summary>
-    private string BuildCheckInPage()
+    internal string BuildCheckInPage()
     {
         var look = CurrentPageLook();
 
@@ -3732,7 +3834,12 @@ public sealed partial class WebServerService
           render();
           say('Enter the check-in PIN above', false);
         }
+        // One look at a time, and given up on after five seconds: a new one
+        // every four seconds whether or not the last had come back piled up
+        // on weak Wi-Fi, and a tap then waited behind them.
+        var loading = false;
         async function load(){
+          if (loading) { return; }
           if (badPin !== null && pinBox.value === badPin) { return; }
           if (pinNeeded && pinBox.value === '') {
             askForPin();
@@ -3744,15 +3851,24 @@ public sealed partial class WebServerService
             if (Date.now() - lastEmptyProbe < 30000) { return; }
             lastEmptyProbe = Date.now();
           }
+          loading = true;
+          // The PIN this look sends. The box can change while it is out,
+          // and the look the change asks for is then dropped (one at a
+          // time, above). A refusal used to be put down to the box as it
+          // was when the answer came - the right PIN, just typed, refused
+          // and never tried until the page was reloaded. Now it is the sent
+          // PIN's, and a box changed meanwhile is looked at once this is back.
+          var sentPin = pinBox.value;
+          var stop = new AbortController(), timer = setTimeout(function(){ stop.abort(); }, 5000);
           try {
-            var r = await fetch('/api/roster', { headers: { 'X-Pin': pinBox.value } });
+            var r = await fetch('/api/roster', { headers: { 'X-Pin': sentPin }, signal: stop.signal });
             var d = await r.json();
             // No PIN typed, and the laptop wants one (set since this page
             // loaded, perhaps): ask for it, and stop sending the empty box.
             if (!r.ok && d.needPin) { pinNeeded = true; askForPin(); return; }
             if (r.ok && pinBox.value === '') { pinNeeded = false; }
             if (!r.ok) {
-              if (r.status === 403 || r.status === 429) { badPin = pinBox.value; }
+              if (r.status === 403 || r.status === 429) { badPin = sentPin; }
               // Locked out rather than wrong: the lock lifts by itself, so
               // polling resumes by itself a minute later.
               if (r.status === 429) { setTimeout(function(){ badPin = null; }, 60000); }
@@ -3765,6 +3881,11 @@ public sealed partial class WebServerService
             document.getElementById('count').textContent = d.checkedIn + ' / ' + d.total + ' HERE';
             render();
           } catch(e) {}
+          finally {
+            clearTimeout(timer);
+            loading = false;
+            if (pinBox.value !== sentPin) { setTimeout(load, 0); }
+          }
         }
         async function toggle(d){
           // Out asks first. A tap on the wrong row while scrolling used to
@@ -3834,7 +3955,8 @@ public sealed partial class WebServerService
         """;
     }
 
-    private string BuildRemotePage()
+    // Internal rather than private so the tests can read its script (BugHunt4WebTests).
+    internal string BuildRemotePage()
     {
         var look = CurrentPageLook();
 
@@ -3950,16 +4072,23 @@ public sealed partial class WebServerService
           const press = ++lastPress;
           show(press, 'Sending ' + name + '…', '', 'busy');
           let r, d = null;
+          // Given up on after twelve seconds - the laptop answers within about
+          // eight (BeginCommand and RunCommand) - so a press stuck behind a
+          // dead connection says so, rather than "Sending" until the Wi-Fi
+          // comes back and then going late.
+          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 12000);
           try{
             r = await fetch('/api/command?action=' + a + (force ? '&force=1' : '')
                             + (force && typeof race === 'number' ? '&raceGeneration=' + race : ''),
-                            { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+                            { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value }, signal: stop.signal });
           }catch(e){
+            clearTimeout(timer);
             // It may have got there before the connection went.
             show(press, 'Connection lost.', 'Check the laptop to see whether ' + name + ' went.', 'bad');
             return;
           }
           try { d = await r.json(); } catch(e) {}
+          clearTimeout(timer);
           if (!d) { show(press, 'No answer this page can read.', 'Check the laptop to see whether ' + name + ' went.', 'bad'); return; }
           // A race is running: ask, and send it again on a yes. A yes that
           // comes back with the question again is asked again only when the
@@ -3982,9 +4111,17 @@ public sealed partial class WebServerService
           else if (d.refused) { show(press, name + ' not done:', d.error || '', 'bad'); }
           else { show(press, name + ':', d.error || 'Failed', 'bad'); }
         }
+        // One poll at a time, and none left hanging, as on the live results
+        // page: a new one every second and a half whether or not the last
+        // came back used up the phone's connections to the laptop on weak
+        // Wi-Fi, and a flag pressed then waited behind them.
+        let ticking = false;
         async function tick(){
+          if (ticking) return;
+          ticking = true;
+          const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
-            const r = await fetch('/api/state'); const d = await r.json();
+            const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
             document.getElementById('state').textContent = d.state + ' - ' + d.flag;
             // As text, never markup: a race name is whatever was typed.
             const race = document.getElementById('race');
@@ -3995,6 +4132,7 @@ public sealed partial class WebServerService
             document.getElementById('rows').innerHTML = d.standings.map(s =>
               '<tr>' + s.cells.map((c,i) => `<td class="${i===0?'pos':''}">${esc(c.text)}</td>`).join('') + '</tr>').join('');
           }catch(e){}
+          finally { clearTimeout(timer); ticking = false; }
         }
         tick(); setInterval(tick, 1500);
         </script><script>{{LookWatchScript}}</script></body></html>
@@ -4009,8 +4147,11 @@ public sealed partial class WebServerService
     /// asks hello rather than assuming, the same as a relay-served copy of
     /// this page would have to. See raceday-protocol.md for every op this
     /// script calls and what each answers.
+    ///
+    /// Internal rather than private so the tests can read its script
+    /// (BugHunt4WebTests).
     /// </summary>
-    private string BuildManagePage()
+    internal string BuildManagePage()
     {
         var look = CurrentPageLook();
 
@@ -4220,15 +4361,23 @@ public sealed partial class WebServerService
           if (d.needPin && pinWasWrong) { text = 'Wrong PIN. Enter the manager PIN again.'; }
           say(text, false, d._status === 200 ? 'error' : 'gate');
         }
-        function call(op, args, confirmToken){
+        // How long a read that refreshes the page is waited for: past the ten
+        // seconds the laptop takes to say it couldn't get to a request
+        // (RaceDayService.AnswerTimeout).
+        var READ_WAIT = 15000;
+        // waitMs gives up on the request after that long - for those reads
+        // only. Never for a change: one can take over a minute on the laptop,
+        // and "Connection lost" while it went through would invite a second go.
+        function call(op, args, confirmToken, waitMs){
           var body = { op: op, args: args || {}, confirm: confirmToken || null };
           // The PIN as it was sent: an answer about it is only acted on while
           // the box still holds it, never over a PIN typed in since.
           var sentPin = pinBox.value;
-          return fetch('/api/manage', { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': sentPin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          var stop = new AbortController(), timer = waitMs ? setTimeout(function(){ stop.abort(); }, waitMs) : 0;
+          return fetch('/api/manage', { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': sentPin, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: stop.signal })
             .then(function(r){ return r.json().then(function(d){ d._status = r.status; return d; }); })
             .catch(function(){ return { ok: false, error: 'Connection lost' }; })
-            .then(function(d){ checkGate(d, sentPin); return d; });
+            .then(function(d){ clearTimeout(timer); checkGate(d, sentPin); return d; });
         }
         function checkGate(d, sentPin){
           if (d._status === 200) {
@@ -4290,18 +4439,18 @@ public sealed partial class WebServerService
         }
         function refreshActive(){
           if (fieldBusy()) { return; }
-          if (active === 'today') { refreshToday(); }
-          else if (active === 'entries') { refreshEntries(); }
-          else if (active === 'program') { refreshProgram(); }
-          else if (active === 'race') { refreshRace(); }
-          else if (active === 'results') { refreshResults(); }
+          if (active === 'today') { return refreshToday(); }
+          else if (active === 'entries') { return refreshEntries(); }
+          else if (active === 'program') { return refreshProgram(); }
+          else if (active === 'race') { return refreshRace(); }
+          else if (active === 'results') { return refreshResults(); }
         }
         document.querySelectorAll('.navbtn').forEach(function(btn){
           btn.addEventListener('click', function(){ showTab(btn.getAttribute('data-tab')); });
         });
 
         function loadHello(){
-          return call('hello', {}).then(function(d){
+          return call('hello', {}, null, READ_WAIT).then(function(d){
             if (!d.ok) { sayFailure(d, 'Could not reach the laptop'); return d; }
             caps.raceControl = !!d.data.raceControl;
             caps.allowResultEditing = !!d.data.allowResultEditing;
@@ -4323,7 +4472,7 @@ public sealed partial class WebServerService
         // ...}, nextStep:{headline,detail,...}, nextRound, runSheetNext, undo,
         // allowResultEditing, busy }.
         function refreshToday(){
-          call('today.summary', {}).then(function(d){
+          return call('today.summary', {}, null, READ_WAIT).then(function(d){
             if (!d.ok) { sayFailure(d); return; }
             renderToday(d.data);
           });
@@ -4380,7 +4529,7 @@ public sealed partial class WebServerService
         var entriesData = [];
         function refreshEntries(){
           var q = document.getElementById('entrySearch').value.trim();
-          call('drivers.search', { query: q, limit: 200 }).then(function(d){
+          return call('drivers.search', { query: q, limit: 200 }, null, READ_WAIT).then(function(d){
             if (!d.ok) { sayFailure(d); return; }
             entriesData = d.data.drivers || [];
             renderEntries();
@@ -4456,7 +4605,7 @@ public sealed partial class WebServerService
         var programRounds = [];
         var programClasses = [];
         function refreshProgram(){
-          call('program.list', {}).then(function(d){
+          return call('program.list', {}, null, READ_WAIT).then(function(d){
             if (!d.ok) { sayFailure(d); return; }
             programRounds = d.data.rounds || [];
             programClasses = d.data.classes || [];
@@ -4663,7 +4812,7 @@ public sealed partial class WebServerService
         // and the laptop says to look again if another has taken its place.
         var shownRaceGeneration = null;
         function refreshRace(){
-          call('today.summary', {}).then(function(d){
+          return call('today.summary', {}, null, READ_WAIT).then(function(d){
             if (!d.ok) { return; }
             var race = d.data.race || {};
             shownRaceGeneration = typeof race.raceGeneration === 'number' ? race.raceGeneration : null;
@@ -4696,7 +4845,7 @@ public sealed partial class WebServerService
         var resultsData = [];
         function refreshResults(){
           var todayOnly = document.getElementById('resultsTodayOnly').checked;
-          call('results.list', { todayOnly: todayOnly, limit: 50 }).then(function(d){
+          return call('results.list', { todayOnly: todayOnly, limit: 50 }, null, READ_WAIT).then(function(d){
             if (!d.ok) { sayFailure(d); return; }
             resultsData = d.data.sessions || [];
             renderResults();
@@ -4773,7 +4922,10 @@ public sealed partial class WebServerService
           var changes = [];
           for (var i = 0; i < currentResult.rows.length; i++) {
             var r = currentResult.rows[i];
-            var addedLaps = prompt('Added laps for ' + r.name + ' (0 = no change):', r.addedLaps || 0);
+            // A total, as the laptop takes it (ResultAdjust). This used to
+            // call 0 no change, and a 1 typed for one more lap was read as
+            // the one lap the driver already had.
+            var addedLaps = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', r.addedLaps || 0);
             if (addedLaps === null) { return; }
             var outcome = prompt('Outcome for ' + r.name + ' (blank = finished, or DNF / DQ):', r.outcome || '');
             if (outcome === null) { return; }
@@ -4790,9 +4942,18 @@ public sealed partial class WebServerService
         // to the laptop with the next poll, and each was counted there as a
         // wrong guess. Hello first and the tab after it, as at the start, so
         // a PIN turned down by the one is not sent again by the other.
+        //
+        // And one poll at a time. A new one every four seconds whether or not
+        // the last had come back piled up on weak Wi-Fi, used up the phone's
+        // connections to the laptop, and a Race-tab flag then waited behind
+        // them. A poll's reads give up after READ_WAIT, so a hung one holds
+        // the next back only that long.
+        var polling = false;
         setInterval(function(){
-          if (document.activeElement === pinBox) { return; }
-          loadHello().then(function(){ refreshActive(); });
+          if (document.activeElement === pinBox || polling) { return; }
+          polling = true;
+          loadHello().then(function(){ return refreshActive(); })
+            .then(function(){ polling = false; }, function(){ polling = false; });
         }, 4000);
         function lookBusy(){
           return fieldBusy()

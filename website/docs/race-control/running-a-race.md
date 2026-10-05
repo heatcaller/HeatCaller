@@ -60,7 +60,7 @@ HeatCaller uses the first of these that exists:
 | **Stagger gap (s):** / clock | The gap between releases for a staggered start, and whether each car gets its own clock (**Clock: own release**) or everyone shares one (**Clock: shared green**). | 5, own release |
 | **Warm-up (s, 0 = none):** | Free laps before the race, up to 30 minutes. See [Warm-up](#warm-up). | 0 (off) |
 | **Run the start sequence automatically (Stage → Countdown → Green)** | When you press **Stage**, the start runs through to the green on its own. | Ticked |
-| **Stage (s):** / **Countdown (s):** | How long each step lasts in the timed Quick Race sequence. | 15 / 5 |
+| **Stage (s):** / **Countdown (s):** | How long each step lasts in the timed Quick Race sequence. With the announcer muted, also how long staging and the countdown last at least in the automatic start sequence. | 15 / 5 |
 | **Leader takes the flag, others finish their lap** | Changes how a race ends. See [Finishing](#finishing). | Ticked |
 
 For a class or a round, untick **Use a custom format (untick to follow the app default)** to go back to the app default.
@@ -72,7 +72,7 @@ For a class or a round, untick **Use a custom format (untick to follow the app d
 3. Press **Countdown** (<kbd>F2</kbd>). The state changes to **Countdown**. From now on, a car that crosses the line counts as a [jump start](#jump-starts).
 4. Press **Green (Start)** (<kbd>F3</kbd>). The race starts and the clock begins counting.
 
-With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller moves on to the countdown when the staging announcement finishes, and drops the green when the countdown announcement finishes. It follows the audio rather than a fixed timer, so the start never talks over itself or leaves a silence.
+With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller moves on to the countdown when the staging announcement finishes, and drops the green when the countdown announcement finishes. It follows the audio rather than a fixed timer, so the start never talks over itself or leaves a silence. With the announcer muted there's no audio to follow, so staging lasts **Stage (s):** and the countdown **Countdown (s):** from the race format instead.
 
 The chain stops if anything else happens first. Pressing **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red** or **Reset** stops the automatic sequence, and your button press wins. **Checkered** doesn't: before the green it's refused and changes nothing, so the start carries on, automatic green included (see [Flags](#flags)).
 
@@ -93,7 +93,7 @@ The green always waits for the countdown announcement to finish, however the sta
 
 **Stage** and **Countdown** pressed while a race is running ask first, because they would abandon the running race without saving it. Starting a round from **Race Day → Next Steps** asks too, before anything is announced. To end a race and keep its result, use **Checkered**. Once you confirm, the abandoned race's flag goes with it, so a new start made over a race under yellow or red runs on to its automatic green like any other. See [Staging over a running race](corrections-and-recovery.md#staging-over-a-running-race).
 
-While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Checkered**, **Reset** and starting a round from the program or the Next Up bar are refused with "Stop practice first on the Practice page". See [Practice](practice-and-ghosts.md#practice).
+While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red**, **Checkered**, **Reset** and starting a round from the program or the Next Up bar are refused with "Stop practice first on the Practice page". See [Practice](practice-and-ghosts.md#practice).
 
 During a demo, **Stage**, **Countdown**, **Reset** or a first **Green (Start)** on Race Control ends the demo so a real race can take its place. Starting a round from the program or the Next Up bar ends a demo too. Once the demo is racing, **Green (Start)** after a caution and **Checkered** still act on the demo. See [Demo Mode](practice-and-ghosts.md#demo-mode).
 
@@ -159,7 +159,7 @@ A **Countdown** or **Green (Start)** pressed without **Stage** first still start
 
 A car that crosses the line during the countdown is flagged as a jump starter. In a staggered start, a car that crosses before its own release time is flagged too. Each car is flagged at most once per race.
 
-A car left sitting on the loop isn't a jump start. The decoder keeps reporting a car parked on the loop every couple of seconds. If it has been seen there three times in a row, no more than 3 seconds apart, by the time of its pass in the countdown, the console says it's sitting on the loop and it isn't flagged. Move it back behind the line. At the green it's treated like any car already past the line. A car moved onto the loop during the countdown is still flagged at its first pass.
+A car left sitting on the loop isn't a jump start. The decoder keeps reporting a car parked on the loop every couple of seconds. If it has been seen there three times in a row, no more than 3 seconds apart, by the time of its pass in the countdown, the console says it's sitting on the loop and it isn't flagged. Move it back behind the line. A car still on the loop at the green is treated like any car already past the line. One moved back behind the line starts like everyone else: its first crossing just after the green is its start lap. A car moved onto the loop during the countdown is still flagged at its first pass.
 
 When a car jumps the start:
 
@@ -181,7 +181,7 @@ You set the jump-start rules on the class:
 |---|---|---|
 | **Yellow** | <kbd>F4</kbd> | Caution. Laps still count and the clock keeps running. |
 | **Red** | <kbd>F5</kbd> | Stops the race. The clock pauses and shows **PAUSED**, laps are not counted, and cars waiting to be released stay held. A timed race can't run out while the red flag is out. |
-| **Green (Start)** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. |
+| **Green (Start)** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. If a lap added by hand under the red brought a driver to the lap limit, the checkered flag comes out instead. |
 | **Checkered** | <kbd>F6</kbd> | Ends the race now, for everyone, and saves the result. Only works while a race is running. |
 | **Reset** | <kbd>F7</kbd> | Clears the race, and the round and name on the **Session** row. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
 
@@ -329,7 +329,7 @@ If the next round's class runs tech and someone in it hasn't passed tech today, 
 
 If something is owed before the next race can go out, the bar says so in place of the next round and the button does it instead: **Move the top finishers up** when a lower main has finished and its bump-ups are due, or **Build the finals from qualifying** when a class has finished qualifying. That way the upper main can't go out before its bump-ups. See [Program and mains](../race-day/program-and-mains.md#the-next-step-card).
 
-**Redo Remaining Heats** rebuilds the rosters of every qualifying heat that hasn't run yet from the drivers checked in right now, after asking. Use it for a no-show or a late entry. Recorded heats and mains aren't changed, and **Undo** puts the old rosters back. See [Events and entries](../race-day/events-and-entries.md).
+**Redo Remaining Heats** rebuilds the rosters of every qualifying heat that hasn't run yet from the drivers checked in right now, after asking. Use it for a no-show or a late entry. When part of a round has already run, that round's remaining heats get only the drivers who haven't raced it yet. Recorded heats and mains aren't changed, and **Undo** puts the old rosters back. See [Events and entries](../race-day/events-and-entries.md).
 
 ## Timing warnings
 
@@ -392,7 +392,7 @@ By default it keeps each car's crossing as it takes the checkered flag, includin
 
 To look at them, click **Photo Finish** next to **Finish camera:**. Pick the night and a shot (each is listed with its time, position, driver and lap). The frame nearest the moment the line counted the car is shown first; drag the slider, or press <kbd>Left</kbd> and <kbd>Right</kbd>, to step a frame at a time. A new shot appears in the list by itself. **Open Folder** opens the shot's folder, to copy a picture out.
 
-The frames are kept in the `photo-finish` folder in HeatCaller's data folder, a folder for each night. See [Data files](../admin/data-files.md).
+The frames are kept in the `photo-finish` folder in HeatCaller's data folder, a folder for each night. They aren't part of backups, so they don't come across to a new laptop with a restore: copy that folder yourself to keep them. See [Data files](../admin/data-files.md).
 
 Practice and Demo Mode don't keep shots.
 

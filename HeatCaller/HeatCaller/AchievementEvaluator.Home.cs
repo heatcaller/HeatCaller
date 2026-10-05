@@ -16,6 +16,13 @@ public sealed record AchievementContext
 
     public ProfileStore? Profiles { get; init; }
 
+    /// <summary>
+    /// For Record Holder: a track layout as it stands now, by name, so the
+    /// badge follows the record Track Layouts shows. Null judges it on the
+    /// saved races alone, as before.
+    /// </summary>
+    public Func<string, TrackLayout?>? TrackLayoutNamed { get; init; }
+
     /// <summary>For Dialled In: the setups logged in the Garage.</summary>
     public SetupLogStore? Setups { get; init; }
 
@@ -27,6 +34,9 @@ public sealed record AchievementContext
 
     /// <summary>The ghosts as they are set up now - read when a session ends, to see whose pace each one ran.</summary>
     public Func<IReadOnlyList<GhostCar>>? GhostCars { get; init; }
+
+    /// <summary>The ghosts switched on part-way through the race now on the board, by transponder - see AchievementEvaluator.GhostsFromTheGreen.</summary>
+    public Func<IReadOnlyCollection<string>>? GhostsJoinedLate { get; init; }
 
     /// <summary>
     /// The ghosts each driver beat in the session just finished, by the
@@ -73,6 +83,17 @@ public static partial class AchievementEvaluator
                         && !string.Equals(r.Id, record.Id, StringComparison.Ordinal))
             .OrderByDescending(r => r.StartedAtUtc)
             .ToList();
+
+    /// <summary>
+    /// The ghosts a race's ghost badges are judged against: every one set
+    /// up, less those switched on part-way through it
+    /// (AchievementContext.GhostsJoinedLate). One of those joins on no laps
+    /// and finishes far down, so every driver was "ahead" of it at the flag.
+    /// </summary>
+    internal static IReadOnlyList<GhostCar> GhostsFromTheGreen(IReadOnlyList<GhostCar> ghosts, IReadOnlyCollection<string> joinedLate) =>
+        joinedLate.Count == 0
+            ? ghosts
+            : ghosts.Where(g => !joinedLate.Contains(g.Transponder.Trim(), StringComparer.OrdinalIgnoreCase)).ToList();
 
     /// <summary>
     /// Which ghosts each real driver beat, from the board as it stood at the

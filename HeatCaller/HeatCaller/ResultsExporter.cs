@@ -202,8 +202,20 @@ public static class ResultsExporter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    /// <summary>
+    /// The name the race saved with the result, as Race History and the
+    /// standings show it. The transponder's live profile is only a fallback
+    /// for a result saved with no name: it used to come first, so a loaner
+    /// transponder handed to somebody else renamed every old result on it to
+    /// its new owner in the export.
+    /// </summary>
     private static string NameFor(SessionResultEntry result, ProfileStore profiles)
     {
+        if (!string.IsNullOrWhiteSpace(result.DriverName))
+        {
+            return result.DriverName;
+        }
+
         var profile = profiles.Get(result.Transponder);
         if (!string.IsNullOrWhiteSpace(profile?.DriverName))
         {

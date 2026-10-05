@@ -14,6 +14,12 @@
     <AssemblyName>HeatCaller</AssemblyName>
     <RootNamespace>HeatCaller</RootNamespace>
 
+    <!-- The one version number. AppVersion.Number reads it back out of the
+         assembly at runtime, and the installer (Velopack) reads the same
+         assembly, so the package, the updater and the title bar cannot
+         drift apart. Bump it here and nowhere else. -->
+    <Version>0.59.0</Version>
+
     <!-- The name Windows shows for the exe (Task Manager, file properties). -->
     <Product>HeatCaller</Product>
     <AssemblyTitle>HeatCaller</AssemblyTitle>

@@ -273,13 +273,35 @@ public sealed class SignupStore
         }
         catch (Exception ex)
         {
-            // Unreadable: start empty rather than refusing to open. The
-            // relay keeps any waiting sign-up; the desk can invite again.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable: start empty rather than refusing to open - but,
+            // when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            // The relay keeps any waiting sign-up.
+            return new SignupStore(false, new List<SignupInvite>(), string.Empty)
+            {
+                LoadedUnreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex),
+            };
         }
 
         return new SignupStore(false, new List<SignupInvite>(), string.Empty);
     }
+
+    /// <summary>
+    /// True when signups.json was there at startup but could not be read -
+    /// see SafeFile.HoldWritesAfterUnreadable. <see cref="Save"/> then writes
+    /// nothing this session, and the desk makes no invites and does not
+    /// switch sign-up on (RelaySignupDesk), so the relay keeps the invites it
+    /// already has.
+    ///
+    /// The file holds every invite and its sealed code: nothing the club can
+    /// get back but by inviting everyone again. It used to load as empty, and
+    /// ticking "Let new drivers sign up" wrote that over it - and the next
+    /// sign-up document took every code off the relay.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
+
+    /// <summary>Takes an invite out, unsaved - one that could not be saved (RelaySignupDesk.CreateInvites).</summary>
+    public void Remove(SignupInvite invite) => _invites.Remove(invite);
 
     private void OpenCodes()
     {
@@ -306,13 +328,23 @@ public sealed class SignupStore
         }
     }
 
-    public void Save()
+    /// <summary>Writes the file. False when it was not written - held (LoadedUnreadable), or the write failed (SafeFile reports it).</summary>
+    public bool Save()
     {
+        // Not written: the real file is almost certainly fine, and this
+        // session's empty store would replace it. The console has already
+        // told the operator why and asked for a restart.
+        if (LoadedUnreadable)
+        {
+            return false;
+        }
+
         var codes = _invites
             .Where(i => i.Code.Length > 0)
             .ToDictionary(i => i.Id, i => i.Code, StringComparer.Ordinal);
 
         var sealedCodes = _sealedAsRead;
+        var resealed = false;
 
         // Sealed afresh unless this file's codes came from somewhere they
         // cannot be opened and nothing new has been made since: then the
@@ -322,8 +354,7 @@ public sealed class SignupStore
             try
             {
                 sealedCodes = codes.Count == 0 ? string.Empty : SecretBox.Seal(JsonSerializer.Serialize(codes));
-                _sealedAsRead = sealedCodes;
-                _sealedElsewhere = false;
+                resealed = true;
             }
             catch (CryptographicException)
             {
@@ -333,7 +364,23 @@ public sealed class SignupStore
         }
 
         var shape = new FileShape { Enabled = Enabled, Invites = _invites, SealedCodes = sealedCodes };
-        SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(shape, new JsonSerializerOptions { WriteIndented = true }));
+
+        if (!SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(shape, new JsonSerializerOptions { WriteIndented = true })))
+        {
+            return false;
+        }
+
+        // Only once it is written. Taken as sealed here before the write, a
+        // failed one whose new invites were then taken back out (see
+        // RelaySignupDesk.CreateInvites) left nothing to seal, and the next
+        // save wrote an empty SealedCodes over codes sealed on another PC.
+        if (resealed)
+        {
+            _sealedAsRead = sealedCodes;
+            _sealedElsewhere = false;
+        }
+
+        return true;
     }
 
     /// <summary>Newest first.</summary>

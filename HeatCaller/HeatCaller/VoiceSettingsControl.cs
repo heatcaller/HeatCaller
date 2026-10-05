@@ -64,8 +64,11 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>While the Kokoro test is speaking - as _windowsTestRunning.</summary>
     private bool _kokoroTestRunning;
 
-    /// <summary>The model download in progress, if one is; its button cancels it.</summary>
-    private CancellationTokenSource? _kokoroDownload;
+    /// <summary>The model download this page is showing, while it runs. KokoroSpeech holds it; its button cancels it.</summary>
+    private Task? _kokoroDownload;
+
+    /// <summary>How this page hears the download's progress - taken off KokoroSpeech when the page goes.</summary>
+    private Action<double>? _kokoroProgress;
 
     /// <summary>What the Prepare row says while a voice on this PC is chosen - and how the page knows it said it.</summary>
     private const string PrepareNotNeededText = "Not needed with the Windows or Kokoro voice - they speak each line on this PC as it's wanted.";
@@ -276,6 +279,37 @@ public sealed partial class VoiceSettingsControl : UserControl
         _autoSaveWired.Add(_txtVoiceRelayUrl);
         _autoSaveWired.Add(_txtVoiceRelayClub);
         _autoSaveWired.Add(_txtVoiceRelayToken);
+
+        // Nor the ElevenLabs boxes typed into - the API key, model, language
+        // and output format. Saving makes the profile current at once, and
+        // every live race line reads it, so saved per keystroke a lap or flag
+        // call made mid-edit went to ElevenLabs with "eleven_v" or "mp3_44"
+        // and was refused - spoken by the stand-in or skipped - and each
+        // half-typed key earned a key-refusal rest. Like the relay boxes,
+        // they are taken into use when left or on Enter; a model picked from
+        // the list is whole, so that still saves at once.
+        _autoSaveWired.Add(_txtApiKey);
+        _autoSaveWired.Add(_cmbModel);
+        _autoSaveWired.Add(_txtLanguageCode);
+        _autoSaveWired.Add(_txtOutputFormat);
+
+        _cmbModel.SelectedIndexChanged += (_, _) => AutoSave();
+
+        foreach (var box in new Control[] { _txtApiKey, _cmbModel, _txtLanguageCode, _txtOutputFormat })
+        {
+            box.Leave += (_, _) => ElevenLabsBoxLeft();
+            box.KeyDown += (_, e) =>
+            {
+                // An open model list is left to take Enter as its own pick.
+                if (e.KeyCode == Keys.Enter && box is not ComboBox { DroppedDown: true })
+                {
+                    // No ding: a single-line box has nothing to do with Enter itself.
+                    e.SuppressKeyPress = true;
+                    e.Handled = true;
+                    ElevenLabsBoxLeft();
+                }
+            };
+        }
 
         WireAutoSave(this);
 
@@ -1050,10 +1084,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>The download button: what pressing it would do now, and hidden once there's nothing to download.</summary>
     private void ShowKokoroDownloadButton()
     {
-        var downloading = _kokoroDownload is not null;
+        var downloading = KokoroSpeech.IsDownloading;
 
-        _btnDownloadKokoro.Text = downloading ? "Cancel Download" : $"Download ({KokoroSpeech.DownloadSizeText})";
-        _btnDownloadKokoro.Visible = downloading || !KokoroSpeech.IsModelDownloaded;
+        // "Download Again" for a model that wouldn't load (see ShouldOfferDownload).
+        _btnDownloadKokoro.Text = downloading ? "Cancel Download"
+            : KokoroSpeech.IsModelDownloaded ? $"Download Again ({KokoroSpeech.DownloadSizeText})"
+            : $"Download ({KokoroSpeech.DownloadSizeText})";
+        _btnDownloadKokoro.Visible = downloading || KokoroSpeech.ShouldOfferDownload;
     }
 
     /// <summary>
@@ -1063,7 +1100,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private void UpdateKokoroControls(bool kokoroChosen)
     {
-        var downloading = _kokoroDownload is not null;
+        var downloading = KokoroSpeech.IsDownloading;
         var downloaded = KokoroSpeech.IsModelDownloaded;
 
         _btnTestKokoroVoice.Enabled = downloaded && !downloading && !_kokoroTestRunning;
@@ -1082,7 +1119,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 : $"Needs a one-off download ({KokoroSpeech.DownloadSizeText}). After that it works with no internet at all.";
             _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Warning : AppTheme.TextMuted;
         }
-        else if (KokoroSpeech.UnavailableReason is { } reason)
+        else if (KokoroSpeech.LoadFailure is { } reason)
         {
             _lblKokoroStatus.Text = $"Kokoro can't speak - {reason}.";
             _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Danger : AppTheme.Warning;
@@ -1103,9 +1140,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private async void BtnDownloadKokoro_Click(object? sender, EventArgs e)
     {
-        if (_kokoroDownload is { } running)
+        if (KokoroSpeech.IsDownloading)
         {
-            running.Cancel();
+            KokoroSpeech.CancelDownload();
             return;
         }
 
@@ -1120,7 +1157,27 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
-        using var download = new CancellationTokenSource();
+        await FollowKokoroDownloadAsync(KokoroSpeech.DownloadModelAsync());
+    }
+
+    /// <summary>
+    /// Shows the model download on this page while it runs, then how it
+    /// ended. Never throws.
+    ///
+    /// The download is KokoroSpeech's, not the page's. It used to be the
+    /// page's, and the page is rebuilt when a soundscape, venue or Lap times
+    /// only is applied: the new page knew nothing of the download still going
+    /// behind it, so it couldn't show or cancel it, and pressing Download
+    /// again failed on the file the first one still held. A page built while
+    /// one runs follows it from OnHandleCreated.
+    /// </summary>
+    private async Task FollowKokoroDownloadAsync(Task download)
+    {
+        if (ReferenceEquals(_kokoroDownload, download))
+        {
+            return;
+        }
+
         _kokoroDownload = download;
         UpdateEngineControls();
 
@@ -1130,42 +1187,58 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Made here, on the UI thread, so each report comes back to it.
         var progress = new Progress<double>(fraction =>
         {
-            if (!Gone && _kokoroDownload is not null)
+            if (!Gone && ReferenceEquals(_kokoroDownload, download))
             {
                 _lblKokoroStatus.Text = $"Downloading Kokoro... {fraction:P0}";
             }
         });
+
+        Action<double> report = ((IProgress<double>)progress).Report;
+        _kokoroProgress = report;
+        KokoroSpeech.DownloadProgressed += report;
 
         string? outcome = null;
         Color outcomeColour = AppTheme.Success;
 
         try
         {
-            await KokoroSpeech.DownloadModelAsync(progress, download.Token);
-            Status("Kokoro voice downloaded.");
-            outcome = _rdoKokoro.Checked
-                ? "Downloaded - Kokoro is speaking from now on."
-                : "Downloaded. Choose Kokoro above to speak with it.";
+            await download;
 
-            if (_rdoKokoro.Checked)
+            // Said by the page showing it now, once - not also by a page
+            // rebuilt away while it ran.
+            if (!Gone)
             {
-                KokoroSpeech.WarmUp();
+                Status("Kokoro voice downloaded.");
+                outcome = _rdoKokoro.Checked
+                    ? "Downloaded - Kokoro is speaking from now on."
+                    : "Downloaded. Choose Kokoro above to speak with it.";
+
+                if (_rdoKokoro.Checked)
+                {
+                    KokoroSpeech.WarmUp();
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            outcome = "Download cancelled - nothing was kept. Press Download to start again.";
+            outcome = "Download canceled - nothing was kept. Press Download to start again.";
             outcomeColour = AppTheme.TextMuted;
         }
         catch (Exception ex)
         {
-            // An async void handler: anything escaping it takes the app down.
-            Status($"Kokoro download failed - {ex.GetType().Name}: {ex.Message}");
+            // Followed from an async void handler: anything escaping it takes the app down.
+            if (!Gone)
+            {
+                Status($"Kokoro download failed - {ex.GetType().Name}: {ex.Message}");
+            }
+
             outcome = $"Download failed: {ex.Message}";
             outcomeColour = AppTheme.Danger;
         }
         finally
         {
+            KokoroSpeech.DownloadProgressed -= report;
+            _kokoroProgress = null;
             _kokoroDownload = null;
         }
 
@@ -1223,7 +1296,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (!Gone)
             {
-                _btnTestKokoroVoice.Enabled = KokoroSpeech.IsModelDownloaded && _kokoroDownload is null;
+                _btnTestKokoroVoice.Enabled = KokoroSpeech.IsModelDownloaded && !KokoroSpeech.IsDownloading;
             }
         }
     }
@@ -1388,6 +1461,33 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
 
         VoiceRelayBoxLeft(tidyAddress);
+    }
+
+    /// <summary>
+    /// One of the ElevenLabs boxes (key, model, language, output format) was
+    /// left, or Enter pressed in it: saved now, if it differs from what the
+    /// races are using - see the constructor. Tabbing past them changes
+    /// nothing, so it writes nothing.
+    /// </summary>
+    private void ElevenLabsBoxLeft()
+    {
+        if (_loadingSettings)
+        {
+            return;
+        }
+
+        var saved = _store.Current;
+        var model = string.IsNullOrWhiteSpace(_cmbModel.Text) ? "eleven_multilingual_v2" : _cmbModel.Text.Trim();
+
+        if (string.Equals(_txtApiKey.Text.Trim(), saved.ApiKey ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(model, saved.ModelId ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(_txtLanguageCode.Text.Trim(), saved.LanguageCode ?? string.Empty, StringComparison.Ordinal)
+            && string.Equals(_txtOutputFormat.Text.Trim(), saved.OutputFormat ?? string.Empty, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        AutoSave();
     }
 
     /// <summary>The three voice-relay boxes as one string, for telling a real edit from tabbing past them.</summary>
@@ -2289,17 +2389,27 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // The list across the whole field column - a saved line is a
         // sentence, and the more of it shows the easier it is to pick the
-        // right one to forget - with its buttons under it.
+        // right one to forget. Its buttons and hint under it start at the
+        // card's left edge, as Prepare Lines and its hint do, rather than
+        // under the list with an empty gap below the caption.
         var recent = new FieldGrid();
 
         recent.AddRow("Recently played:", _cmbSavedLines, stretch: true);
-        recent.AddField(new ButtonBar().With(_btnForgetLine, _btnForgetAll));
-        recent.AddHint(
-            "A line that came out wrong: forget it and it's rendered afresh the next time it's wanted. For a flag, or any "
-            + "line with no {placeholder}, pressing Test on its announcement below does the same - a test always records a "
-            + "new take, and the race plays the one heard last. "
-            + $"Kept in {VoiceLibrary.Shared.Folder} (not part of backups - it can always be made again), up to "
-            + $"{VoiceLibrary.MaxBytes / (1024 * 1024)} MB; past that, the lines played least recently make way.");
+
+        var forget = new ButtonBar().With(_btnForgetLine, _btnForgetAll);
+
+        var lblForgetHint = _textSize.Wear(
+            new Label
+            {
+                Text = "A line that came out wrong: forget it and it's rendered afresh the next time it's wanted. For a flag, or any "
+                     + "line with no {placeholder}, pressing Test on its announcement below does the same - a test always records a "
+                     + "new take, and the race plays the one heard last. "
+                     + $"Kept in {VoiceLibrary.Shared.Folder} (not part of backups - it can always be made again), up to "
+                     + $"{VoiceLibrary.MaxBytes / (1024 * 1024)} MB; past that, the lines played least recently make way.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont);
 
         var card = new Section("Saved voice lines");
 
@@ -2307,7 +2417,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_lblLibraryStatus);
         card.Add(prepare, gapBelow: UiLayout.HintGap);
         card.Add(lblPrepareHint);
-        card.Add(recent, gapBelow: 0);
+        card.Add(recent);
+        card.Add(forget, gapBelow: UiLayout.HintGap);
+        card.Add(lblForgetHint, gapBelow: 0);
 
         return card;
     }
@@ -2453,6 +2565,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // back but Refresh. The handle is also what makes it safe to touch
         // controls after an await (see Gone).
         _ = LoadHeatCallerCatalogueAsync(byHand: false);
+
+        // A Kokoro download started on the page this one replaced.
+        if (KokoroSpeech.RunningDownload is { } download)
+        {
+            _ = FollowKokoroDownloadAsync(download);
+        }
     }
 
     protected override void OnHandleDestroyed(EventArgs e)
@@ -2470,6 +2588,14 @@ public sealed partial class VoiceSettingsControl : UserControl
             VoiceLibrary.Shared.Changed -= OnLibraryChanged;
             _store.Restored -= OnStoreRestored;
             _prepareCancel?.Cancel();
+
+            // Not canceled: a Kokoro download carries on, and the page built
+            // next follows it.
+            if (_kokoroProgress is { } report)
+            {
+                KokoroSpeech.DownloadProgressed -= report;
+            }
+
             _libraryRefreshTimer.Stop();
             _libraryRefreshTimer.Dispose();
         }
@@ -2794,7 +2920,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         control.Value = Math.Clamp((decimal)value, min, max);
     }
 
-    private static readonly HashSet<AnnouncementEventType> PerLapWeightedTypes = new()
+    // Internal for VoiceSettingsStore.Load, which repairs the weights of the
+    // events NOT listed here (see WeightWithoutBox).
+    internal static readonly HashSet<AnnouncementEventType> PerLapWeightedTypes = new()
     {
         AnnouncementEventType.FastLap,
         AnnouncementEventType.PersonalBestLap,
@@ -3036,11 +3164,30 @@ public sealed partial class VoiceSettingsControl : UserControl
                 LapTimeEveryNLaps = type == AnnouncementEventType.LapTime ? (int)_numLapTimeEveryN.Value : 1,
                 PositionReportEveryLaps = type == AnnouncementEventType.PositionReport ? (int)_numPositionEveryLaps.Value : 5,
                 PositionReportDepth = type == AnnouncementEventType.PositionReport ? (int)_numPositionDepth.Value : 3,
-                Weight = _eventWeights.TryGetValue(type, out var numWeight) ? (int)numWeight.Value : 50,
+                Weight = _eventWeights.TryGetValue(type, out var numWeight) ? (int)numWeight.Value : WeightWithoutBox(type),
             };
         }
 
         return profile;
+    }
+
+    /// <summary>
+    /// The weight saved for an event with no weight box on this page - the
+    /// one it already has. This used to save a flat 50, so any change here
+    /// knocked Provisional Pole (92) out of the per-lap cap, put Streak Lead
+    /// behind the Streak line it was weighted to beat, and tied the pair
+    /// lines, with no box to set them back.
+    /// </summary>
+    private int WeightWithoutBox(AnnouncementEventType type)
+    {
+        if (_store.Current.Events.TryGetValue(type.ToString(), out var saved) && saved is not null)
+        {
+            return saved.Weight;
+        }
+
+        return VoiceProfile.CreateDefault().Events.TryGetValue(type.ToString(), out var defaults) && defaults is not null
+            ? defaults.Weight
+            : 50;
     }
 
     /// <summary>

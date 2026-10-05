@@ -89,7 +89,7 @@ The **What gets published** card lists what's always sent: the live race while o
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, and sends the list of who is entered. The relay only hands the list out if your relay admin has also allowed it for your club. | Off |
+| **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, and sends the list of who is entered. The relay only shows either if your relay admin has also allowed it for your club; until then the Schedule page shows the heats without who is in them. | Off |
 | **Shorten published names to a first name and an initial** | Shows "Dana S" instead of "Dana Sloane" everywhere online. Only the last name is shortened, and a one-word name is left alone. Affects what's sent from now on: standings and the last 36 hours of results are re-sent with the new names, but older results already on the relay keep the names they were sent with. | On |
 
 Both are off-by-default decisions about children's names; see [Children and privacy](index.md#children-and-privacy).

@@ -113,8 +113,11 @@ during a race day.
 
 Off by default, and that default is a decision rather than caution: a
 roster is a list of names, some of them children's, on an address anyone
-can reach. A club turns that on deliberately. Results and standings do not
-carry a full roster, so they are unaffected.
+can reach. A club turns that on deliberately. Heat line-ups are the same
+names split by heat, so they follow it too: for a club without it, the
+relay takes the drivers out of `programme` before storing it, and again
+when serving one stored before. Results and standings do not carry a full
+roster, so they are unaffected.
 
 ## Run
 
@@ -365,13 +368,16 @@ that treated it as an error would retry a stale frame forever.
 ```
 GET /api/v1/c/:club/snapshot/:channel           -> {seq, publishedAt, body}
 GET /api/v1/c/:club/collection/:channel         -> {items:[{id, publishedAt, body}], omitted?}
-GET /api/v1/c/:club/collection/:channel?meta=1  -> {items:[{id, publishedAt, bytes}], meta:true}
+GET /api/v1/c/:club/collection/:channel?meta=1  -> {items:[{id, publishedAt, bytes}], meta:true}   (&limit=n: the newest n)
 GET /api/v1/c/:club/collection/:channel?ids=a,b -> {items:[{id, publishedAt, body}], omitted?}
 GET /api/v1/c/:club/collection/:channel/:id     -> {seq, publishedAt, body}
 ```
 
 `?meta=1` says what a collection holds without any of it - ids, times and
-sizes, newest first, no bodies, and nothing read or parsed. `?ids=` fetches
+sizes, newest first, no bodies, and nothing read or parsed. `&limit=n`
+(a whole number of 1 or more) cuts it to the newest `n` - the club home
+page asks for 3. A `limit` that isn't one, or one without `meta=1`, gets a
+400. `?ids=` fetches
 just the documents named, in the order named, at most 50 at a time and at
 most 1 MB of answer; an id that is unknown or unusable is simply absent from
 the answer. When the documents named are bigger than that, the answer
@@ -525,7 +531,10 @@ guessed, so accepting it helps nobody guess - which is what keeps a desk
 already signed in working through a lockout somebody else caused. It
 changes whenever the PIN does, so a new PIN signs out every device holding
 the old one. A pass that matches nothing is ignored and the PIN beside it
-is judged as usual. Every pass is compared in constant time; a racer's is
+is judged as usual - unless it is the pass that very PIN was given before
+the PINs changed: that is refused with `403` "That PIN has changed." and
+not counted as a wrong guess. Any other PIN sent with an old pass is
+counted as usual. Every pass is compared in constant time; a racer's is
 compared against every racer's in turn, so how long that takes says
 nothing about whose it is.
 
@@ -685,8 +694,8 @@ there is no separate acknowledgement, and a request the laptop never
 manages to answer (a crash mid-way) simply stays in `inbox` to be picked
 up again - the same trade-off check-in's own taps make, for the same
 reason. Requests and answers alike are dropped once ten minutes old.
-Requests waiting for the laptop may number 300 and come to 1,088 KB
-between them (sixteen of the largest a phone may send): past either, a
+Requests waiting for the laptop may number 300 and come to 952 KB
+between them (fourteen of the largest a phone may send): past either, a
 new one is refused with `503` and the relay logs it, so a stalled laptop -
 or someone filling the queue - tells the manager something is wrong rather
 than losing a request silently. Answers not yet collected may number 300
@@ -918,8 +927,8 @@ own network.
 | 409 | Online check-in, or the race-day manager, is not open - including a tap that was waiting while the desk closed check-in. |
 | 413 | Payload over `maxBodyBytes`, or a collection document over 256 KB. The connection is closed after the answer. |
 | 429 | Too many wrong PINs (from one address, or for the whole club - the error says which and for how long, check-in and the manager kept entirely apart), or too many check-in or manager requests. |
-| 503 | The check-in queue is full: the laptop has not collected taps. The manager's own request queue is full the same way (300 requests, or 1,088 KB of them). Or a stored document is there but could not be read just now - try again. |
-| 507 | The club is at its 50 MB quota (the manager's tunnel not counted) and the document would not fit even with its oldest results forgotten. |
+| 503 | The check-in queue is full: the laptop has not collected taps. The manager's own request queue is full the same way (300 requests, or 952 KB of them). Or a stored document is there but could not be read just now - try again. |
+| 507 | The club is at its 50 MB quota (the manager's tunnel not counted) and the document would not fit even with its oldest results forgotten. Or a year of `resultsindex` that would only fit in the index's own 2 MB by pushing out a later year. |
 
 An unknown club and a malformed club id answer the API with the same
 `404`. That is not a promise that club ids are secret: `/c/:club` serves a

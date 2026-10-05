@@ -347,23 +347,7 @@ public sealed class RaceClassesControl : UserControl
             // filled in just below.
             _undo?.Capture($"Rename class '{oldName}' to '{newName}'", () =>
             {
-                if (receipt is not null)
-                {
-                    cascade.Undo(receipt);
-                }
-
-                // The name, and whatever else the same dialog changed - it
-                // used to put back only the name, so a rename made together
-                // with a new main size or format kept those after the undo.
-                // Setting by setting (RevertEdit), not the whole pre-rename
-                // class: an edit made since to anything else survives. Only
-                // when the class has gone altogether is the snapshot used, so
-                // the drivers and rounds just moved back to the old name
-                // have a class to belong to.
-                if (before is not null && !store.RevertEdit(before, afterJson, keepName: false))
-                {
-                    store.Upsert(before);
-                }
+                store.UndoRename(existing.Id, oldName, before, afterJson, cascade, receipt);
 
                 if (!IsDisposed && !Disposing)
                 {

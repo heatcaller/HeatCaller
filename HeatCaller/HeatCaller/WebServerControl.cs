@@ -600,9 +600,24 @@ public sealed class WebServerControl : UserControl
             return;
         }
 
-        var pin = _txtPin.Text.Trim();
-        var checkInPin = _txtCheckInPin.Text.Trim();
-        var managerPin = _txtManagerPin.Text.Trim();
+        // A changed PIN that is already some racer's personal PIN is not
+        // taken (RacerPins.IsHeldByRacer): its box goes back to the PIN
+        // saved, the others are saved as usual, and the page says so - in
+        // words that don't tell the desk whose PIN it is.
+        var refused = new List<string>();
+
+        var pin = Allowed(_txtPin, _settings.WebServerPin, "Remote PIN");
+        var checkInPin = Allowed(_txtCheckInPin, _settings.WebServerCheckInPin, "check-in PIN");
+        var managerPin = Allowed(_txtManagerPin, _settings.ManagerPin, "Manager PIN");
+
+        if (refused.Count > 0)
+        {
+            AppDialog.Show(this,
+                $"The {string.Join(" and the ", refused)} you typed can't be used - "
+                + (refused.Count == 1 ? "it is" : "they are") + " already in use elsewhere in HeatCaller. "
+                + "Choose another. " + (refused.Count == 1 ? "The box has" : "The boxes have") + " been put back to what was saved.",
+                "PIN not saved", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
 
         var managerChanged = !string.Equals(_settings.ManagerPin, managerPin, StringComparison.Ordinal);
 
@@ -616,11 +631,34 @@ public sealed class WebServerControl : UserControl
         _settings.WebServerPin = pin;
         _settings.WebServerCheckInPin = checkInPin;
         _settings.ManagerPin = managerPin;
+
+        // Set again after a restore whose keys couldn't be had back: check-in
+        // may open now, and a PIN cleared after this is the club's own choice
+        // (AppSettings.CheckInPinNeedsEntering).
+        if (checkInPin.Length > 0)
+        {
+            _settings.CheckInPinRestored();
+        }
+
         _settings.Save();
 
         if (managerChanged)
         {
             _relay.SettingsChanged();
+        }
+
+        string Allowed(TextBox box, string saved, string name)
+        {
+            var typed = box.Text.Trim();
+
+            if (string.Equals(typed, saved, StringComparison.Ordinal) || !RacerPins.IsHeldByRacer(_settings, typed))
+            {
+                return typed;
+            }
+
+            refused.Add(name);
+            box.Text = saved;
+            return saved;
         }
     }
 

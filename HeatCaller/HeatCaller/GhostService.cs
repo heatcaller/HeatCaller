@@ -28,7 +28,7 @@ public sealed class GhostService : IDisposable
     private bool _running;
 
     /// <summary>
-    /// The ghosts' clock: wall-clock milliseconds since the green flag.
+    /// The ghosts' clock: milliseconds since the green flag.
     ///
     /// It used to be anchored to the session's LastKnownDeviceTimeMs plus
     /// wall time. That value is the time of the last REAL pass, which can be
@@ -41,9 +41,12 @@ public sealed class GhostService : IDisposable
     /// Ghost passes are marked synthetic, and the session measures them
     /// against the green directly, so the two clocks never have to agree.
     /// </summary>
-    private long NowMs => _race.RaceStartUtc is { } start
-        ? Math.Max(0, (long)(DateTime.UtcNow - start).TotalMilliseconds)
-        : 0;
+    /// <remarks>
+    /// Read off the session's monotonic clock (MsSinceGreen) rather than
+    /// DateTime.UtcNow, so a Windows time sync mid-race does not bunch the
+    /// ghosts' crossings together or hold them back.
+    /// </remarks>
+    private long NowMs => Math.Max(0, _race.MsSinceGreen);
 
     /// <summary>
     /// The UI thread, captured at Start. Passes are handed back to it:
@@ -123,6 +126,15 @@ public sealed class GhostService : IDisposable
     public bool IsRunning
     {
         get { lock (_lock) { return _running; } }
+    }
+
+    /// <summary>Whether this ghost is one of those running now.</summary>
+    private bool IsStillRunning(string transponder)
+    {
+        lock (_lock)
+        {
+            return _running && _runners.ContainsKey(transponder);
+        }
     }
 
     /// <summary>One ghost's state while a session is running.</summary>
@@ -403,8 +415,11 @@ public sealed class GhostService : IDisposable
                 try
                 {
                     // Re-checked on the UI thread: the race may have been
-                    // stopped between scheduling and delivery.
-                    if (!IsRunning || _race.State != RaceState.Racing)
+                    // stopped between scheduling and delivery - or this
+                    // ghost switched off while the others carry on, when its
+                    // crossing would put it back on the board it has just
+                    // been taken off (MainForm.KeepRunningGhostsInStep).
+                    if (!IsStillRunning(car.Transponder) || _race.State != RaceState.Racing)
                     {
                         return;
                     }
@@ -704,16 +719,50 @@ public sealed class GhostService : IDisposable
 
         // The most recent session that driver actually appears in - not
         // simply the newest session, which they may not have raced. Saved
-        // demo races don't count - their times are invented.
-        var entry = _history.All
+        // demo races don't count - their times are invented. One with no
+        // timed lap to average (only the start lap) is passed over too.
+        return _history.All
             .Where(s => !s.IsDemoSession())
             .OrderByDescending(s => s.StartedAtUtc)
             .SelectMany(s => s.Results)
-            .FirstOrDefault(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase)
-                                 && r.Laps > 0
-                                 && r.ElapsedMs > 0);
+            .Where(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase)
+                        && r.Laps > 0
+                        && r.ElapsedMs > 0)
+            .Select(AveragePaceMs)
+            .FirstOrDefault(ms => ms is not null);
+    }
 
-        return entry is null ? null : (int)(entry.ElapsedMs / Math.Max(1, entry.Laps));
+    /// <summary>
+    /// A saved result's usual lap: the mean of its timed laps, leaving out
+    /// the start lap and any lap under half or over twice the median - a
+    /// dash to the line, a battery swap, a tuning stop. Null when it has no
+    /// timed lap. A result saved before lap times were kept has only its
+    /// total, so that over its laps, as before.
+    ///
+    /// It used to be the total over the laps for everyone. A practice's
+    /// total runs from its green, so the walk to the track after Start
+    /// Practice - or twelve minutes of someone else lapping before the
+    /// driver's first crossing - went into the average, and the ghost ran
+    /// three times slower than the driver drives.
+    /// </summary>
+    internal static int? AveragePaceMs(SessionResultEntry entry)
+    {
+        if (entry.LapTimesMs is not { Count: > 0 } laps)
+        {
+            return entry.Laps > 0 && entry.ElapsedMs > 0 ? (int)(entry.ElapsedMs / entry.Laps) : null;
+        }
+
+        var timed = laps.Skip(1).Where(ms => ms > 0).OrderBy(ms => ms).ToList();
+
+        if (timed.Count == 0)
+        {
+            return null;
+        }
+
+        var median = timed[timed.Count / 2];
+
+        // Never empty: the median itself is always in range.
+        return (int)timed.Where(ms => ms * 2 >= median && ms <= median * 2).Average();
     }
 
     private static string DescribeMissingPace(GhostCar ghost) => ghost.PaceSource switch

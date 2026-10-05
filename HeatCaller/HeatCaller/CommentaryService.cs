@@ -234,6 +234,26 @@ public sealed class CommentaryService
     private const string SummaryKind = "Summary";
 
     /// <summary>
+    /// Lets go of the last race's recap as the next race finishes, so the
+    /// summary held is only ever that of the race that just ended. Only a
+    /// new recap used to replace it: after a race whose recap never came
+    /// (the model timed out, recaps off, the race not saved), and while one
+    /// was still being written, the Announcer page went on offering the
+    /// race before's recap as the last race summary - winner and margin -
+    /// to repeat over the PA. A talking point held as the last line stays.
+    /// </summary>
+    public void ClearRaceSummary()
+    {
+        LastRaceSummary = null;
+
+        if (LastLineKind == SummaryKind)
+        {
+            LastLine = null;
+            LastLineKind = null;
+        }
+    }
+
+    /// <summary>
     /// Takes back a recap that was written but never spoken - dropped
     /// because the next race was called to the grid first. Without this it
     /// stayed the "last race summary", and the Announcer page offered to

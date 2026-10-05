@@ -207,6 +207,48 @@ public sealed class TechInspectionStore
         return newest;
     }
 
+    /// <summary>
+    /// The class <see cref="LatestForDriver"/> answers for, by the same
+    /// rule: the first class they are not cleared in, or, cleared in all of
+    /// them, the one with the newest pass - or their main class when no
+    /// class they race runs tech.
+    ///
+    /// For Inspect Selected Car, which used to open the main class whatever
+    /// the desk was showing. A driver cleared in Stock but not in Modified
+    /// showed "-", and Inspect opened their Stock pass to edit: switching it
+    /// to Modified and saving replaced the Stock inspection.
+    /// </summary>
+    public string TechClassForDriver(DriverProfile profile, Func<string, bool> techIsRunFor)
+    {
+        var classes = profile.AllClasses.Where(techIsRunFor).ToList();
+
+        if (classes.Count == 0)
+        {
+            return profile.ClassName ?? string.Empty;
+        }
+
+        string? newestClass = null;
+        TechInspection? newest = null;
+
+        foreach (var className in classes)
+        {
+            var latest = Latest(profile.Transponder, className);
+
+            if (latest is not { IsCleared: true })
+            {
+                return className;
+            }
+
+            if (newest is null || latest.InspectedAtUtc > newest.InspectedAtUtc)
+            {
+                newest = latest;
+                newestClass = className;
+            }
+        }
+
+        return newestClass!;
+    }
+
     /// <summary>Every inspection carried out at an event, newest first.</summary>
     public IReadOnlyList<TechInspection> ForEvent(string eventId) =>
         _inspections

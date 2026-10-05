@@ -789,7 +789,11 @@ internal static class GarageMigration
 {
     public static void RunOnce(AppSettings settings, CarStore cars, ProfileStore profiles)
     {
-        if (settings.HasBuiltGarageFromProfiles)
+        // Not while the garage or the drivers could not be read, as
+        // SetupLinking.LinkOnce: a pass over an empty one would find
+        // nothing, and the flag set below would stop it ever running again.
+        // Left for a launch that can read both.
+        if (settings.HasBuiltGarageFromProfiles || cars.Unreadable || profiles.LoadedUnreadable)
         {
             return;
         }
@@ -829,7 +833,8 @@ internal static class GarageMigration
     /// </remarks>
     public static void CatchUpOnce(AppSettings settings, CarStore cars, ProfileStore profiles)
     {
-        if (settings.HasCaughtUpGarageFromProfiles)
+        // Not while the garage or the drivers could not be read - see RunOnce.
+        if (settings.HasCaughtUpGarageFromProfiles || cars.Unreadable || profiles.LoadedUnreadable)
         {
             return;
         }
@@ -1013,9 +1018,9 @@ internal static class GarageSync
 
     /// <summary>
     /// The car a transponder is fitted to, when its driver has said so
-    /// (OwnedTransponder.CarId) and it is still in the garage: the car
-    /// that transponder crossing the line is. Null for a transponder that
-    /// moves between cars - their active car is the one.
+    /// (OwnedTransponder.CarId) and it is still in the garage and not
+    /// retired: the car that transponder crossing the line is. Null for a
+    /// transponder that moves between cars - their active car is the one.
     ///
     /// Read from the voice queue's thread as well as this one; the stores
     /// it reads are safe for that (CarStore locks; ProfileStore.Get is read
@@ -1028,8 +1033,13 @@ internal static class GarageSync
             return null;
         }
 
+        // A retired car is somewhere nothing else lets a transponder be
+        // fitted. Retiring one used to leave its transponders fitted to it,
+        // so the board, the calls and the saved result kept naming it. Left
+        // out here rather than unfitted on retire, so Put Back brings it back.
         return profile.TransponderEntry(transponder.Trim()) is { Retired: false, CarId: { Length: > 0 } carId }
-            ? cars.Get(carId)
+               && cars.Get(carId) is { Retired: false } car
+            ? car
             : null;
     }
 

@@ -906,6 +906,44 @@ public sealed class AppSettings
     [JsonIgnore]
     public bool SecretsLocked { get; private set; }
 
+    /// <summary>
+    /// Set by SecretRecovery when it leaves locked secrets for the next
+    /// launch (a file it needed was in use). While the secrets are still
+    /// locked, every save this session then writes their sealed text back
+    /// unchanged, even once a key or PIN has been typed in - see Secrets.
+    ///
+    /// Not saved: it describes this launch, not the club's settings.
+    /// </summary>
+    [JsonIgnore]
+    internal bool HoldLockedSecrets { get; set; }
+
+    /// <summary>
+    /// True from the moment this file's secrets could not be opened here
+    /// until the check-in PIN is really back - recovered from the backup
+    /// (SecretRecovery), or typed in again on Local Screens. Until then the
+    /// Wi-Fi check-in pages stay closed (WebServerService.CheckInLockedReason).
+    ///
+    /// Not SecretsLocked, which is what used to close them: that goes as
+    /// soon as anything re-seals the settings - giving up on the backup's
+    /// keys, or any one secret typed in - and check-in then opened to
+    /// everybody on the Wi-Fi with no PIN, though nobody had chosen that.
+    /// Saved, so a restart doesn't open it either. Only ever turned on while
+    /// loading: the file from the old PC carries false, written after
+    /// "Secrets", which would otherwise undo it. Turned off by
+    /// CheckInPinRestored alone.
+    /// </summary>
+    [JsonInclude]
+    public bool CheckInPinNeedsEntering
+    {
+        get => _checkInPinNeedsEntering;
+        private set => _checkInPinNeedsEntering |= value;
+    }
+
+    private bool _checkInPinNeedsEntering;
+
+    /// <summary>The check-in PIN is back: recovered from a backup, or set again. See CheckInPinNeedsEntering.</summary>
+    internal void CheckInPinRestored() => _checkInPinNeedsEntering = false;
+
     // The sealed text as last read or written. Kept so that a file whose
     // secrets could not be opened here is written back unchanged rather
     // than replaced with blanks - it can still be opened on the PC it came
@@ -1007,7 +1045,15 @@ public sealed class AppSettings
         {
             // Nothing entered since a locked file was loaded: hand the
             // original sealed text back untouched.
-            if (SecretsLocked && !HasAnySecret())
+            //
+            // The same while SecretRecovery has put the unlocking off to the
+            // next launch (HoldLockedSecrets), entered or not. A key typed
+            // that session - a backup password, a check-in PIN - used to
+            // re-seal the settings with only that value in them, and the
+            // next launch then found them unlocked, took the backup's copy of
+            // the keys as no longer needed and deleted it: the relay token,
+            // every PIN and the QR check-in key gone without a word.
+            if (SecretsLocked && (HoldLockedSecrets || !HasAnySecret()))
             {
                 return _sealedSecrets;
             }
@@ -1050,6 +1096,7 @@ public sealed class AppSettings
             catch (Exception ex) when (ex is CryptographicException or JsonException)
             {
                 SecretsLocked = true;
+                CheckInPinNeedsEntering = true;
             }
         }
     }

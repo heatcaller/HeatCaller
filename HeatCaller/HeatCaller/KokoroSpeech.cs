@@ -83,6 +83,13 @@ internal static class KokoroSpeech
     /// <summary>Where Kokoro's problems are reported, said once each. Set by the announcer.</summary>
     internal static Action<string>? Log { get; set; }
 
+    /// <summary>
+    /// Tests only: stands in for the loaded model - finding a voice by name,
+    /// and saying a line in it at a speed - since the 310 MB model can't be
+    /// loaded in a test. Always null in the app.
+    /// </summary>
+    internal static (Func<string, object> FindVoice, Func<string, object, float, Task<byte[]>> Say)? ModelForTests { get; set; }
+
     /// <summary>The folder the model is kept in - this PC only, never backed up.</summary>
     internal static string Folder => Path.Combine(AppPaths.LocalRoot, "Kokoro");
 
@@ -130,6 +137,44 @@ internal static class KokoroSpeech
     }
 
     internal static bool IsAvailable => UnavailableReason is null;
+
+    /// <summary>
+    /// Why the model wouldn't load, lower case, or null - kept until a load
+    /// works or a new model is downloaded. UnavailableReason lets it go after
+    /// RetryLoadAfter, so a line can try again; what the page and the Mixer
+    /// show reads this instead. They used to read that one, and went back to
+    /// "ready" a minute after each failure while the Windows voice said
+    /// every line.
+    /// </summary>
+    internal static string? LoadFailure
+    {
+        get
+        {
+            lock (EngineLock)
+            {
+                return _loadFailure;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether Voice Settings offers the download: there's no model yet, or
+    /// the one there wouldn't load - its reason says to download it again,
+    /// and the button used to be hidden whenever a file of the right size
+    /// was there.
+    /// </summary>
+    internal static bool ShouldOfferDownload => !IsModelDownloaded || LoadFailure is not null;
+
+    /// <summary>Tests only: as if the model had failed to load at <paramref name="atUtc"/>, for <paramref name="reason"/>.</summary>
+    internal static void RecordLoadFailureForTests(string? reason, DateTime atUtc)
+    {
+        lock (EngineLock)
+        {
+            _loading = null;
+            _loadFailure = reason;
+            _loadFailedAtUtc = atUtc;
+        }
+    }
 
     /// <summary>
     /// Loads the model in the background, so the first line of the night
@@ -253,14 +298,38 @@ internal static class KokoroSpeech
             return kept;
         }
 
-        KokoroWavSynthesizer engine;
-        try
+        // The two steps that need the model: finding the voice, and saying
+        // the line in it. A test stands in for both (ModelForTests).
+        Func<string, object> findVoice;
+        Func<string, object, Task<byte[]>> say;
+
+        if (ModelForTests is { } standIn)
         {
-            engine = await EngineAsync().WaitAsync(LoadWait, cancel).ConfigureAwait(false);
+            findVoice = standIn.FindVoice;
+            say = (line, voice) => standIn.Say(line, voice, speed);
         }
-        catch (TimeoutException)
+        else
         {
-            throw new InvalidOperationException($"The Kokoro voice was still loading after {LoadWait.TotalSeconds:0} s.");
+            KokoroWavSynthesizer engine;
+            try
+            {
+                engine = await EngineAsync().WaitAsync(LoadWait, cancel).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                throw new InvalidOperationException($"The Kokoro voice was still loading after {LoadWait.TotalSeconds:0} s.");
+            }
+
+            // KokoroSharp's own default for whole-line synthesis, with the
+            // speed set: a first segment as long as the model takes, since
+            // the whole line is wanted before any of it plays.
+            var config = new KokoroTTSPipelineConfig(new DefaultSegmentationConfig { MaxFirstSegmentLength = 510 })
+            {
+                Speed = speed,
+            };
+
+            findVoice = name => VoiceFor(name);
+            say = (line, voice) => engine.SynthesizeAsync(line, (KokoroSharp.Core.KokoroVoice)voice, config);
         }
 
         if (!await Gate.WaitAsync(GateWait, cancel).ConfigureAwait(false))
@@ -272,17 +341,17 @@ internal static class KokoroSpeech
         byte[] pcm;
         try
         {
-            var voice = VoiceFor(voiceName);
-
-            // KokoroSharp's own default for whole-line synthesis, with the
-            // speed set: a first segment as long as the model takes, since
-            // the whole line is wanted before any of it plays.
-            var config = new KokoroTTSPipelineConfig(new DefaultSegmentationConfig { MaxFirstSegmentLength = 510 })
-            {
-                Speed = speed,
-            };
-
-            pcm = await engine.SynthesizeAsync(spoken, voice, config).WaitAsync(RenderTimeout, cancel).ConfigureAwait(false);
+            // On the pool, still inside the gate. It used to start right
+            // here, on the caller's thread - the UI thread, for the voice
+            // queue and the Test buttons - and with the model loaded and the
+            // gate free nothing above leaves that thread. The first line of
+            // the night then loaded every voice file and KokoroSharp's
+            // pronunciation dictionary before its first await, and the window
+            // froze meanwhile. Finding the voice has no timeout: a render given
+            // up on releases the gate, and the voice list must not still be
+            // loading then (see VoiceFor).
+            var voice = await Task.Run(() => findVoice(voiceName)).ConfigureAwait(false);
+            pcm = await Task.Run(() => say(spoken, voice)).WaitAsync(RenderTimeout, cancel).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -411,28 +480,113 @@ internal static class KokoroSpeech
 
     // --- Downloading the model ----------------------------------------------
 
-    private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    /// <summary>What the model is fetched with. Set by a test, which can't fetch 310 MB.</summary>
+    internal static HttpClient Http { get; set; } = new() { Timeout = Timeout.InfiniteTimeSpan };
+
+    private static readonly object DownloadLock = new();
+    private static Task? _download;
+    private static CancellationTokenSource? _downloadCancel;
+
+    /// <summary>How far the download has got, 0-1, in whole percent steps - raised on the thread doing it.</summary>
+    internal static event Action<double>? DownloadProgressed;
+
+    /// <summary>The download running now, to follow, or null when there isn't one.</summary>
+    internal static Task? RunningDownload
+    {
+        get
+        {
+            lock (DownloadLock)
+            {
+                return _download is { IsCompleted: false } running ? running : null;
+            }
+        }
+    }
+
+    internal static bool IsDownloading => RunningDownload is not null;
 
     /// <summary>
-    /// Fetches the model into <see cref="Folder"/>, reporting 0-1 as it goes.
-    /// Written to a .part file and only renamed once complete, so a download
-    /// cut short never leaves a file that looks like the model.
+    /// Starts fetching the model into <see cref="Folder"/>, or hands back the
+    /// download already running. Held here, not by the Voice Settings page:
+    /// that page is rebuilt when a soundscape, venue or Lap times only is
+    /// applied, and the download it held went on unseen and uncancellable,
+    /// with a second Download failing on the .part file it still had open.
     /// </summary>
-    internal static async Task DownloadModelAsync(IProgress<double>? progress, CancellationToken cancel)
+    internal static Task DownloadModelAsync()
+    {
+        lock (DownloadLock)
+        {
+            if (_download is { IsCompleted: false } running)
+            {
+                return running;
+            }
+
+            // Not disposed after: it holds nothing that needs it, and a
+            // Cancel pressed just as the download ends would find it disposed.
+            var cancel = new CancellationTokenSource();
+            _downloadCancel = cancel;
+            _download = Task.Run(() => FetchModelAsync(cancel.Token));
+            return _download;
+        }
+    }
+
+    /// <summary>Stops the download running now, if there is one; its task ends canceled.</summary>
+    internal static void CancelDownload()
+    {
+        CancellationTokenSource? cancel;
+        lock (DownloadLock)
+        {
+            cancel = _download is { IsCompleted: false } ? _downloadCancel : null;
+        }
+
+        // Outside the lock: canceling runs what was waiting on it.
+        cancel?.Cancel();
+    }
+
+    /// <summary>
+    /// Deletes the .part file of a download HeatCaller was closed part way
+    /// through - up to 310 MB, in a folder nobody looks in. At startup.
+    /// </summary>
+    internal static void DeleteLeftoverDownload()
+    {
+        if (!IsDownloading)
+        {
+            TryDelete(ModelPath + ".part");
+        }
+    }
+
+    private static async Task FetchModelAsync(CancellationToken cancel)
+    {
+        using var response = await Http.GetAsync(ModelUrl, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        await using var source = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
+        await SaveModelAsync(source, response.Content.Headers.ContentLength, ToListeners, cancel).ConfigureAwait(false);
+    }
+
+    private static readonly IProgress<double> ToListeners = new ListenerProgress();
+
+    private sealed class ListenerProgress : IProgress<double>
+    {
+        public void Report(double value) => DownloadProgressed?.Invoke(value);
+    }
+
+    /// <summary>
+    /// Saves the model from <paramref name="source"/>, reporting 0-1 as it
+    /// goes. Written to a .part file and only renamed once complete, so a
+    /// download cut short never leaves a file that looks like the model.
+    /// </summary>
+    internal static async Task SaveModelAsync(Stream source, long? length, IProgress<double>? progress, CancellationToken cancel)
     {
         Directory.CreateDirectory(Folder);
         var part = ModelPath + ".part";
 
-        using (var response = await Http.GetAsync(ModelUrl, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false))
+        try
         {
-            response.EnsureSuccessStatusCode();
-
-            var total = response.Content.Headers.ContentLength ?? 325_000_000L;
+            var total = length ?? 325_000_000L;
             var buffer = new byte[81920];
             long done = 0;
             var lastReported = -1;
 
-            await using var source = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
             await using (var target = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, useAsync: true))
             {
                 int read;
@@ -454,12 +608,42 @@ internal static class KokoroSpeech
 
             if (done < SmallestRealModel)
             {
-                TryDelete(part);
                 throw new InvalidOperationException($"The download stopped after {done / (1024 * 1024)} MB - that isn't the whole model. Try again.");
             }
-        }
 
-        File.Move(part, ModelPath, overwrite: true);
+            // A line trying the old model again has it open while it loads,
+            // which would fail the move - now that a model that won't load
+            // can be downloaded again over it.
+            Task? loading;
+            lock (EngineLock)
+            {
+                loading = _loading is { IsCompleted: false } ? _loading : null;
+            }
+
+            if (loading is not null)
+            {
+                try
+                {
+                    await loading.WaitAsync(LoadWait, cancel).ConfigureAwait(false);
+                }
+                catch (Exception) when (!cancel.IsCancellationRequested)
+                {
+                    // It failed, or is still going after LoadWait: the move
+                    // is tried anyway.
+                }
+            }
+
+            File.Move(part, ModelPath, overwrite: true);
+        }
+        catch (Exception)
+        {
+            // It used to delete the .part only when a download ended short,
+            // so one canceled, cut off or stopped by a full disk left up to
+            // 310 MB behind - on a disk that might then have no room for the
+            // club's own saves, after saying "nothing was kept".
+            TryDelete(part);
+            throw;
+        }
 
         lock (EngineLock)
         {

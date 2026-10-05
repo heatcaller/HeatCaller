@@ -3,12 +3,14 @@ namespace HeatCaller;
 /// <summary>
 /// MainForm's side of the live track map (TrackLine, TrackPositions,
 /// TrackMapView): following the race's crossings, working out the line of
-/// the layout Race Control is racing on, and handing the map to the Big
-/// Screen (through Race Control) and to the Live Results page.
+/// the layout being raced on, and handing the map to the Big Screen
+/// (through Race Control) and to the Live Results page.
 ///
-/// The layout is Race Control's - the one its Track box is on, which is
-/// also where the sector lengths come from (SectorLengthsFeetProvider). Its
-/// line is worked out again only when the plan changes.
+/// The layout is Race Control's - the one its Track box is on - or, in
+/// practice or a demo, the one picked on that page (RunningTrackName). That
+/// is also where the sector lengths come from (SectorLengthsFeetProvider).
+/// It used to be Race Control's even in practice. Its line is worked out
+/// again only when the plan changes.
 /// </summary>
 public partial class MainForm
 {
@@ -30,7 +32,7 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The line of the layout Race Control is racing on, and every car placed
+    /// The line of the layout being raced on, and every car placed
     /// on it now - or no line when that layout has no plan with a closed
     /// racing line through a finish line. UI thread.
     /// </summary>
@@ -50,7 +52,7 @@ public partial class MainForm
 
     private TrackLine? CurrentTrackLine()
     {
-        var name = _settings.LastRaceControlTrackName;
+        var name = RunningTrackName(_settings.LastRaceControlTrackName);
         var design = string.IsNullOrWhiteSpace(name)
             ? null
             : _trackLayouts.All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal))?.Design;

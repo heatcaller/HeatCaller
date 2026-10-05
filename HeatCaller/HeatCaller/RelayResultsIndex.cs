@@ -78,6 +78,22 @@ internal static class RelayResultsIndex
     internal static DateTime EffectiveStart(SessionRecord session) =>
         session.StartedAtUtc > DateTime.MinValue ? session.StartedAtUtc : session.EndedAtUtc;
 
+    /// <summary>
+    /// Whether the relay may already hold a copy of this session's result -
+    /// what RelayPublisher.PublishResult's correction means (see
+    /// Ledger.NoteWithheld). Only a session's first publish, uncorrected,
+    /// can be one the relay has never had.
+    ///
+    /// It used to be "has been corrected" alone. A re-send of an
+    /// uncorrected result - the startup re-send, Publish again from a phone,
+    /// a correction undone back to none - that could not be queued (a
+    /// restored relay not yet confirmed, a blank token) then marked a result
+    /// the relay still held as withheld, and the year's index left that
+    /// whole night out for good.
+    /// </summary>
+    internal static bool MayAlreadyBeOnRelay(SessionRecord session, bool firstPublish) =>
+        !firstPublish || session.Edits is { Count: > 0 };
+
     private static DateTime LocalStart(SessionRecord session)
     {
         // Started, not ended: a race that runs past midnight belongs to
@@ -336,12 +352,74 @@ internal static class RelayResultsIndex
         public HashSet<string> Extra { get; set; } = new(StringComparer.Ordinal);
 
         /// <summary>
-        /// Corrections to a result the relay holds, made while it could not
-        /// be sent. The relay still has the uncorrected copy, so these are
-        /// sent again the next time results are - see
-        /// MainForm.RepublishRecentResults.
+        /// Results the relay has not confirmed it holds as they now stand:
+        /// corrections made while they could not be sent (the relay still
+        /// has the uncorrected copy), and results queued but not yet taken.
+        /// These are sent again the next time results are, however old -
+        /// see MainForm.RepublishRecentResults.
+        ///
+        /// Queued ones are here because the queue lives only in memory. A
+        /// night with the relay unreachable, the laptop then shut down, lost
+        /// every result in it - and a club racing weekly reopened the app a
+        /// week later, well outside the 36 hours republished, so that night
+        /// never reached the relay at all. Taken off only when the relay
+        /// takes the result (RelayPublisher.Drain), not when it is queued.
         /// </summary>
         public HashSet<string> Owed { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The relay address and club the window and these exceptions
+        /// describe, or null when that was never recorded (a ledger from
+        /// before this existed, or none yet). See BelongsTo.
+        ///
+        /// Recorded rather than inferred from the settings saved before. A
+        /// restored backup holds the relay back until it is confirmed, and a
+        /// club id saved with a typo and put right a moment later is two
+        /// "changes" of relay - each of those cleared the window and the
+        /// ledger, and the next index dropped every earlier race day of the
+        /// season though the relay still held them all.
+        /// </summary>
+        public string? Relay { get; set; }
+
+        /// <summary>The club on <see cref="Relay"/>. See there.</summary>
+        public string? Club { get; set; }
+
+        /// <summary>
+        /// Whether this ledger describes that relay and club. One that never
+        /// recorded which is taken to be the one in use, as it always was.
+        /// </summary>
+        public bool BelongsTo(string relay, string club) =>
+            Relay is null
+            || (string.Equals(Relay, relay, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Club, club, StringComparison.Ordinal));
+
+        /// <summary>Records which relay and club this ledger describes, if it had not said. Returns whether that changed anything.</summary>
+        public bool Adopt(string relay, string club)
+        {
+            if (Relay is not null)
+            {
+                return false;
+            }
+
+            Relay = relay;
+            Club = club;
+            return true;
+        }
+
+        /// <summary>
+        /// Starts again for a different relay or club, which has been given
+        /// nothing this ledger knows of. The caller clears the window with it.
+        ///
+        /// Owed is kept: those are results this laptop still means to send,
+        /// and sending them to the relay now in use is what they are for.
+        /// </summary>
+        public void MoveTo(string relay, string club)
+        {
+            Withheld.Clear();
+            Extra.Clear();
+            Relay = relay;
+            Club = club;
+        }
 
         internal static string FilePath => Path.Combine(AppPaths.Root, "relay-results.json");
 
@@ -361,8 +439,8 @@ internal static class RelayResultsIndex
         }
 
         /// <summary>
-        /// A result has been queued for the relay. Returns the window as it
-        /// now stands - opened at this session if there was none.
+        /// The relay has taken a result. Returns the window as it now stands
+        /// - opened now if there was none.
         ///
         /// A session from before the window is noted as an exception rather
         /// than moving the window back to it: moving it claimed every session
@@ -380,7 +458,25 @@ internal static class RelayResultsIndex
 
             if (from is null)
             {
-                return startedUtc;
+                // Opened NOW, with this session as an exception before it -
+                // not at this session's start. The first result a relay is
+                // given is often not the newest: the republish after startup
+                // goes oldest first and takes in any session corrected
+                // lately, however old, so a heat from March corrected
+                // yesterday opened the window in March, and the index then
+                // claimed every race day from March on though the relay had
+                // been given that heat and the last 36 hours. Opened now,
+                // everything sent so far is listed by name and everything
+                // raced from here on by the window, which is exactly what
+                // the relay holds.
+                var opened = DateTime.UtcNow;
+
+                if (startedUtc < opened)
+                {
+                    changed |= Extra.Add(sessionId);
+                }
+
+                return opened;
             }
 
             if (startedUtc < from.Value)
@@ -393,7 +489,8 @@ internal static class RelayResultsIndex
 
         /// <summary>
         /// A result could not be queued - publishing off, the relay not set
-        /// up, or the document too big. Returns whether anything changed.
+        /// up, or the document too big - or the relay refused it outright.
+        /// Returns whether anything changed.
         /// </summary>
         /// <param name="correction">
         /// The session had been saved before. A first save that was withheld
@@ -411,10 +508,38 @@ internal static class RelayResultsIndex
             return correction ? Owed.Add(sessionId) : Withheld.Add(sessionId);
         }
 
+        /// <summary>
+        /// True when relay-results.json was there at startup but could not be
+        /// read - see SafeFile.HoldWritesAfterUnreadable - and <see cref="Save"/>
+        /// then writes nothing this session.
+        ///
+        /// The empty ledger it fell back to used to be saved over the file
+        /// within seconds of startup, so a sync or backup tool holding it for
+        /// a moment lost every result re-sent from before the window (a
+        /// club's whole first night among them), every result still owed and
+        /// every one withheld. Publishing carries on from memory, and the
+        /// file is read again at the next start.
+        ///
+        /// A new relay or club taking a result (MoveTo) is not written while
+        /// held either, so the next start reads the old relay's ledger back
+        /// and starts again for the new one at its next delivery - a few of
+        /// this session's results drop out of its index until they are sent
+        /// again, which beats losing the old ledger's owed results.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HoldWrites { get; private set; }
+
         /// <summary>Forgets every exception, for when the window itself is cleared.</summary>
         public bool Clear()
         {
             var had = Withheld.Count + Extra.Count + Owed.Count > 0;
+
+            // Written even while held. Clearing goes with Delete Everything
+            // Published, after which nothing the file holds is true, and left
+            // there it put the deleted results back in the index - and sent
+            // the owed ones again - at the next start.
+            had |= HoldWrites;
+            HoldWrites = false;
 
             Withheld.Clear();
             Extra.Clear();
@@ -440,22 +565,32 @@ internal static class RelayResultsIndex
                             Withheld = new HashSet<string>(loaded.Withheld ?? new(), StringComparer.Ordinal),
                             Extra = new HashSet<string>(loaded.Extra ?? new(), StringComparer.Ordinal),
                             Owed = new HashSet<string>(loaded.Owed ?? new(), StringComparer.Ordinal),
+                            Relay = loaded.Relay,
+                            Club = loaded.Club,
                         };
                     }
                 }
             }
             catch (Exception ex)
             {
-                // The window alone, as before this file existed. Kept aside
-                // first, as every store does, so the next save does not
-                // write an empty ledger over one that was only locked.
-                SafeFile.PreserveUnreadable(FilePath, ex);
+                // The window alone, as before this file existed - but, when
+                // it could not be read at all or no copy of it could be kept,
+                // never saved over this session (see HoldWrites).
+                return new Ledger { HoldWrites = SafeFile.HoldWritesAfterUnreadable(FilePath, ex) };
             }
 
             return new Ledger();
         }
 
-        /// <summary>Writes the ledger. Never throws; SafeFile reports a failed write.</summary>
-        public void Save() => SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(this));
+        /// <summary>Writes the ledger, unless <see cref="HoldWrites"/>. Never throws; SafeFile reports a failed write.</summary>
+        public void Save()
+        {
+            if (HoldWrites)
+            {
+                return;
+            }
+
+            SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(this));
+        }
     }
 }

@@ -95,7 +95,7 @@ All data files are plain JSON text, except where noted.
 | `sponsors.json` | Sponsor slide settings (**Sponsors** page). |
 | `Sponsors\` | Sponsor slide images. The `_removed` subfolder keeps slides you removed so the removal can be undone. |
 | `DriverPhotos\` | Driver photos, resized when you added them. |
-| `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
+| `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Not part of backups, so they don't come across to a new laptop. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
 | `club-logo-*.png` | The club logo (**Themes** page), used in the app, on the Big Screen, the Wi-Fi pages and the online pages. Only a logo file HeatCaller made itself is used. |
 
 ### Settings, logs and recovery files
@@ -172,7 +172,7 @@ Use **Backup & Restore**, not a manual copy:
 3. Install HeatCaller on the new laptop and restore the backup.
 4. When HeatCaller restarts, enter the backup password to bring the keys, tokens and PINs across.
 
-A backup is a zip of the entire data folder, plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. See [Backups](backups.md) for the full steps.
+A backup is a zip of the entire data folder, plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. Photo-finish pictures don't: they're left out of backups. See [Backups](backups.md) for the full steps.
 
 ## What's safe to delete
 

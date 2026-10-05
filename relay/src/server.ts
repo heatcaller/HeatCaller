@@ -537,6 +537,8 @@ interface CheckinView {
   readonly salt: string;
   /** The pass a signed-in staff device carries (see passFor), or "" with no staff PIN. */
   readonly staffPass: string;
+  /** The club pass key every pass here was made with - for telling a pass from a PIN that has since changed (checkinRequest). */
+  readonly passKey: Buffer;
   readonly drivers: readonly CheckinDriver[];
   /**
    * Each racer PIN hash to the one driver it opens, and that racer's pass:
@@ -1957,7 +1959,10 @@ export class Relay {
       const doc: StoredDocument = {
         seq,
         publishedAt: this.now().toISOString(),
-        body,
+        // Heat line-ups are the roster split by heat, so they follow the
+        // relay's roster switch too - taken out here, so the names never
+        // reach the disk. See withoutLineups.
+        body: spec.name === "programme" && who.publishRoster !== true ? withoutLineups(body) : body,
       };
 
       if (spec.kind === "snapshot") {
@@ -2046,6 +2051,17 @@ export class Relay {
       return { applied: true, seq };
     });
 
+    // Its own budget, not the club's quota, is what a channel like the
+    // results index runs out of - and only later documents fill it.
+    if (outcome === "full" && spec.ownBudget !== undefined) {
+      this.log(`[relay] "${club}": "${spec.name}" is full of later documents; "${itemId ?? ""}" was refused.`);
+      sendJson(response, 507, {
+        ok: false,
+        error: `"${spec.name}" is holding all it may (${spec.ownBudget} bytes) with documents later than "${itemId ?? ""}", so that one cannot be kept.`,
+      });
+      return;
+    }
+
     if (outcome === "full") {
       this.log(`[relay] "${club}" is at its storage quota; a "${spec.name}" document was refused.`);
       sendJson(response, 507, {
@@ -2061,7 +2077,8 @@ export class Relay {
   /**
    * Which documents in a collection must go to make room for one more,
    * oldest first - or undefined when it would not fit even with the whole
-   * collection gone, and the caller answers 507.
+   * collection gone (for a channel with a budget of its own, with every
+   * EARLIER document gone), and the caller answers 507.
    *
    * Two limits: a count, so a listing stays something a phone can fetch,
    * and the club's quota, so a disk shared by every club cannot be filled
@@ -2105,7 +2122,16 @@ export class Relay {
       // moment a stray 2019 heat was deleted, and the next overflow took
       // 2021 instead, a season the laptop never knew to send again.
       // Four-digit years sort as text the way they do as numbers.
-      const byAge = [...others].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.at - b.at));
+      //
+      // And only years OLDER than the one being published. `others` leaves
+      // the incoming id out, so with nothing more said, republishing 2025
+      // after an edit evicted 2026 - the current season - and the next
+      // 2026 publish evicted 2025 back. Newer years are never pushed out
+      // by an older one: if the older years cannot make room, the
+      // incoming document is the one refused.
+      const byAge = others
+        .filter((item) => item.id < id)
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.at - b.at));
 
       for (const item of byAge) {
         if (mine <= spec.ownBudget) {
@@ -2292,7 +2318,9 @@ export class Relay {
       return;
     }
 
-    if (channel === "roster" && this.tenants.club(club)?.publishRoster !== true) {
+    const rosterAllowed = this.tenants.club(club)?.publishRoster === true;
+
+    if (channel === "roster" && !rosterAllowed) {
       sendJson(response, 403, {
         ok: false,
         error: "This club does not publish its roster.",
@@ -2321,7 +2349,16 @@ export class Relay {
       async () => {
         const doc = await this.store.getSnapshot(club, channel);
 
-        return doc === undefined ? undefined : Buffer.from(JSON.stringify(doc), "utf8");
+        if (doc === undefined) {
+          return undefined;
+        }
+
+        // And again here, for a programme stored before publish took them
+        // out: the laptop only resends it when it changes, so a club
+        // between meetings would have gone on serving the old one's names.
+        const served = channel === "programme" && !rosterAllowed ? { ...doc, body: withoutLineups(doc.body) } : doc;
+
+        return Buffer.from(JSON.stringify(served), "utf8");
       },
       false,
     );
@@ -2374,17 +2411,29 @@ export class Relay {
     }
 
     const meta = query.get("meta") === "1";
-    const key = this.listingKey(club, channel, meta);
-    const held = this.listings.get(key);
 
-    if (held !== undefined) {
-      sendPublicBytes(response, 200, held);
-      return;
+    // ?meta=1&limit=N: only the newest N. The home page polls for its
+    // three latest results, and a club with years of them has a meta
+    // listing of hundreds of kilobytes - every phone, every fifteen
+    // seconds. Cut from the held meta listing, so it costs no disk read.
+    const rawLimit = query.get("limit");
+    let limit: number | undefined;
+
+    if (rawLimit !== null) {
+      limit = Number(rawLimit);
+
+      if (!meta || !Number.isInteger(limit) || limit < 1) {
+        sendJson(response, 400, { ok: false, error: '"limit" must be a whole number of 1 or more, and goes with "meta=1".' });
+        return;
+      }
     }
 
-    const built = await this.buildOnce(key, key, () => (meta ? this.buildMetaListing(club, channel) : this.buildListing(club, channel)));
+    const key = this.listingKey(club, channel, meta);
+    const held =
+      this.listings.get(key) ??
+      ((await this.buildOnce(key, key, () => (meta ? this.buildMetaListing(club, channel) : this.buildListing(club, channel)))) as Buffer);
 
-    sendPublicBytes(response, 200, built as Buffer);
+    sendPublicBytes(response, 200, limit === undefined ? held : newestOfMeta(held, limit));
   }
 
   /**
@@ -3172,7 +3221,9 @@ export class Relay {
       const wellFormed = /^[0-9]{4,8}$/.test(offered);
 
       // Staff first, compared in constant time as ever.
-      if (wellFormed && checkin.pinSha256 !== "" && sameHash(pinHash(club, offered, checkin.salt), checkin.pinSha256)) {
+      const staffHash = wellFormed && checkin.pinSha256 !== "" ? pinHash(club, offered, checkin.salt) : "";
+
+      if (staffHash !== "" && sameHash(staffHash, checkin.pinSha256)) {
         sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers, pass: checkin.staffPass });
         return;
       }
@@ -3181,11 +3232,33 @@ export class Relay {
       // a constant-time walk: the hash is what the laptop published, not
       // the PIN, and knowing how much of a hash a guess matched says
       // nothing about which PIN to try next.
-      const racer = wellFormed ? checkin.racers.get(racerPinHash(club, offered, checkin.salt)) : undefined;
+      const racerHash = wellFormed ? racerPinHash(club, offered, checkin.salt) : "";
+      const racer = wellFormed ? checkin.racers.get(racerHash) : undefined;
 
       if (racer !== undefined) {
         sendJson(response, 200, { ok: true, mode: "racer", event: checkin.event, driver: racer.driver, pass: racer.pass });
         return;
+      }
+
+      // A page left open sends its PIN with the pass that PIN was given,
+      // and once the PINs change that pass opens nothing. It used to be
+      // counted as a wrong guess, so a dozen phones left open on the venue
+      // Wi-Fi after New PINs Now - or the weekly change - locked that
+      // address out of PIN sign-in, new PINs and all. A pass is the
+      // relay's own keyed hash of the PIN it was given for, so one made
+      // from THIS PIN proves the page really had it once: refused, but not
+      // counted. Only that one PIN, so it is no way to guess for free. The
+      // hashes are the ones just worked out, and the key is the view's own,
+      // so nothing here awaits or runs another slow hash.
+      if (PASS.test(pass) && wellFormed) {
+        const hadIt =
+          sameHash(pass, keyedPass(checkin.passKey, "racer", club, racerHash)) ||
+          (staffHash !== "" && sameHash(pass, keyedPass(checkin.passKey, "staff", club, staffHash)));
+
+        if (hadIt) {
+          sendJson(response, 403, { ok: false, error: "That PIN has changed." });
+          return;
+        }
       }
 
       // Counted in memory here, in the same step as the checks above, so
@@ -4687,6 +4760,34 @@ function managePinOf(body: unknown): string {
   return typeof stored === "string" && PIN_SHA256.test(stored) ? stored : "";
 }
 
+/**
+ * A programme with its heat line-ups taken out - "lineups" false and every
+ * line's drivers null, exactly what a laptop with line-ups off sends - for
+ * a club whose relay entry does not allow its roster (Tenant.publishRoster).
+ *
+ * Only the laptop's switch used to decide this. The roster channel itself
+ * was refused, but the same names, split by heat, went out in the
+ * programme for anyone to read on the Schedule page - though the relay's
+ * operator never agreed to publish them. Only those two fields change,
+ * and only where they are there; anything not shaped as expected is left
+ * as it is rather than refused, so this never throws.
+ */
+function withoutLineups(body: unknown): unknown {
+  if (!isPlainObject(body)) {
+    return body;
+  }
+
+  const lines = body["lines"];
+
+  return {
+    ...body,
+    ...("lineups" in body ? { lineups: false } : {}),
+    ...(Array.isArray(lines)
+      ? { lines: lines.map((line: unknown) => (isPlainObject(line) && "drivers" in line ? { ...line, drivers: null } : line)) }
+      : {}),
+  };
+}
+
 /** The laptop's manage document, cleaned. Undefined when there is none, or it is not an object - readCheckin's twin, much simpler: nothing here but whether it is on and what it is guarded by. */
 function readManage(club: string, doc: StoredDocument | undefined, key: Buffer): ManageView | undefined {
   const manage = isPlainObject(doc?.body) ? doc.body : undefined;
@@ -5029,6 +5130,7 @@ function readCheckin(club: string, doc: StoredDocument | undefined, key: Buffer)
     pinSha256,
     salt: pinSaltOf(checkin),
     staffPass: pinSha256 === "" ? "" : keyedPass(key, "staff", club, pinSha256),
+    passKey: key,
     drivers,
     racers,
   };
@@ -5645,6 +5747,17 @@ function sendAudio(response: ServerResponse, bytes: Buffer, headers: Readonly<Re
   });
 
   response.end(bytes);
+}
+
+/** The first `limit` items of a meta listing (already newest first), as a meta listing. */
+function newestOfMeta(listing: Buffer, limit: number): Buffer {
+  const parsed = JSON.parse(listing.toString("utf8")) as { items: unknown[] };
+
+  if (parsed.items.length <= limit) {
+    return listing;
+  }
+
+  return Buffer.from(JSON.stringify({ items: parsed.items.slice(0, limit), meta: true }), "utf8");
 }
 
 function sendPublicBytes(response: ServerResponse, status: number, bytes: Buffer): void {

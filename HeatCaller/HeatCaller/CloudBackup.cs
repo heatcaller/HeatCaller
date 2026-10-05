@@ -164,6 +164,8 @@ internal static class CloudBackup
                 continue;
             }
 
+            string? partial = null;
+
             try
             {
                 // The local backup folder may itself be inside the cloud
@@ -175,14 +177,20 @@ internal static class CloudBackup
                 {
                     Directory.CreateDirectory(destinationFolder);
 
+                    // Copies an earlier backup left half-done, the same way
+                    // as the local folder's .tmp files - and by age alone:
+                    // another backup's copy can be under way right now.
+                    BackupService.DeleteLeftovers(destinationFolder, ".partial");
+
                     var destination = Path.Combine(destinationFolder, Path.GetFileName(backupPath));
 
                     // Written under another name and renamed when complete,
                     // so the sync app never uploads half a backup, and a
                     // half-written file is never listed as one.
-                    var partial = destination + ".partial";
+                    partial = destination + ".partial";
                     File.Copy(backupPath, partial, overwrite: true);
                     File.Move(partial, destination, overwrite: true);
+                    partial = null;
                 }
 
                 BackupService.PruneOldBackups(destinationFolder, keepAutomatic);
@@ -190,6 +198,20 @@ internal static class CloudBackup
             }
             catch (Exception ex)
             {
+                // A copy that failed (a full cloud folder, the file held by
+                // the sync app) used to leave its half-written copy behind.
+                if (partial is not null)
+                {
+                    try
+                    {
+                        File.Delete(partial);
+                    }
+                    catch
+                    {
+                        // Cleared by a later backup's copy instead.
+                    }
+                }
+
                 results.Add($"Not copied to {target.Name}: {ex.Message}");
             }
         }

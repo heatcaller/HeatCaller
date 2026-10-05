@@ -1,14 +1,18 @@
+using System.Reflection;
+
 namespace HeatCaller;
 
 /// <summary>
 /// What build this is.
 ///
-/// One place, updated by hand when something ships. Deliberately not read
-/// from the assembly: an assembly version moves when the project file is
-/// touched, or does not move when only code changed, and neither is what
-/// somebody means when they ask "which build am I running?" after a race
-/// night went wrong. This number moves when a change is handed over, and
-/// only then.
+/// One place: the csproj's &lt;Version&gt;. It used to be typed in here by
+/// hand, on the argument that an assembly version can move without anything
+/// actually shipping - but the installer (Velopack) numbers the package and
+/// the update feed from the assembly, so the package, the updater and the
+/// title bar could each claim a different build. The csproj wins, and
+/// Number reads it back at runtime, so there is nothing left to disagree
+/// with. Bump it in HeatCaller.csproj when work is handed over, and only
+/// then.
 ///
 /// The convention while the app is in beta:
 ///
@@ -22,8 +26,70 @@ namespace HeatCaller;
 /// </summary>
 public static class AppVersion
 {
-    /// <summary>The version itself. Bump this when work ships.</summary>
-    public const string Number = "0.59.0";
+    /// <summary>
+    /// The version itself, read out of the assembly the app is running from.
+    /// Bump it in HeatCaller.csproj (&lt;Version&gt;) when work ships. Read
+    /// once and kept: nothing about it changes while the app runs, and it is
+    /// wanted from static code with no window open (the splash screen, the
+    /// session log's first line).
+    /// </summary>
+    public static string Number { get; } = ReadNumber();
+
+    /// <summary>
+    /// What to show if reflection somehow gives nothing - a stripped single
+    /// file, an odd host. A stale number is still better than a blank one in
+    /// a bug report, and it must never be the reason the app fails to start.
+    /// </summary>
+    private const string Unknown = "0.0.0";
+
+    private static string ReadNumber()
+    {
+        try
+        {
+            var assembly = typeof(AppVersion).Assembly;
+
+            // &lt;Version&gt; sets the informational version, which is the
+            // one that keeps "0.59.0" as written - the plain assembly
+            // version is padded to four parts (0.59.0.0).
+            var informational = assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion;
+            var number = WithoutBuildMetadata(informational);
+            if (number.Length > 0)
+            {
+                return number;
+            }
+
+            var version = assembly.GetName().Version;
+            if (version is not null)
+            {
+                return $"{version.Major}.{version.Minor}.{version.Build}";
+            }
+        }
+        catch (Exception)
+        {
+            // Nothing here is worth a crash on startup; fall through.
+        }
+
+        return Unknown;
+    }
+
+    /// <summary>
+    /// "0.59.0+9f3c1ab" -> "0.59.0". The SDK appends "+&lt;git sha&gt;" to the
+    /// informational version on some builds, which is no use to anybody
+    /// reading a title bar.
+    /// </summary>
+    internal static string WithoutBuildMetadata(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = version.Trim();
+        var plus = trimmed.IndexOf('+');
+        return plus < 0 ? trimmed : trimmed[..plus].Trim();
+    }
 
     /// <summary>Beta until the club has run a full event on it without surprises.</summary>
     public const string Stage = "BETA";

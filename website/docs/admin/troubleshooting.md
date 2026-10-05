@@ -88,7 +88,7 @@ These are about the **Local Screens** page. Setup is in [Local Screens](../scree
 | `The laptop is closing - that command may not have gone. Check the laptop.` (or `The laptop is closing - it was NOT sent.`) | HeatCaller was closing on the laptop when the command arrived. | Check the laptop, and press the button again once HeatCaller is running. |
 | The remote shows `GREEN not done:` (or another button's name) and a reason | Race Control refused the command, and nothing changed. For example `Practice is running - stop it on the Practice page first.`, or for **CHECKERED** before the green `The race hasn't gone green yet. To call off this start, press Reset.` | Deal with the reason. See [Running a race](../race-control/running-a-race.md#flags). |
 | `GREEN sent: Check the laptop - it may be asking a question.` | The laptop had the command but hadn't finished with it within about 3 seconds, usually because a question is open on its screen. | Answer the question on the laptop. |
-| `Connection lost. Check the laptop to see whether GREEN went.` | The phone lost contact while it waited for the answer. The command may or may not have reached the laptop. | Check the laptop or the live page before pressing again, then check the Wi-Fi. |
+| `Connection lost. Check the laptop to see whether GREEN went.` | The phone lost contact while it waited for the answer, or had no answer within 12 seconds. The command may or may not have reached the laptop. | Check the laptop or the live page before pressing again, then check the Wi-Fi. |
 | The race-day manager says `Wrong PIN. Enter the manager PIN again.` | A wrong Manager PIN. The phone emptied the box and forgot it. | Type the PIN again. Check it on the **Local Screens** page (**Show PINs**). |
 | `Too many wrong PINs on this Wi-Fi. The PIN is not being accepted for five minutes.` (HTTP 429) | 50 wrong tries at that PIN in five minutes, from any devices. Phones that already entered the PIN keep working. | Wait five minutes, or stop and start the server. Consider a longer PIN. |
 
@@ -210,5 +210,6 @@ Before asking for help:
 
 - Save the support file: **Save Support Info** on the **Backup & Restore** page. It holds the version, the console from the last few runs and `crash.log`, with driver names and email addresses taken out. See [Save Support Info](backups.md#save-support-info).
 - Note what you were doing when it happened, and copy the exact message from the console or take a screenshot.
+- Note the version you're on: **About HeatCaller...** on the **Getting help** card shows it, along with the licences of the components HeatCaller ships.
 
-<!-- TODO: add the support contact / issue tracker link -->
+Then email it all to **support@heatcaller.com**. The address is on the **Getting help** card too, with **Copy Address** beside it, and the crash dialog names it as well.

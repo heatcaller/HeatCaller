@@ -39,13 +39,13 @@ What follows from that:
 
 | | |
 |---|---|
-| Version | 0.59.0 BETA (`AppVersion.cs`), cut on 28 Sep 2026 from everything since 0.52.0 - 0.53 to 0.58 were working builds with no notes of their own. Its notes are in `website\docs\release-notes.md` |
-| App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 305 source files, ~177k lines, 25 pages |
-| Tests | `HeatCaller.Tests`: 354 tests (30 Sep), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
-| Relay | TypeScript on Fly.io (`relay\`), 27 test files |
+| Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
+| App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
+| Tests | `HeatCaller.Tests`: 1,052 tests in 134 classes (5 Oct), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
+| Relay | TypeScript on Fly.io (`relay\`), 34 test files. **Owed a deploy**: the heat line-up privacy fix and the check-in PIN fix are in the relay's own code |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
-| Real use | Three solo rehearsal nights at home (27 Sep), one called clean. No club has run a night on it yet |
+| Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
 
 ---
 
@@ -96,7 +96,7 @@ and that night does not count.
 | 1 | 27 Sep 2026 | No | The countdown played twice: the start went on to the countdown while the AI round intro was still being written. A recap called a win by 0.004s a tie. Both fixed. |
 | 2 | 27 Sep 2026 | No | Froze mid-race in heat 2, with no message; force-closed. Cause unknown - the console only lived in the window. Added the session log file and the freeze catcher (`SessionLog`, `HangWatchdog`) to catch it next time. |
 | 3 | 27 Sep 2026 | Called clean - freeze lifted | Nothing lost, froze or needed fixing by hand. Its log showed four things, fixed after: the A-Main started from the Next Up bar ran as freeform (no intro, "No round selected"; saved to the right round only by the fallback); the round intro was shouted, 80 words, and called Q3 Heat 1 "Heat 3"; cars parked on the loop were called as jump starts ("Frank jumped the start!"); and the "too soon" log line printed the wrong figure. The intro and the jump-start call are wrong calls by the announcer, which strictly fails the list above. |
-| 4 | Due | - | Owed under the rule above: the timing path has changed since rehearsal 3 (`EasyLapFramer` took over the decoder's framing, heartbeats are decoded, `TimingWatch` runs on every race tick), and the broadcast recap and the CSV import are new. What it has to cover is "Next, in order", 2. |
+| 4 | 4-5 Oct 2026 | Called clean - small things fixed after | Nothing lost, nothing hand-fixed, no freeze. A few things from the log were fixed afterwards, as after rehearsal 3. **The row is short on detail: what they were is in another chat and has not been written down here.** The I-Lap ran on real hardware for the first time in the same stretch - see "Next, in order", 7. |
 
 ### The rehearsal copy
 
@@ -143,8 +143,9 @@ day: the layout overhaul is finished before the beta rather than after it
    (b62-b64, asked for the same day) - all of it checked together by one
    `check.cmd`. Nothing new starts until the working copy is a green
    commit.
-2. **Rehearsal 4** - owed under the rule above, since the timing path
-   changed after rehearsal 3. On a commit that went green on GitHub:
+2. ~~**Rehearsal 4**~~ - **done 4-5 Oct 2026, called clean** (rehearsal
+   table above). It was owed because the timing path changed after
+   rehearsal 3. What it had to cover:
    - the timing-warning drills: unplug the decoder, pull the loop cable,
      switch a transponder off - each warning appears, and clears;
    - the mains with the broadcast recap on (opening, interview, sign-off);
@@ -398,8 +399,17 @@ day: the layout overhaul is finished before the beta rather than after it
    no BinaryFormatter, Clipboard.GetData, OnClosing/OnClosed, StatusStrip
    or System.Drawing OutOfMemoryException catches; drag-and-drop of
    RoundDrag/DriverDrag is in-process, which never went through
-   BinaryFormatter (only dragging OUT of the process does) - but try a
-   drag on Next Steps' program and in Heat Balance anyway; C# 14's `field`
+   BinaryFormatter (only dragging OUT of the process does) - **read
+   through on 5 Oct and confirmed safe**: all three drag sources
+   (`RoundDrag`, `DriverDrag`, the sidebar's boxed `int`) hand a live
+   object to WinForms' in-process store and read it back in the same
+   process, the app sets no BinaryFormatter switch and depends on none
+   (the `false` in the build output is the SDK default), nothing accepts
+   `DataFormats.FileDrop`, and the one cross-process clipboard write
+   (`RacerPinsForm`) uses only text and streams, which bypass the
+   serializer. Two drags are still worth doing by eye, because reading
+   cannot settle them: a programme row dragged OUT onto another window,
+   and an Explorer file dragged onto the sidebar; C# 14's `field`
    keyword and array `.Reverse()` (now the in-place span one) are not used
    in a way that changes meaning. Windows 10 Home/Pro is no longer on
    Microsoft's .NET 10 support list (only Enterprise/IoT LTSC) - the docs
@@ -435,11 +445,15 @@ day: the layout overhaul is finished before the beta rather than after it
    work (Beta readiness 6): every beta club needs it, and only a club
    using online check-in, the phone manager or the website needs the
    relay - but re-mint the `horizon-test` token whenever it's convenient.
-7. **I-Lap on real hardware**, if the beta club uses I-Lap. `ILapClient`
-   was written before a unit was on the bench. A unit is set up now, and
-   the bench work starts the weekend of 3 Oct (Asher, 30 Sep): read the
-   raw capture (`ilap-raw-*.log`), tighten `ParseLine` if needed, and turn
-   the capture into tests.
+7. ~~**I-Lap on real hardware**~~ - **done, weekend of 3 Oct 2026.**
+   `ILapClient` was written before a unit was on the bench; it now reads a
+   real one, and reads it as a split loop with split times coming through.
+   It read correctly on the first attempt, stopped reading the next day
+   after changes, and was found and fixed. **Still owed from this:** a
+   capture test like `EasyLapCaptureTests`, built from the I-Lap's raw
+   capture (`ilap-raw-*.log`), so a real I-Lap night replays on every
+   build. Until that exists the I-Lap path is proven once by hand and
+   nothing stops it regressing.
 8. **A capture from every rehearsal that shows something new.** The
    EasyLap path is tested from rehearsal 3's (`EasyLapCaptureTests`): every
    HID report in `HeatCaller.Tests\Captures\easylap-rehearsal3.log` is
@@ -512,11 +526,13 @@ read at all.
       Profiles (a turned-down sign-up) can't be recognised - the README
       inside says so. The crash dialog points at it. Not yet tried on the
       laptop: save one after a rehearsal and read it through.
-- [ ] **A support channel** the club knows before the night, and a plain
+- [x] **A support channel** the club knows before the night, and a plain
       answer to "what if it breaks on Saturday": they switch to the
       fallback plan (section 5). The address is up: support@heatcaller.com
-      (30 Sep). Left: saying so in the app (Getting Help, the crash
-      dialog) and in the first-night guide.
+      (30 Sep), and the app says so (5 Oct): `AppSupport` holds it in one
+      place, the **Getting help** card on Backup & Restore shows it as a
+      link with **Copy Address** beside it, and the crash dialog names it
+      after **Save Support Info**. Left: the first-night guide.
 
 ### 3. Install, update, and undo
 
@@ -539,12 +555,39 @@ second project. Not WiX/MSI: too heavy.
       No trimming (WinForms doesn't support it); ReadyToRun optional, for startup.
       Fonts, sound packs and music already copy beside the exe and are
       found through `AppContext.BaseDirectory` - no change needed.
-- [ ] **One version number.** `AppVersion.Number` is typed in by hand
-      (`"0.59.0"`). Take it from the csproj `<Version>` (the assembly's
-      version) so the package, the updater and the title bar can never
-      disagree. `AppVersion.cs` argues for keeping it by hand - an assembly
-      version can move without anything shipping - so decide which of the
-      two gives way when the packaging is built, and write the answer there.
+- [ ] **The whole Kokoro voice goes in the installer** (Asher, 5 Oct
+      2026). Today the 61 voice files ship beside the exe (with Kokoro's
+      own Apache-2.0 licence, copied by `KokoroSharp.targets`) but the
+      ~310 MB `kokoro.onnx` does not: `KokoroSpeech` downloads it into
+      `%LocalAppData%\HeatCaller\Kokoro` the first time a club chooses
+      that voice. Bundling it means a club at a track with bad Wi-Fi gets
+      a working natural voice with no download step and nothing to go
+      wrong on the night, which is worth the size. What it takes:
+      - ship `kokoro.onnx` with the app and have `KokoroSpeech` prefer a
+        copy beside the exe over `%LocalAppData%`, keeping the download as
+        the fallback for anyone who has one already;
+      - the installer goes to roughly half a gigabyte (the self-contained
+        runtime, plus 69 MB of MisakiSharp lexicons, plus the model). The
+        first download is the whole thing; **Velopack's delta updates keep
+        later ones small, because the model never changes** - which is the
+        argument that makes this affordable at all;
+      - licence-wise it is clear: Kokoro is Apache-2.0 and redistributable
+        (see Licences below), with attribution already travelling with the
+        voices.
+      Worth measuring the packed size both ways before committing to it.
+- [x] **One version number** - **decided and done, 5 Oct 2026: the csproj
+      wins.** `HeatCaller.csproj` carries `<Version>`, and `AppVersion`
+      reads the assembly's informational version at startup (cutting the
+      `+<sha>` suffix the SDK appends), falling back to the assembly name's
+      version and then to a literal, so the version can never come out
+      blank. The argument for keeping it by hand - an assembly version can
+      move without anything shipping - was overruled: the package, the
+      updater and the title bar disagreeing is worse. `AppVersionTests`
+      pins it, and it caught the two numbers already drifting (the csproj
+      had no `<Version>`, so the assembly said 1.0.0 while the app said
+      0.59.0). **One thing left:** `website\STYLE.md` also carries
+      "Current version: 0.59.0" - a third place a bump has to be
+      remembered.
 - [ ] **Package id `HeatCallerApp`, never `HeatCaller`.** Velopack
       installs into `%LocalAppData%\<package id>`, and
       `%LocalAppData%\HeatCaller` is already `AppPaths.LocalRoot` - the
@@ -589,15 +632,44 @@ second project. Not WiX/MSI: too heavy.
 
 **Outside the installer's reach**
 - [ ] **Phone pages on the local network** need a URL reservation and a
-      firewall rule - admin-only, so a per-user installer can't make them.
-      Keep today's handling (the app shows the two commands, or runs them
-      when elevated); consider a "Set up phone pages" button that asks for
-      admin once.
+      firewall rule (`netsh http add urlacl`, `netsh advfirewall firewall
+      add rule`). Both are admin-only, so a per-user installer cannot make
+      them. Today the app does NOT run them: when the listener is refused
+      it shows `WebServerService.UrlReservationHint`, which tells the
+      volunteer to run HeatCaller as administrator or to paste two netsh
+      commands into an admin Command Prompt. (The code that used to run
+      them when elevated went with HTTPS in 0.26.2 - see `HttpsSetup.cs`.)
+      **Decided 5 Oct 2026: build the button.** A "Set up phone pages"
+      button on Local Screens that asks for admin once (a UAC prompt,
+      `Verb = "runas"`), runs both commands, and reports what happened -
+      so a club volunteer never pastes netsh into a terminal. The hint
+      text stays as the fallback for a locked-down PC.
 - [ ] **Decoder drivers**: EasyLap needs none. An I-Lap on a USB-to-serial
       adapter may need the adapter's own driver - said in the guide, not
       bundled.
-- [ ] **Licences**: an About box listing NAudio, HidSharp, QRCoder and the
-      OFL fonts (their licence files already travel with them).
+- [x] **Licences** - **done 5 Oct 2026, and the list was four times
+      longer than this line assumed.** `ThirdPartyCatalog` (in `About.cs`)
+      holds 14 components over 22 shipping packages as testable data, and
+      the new **About HeatCaller...** button on Backup & Restore's
+      **Getting help** card shows them with the version, the support
+      address and the docs link. Audited from the package files rather
+      than from memory. **Nothing is copyleft** - the espeak-ng/GPL worry
+      does not apply, because MisakiSharp is a distilled G2P with no
+      espeak in it. Three things still owed:
+      - **MisakiSharp ships no NOTICE file.** Apache-2.0 4(d) asks for it;
+        fetch it from github.com/Lyrcaxis/MisakiSharp and put it in the
+        installer.
+      - **HidSharp and OpenTK carry no licence in their packages** (only a
+        dead `licenseUrl`, and nothing at all for OpenTK). Almost
+        certainly Apache-2.0 and MIT; somebody with a browser should read
+        both texts and confirm before the public beta. OpenTK is also a
+        pre-release (`5.0.0-pre.13`), pulled in by KokoroSharp.
+      - **The build copies ONNX Runtime natives for Android, iOS, Linux
+        and macOS** into the output, `onnxruntime.aar` and
+        `onnxruntime.xcframework.zip` among them, plus `.lib` import
+        libraries for three Windows architectures. Tens of MB of files no
+        Windows PC can load. Exclude them by RuntimeIdentifier before the
+        installer is cut.
 
 **Release pipeline and discipline**
 - [ ] **A tag makes a release**: GitHub Actions runs `check.cmd`, then

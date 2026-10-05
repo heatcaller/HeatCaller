@@ -155,6 +155,7 @@ public sealed class SoundscapeEditorForm : Form
         [SoundEffectKind.YellowFlag] = "Yellow flag",
         [SoundEffectKind.RedFlag] = "Red flag",
         [SoundEffectKind.GreenFlagResumed] = "Green (restart)",
+        [SoundEffectKind.Warning] = "Warning",
         [SoundEffectKind.RaceTimeOver] = "Last lap",
         [SoundEffectKind.RaceCompleted] = "Checkered flag",
     };

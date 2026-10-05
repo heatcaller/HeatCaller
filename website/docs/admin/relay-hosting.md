@@ -335,10 +335,10 @@ Only a render that isn't already on disk is charged to ElevenLabs and counted ag
 
 - **A line with no driver's name in it is rendered once for every club.** The laptop tells the relay when a line is one of the announcer's fixed lines, so "Green flag!" is paid for by the first club that asks and handed to all the rest. Most of a club's fixed lines cost nothing at all.
 - **A line with a name in it is cached for that club alone.**
-- **Each club's month is a calendar month (UTC)**, counted in `dataDir/voice/usage/<club>.json`, so a deploy doesn't hand anybody a fresh allowance.
+- **Each club's month is a calendar month (UTC)**, counted in `dataDir/.voice/usage/<club>.json`, so a deploy doesn't hand anybody a fresh allowance.
 - **The allowance holds under load.** A club's characters are reserved before the render and given back if it fails, so a laptop with several lines in flight at once can't slip past the limit.
 
-Rendered audio lives in `dataDir/voice/` — `shared/` for the lines every club may have, `clubs/<club>/` for the rest — content-addressed and swept oldest-used-first at 200 MB shared and 25 MB per club. None of it counts against a club's 50 MB publishing quota.
+Rendered audio lives in `dataDir/.voice/` (a hidden folder, with a dot in front so it can never clash with a club's own folder) — `shared/` for the lines every club may have, `clubs/<club>/` for the rest — content-addressed and swept oldest-used-first at 200 MB shared and 25 MB per club. None of it counts against a club's 50 MB publishing quota.
 
 Renders are capped at six at once across the whole relay, and a club may ask 300 times a minute, which is enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines.
 
@@ -366,7 +366,7 @@ The club's published data isn't affected. Publishing pauses between step 2 and s
 
 ### Turning on a club's public roster
 
-A club's roster (who is entered and who is checked in) is only served if **both** the club ticks the roster option on its **Club Website** page **and** the relay's config has `"publishRoster": true` for that club. Mint never turns it on. To allow it, edit that club's entry in `relay.config.json` by hand, then run `fly-set-config.cmd`. Many drivers are children; turn this on only when the club has decided to.
+A club's roster (who is entered and who is checked in) and its heat line-ups (who is in each heat, on the Schedule page) are only served if **both** the club ticks the roster option on its **Club Website** page **and** the relay's config has `"publishRoster": true` for that club. Without it, the relay takes the names out of the schedule before storing it, and the Schedule page shows the heats without who is in them. Mint never turns it on. To allow it, edit that club's entry in `relay.config.json` by hand, then run `fly-set-config.cmd`. Many drivers are children; turn this on only when the club has decided to.
 
 ### Removing a club
 
@@ -519,7 +519,7 @@ To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-
 | `clubs[].club` | The club id. Lower-case letters, digits and single hyphens, 3 to 32 characters. | (required) |
 | `clubs[].name` | The club's name, for page headings. | The club id |
 | `clubs[].tokenSha256` | SHA-256 of the club's publish token, as 64 hex characters. Written by mint. | (required) |
-| `clubs[].publishRoster` | Whether the club's roster may be served publicly. | `false` |
+| `clubs[].publishRoster` | Whether the club's roster and heat line-ups may be served publicly. | `false` |
 | `clubs[].voice.enabled` | Whether this club may use the HeatCaller voice. | `false` |
 | `clubs[].voice.monthlyChars` | This club's characters a calendar month. 0 to 100,000,000. | `voice.monthlyChars` |
 | `clubs[].voice.voices` | Catalog ids this club may use. Omitted or empty means the whole catalog. Every id must be in it. | all of them |
@@ -572,10 +572,11 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 |---|---|---|
 | Request body | `maxBodyBytes` (1 MiB by default) | Refused with 413. |
 | One result document | 256 KB (or `maxBodyBytes` if smaller) | Refused with 413. |
-| Results kept per club | The newest 300 | Publishing the 301st forgets the oldest. The laptop keeps every result. |
-| Storage per club | 50 MB, not counting the race-day manager's requests and answers | The oldest results are forgotten to make room. Only a document that wouldn't fit even then is refused, with 507. Live race frames and other snapshots are never refused for space. |
+| Results kept per club | Every one, until the club's storage is full | There's no count limit; only the 50 MB below makes old results go, oldest first. The laptop keeps every result. |
+| Storage per club | 50 MB, not counting the race-day manager's requests and answers, driver sign-ups or the results index | The oldest results are forgotten to make room. Only a document that wouldn't fit even then is refused, with 507. Live race frames and other snapshots are never refused for space. |
+| Results index | 2 MB of its own, at most 1 MB for one year | The earliest year is forgotten to make room for a later one. An earlier year that wouldn't fit is refused with 507, rather than pushing out a later season. |
 | Check-in taps waiting | 500 | New taps are refused with 503 until the laptop collects them. Taps older than 12 hours are dropped. |
-| Race-day manager requests waiting | 300, or 1,088 KB in all | New requests are refused with 503 ("The race-day manager is busy - ...") until the laptop collects them. Requests older than 10 minutes are dropped. |
+| Race-day manager requests waiting | 300, or 952 KB in all | New requests are refused with 503 ("The race-day manager is busy - ...") until the laptop collects them. Requests older than 10 minutes are dropped. |
 | Race-day manager answers waiting | 300, or 4 MB in all | The oldest answers are forgotten. Answers older than 10 minutes are dropped. |
 | Check-in request body | 4 KB | Refused. |
 | Results listing | 8 MB | The listing holds the newest results that fit, and says how many older ones were left out (`omitted`). Each is still readable on its own. Old results are only forgotten after a new one has been saved. |

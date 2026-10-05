@@ -138,6 +138,16 @@ internal sealed class SignupsForm : Form
         _btnResend.Click += (_, _) => ResendSelected();
         _btnCancelInvite.Click += (_, _) => CancelSelected();
 
+        // Nothing can be saved to signups.json this session (the state line
+        // says why), so nothing that would make invites or switch sign-up on
+        // is offered. With no invites to email, nothing turns these back on.
+        if (_desk.Held is not null)
+        {
+            _chkEnabled.Enabled = false;
+            _btnInvite.Enabled = false;
+            _btnHere.Enabled = false;
+        }
+
         var btnClose = new Button { Text = "Close", DialogResult = DialogResult.OK };
 
         // The window is not a dialog - Main Window shows it beside itself -
@@ -318,7 +328,12 @@ internal sealed class SignupsForm : Form
         var bad = false;
         string text;
 
-        if (!_settings.RelayEnabled || SignupStore.PageUrl(_settings) is null)
+        if (_desk.Held is { } held)
+        {
+            text = held;
+            bad = true;
+        }
+        else if (!_settings.RelayEnabled || SignupStore.PageUrl(_settings) is null)
         {
             text = "Publishing to the relay is off, so there is no sign-up page yet. Set it up on the Club Website page first.";
             bad = true;
@@ -540,7 +555,18 @@ internal sealed class SignupsForm : Form
             _desk.SetEnabled(true);
         }
 
-        var invites = _desk.CreateInvites(form.People);
+        IReadOnlyList<SignupInvite> invites;
+
+        try
+        {
+            invites = _desk.CreateInvites(form.People);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AppDialog.Show(this, ex.Message, "Invites not made", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         _ = SendAsync(invites);
     }
 
@@ -623,7 +649,18 @@ internal sealed class SignupsForm : Form
             _desk.SetEnabled(true);
         }
 
-        var invite = _desk.CreateInvites(new[] { (string.Empty, prompt.Reason.Length > 0 ? prompt.Reason : "At the desk") })[0];
+        SignupInvite invite;
+
+        try
+        {
+            invite = _desk.CreateInvites(new[] { (string.Empty, prompt.Reason.Length > 0 ? prompt.Reason : "At the desk") })[0];
+        }
+        catch (InvalidOperationException ex)
+        {
+            AppDialog.Show(this, ex.Message, "Code not made", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         ShowCode(invite);
     }
 
@@ -785,10 +822,11 @@ internal sealed class ApproveSignupForm : Form
             {
                 _txtTransponder.ReadOnly = false;
 
-                if (!request.HasOwnTransponder)
-                {
-                    _txtTransponder.Text = string.Empty;
-                }
+                // Back to what they asked with - their own number, or an empty
+                // box. Leaving the rental's number in it (as this used to for
+                // somebody with their own) lent them the rental on Approve and
+                // left their real transponder unassigned.
+                _txtTransponder.Text = request.HasOwnTransponder ? request.Transponder : string.Empty;
             }
         };
 

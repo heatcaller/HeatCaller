@@ -74,6 +74,25 @@ public sealed class VoiceSettingsStore
                         }
                     }
 
+                    // Repair weights the Voice Settings page used to reset:
+                    // it saved every event without a weight box as a flat 50,
+                    // which knocked Provisional Pole out of the per-lap cap
+                    // and tied the pair lines. Those weights have no box, so
+                    // a 50 on one whose default differs came from that save,
+                    // not from the club; the default goes back.
+                    foreach (var (key, defaultConfig) in defaults.Events)
+                    {
+                        if (Enum.TryParse<AnnouncementEventType>(key, out var type)
+                            && !VoiceSettingsControl.PerLapWeightedTypes.Contains(type)
+                            && loaded.Events.TryGetValue(key, out var existing)
+                            && existing is not null
+                            && existing.Weight == 50
+                            && defaultConfig.Weight != 50)
+                        {
+                            existing.Weight = defaultConfig.Weight;
+                        }
+                    }
+
                     if (loaded.TemplateVersion < CurrentTemplateVersion)
                     {
                         // Replace ONLY the spoken lines. Enabled, Weight and

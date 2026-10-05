@@ -102,11 +102,29 @@ internal sealed class RelaySignupDesk
 
     private string Club => _settings.RelayClub.Trim().ToLowerInvariant();
 
-    /// <summary>Whether this club has ever used sign-up - switched it on, or made an invite. Until then there is nothing to publish.</summary>
-    public bool InUse => Store.Enabled || Store.All.Count > 0;
+    /// <summary>
+    /// Whether this club has ever used sign-up - switched it on, or made an
+    /// invite. Until then there is nothing to publish. Never while
+    /// signups.json could not be read: a document from this session's empty
+    /// store would take every real invite's code off the relay.
+    /// </summary>
+    public bool InUse => !Store.LoadedUnreadable && (Store.Enabled || Store.All.Count > 0);
+
+    /// <summary>Why invites can't be made and sign-up can't be switched on this session, or null. See SignupStore.LoadedUnreadable.</summary>
+    public string? Held => Store.LoadedUnreadable
+        ? "The sign-up invites file (signups.json) couldn't be read when HeatCaller started - another program may have had it open. "
+          + "Nothing here can be changed until HeatCaller is restarted and can read it, so the invites in it aren't lost. "
+          + "Close anything that might have it open (a backup or sync tool is the usual cause) and restart HeatCaller."
+        : null;
 
     public void SetEnabled(bool on)
     {
+        // Refused while held - see InUse. The Sign-ups window says why.
+        if (Store.LoadedUnreadable)
+        {
+            return;
+        }
+
         Store.Enabled = on;
         Store.Save();
         _publisher.SignupsWanted = on;
@@ -595,12 +613,35 @@ internal sealed class RelaySignupDesk
 
     // ------------------------------------------------------------ invites
 
-    /// <summary>New invites, one per address (or one with none, for somebody at the desk). Saved; the relay has them within a couple of seconds.</summary>
+    /// <summary>
+    /// New invites, one per address (or one with none, for somebody at the
+    /// desk). Saved; the relay has them within a couple of seconds. Throws
+    /// InvalidOperationException, with the reason to show, when they could
+    /// not be saved - and then none is kept, published or sent.
+    /// </summary>
     public IReadOnlyList<SignupInvite> CreateInvites(IEnumerable<(string Email, string Note)> people)
     {
+        if (Held is { } held)
+        {
+            throw new InvalidOperationException(held);
+        }
+
         var made = people.Select(p => Store.Create(_settings, p.Email, p.Note)).ToList();
 
-        Store.Save();
+        // Taken back out when they could not be saved. Kept in memory, they
+        // were emailed and published straight away, and the next launch
+        // read the file without them: every code just sent stopped working.
+        if (!Store.Save())
+        {
+            foreach (var invite in made)
+            {
+                Store.Remove(invite);
+            }
+
+            throw new InvalidOperationException("The invites couldn't be saved, so none were made or sent. "
+                + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.");
+        }
+
         Changed?.Invoke();
         return made;
     }
@@ -649,7 +690,12 @@ internal sealed class RelaySignupDesk
 
         foreach (var sent in result.Sent)
         {
-            if (Store.Get(sent.Transponder) is { } invite)
+            // Only with the code that went, and while it is still open. A
+            // batch copies every code before its first email, so an invite
+            // cancelled, or given a new code by an undo, part-way through
+            // was marked emailed - and listed as sent a code it never had.
+            if (Store.Get(sent.Transponder) is { State: SignupInviteState.Open } invite
+                && string.Equals(invite.Code, sent.Pin, StringComparison.Ordinal))
             {
                 invite.EmailedUtc = DateTime.UtcNow;
                 any = true;

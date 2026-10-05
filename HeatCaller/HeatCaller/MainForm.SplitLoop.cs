@@ -110,7 +110,9 @@ public partial class MainForm
         _splitLoop = split;
 
         // Sector lengths for the speed columns: from the split loops placed
-        // on the plan of the layout Race Control is racing on.
+        // on the plan of the layout being raced on - the Practice page's in
+        // practice (RunningTrackName). It used to be Race Control's always,
+        // so practice speeds came from another layout's sectors, or dashes.
         //
         // Worked out on the UI thread, where the layouts are changed; the
         // web server asks from its own, and gets the last answer worked out.
@@ -121,7 +123,7 @@ public partial class MainForm
                 return _sectorLengthsFeet;
             }
 
-            var name = _settings.LastRaceControlTrackName;
+            var name = RunningTrackName(_settings.LastRaceControlTrackName);
 
             _sectorLengthsFeet = string.IsNullOrWhiteSpace(name)
                 ? null
@@ -265,8 +267,20 @@ public partial class MainForm
     }
 
     /// <summary>Connects the split loop's decoder, when there is one and it isn't connected.</summary>
-    private void ConnectSplitLoop()
+    /// <param name="userChose">
+    /// True when somebody pressed Connect or Connect Split, so the I-Lap port
+    /// in the picker is one they chose. Otherwise - the line connecting by
+    /// itself, start-up connect, the split loop being switched on - only the
+    /// remembered port is used, and only when it is present: the picker falls
+    /// back to the last port listed when that one is missing, and opening a
+    /// stranger's Bluetooth port by ourselves (and saving it over the real
+    /// one) is worse than waiting. See TryStartupConnect, which does the same.
+    /// </param>
+    private void ConnectSplitLoop(bool userChose = false)
     {
+        // Whatever this go comes to, it is the one that counts now.
+        _splitWaitingForPort = false;
+
         if (!_settings.SplitLoopEnabled)
         {
             return;
@@ -284,6 +298,29 @@ public partial class MainForm
 
         if (split == DecoderConnection.ILap)
         {
+            if (!userChose)
+            {
+                var remembered = _settings.ILapPort?.Trim() ?? string.Empty;
+
+                if (remembered.Length == 0)
+                {
+                    RenderSplitStatus("Pick the I-Lap's COM port above, then click Connect Split.");
+                    return;
+                }
+
+                if (!ILapClient.AvailablePorts().Contains(remembered, StringComparer.OrdinalIgnoreCase))
+                {
+                    _splitWaitingForPort = true;
+                    RenderSplitStatus($"Waiting for the I-Lap on {remembered} - plug it in, or pick its port above and click Connect Split.");
+                    return;
+                }
+
+                // Nothing saved: this is the port already remembered.
+                _ilapClient.Connect(remembered, _settings.ILapBaud);
+                RenderSplitStatus();
+                return;
+            }
+
             if (cmbSerialPort.SelectedItem is not string port)
             {
                 RenderSplitStatus("Pick the I-Lap's COM port above, then click Connect Split.");
@@ -308,9 +345,56 @@ public partial class MainForm
         RenderSplitStatus();
     }
 
+    /// <summary>
+    /// True while an I-Lap split loop is waiting for the port it was last on
+    /// to appear - set by ConnectSplitLoop when the port isn't there, and
+    /// cleared by the next go at connecting it and by Disconnect. See
+    /// TryConnectWaitingSplitLoop.
+    /// </summary>
+    private bool _splitWaitingForPort;
+
+    /// <summary>
+    /// On the auto-connect timer's tick: connects an I-Lap split loop that
+    /// was left waiting for its port, once the port is there. It used to
+    /// only say it was waiting: an I-Lap plugged in after the line had
+    /// connected by itself was never connected, and heats ran all night
+    /// without sector times.
+    /// </summary>
+    private void TryConnectWaitingSplitLoop()
+    {
+        if (!_splitWaitingForPort
+            || !WaitingSplitLoopCanConnect(_settings.SplitLoopEnabled, OtherDecoder(SelectedDecoder), LineDecoderConnected(),
+                _settings.ILapPort, ILapClient.AvailablePorts()))
+        {
+            return;
+        }
+
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [split] {_settings.ILapPort!.Trim()} is there now - connecting the I-Lap split loop.");
+        ConnectSplitLoop();
+    }
+
+    /// <summary>
+    /// Whether an I-Lap split loop left waiting for its port may connect now:
+    /// it is still the split loop, the line is connected, and the port it was
+    /// last on is listed again. Only that port - see ConnectSplitLoop.
+    /// </summary>
+    internal static bool WaitingSplitLoopCanConnect(bool splitLoopOn, int splitDecoder, bool lineConnected, string? rememberedPort, IEnumerable<string> portsNow)
+    {
+        var remembered = rememberedPort?.Trim() ?? string.Empty;
+
+        return splitLoopOn
+               && splitDecoder == DecoderConnection.ILap
+               && lineConnected
+               && remembered.Length > 0
+               && portsNow.Contains(remembered, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Disconnects the split loop's decoder, if it is connected.</summary>
     private void DisconnectSplitLoop()
     {
+        // Disconnect sticks: no connecting by itself once its port appears.
+        _splitWaitingForPort = false;
+
         var split = OtherDecoder(SelectedDecoder);
 
         if (split == DecoderConnection.ILap)
@@ -444,6 +528,15 @@ public partial class MainForm
         return null;
     }
 
+    /// <summary>
+    /// True while Line Up's window is open. A car driven across the loops for
+    /// it is not a car out to practice: with practice set to start at the
+    /// gate, the first crossing used to start practice, and Save was then
+    /// refused as a change mid-practice - every try, until auto-start was
+    /// unticked. See MaybeAutoStartPracticeOnGatePass.
+    /// </summary>
+    private bool _lineUpOpen;
+
     /// <summary>Line Up: measures how late the split loop reads a car, with both loops at the same spot.</summary>
     private void BtnLineUp_Click(object? sender, EventArgs e)
     {
@@ -466,7 +559,19 @@ public partial class MainForm
 
         using var form = new SplitLineUpForm(_splitLoop, _profiles, _settings.SplitLoopOffsetMs, handler => LinePassSeen += handler, handler => LinePassSeen -= handler);
 
-        if (form.ShowDialog(this) != DialogResult.OK || form.OffsetMs is not { } measured)
+        DialogResult answer;
+        _lineUpOpen = true;
+
+        try
+        {
+            answer = form.ShowDialog(this);
+        }
+        finally
+        {
+            _lineUpOpen = false;
+        }
+
+        if (answer != DialogResult.OK || form.OffsetMs is not { } measured)
         {
             return;
         }

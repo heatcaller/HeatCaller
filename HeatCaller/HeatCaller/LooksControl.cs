@@ -49,6 +49,20 @@ public sealed class LooksControl : UserControl
     private readonly Action _onAppLogoChanged;
     private readonly Action _restartApp;
 
+    /// <summary>
+    /// Asked before "Use for the App" restarts: true while a race (or
+    /// practice) is under way. Set by the host (MainForm), which knows the
+    /// race state; null means "never", which is what this page assumed
+    /// before.
+    ///
+    /// The restart closes the app without the "a race is running" question
+    /// a normal close asks, so it ended a live race on the spot: the
+    /// decoder dropped and every pass until it came back was lost. While a
+    /// race runs, the look is saved for the next start instead - the same
+    /// pending change the page already shows after a look is chosen.
+    /// </summary>
+    public Func<bool>? IsRaceUnderWay { get; set; }
+
     private readonly ListBox _list = new();
     private readonly LookPreview _preview = new();
     private readonly Label _lblName = new();
@@ -863,6 +877,24 @@ public sealed class LooksControl : UserControl
         var follow = Looks.DisplayKey(_settings) == Looks.MatchApp
             ? "\n\nThe crowd screens are set to match the app, so they will change with it."
             : string.Empty;
+
+        // No restart in the middle of a race - see IsRaceUnderWay.
+        if (IsRaceUnderWay?.Invoke() == true)
+        {
+            var later = AppDialog.Show(this,
+                $"A race or practice is running, so the app won't restart now - that would end it.\n\n"
+                + $"Use \"{look.Name}\" for the app from the next time HeatCaller starts?{follow}",
+                "Race running", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (later == DialogResult.Yes)
+            {
+                SaveAppLook(look);
+                ShowSelected();
+                _lblStatus.Text = $"The app switches to \"{look.Name}\" when it next starts.";
+            }
+
+            return;
+        }
 
         var confirm = AppDialog.Show(this,
             $"Use \"{look.Name}\" for the app? The app needs to restart for this to take effect.{follow}",

@@ -459,9 +459,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     {
         // A driver's best lap of the day, per driver.
         // Ghosts left out - see WriteSummary.
+        // By the name saved with each result (the transponder only when it
+        // has none) AND the transponder: grouped by transponder alone, two
+        // drivers who used the same unit that day came out as one row under
+        // whoever owns it now; by name alone, two drivers called Chris did.
         var bests = sessions
             .SelectMany(s => s.Results.Where(r => r.FastLapMs > 0 && !GhostService.IsGhost(r.Transponder)))
-            .GroupBy(r => r.Transponder, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(r => (
+                Name: (string.IsNullOrWhiteSpace(r.DriverName) ? r.Transponder ?? string.Empty : r.DriverName).Trim().ToUpperInvariant(),
+                Transponder: (r.Transponder ?? string.Empty).Trim().ToUpperInvariant()))
             .Select(g => g.OrderBy(r => r.FastLapMs).First())
             .OrderBy(r => r.FastLapMs)
             .ToList();
@@ -574,8 +580,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         }
     }
 
+    /// <summary>
+    /// The name the race saved with the result, as Race History and the
+    /// exports show it; the transponder's live profile only for a result
+    /// saved with no name. The profile used to come first, so once a
+    /// transponder changed hands an old day's report named its new owner as
+    /// the heat winner and fastest lap (see ResultsExporter.NameFor).
+    /// </summary>
     private static string NameFor(string transponder, string fallback, ProfileStore profiles)
     {
+        if (!string.IsNullOrWhiteSpace(fallback))
+        {
+            return fallback;
+        }
+
         var profile = profiles.Get(transponder);
         if (!string.IsNullOrWhiteSpace(profile?.DriverName))
         {

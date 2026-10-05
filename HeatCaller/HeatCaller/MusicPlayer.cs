@@ -797,22 +797,62 @@ public sealed class MusicPlayer : IDisposable
             }
         }
 
-        _queueIndex++;
+        // The queue is built once a pass, but the library can change during
+        // it: a track excluded or removed on the Music page kept coming up
+        // until the pass ran out - an hour later, maybe - while the page
+        // showed it as "No" or gone. So each move goes past any entry the
+        // queue would no longer be built with.
+        var playable = PlayableIdsLocked();
 
-        if (_queueIndex >= _queue.Count)
+        while (true)
         {
-            // End of the queue - reshuffle and go round again, so a
-            // long event doesn't fall silent after one pass.
-            BuildQueueLocked();
-            _queueIndex = 0;
+            _queueIndex++;
 
-            if (_queue.Count == 0)
+            if (_queueIndex >= _queue.Count)
             {
-                return null;
+                // End of the queue - reshuffle and go round again, so a
+                // long event doesn't fall silent after one pass. Built from
+                // the library as it is now, so nothing in it needs skipping.
+                BuildQueueLocked();
+                _queueIndex = 0;
+
+                return _queue.Count == 0 ? null : _queue[0];
+            }
+
+            if (playable.Contains(_queue[_queueIndex].Id))
+            {
+                return _queue[_queueIndex];
             }
         }
+    }
 
-        return _queue[_queueIndex];
+    /// <summary>
+    /// The ids of the tracks a queue built now would hold - the same choice
+    /// BuildQueueLocked makes (theme tracks, or the library's enabled ones),
+    /// for NextInQueueLocked to tell a still-wanted entry from one excluded
+    /// or removed since the queue was built.
+    /// </summary>
+    private HashSet<string> PlayableIdsLocked()
+    {
+        // A copy, as in BuildQueueLocked: the Music page can change the
+        // list on the UI thread while this runs on the thread pool.
+        MusicTrack[] library;
+        try
+        {
+            library = Settings.Tracks.ToArray();
+        }
+        catch
+        {
+            library = Array.Empty<MusicTrack>();
+        }
+
+        var themeTracks = Settings.PlayThemeMusic == true && Theme is { } theme
+            ? theme.TracksIn(library)
+            : new List<MusicTrack>();
+
+        return (themeTracks.Count > 0 ? themeTracks : library.Where(t => t.Enabled))
+            .Select(t => t.Id)
+            .ToHashSet();
     }
 
     /// <summary>

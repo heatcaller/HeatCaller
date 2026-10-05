@@ -23,7 +23,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 ## Turn on online check-in
 
 1. On the **Club Website** page, in the **Online check-in** card, tick **Let drivers check in from their own phones**.
-2. In **Staff PIN (opens the full list):**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits."
+2. In **Staff PIN (opens the full list):**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits." Nor is one that's already a racer's personal PIN: "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another."
 3. Decide on **Include photos (drivers can be children - off unless you're sure)**. It's off by default.
 4. Check the state line under it (see [Check-in states](#check-in-states)).
 5. Click **Open Check-in Page** to see the page as drivers will.

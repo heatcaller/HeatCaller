@@ -351,10 +351,7 @@ internal static class Program
             // the one thing that cannot be trusted to open. The system box
             // has no such dependency.
             MessageBox.Show(
-                $"{ex.GetType().Name}: {ex.Message}\r\n\r\n" +
-                $"Full details were written to:\r\n{CrashLogPath}\r\n\r\n" +
-                "To send them for help: Backup & Restore page, Save Support Info.\r\n\r\n" +
-                $"{ex.StackTrace}",
+                CrashMessage(ex, CrashLogPath),
                 title, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         catch
@@ -366,4 +363,21 @@ internal static class Program
             Interlocked.Exchange(ref _crashDialogOpen, 0);
         }
     }
+
+    /// <summary>
+    /// What the crash dialog says: the error, where the full detail went,
+    /// how to send it and who to send it to, then the stack trace.
+    ///
+    /// Its own method so a test can read it without a window - the dialog
+    /// itself is the system MessageBox, which nothing can open in a test.
+    /// It used to say only "Backup &amp; Restore page, Save Support Info",
+    /// which told a club how to make the file and not where to send it; the
+    /// address is in it now (AppSupport).
+    /// </summary>
+    internal static string CrashMessage(Exception ex, string crashLogPath) =>
+        $"{ex.GetType().Name}: {ex.Message}\r\n\r\n" +
+        $"Full details were written to:\r\n{crashLogPath}\r\n\r\n" +
+        "To send them for help: Backup & Restore page, Save Support Info. " +
+        $"Then email the file to {AppSupport.Email}.\r\n\r\n" +
+        $"{ex.StackTrace}";
 }

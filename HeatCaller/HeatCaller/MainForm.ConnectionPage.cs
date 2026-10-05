@@ -145,7 +145,7 @@ public partial class MainForm
         cmbSplitLoop.SelectedIndexChanged += CmbSplitLoop_SelectedIndexChanged;
 
         btnConnectSplit.Text = "Connect Split";
-        btnConnectSplit.Click += (_, _) => ConnectSplitLoop();
+        btnConnectSplit.Click += (_, _) => ConnectSplitLoop(userChose: true);
 
         btnLineUp.Text = "Line Up...";
         btnLineUp.Click += BtnLineUp_Click;

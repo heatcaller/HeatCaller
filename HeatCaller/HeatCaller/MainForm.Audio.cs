@@ -369,10 +369,7 @@ public partial class MainForm
     /// </summary>
     private void HandleSessionAudioFinished()
     {
-        // Stopped at the flag instead (see StopSessionAudio). Music playing
-        // now was started since, by hand or by the next session - not this
-        // broadcast's to end.
-        if (!_music.IsPlaying || _settings.AudioStopMusicAfterSession)
+        if (!EndsMusicAfterRecap(_settings, _music.IsPlaying))
         {
             return;
         }
@@ -410,6 +407,23 @@ public partial class MainForm
                 break;
         }
     }
+
+    /// <summary>
+    /// Whether Music after the recap applies once a race's broadcast is over.
+    ///
+    /// Only with auto-start on for races - the end of the broadcast is only
+    /// ever raised for a race (or a demo), never practice. With it off the
+    /// Mixer greys the whole When it ends card, yet this still faded or
+    /// stopped music the club had started by hand after every recap.
+    /// </summary>
+    internal static bool EndsMusicAfterRecap(AppSettings settings, bool musicPlaying) =>
+        settings.AudioStartWithRaces
+        && musicPlaying
+
+        // Stopped at the flag instead (see StopSessionAudio). Music playing
+        // now was started since, by hand or by the next session - not this
+        // broadcast's to end.
+        && !settings.AudioStopMusicAfterSession;
 
     /// <summary>
     /// Takes down the audio that StartSessionAudio brought up.

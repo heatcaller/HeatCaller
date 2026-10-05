@@ -720,6 +720,12 @@ public sealed partial class RaceControlControl : UserControl
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
 
+        // What kind of race it was, as the Reset button takes it: put back
+        // without it, a Quick Race came back looking like any freeform race
+        // and auto-advance filed it against the next heat.
+        var wasQuick = _currentRaceIsQuick;
+        var wasRerun = _currentRaceIsRerun;
+
         // The rules the race ran under, as the Reset button takes them (see
         // CaptureRaceRulesForUndo): a format written while the session sat
         // idle must not be what the restored race finishes under.
@@ -745,6 +751,8 @@ public sealed partial class RaceControlControl : UserControl
         _previousFlag = FlagState.None;
         _currentRaceIsDemo = false;
         _currentRaceIsQuick = false;
+        _currentRaceIsRerun = false;
+        _rerunPending = false;
 
         // As the Reset button does - see there. The undo below puts it back.
         _sessionStartedAtUtc = null;
@@ -781,6 +789,8 @@ public sealed partial class RaceControlControl : UserControl
             }
 
             _sessionStartedAtUtc = sessionStart;
+            _currentRaceIsQuick = wasQuick;
+            _currentRaceIsRerun = wasRerun;
             _promptedTransponders.Clear();
             foreach (var t in prompted)
             {

@@ -10,8 +10,10 @@ namespace HeatCaller;
 /// What goes with the car: its photos, details, notes and setups, which
 /// all belong to the car, and any of the old owner's transponders fitted
 /// to it that they say go too. What stays: the races already run, filed
-/// under the driver who ran them, and the old owner's main transponder,
-/// which is their key (DriverProfile.Transponder) and never moves.
+/// under the driver who ran them - except one where a transponder that
+/// goes was timed as a car of its own, which is saved under that
+/// transponder and goes with it (Run asks first) - and the old owner's main
+/// transponder, which is their key (DriverProfile.Transponder) and never moves.
 ///
 /// The split-loop transponders fitted to it (DriverProfile.SplitTransponders)
 /// go with it to a driver without asking - they only ever tell the split
@@ -205,7 +207,9 @@ internal static class CarTransferring
                 updated.SplitTransponders.Add(entry);
             }
 
-            if (string.IsNullOrWhiteSpace(updated.CarModel))
+            // Not a retired one, which is no car to be announced in - it used
+            // to become their active car all the same.
+            if (string.IsNullOrWhiteSpace(updated.CarModel) && !carAfter.Retired)
             {
                 updated.SetActiveCar(carAfter.DisplayName);
             }
@@ -294,8 +298,45 @@ internal static class CarTransferring
         }
     }
 
-    /// <summary>Asks who it goes to, and transfers it. True when it was.</summary>
-    public static bool Run(IWin32Window owner, Car car, CarStore cars, ProfileStore profiles, UndoService undo)
+    /// <summary>
+    /// The question Run asks before the car goes, when a transponder going
+    /// with it was timed as a car of its own in races already run: those
+    /// races for each one (TransponderTransferring.AskFor), and once at the
+    /// end whether to go ahead. Null when there are none - or it goes to the
+    /// club, which no transponder goes to - and nothing needs asking.
+    /// </summary>
+    public static string? AskFor(Plan plan, string carName, string fromName, string toName, IEnumerable<SessionRecord> sessions)
+    {
+        if (plan.ToTransponder.Length == 0)
+        {
+            return null;
+        }
+
+        var all = sessions.ToList();
+        var asks = plan.Moving
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(id => TransponderTransferring.AskFor(id, fromName, toName, TransponderTransferring.RacesFiledUnder(id, all), question: string.Empty))
+            .OfType<string>()
+            .Select(ask => ask.TrimEnd())
+            .ToList();
+
+        return asks.Count == 0 ? null : string.Join("\n\n", asks) + $"\n\nTransfer {carName} anyway?";
+    }
+
+    /// <summary>
+    /// Asks who it goes to, and transfers it. True when it was.
+    ///
+    /// A transponder going with it becomes the new owner's, and a race where
+    /// it was timed as a car of its own is saved under it - so that race
+    /// counts for them from then on. This used to go ahead without a word,
+    /// with the window promising races already run stay with whoever ran
+    /// them; it now asks first (AskFor), as a transponder transferred on its
+    /// own does. <paramref name="history"/> has no default for the same
+    /// reason as TransponderTransferring.Run's.
+    /// </summary>
+    public static bool Run(IWin32Window owner, Car car, CarStore cars, ProfileStore profiles, UndoService undo,
+        SessionHistoryStore? history)
     {
         using var form = new CarTransferForm(car, profiles);
 
@@ -304,7 +345,21 @@ internal static class CarTransferring
             return false;
         }
 
-        if (Apply(new Plan(car.Id, form.ToTransponder, form.Moving), cars, profiles, undo) is { } refusal)
+        var plan = new Plan(car.Id, form.ToTransponder, form.Moving);
+
+        if (history is not null)
+        {
+            var fromName = NameOf(car.IsClubCar ? null : profiles.Get(car.OwnerTransponder), car.OwnerTransponder ?? string.Empty);
+            var toName = NameOf(form.ToTransponder.Length == 0 ? null : profiles.Get(form.ToTransponder), "the club");
+
+            if (AskFor(plan, car.DisplayName, fromName, toName, history.All) is { } ask
+                && AppDialog.Show(owner, ask, "Transfer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            {
+                return false;
+            }
+        }
+
+        if (Apply(plan, cars, profiles, undo) is { } refusal)
         {
             AppDialog.Show(owner, refusal, "Transfer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
@@ -537,12 +592,27 @@ internal sealed class CarTransferForm : Form
             return;
         }
 
-        var who = ToClub ? "the club's" : $"{NameOf(_profiles.Get(choice.Key)!)}'s";
+        var toName = ToClub ? null : NameOf(_profiles.Get(choice.Key)!);
         var going = ToClub ? 0 : goingNow ?? _lstTransponders.CheckedItems.Count;
+
+        _lblOutcome.Text = OutcomeText(_car.DisplayName, toName, going);
+    }
+
+    /// <summary>The outcome line for <paramref name="carName"/> going to <paramref name="toName"/> (null: the club), with <paramref name="going"/> transponders going too.</summary>
+    internal static string OutcomeText(string carName, string? toName, int going)
+    {
+        var who = toName is null ? "the club's" : $"{toName}'s";
         var transponders = going == 0 ? string.Empty : going == 1 ? ", and so does its transponder" : $", and so do {going} transponders";
 
-        _lblOutcome.Text = $"{_car.DisplayName} becomes {who}. Its photos, notes and setups go with it{transponders}. "
-                           + "Races already run stay with whoever ran them.";
+        // With a transponder going too, this used to say the same - but a
+        // race where it was timed as a car of its own goes with it
+        // (CarTransferring.AskFor).
+        var races = going == 0 || toName is null
+            ? "Races already run stay with whoever ran them."
+            : $"Races already run stay with whoever ran them, except any where {(going == 1 ? "that transponder was" : "one of those transponders was")} "
+              + $"timed as a car of its own: those will count for {toName}.";
+
+        return $"{carName} becomes {who}. Its photos, notes and setups go with it{transponders}. {races}";
     }
 
     private void Transfer()

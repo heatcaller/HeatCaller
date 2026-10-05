@@ -309,8 +309,13 @@ public sealed class ProfileStore
     /// <paramref name="editing"/> is the main transponder of the profile
     /// being edited (it is allowed to clash with itself), or null when the
     /// profile is new.
+    ///
+    /// <paramref name="showTransponder"/>, when given, writes each
+    /// transponder number the answer names - for the race-day manager
+    /// through the relay, which must not send a driver's whole number
+    /// (RaceDayService.ClashForPhone). Without it they are written in full.
     /// </summary>
-    public string? DescribeClash(DriverProfile candidate, string? editing)
+    public string? DescribeClash(DriverProfile candidate, string? editing, Func<string, string>? showTransponder = null)
     {
         var main = candidate.Transponder?.Trim() ?? string.Empty;
 
@@ -327,7 +332,7 @@ public sealed class ProfileStore
 
             var otherMain = other.Transponder?.Trim() ?? string.Empty;
             var theirs = other.AllTransponderIds;
-            var who = DescribeOwner(other);
+            var who = DescribeOwner(other, showTransponder);
 
             foreach (var id in mine)
             {
@@ -338,13 +343,14 @@ public sealed class ProfileStore
 
                 var isMyMain = string.Equals(id, main, StringComparison.OrdinalIgnoreCase);
                 var isTheirMain = string.Equals(id, otherMain, StringComparison.OrdinalIgnoreCase);
+                var shown = showTransponder?.Invoke(id) ?? id;
 
                 return (isMyMain, isTheirMain) switch
                 {
-                    (true, true) => $"Transponder {id} already belongs to {who}. Edit {who}'s profile instead, or change or delete it first.",
-                    (true, false) => $"Transponder {id} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
-                    (false, true) => $"Transponder {id} already belongs to {who}. A transponder can only belong to one driver.",
-                    _ => $"Transponder {id} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
+                    (true, true) => $"Transponder {shown} already belongs to {who}. Edit {who}'s profile instead, or change or delete it first.",
+                    (true, false) => $"Transponder {shown} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
+                    (false, true) => $"Transponder {shown} already belongs to {who}. A transponder can only belong to one driver.",
+                    _ => $"Transponder {shown} is already one of {who}'s transponders. Remove it from {who}'s profile first.",
                 };
             }
         }
@@ -444,9 +450,11 @@ public sealed class ProfileStore
         return null;
     }
 
-    /// <summary>The name to put in a clash message - a driver name if there is one, otherwise the transponder.</summary>
-    private static string DescribeOwner(DriverProfile profile) =>
-        string.IsNullOrWhiteSpace(profile.DriverName) ? $"the profile for {profile.Transponder}" : profile.DriverName.Trim();
+    /// <summary>The name to put in a clash message - a driver name if there is one, otherwise the transponder (written by <paramref name="showTransponder"/> when given).</summary>
+    private static string DescribeOwner(DriverProfile profile, Func<string, string>? showTransponder = null) =>
+        string.IsNullOrWhiteSpace(profile.DriverName)
+            ? $"the profile for {showTransponder?.Invoke(profile.Transponder) ?? profile.Transponder}"
+            : profile.DriverName.Trim();
 
     /// <summary>
     /// Every REAL driver. Ghost cars are excluded.
@@ -812,6 +820,19 @@ public sealed class ProfileStore
         ReferenceEquals(a, b) || ReferenceEquals(LineageOf(a), LineageOf(b));
 
     /// <summary>
+    /// The record on file now for <paramref name="driver"/>, under
+    /// <paramref name="transponder"/> - their main transponder when the undo
+    /// was taken. Null when they have been deleted since.
+    ///
+    /// Only a later version of that same driver counts, as in PutBack. A
+    /// quick photo change's undo used to check only the transponder, so
+    /// after change Sam's photo, delete Sam, add Alex on Sam's transponder,
+    /// it gave Alex Sam's old photo and retired Alex's own.
+    /// </summary>
+    public DriverProfile? CurrentVersionOf(DriverProfile driver, string transponder) =>
+        _profiles.TryGetValue(transponder, out var present) && IsSameDriver(present, driver) ? present : null;
+
+    /// <summary>
     /// Which of a deleted profile's transponders somebody else holds now,
     /// and who - or null when neither is anybody else's. Profiles in
     /// <paramref name="ignore"/> (the ones being put back with it) don't
@@ -928,25 +949,58 @@ public sealed class ProfileStore
     /// not dragged back, and a driver added to the renamed class since is
     /// not stranded under a name that is about to stop existing.
     /// </summary>
-    public void UndoRenameClass(string newName, string oldName, IReadOnlyCollection<string> leaveAlone)
+    public void UndoRenameClass(string newName, string oldName, IReadOnlyCollection<string> leaveAlone) =>
+        UndoRenameClass(newName, oldName, leaveAlone, leaveAlone);
+
+    /// <summary>
+    /// The drivers whose MAIN class is this name now - WithClassName for the
+    /// main class alone. See UndoRenameClass with two lists.
+    /// </summary>
+    public IReadOnlyList<string> WithMainClassName(string className) =>
+        _profiles.Values
+            .Where(p => string.Equals(p.ClassName?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Transponder)
+            .ToList();
+
+    /// <summary>
+    /// The drivers with this name among their OTHER classes now - WithClassName
+    /// for those alone. See UndoRenameClass with two lists.
+    /// </summary>
+    public IReadOnlyList<string> WithOtherClassName(string className) =>
+        _profiles.Values
+            .Where(p => p.Classes is { Count: > 0 } others
+                        && others.Any(c => string.Equals(c?.Trim(), className.Trim(), StringComparison.OrdinalIgnoreCase)))
+            .Select(p => p.Transponder)
+            .ToList();
+
+    /// <summary>
+    /// UndoRenameClass, judged for a driver's main class and their other
+    /// classes separately: the main class is left alone for the drivers in
+    /// <paramref name="leaveMain"/>, and the others for those in
+    /// <paramref name="leaveOther"/>.
+    ///
+    /// One list for both left a driver whose main class was renamed onto a
+    /// name they already had as another class ("Modified", also racing a
+    /// leftover "Mod", with Modified renamed to Mod) on the new name after
+    /// the undo - out of the class they were in before.
+    /// </summary>
+    public void UndoRenameClass(string newName, string oldName, IReadOnlyCollection<string> leaveMain, IReadOnlyCollection<string> leaveOther)
     {
-        var keep = leaveAlone.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keepMain = leaveMain.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keepOther = leaveOther.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var changed = false;
 
         foreach (var profile in _profiles.Values)
         {
-            if (keep.Contains(profile.Transponder))
-            {
-                continue;
-            }
-
-            if (string.Equals(profile.ClassName?.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (!keepMain.Contains(profile.Transponder)
+                && string.Equals(profile.ClassName?.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase))
             {
                 profile.ClassName = oldName;
                 changed = true;
             }
 
-            if (profile.Classes is { Count: > 0 } others
+            if (!keepOther.Contains(profile.Transponder)
+                && profile.Classes is { Count: > 0 } others
                 && others.Any(c => string.Equals(c.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase)))
             {
                 profile.Classes = others

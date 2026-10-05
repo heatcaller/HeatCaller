@@ -326,7 +326,11 @@ public sealed class TrackPositions
                 continue;
             }
 
-            var stillRacing = racing && finished?.Invoke(standing.TransponderId) != true;
+            // Never a ghost: there is no car to send a marshal to, and it
+            // only ever crosses the line - so on a plan with a split loop a
+            // running ghost was called stopped on every lap, short of a loop
+            // it never crosses.
+            var stillRacing = racing && !Ghosts.IsGhost(standing.TransponderId) && finished?.Invoke(standing.TransponderId) != true;
             var car = Place(standing.TransponderId, i + 1, seen, line.SplitAt, typical, nowMs, stillRacing);
 
             if (!car.Stopped && BestLap(standing) is var best and > 0)

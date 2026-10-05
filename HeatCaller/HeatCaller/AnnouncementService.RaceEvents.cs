@@ -24,6 +24,40 @@ public sealed partial class AnnouncementService
     /// <summary>Feed a gate/lap pass from any source.</summary>
     public void OnGatePassed(GatePassEvent gate) => HandleGatePassed(gate);
 
+    /// <summary>
+    /// A row taken off the board mid-race - a ghost switched off. Forgotten
+    /// here as well, or it stayed in the running order the calls are worked
+    /// out from, frozen on its last lap: the leader was called as lapping it
+    /// again on every lap it lost, and it could still be named in a battle,
+    /// a rivalry or a streak. The car now in front of it isn't called as
+    /// taking a lead it was simply left.
+    /// </summary>
+    public void OnStandingRemoved(string transponder)
+    {
+        lock (_voiceQueueLock)
+        {
+            _standings.Remove(transponder);
+            _lapCrossings.Remove(transponder);
+            _lappedAnnounced.Remove(transponder);
+
+            if (string.Equals(_currentLeaderTransponder, transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentLeaderTransponder = null;
+            }
+
+            lock (_streakLock)
+            {
+                _currentStreaks.Remove(transponder);
+
+                if (string.Equals(_streakLeader, transponder, StringComparison.OrdinalIgnoreCase))
+                {
+                    _streakLeader = null;
+                    _streakLeaderCount = 0;
+                }
+            }
+        }
+    }
+
     public void NotifyRaceStaging()
     {
         // A new race is being called to the grid, so whatever the last one
@@ -810,7 +844,11 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        PlaySound(SoundEffectKind.InvalidLap, ToneGenerator.PlayInvalidLapAsync, blackFlag ? "black flag buzzer" : "warning buzzer");
+        // Its own sound, as the jump start has. It used to borrow the
+        // invalid-lap buzzer - off by default, and a lap sound, so it was
+        // also held under a yellow, dropped behind a long line as too late
+        // for its lap, and cleared by a flag call.
+        PlaySound(SoundEffectKind.Warning, ToneGenerator.PlayInvalidLapAsync, blackFlag ? "black flag buzzer" : "warning buzzer");
         SpeakReminder(spokenLine);
     }
 
@@ -845,7 +883,7 @@ public sealed partial class AnnouncementService
         // qualifying split below, because an improvement in a qualifier is
         // just as much a personal best. Never for a ghost.
         if (!GhostService.IsGhost(transponderId)
-            && !(standing.FastLapMs > 0 && standing.FastLapMs == lapMs && IsRaceFastest(lapMs)))
+            && !(standing.FastLapMs > 0 && standing.FastLapMs == lapMs && IsRaceFastest(transponderId, lapMs)))
         {
             var sounds = _soundStore.Current;
             var bestCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.PersonalBest));
@@ -894,7 +932,7 @@ public sealed partial class AnnouncementService
         }
 
         // The race's fastest lap owns this moment if it's the same lap.
-        if (standing.FastLapMs > 0 && standing.FastLapMs == lapMs && IsRaceFastest(lapMs))
+        if (standing.FastLapMs > 0 && standing.FastLapMs == lapMs && IsRaceFastest(transponderId, lapMs))
         {
             return;
         }
@@ -1119,9 +1157,28 @@ public sealed partial class AnnouncementService
             .Transponder;
     }
 
-    /// <summary>True when no other tracked racer has gone quicker.</summary>
-    private bool IsRaceFastest(long lapMs) =>
-        _standings.Values.All(s => s.FastLapMs <= 0 || s.FastLapMs >= lapMs);
+    /// <summary>
+    /// True when this driver's lap is the race's fastest: no other tracked
+    /// racer has gone quicker. While real cars are racing, ghosts are left
+    /// out on both sides, as the session leaves them out of the race's
+    /// fastest lap - so a quicker ghost no longer made a real driver's
+    /// race-fastest lap speak as a personal best instead, which then
+    /// drowned out the fastest-lap call. A field of nothing but ghosts
+    /// still counts them all.
+    /// </summary>
+    private bool IsRaceFastest(string transponderId, long lapMs)
+    {
+        var realCarsRacing = _standings.Values.Any(s => !GhostService.IsGhost(s.Transponder));
+
+        if (realCarsRacing && GhostService.IsGhost(transponderId))
+        {
+            return false;
+        }
+
+        return _standings.Values
+            .Where(s => !(realCarsRacing && GhostService.IsGhost(s.Transponder)))
+            .All(s => s.FastLapMs <= 0 || s.FastLapMs >= lapMs);
+    }
 
     /// <summary>
     /// Derives this specific lap's duration from the change in cumulative

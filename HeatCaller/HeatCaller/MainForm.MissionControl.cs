@@ -24,6 +24,22 @@ public partial class MainForm
     /// <summary>Transponders already called fading in the console, by night - "2026-10-03|4385919" - so each is said once a night.</summary>
     private HashSet<string>? _fadingSaid;
 
+    /// <summary>
+    /// Since when (DateTime.UtcNow ticks) a pass counts as "heard" for the
+    /// next race's grid, or 0 before any race has been staged or finished
+    /// this session - then TransponderWatch's own window is all there is.
+    /// Any thread - see WireMissionControl.
+    ///
+    /// TransponderWatch remembers a car for twelve minutes, so a car that
+    /// ran the heat before and whose transponder died on its last lap still
+    /// counted as heard, and Mission Control said "All clear" while the Big
+    /// Screen's roll call said WAITING. This applies the roll call's rule
+    /// (RollCall.Grace): heard since the race was staged, less the grace -
+    /// and never from before the last race finished, so a pass made in
+    /// that race is not taken as proof the transponder is alive now.
+    /// </summary>
+    private long _gridHeardSinceTicks;
+
     /// <summary>Hooks the heartbeat clock. Called once, from the constructor, after the decoders exist.</summary>
     private void WireMissionControl()
     {
@@ -37,6 +53,26 @@ public partial class MainForm
             {
                 Interlocked.Exchange(ref _lastHeartbeatTicks, 0);
                 Interlocked.Exchange(ref _connectedTicks, Environment.TickCount64);
+            }
+        };
+
+        // Where the grid check starts counting from - see _gridHeardSinceTicks.
+        var previousState = _race.State;
+        _race.StateChanged += state =>
+        {
+            var wasStaged = previousState is RaceState.Staging or RaceState.Countdown;
+            previousState = state;
+
+            if (state == RaceState.Finished)
+            {
+                Interlocked.Exchange(ref _gridHeardSinceTicks, DateTime.UtcNow.Ticks);
+            }
+            else if ((state is RaceState.Staging or RaceState.Countdown) && !wasStaged)
+            {
+                // Staged (or straight to the countdown): the roll call starts
+                // now, less its grace - but not from before the last finish.
+                var staged = (DateTime.UtcNow - RollCall.Grace).Ticks;
+                Interlocked.Exchange(ref _gridHeardSinceTicks, Math.Max(staged, Interlocked.Read(ref _gridHeardSinceTicks)));
             }
         };
     }
@@ -102,7 +138,13 @@ public partial class MainForm
             if (expected.Count > 0)
             {
                 roster = expected.Select(DriverNameOf).ToList();
-                missing = expected.Where(t => _transponderWatch.Of(t) is null).Select(DriverNameOf).ToList();
+                // Heard since the grid check began, not merely within
+                // TransponderWatch's twelve minutes - see _gridHeardSinceTicks.
+                var sinceTicks = Interlocked.Read(ref _gridHeardSinceTicks);
+                missing = expected
+                    .Where(t => _transponderWatch.Of(t) is not { } sighting || sighting.LastSeenUtc.Ticks < sinceTicks)
+                    .Select(DriverNameOf)
+                    .ToList();
             }
         }
 

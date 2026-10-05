@@ -86,6 +86,26 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Whether the check-in desk and the phone judge a driver's tech in this
+    /// class (TechInspectionStore.LatestForDriver): it runs tech, it is
+    /// racing tonight when the race day names its classes, and it is the
+    /// class picked in the desk's Class: filter when one is.
+    ///
+    /// They used to ask TechIsRunFor alone, true for any class with a
+    /// checklist whether it was racing or not. A driver cleared in the one
+    /// class on tonight's race day still read as not inspected, because of
+    /// a second class that was not racing, and stayed on the desk's "not
+    /// through tech" list even with that one class picked - while Race
+    /// Control, which only judges a heat's own class, let them go.
+    /// </summary>
+    internal static bool DeskJudgesTechFor(string className, IEnumerable<RaceClass> classes, TechInspectionStore tech,
+        RaceEvent? day, string? classFilter = null) =>
+        (classFilter is null || string.Equals(className, classFilter, StringComparison.OrdinalIgnoreCase))
+        && (day is not { IsLegacy: false, ClassNames.Count: > 0 } || day.ClassNames.Contains(className, StringComparer.OrdinalIgnoreCase))
+        && classes.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase)) is { } raceClass
+        && TechIsRunFor(raceClass, tech);
+
+    /// <summary>
     /// Drivers on a round's roster who are not cleared by tech, as
     /// "name - not inspected" / "name - Failed" lines. Empty when everyone
     /// is cleared, or when the check does not apply: no round, no roster,
@@ -547,7 +567,9 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var pending = OrderedProgram()
+        var program = OrderedProgram();
+
+        var pending = program
             .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
             .ToList();
 
@@ -649,6 +671,7 @@ public sealed partial class RaceControlControl
 
         var touched = 0;
         var skipped = new List<string>();
+        var leftAlone = new List<string>();
 
         foreach (var classGroup in pending.GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase))
         {
@@ -680,42 +703,24 @@ public sealed partial class RaceControlControl
                 continue;
             }
 
-            // Heats regrouped by the round they belong to - "Q1 Heat 2"
-            // groups under "Q1", a hand-made "Heat 2" under the blank
-            // prefix - so the per-round rotation survives the re-seed.
-            var groups = classGroup
-                .GroupBy(r =>
-                {
-                    var cut = r.RoundLabel.IndexOf("Heat", StringComparison.OrdinalIgnoreCase);
-                    return cut < 0 ? r.RoundLabel : r.RoundLabel[..cut].Trim();
-                })
+            var classDayRounds = program
+                .Where(r => string.Equals(r.ClassName, classGroup.Key, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            var groupIndex = 0;
+            var dealt = RedealRemainingHeats(classDayRounds, roster);
 
-            foreach (var group in groups)
+            foreach (var heat in classGroup)
             {
-                var heats = group.ToList();
-                var heatSize = (int)Math.Ceiling(roster.Count / (double)heats.Count);
-                var shift = roster.Count == 0 ? 0 : groupIndex * heatSize % roster.Count;
-                var rotated = roster.Skip(shift).Concat(roster.Take(shift)).ToList();
-
-                var buckets = Enumerable.Range(0, heats.Count).Select(_ => new List<string>()).ToList();
-
-                for (var i = 0; i < rotated.Count; i++)
+                if (!dealt.TryGetValue(heat.Id, out var given))
                 {
-                    buckets[i % heats.Count].Add(rotated[i]);
+                    leftAlone.Add($"{heat.ClassName} {heat.RoundLabel}");
+                    continue;
                 }
 
-                for (var i = 0; i < heats.Count; i++)
-                {
-                    heats[i].AssignedTransponders = buckets[i];
-                    _rounds.Update(heats[i]);
-                    after[heats[i].Id] = buckets[i].ToList();
-                    touched++;
-                }
-
-                groupIndex++;
+                heat.AssignedTransponders = given;
+                _rounds.Update(heat);
+                after[heat.Id] = given.ToList();
+                touched++;
             }
         }
 
@@ -726,8 +731,93 @@ public sealed partial class RaceControlControl
             note += $" Skipped {string.Join(", ", skipped)} - nobody checked in.";
         }
 
+        if (leftAlone.Count > 0)
+        {
+            note += $" Left {string.Join(", ", leftAlone)} as before - everyone checked in has already raced that round.";
+        }
+
         StatusMessage?.Invoke(note);
         UpdateNextUpBar();
+    }
+
+    /// <summary>
+    /// The rosters Redo Remaining Heats deals one class's not-yet-run
+    /// qualifiers, by round id. <paramref name="classDayRounds"/> is the
+    /// class's rounds on today's program, recorded ones included, and
+    /// <paramref name="roster"/> who is checked in to race it. A heat left
+    /// out of the answer keeps the roster it has. Pure, so the tests can
+    /// hold it to what it promises without a race day.
+    /// </summary>
+    internal static Dictionary<string, List<string>> RedealRemainingHeats(
+        IReadOnlyList<RoundDefinition> classDayRounds, IReadOnlyList<string> roster)
+    {
+        var dealt = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        // Heats regrouped by the qualifying round they belong to, read the
+        // way Move Drivers Between Heats reads it ("Q1 Heat 2" and "Race 1
+        // Heat 2" are round 1, a one-round night's "Heat 2" the one round),
+        // so the per-round rotation survives the re-seed. A heat that
+        // belongs to no round - one added by hand beside numbered rounds -
+        // groups by the text before "Heat", as every heat used to.
+        var groups = classDayRounds
+            .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            .GroupBy(r =>
+            {
+                if (HeatBalanceForm.RoundKeyFor(r, classDayRounds) is { } round)
+                {
+                    return (Round: (string?)round, Label: string.Empty);
+                }
+
+                var cut = r.RoundLabel.IndexOf("Heat", StringComparison.OrdinalIgnoreCase);
+                return (Round: (string?)null, Label: cut < 0 ? r.RoundLabel : r.RoundLabel[..cut].Trim());
+            })
+            .ToList();
+
+        var groupIndex = 0;
+
+        foreach (var group in groups)
+        {
+            var heats = group.ToList();
+            var pool = roster;
+            var round = groupIndex++;
+
+            if (group.Key.Round is { } key)
+            {
+                // Not anyone who has already raced this round. This used to
+                // deal the whole class into the round's unrun heats, so a
+                // Redo after Q2 Heat 1 had run put its eight drivers into
+                // Q2 Heat 2 as well - a second Q2 heat that counted.
+                var raced = classDayRounds
+                    .Where(r => r.Kind == RoundKind.Qualifier && r.IsRecorded
+                                && HeatBalanceForm.RoundKeyFor(r, classDayRounds) == key)
+                    .SelectMany(r => r.AssignedTransponders)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                pool = roster.Where(t => !raced.Contains(t)).ToList();
+
+                // Dealt by its own round number, as the build deals it. It
+                // used to be a plain deal by its place among the rounds left,
+                // which gave an evenly split class Q1's groups again in Q2
+                // and Q3.
+                round = Math.Max(0, (RaceProgramControl.QualifyingRoundNumber(heats[0], classDayRounds) ?? 1) - 1);
+            }
+
+            // Everyone checked in has raced this round already: its heats
+            // keep the rosters they have.
+            if (pool.Count == 0)
+            {
+                continue;
+            }
+
+            var buckets = RaceProgramControl.DealQualifyingHeatsInto(pool, heats.Count, round);
+
+            for (var i = 0; i < heats.Count; i++)
+            {
+                dealt[heats[i].Id] = buckets[i];
+            }
+        }
+
+        return dealt;
     }
 
     /// <summary>

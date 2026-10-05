@@ -164,6 +164,12 @@ public sealed class RaceJournal
         /// </summary>
         public long QualifyingZeroMs { get; set; } = -1;
 
+        /// <summary>
+        /// See RacerStanding.StartLapCredited. False in a journal written
+        /// before this was stored, which is what it was treated as then.
+        /// </summary>
+        public bool StartLapCredited { get; set; }
+
         public List<long> LapTimesMs { get; set; } = new();
         public List<int> StreakAtLap { get; set; } = new();
 
@@ -253,6 +259,16 @@ public sealed class RaceJournal
         public bool IsDemo { get; set; }
 
         /// <summary>
+        /// A re-run of a round already recorded (see
+        /// RaceControlControl.MarkNextStageAsRerun). It races with no round
+        /// and the recorded heat's own name, so nothing else in here says so -
+        /// and restored as any freeform race, auto-advance filed it against
+        /// the same drivers' next heat at the flag. False in a journal written
+        /// before this was stored, which is what happened then.
+        /// </summary>
+        public bool IsRerun { get; set; }
+
+        /// <summary>
         /// Practice is no longer written at all - see Record. Kept so a
         /// journal a practice left behind before that can be recognised and
         /// passed over rather than offered back as a race.
@@ -312,13 +328,15 @@ public sealed class RaceJournal
     /// <param name="force">Used for flags and corrections, which are rare and worth writing immediately.</param>
     /// <param name="roundId">The round the race is being run for, or null when none is picked.</param>
     /// <param name="raceLabel">The race name typed on Race Control, or null to leave it unrecorded.</param>
+    /// <param name="isRerun">The race is a re-run of a round already recorded - see Entry.IsRerun.</param>
     public void Record(
         RaceControlSession race,
         DateTime? sessionStartedAtUtc,
         string trackLayoutName,
         bool force = false,
         string? roundId = null,
-        string? raceLabel = null)
+        string? raceLabel = null,
+        bool isRerun = false)
     {
         // Nothing to protect: an idle session, or a rehearsal.
         //
@@ -401,6 +419,7 @@ public sealed class RaceJournal
                 RoundId = roundId,
                 RaceLabel = raceLabel,
                 IsDemo = race.IsDemoMode,
+                IsRerun = isRerun,
                 IsPractice = race.IsPracticeMode,
                 StartType = race.StartType,
                 StaggerClockMode = race.StaggerClockMode,
@@ -433,6 +452,7 @@ public sealed class RaceJournal
                     LapsLed = s.LapsLed,
                     StartPosition = s.StartPosition,
                     QualifyingZeroMs = s.QualifyingZeroMs,
+                    StartLapCredited = s.StartLapCredited,
                     LapTimesMs = s.LapTimesMs.ToList(),
                     StreakAtLap = s.StreakAtLap.ToList(),
                     SectorsAtLap = s.SectorsAtLap.ToList(),
@@ -584,6 +604,7 @@ public sealed class RaceJournal
         }
 
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var swapping = false;
         var swapped = false;
 
         try
@@ -615,14 +636,11 @@ public sealed class RaceJournal
                     return;
                 }
 
-                if (File.Exists(path))
-                {
-                    File.Replace(temp, path, destinationBackupFileName: null);
-                }
-                else
-                {
-                    File.Move(temp, path);
-                }
+                // SafeFile's own swap, so a failed one that took the old
+                // journal away moves this one into its place rather than
+                // deleting the only copy of the race below.
+                swapping = true;
+                SafeFile.SwapIn(temp, path);
 
                 swapped = true;
             });
@@ -632,7 +650,9 @@ public sealed class RaceJournal
             // Falls through to the tidy-up below and reports a failure.
         }
 
-        if (!swapped)
+        // Not when the swap left no journal at all: the temp file is then
+        // the only copy of the race (see SafeFile.WriteAtomically).
+        if (!swapped && !(swapping && !File.Exists(path)))
         {
             try
             {
@@ -984,6 +1004,7 @@ public sealed class RaceJournal
                 LapsLed = s.LapsLed,
                 StartPosition = s.StartPosition,
                 QualifyingZeroMs = s.QualifyingZeroMs,
+                StartLapCredited = s.StartLapCredited,
             };
 
             standing.LapTimesMs.AddRange(s.LapTimesMs);

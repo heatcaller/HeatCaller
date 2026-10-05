@@ -1092,6 +1092,16 @@ public sealed class ThemesControl : UserControl
             ? "\n\nWhile this PC uses the HeatCaller voice the announcer says the standard lines, so these recordings play once you switch to your own key or the Windows voice."
             : string.Empty;
 
+        // Re-record all asks ElevenLabs for new takes (see
+        // RecordVoiceLineAsync), but the HeatCaller voice's relay keeps one
+        // take of each line and hands that back - so say so before anyone
+        // expects a different one.
+        if (rerecordAll && voice.EffectiveEngine == VoiceEngine.HeatCaller)
+        {
+            heatCallerNote += " The HeatCaller voice keeps one take of each line, so re-recording with it brings back the same takes. "
+                + "For new ones, record with your own ElevenLabs key.";
+        }
+
         if (AppDialog.Show(this,
                 $"Record {toRecord.Count} lines for \"{theme.Name}\" with {voiceName}? That's about {characters:N0} characters, once.{heatCallerNote}",
                 "Record voice lines", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -1113,7 +1123,11 @@ public sealed class ThemesControl : UserControl
         // record straight over them, destroying takes that were paid for.
         // Instead the run stops at the next line, and the old takes go back
         // once it has (see finally).
-        IReadOnlyList<StingerLibrary.Held> previousTakes = Array.Empty<StingerLibrary.Held>();
+        var previousTakes = new List<StingerLibrary.Held>();
+
+        // The old take of the line being recorded right now, set aside just
+        // before it is rendered - see the loop below.
+        IReadOnlyList<StingerLibrary.Held> heldNow = Array.Empty<StingerLibrary.Held>();
         var recordingDone = false;
         var undoneWhileRecording = false;
 
@@ -1121,7 +1135,8 @@ public sealed class ThemesControl : UserControl
         {
             if (rerecordAll)
             {
-                // Out of the way first - a recorded line would otherwise be
+                // Each old take is moved out of the way just before its line
+                // is rendered (below) - a recorded line would otherwise be
                 // handed straight back instead of rendered again.
                 //
                 // Moved aside rather than deleted, so a re-record that comes
@@ -1140,32 +1155,74 @@ public sealed class ThemesControl : UserControl
                     StingerLibrary.Shared.PutBack(previousTakes, replaceNewer: true);
                     themeStore.NotifyRestored(liveSettingsRestored: false);
                 });
-
-                previousTakes = StingerLibrary.Shared.DeleteForUndo(toRecord);
             }
 
             var ok = 0;
             for (var i = 0; i < toRecord.Count && !undoneWhileRecording; i++)
             {
                 _lblStatus.Text = $"Recording voice line {i + 1} of {toRecord.Count} for \"{theme.Name}\"...";
-                var audio = await Announcer.RecordVoiceLineAsync(toRecord[i], theme.Voice.Stability, theme.Voice.Style);
+
+                // One line at a time, not every old take up front: setting
+                // them all aside first meant a run where nothing rendered
+                // (offline, out of characters) left every line with no
+                // recording at all, and only Undo brought them back.
+                if (rerecordAll)
+                {
+                    heldNow = StingerLibrary.Shared.DeleteForUndo(new[] { toRecord[i] });
+                    previousTakes.AddRange(heldNow);
+                }
+
+                var audio = await Announcer.RecordVoiceLineAsync(toRecord[i], theme.Voice.Stability, theme.Voice.Style, fresh: rerecordAll);
                 if (audio is not null && !undoneWhileRecording)
                 {
                     StingerLibrary.Shared.Save(toRecord[i], audio, voiceName, theme.Name);
-                    ok++;
+
+                    if (StingerLibrary.Shared.Has(toRecord[i]))
+                    {
+                        ok++;
+                        heldNow = Array.Empty<StingerLibrary.Held>();
+                    }
                 }
+
+                // Not rendered, or the new take couldn't be stored: the old
+                // take goes straight back, so a failed line sounds as it did.
+                // Not after an undo pressed mid-run - finally puts every old
+                // take back then.
+                if (heldNow.Count > 0 && !undoneWhileRecording)
+                {
+                    PutBackHeldTakes(heldNow, previousTakes);
+                }
+
+                heldNow = Array.Empty<StingerLibrary.Held>();
             }
 
             RefreshCards();
             _lblStatus.Text = ok == toRecord.Count
                 ? $"Recorded {ok} voice lines for \"{theme.Name}\"."
-                : $"Recorded {ok} of {toRecord.Count} voice lines for \"{theme.Name}\" - the rest couldn't be rendered with ElevenLabs. Check Voice Settings, then record the missing ones.";
+                : $"Recorded {ok} of {toRecord.Count} voice lines for \"{theme.Name}\" - the rest couldn't be rendered with ElevenLabs"
+                    + (rerecordAll ? " and kept their previous recordings" : string.Empty)
+                    + ". Check Voice Settings, then record the missing ones.";
         }
         catch (Exception ex)
         {
             // Run from a menu item's async handler - an exception getting out
             // would take the app down.
             System.Diagnostics.Debug.WriteLine($"[voice lines] {ex}");
+
+            // The line that was being recorded when it stopped gets its old
+            // take back, as a line that failed to render does above.
+            if (heldNow.Count > 0 && !undoneWhileRecording)
+            {
+                try
+                {
+                    PutBackHeldTakes(heldNow, previousTakes);
+                }
+                catch (Exception putBackEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[voice lines] put back: {putBackEx}");
+                }
+            }
+
             if (!IsDisposed)
             {
                 RefreshCards();
@@ -1199,6 +1256,17 @@ public sealed class ThemesControl : UserControl
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Puts old takes set aside by a re-record back over their lines, and
+    /// takes them off the list the re-record's Undo puts back - they are
+    /// back already, and the undo must not move them a second time.
+    /// </summary>
+    private void PutBackHeldTakes(IReadOnlyList<StingerLibrary.Held> held, List<StingerLibrary.Held> previousTakes)
+    {
+        StingerLibrary.Shared.PutBack(held, replaceNewer: true);
+        previousTakes.RemoveAll(h => held.Contains(h));
     }
 
     private void DeleteTheme(Theme theme)

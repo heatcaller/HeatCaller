@@ -835,7 +835,7 @@ public partial class MainForm : Form
         // time round.
         _sessionHistory.SessionAdded += record =>
         {
-            PublishSessionToRelay(record);
+            PublishSessionToRelay(record, firstPublish: true);
             PublishResultsIndexFor(record);
             PublishStandingsToRelay();
 
@@ -1358,6 +1358,9 @@ public partial class MainForm : Form
             // An I-Lap waited for at start-up, whose port has not appeared
             // yet - see TryStartupConnect.
             TryStartupConnect(firstTry: false);
+
+            // And an I-Lap split loop waiting for its port the same way.
+            TryConnectWaitingSplitLoop();
         };
         _decoderAutoConnectRetryTimer.Start();
         chkAutoConnect.Checked = _settings.DirectDecoderAutoConnect; // fires CheckedChanged, which connects if already in EasyLap mode

@@ -104,6 +104,15 @@ public sealed class RelayPublisher : IDisposable
     /// <summary>The exceptions to RelayResultsFromUtc. Read and written under its own lock. See RelayResultsIndex.Ledger.</summary>
     private readonly RelayResultsIndex.Ledger _ledger = RelayResultsIndex.Ledger.Load();
     private readonly object _ledgerGate = new();
+
+    /// <summary>
+    /// The thread this was made on - the UI thread, which settings belong
+    /// to (see DeletePublishedAsync). The worker learns when a result has
+    /// reached the relay, and the window that moves with it is a setting,
+    /// so that note is posted here rather than written from the worker.
+    /// Null only where there is no such thread; the note is then made inline.
+    /// </summary>
+    private readonly SynchronizationContext? _settingsThread;
     private readonly ManualResetEventSlim _wake = new(false);
     private readonly CancellationTokenSource _stopping = new();
     private readonly Thread _worker;
@@ -153,6 +162,11 @@ public sealed class RelayPublisher : IDisposable
     {
         _settings = settings;
         _target = ReadTarget(settings);
+        _settingsThread = SynchronizationContext.Current;
+
+        // A ledger from before it recorded its relay describes the one in
+        // use: until now the window was cleared whenever that changed.
+        AdoptLedger(_target);
 
         // A timeout, not the default of 100 seconds. A socket that hangs
         // must not hold the queue for a minute and a half.
@@ -817,13 +831,21 @@ public sealed class RelayPublisher : IDisposable
         {
             ForgetManageAnswered();
 
-            // A different relay, or a different club on it, has been given
-            // nothing by this laptop. The results index must say so, or it
-            // would promise the new relay a history that only the old one
-            // ever held.
-            _settings.RelayResultsFromUtc = null;
-            _settings.Save();
-            ForgetLedger();
+            // The results window and ledger are NOT cleared here any more.
+            // "previous" is only the last target this laptop held, which
+            // can be the empty one a restored backup is held back as, or a
+            // club id typed wrong and put right a moment later - and either
+            // read as a different relay, so confirming a restored backup, or
+            // fixing a typo, wiped the window and the next index dropped
+            // every earlier race day of the season. The ledger records the
+            // relay and club it describes instead, and starts again only
+            // once a different one has actually taken a result - see
+            // NoteResultDelivered. Until then ResultIsOnRelay lists nothing
+            // for a relay that is not the ledger's.
+            //
+            // A ledger from before that was recorded describes whatever was
+            // in use before this save, which the old clearing guaranteed.
+            AdoptLedger(previous);
         }
 
         // A lockout said by the relay or club this laptop may just have
@@ -870,13 +892,26 @@ public sealed class RelayPublisher : IDisposable
         // rather than only at the call sites: one refusal in one place is
         // checkable, five scattered ones are not. The relay withholds it
         // too - both ends have to agree before a name is public.
+        //
+        // Replaced, not dropped. Dropping it left the last roster sent while
+        // the box was ticked on the relay for good - every name, class and
+        // check-in still served while the laptop said the roster was off.
+        // An empty roster in its place takes it down, the way the check-in
+        // channel withdraws itself (RelayDocuments.CheckIn).
         if (channel == RelayChannel.Roster && !_settings.RelayPublishRoster)
         {
-            return;
+            json = WithdrawnRoster;
         }
 
         Enqueue(NameOf(channel), null, json);
     }
+
+    /// <summary>
+    /// The roster sent while the club has not chosen to publish it: the
+    /// same shape as a real one (MainForm.PublishRosterToRelay), with nobody
+    /// in it. What replaces a roster published before the box was unticked.
+    /// </summary>
+    internal const string WithdrawnRoster = "{\"checkedIn\":0,\"total\":0,\"drivers\":[]}";
 
     /// <summary>
     /// Queues one year of the results index - what is in the results
@@ -900,7 +935,7 @@ public sealed class RelayPublisher : IDisposable
 
     /// <summary>Queues one finished session's results. These are never dropped for being superseded.</summary>
     /// <param name="startedUtc">When that session was raced, so the results index knows how far back the relay has been given. See NoteResultsWindow.</param>
-    /// <param name="correction">The session has been corrected since it was saved. See RelayResultsIndex.Ledger.NoteWithheld.</param>
+    /// <param name="correction">The relay may already hold a copy: corrected since it was saved, or sent before (RelayResultsIndex.MayAlreadyBeOnRelay). See RelayResultsIndex.Ledger.NoteWithheld.</param>
     public void PublishResult(string sessionId, string json, DateTime startedUtc, bool correction = false)
     {
         var id = SafeItemId(sessionId);
@@ -910,8 +945,24 @@ public sealed class RelayPublisher : IDisposable
             return;
         }
 
-        NoteResultsWindow(sessionId, startedUtc, Enqueue("results", id, json), correction);
+        var note = new ResultNote(sessionId, startedUtc, correction);
+
+        // Queued and noted as owed under the ledger's lock, so the worker
+        // cannot take it and note it delivered in between - which would
+        // leave it owed after it had gone, and sent once more at the next
+        // start for nothing. Enqueue only takes _gate inside, and nothing
+        // takes _ledgerGate while holding _gate, so this cannot deadlock.
+        lock (_ledgerGate)
+        {
+            NoteResultsWindow(note, Enqueue("results", id, json, note));
+        }
     }
+
+    /// <summary>
+    /// A queued result, as the results index has to know it once the relay
+    /// has answered for it. See NoteResultDelivered and NoteResultRefused.
+    /// </summary>
+    private sealed record ResultNote(string SessionId, DateTime StartedUtc, bool Correction);
 
     /// <summary>
     /// Whether the relay was given this session's result, for the results
@@ -920,13 +971,23 @@ public sealed class RelayPublisher : IDisposable
     /// </summary>
     internal bool ResultIsOnRelay(string sessionId, DateTime startedUtc)
     {
+        var target = _target;
+
         lock (_ledgerGate)
         {
-            return _ledger.Listed(sessionId, startedUtc, _settings.RelayResultsFromUtc);
+            // Nothing, to a relay or club the ledger does not describe: it
+            // has been given nothing the ledger knows of. Not cleared for
+            // that, though - see SettingsChanged. No relay at all (not set
+            // up, or a restored one not yet confirmed) publishes nothing,
+            // so the ledger is answered as it stands; answering "nothing"
+            // made every year's index look changed the moment it was
+            // confirmed, and all of them went at once.
+            return (!target.Configured || _ledger.BelongsTo(target.Root, target.Club))
+                   && _ledger.Listed(sessionId, startedUtc, _settings.RelayResultsFromUtc);
         }
     }
 
-    /// <summary>Whether a correction to this session could not be sent, so the relay still has the old result. See RelayResultsIndex.Ledger.Owed.</summary>
+    /// <summary>Whether the relay has not yet taken this session's result as it now stands - queued and not delivered, or a correction that could not be sent. See RelayResultsIndex.Ledger.Owed.</summary>
     internal bool ResultIsOwed(string sessionId)
     {
         lock (_ledgerGate)
@@ -936,7 +997,8 @@ public sealed class RelayPublisher : IDisposable
     }
 
     /// <summary>
-    /// Records whether this session's result went, for the results index.
+    /// Records whether this session's result is on its way, for the results
+    /// index.
     ///
     /// HERE rather than at the call site, because here is where it is known
     /// whether the session is going anywhere at all. Enqueue drops silently
@@ -947,38 +1009,21 @@ public sealed class RelayPublisher : IDisposable
     /// every past race night, each full of "that result is not on the relay
     /// any more".
     ///
-    /// The window opens at the first session sent and is never moved after
-    /// that; what does not fit it is kept in the ledger instead. It used to
-    /// be widened back to any older session re-sent, which claimed every
-    /// session in between, and nothing recorded one withheld inside it -
-    /// publishing unticked for a few weeks and ticked again put those weeks
-    /// in the archive with no results behind them. Nothing clears either
-    /// but leaving this relay behind, or the club's published data being
-    /// deleted - see SettingsChanged and DeletePublishedAsync.
+    /// Queued is not sent. A queued result is only noted as owed, on disk,
+    /// and the window and ledger move when the relay takes it - see
+    /// NoteResultDelivered. They used to move here, so a night of results
+    /// queued while the relay was unreachable, then lost with the queue at
+    /// shutdown, was recorded as on the relay for good.
     /// </summary>
-    private void NoteResultsWindow(string sessionId, DateTime startedUtc, bool queued, bool correction)
+    private void NoteResultsWindow(ResultNote note, bool queued)
     {
         try
         {
             lock (_ledgerGate)
             {
-                var from = _settings.RelayResultsFromUtc;
-                bool changed;
-
-                if (queued)
-                {
-                    var now = _ledger.NoteSent(sessionId, startedUtc, from, out changed);
-
-                    if (now != from)
-                    {
-                        _settings.RelayResultsFromUtc = now;
-                        _settings.Save();
-                    }
-                }
-                else
-                {
-                    changed = _ledger.NoteWithheld(sessionId, startedUtc, from, correction);
-                }
+                var changed = queued
+                    ? _ledger.Owed.Add(note.SessionId)
+                    : _ledger.NoteWithheld(note.SessionId, note.StartedUtc, _settings.RelayResultsFromUtc, note.Correction);
 
                 if (changed)
                 {
@@ -990,6 +1035,155 @@ public sealed class RelayPublisher : IDisposable
         {
             // Like Enqueue: nothing here may throw into the race path. The
             // ledger's own write reports itself through SafeFile.
+        }
+    }
+
+    /// <summary>
+    /// The relay has taken a result - or holds a newer copy of it, which
+    /// is the same for the index. Posted from the worker to the settings
+    /// thread (OnSettingsThread), as it moves the window.
+    ///
+    /// The window opens at the first result taken and is never moved after
+    /// that; what does not fit it is kept in the ledger instead. It used to
+    /// be widened back to any older session re-sent, which claimed every
+    /// session in between, and nothing recorded one withheld inside it -
+    /// publishing unticked for a few weeks and ticked again put those weeks
+    /// in the archive with no results behind them.
+    ///
+    /// Nothing clears the window but a DIFFERENT relay or club taking a
+    /// result, or the club's published data being deleted (see
+    /// DeletePublishedAsync). That is decided here, by what actually took
+    /// the result, and not when settings are saved: a restored backup not
+    /// yet confirmed, or a club id typed wrong for a moment, never takes
+    /// anything - see SettingsChanged.
+    /// </summary>
+    /// <param name="target">The relay and club the result was sent to.</param>
+    private void NoteResultDelivered(ResultNote note, RelayTarget target)
+    {
+        try
+        {
+            lock (_ledgerGate)
+            {
+                var from = _settings.RelayResultsFromUtc;
+                bool changed;
+
+                if (!_ledger.BelongsTo(target.Root, target.Club))
+                {
+                    // A different relay, or a different club on it, has been
+                    // given nothing else by this laptop. The results index
+                    // must say so, or it would promise the new relay a
+                    // history that only the old one ever held.
+                    _ledger.MoveTo(target.Root, target.Club);
+                    from = null;
+                    changed = true;
+                }
+                else
+                {
+                    changed = _ledger.Adopt(target.Root, target.Club);
+                }
+
+                var now = _ledger.NoteSent(note.SessionId, note.StartedUtc, from, out var noted);
+                changed |= noted;
+
+                if (now != _settings.RelayResultsFromUtc)
+                {
+                    _settings.RelayResultsFromUtc = now;
+                    _settings.Save();
+                }
+
+                if (changed)
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // Nothing here may throw into the UI thread it is posted to. The
+            // ledger's own write reports itself through SafeFile; one not
+            // written stays owed, and is sent again at the next start.
+        }
+    }
+
+    /// <summary>
+    /// The relay refused a result outright (400 or 413) - it will never
+    /// take it as it is, so it is no longer owed, and the index treats it
+    /// as one that could not be queued. Posted from the worker, as
+    /// NoteResultDelivered is.
+    /// </summary>
+    private void NoteResultRefused(ResultNote note)
+    {
+        try
+        {
+            lock (_ledgerGate)
+            {
+                // NoteWithheld puts a correction back in Owed - the relay
+                // still has the uncorrected copy - as it does when one is
+                // too big to queue at all.
+                var changed = _ledger.Owed.Remove(note.SessionId);
+                changed |= _ledger.NoteWithheld(note.SessionId, note.StartedUtc, _settings.RelayResultsFromUtc, note.Correction);
+
+                if (changed)
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // As NoteResultDelivered.
+        }
+    }
+
+    /// <summary>
+    /// Runs a note from the worker on the thread settings belong to - see
+    /// _settingsThread. Posted, never waited for: the worker must not stall
+    /// on a UI thread that is busy. Never throws.
+    /// </summary>
+    private void OnSettingsThread(Action note)
+    {
+        if (_settingsThread is null)
+        {
+            note();
+            return;
+        }
+
+        try
+        {
+            _settingsThread.Post(_ => note(), null);
+        }
+        catch
+        {
+            // The window has gone - shutting down. Not noted, so the result
+            // stays owed and is sent again at the next start; nothing lost.
+        }
+    }
+
+    /// <summary>
+    /// Records which relay and club the ledger describes, when it has never
+    /// said - a ledger from before it recorded that. Does nothing for a
+    /// target that is not set up. Never throws.
+    /// </summary>
+    private void AdoptLedger(RelayTarget target)
+    {
+        if (!target.Configured)
+        {
+            return;
+        }
+
+        try
+        {
+            lock (_ledgerGate)
+            {
+                if (_ledger.Adopt(target.Root, target.Club))
+                {
+                    _ledger.Save();
+                }
+            }
+        }
+        catch
+        {
+            // Adopted in memory, written with the ledger's next change.
         }
     }
 
@@ -1258,10 +1452,12 @@ public sealed class RelayPublisher : IDisposable
     // ---------------------------------------------------------------- queue
 
     /// <param name="Reissued">Already sent once with a fresh seq after the relay said it held a newer one. See Drain.</param>
-    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false);
+    /// <param name="Result">A session's result, for the results index once the relay has answered for it; null for anything else. See PublishResult.</param>
+    private sealed record Pending(string Channel, string? ItemId, string Json, long Seq, bool Reissued = false, ResultNote? Result = null);
 
+    /// <param name="result">For a session's result, what the worker notes for the results index once the relay answers. See Pending.</param>
     /// <returns>Whether it was queued - false when it was dropped, which PublishResult has to know. See NoteResultsWindow.</returns>
-    private bool Enqueue(string channel, string? itemId, string json)
+    private bool Enqueue(string channel, string? itemId, string json, ResultNote? result = null)
     {
         try
         {
@@ -1284,7 +1480,7 @@ public sealed class RelayPublisher : IDisposable
 
             lock (_gate)
             {
-                var item = new Pending(channel, itemId, json, NextSeq());
+                var item = new Pending(channel, itemId, json, NextSeq(), Result: result);
 
                 if (itemId is null)
                 {
@@ -1571,15 +1767,35 @@ public sealed class RelayPublisher : IDisposable
 
         if (result is not null)
         {
+            // Where it is going, for the results index (NoteResultDelivered):
+            // read here, as Send reads it, so a save landing mid-send is at
+            // worst noted against the relay the save just left - the one
+            // Send most likely used.
+            var target = _target;
+
             switch (Send(result, token, out var heldSeq))
             {
                 case SendOutcome.Sent:
                     CompleteResult(result);
                     Succeeded();
+
+                    // Only now is it on the relay - see NoteResultsWindow.
+                    if (result.Result is { } delivered)
+                    {
+                        OnSettingsThread(() => NoteResultDelivered(delivered, target));
+                    }
+
                     break;
 
                 case SendOutcome.Superseded:
                     Succeeded();
+
+                    // The relay holds this session's result - a newer copy
+                    // of it - so for the index it is there either way.
+                    if (result.Result is { } held)
+                    {
+                        OnSettingsThread(() => NoteResultDelivered(held, target));
+                    }
 
                     // Sent again under a number above the relay's, once. A
                     // result the relay says it has "a newer copy of" is a
@@ -1614,6 +1830,11 @@ public sealed class RelayPublisher : IDisposable
                     lock (_gate)
                     {
                         _dropped++;
+                    }
+
+                    if (result.Result is { } refused)
+                    {
+                        OnSettingsThread(() => NoteResultRefused(refused));
                     }
 
                     break;
@@ -2837,6 +3058,7 @@ public sealed class RelayPublisher : IDisposable
                         => "The relay is an older build that cannot take this. Redeploy it.",
                     404 => $"The relay has no club called \"{target.Club}\". Check the club id.",
                     413 => "The relay refused the payload as too large.",
+                    507 => $"The relay is out of room for \"{item.Channel}\" (HTTP 507).",
                     _ => $"The relay answered HTTP {code}.",
                 };
             }
@@ -2844,7 +3066,13 @@ public sealed class RelayPublisher : IDisposable
             // 401 and 403 are retried on purpose: they are what a
             // mistyped token looks like, and the queue should drain the
             // moment it is corrected rather than having been thrown away.
-            var outcome = code is 400 or 413 || unknownChannel ? SendOutcome.Rejected : SendOutcome.Retry;
+            //
+            // A 507 for a year of the results index is final too: the relay
+            // refuses an older year rather than evict a newer one to fit it,
+            // and asking again cannot change that. Retried, it sat at the
+            // head of the queue and held every result behind it for good.
+            var indexRefused = code == 507 && item.ItemId is not null && item.Channel == RelayResultsIndex.Channel;
+            var outcome = code is 400 or 413 || unknownChannel || indexRefused ? SendOutcome.Rejected : SendOutcome.Retry;
 
             if (isSignup && outcome == SendOutcome.Rejected)
             {

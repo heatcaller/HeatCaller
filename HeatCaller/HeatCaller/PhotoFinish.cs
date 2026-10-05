@@ -61,7 +61,10 @@ public sealed class PhotoFinish
     private DateTime _lastPollUtc = DateTime.MinValue;
 
     /// <summary>Where shots are kept: a folder a night under the app's data folder.</summary>
-    public static string Root => Path.Combine(AppPaths.Root, "photo-finish");
+    public static string Root => Path.Combine(AppPaths.Root, FolderName);
+
+    /// <summary>The name of <see cref="Root"/> in the data folder. Backups leave it out (see BackupService.IsLeftOutOfBackup).</summary>
+    internal const string FolderName = "photo-finish";
 
     /// <summary>Said once a shot is saved, for the console. Any thread.</summary>
     public event Action<string>? Saved;

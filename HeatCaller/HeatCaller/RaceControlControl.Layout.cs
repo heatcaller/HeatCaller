@@ -212,6 +212,11 @@ public sealed partial class RaceControlControl
             // in AfterRace. Cleared by any other start and by Reset.
             _currentRaceIsQuick = true;
 
+            // Not a re-run of a recorded round, even if a program start of
+            // one was still waiting on its warm-up - see _rerunPending.
+            _currentRaceIsRerun = false;
+            _rerunPending = false;
+
             _txtSessionLabel.Text = $"Quick Race {DateTime.Now:HH:mm}";
 
             ApplyEffectiveFormat();
@@ -321,6 +326,10 @@ public sealed partial class RaceControlControl
                 return;
             }
 
+            // The state Stage was pressed in, read before ending a demo can
+            // move it - see RaceKindAfterStage below.
+            var stateBefore = _race.State;
+
             // Stage over a running race wipes every lap it has counted, and
             // F1 is one key away from the flag keys - so it is asked about,
             // and can be undone, rather than simply done.
@@ -354,9 +363,15 @@ public sealed partial class RaceControlControl
             ApplyEffectiveFormat(startingNewRace: true);
             ApplyJumpStartRules();
 
-            // A race staged here is never a Quick Race (that starts through
-            // RunAutoStartSequenceAsync), whatever ran before it.
-            _currentRaceIsQuick = false;
+            // A new race staged here is never a Quick Race (that starts
+            // through RunAutoStartSequenceAsync), and is a re-run of a
+            // recorded round only if the host said this start is one - see
+            // MarkNextStageAsRerun. A Stage pressed again during the start's
+            // staging or countdown restarts that start, and keeps what it
+            // was - see RaceKindAfterStage.
+            (_currentRaceIsQuick, _currentRaceIsRerun) = RaceKindAfterStage(
+                stateBefore, tookOverDemo, _currentRaceIsQuick, _currentRaceIsRerun, _rerunPending);
+            _rerunPending = false;
             _race.Stage();
             generationAfterStage = _race.SessionGeneration;
 
@@ -371,7 +386,7 @@ public sealed partial class RaceControlControl
             if (_fmt.AutoAdvance)
             {
                 ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false),
-                    introComing ? StagingWaitWithIntro : null);
+                    introComing ? StagingWaitWithIntro : null, _fmt.StagingSeconds);
             }
         };
         _btnStage.Click += (_, _) => _actStage(false, null);
@@ -422,11 +437,18 @@ public sealed partial class RaceControlControl
                 ApplyJumpStartRules();
             }
 
+            // A countdown pressed during a re-run's warm-up starts that race
+            // with no Stage to take the re-run up. It used to stay pending:
+            // the re-run was filed by auto-advance's guess, and the next,
+            // unrelated Stage was kept on its own instead.
+            _currentRaceIsRerun |= _rerunPending;
+            _rerunPending = false;
+
             _race.StartCountdown();
 
             if (_fmt.AutoAdvance)
             {
-                ChainAfterAudio(RaceState.Countdown, () => _actGreen?.Invoke());
+                ChainAfterAudio(RaceState.Countdown, () => _actGreen?.Invoke(), mutedSeconds: _fmt.CountdownSeconds);
             }
         };
         _btnCountdown.Click += (_, _) => _actCountdown(false);
@@ -484,6 +506,11 @@ public sealed partial class RaceControlControl
                 {
                     ApplyJumpStartRules();
                 }
+
+                // As for a countdown: a green pressed during a re-run's
+                // warm-up starts it without the Stage that takes it up.
+                _currentRaceIsRerun |= _rerunPending;
+                _rerunPending = false;
             }
 
             // Straightforward now: the audio wait lives in the session gate
@@ -495,7 +522,20 @@ public sealed partial class RaceControlControl
         _btnGreen.Click += (_, _) => _actGreen();
 
         _btnYellow.Text = "Yellow";
-        _actYellow = () => { CancelAutoStart(); _race.YellowFlag(); };
+        _actYellow = () =>
+        {
+            // As for red, below: practice has no flags, and Green is refused
+            // while it runs. A yellow from the button, F4 or the phone used
+            // to go through, and with nothing able to clear it the announcer
+            // held every lap call for the rest of the practice.
+            if (RefuseIfPracticeRunning("throw the yellow flag", NoFlagsInPractice))
+            {
+                return;
+            }
+
+            CancelAutoStart();
+            _race.YellowFlag();
+        };
         _btnYellow.Click += (_, _) => _actYellow();
 
         _btnRed.Text = "Red";
@@ -506,7 +546,7 @@ public sealed partial class RaceControlControl
             // practice runs. A RED from the phone, the button or F5 used to
             // go through anyway: practice laps silently stopped counting,
             // with nothing on screen to say so and no green to clear it.
-            if (RefuseIfPracticeRunning("throw the red flag"))
+            if (RefuseIfPracticeRunning("throw the red flag", NoFlagsInPractice))
             {
                 return;
             }
@@ -588,6 +628,13 @@ public sealed partial class RaceControlControl
                 var sessionStart = _sessionStartedAtUtc;
                 var prompted = _promptedTransponders.ToList();
 
+                // What kind of race it was, cleared below. Put back without
+                // it, a Quick Race (or a re-run of a recorded round) came
+                // back looking like any freeform race, and auto-advance
+                // filed it against the next heat at the flag.
+                var wasQuick = _currentRaceIsQuick;
+                var wasRerun = _currentRaceIsRerun;
+
                 // The rules the reset race was running under. The snapshot
                 // does not carry them, and the undo stays good for as long
                 // as the session sits at Idle - where the format IS written
@@ -652,6 +699,8 @@ public sealed partial class RaceControlControl
                     }
 
                     _sessionStartedAtUtc = sessionStart;
+                    _currentRaceIsQuick = wasQuick;
+                    _currentRaceIsRerun = wasRerun;
                     _promptedTransponders.Clear();
                     foreach (var t in prompted)
                     {
@@ -725,6 +774,8 @@ public sealed partial class RaceControlControl
             _previousFlag = FlagState.None;
             _currentRaceIsDemo = false;
             _currentRaceIsQuick = false;
+            _currentRaceIsRerun = false;
+            _rerunPending = false;
 
             // The reset race's start goes with it (Undo puts it back). Left
             // here, a start that does not stamp its own - a demo's green -

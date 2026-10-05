@@ -164,6 +164,20 @@ internal sealed class RaceDaySetupWizard : Form
     private readonly SteadyLabel _lblShapeHint = new() { Wordings = new[] { RaceDayShapeHint, ClubNightShapeHint } };
 
     private readonly TextBox _txtDayName = new();
+
+    /// <summary>
+    /// The name the day step filled in itself while no day is open, or null.
+    /// A change of the kind of night rewords it (SuggestedNameAfterShapeChange);
+    /// a name typed over it is kept.
+    /// </summary>
+    private string? _suggestedDayName;
+
+    /// <summary>True once the kind of night has been picked by hand - until then, with no day open, it follows the last race day's.</summary>
+    private bool _shapePicked;
+
+    /// <summary>True while the wizard sets the kind of night itself, so that doesn't count as picked.</summary>
+    private bool _settingShape;
+
     private readonly ComboBox _cmbVenue = new();
     private readonly ComboBox _cmbTrack = new();
     private readonly Label _lblDayState = new();
@@ -512,7 +526,7 @@ internal sealed class RaceDaySetupWizard : Form
         _cmbShape.Items.Add("Race day - heats, then finals");
         _cmbShape.Items.Add("Club night - just races");
         _cmbShape.SelectedIndex = 0;
-        _cmbShape.SelectedIndexChanged += (_, _) => ApplyShapeHint();
+        _cmbShape.SelectedIndexChanged += (_, _) => ShapeChanged();
 
         _cmbVenue.DropDownStyle = ComboBoxStyle.DropDown;
         _cmbTrack.DropDownStyle = ComboBoxStyle.DropDown;
@@ -895,7 +909,7 @@ internal sealed class RaceDaySetupWizard : Form
         // NewValue, not the item's current state: ItemCheck runs before the
         // tick actually changes, so reading the list here would write back
         // the value being replaced.
-        _checkIns.SetCheckedIn(item.Transponder, e.NewValue == CheckState.Checked);
+        SetCheckedIn(item.Transponder, e.NewValue == CheckState.Checked);
 
         // Posted rather than run now, for the same reason - the count has to
         // be taken after the tick has landed.
@@ -910,10 +924,29 @@ internal sealed class RaceDaySetupWizard : Form
         // reach past the filter either.
         foreach (var item in _lstWhosHere.Items.Cast<object>().OfType<DriverItem>().ToList())
         {
-            _checkIns.SetCheckedIn(item.Transponder, here);
+            SetCheckedIn(item.Transponder, here);
         }
 
         FillWhosHere();
+    }
+
+    /// <summary>
+    /// Ticks a driver in or out the way the desk does - through the host,
+    /// which times it, so a slower online tap made before it can't undo it
+    /// (MainForm.ApplyRelayCheckIn). The wizard used to write the store
+    /// itself, untimed: a driver unticked here a few seconds after tapping
+    /// in online was checked back in when the tap arrived, and built into
+    /// tonight's heats while the list still showed him unticked.
+    /// </summary>
+    private void SetCheckedIn(string transponder, bool here)
+    {
+        if (_host.SetCheckedIn is { } timed)
+        {
+            timed(transponder, here);
+            return;
+        }
+
+        _checkIns.SetCheckedIn(transponder, here);
     }
 
     private void RefreshCheckInCount()
@@ -1485,8 +1518,13 @@ internal sealed class RaceDaySetupWizard : Form
 
             case StepClasses:
                 _lblStepTitle.Text = "Tonight's classes";
-                _lblStepBody.Text = "Tick the classes out tonight - Add Class for a new one. Then how many times each driver "
-                                  + "races, how many cars go out at once, and the race each class runs.";
+
+                // What is picked here is saved on the day - see LoadRacingStep.
+                _lblStepBody.Text = OpenDay is null
+                    ? "No race day is open, so tonight's classes can't be picked yet. Go back to The day to open one - "
+                      + "new classes can still be added with Add Class, and their race formats changed."
+                    : "Tick the classes out tonight - Add Class for a new one. Then how many times each driver "
+                      + "races, how many cars go out at once, and the race each class runs.";
                 LoadRacingStep();
                 content = _racingStep;
                 break;
@@ -1759,7 +1797,7 @@ internal sealed class RaceDaySetupWizard : Form
             return;
         }
 
-        _checkIns.SetCheckedIn(form.Transponder, true);
+        SetCheckedIn(form.Transponder, true);
 
         // A class filter that would hide them is taken off, so the person
         // just added is in the list to be seen.
@@ -1817,18 +1855,34 @@ internal sealed class RaceDaySetupWizard : Form
 
         if (day is not null)
         {
-            _cmbShape.SelectedIndex = day.IsClubNight ? 1 : 0;
+            // The day's own name: nothing here to reword.
+            _suggestedDayName = null;
+            SetShape(day.IsClubNight ? RaceDayShape.ClubNight : RaceDayShape.RaceDay);
             _txtDayName.Text = day.Name;
             _cmbVenue.Text = day.VenueName;
             _cmbTrack.Text = day.TrackLayoutName;
         }
         else
         {
+            var previous = _events.Real.OrderByDescending(e => e.StartedUtc).FirstOrDefault();
+
+            // The kind of night the last race day was, as New Race Day opens
+            // on it, until it is picked here. It always opened on a race day,
+            // so a club that runs club nights got a race day - check-in only,
+            // heats and finals - unless somebody noticed the box.
+            if (previous is not null && !_shapePicked)
+            {
+                SetShape(previous.Shape);
+            }
+
+            // After the kind of night, which the name follows.
             if (_txtDayName.Text.Length == 0)
             {
                 _txtDayName.Text = EventSpine.DefaultDayName(
                     DateTime.Now,
                     _cmbShape.SelectedIndex == 1 ? RaceDayShape.ClubNight : RaceDayShape.RaceDay);
+
+                _suggestedDayName = _txtDayName.Text;
             }
 
             // The venue and the track from the last real day, shown here
@@ -1844,8 +1898,6 @@ internal sealed class RaceDaySetupWizard : Form
             // tonight sees what to change. The same day StartDayFrom copies
             // from: the most recently started real one. Only into a box that
             // is empty, so nothing typed is ever replaced.
-            var previous = _events.Real.OrderByDescending(e => e.StartedUtc).FirstOrDefault();
-
             if (previous is not null)
             {
                 if (_cmbVenue.Text.Length == 0)
@@ -1869,6 +1921,60 @@ internal sealed class RaceDaySetupWizard : Form
 
     private void ApplyShapeHint() =>
         _lblShapeHint.Text = _cmbShape.SelectedIndex == 1 ? ClubNightShapeHint : RaceDayShapeHint;
+
+    /// <summary>Sets the kind of night without that counting as picked by hand.</summary>
+    private void SetShape(RaceDayShape shape)
+    {
+        _settingShape = true;
+
+        try
+        {
+            _cmbShape.SelectedIndex = shape == RaceDayShape.ClubNight ? 1 : 0;
+        }
+        finally
+        {
+            _settingShape = false;
+        }
+    }
+
+    private void ShapeChanged()
+    {
+        ApplyShapeHint();
+
+        if (!_settingShape)
+        {
+            _shapePicked = true;
+        }
+
+        var shape = _cmbShape.SelectedIndex == 1 ? RaceDayShape.ClubNight : RaceDayShape.RaceDay;
+
+        if (SuggestedNameAfterShapeChange(_txtDayName.Text, _suggestedDayName, shape, DateTime.Now) is { } renamed)
+        {
+            _txtDayName.Text = renamed;
+            _suggestedDayName = renamed;
+        }
+    }
+
+    /// <summary>
+    /// What the name box says once the kind of night is changed to
+    /// <paramref name="shape"/>, or null to leave it as it is: the name the
+    /// wizard suggested (<paramref name="suggested"/>) reworded for the new
+    /// kind - "Race Day 4 Oct 2026" becomes "Club Night 4 Oct 2026" - and
+    /// anything typed over it kept. It used to keep the first suggestion
+    /// whichever kind was picked, and leaving the step named the club night
+    /// "Race Day ..." over the name it had just been started with.
+    /// </summary>
+    internal static string? SuggestedNameAfterShapeChange(string inBox, string? suggested, RaceDayShape shape, DateTime localNow)
+    {
+        if (suggested is null || !string.Equals(inBox.Trim(), suggested, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var renamed = EventSpine.DefaultDayName(localNow, shape);
+
+        return string.Equals(renamed, suggested, StringComparison.Ordinal) ? null : renamed;
+    }
 
     private void SaveDay()
     {
@@ -1907,6 +2013,19 @@ internal sealed class RaceDaySetupWizard : Form
     {
         var day = OpenDay;
 
+        // The ticks and the numbers only with a day open, as on the Drivers
+        // step (LoadCheckInStep): they are saved on the day (SaveRacing), and
+        // with none open they used to be taken and then thrown away without
+        // a word - the day was started later with every class and the last
+        // day's numbers. Add Class and the formats are the class store's,
+        // and work either way.
+        var haveDay = day is not null;
+
+        foreach (var control in new Control[] { _lstClasses, _numRounds, _numHeatSize, _chkFirstRace })
+        {
+            control.Enabled = haveDay;
+        }
+
         _lstClasses.Items.Clear();
 
         foreach (var raceClass in _raceClasses.All)
@@ -1937,7 +2056,7 @@ internal sealed class RaceDaySetupWizard : Form
             _dtpFirstRace.Value = day.FirstRaceLocalTime ?? TimeSpan.FromHours(10);
         }
 
-        _dtpFirstRace.Enabled = _chkFirstRace.Checked;
+        _dtpFirstRace.Enabled = haveDay && _chkFirstRace.Checked;
         _chkFirstRace.CheckedChanged -= FirstRaceToggled;
         _chkFirstRace.CheckedChanged += FirstRaceToggled;
         FillFormatRows();
@@ -2381,10 +2500,12 @@ internal sealed class QuickDriverForm : Form
 /// <param name="PlanBuild">The programme's PlanQualifyingBuild - what building would do, changing nothing.</param>
 /// <param name="Build">The programme's BuildQualifying.</param>
 /// <param name="Sound">What the day step needs to offer tonight's sound - see SoundOffer. None, and the step does not offer it.</param>
+/// <param name="SetCheckedIn">The desk's timed check-in (MainForm.SetCheckedInFromWizard). None, and the Drivers step writes the check-in sheet itself.</param>
 internal sealed record RaceDaySetupHost(
     Func<RaceDayShape, IReadOnlyList<string>, bool> StartDay,
     Action<Action<RaceEvent>> ChangeDay,
     Action<IReadOnlyList<string>> SetClassesRacing,
     Func<ProgramAnswer> PlanBuild,
     Func<ProgramAnswer> Build,
-    SoundOfferHost? Sound = null);
+    SoundOfferHost? Sound = null,
+    Action<string, bool>? SetCheckedIn = null);

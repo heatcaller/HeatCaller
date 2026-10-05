@@ -344,11 +344,21 @@ public sealed class AmbienceStore
         catch (Exception ex)
         {
             // Unreadable file: start with defaults rather than refusing to open.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // But, when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            store.LoadedUnreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
         return store;
     }
+
+    /// <summary>
+    /// True when ambience.json was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A file locked for a moment at
+    /// launch used to load with no layers, and the first fader moved or
+    /// soundscape applied replaced the club's own layers and settings.
+    /// </summary>
+    public bool LoadedUnreadable { get; private set; }
 
     /// <summary>
     /// Brings a soundscape crowd added by an older version up to date: the
@@ -449,6 +459,14 @@ public sealed class AmbienceStore
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and these
+        // settings were built on the defaults it loaded as. The change still
+        // applies this session. The console has already said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         try
         {
             // SafeFile, like the other stores: an atomic swap, and it

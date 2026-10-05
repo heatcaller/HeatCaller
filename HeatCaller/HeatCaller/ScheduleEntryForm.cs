@@ -27,11 +27,18 @@ public sealed class ScheduleEntryForm : Form
     private readonly ComboBox _cmbClass = new();
     private readonly TextBox _txtDescription = new();
 
+    /// <summary>The time as the line had it when this opened - Result is the stored line itself, so it is kept here (see TimeToSave).</summary>
+    private readonly string _originalTime;
+
+    /// <summary>Whether No set time has been ticked or unticked since this opened.</summary>
+    private bool _noTimeToggled;
+
     public ScheduleEntry Result { get; private set; }
 
     public ScheduleEntryForm(ScheduleEntry? existing, RaceClassStore raceClasses)
     {
         Result = existing ?? new ScheduleEntry();
+        _originalTime = Result.ScheduledTime ?? string.Empty;
 
         Text = existing is null ? "Add Schedule Entry" : "Edit Schedule Entry";
         Font = AppTheme.BodyFont;
@@ -63,6 +70,9 @@ public sealed class ScheduleEntryForm : Form
             var next = DateTime.Now.AddHours(1);
             _dtpTime.Value = new TimeSpan(next.Hour, 0, 0);
         }
+
+        // After the box is set above, so only the user's own clicks count.
+        _chkNoTime.CheckedChanged += (_, _) => _noTimeToggled = true;
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDown;
         foreach (var c in raceClasses.All)
@@ -140,11 +150,23 @@ public sealed class ScheduleEntryForm : Form
             return;
         }
 
-        Result.ScheduledTime = _chkNoTime.Checked ? string.Empty : _dtpTime.FormattedValue;
+        Result.ScheduledTime = TimeToSave(_originalTime, _chkNoTime.Checked, _noTimeToggled, _dtpTime.FormattedValue);
         Result.ClassName = _cmbClass.Text.Trim();
         Result.Description = _txtDescription.Text.Trim();
 
         DialogResult = DialogResult.OK;
         Close();
     }
+
+    /// <summary>
+    /// The time a line is saved with. A time the picker could not show
+    /// ("TBD", "~10:15") is kept while No set time is left as it opened; it
+    /// used to be written back blank by any edit, a fixed typo included,
+    /// and Fill In the Times then stamped a time over it. Unticking and
+    /// ticking the box again clears it on purpose.
+    /// </summary>
+    internal static string TimeToSave(string originalTime, bool noTimeTicked, bool noTimeToggled, string pickedTime) =>
+        !noTimeTicked ? pickedTime
+        : noTimeToggled ? string.Empty
+        : originalTime;
 }

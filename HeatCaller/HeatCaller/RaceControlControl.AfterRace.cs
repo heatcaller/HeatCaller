@@ -47,12 +47,71 @@ public sealed partial class RaceControlControl
 
     /// <summary>
     /// True from a Quick Race press (_actQuickRace) until that race is saved,
-    /// staged over or reset. A Quick Race is filed on its own, never against
+    /// staged over or reset - not by a Stage that only restarts its start
+    /// (see RaceKindAfterStage). A Quick Race is filed on its own, never against
     /// the next heat by auto-advance - see SaveCompletedSessionToHistory.
     /// Nothing else about the race says it was one: the Round box is simply
     /// freeform, as it is for any race nobody picked a round for.
     /// </summary>
     private bool _currentRaceIsQuick;
+
+    /// <summary>
+    /// True from the Stage of a race started as a re-run of a round that has
+    /// already been recorded (see MarkNextStageAsRerun) until that race is
+    /// saved, staged over or reset - as for _currentRaceIsQuick. Like a Quick
+    /// Race it is never filed by auto-advance's guess.
+    ///
+    /// The Round box only lists unrun rounds, so a re-run races with the box
+    /// on freeform - and the guess then filed it against the same drivers'
+    /// NEXT unrun heat: Q1 Heat 1 run again became Q2 Heat 1, marked as run
+    /// with the re-run's laps, gone from Next Up and counted in qualifying.
+    /// The director had just been told a re-run "records a new session and
+    /// won't replace the existing result", so it is kept on its own instead.
+    /// </summary>
+    private bool _currentRaceIsRerun;
+
+    /// <summary>
+    /// Set by MarkNextStageAsRerun and taken up by the next Stage, which is
+    /// where a race begins - a program start can open a warm-up first, so
+    /// the Stage may come a while after the start was asked for. Or by a
+    /// Countdown or first Green pressed during that warm-up instead, which
+    /// start the race without a Stage. Dropped by Quick Race and Reset,
+    /// which mean some other race is wanted.
+    /// </summary>
+    private bool _rerunPending;
+
+    /// <summary>
+    /// Says the race about to be staged is a re-run of a round that has
+    /// already been recorded, so it is kept in Race History on its own
+    /// rather than filed against the next heat by auto-advance. For the
+    /// host to call just before TriggerAutoStart.
+    /// </summary>
+    public void MarkNextStageAsRerun() => _rerunPending = true;
+
+    /// <summary>
+    /// Whether the race a Stage leaves on the board is a Quick Race, and
+    /// whether it is a re-run of a recorded round.
+    ///
+    /// A Stage that begins a new race starts it as neither, unless the host
+    /// asked for a re-run (<paramref name="rerunPending"/>). A Stage pressed
+    /// again during a start's staging or countdown restarts that same start
+    /// - as the log says to after a caution - so it keeps what it was. It
+    /// used to clear both every time, and a Quick Race or a re-run restaged
+    /// before its green was filed against the drivers' next heat by
+    /// auto-advance at the flag. Taking over a demo is a new race, whatever
+    /// state the demo was in.
+    /// </summary>
+    /// <param name="stateBefore">The race's state when Stage was pressed, before any demo was ended.</param>
+    internal static (bool IsQuick, bool IsRerun) RaceKindAfterStage(
+        RaceState stateBefore, bool tookOverDemo, bool isQuick, bool isRerun, bool rerunPending)
+    {
+        if (!tookOverDemo && stateBefore is RaceState.Staging or RaceState.Countdown)
+        {
+            return (isQuick, isRerun || rerunPending);
+        }
+
+        return (false, rerunPending);
+    }
 
     /// <summary>
     /// Works out what the race just earned everyone and says the best of it.
@@ -87,11 +146,15 @@ public sealed partial class RaceControlControl
             // rental or a ghost does not take the Track Record badge.
             // Where the app is used, the garage, the packs and the ghosts
             // beaten - for the home and garage badges.
+            // And the track layouts, so Record Holder goes with the record
+            // they show - found by name the way CheckAndAnnounceTrackRecord
+            // finds the one it sets.
             var context = (AchievementStores ?? new AchievementContext()) with
             {
                 RacingAt = _settings.RacingAt,
                 Profiles = _profiles,
                 GhostsBeaten = _ghostsBeatenAtFlag,
+                TrackLayoutNamed = name => _trackLayouts.All.FirstOrDefault(t => t.Name == name),
             };
 
             var unlocks = AchievementEvaluator.EvaluateFinishedRace(
@@ -1337,6 +1400,8 @@ public sealed partial class RaceControlControl
         // filed (or auto-advanced) as usual - see the auto-advance below.
         var wasQuickRace = _currentRaceIsQuick;
         _currentRaceIsQuick = false;
+        var wasRerun = _currentRaceIsRerun;
+        _currentRaceIsRerun = false;
 
         if (_race.IsPracticeMode)
         {
@@ -1356,6 +1421,12 @@ public sealed partial class RaceControlControl
 
             return;
         }
+
+        // Every race from here has its own ending - a recap, no recap, or
+        // not saved at all - and none of them is the last race's. Cleared in
+        // this one place rather than in each, so no path can leave the race
+        // before's recap on offer (see CommentaryService.ClearRaceSummary).
+        _commentary?.ClearRaceSummary();
 
         // Demo races are simulated, so they stay out of history unless the
         // user opts in. Even then the saved copy is marked as a demo and
@@ -1401,9 +1472,12 @@ public sealed partial class RaceControlControl
         // badges for this race, and the race is filed as ever.
         try
         {
+            // Not a ghost switched on part-way through - see GhostsFromTheGreen.
             _ghostsBeatenAtFlag = AchievementEvaluator.GhostsBeatenBy(
                 ordered.Select(s => (s.TransponderId, s.Laps, s.FastestLapMs)).ToList(),
-                AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
+                AchievementEvaluator.GhostsFromTheGreen(
+                    AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
+                    AchievementStores?.GhostsJoinedLate?.Invoke() ?? Array.Empty<string>()),
                 byBestLap: false);
         }
         catch (Exception ex)
@@ -1478,7 +1552,10 @@ public sealed partial class RaceControlControl
         // qualifying and on the club's website. A round picked by hand
         // after pressing Quick Race still counts; only the guess is skipped.
         var autoAdvanced = false;
-        if (round is null && _rounds is not null && AutoAdvanceWanted && !_currentRaceIsDemo && !wasQuickRace)
+
+        // Nor for a re-run of a round already recorded - see
+        // _currentRaceIsRerun.
+        if (round is null && _rounds is not null && AutoAdvanceWanted && !_currentRaceIsDemo && !wasQuickRace && !wasRerun)
         {
             round = PickNextRound(racers);
             autoAdvanced = round is not null;
@@ -1488,6 +1565,12 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke(
                 "[session] Quick Race - kept in Race History on its own. A Quick Race is never filed against a heat "
                 + "by itself; pick the round in the Round box first if one is meant to count.");
+        }
+        else if (round is null && wasRerun && !_currentRaceIsDemo)
+        {
+            StatusMessage?.Invoke(
+                "[session] Re-run of a round that was already recorded - kept in Race History on its own. "
+                + "The round keeps its earlier result, and no other heat was marked as run.");
         }
 
         var record = new SessionRecord
@@ -1696,6 +1779,9 @@ public sealed partial class RaceControlControl
             // threw away.
             if (!ReferenceEquals(_sessionHistory.Get(record.Id), record))
             {
+                // Nothing will file it now, so an undo of that delete must
+                // write it itself - see SessionHistoryStore.RestoreUnfiled.
+                _sessionHistory.ForgetDeletedUnfiled(record);
                 _unfiledRaces.Remove(unfiled);
                 continue;
             }
@@ -1774,7 +1860,7 @@ public sealed partial class RaceControlControl
         }
 
         _journal.Record(_race, _sessionStartedAtUtc, SelectedTrackName(), force,
-            RoundForThisRace()?.Id, _txtSessionLabel.Text);
+            RoundForThisRace()?.Id, _txtSessionLabel.Text, _currentRaceIsRerun);
     }
 
     /// <summary>
@@ -1896,6 +1982,20 @@ public sealed partial class RaceControlControl
             {
                 _txtSessionLabel.Text = raceLabel;
             }
+
+            // A Quick Race is still one after a crash. The journal does not
+            // say so in as many words, but a race with no round and Quick
+            // Race's own "Quick Race HH:mm" name is one - and brought back
+            // as any freeform race, auto-advance filed the shakedown
+            // against the next heat at the flag.
+            _currentRaceIsQuick = _restoredRoundId is null
+                && entry.RaceLabel is { } quickLabel
+                && IsQuickRaceStamp(quickLabel.Trim());
+
+            // So is a re-run of a recorded round, which nothing else in the
+            // journal gives away - see RaceJournal.Entry.IsRerun. Set before
+            // the journal is written again below, so a second crash keeps it.
+            _currentRaceIsRerun = entry.IsRerun;
 
             if (!string.IsNullOrWhiteSpace(entry.TrackLayoutName))
             {

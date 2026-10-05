@@ -63,6 +63,19 @@ public partial class MainForm
             ?? _activeRound?.Id
             ?? _settings.LastActiveRoundId;
 
+        // The round a race is being run for right now stays the round, even
+        // if the list below no longer holds it - another race day made
+        // current mid-race (from the Day tab or a phone) rebuilt the list
+        // from THAT day's rounds, the running heat wasn't among them, and
+        // the race was filed at the flag against one of the other day's
+        // rounds, or against nothing. Not when the caller names a round:
+        // StartRoundNow does that over a race it is replacing.
+        var runningRound = selectRoundId is null && RaceUnderWay ? _activeRound : null;
+        if (runningRound is not null)
+        {
+            previousId = runningRound.Id;
+        }
+
         // Declared outside the try so it's still in scope for the
         // no-longer-available check further down.
         var idx = -1;
@@ -79,6 +92,13 @@ public partial class MainForm
             foreach (var round in _rounds.Unrecorded(_raceEvents.ActiveRoundScope()))
             {
                 cmbActiveRound.Items.Add(new RoundComboItem(round));
+            }
+
+            // Kept in the list while it runs - see runningRound above.
+            if (runningRound is not null
+                && !cmbActiveRound.Items.Cast<object>().Any(item => (item as RoundComboItem)?.Round.Id == runningRound.Id))
+            {
+                cmbActiveRound.Items.Add(new RoundComboItem(runningRound));
             }
 
             if (previousId is not null)
@@ -258,6 +278,16 @@ public partial class MainForm
                 $"{AppTime.LogStampNow()}  [program] WARNING: \"{round.RoundLabel}\" ({round.ClassName}) is not in the Round box "
                 + "(not on tonight's race day, or already recorded), so this race is running as freeform. "
                 + "Pick the round in the Round box before the green if it should be filed against it.");
+
+            // A re-run of a round already recorded - asked for on purpose,
+            // past "Starting it again records a new session and won't
+            // replace the existing result". With the box on freeform,
+            // auto-advance otherwise filed it against the same drivers'
+            // NEXT unrun heat, which was then marked as run with these laps.
+            if (round.IsRecorded)
+            {
+                _raceControlControl.MarkNextStageAsRerun();
+            }
         }
 
         if (showRaceControl)
@@ -303,6 +333,21 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Checks a driver in or out from Set Up Tonight's Drivers step: a desk
+    /// change, so timed like every other (see CheckInChangedAtDesk) - even
+    /// when nothing changed, as Check In All Shown at the desk is - so a
+    /// slower online tap made before it cannot undo it. UI thread only.
+    /// </summary>
+    private void SetCheckedInFromWizard(string transponder, bool wanted)
+    {
+        _checkInStore.SetCheckedIn(transponder, wanted);
+        _checkInChangedUtc[transponder] = DateTime.UtcNow;
+
+        PublishCheckInRosterSoon();
+        _checkInControl?.RefreshCheckInMarks();
+    }
+
+    /// <summary>
     /// Builds the race-day manager and hands it the stores, Race Control
     /// and the Program tab - the same objects the desk uses - plus the
     /// three MainForm methods that stand in for a dialog: starting a round,
@@ -339,7 +384,17 @@ public partial class MainForm
                 StartRoundNow(round, confirmedOverRunningRace, showRaceControl: false, logLine),
 
             SetCheckedIn = ApplyPhoneCheckIn,
-            RepublishSession = PublishSessionToRelay,
+            // With its year's index, as SessionAdded and SessionEdited send
+            // it. Sent alone, a result from a year with nothing else online
+            // reached the relay but never the archive: no index for that
+            // year went this run, so the year was only noted when it turned
+            // up, never published. And the standings, as the op promises.
+            RepublishSession = session =>
+            {
+                PublishSessionToRelay(session);
+                PublishResultsIndexFor(session);
+                PublishStandingsToRelay();
+            },
 
             RefreshDesk = () =>
             {

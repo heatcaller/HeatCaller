@@ -1054,10 +1054,18 @@ public sealed class TrackLayoutManagerControl : UserControl
             var restoreTarget = store.Get(trackId);
             if (restoreTarget is not null)
             {
-                restoreTarget.RecordLapMs = oldMs;
-                restoreTarget.RecordHolderName = oldHolder;
-                restoreTarget.RecordSetUtc = oldSet;
-                restoreTarget.RecordSectorsMs = oldRecordSectors;
+                // The lap record the same way as the sectors below: a heat
+                // run since the reset can have set a quicker one, and undo
+                // used to put the old, slower record back over it. Only
+                // when there is none now, or the old one was quicker - and
+                // then its holder, date and sectors with it.
+                if (oldMs > 0 && (restoreTarget.RecordLapMs == 0 || oldMs < restoreTarget.RecordLapMs))
+                {
+                    restoreTarget.RecordLapMs = oldMs;
+                    restoreTarget.RecordHolderName = oldHolder;
+                    restoreTarget.RecordSetUtc = oldSet;
+                    restoreTarget.RecordSectorsMs = oldRecordSectors;
+                }
 
                 // Sector records merged back, not put over: a heat run
                 // since the reset can have set some, and they stand unless

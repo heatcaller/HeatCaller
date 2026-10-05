@@ -223,6 +223,9 @@ public sealed class BigScreenForm : Form
 
         _race.LapProcessed += OnRaceEvent;
         _race.StandingAdjusted += OnStandingAdjusted;
+
+        // A ghost switched off mid-race leaves the board - refreshed the same way.
+        _race.StandingRemoved += OnStandingAdjusted;
         _race.StateChanged += _stateChangedHandler;
         _race.FlagChanged += _flagChangedHandler;
         _announcer.AnnouncementTextReady += OnAnnouncementTextReady;
@@ -275,6 +278,7 @@ public sealed class BigScreenForm : Form
             _picSponsor.Image?.Dispose();
             _race.LapProcessed -= OnRaceEvent;
             _race.StandingAdjusted -= OnStandingAdjusted;
+            _race.StandingRemoved -= OnStandingAdjusted;
             _race.StateChanged -= _stateChangedHandler;
             _race.FlagChanged -= _flagChangedHandler;
             _race.WarningIssued -= _warningIssuedHandler;
@@ -1211,6 +1215,16 @@ public sealed class BigScreenForm : Form
                 _grid.Visible = false;
                 _picSponsor.Visible = false;
                 _rollCall.Visible = true;
+
+                // A slide that was up when the race was staged ends here. It
+                // used to stay "showing" under the roll call, and at the
+                // green HideRollCall put it back over the board for whatever
+                // was left of its time - the opening laps, with long slides.
+                if (_showingSponsor && _sponsors is not null)
+                {
+                    _showingSponsor = false;
+                    _sponsorTimer.Interval = SponsorIntervalMs(_sponsors.Current.LeaderboardSeconds);
+                }
             }
 
             _rollCall.ShowEntries(RollCall.Build(roster!, _watch!, t => _profiles.Get(t)?.DriverName, _rollCallSinceUtc.Value));

@@ -855,17 +855,24 @@ public partial class MainForm
                 roster.Select(d => RelayDocuments.PublicNameOrUnnamed(d.Name, d.Transponder)).ToList(),
                 abbreviate);
 
-            var document = JsonSerializer.Serialize(new
-            {
-                checkedIn = roster.Count(d => d.CheckedIn),
-                total = roster.Count,
-                drivers = roster.Select((d, i) => new
+            // Not published: the empty roster PublishSnapshot would put in
+            // its place anyway, built here so the check below compares what
+            // actually goes. Unticking the box then sends it once, taking
+            // the roster already on the relay down, rather than the full
+            // roster being "unchanged" and nothing going at all.
+            var document = !_settings.RelayPublishRoster
+                ? RelayPublisher.WithdrawnRoster
+                : JsonSerializer.Serialize(new
                 {
-                    name = names[i],
-                    className = d.ClassName,
-                    checkedIn = d.CheckedIn,
-                }).ToList(),
-            });
+                    checkedIn = roster.Count(d => d.CheckedIn),
+                    total = roster.Count,
+                    drivers = roster.Select((d, i) => new
+                    {
+                        name = names[i],
+                        className = d.ClassName,
+                        checkedIn = d.CheckedIn,
+                    }).ToList(),
+                });
 
             // This runs every two seconds whether anything moved or not.
             // Sending an identical document that often is a POST a second
@@ -1234,7 +1241,10 @@ public partial class MainForm
             // queue in memory, and a race only 36 hours old was the whole
             // test - so Saturday's heat corrected on Monday with the relay
             // asleep, the laptop then shut, was never sent again, and the
-            // relay served the uncorrected result for good.
+            // relay served the uncorrected result for good. Owed takes in
+            // every result queued and never taken as well, so a night's
+            // results lost with the queue at shutdown go now, whatever
+            // their age (see RelayResultsIndex.Ledger.Owed).
             var sent = _sessionHistory.Saved
                 .Where(s => (s.EndedAtUtc > s.StartedAtUtc ? s.EndedAtUtc : s.StartedAtUtc) >= since
                     || (s.Edits is { } edits && edits.Any(e => e.AtUtc >= since))
@@ -1353,8 +1363,19 @@ public partial class MainForm
 
                 if (!_relayIndexSessionsSeen.TryGetValue(year, out var seen))
                 {
-                    _relayIndexSessionsSeen[year] = current;
-                    continue;
+                    // Unless an index for it has gone this run. A result
+                    // now joins the index only once the relay has taken it,
+                    // which is after SessionAdded sent its year's index - so
+                    // the first heat of a new year (or to a new relay) was
+                    // first seen here already delivered, only noted, and
+                    // left out of the index until another heat was raced.
+                    if (!_relayIndexSent.ContainsKey(year))
+                    {
+                        _relayIndexSessionsSeen[year] = current;
+                        continue;
+                    }
+
+                    seen = string.Empty; // never equal: a year only in `now` has sessions
                 }
 
                 if (seen == current)
@@ -1480,7 +1501,8 @@ public partial class MainForm
     ///
     /// Transponder ids are left out for the same reason as the roster.
     /// </summary>
-    private void PublishSessionToRelay(SessionRecord session)
+    /// <param name="firstPublish">The session has just been saved (SessionAdded). Every other caller is a re-send - see RelayResultsIndex.MayAlreadyBeOnRelay.</param>
+    private void PublishSessionToRelay(SessionRecord session, bool firstPublish = false)
     {
         // A demo race is a rehearsal, not a result - it never goes on the
         // club's public results page.
@@ -1543,11 +1565,13 @@ public partial class MainForm
             // ignores, so the index then left out a session whose result
             // the relay had been given.
             //
-            // Whether it has been corrected, so a correction that cannot go
-            // is remembered as owed rather than the session dropped from
-            // the index - the relay still holds the copy from before.
+            // Whether the relay may hold it already - corrected, or sent
+            // before - so a re-send that cannot go is remembered as owed
+            // rather than the session dropped from the index: the relay
+            // still holds the copy from before.
             _relayPublisher.PublishResult(
-                session.Id, document, RelayResultsIndex.EffectiveStart(session), correction: session.Edits is { Count: > 0 });
+                session.Id, document, RelayResultsIndex.EffectiveStart(session),
+                correction: RelayResultsIndex.MayAlreadyBeOnRelay(session, firstPublish));
         }
         catch (Exception ex)
         {

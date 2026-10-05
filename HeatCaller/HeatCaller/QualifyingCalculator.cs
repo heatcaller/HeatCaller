@@ -366,6 +366,12 @@ public static class QualifyingCalculator
                 // to be dropped rather than displacing a real result.
                 .OrderBy(h => h.ConsecutiveMs > 0 ? 0 : 1)
                 .ThenBy(h => h.ConsecutiveMs)
+                // Among those, most laps then least time, as IsBetterHeat and
+                // Rank judge them. Without it they stayed in running order,
+                // so a driver with no full run anywhere was counted on their
+                // earliest heats rather than their best.
+                .ThenByDescending(h => h.Laps)
+                .ThenBy(h => h.ElapsedMs)
                 .ToList()
             : heats
                 .OrderByDescending(h => h.Laps)

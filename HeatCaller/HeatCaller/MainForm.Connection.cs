@@ -44,8 +44,10 @@ public partial class MainForm
                 RenderDecoderStatus(state, message);
 
                 // However the line came to connect - Connect, or
-                // auto-connect - the split loop joins it.
-                if (state == DecoderConnectionState.Connected)
+                // auto-connect - the split loop joins it. ConnectLine
+                // connects it itself, with the port picked - see
+                // _connectingLine.
+                if (state == DecoderConnectionState.Connected && !_connectingLine)
                 {
                     ConnectSplitLoop();
                 }
@@ -238,9 +240,11 @@ public partial class MainForm
     {
         // Not until the unfinished-race offer has been answered: a
         // practice started first took the session, and the race waiting to
-        // be recovered was then never offered. See _recoveryDecided.
+        // be recovered was then never offered. See _recoveryDecided. Nor
+        // while Line Up is open - see _lineUpOpen.
         if (!_settings.PracticeAutoStartOnGatePass
             || !_recoveryDecided
+            || _lineUpOpen
             || _practiceControl is null
             || _race.State != RaceState.Idle
             || _race.IsWarmingUp)
@@ -540,11 +544,12 @@ public partial class MainForm
     {
         // Somebody pressed Connect: the start-up connect stands down.
         _startupConnectPending = false;
-        ConnectLine();
+        ConnectLine(userChose: true);
     }
 
     /// <summary>Connects the line decoder, and the split loop with it - Connect's work, for the button and for the start-up connect.</summary>
-    private void ConnectLine()
+    /// <param name="userChose">True from the Connect button - see ConnectSplitLoop.</param>
+    private void ConnectLine(bool userChose = false)
     {
         if (SelectedDecoder == DecoderConnection.ILap)
         {
@@ -570,15 +575,35 @@ public partial class MainForm
             btnConnect.Enabled = false;
             btnDisconnect.Enabled = true;
             _ilapClient.Connect(ilapPort, _settings.ILapBaud);
-            ConnectSplitLoop();
+            ConnectSplitLoop(userChose);
             return;
         }
 
         btnConnect.Enabled = false;
         btnDisconnect.Enabled = true;
-        _decoderClient.Connect();
-        ConnectSplitLoop();
+        _connectingLine = true;
+
+        try
+        {
+            _decoderClient.Connect();
+        }
+        finally
+        {
+            _connectingLine = false;
+        }
+
+        ConnectSplitLoop(userChose);
     }
+
+    /// <summary>
+    /// True while ConnectLine is connecting the EasyLap, which then connects
+    /// the split loop itself. The EasyLap says it is connected before Connect
+    /// returns, and OnDecoderStatusChanged used to connect an I-Lap split
+    /// loop there and then on the REMEMBERED port - so the port picked for
+    /// it was never read, and a wrong remembered port could not be put right
+    /// with Connect.
+    /// </summary>
+    private bool _connectingLine;
 
     private void BtnDisconnect_Click(object? sender, EventArgs e)
     {

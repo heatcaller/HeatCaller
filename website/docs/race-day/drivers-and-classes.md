@@ -65,7 +65,9 @@ When a car changes hands for good — sold or given — transfer it. A car lent 
 3. If any of the owner's transponders are fitted to the car, they're listed with a tick. Untick any that stay with the owner. A transponder that stays with them moves between their cars from now on. The owner's main transponder always stays with them, because their results are filed under it. A transponder can't go to the club. Split transponders fitted to the car always go with it to a driver; going to the club, they stay with the owner.
 4. Click **Transfer to *name***.
 
-The car's photos, notes and setups go with it. Races already run stay with whoever ran them, and setups the old owner logged still show on their **Setups** tab. The car window shows who it was **Transferred from:** and when. If the new owner had no active car, this one becomes it. Undo puts the car and its transponders back with the old owner.
+The car's photos, notes and setups go with it, and setups the old owner logged still show on their **Setups** tab. The car window shows who it was **Transferred from:** and when. If the new owner had no active car, this one becomes it, unless it's retired. Undo puts the car and its transponders back with the old owner.
+
+Races already run stay with whoever ran them, except where a transponder that goes with the car was timed as a car of its own. Those races are saved under the transponder itself, so they count for the new owner, as when a [transponder is transferred](#transfer-a-transponder) on its own. If there are any, HeatCaller lists them before anything moves and asks **Transfer *car* anyway?**. Click **No** to leave everything as it was. To keep those races with the old owner, transfer the car again with that transponder unticked.
 
 A car's owner can only be picked when it's added. After that, use **Transfer**.
 
@@ -92,7 +94,14 @@ When a transponder changes hands for good, transfer it. A transponder that goes 
 4. If it replaces one of theirs, pick it in **It replaces:**. That one is retired: it stays theirs, and so does everything timed on it.
 5. Click **Transfer *number* to *name***.
 
-It leaves the old owner's list and joins the new owner's, in use. Laps timed on it from then on count for the new owner; races already run stay with whoever ran them. A driver's main transponder can't be transferred, because their results, check-ins and badges are filed under it. Undo puts it back with the old owner.
+It leaves the old owner's list and joins the new owner's, in use. Laps timed on it from then on count for the new owner. A driver's main transponder can't be transferred, because their results, check-ins and badges are filed under it. Undo puts it back with the old owner.
+
+Races already run aren't changed, but whose they count as depends on how the transponder was timed in them:
+
+- Where its laps went into the old owner's own row (one of their cars out at a time), the race stays theirs.
+- Where it was timed as a car of its own, for example with two of the old owner's cars out together, the race is saved under the transponder itself, and qualifying and the mains count it for whoever the transponder belongs to now: the new owner.
+
+If it was timed as a car of its own in any race already run, HeatCaller lists those races (up to eight, then how many more) before anything moves, and asks **Transfer it anyway?**. Click **No** to leave it with the old owner.
 
 ### A driver's batteries
 
@@ -165,7 +174,8 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Contact:** | For organizer use only. It's never announced. |
 | **Email:** | Where the driver's personal check-in PIN is sent. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
 | **Transponders:** | The driver's other transponders: a second car's, a spare, a replacement. Type a number and click **Add**. Pick one and click **Retire** when it's no longer used (what was timed on it stays theirs), or **Remove** for one added by mistake. The main transponder is listed first and can be retired too. See [Alternate transponder](../timing/transponders.md#alternate-transponder). |
-| **Class:** | The class the driver races in, or **(none)**. Click **Manage** to open the class list if the class you need doesn't exist yet. |
+| **Class:** | The driver's main class, or **(none)**: the one their card, the check-in sheet, results and badges give as their class. Click **Manage** to open the class list if the class you need doesn't exist yet. |
+| **Also races:** | Any other classes the driver races besides their main one. Click **Choose...** and tick them. See [A driver in more than one class](#a-driver-in-more-than-one-class). |
 | **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, log setups against the car in the [Garage](#garage). |
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |
 | **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
@@ -229,6 +239,7 @@ How the import treats drivers who already exist:
 
 - A transponder that isn't in HeatCaller yet becomes a new profile.
 - A transponder that already has a profile is **updated, not replaced**. Only the columns that are picked *and* filled in on the sheet change anything. The driver's photo and every other field not on the sheet are left alone, and a blank cell never wipes out an existing value.
+- A second row for the same transponder and driver name with a different **Class** is a driver entered in two classes: that class is added to their [other classes](#a-driver-in-more-than-one-class) instead of replacing the first row's, and a different **Car** is added to their cars. Their main class and the car they're announced in stay the first row's. A class or car they already have changes nothing, so importing the same sheet again leaves a driver in both classes.
 - A row is skipped, and nothing is changed for it, when its transponder is another driver's alt transponder, when it gives a different driver name for a transponder that's already in use, or when it repeats an earlier row's transponder with a different name.
 
 When it finishes, **Import complete** tells you how many profiles were imported and how many were new or updated, and how many drivers' points were carried in. Rows with no transponder, rows skipped because of a transponder clash, and rows whose points couldn't be carried in are listed (up to ten of each). The whole import is one step for the sidebar **Undo** button, points included.
@@ -266,11 +277,33 @@ Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** an
 
 When you delete a class, drivers keep the class name on their profile, but it no longer appears in the class list. You can undo a delete with the **Undo** button.
 
+### A driver in more than one class
+
+A driver who races two cars in two classes, a stock car and a modified one, say, keeps one profile, so their history and personal bests stay in one place.
+
+1. In **Driver Hub**, pick the driver and click **Edit Profile**.
+2. Pick their main class in **Class:**.
+3. Click **Choose...** beside **Also races:**. The **Other Classes** window lists the club's classes except the main one: tick the others they race and click **Save**.
+4. Click **Save** on the profile.
+
+From then on:
+
+- **Heats:** building the program deals them into every class they race. With **Only include drivers who have checked in** on, one check-in covers them all.
+- **Their main class** is still the one their card, the check-in sheet, results headings, badges and the announcer give as their class.
+- **Driver Hub** shows a chip for each class they race, the main one first, and **Find** finds them by any of them.
+- **Tech:** **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each, so they agree with the tech warning on Race Control. See [Who still needs inspecting](events-and-entries.md#whos-outstanding).
+- **The phone race manager** lists them under each class they race. Setting a driver's class there changes their main class only, and keeps the others.
+- **Import from CSV:** a second row for the same driver with a different class adds that class to their others. See [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet).
+
+Changing the main class never drops the others. A class they're ticked for that has since been deleted stays on the list, ticked, until you untick it.
+
 ### Rename a class
 
-Change the **Name:** in **Edit** and click **Save**. The new name is carried to everything that uses the class: drivers, rounds, championships, tech inspections, race days, handicap modes, run sheet lines and remembered filters. A **Class renamed** box counts what moved (drivers, rounds, championships, tech inspections, race days and run sheet lines), and one **Undo** puts the old name back everywhere.
+Change the **Name:** in **Edit** and click **Save**. The new name is carried to everything that uses the class: drivers (as their main class or one of their [other classes](#a-driver-in-more-than-one-class)), garage cars, rounds, championships, tech inspections, race days, a race day's **Next race is:** when it's set to that class, handicap modes, run sheet lines and remembered filters. A **Class renamed** box counts what moved (drivers, rounds, championships, tech inspections, race days, run sheet lines, cars and race days' auto-advance pins), and one **Undo** puts the old name back everywhere.
 
-Undoing a rename only puts back the name. Other changes you've made to the class since the rename are kept. Drivers, rounds, championships, tech inspections, race days and run sheet lines added under the new name go back to the old name with it. Race days and run sheet lines that already used the new name before the rename are left as they were, and a race day that listed both names keeps both. The class keeps its own handicap mode through a rename, and the undo restores it. Undoing several renames in a row puts back every handicap mode they replaced.
+Undoing a rename only puts back the name. Other changes you've made to the class since the rename are kept. Drivers, rounds, championships, tech inspections, race days and run sheet lines added under the new name go back to the old name with it. Race days, run sheet lines, cars, and drivers' main or other classes that already used the new name before the rename are left as they were, and a race day that listed both names keeps both. The class keeps its own handicap mode through a rename, and the undo restores it. Undoing several renames in a row puts back every handicap mode they replaced.
+
+If a new class has been given the old name since the rename, the undo is refused and nothing changes, because two classes can't share a name. The console says why ("[undo] FAILED to undo ..."). Rename or delete the new class, then rename this one back by hand.
 
 Class names must be unique, ignoring capitals: "stock" and "Stock" are the same class. A name that's already used is refused with "There is already a class called ...".
 

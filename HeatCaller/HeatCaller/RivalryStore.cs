@@ -20,6 +20,8 @@ public sealed class RivalryStore
 
     public static RivalryStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -35,14 +37,32 @@ public sealed class RivalryStore
         catch (Exception ex)
         {
             // Corrupt/unreadable file: start fresh rather than crashing on launch.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // But, when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new RivalryStore(new List<RivalryLine>());
+        return new RivalryStore(new List<RivalryLine>()) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. A file locked for a moment at
+    /// launch used to load empty, and the first rivalry added or edited
+    /// then replaced every rivalry the club had written.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this near-empty store would replace it. The console has already
+        // said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         var json = JsonSerializer.Serialize(_rivalries, new JsonSerializerOptions { WriteIndented = true });
         SafeFile.WriteAllText(FilePath, json);
     }

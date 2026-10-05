@@ -381,6 +381,11 @@ public sealed class SeasonsControl : UserControl
         var wasBest = season.CountBestRounds;
         var wasEvents = season.IncludedEventIds.ToList();
 
+        // And the races ticked in and out, which turning the rule off now
+        // writes to (see ApplyRules).
+        var wasIncluded = season.IncludedSessionIds.ToList();
+        var wasExcluded = season.ExcludedSessionIds.ToList();
+
         var seasons = _seasons;
         var seasonId = season.Id;
 
@@ -398,15 +403,61 @@ public sealed class SeasonsControl : UserControl
             current.MainsOnly = wasMains;
             current.CountBestRounds = wasBest;
             current.IncludedEventIds = wasEvents.ToList();
+            current.IncludedSessionIds = wasIncluded.ToList();
+            current.ExcludedSessionIds = wasExcluded.ToList();
 
             seasons.Upsert(current);
             RefreshAfterUndo();
         });
 
-        form.ApplyTo(season);
+        ApplyRules(season, form.ApplyTo, _events, _rounds, _history);
         _seasons.Upsert(season);
 
         LoadSelectedSeasonIntoUi();
+    }
+
+    /// <summary>
+    /// Writes the Scoring Rules dialog onto a season.
+    ///
+    /// Turning "Add new races to this championship automatically" off keeps
+    /// the races the rule was counting, as ticks of their own. It used to
+    /// flip the switch alone, and a hand-picked championship counts only its
+    /// ticks - so every race the rule had brought in came off the table (and
+    /// the club's online standings) at once, when turning it off is how a
+    /// director freezes the table at the end of a season.
+    ///
+    /// Turned back on, the ticks the rule takes again come off: only the
+    /// disagreements are stored (see OverridesFor). Left there, every race
+    /// the freeze had copied stayed ticked in by hand, and a later change of
+    /// class or race days kept the old races counting.
+    /// </summary>
+    internal static void ApplyRules(Season season, Action<Season> apply, RaceEventStore? events,
+        RoundDefinitionStore rounds, SessionHistoryStore history)
+    {
+        var wasAuto = season.AutoInclude;
+        var counted = wasAuto
+            ? EventSpine.SessionsFor(season, events, rounds, history).Select(s => s.Id).ToList()
+            : null;
+
+        apply(season);
+
+        if (counted is not null && !season.AutoInclude)
+        {
+            season.IncludedSessionIds = season.IncludedSessionIds
+                .Concat(counted)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+        else if (!wasAuto && season.AutoInclude)
+        {
+            // A race also taken out by hand keeps its tick: the tick is what
+            // has it counting, so dropping it would change the table.
+            season.IncludedSessionIds = season.IncludedSessionIds
+                .Where(id => history.Get(id) is not { } session
+                    || !EventSpine.RuleTakes(season, session, rounds, events, history)
+                    || season.ExcludedSessionIds.Contains(id, StringComparer.Ordinal))
+                .ToList();
+        }
     }
 
     private Season? SelectedSeason() => (_lstSeasons.SelectedItem as SeasonListItem)?.Season;
@@ -580,37 +631,17 @@ public sealed class SeasonsControl : UserControl
             scheme.Add(new PointsSchemeEntry { Position = position, Points = points });
         }
 
-        // A tick means "this race counts". WHY it counts decides where it
-        // is recorded: if the rule already takes it, ticking is simply
-        // agreement and nothing needs storing - only the disagreements
-        // have to be written down. That is what keeps both override lists
-        // small, rather than the season carrying a copy of every race it
-        // happens to include.
-        var forcedIn = new List<string>();
-        var forcedOut = new List<string>();
+        var rows = new List<(SessionRecord Session, bool Ticked)>();
 
         for (var i = 0; i < _clbSessions.Items.Count; i++)
         {
-            if (_clbSessions.Items[i] is not SessionListItem item)
+            if (_clbSessions.Items[i] is SessionListItem item)
             {
-                continue;
-            }
-
-            var ticked = _clbSessions.GetItemChecked(i);
-            // The same test the table counts by - a race whose heat was run
-            // again is not the rule's, so leaving it unticked excludes
-            // nothing and ticking it puts it in by hand.
-            var byRule = season.AutoInclude && EventSpine.RuleTakes(season, item.Session, _rounds, _events, _history);
-
-            if (byRule && !ticked)
-            {
-                forcedOut.Add(item.Session.Id);
-            }
-            else if (!byRule && ticked)
-            {
-                forcedIn.Add(item.Session.Id);
+                rows.Add((item.Session, _clbSessions.GetItemChecked(i)));
             }
         }
+
+        var (forcedIn, forcedOut) = OverridesFor(season, rows, _rounds, _events, _history);
 
         // One undo step per change, like every other edit on this page.
         // Without it a mistaken tick took no step, so Ctrl+Z straight
@@ -671,6 +702,59 @@ public sealed class SeasonsControl : UserControl
         season.ExcludedSessionIds = forcedOut;
 
         _seasons.Upsert(season);
+    }
+
+    /// <summary>
+    /// The two override lists the ticks under Races counted come to.
+    ///
+    /// A tick means "this race counts". WHY it counts decides where it is
+    /// recorded: if the rule already takes it, ticking is simply agreement
+    /// and nothing needs storing - only the disagreements have to be
+    /// written down. That is what keeps both override lists small, rather
+    /// than the season carrying a copy of every race it happens to include.
+    /// </summary>
+    internal static (List<string> ForcedIn, List<string> ForcedOut) OverridesFor(
+        Season season,
+        IEnumerable<(SessionRecord Session, bool Ticked)> rows,
+        RoundDefinitionStore rounds,
+        RaceEventStore? events,
+        SessionHistoryStore history)
+    {
+        var forcedIn = new List<string>();
+
+        // The races already taken out by hand stay out until one is ticked
+        // back in. Rebuilt from the ticks alone, an exclusion was thrown
+        // away on the next tick or points edit once the rule stopped taking
+        // that race - turned off, or narrowed to another class - and turning
+        // the rule back on put the rained-off round back in the table.
+        var forcedOut = season.ExcludedSessionIds.ToList();
+
+        foreach (var (session, ticked) in rows)
+        {
+            // The same test the table counts by - a race whose heat was run
+            // again is not the rule's, so leaving it unticked excludes
+            // nothing and ticking it puts it in by hand.
+            var byRule = season.AutoInclude && EventSpine.RuleTakes(season, session, rounds, events, history);
+
+            if (ticked)
+            {
+                forcedOut.RemoveAll(id => string.Equals(id, session.Id, StringComparison.Ordinal));
+            }
+
+            if (byRule && !ticked)
+            {
+                if (!forcedOut.Contains(session.Id, StringComparer.Ordinal))
+                {
+                    forcedOut.Add(session.Id);
+                }
+            }
+            else if (!byRule && ticked)
+            {
+                forcedIn.Add(session.Id);
+            }
+        }
+
+        return (forcedIn, forcedOut);
     }
 
     private void RecomputeStandings()

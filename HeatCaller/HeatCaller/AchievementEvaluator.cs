@@ -102,7 +102,11 @@ public static partial class AchievementEvaluator
         int GridOf(SessionResultEntry entry) =>
             entry.StartPosition <= 0
                 ? 0
-                : 1 + results.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition);
+                : 1 + results.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition
+                    // A car that never turned a lap held a slot, not a place:
+                    // five no-shows on the front rows made a win from slot 6
+                    // "from P6", the same rule `field` follows.
+                    && o.Laps >= MinimumLapsToCount);
 
         // Every race this driver has run BEFORE this one - the history is
         // the source for anything historical, and this record may or may not
@@ -419,8 +423,11 @@ public static partial class AchievementEvaluator
                 // lined up behind - rather than by slot number: ghosts on
                 // the grid push real slots back, and a slot number would
                 // then call the middle of the field the back.
+                // A car that never turned a lap is not lined up behind
+                // anyone, as for GridOf: a no-show in the last slot took
+                // the badge off the driver really starting last.
                 if (field >= 5 && PlaceOf(entry) <= 3
-                    && !results.Any(o => o.StartPosition > entry.StartPosition))
+                    && !results.Any(o => o.StartPosition > entry.StartPosition && o.Laps >= MinimumLapsToCount))
                 {
                     Award(AchievementCatalogue.ComebackKid, $"P{GridOf(entry)} to P{PlaceOf(entry)}");
                 }
@@ -430,7 +437,8 @@ public static partial class AchievementEvaluator
                 // opening lap is mostly just the shortest one. Counted among
                 // the real cars, for the same reason as above.
                 if (quickestOpeningLap > 0
-                    && results.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition) >= 2
+                    && results.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition
+                        && o.Laps >= MinimumLapsToCount) >= 2
                     && entry.LapTimesMs.Count >= 2 && entry.LapTimesMs[0] == quickestOpeningLap)
                 {
                     Award(AchievementCatalogue.RocketStart, $"from P{GridOf(entry)}");
@@ -738,10 +746,21 @@ public static partial class AchievementEvaluator
             // one of them - a rental or an excluded guest never takes the
             // badge, and never stops the eligible driver behind them from
             // taking it.
-            if (entry.FastLapMs > 0 && entry.FastLapMs == recordLapOfRace
+            //
+            // Where the track layouts are known (Race Control), the record
+            // Track Layouts shows decides instead of history - see
+            // IsLiveTrackRecord. That needs no "quickest of this race" test:
+            // the live record only ever takes a lap under the one standing,
+            // and with it a phantom Race Control refused, quicker than
+            // everyone, no longer stops the driver who really set the record.
+            if (entry.FastLapMs > 0
                 && CanHoldTrackRecord(entry.Transponder, profiles)
                 && !string.IsNullOrWhiteSpace(record.TrackLayoutName)
-                && IsTrackRecord(earlier, record.TrackLayoutName, entry.FastLapMs, profiles))
+                && (context?.TrackLayoutNamed is { } layoutNamed
+                    ? IsLiveTrackRecord(layoutNamed(record.TrackLayoutName), record, entry.FastLapMs)
+                      && BestEverOn(earlier, record.TrackLayoutName, profiles) > 0
+                    : entry.FastLapMs == recordLapOfRace
+                      && IsTrackRecord(earlier, record.TrackLayoutName, entry.FastLapMs, profiles)))
             {
                 if (!driver.TrackRecords.Contains(record.TrackLayoutName, StringComparer.OrdinalIgnoreCase))
                 {
@@ -825,7 +844,10 @@ public static partial class AchievementEvaluator
             // below are numbers only, never the other driver's name - the
             // detail line is published to the club website.
             var beaten = results
-                .Where(o => PlaceOf(o) > PlaceOf(entry) && !string.IsNullOrWhiteSpace(o.Transponder))
+                .Where(o => PlaceOf(o) > PlaceOf(entry) && !string.IsNullOrWhiteSpace(o.Transponder)
+                    // Never beaten by sitting on the line: a car with no laps
+                    // (a hand-released grid files the whole roster) did not race.
+                    && o.Laps >= MinimumLapsToCount)
                 .ToList();
 
             // Ahead of whoever has won the most races at the club - five at
@@ -856,11 +878,14 @@ public static partial class AchievementEvaluator
             // people in THIS race, so it lands on the twentieth.
             // One pass over this driver's races, counting everybody met in
             // each, rather than one pass per person on the grid tonight.
+            // Only cars that turned a lap, there and tonight: a friend who
+            // never left the line was not raced with.
             var racesWith = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var race in myEarlier)
             {
                 foreach (var met in race.Results
+                             .Where(e => e.Laps >= MinimumLapsToCount)
                              .Select(e => e.Transponder)
                              .Where(t => !string.IsNullOrWhiteSpace(t))
                              .Distinct(StringComparer.OrdinalIgnoreCase))
@@ -870,7 +895,8 @@ public static partial class AchievementEvaluator
             }
 
             var mostShared = results
-                .Where(o => !ReferenceEquals(o, entry) && !string.IsNullOrWhiteSpace(o.Transponder))
+                .Where(o => !ReferenceEquals(o, entry) && !string.IsNullOrWhiteSpace(o.Transponder)
+                            && o.Laps >= MinimumLapsToCount)
                 .Select(o => (racesWith.TryGetValue(o.Transponder, out var n) ? n : 0) + 1)
                 .DefaultIfEmpty(0)
                 .Max();
@@ -1071,13 +1097,22 @@ public static partial class AchievementEvaluator
 
     private static bool IsTrackRecord(IEnumerable<SessionRecord> history, string layout, long lapMs, ProfileStore? profiles)
     {
+        var bestEver = BestEverOn(history, layout, profiles);
+
+        // Nothing to beat isn't a record. The first lap ever timed on a new
+        // layout is quickest by default, which is not an achievement.
+        return bestEver > 0 && lapMs < bestEver;
+    }
+
+    /// <summary>The quickest lap any car that may hold a record ran on this layout in these races, or 0.</summary>
+    private static long BestEverOn(IEnumerable<SessionRecord> history, string layout, ProfileStore? profiles) =>
         // Only laps that could ever have been the record count as the bar
         // to beat. Older saved races still carry their ghosts' rows, and a
         // ghost's - or an excluded guest's - quicker lap left there set a
         // bar no real driver could get under, so nobody ever earned the
         // badge on that layout even when the Track Layouts page said they
         // held the record.
-        var bestEver = history
+        history
             .Where(r => string.Equals(r.TrackLayoutName, layout, StringComparison.OrdinalIgnoreCase))
             .SelectMany(r => r.Results)
             .Where(e => e.FastLapMs > 0 && CanHoldTrackRecord(e.Transponder, profiles))
@@ -1085,10 +1120,23 @@ public static partial class AchievementEvaluator
             .DefaultIfEmpty(0)
             .Min();
 
-        // Nothing to beat isn't a record. The first lap ever timed on a new
-        // layout is quickest by default, which is not an achievement.
-        return bestEver > 0 && lapMs < bestEver;
-    }
+    /// <summary>
+    /// Whether this lap is the layout's record as Track Layouts shows it
+    /// now, set during this race.
+    ///
+    /// History alone could not say. Race Control refuses a record lap it
+    /// does not believe (a retriggering transponder near the minimum lap),
+    /// yet the lap stays the driver's best - so the badge went to a phantom,
+    /// and that lap then stood in history as a bar nobody could beat. After
+    /// Reset Record on a re-laid track the old layout's laps were the bar,
+    /// so the new record was announced but never earned the badge. Ties on
+    /// the record lap still share it. A layout that is not on Track Layouts
+    /// has no record to hold, so earns nothing.
+    /// </summary>
+    private static bool IsLiveTrackRecord(TrackLayout? layout, SessionRecord race, long lapMs) =>
+        layout is { RecordLapMs: > 0, RecordSetUtc: { } setUtc }
+        && layout.RecordLapMs == lapMs
+        && setUtc >= race.StartedAtUtc;
 
     /// <summary>Three races in a row on this layout, each quicker than the last.</summary>
     private static bool HasImprovedThreeRunning(IReadOnlyList<SessionRecord> earlier, SessionRecord current, string transponder)
@@ -1137,7 +1185,9 @@ public static partial class AchievementEvaluator
         var place = results.IndexOf(entry);
 
         var behind = results
-            .Where(e => results.IndexOf(e) > place && !string.IsNullOrWhiteSpace(e.DriverName))
+            .Where(e => results.IndexOf(e) > place && !string.IsNullOrWhiteSpace(e.DriverName)
+                // A rival who never turned a lap was not beaten - see `beaten`.
+                && e.Laps >= MinimumLapsToCount)
             .Select(e => e.DriverName)
             .ToList();
 
@@ -1212,12 +1262,17 @@ public static partial class AchievementEvaluator
     /// Ghosts are excluded for the obvious reason: racing your own replay
     /// fifty times is not knowing fifty drivers, and every ghost carries a
     /// transponder of its own, so they counted as fifty different ones.
+    ///
+    /// Only races this driver turned a lap in, and only opponents who did
+    /// too - a hand-released grid files the whole roster, so cars that never
+    /// left the line used to count as drivers met.
     /// </summary>
     private static int DistinctOpponents(IReadOnlyList<SessionRecord> earlier, SessionRecord current, string transponder) =>
         earlier
             .Append(current)
-            .Where(r => r.Results.Any(e => string.Equals(e.Transponder, transponder, StringComparison.OrdinalIgnoreCase)))
+            .Where(r => EntryOf(r, transponder) is { } mine && mine.Laps >= MinimumLapsToCount)
             .SelectMany(r => r.Results)
+            .Where(e => e.Laps >= MinimumLapsToCount)
             .Select(e => e.Transponder)
             .Where(t => !string.IsNullOrWhiteSpace(t)
                         && !GhostService.IsGhost(t)

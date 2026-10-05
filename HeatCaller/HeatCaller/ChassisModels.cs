@@ -281,8 +281,10 @@ public sealed class ChassisTemplateStore
     private static string ImageFolder => Path.Combine(RootFolder, "ChassisImages");
 
     /// <summary>
-    /// Set when chassis-templates.json was there and could not be read, so
-    /// the seeded default is never written over it.
+    /// Set when chassis-templates.json was there and could not be read, and
+    /// either could not be read at all (locked) or no copy of it could be
+    /// kept, so the seeded default is never written over it. A damaged file
+    /// that WAS copied aside does not set it - see Load.
     ///
     /// The file held the club's own setup sheets. An unreadable one - a
     /// half-finished write, a file locked by a backup tool past the retry
@@ -319,13 +321,20 @@ public sealed class ChassisTemplateStore
         }
         catch (Exception ex)
         {
-            // Corrupt or unreadable, and a copy kept. The seeded default is
-            // used for this run but NOT written - see _loadedUnreadable.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Corrupt or unreadable. The seeded default is used for this run
+            // and never written by Load itself. Saves are held for the
+            // session only when the file could not be read at all or no copy
+            // of it could be kept - see SafeFile.HoldWritesAfterUnreadable.
+            // Holding them on a file that was merely damaged, and already
+            // copied aside, meant every sheet made or edited was thrown away
+            // at the end of every session, with no warning, until someone
+            // deleted the file by hand. Once copied, the first real change
+            // the user makes is safe to write.
+            var hold = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
 
             return new ChassisTemplateStore(
                 new List<ChassisTemplate> { ChassisTemplate.CreateKyoshoDefault() },
-                loadedUnreadable: true);
+                loadedUnreadable: hold);
         }
 
         // Nothing there at all, or an empty list: a first run. Seeding and

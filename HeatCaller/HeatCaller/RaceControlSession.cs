@@ -599,6 +599,9 @@ public sealed partial class RaceControlSession
     private readonly HashSet<string> _tookTheFlag = new(StringComparer.OrdinalIgnoreCase);
 
     private DateTime? _finishingSinceUtc;
+
+    /// <summary>_finishingSinceUtc on the monotonic clock (TimingClock.NowMs) - what the straggler wait is measured with. See _raceStartClockMs.</summary>
+    private long? _finishingSinceClockMs;
     private bool _finishingOnTime;
 
     /// <summary>
@@ -627,6 +630,7 @@ public sealed partial class RaceControlSession
         IsFinishing = true;
         _finishingOnTime = timeLimitReached;
         _finishingSinceUtc = DateTime.UtcNow;
+        _finishingSinceClockMs = TimingClock.NowMs;
         _tookTheFlag.Clear();
 
         SetFlag(FlagState.Checkered);
@@ -671,6 +675,41 @@ public sealed partial class RaceControlSession
             Log("Every car has taken the flag.");
             Finish(_finishingOnTime);
         }
+    }
+
+    /// <summary>A row taken off the board mid-race - a ghost switched off (RemoveGhostStanding).</summary>
+    public event Action<RacerStanding>? StandingRemoved;
+
+    /// <summary>
+    /// Takes a ghost switched off mid-race off the board. Ghosts only - a
+    /// real car's row is never removed this way - and only while racing.
+    ///
+    /// Switching a ghost off used to stop it lapping and leave its row
+    /// behind, frozen: the finish waited on it to take the flag until the
+    /// 60s grace ran out, the track map called it a stopped car, and every
+    /// driver ahead of the frozen row was credited with beating it.
+    /// </summary>
+    public bool RemoveGhostStanding(string transponderId)
+    {
+        if (State != RaceState.Racing || !Ghosts.IsGhost(transponderId)
+            || !_standings.Remove(transponderId, out var standing))
+        {
+            return false;
+        }
+
+        _tookTheFlag.Remove(transponderId);
+        Log($"Ghost {transponderId} switched off - taken off the board.");
+        SafeRaise(StandingRemoved, h => h(standing), nameof(StandingRemoved));
+
+        // Switched off after the checkered, it may have been the last car
+        // the finish was waiting on.
+        if (IsFinishing && _standings.Keys.All(k => _tookTheFlag.Contains(k)))
+        {
+            Log("Every car has taken the flag.");
+            Finish(_finishingOnTime);
+        }
+
+        return true;
     }
 
     /// <summary>Race ends automatically after this much real time has elapsed. Null = no time limit.</summary>
@@ -778,6 +817,18 @@ public sealed partial class RaceControlSession
     private const long JumpStartCreditWindowMs = 8000;
 
     /// <summary>
+    /// How soon after the green a car credited with the start lap can cross
+    /// and be taken for one that was behind the line all along - see
+    /// ProcessLapEvent. A car sitting just behind the line is over it within
+    /// a second or so of the green.
+    ///
+    /// Fixed, not the minimum lap time: that is set a little under the
+    /// quickest real lap, and a car that went on the first light of the
+    /// countdown comes round a whole lap later well inside it.
+    /// </summary>
+    private const long BehindTheLineAtTheGreenWindowMs = 2000;
+
+    /// <summary>
     /// Raised when a car crosses the line before the green drops. Carries
     /// the driver and the penalty applied (zero when flagging only).
     /// </summary>
@@ -801,6 +852,50 @@ public sealed partial class RaceControlSession
 
     /// <summary>When the current red flag began, or null if not currently red.</summary>
     private DateTime? _redFlagStartedUtc;
+
+    /// <summary>_redFlagStartedUtc on the monotonic clock (TimingClock.NowMs). See _raceStartClockMs.</summary>
+    private long? _redFlagStartedClockMs;
+
+    /// <summary>
+    /// RaceStartUtc on the monotonic clock (TimingClock.NowMs) - what the
+    /// race clock is actually measured with.
+    ///
+    /// The race clock, the time limit and the wait for stragglers used to
+    /// be worked out from DateTime.UtcNow, which is the wall clock - and
+    /// Windows steps the wall clock when it syncs the time. A laptop that
+    /// joined the Wi-Fi mid-heat and was stepped 40 seconds forward threw
+    /// the checkered on a 5:00 race 40 seconds early (a step back ran it
+    /// long), and the same step could call the race on its stragglers or
+    /// "correct" a start reference that was fine. TimingClock only ever goes
+    /// forward, so durations are measured on it; the UTC stamps are kept as
+    /// they were, for the screens, the journal and the snapshot an undo
+    /// puts back.
+    ///
+    /// Each one is set wherever its UTC stamp is, and null when that is.
+    /// A stamp put back from a snapshot or the journal has no reading of
+    /// its own, so it is placed on the monotonic clock from the wall clock
+    /// once, as it comes back (ClockMsAt) - the race then runs on from
+    /// there unmoved by any later time sync.
+    /// </summary>
+    private long? _raceStartClockMs;
+
+    /// <summary>
+    /// Where a wall-clock moment falls on the monotonic clock
+    /// (TimingClock.NowMs), read against the wall clock now. Only for a
+    /// stamp put back from a snapshot or the journal, which has no reading
+    /// of its own - see _raceStartClockMs.
+    /// </summary>
+    private static long ClockMsAt(DateTime utc) =>
+        TimingClock.NowMs - (long)(DateTime.UtcNow - utc).TotalMilliseconds;
+
+    /// <summary>
+    /// Milliseconds since the green on the monotonic clock - red flags
+    /// included, unlike ElapsedRaceTime - or 0 with no race start. What
+    /// the ghosts are timed with, and what the start reference is checked
+    /// against. See _raceStartClockMs.
+    /// </summary>
+    public long MsSinceGreen =>
+        RaceStartUtc is { } start ? TimingClock.NowMs - (_raceStartClockMs ?? ClockMsAt(start)) : 0;
 
     /// <summary>
     /// The race clock as it stood the moment the race finished - see
@@ -848,14 +943,17 @@ public sealed partial class RaceControlSession
                 return TimeSpan.Zero;
             }
 
-            var raw = DateTime.UtcNow - start - _accumulatedRedTime;
+            // On the monotonic clock, so a Windows time sync mid-race does
+            // not move it - see _raceStartClockMs.
+            var nowMs = TimingClock.NowMs;
+            var raw = TimeSpan.FromMilliseconds(nowMs - (_raceStartClockMs ?? ClockMsAt(start))) - _accumulatedRedTime;
 
             // Subtract the in-progress red period too, so the clock is
             // visibly frozen while the flag is out rather than jumping
             // backwards when it clears.
             if (_redFlagStartedUtc is { } redStart)
             {
-                raw -= DateTime.UtcNow - redStart;
+                raw -= TimeSpan.FromMilliseconds(nowMs - (_redFlagStartedClockMs ?? ClockMsAt(redStart)));
             }
 
             return raw < TimeSpan.Zero ? TimeSpan.Zero : raw;
@@ -905,8 +1003,13 @@ public sealed partial class RaceControlSession
     /// </summary>
     public long LastKnownDeviceTimeMs { get; private set; }
 
-    /// <summary>Wall-clock moment LastKnownDeviceTimeMs was received, for estimating the decoder clock between passes.</summary>
-    private DateTime? _lastKnownDeviceWallUtc;
+    /// <summary>
+    /// When LastKnownDeviceTimeMs was received (TimingClock.NowMs), for
+    /// estimating the decoder clock between passes. The monotonic clock
+    /// rather than the wall clock, so a time sync between the last pass
+    /// and the green does not move the race's start reference.
+    /// </summary>
+    private long? _lastKnownDeviceClockMs;
 
     /// <summary>
     /// Best estimate of what the decoder's clock reads RIGHT NOW: the last
@@ -918,8 +1021,8 @@ public sealed partial class RaceControlSession
     /// Time then included that whole gap.
     /// </summary>
     public long EstimatedDeviceTimeNowMs =>
-        _lastKnownDeviceWallUtc is { } wall
-            ? LastKnownDeviceTimeMs + (long)(DateTime.UtcNow - wall).TotalMilliseconds
+        _lastKnownDeviceClockMs is { } receivedMs
+            ? LastKnownDeviceTimeMs + (TimingClock.NowMs - receivedMs)
             : LastKnownDeviceTimeMs;
 
     /// <summary>Whether the start reference has been sanity-checked against the first real pass of this race.</summary>
@@ -1192,7 +1295,78 @@ public sealed partial class RaceControlSession
 
         Log($"Manual adjustment: {transponderId} laps {before} -> {standing.Laps}");
         SafeRaise(StandingAdjusted, h => h(standing), nameof(StandingAdjusted));
+
+        // After the board has been told, so a finish this sets off is not
+        // taken for a correction made after the flag.
+        ApplyLapLimitAfterCorrection(standing, before);
         return true;
+    }
+
+    /// <summary>
+    /// The lap limit, looked at again after a driver's laps were corrected
+    /// by hand. It was only ever checked on a counted crossing, so a
+    /// correction at the end of a lap race never moved the finish: +1 Lap
+    /// for the leader's missed last crossing left the checkered in until
+    /// somebody crossed at the limit again (the leader a lap too many), and
+    /// -1 Lap on a phantom crossing that had brought the checkered out (a
+    /// double read, a car carried back across the loop) left that driver
+    /// marked as having taken it, so their real last lap was thrown away and
+    /// they were classified a lap down.
+    ///
+    /// The checkered is never taken back in. Cars may already have taken it
+    /// and pulled off, and a green now would be called as the start; a race
+    /// flagged early ends there.
+    /// </summary>
+    private void ApplyLapLimitAfterCorrection(RacerStanding standing, int lapsBefore)
+    {
+        if (LapLimit is not { } limit || State != RaceState.Racing || IsPracticeMode)
+        {
+            return;
+        }
+
+        var id = standing.TransponderId;
+
+        if (lapsBefore >= limit && standing.Laps < limit)
+        {
+            // Only for the car that brought the checkered out: the first to
+            // take it, so every other real car took it on a later crossing.
+            // Those others took it with the flag already out, which finishes
+            // them whatever their count - a lap taken off for an earlier
+            // double read changes nothing about that.
+            var broughtItOut = _tookTheFlag.All(k =>
+                string.Equals(k, id, StringComparison.OrdinalIgnoreCase)
+                || Ghosts.IsGhost(k)
+                || !_standings.TryGetValue(k, out var other)
+                || other.LastLapDeviceTimeMs > standing.LastLapDeviceTimeMs);
+
+            if (IsFinishing && !_finishingOnTime && broughtItOut && _tookTheFlag.Remove(id))
+            {
+                Log($"{id} is below the lap limit again - their next crossing takes the checkered flag.");
+            }
+
+            return;
+        }
+
+        // Brought up to the limit while the flag is still in: the lap added
+        // is the crossing that reached it, so the checkered comes out as it
+        // would have then. Not for a ghost while real cars race, and not
+        // under a red, when no crossing would have counted either.
+        var isGhost = _standings.Keys.Any(k => !Ghosts.IsGhost(k)) && Ghosts.IsGhost(id);
+
+        if (lapsBefore < limit && standing.Laps >= limit && !IsFinishing && !isGhost && Flag != FlagState.Red)
+        {
+            Log($"Lap limit of {limit} reached by {id} - lap added by hand.");
+
+            if (FinishOnNextCrossing)
+            {
+                BeginFinishing(timeLimitReached: false);
+                MarkTookTheFlag(id);
+            }
+            else
+            {
+                Finish(timeLimitReached: false);
+            }
+        }
     }
 
     /// <summary>
@@ -1204,11 +1378,16 @@ public sealed partial class RaceControlSession
     private void RecomputeAfterLapRemoval(RacerStanding standing)
     {
         // Index 0 is the start lap and never a best - see ProcessLapEvent.
+        // For a jump-starter credited the start lap at the green, index 1
+        // is their start lap in effect (the dash from wherever they crossed
+        // before the green) and is left out too, the same as ProcessLapEvent
+        // does - see RacerStanding.StartLapCredited.
         // Nor is a lap that ran through a crash recovery: it spans the
         // stoppage, and left in here it could become the driver's best (or
         // the yardstick below) the moment the laps around it were removed.
+        var lastStartLapIndex = standing.StartLapCredited ? 1 : 0;
         standing.FastestLapMs = standing.LapTimesMs
-            .Where((t, i) => i > 0 && t > 0 && !standing.IsRecoveryLap(i))
+            .Where((t, i) => i > lastStartLapIndex && t > 0 && !standing.IsRecoveryLap(i))
             .DefaultIfEmpty(0)
             .Min();
 
@@ -1217,7 +1396,7 @@ public sealed partial class RaceControlSession
         // A recovery lap is never the yardstick for the next one - the same
         // as ProcessLapEvent leaves it, where it zeroes the baseline.
         var lastLapIndex = standing.LapTimesMs.Count - 1;
-        standing.StreakBaselineLapMs = lastLapIndex >= 1 && !standing.IsRecoveryLap(lastLapIndex)
+        standing.StreakBaselineLapMs = lastLapIndex > lastStartLapIndex && !standing.IsRecoveryLap(lastLapIndex)
             ? standing.LapTimesMs[lastLapIndex]
             : 0;
 
@@ -1486,6 +1665,12 @@ public sealed partial class RaceControlSession
         // correction and booked on a lap since must not be owed twice.
         internal bool OwedJumpStartCleared { get; set; }
 
+        // Whether the driver had taken the checkered either side of the
+        // correction - a lap correction at the limit can change that (see
+        // ApplyLapLimitAfterCorrection), and Undo puts it back.
+        internal bool TookTheFlagBefore { get; init; }
+        internal bool TookTheFlagAfter { get; set; }
+
         internal bool LapsChanged =>
             LapsAfter != LapsBefore || !LapTimesAfter.SequenceEqual(LapTimesBefore);
     }
@@ -1522,6 +1707,7 @@ public sealed partial class RaceControlSession
             WarningsBefore = standing.Warnings.ToList(),
             WarningPenaltiesBefore = standing.Warnings.Select(w => w.PenaltyMs).ToList(),
             OwedJumpStartBefore = _pendingJumpStartPenalties.TryGetValue(transponderId, out var owed) ? (long?)owed : null,
+            TookTheFlagBefore = _tookTheFlag.Contains(standing.TransponderId),
         };
 
         if (!change())
@@ -1539,6 +1725,7 @@ public sealed partial class RaceControlSession
         // taken off the board still carries the note it had.
         edit.WarningPenaltiesAfter = edit.WarningsBefore.Select(w => w.PenaltyMs).ToList();
         edit.OwedJumpStartCleared = edit.OwedJumpStartBefore is not null && !_pendingJumpStartPenalties.ContainsKey(transponderId);
+        edit.TookTheFlagAfter = _tookTheFlag.Contains(standing.TransponderId);
 
         var nothingChanged = !edit.LapsChanged
                              && edit.PenaltyAfter == edit.PenaltyBefore
@@ -1716,6 +1903,21 @@ public sealed partial class RaceControlSession
 
         Log($"Undo: correction to {edit.TransponderId} reversed (laps {standing.Laps}, penalty {standing.PenaltyMs / 1000.0:0.0}s)");
         SafeRaise(StandingAdjusted, h => h(standing), nameof(StandingAdjusted));
+
+        // Whether the driver has taken the checkered goes back as the
+        // correction found it, while that finish is still going on - after
+        // the board has been told, as in AdjustLaps. The flag stays out.
+        if (IsFinishing && State == RaceState.Racing && edit.TookTheFlagBefore != edit.TookTheFlagAfter)
+        {
+            if (edit.TookTheFlagBefore)
+            {
+                MarkTookTheFlag(standing.TransponderId);
+            }
+            else if (_tookTheFlag.Remove(standing.TransponderId))
+            {
+                Log($"{standing.TransponderId} has not taken the checkered flag after all - their next crossing takes it.");
+            }
+        }
     }
 
     public IReadOnlyList<RacerStanding> GetOrderedStandings() =>
@@ -2104,6 +2306,45 @@ public sealed partial class RaceControlSession
                 return;
             }
 
+            // A car already at the lap limit got there while the field was
+            // stopped: a missed crossing added by hand under the red, which
+            // leaves the checkered in (see ApplyLapLimitAfterCorrection).
+            // Nothing looked again here, so the green went out, the leader
+            // had to cross once more before the checkered came out, and the
+            // whole field ran a lap long. The restart puts it out instead, as
+            // the crossing that reached the limit would have, and every car
+            // already there has finished. Not for a ghost while real cars
+            // race, which can never put the checkered out.
+            if (LapLimit is { } limit && !IsPracticeMode)
+            {
+                var realCarsRacing = _standings.Keys.Any(k => !Ghosts.IsGhost(k));
+                var atTheLimit = _standings.Values
+                    .Where(s => s.Laps >= limit && !(realCarsRacing && Ghosts.IsGhost(s.TransponderId)))
+                    .Select(s => s.TransponderId)
+                    .ToList();
+
+                if (atTheLimit.Count > 0)
+                {
+                    Log($"Lap limit of {limit} already reached by {string.Join(", ", atTheLimit)} - the race resumes on its last lap.");
+
+                    if (FinishOnNextCrossing)
+                    {
+                        BeginFinishing(timeLimitReached: false);
+
+                        foreach (var id in atTheLimit)
+                        {
+                            MarkTookTheFlag(id);
+                        }
+                    }
+                    else
+                    {
+                        Finish(timeLimitReached: false);
+                    }
+
+                    return;
+                }
+            }
+
             SetFlag(FlagState.Green);
             Log("Green flag - racing resumes.");
             return;
@@ -2140,6 +2381,7 @@ public sealed partial class RaceControlSession
 
         IsFinishing = false;
         _finishingSinceUtc = null;
+        _finishingSinceClockMs = null;
         _tookTheFlag.Clear();
 
         _standings.Clear();
@@ -2273,6 +2515,10 @@ public sealed partial class RaceControlSession
             }
         }
         _startReferenceChecked = false;
+        // The monotonic reading first: read from another thread (the
+        // ghosts) between the two, the old race's reading under the new
+        // start would make it look minutes into the race.
+        _raceStartClockMs = TimingClock.NowMs;
         RaceStartUtc = DateTime.UtcNow;
         SetState(RaceState.Racing);
         GreenStartedTheRace = true;
@@ -2296,6 +2542,7 @@ public sealed partial class RaceControlSession
         if (Flag != FlagState.Red)
         {
             _redFlagStartedUtc = DateTime.UtcNow;
+            _redFlagStartedClockMs = TimingClock.NowMs;
         }
         SetFlag(FlagState.Red);
         Log("Red flag - race clock paused, laps will not be counted until green resumes.");
@@ -2306,8 +2553,10 @@ public sealed partial class RaceControlSession
     {
         if (_redFlagStartedUtc is { } redStart)
         {
-            _accumulatedRedTime += DateTime.UtcNow - redStart;
+            // Measured on the monotonic clock - see _raceStartClockMs.
+            _accumulatedRedTime += TimeSpan.FromMilliseconds(TimingClock.NowMs - (_redFlagStartedClockMs ?? ClockMsAt(redStart)));
             _redFlagStartedUtc = null;
+            _redFlagStartedClockMs = null;
 
             // Nobody can take a flag while the field is stopped, so the wait
             // for stragglers starts again when it moves. Otherwise a red
@@ -2317,6 +2566,7 @@ public sealed partial class RaceControlSession
             if (IsFinishing)
             {
                 _finishingSinceUtc = DateTime.UtcNow;
+                _finishingSinceClockMs = TimingClock.NowMs;
             }
         }
     }
@@ -2365,6 +2615,7 @@ public sealed partial class RaceControlSession
 
         IsFinishing = false;
         _finishingSinceUtc = null;
+        _finishingSinceClockMs = null;
 
         // Read while the state is still Racing, so it is the live clock -
         // and a finish under red stops it where the red did.
@@ -2485,6 +2736,11 @@ public sealed partial class RaceControlSession
                 RejectedLaps = s.RejectedLaps,
                 LapsLed = s.LapsLed,
                 StartPosition = s.StartPosition,
+
+                // Copied too, or an undone Reset or Stage brought a credited
+                // jump-starter back without it, and their grid dash then
+                // competed for best lap - see RacerStanding.StartLapCredited.
+                StartLapCredited = s.StartLapCredited,
             };
             copy.LapTimesMs.AddRange(s.LapTimesMs);
             copy.StreakAtLap.AddRange(s.StreakAtLap);
@@ -2622,6 +2878,10 @@ public sealed partial class RaceControlSession
         _raceStartDeviceTimeMs = snapshot.RaceStartDeviceTimeMs;
         _accumulatedRedTime = snapshot.AccumulatedRedTime;
         _redFlagStartedUtc = snapshot.RedFlagStartedUtc;
+
+        // Placed on the monotonic clock once, here - see _raceStartClockMs.
+        _raceStartClockMs = RaceStartUtc is { } restoredStart ? ClockMsAt(restoredStart) : null;
+        _redFlagStartedClockMs = _redFlagStartedUtc is { } restoredRed ? ClockMsAt(restoredRed) : null;
         _raceFastestLapMs = snapshot.RaceFastestLapMs;
         _raceFastestLapTransponder = snapshot.RaceFastestLapTransponder;
 
@@ -2632,6 +2892,7 @@ public sealed partial class RaceControlSession
         // when the flag came out - a journal restored after a crash - so a
         // race that was on its last lap is not called the moment it resumes.
         _finishingSinceUtc = snapshot.IsFinishing ? (DateTime?)(snapshot.FinishingSinceUtc ?? DateTime.UtcNow) : null;
+        _finishingSinceClockMs = _finishingSinceUtc is { } restoredFinishing ? ClockMsAt(restoredFinishing) : null;
 
         if (!snapshot.IsFinishing)
         {
@@ -2814,11 +3075,14 @@ public sealed partial class RaceControlSession
         IsFinishing = false;
         _finishingOnTime = false;
         _finishingSinceUtc = null;
+        _finishingSinceClockMs = null;
         _tookTheFlag.Clear();
         _raceStartDeviceTimeMs = null;
         RaceStartUtc = null;
+        _raceStartClockMs = null;
         _accumulatedRedTime = TimeSpan.Zero;
         _redFlagStartedUtc = null;
+        _redFlagStartedClockMs = null;
         EndWarmUp("Warm-up cancelled.");
         SetState(RaceState.Idle);
         SetFlag(FlagState.None);
@@ -2913,7 +3177,9 @@ public sealed partial class RaceControlSession
         // that exists for cars which have stopped.
         var grace = FinishGrace + LastWindowExtension;
 
-        if (IsFinishing && _finishingSinceUtc is { } since && DateTime.UtcNow - since > grace)
+        // On the monotonic clock - see _raceStartClockMs.
+        if (IsFinishing && _finishingSinceUtc is { } since
+            && TimeSpan.FromMilliseconds(TimingClock.NowMs - (_finishingSinceClockMs ?? ClockMsAt(since))) > grace)
         {
             var waitingOn = _standings.Keys.Where(k => !_tookTheFlag.Contains(k)).ToList();
             Log($"Calling the race {grace.TotalSeconds:0}s after the flag - still waiting on {Plural.Of(waitingOn.Count, "car")}: {string.Join(", ", waitingOn)}");

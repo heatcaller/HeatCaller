@@ -2004,6 +2004,24 @@ public sealed class RaceProgramControl : UserControl
             ? 1
             : Math.Max(1, (int)Math.Ceiling(roster.Count / (double)Math.Max(1, heatSize)));
 
+        return DealIntoHeats(roster, heatCount, heatSize, round);
+    }
+
+    /// <summary>
+    /// DealQualifyingHeats into a set number of heats, for Redo Remaining
+    /// Heats, which re-deals heats already on the program and has to fill
+    /// every one of them. Working the count back out from a heat size can
+    /// come out short: 9 drivers in 4 heats is 3 a heat, which is 3 heats.
+    /// </summary>
+    internal static List<List<string>> DealQualifyingHeatsInto(IReadOnlyList<string> roster, int heatCount, int round)
+    {
+        heatCount = Math.Max(1, heatCount);
+
+        return DealIntoHeats(roster, heatCount, (int)Math.Ceiling(roster.Count / (double)heatCount), round);
+    }
+
+    private static List<List<string>> DealIntoHeats(IReadOnlyList<string> roster, int heatCount, int heatSize, int round)
+    {
         var heats = Enumerable.Range(0, heatCount).Select(_ => new List<string>()).ToList();
 
         if (roster.Count == 0)
@@ -3703,8 +3721,13 @@ public sealed class RaceProgramControl : UserControl
     /// it already, and the only thing left is to mark it done
     /// (SkipBumpUps). Otherwise Message is the question to ask before
     /// ApplyBumpUpsInto.
+    ///
+    /// <paramref name="nameOf"/> names each driver in the message; without
+    /// it, the name their feeder result was filed under. The race-day
+    /// manager hands its own, so a car nobody named isn't sent through the
+    /// relay as its whole transponder (RaceDayService.ShownPromotionName).
     /// </summary>
-    public BumpUpsAnswer PlanBumpUps(string className)
+    public BumpUpsAnswer PlanBumpUps(string className, Func<MainsBuilder.PlannedPromotion, string>? nameOf = null)
     {
         // Before the mains are even gathered: a club night has none by
         // design, and "no tiered mains" below would be true but would read
@@ -3759,12 +3782,13 @@ public sealed class RaceProgramControl : UserControl
         var plan = MainsBuilder.PlanBumpUp(target, feederResults, _profiles);
         var movable = plan.Movable;
         var alreadyThere = plan.AlreadyThere;
+        var name = nameOf ?? (r => r.DriverName);
 
         if (movable.Count == 0)
         {
             var who = alreadyThere.Count > 0
                 ? $"\r\n\r\nAlready in {target.RoundLabel}:\r\n"
-                  + string.Join("\r\n", alreadyThere.Select(r => $"   {r.DriverName}"))
+                  + string.Join("\r\n", alreadyThere.Select(r => $"   {name(r)}"))
                 : string.Empty;
 
             return new BumpUpsAnswer(true, "Nothing to bump",
@@ -3773,7 +3797,7 @@ public sealed class RaceProgramControl : UserControl
                 target, feeder, true);
         }
 
-        var names = string.Join("\r\n", movable.Select(r => $"   P{r.Position}  {r.DriverName}"));
+        var names = string.Join("\r\n", movable.Select(r => $"   P{r.Position}  {name(r)}"));
 
         var skipped = alreadyThere.Count > 0
             ? $"\r\n\r\n{alreadyThere.Count} of the top finishers are already in {target.RoundLabel} and will be left alone."

@@ -1155,7 +1155,7 @@ public sealed class GarageControl : UserControl
     /// <summary>Gives a car to someone else for good (CarTransferring) - from a driver's page, where it then leaves their garage.</summary>
     private void TransferCar(Car car)
     {
-        if (!CarTransferring.Run(this, car, _cars, _profiles, _undo))
+        if (!CarTransferring.Run(this, car, _cars, _profiles, _undo, _history))
         {
             return;
         }

@@ -1999,8 +1999,9 @@ public sealed partial class ProfileManagerControl : UserControl
         // below, so it can be fetched back.
         _undo.Capture($"Change photo for {DescribeDeleted(profile)}", () =>
         {
-            if (store.Get(transponder) is not { } current
-                || !string.Equals(current.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+            // This driver, not just whoever is on the transponder now - see
+            // CurrentVersionOf.
+            if (store.CurrentVersionOf(profile, transponder) is not { } current)
             {
                 throw new InvalidOperationException($"the driver on {transponder} has been deleted since, so there is no photo to put back.");
             }
@@ -2452,26 +2453,16 @@ public sealed partial class ProfileManagerControl : UserControl
 
                 profile.AnnouncerName = MergeField(profile.AnnouncerName, fields, announcerCol);
                 profile.RaceNumber = MergeField(profile.RaceNumber, fields, numberCol);
-                profile.CarModel = MergeField(profile.CarModel, fields, carCol);
                 // A second row for a driver already read from this sheet, in
                 // a different class, is a driver entered in two classes -
                 // what a club's export does for someone running two cars.
-                // That class is added as one of their others rather than
-                // overwriting the first row's. Any other row sets the main
-                // class, as it always did.
-                var rowClass = GetField(fields, classCol);
-
-                if (pending is not null
-                    && !string.IsNullOrWhiteSpace(rowClass)
-                    && !string.IsNullOrWhiteSpace(profile.ClassName)
-                    && !profile.RunsClass(rowClass))
-                {
-                    profile.Classes = (profile.Classes ?? new List<string>()).Append(rowClass.Trim()).ToList();
-                }
-                else
-                {
-                    profile.ClassName = MergeField(profile.ClassName, fields, classCol);
-                }
+                // That class and car are added to their others rather than
+                // overwriting the first row's (DriverImport.MergeClass and
+                // MergeCar). Any other row sets the main class and the active
+                // car, as it always did.
+                var repeatRow = pending is not null;
+                DriverImport.MergeCar(profile, repeatRow, GetField(fields, carCol));
+                DriverImport.MergeClass(profile, repeatRow, GetField(fields, classCol));
                 profile.Team = MergeField(profile.Team, fields, teamCol);
                 profile.Sponsors = MergeField(profile.Sponsors, fields, sponsorsCol);
                 profile.Notes = MergeField(profile.Notes, fields, notesCol);

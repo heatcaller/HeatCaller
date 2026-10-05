@@ -137,9 +137,10 @@ public sealed partial class RaceDayService
         // practice used to stop every lap counting, with no green that could
         // clear it) - otherwise the phone read "RED sent" for a flag the
         // laptop had turned down with a dialog nobody near the phone saw.
-        if (race.IsPracticeMode && flag is "stage" or "countdown" or "green" or "checkered" or "reset" or "red")
+        // And yellow, for the same reason - see PracticeRefusal.
+        if (PracticeRefusal(flag, race.IsPracticeMode) is { } inPractice)
         {
-            throw new OpRefused("Practice is running - stop it on the Practice page first.");
+            throw new OpRefused(inPractice);
         }
 
         // A checkered with no race running, and a green on the last lap, are
@@ -226,4 +227,17 @@ public sealed partial class RaceDayService
 
         return OpResult.Done($"Sent {flag.ToUpperInvariant()}", $"{flag.ToUpperInvariant()} sent.", new { flag, sent = true });
     }
+
+    /// <summary>
+    /// The phone's answer to a flag Race Control would refuse because
+    /// practice is running, or null when it isn't refused for that.
+    ///
+    /// Yellow is refused as red is. It used to be sent: a yellow in practice
+    /// can't be cleared (Green is refused while practice runs), and the
+    /// announcer held every lap call under it until practice was stopped.
+    /// </summary>
+    internal static string? PracticeRefusal(string flag, bool practiceRunning) =>
+        practiceRunning && flag is "stage" or "countdown" or "green" or "yellow" or "checkered" or "reset" or "red"
+            ? "Practice is running - stop it on the Practice page first."
+            : null;
 }

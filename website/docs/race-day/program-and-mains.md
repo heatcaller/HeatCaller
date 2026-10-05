@@ -119,6 +119,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 HeatCaller builds every planned qualifying round for every class that's racing and has drivers:
 
 - **Heats per round.** Each class's drivers are split into as few heats as the **Drivers per heat:** setting allows. For example, 13 drivers with 8 per heat makes 2 heats (7 and 6). Drivers are dealt into the heats in turn, so heats come out within one driver of each other.
+- **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
 - **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
 - **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on.
@@ -137,11 +138,11 @@ If some of the new heats have been run by the time you undo, they're kept with t
 
 Select a round and click **Edit Drivers**. In **Drivers in *round***, tick the drivers to include and use **Move Up** / **Move Down** to set their order — that's the order they appear on the heat sheet. **Select All** and **Clear All** tick or untick everyone. Click **Save**.
 
-The list shows the class's drivers. To add someone from another class (a late entry, say), click **Add Driver** — they're shown with "(not in this class)" beside their name.
+The list shows the class's drivers, including those who race it as one of their other classes. To add someone from another class (a late entry, say), click **Add Driver** — they're shown with "(not in this class)" beside their name, every time the round is opened.
 
 If the round has already run, HeatCaller warns you that changing its drivers only affects the program, not the recorded results. A round that's on track can't be changed until it has finished. The change can be undone with **Undo**.
 
-For a no-show or a late entry across every heat still to run, **Redo Remaining Heats** on **Race Control** rebuilds them all from who is checked in now. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
+For a no-show or a late entry across every heat still to run, **Redo Remaining Heats** on **Race Control** rebuilds them all from who is checked in now. Drivers you added to a heat by hand from another class stay in it, and nobody is put into a round they have already raced. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
 
 ### Balance heats
 
@@ -193,7 +194,7 @@ If a race is already running on **Race Control**, HeatCaller asks "Abandon the r
 
 A race started from the program is recorded against its round. A race run without a round picked on **Race Control** (a race started by hand, for example) is handled by **Start the next race automatically** on **Race Day → Setup** (on by default): HeatCaller records it against the next round that hasn't run yet, so you work through the program without picking each round by hand. **Next race is:** sets which round it picks:
 
-- **the class that was racing** (the default) — the next round for the class most of the drivers on track belong to.
+- **the class that was racing** (the default) — the unrun heat whose drivers were the ones on track: the one that holds the most of them, the earliest in the program on a tie. If no unrun heat has them, the next round for the class most of the drivers on track belong to.
 - **any class, in program order** — the next unrun round overall.
 - **only "*class*"** — the next round for that one class.
 
@@ -280,9 +281,11 @@ If the class has no recorded qualifying yet, seeding offers to add a main by han
 
 ### Add a main by hand
 
-For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests "A-Main", then "B-Main", based on the mains already in today's program), pick a **Track Layout:**, and tick the drivers under **Drivers in this main:**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
+For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests the next letter, "A-Main", then "B-Main", "C-Main" and so on, based on the mains already in today's program), pick a **Track Layout:**, and tick the drivers under **Drivers in this main:**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
 
-A hand-added main takes part in bump-ups only if its label names a tier — "A-Main", "B Main", "C" and so on. A label like "Consolation" isn't treated as a tier, and shows as **Main (no tier)** in the **Kind** column.
+A hand-added main takes part in bump-ups only if its label names a tier — "A-Main", "B Main", "A Final", "C" and so on. A label like "Consolation" isn't treated as a tier, and shows as **Main (no tier)** in the **Kind** column.
+
+Lower mains run first, so their top finishers can bump up before the main above them runs. A tiered main you add goes in front of the first higher main still to run, and HeatCaller says where it put it. If every main above it has already run or is on track, it says its finishers can't bump up into them.
 
 ## Bump-ups
 
@@ -383,6 +386,8 @@ The timetable's times show up elsewhere too: in the **Due** column of **Tonight'
 ### Add and change lines
 
 **Add Entry** adds a line of your own. In **Add Schedule Entry**, set a **Time:** (or tick **No set time**), a **Class:**, and a **Description:** such as "Lunch". You need at least a class or a description. The new line goes straight after the selected line, or at the end if nothing is selected, and it stays in that place as the program changes around it.
+
+A line from an older version may have a time typed as text, such as "TBD". It opens in **Edit Schedule Entry** with **No set time** ticked, and saving keeps the text as long as you leave the time alone. To clear it, untick **No set time** and tick it again.
 
 Everything else is on the **More** button, which opens the same menu as right-clicking the grid:
 

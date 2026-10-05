@@ -52,7 +52,14 @@ public static class SoundPacks
         try
         {
             var path = Path.Combine(Folder, pack.Key, kind + ".wav");
-            return File.Exists(path) ? path : null;
+            if (File.Exists(path))
+            {
+                return path;
+            }
+
+            // No pack has a warning sound of its own: it plays the pack's
+            // invalid-lap buzzer, as it did before it was a sound of its own.
+            return kind == SoundEffectKind.Warning ? FileFor(packKey, SoundEffectKind.InvalidLap) : null;
         }
         catch
         {

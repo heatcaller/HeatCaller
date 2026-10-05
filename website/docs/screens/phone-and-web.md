@@ -37,6 +37,8 @@ To start the server every time HeatCaller opens, tick **Start the server automat
 
 All three PINs are hidden. Tick **Show PINs**, under the check-in PIN, to see them. They're hidden by default because this page may be on the laptop screen while drivers queue at the desk.
 
+A new PIN that's already a racer's personal PIN isn't saved. HeatCaller says so, for example "The Remote PIN you typed can't be used - it is already in use elsewhere in HeatCaller. Choose another.", and puts the box back to what was saved. The other PINs are saved as usual.
+
 Never make the check-in PIN the same as the remote PIN or the Manager PIN. The check-in PIN is meant to go on the wall for drivers, and anyone who reads it could throw flags (if it matches the remote PIN) or edit entries, the programme and saved results (if it matches the Manager PIN).
 
 If there's a problem with the PINs when you click **Start Server**, the server still starts, and HeatCaller shows a warning titled "Server started - check the PINs":
@@ -170,10 +172,10 @@ At the top, **CONTROLLING** shows which race the buttons act on: the round selec
 | The laptop's own words: "Staged.", "Countdown started.", "Green - race on.", "Green - racing resumes.", "Already green.", "Yellow flag out.", "Red flag out.", "Checkered flag out." or "Race reset." | Done. |
 | "GREEN not done:" (with the button's name) and the reason, for example "STAGE not done: Practice is running - stop it on the Practice page first." or "CHECKERED not done: The race hasn't gone green yet. To call off this start, press Reset." | Race Control refused it, and nothing changed on the laptop. |
 | "GREEN sent: Check the laptop - it may be asking a question." | The laptop had the command but hadn't finished with it within about 3 seconds, usually because a question is open on the laptop screen. What happens is decided there. |
-| "Connection lost. Check the laptop to see whether GREEN went." | The phone lost contact while it waited. The command may or may not have reached the laptop. |
+| "Connection lost. Check the laptop to see whether GREEN went." | The phone lost contact while it waited, or had no answer within 12 seconds. The command may or may not have reached the laptop. |
 | "GREEN: The laptop is closing - that command may not have gone. Check the laptop." | HeatCaller was closing on the laptop as the command arrived. It may or may not have run. |
 
-An answer can take up to about 3 seconds to come. The buttons stay where they are when it appears, so the next tap lands where you expect. A command refused during practice doesn't put up a box on the laptop; the console notes it, as it notes every command from the phone and what became of it.
+An answer can take up to about 3 seconds to come. The buttons stay where they are when it appears, so the next tap lands where you expect. During practice every button is refused, because practice has no staging, flags or finish. A command refused during practice doesn't put up a box on the laptop; the console notes it, as it notes every command from the phone and what became of it.
 
 Each button does exactly what the same button on the **Race Control** page does, and is refused for the same reasons, such as **CHECKERED** before the race has gone green. See [Running a race](../race-control/running-a-race.md#flags).
 
@@ -220,9 +222,11 @@ A wrong PIN empties the box, and the phone forgets it: the page says "Wrong PIN.
 - **Entries** searches the roster; tap a row to check a driver in or out, or use **Add Driver...** to add one by transponder, name and class. Under a driver with battery packs, **Pack in the car** picks the pack their races are recorded on, or **None** (see [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries)).
 - **Program** picks a class from the full-width list at the top, with **Seed Mains** and **Bump Ups** side by side under it, then lists its rounds. Tap a round to see its heats: remove a driver, add one of the drivers still available, delete the round, or reorder the day's rounds.
 - **Race** starts the next round and has the same **STAGE**, **COUNTDOWN**, **GREEN - START**, **YELLOW**, **RED**, **CHECKERED** and **RESET** buttons as the phone remote.
-- **Results** lists today's finished sessions (a toggle switches to every session), with the winner's name under a small "Winner" caption; tap one to see its rows, or **Publish again**. With **Allow corrections to saved results** ticked on this page, **Edit result...** is also here - it asks for a reason first, then lets you add or remove laps or set an outcome (DNF, DQ, and so on) for a driver, the same correction **Race History**'s **Edit Result** makes on the laptop (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
+- **Results** lists today's finished sessions (a toggle switches to every session), with the winner's name under a small "Winner" caption; tap one to see its rows, or **Publish again**. With **Allow corrections to saved results** ticked on this page, **Edit result...** is also here - it asks for a reason first, then for each driver's total laps added (the box starts at the current total; 0 = none, a minus sign takes laps away) and their outcome (DNF, DQ, and so on). If nothing you typed differs from the result as it stands, it says "Nothing to change" and saves nothing. It's the same correction **Race History**'s **Edit Result** makes on the laptop (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
 
 What the laptop says about each action appears in a box at the foot of the screen, over the page, so the tabs never move. Good news, such as "Checked in.", clears itself after 4 seconds; an error stays until your next action; and changing tab clears either.
+
+**New Race Day...** starts the same kind of race day as **New Race Day** on the laptop: the kind of night, the classes, the venue, the track layout, the championship, the number of heats each driver gets and the drivers per heat all start from your last race day, and the name is today's date (for example "Club Night 21 Sep 2026" after a club night). On a club's first race day, every class is in it.
 
 **New Race Day...** asked for twice, for example by a double tap or a phone asking again after it gave up waiting, doesn't make a second race day. While the race day it started is still the current one, less than 15 minutes old and with no program built yet, a second request with the same name (or again with no name) is answered with that day instead:
 
@@ -232,7 +236,7 @@ Changes made from a phone go on the laptop's **Undo** list, named "Phone: ..." (
 
 **Allow corrections to saved results** is off by default, since changing a result after the flag is a decision a club makes on purpose, not something it finds switched on.
 
-The manager works the same way, tab for tab, whether it's opened here on the venue's Wi-Fi or - if the club has turned that on - [through the relay from anywhere](../online/setup.md#race-day-manager). The one difference is the **Race** tab: it never appears over the relay, and the laptop refuses a start, a stop or a flag from anywhere but this Wi-Fi even if one were sent, so the manager can never run a race except from here. Over the relay, drivers' transponder numbers are also left out, the same as everywhere else off this Wi-Fi.
+The manager works the same way, tab for tab, whether it's opened here on the venue's Wi-Fi or - if the club has turned that on - [through the relay from anywhere](../online/setup.md#race-day-manager). The one difference is the **Race** tab: it never appears over the relay, and the laptop refuses a start, a stop or a flag from anywhere but this Wi-Fi even if one were sent, so the manager can never run a race except from here. Over the relay, drivers' transponder numbers are also left out, the same as everywhere else off this Wi-Fi, and **Today** says only how many changes can be undone on the laptop, not what they were.
 
 ### Sponsor images
 

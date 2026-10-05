@@ -827,6 +827,18 @@ public sealed class RelaySettingsControl : UserControl
                 return;
             }
 
+            // Already some racer's personal PIN (RacerPins.IsHeldByRacer):
+            // the racer may have it in an email, and it would open everybody's
+            // list. Said without saying whose.
+            if (RacerPins.IsHeldByRacer(_settings, digits))
+            {
+                _pinRejected = RelayCheckIn.IsUsablePin(_settings.RelayCheckInPin)
+                    ? "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another. The old staff PIN still works until it is changed."
+                    : "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another.";
+                RefreshCheckInState();
+                return;
+            }
+
             _pinRejected = null;
             _settings.RelayCheckInPin = digits;
             _settings.Save();

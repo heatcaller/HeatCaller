@@ -74,7 +74,7 @@ Kokoro sounds far closer to ElevenLabs than the Windows voice does, and like the
 3. Pick a voice in **Kokoro voice:**. **Michael (American, male)** is chosen to begin with. There are American and British voices, women and men.
 4. Press **Test Kokoro Voice**. You should hear "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!" The first test after starting HeatCaller takes a few seconds while Kokoro loads.
 
-Until Kokoro is downloaded, or if it ever can't say a line, the Windows voice says it instead, so a flag call is never silent. The console says why, once. **Prepare Lines** isn't needed with Kokoro: it speaks each line on the laptop as it's wanted, and a line it has said once plays straight away for the rest of the session.
+Until Kokoro is downloaded, or if it ever can't say a line, the Windows voice says it instead, so a flag call is never silent. The console says why, once. If Kokoro is downloaded but won't load on this PC, the line under **Kokoro voice:** says so and the button comes back as **Download Again (about 310 MB)**: press it to fetch a fresh copy, which usually fixes it. **Prepare Lines** isn't needed with Kokoro: it speaks each line on the laptop as it's wanted, and a line it has said once plays straight away for the rest of the session.
 
 Kokoro uses the same settings as the Windows voice (see [What the Windows voice uses](#what-the-windows-voice-uses)): **Speed:**, **Playback volume (%):**, each announcement's own **Speed**, and **Max spoken announcements per lap:**. Audio tags such as `[excited]` are taken out before it speaks. Nothing it says is kept with the [saved voice lines](#saved-voice-lines). The download is kept in `%LocalAppData%\HeatCaller\Kokoro`, on that PC only, and isn't part of a backup.
 
@@ -577,7 +577,7 @@ The page shows:
     - Lines starting with `*`, worked out from the live standings: a close fight for the lead (under 2 seconds), anyone laps down, who holds the fastest lap, and battles under a second further down the order.
     - A time-stamped record of every announcement the announcer has made (the same lines it spoke), plus jump starts. Up to 40 are kept.
 - **Spotlight**: pick any driver to follow a story. It shows their position, laps and best this race, their last three laps, their all-time personal best from saved sessions and how far off it they are today, their car and class, and any notes on their profile.
-- **LAST RACE SUMMARY**: the most recent race recap from [Commentary](commentary.md).
+- **LAST RACE SUMMARY**: the recap of the race that just finished, from [Commentary](commentary.md). It's cleared as soon as the next race finishes, so it's empty while that race's recap is being written, and stays empty if that race doesn't get one.
 
 Buttons:
 

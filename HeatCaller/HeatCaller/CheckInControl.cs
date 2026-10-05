@@ -841,9 +841,23 @@ public sealed class CheckInControl : UserControl
     /// class read as cleared here and was then flagged at the start.
     /// </summary>
     private TechInspection? TechFor(DriverProfile profile) =>
-        _tech!.LatestForDriver(profile, name =>
-            _raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) is { } raceClass
-            && RaceControlControl.TechIsRunFor(raceClass, _tech!));
+        _tech!.LatestForDriver(profile, JudgesTechFor);
+
+    /// <summary>
+    /// The class Inspect Selected Car opens for a driver: the one the Tech
+    /// column is showing (TechInspectionStore.TechClassForDriver). It used
+    /// to be their main class whatever the column said.
+    /// </summary>
+    public string InspectClassFor(DriverProfile profile) =>
+        _tech?.TechClassForDriver(profile, JudgesTechFor) ?? profile.ClassName;
+
+    /// <summary>
+    /// Only the classes racing tonight, and only the one picked in Class:
+    /// when one is - see RaceControlControl.DeskJudgesTechFor.
+    /// </summary>
+    private bool JudgesTechFor(string className) =>
+        RaceControlControl.DeskJudgesTechFor(className, _raceClasses.All, _tech!, _events?.Active,
+            _cmbClassFilter.SelectedIndex > 0 ? _cmbClassFilter.SelectedItem as string : null);
 
     public void RefreshAll()
     {

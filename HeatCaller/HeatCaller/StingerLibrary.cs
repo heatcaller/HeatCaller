@@ -54,6 +54,18 @@ public sealed class StingerLibrary
     private readonly object _gate = new();
     private Dictionary<string, Entry>? _index;
 
+    // Set while index.json exists but could not be read (held open by a sync
+    // or backup tool, usually). The index is then NOT cached: an empty one
+    // cached for the session spoke every recorded line live all night, and
+    // the next recording saved an index of just this session's lines over
+    // every other soundscape's - recordings the club paid for, orphaned for
+    // good. Lines recorded meanwhile wait in _unreadIndex and are merged in
+    // once the file reads; nothing is written over it until then.
+    private Dictionary<string, Entry>? _unreadIndex;
+    private bool _holdWrites;
+    private bool _reportedUnreadable;
+    private DateTime _nextReadAttemptUtc;
+
     private StingerLibrary(string folder)
     {
         _folder = folder;
@@ -113,6 +125,13 @@ public sealed class StingerLibrary
             return _index;
         }
 
+        // Still unreadable a moment ago: don't make every line wait out the
+        // read retries again - try again every little while instead.
+        if (_unreadIndex is not null && DateTime.UtcNow < _nextReadAttemptUtc)
+        {
+            return _unreadIndex;
+        }
+
         var index = new Dictionary<string, Entry>();
         try
         {
@@ -133,13 +152,45 @@ public sealed class StingerLibrary
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Unreadable index: start empty. The audio files are still on
-            // disk, and recording again rewrites the index.
+            // Reported (and a copy kept) once, not on every retry.
+            if (!_reportedUnreadable)
+            {
+                _reportedUnreadable = true;
+                _holdWrites = SafeFile.HoldWritesAfterUnreadable(IndexPath, ex);
+            }
+
+            if (_holdWrites)
+            {
+                // Could not be read - see _unreadIndex. Not cached, so the
+                // next look after a short wait tries the file again.
+                _unreadIndex ??= index;
+                _nextReadAttemptUtc = DateTime.UtcNow.AddSeconds(30);
+                return _unreadIndex;
+            }
+
+            // Damaged content, and a copy of it was kept aside: start empty
+            // as before. The audio files are still on disk, and recording
+            // again rewrites the index.
         }
 
+        _holdWrites = false;
         _index = index;
+
+        // Lines recorded while the file couldn't be read: merge them in
+        // (they are the newer takes) and write the whole index now.
+        if (_unreadIndex is { Count: > 0 } pending)
+        {
+            foreach (var entry in pending.Values)
+            {
+                index[entry.Key] = entry;
+            }
+
+            SafeFile.WriteAllText(IndexPath, JsonSerializer.Serialize(index.Values.ToList(), new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        _unreadIndex = null;
         return index;
     }
 
@@ -180,7 +231,17 @@ public sealed class StingerLibrary
 
     private void SaveIndex()
     {
-        SafeFile.WriteAllText(IndexPath, JsonSerializer.Serialize(Index().Values.ToList(), new JsonSerializerOptions { WriteIndented = true }));
+        var index = Index();
+
+        // index.json is there but couldn't be read: saving now would write
+        // just this session's lines over everyone else's. They are kept in
+        // memory and written once the file can be read - see Index().
+        if (_index is null && _holdWrites)
+        {
+            return;
+        }
+
+        SafeFile.WriteAllText(IndexPath, JsonSerializer.Serialize(index.Values.ToList(), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public bool Has(string text)

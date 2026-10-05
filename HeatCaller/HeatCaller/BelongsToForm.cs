@@ -280,11 +280,22 @@ internal sealed class BelongsToForm : Form
         }
 
         var replaces = (_cmbReplaces.SelectedItem as Item)?.Value ?? string.Empty;
+
+        _lblOutcome.Text = OutcomeText(_transponder, transfer: _fromDriver is not null, NameOf(profile), replaces);
+    }
+
+    /// <summary>The outcome line for <paramref name="transponder"/> given (or, for a transfer, transferred) to <paramref name="driverName"/>, retiring <paramref name="replaces"/> (empty: none).</summary>
+    internal static string OutcomeText(string transponder, bool transfer, string driverName, string replaces)
+    {
         var retire = replaces.Length > 0 ? $" {replaces} is retired." : string.Empty;
 
-        _lblOutcome.Text = _fromDriver is null
-            ? $"Laps timed on {_transponder} will count for {NameOf(profile)}.{retire}"
-            : $"{_transponder} becomes {NameOf(profile)}'s, and their laps on it count for them. Races already run stay with whoever ran them.{retire}";
+        // A transfer's line used to end "Races already run stay with whoever
+        // ran them", which the lead above it says isn't so for a race where it
+        // was timed as a car of its own (TransponderTransferring).
+        return !transfer
+            ? $"Laps timed on {transponder} will count for {driverName}.{retire}"
+            : $"{transponder} becomes {driverName}'s, and their laps on it count for them. "
+              + $"Races already run where it was timed as a car of its own count for them too.{retire}";
     }
 
     /// <summary>The button's caption: Give for a transponder nobody has, Transfer for one somebody does.</summary>

@@ -26,6 +26,7 @@ public sealed partial class RaceControlControl
     private Action<RacerStanding, int, long[]>? _sectorsRecordedHandler;
     private Action<RacerStanding>? _personalBestHandler;
     private Action<RacerStanding>? _standingAdjustedHandler;
+    private Action<RacerStanding>? _standingRemovedHandler;
     private Action<string, long>? _jumpStartHandler;
     private Action<RacerStanding, RaceWarning>? _warningIssuedHandler;
     private Action? _timeLimitReachedHandler;
@@ -98,6 +99,13 @@ public sealed partial class RaceControlControl
             OnStandingAdjusted(standing);
         };
         _race.StandingAdjusted += _standingAdjustedHandler;
+
+        _standingRemovedHandler = standing =>
+        {
+            if (InvokeRequired) { BeginInvoke(() => OnStandingRemoved(standing)); return; }
+            OnStandingRemoved(standing);
+        };
+        _race.StandingRemoved += _standingRemovedHandler;
 
         _jumpStartHandler = (transponder, penaltyMs) =>
         {
@@ -203,6 +211,7 @@ public sealed partial class RaceControlControl
         if (_sectorsRecordedHandler is not null) _race.SectorsRecorded -= _sectorsRecordedHandler;
         if (_personalBestHandler is not null) _race.PersonalBestLap -= _personalBestHandler;
         if (_standingAdjustedHandler is not null) _race.StandingAdjusted -= _standingAdjustedHandler;
+        if (_standingRemovedHandler is not null) _race.StandingRemoved -= _standingRemovedHandler;
         if (_jumpStartHandler is not null) _race.JumpStartDetected -= _jumpStartHandler;
         if (_warningIssuedHandler is not null) _race.WarningIssued -= _warningIssuedHandler;
         if (_timeLimitReachedHandler is not null) _race.TimeLimitReached -= _timeLimitReachedHandler;
@@ -466,6 +475,17 @@ public sealed partial class RaceControlControl
 
         CheckRecordPace(standing, isValid, thisLapMs);
 
+        RenderLeaderboard();
+    }
+
+    /// <summary>
+    /// A ghost switched off mid-race, taken off the board. Off the
+    /// announcer's running order too, and out of the crash journal.
+    /// </summary>
+    private void OnStandingRemoved(RacerStanding standing)
+    {
+        _announcer.OnStandingRemoved(standing.TransponderId);
+        WriteJournal(force: true);
         RenderLeaderboard();
     }
 

@@ -833,7 +833,14 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>A line already rendered to audio, ready to play the instant it's wanted.</summary>
-    public sealed record PreparedSpeech(string Text, byte[] Audio);
+    /// <param name="Text">What was sent to the voice - times spelled out for speech.</param>
+    /// <param name="DisplayText">
+    /// The line as written, for the Big Screen, the overlay and the Announcer
+    /// feed. Screens used to be handed <paramref name="Text"/>, so a prepared
+    /// recap showed "6 point nine four seconds" where the live path shows
+    /// "6.935s".
+    /// </param>
+    public sealed record PreparedSpeech(string Text, byte[] Audio, string DisplayText);
 
     /// <summary>
     /// Renders a line now and hands the audio back instead of speaking it.
@@ -892,7 +899,7 @@ public sealed partial class AnnouncementService
         try
         {
             var audio = (await RenderLineAsync(profile, spoken)).Audio;
-            return new PreparedSpeech(spoken, audio);
+            return new PreparedSpeech(spoken, audio, text);
         }
         catch (Exception ex)
         {
@@ -914,7 +921,14 @@ public sealed partial class AnnouncementService
     /// a recording is played for good, and a stand-in take recorded by
     /// accident would replace the announcer on that line every race.
     /// </summary>
-    public async Task<byte[]?> RecordVoiceLineAsync(string text, double stability, double style)
+    /// <param name="fresh">
+    /// True for Re-record all: a new ElevenLabs take, not the one the
+    /// saved-voice library kept from the first recording - same voice, same
+    /// delivery, same words, so the same key - which used to come straight
+    /// back, and re-recording a bad take changed nothing. The HeatCaller
+    /// voice's relay keeps one take of each line, so it has no new one to give.
+    /// </param>
+    public async Task<byte[]?> RecordVoiceLineAsync(string text, double stability, double style, bool fresh = false)
     {
         var profile = _voiceStore.Current.CloneForDelivery(stability, style);
         if (profile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro || string.IsNullOrWhiteSpace(text))
@@ -930,7 +944,7 @@ public sealed partial class AnnouncementService
 
         try
         {
-            var result = await RenderLineAsync(profile, spoken);
+            var result = await RenderLineAsync(profile, spoken, fresh);
             return result.Source is LineSource.ElevenLabs or LineSource.HeatCaller or LineSource.Library
                 ? result.Audio
                 : null;
@@ -1009,7 +1023,7 @@ public sealed partial class AnnouncementService
             {
                 _audioPlaybackLock.Release();
             }
-        }, displayText: prepared.Text);
+        }, displayText: prepared.DisplayText);
     }
 
     /// <summary>
@@ -1105,6 +1119,7 @@ public sealed partial class AnnouncementService
         // another voice has no reason to give up. Choosing it on Voice
         // Settings loads it then.
         KokoroSpeech.Log = message => StatusMessage?.Invoke(message);
+        KokoroSpeech.DeleteLeftoverDownload();
         if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
         {
             KokoroSpeech.WarmUp();

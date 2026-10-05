@@ -208,6 +208,31 @@ public sealed class BackupRestoreControl : UserControl
         var btnSupport = new Button { Text = "Save Support Info..." };
         btnSupport.Click += (_, _) => SupportInfoRequested?.Invoke();
 
+        var btnAbout = new Button { Text = "About HeatCaller..." };
+        btnAbout.Click += (_, _) => AboutForm.ShowFor(FindForm());
+
+        // The address the support file is for. A link rather than painted
+        // text so it opens the club's email program, with Copy Address
+        // beside it because a track PC often has no email program set up at
+        // all and the address is then wanted on a phone - the same pairing
+        // the club page gets on Club Website.
+        var lnkEmail = new LinkLabel
+        {
+            Text = AppSupport.EmailSentence,
+            AutoSize = true,
+            LinkArea = new LinkArea(
+                AppSupport.EmailSentence.IndexOf(AppSupport.Email, StringComparison.Ordinal),
+                AppSupport.Email.Length),
+            LinkColor = AppTheme.Accent,
+            ActiveLinkColor = AppTheme.Accent,
+            VisitedLinkColor = AppTheme.Accent,
+        };
+
+        lnkEmail.LinkClicked += (_, _) => AppSupport.Open(AppSupport.MailTo);
+
+        var btnCopyEmail = new Button { Text = "Copy Address" };
+        btnCopyEmail.Click += (_, _) => AppSupport.CopyEmail();
+
         var lblHint = new Label
         {
             Text = "Saves one file to attach to an email when something went wrong: the console from the last few runs, the crash log, "
@@ -221,8 +246,9 @@ public sealed class BackupRestoreControl : UserControl
 
         var card = new Section("Getting help");
 
-        card.Add(new ButtonBar().With(btnSupport));
-        card.Add(lblHint, gapBelow: 0);
+        card.Add(new ButtonBar().With(btnSupport, btnAbout));
+        card.Add(lblHint);
+        card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: 0);
 
         return card;
     }
@@ -618,11 +644,32 @@ public sealed class BackupRestoreControl : UserControl
         _txtBackupPasswordConfirm.Clear();
         RefreshPasswordStatus();
 
+        if (SessionOnlyPasswordMessage(_settings) is { } sessionOnly)
+        {
+            AppDialog.Show(this, sessionOnly, "Backup password set for now", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         AppDialog.Show(this,
             "Backup password set. Backups made from now on carry the keys, tokens and QR check-in key, locked with it - backups made before don't.\n\n" +
             "Write it down and keep it away from this PC. Without it, a backup restored on another PC comes back without its keys.",
             "Backup password set", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
+
+    /// <summary>
+    /// What Set Password says instead while a restored backup's keys wait
+    /// for the next start (SecretRecovery's PutOff): every save then writes
+    /// the locked keys back unchanged, so the password lasts only until
+    /// HeatCaller closes. It used to say "Backup password set" and that
+    /// backups now carried the keys, neither of which held. Null otherwise.
+    /// </summary>
+    internal static string? SessionOnlyPasswordMessage(AppSettings settings) =>
+        settings.SecretsLocked && settings.HoldLockedSecrets
+            ? "The backup password is set for this session only - it isn't saved.\n\n"
+              + "HeatCaller is still waiting to get the restored backup's keys back, and tries again the next time it starts. "
+              + "Until then nothing typed in for the keys is saved, this password included. Set it again once the keys are back.\n\n"
+              + "A backup made in the meantime won't carry the restored backup's keys."
+            : null;
 
     private void BtnRemoveBackupPassword_Click(object? sender, EventArgs e)
     {

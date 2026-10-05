@@ -130,10 +130,13 @@ public sealed class MusicStore
     public MusicSettings Current { get; private set; } = new();
 
     /// <summary>
-    /// Set when music.json was there but couldn't be read, so nothing
-    /// written on the way up saves an empty library over it - see Load.
+    /// Set when music.json was there but couldn't be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. Nothing is saved over it this
+    /// session: it holds the club's own tracks, which the sync never lists
+    /// again by itself, and a file locked for a moment at launch used to
+    /// load as the bundled tracks alone and be replaced by the first change.
     /// </summary>
-    private bool _loadedUnreadable;
+    public bool LoadedUnreadable { get; private set; }
 
     public static MusicStore Load()
     {
@@ -182,17 +185,18 @@ public sealed class MusicStore
         catch (Exception ex)
         {
             // Unreadable file: start with defaults rather than refusing to open.
-            SafeFile.PreserveUnreadable(FilePath, ex);
-            unreadable = true;
+            // But, when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        store._loadedUnreadable = unreadable;
+        store.LoadedUnreadable = unreadable;
         store.InstallBundledTracks();
 
         // The sync saves - normally just to record what it found. After a
         // failed load it would be saving an empty library over the user's
-        // real one before anyone had seen the message, so the file is left
-        // for the first deliberate change to replace.
+        // real one before anyone had seen the message. (Save itself refuses
+        // as well - see LoadedUnreadable.)
         store.SyncBuiltInTracks(save: !unreadable);
         return store;
     }
@@ -540,7 +544,13 @@ public sealed class MusicStore
                 var known = Current.Tracks.Any(t =>
                     string.Equals(t.FilePath, file, StringComparison.OrdinalIgnoreCase));
 
-                if (!known)
+                // Only the shipped tracks, as the summary says. Every audio
+                // file in the folder used to be listed, so a club's own track
+                // taken out with Remove (or Clear Library, keeping the files)
+                // came back at the next launch, switched on and labelled
+                // "Included". Their own files are listed by Add Track, which
+                // also takes one already in the music folder.
+                if (!known && IsBundledTitle(TitleForFile(file)))
                 {
                     Current.Tracks.Add(new MusicTrack
                     {
@@ -748,6 +758,14 @@ public sealed class MusicStore
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and this
+        // library was built on the defaults it loaded as. The change still
+        // applies this session. The console has already said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         try
         {
             // FilePath is written as the full path, which is what every
@@ -827,7 +845,7 @@ public sealed class MusicStore
 
         // Not over a file that couldn't be read - the same rule as Load's
         // own sync. The choice still applies for this session.
-        if (!_loadedUnreadable)
+        if (!LoadedUnreadable)
         {
             Save();
         }

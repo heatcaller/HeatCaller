@@ -72,6 +72,8 @@ public sealed class LapBeepStore
 
     public static LapBeepStore Load()
     {
+        var unreadable = false;
+
         try
         {
             if (File.Exists(FilePath))
@@ -93,15 +95,33 @@ public sealed class LapBeepStore
         }
         catch (Exception ex)
         {
-            // Unreadable file: start empty rather than refusing to open.
-            SafeFile.PreserveUnreadable(FilePath, ex);
+            // Unreadable file: start empty rather than refusing to open. But,
+            // when it could not be read at all or no copy of it could be
+            // kept, never save over it this session (see LoadedUnreadable).
+            unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new LapBeepStore(new List<DriverLapBeep>(), false);
+        return new LapBeepStore(new List<DriverLapBeep>(), false) { LoadedUnreadable = unreadable };
     }
+
+    /// <summary>
+    /// True when the file was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. The file holds every driver's
+    /// chosen cue, and a file locked for a moment at launch used to load
+    /// empty and then be replaced whole by the first cue anyone set.
+    /// </summary>
+    public bool LoadedUnreadable { get; private init; }
 
     public void Save()
     {
+        // Not written: the real file is almost certainly fine, and saving
+        // this near-empty store would replace it. The console has already
+        // said why.
+        if (LoadedUnreadable)
+        {
+            return;
+        }
+
         SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(
             new BeepFile { Beeps = _beeps, Enabled = _enabled },
             new JsonSerializerOptions { WriteIndented = true }));

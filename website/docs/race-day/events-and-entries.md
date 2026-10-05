@@ -57,8 +57,8 @@ The steps are listed down the left: **Tonight**, **The day**, **Classes**, **Dri
 
 | Step | What you do |
 |---|---|
-| **The day** | Choose what kind of night it is, and where, and the sound for tonight under **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only** (see [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards)). Moving on from here opens the day and applies the sound. |
-| **Classes** | Tick the classes out tonight (**Add Class** for a new one), then how many times each driver races, how many drivers go out at once, and the race format each class runs. |
+| **The day** | Choose what kind of night it is (it starts on the kind your last race day was), and where, and the sound for tonight under **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only** (see [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards)). Moving on from here opens the day and applies the sound. |
+| **Classes** | Tick the classes out tonight (**Add Class** for a new one), then how many times each driver races, how many drivers go out at once, and the race format each class runs. These are saved on the day, so with no race day open they're grayed out until you open one on **The day**; **Add Class** and the race formats still work. |
 | **Drivers** | Tick everyone who has turned up, a class at a time if you like. **Add Driver** puts someone new on file and checks them in. |
 | **Program** | Builds tonight's races from the classes and drivers above. **Build It** builds them; **Back** lets you change anything first. |
 
@@ -239,7 +239,12 @@ The gate is the **Tech** column on **Who's Racing**. You record inspections from
 
     From **Who's Racing**, if the car was already inspected today (or in the last 6 hours, for a club night that runs past midnight), that inspection opens to edit instead of starting a new one. An older inspection, such as Saturday's at a weekend meeting, is left as it was, and a new one is recorded for today. To change an older inspection, pick it in the Scrutineering log and use **Edit**.
 
-2. Pick the **Driver:**. The **Class:** and **Car:** fill in from their profile; you can change them.
+    For a driver who races more than one class, it opens the class their **Tech** cell is showing: the first one they aren't cleared in yet.
+
+2. Pick the **Driver:**. The **Class:** and **Car:** fill in from their profile; you can change them. Switching to another class starts its checklist again at **not checked**, because it's a different car.
+
+    On an inspection that's already saved, changing the class moves that inspection to the new class when you save, and it no longer counts for the class it was in. HeatCaller asks first. That's how you fix an inspection filed under the wrong class. To record a driver's second car and keep the first one's inspection, click **New Inspection** in the Scrutineering log instead.
+
 3. For each item on the class's checklist, choose **OK**, **FAIL** or leave it at **not checked**. The line under the checklist sums it up: "FAILS - 1 check failed.", "2 checks not looked at yet." or "All checks passed."
 4. Enter the **Inspector:** and any **Notes:**.
 5. Click **Save**.
@@ -264,11 +269,11 @@ Recording or editing an inspection can be undone with **Undo**. **Cancel** in th
 
 ### Who still needs inspecting
 
-Tick **Only those not through tech** on **Who's Racing** to list every driver who isn't cleared yet at the current race day — either not inspected or failed — across all classes. Use the **Class:** filter to narrow it to one class, and **Inspect Selected Car** to deal with each one.
+Tick **Only those not through tech** on **Who's Racing** to list every driver who isn't cleared yet at the current race day — either not inspected or failed — across all classes. Use the **Class:** filter to narrow it to one class (the **Tech** column then shows each driver's result in that class), and **Inspect Selected Car** to deal with each one.
 
 Inspections are filed against the current race day, so a car cleared on the first day of a two-day meeting stays cleared on the second. Re-inspecting a car files the new inspection under the race day that's open now. With no race day open, a pass counts for 18 hours after it was recorded, so a club night that runs past midnight doesn't lose its passes.
 
-The **Tech** column, **Only those not through tech** and the tech warning on Race Control all use the same rule, so they agree on who's cleared.
+The **Tech** column, **Only those not through tech** and the tech warning on Race Control all use the same rule, so they agree on who's cleared. For a driver who races [more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class), **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each. If the race day has its **Classes racing:** ticked, only those classes count, so a class that isn't racing today never holds a driver up.
 
 ### The Scrutineering log
 

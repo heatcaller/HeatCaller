@@ -100,7 +100,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private RoundDefinition? RoundThisRaceWillBeFiledUnder()
     {
-        if (_rounds is null || !AutoAdvanceWanted || _currentRaceIsDemo || _currentRaceIsQuick)
+        if (_rounds is null || !AutoAdvanceWanted || _currentRaceIsDemo || _currentRaceIsQuick || _currentRaceIsRerun)
         {
             return null;
         }

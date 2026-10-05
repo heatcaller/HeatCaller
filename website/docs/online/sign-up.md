@@ -112,6 +112,12 @@ It says what's wrong. "Publishing to the relay is off" means the relay isn't set
 **A driver says their code doesn't work.**
 Check the invite under **Invites**. If it says "Expired" or "Cancelled", make them a new one. If sign-up is switched off, their phone says "Sign-up is not open right now."
 
+**"The sign-up invites file (signups.json) couldn't be read".**
+Another program, usually a backup or sync tool, had the file open when HeatCaller started. So that the invites in it aren't lost, nothing on **Online Sign-ups** can be changed until HeatCaller is restarted: the tick box, **Invite Drivers** and **Code for Someone Here** are grayed out. Invites you've already made keep working, and sign-ups made with them wait on the relay. Close anything that might have the file open and restart HeatCaller.
+
+**"The invites couldn't be saved".**
+HeatCaller couldn't write `signups.json`, so no invite was made and nothing was emailed. Close anything that might have the file open and try again.
+
 **"Sign-up codes are locked after too many wrong guesses".**
 Someone typed many wrong codes. The relay closes code sign-in for a while, longer each time it happens. Phones that already signed in keep working. To reopen it at once, cancel every open invite and make new ones.
 

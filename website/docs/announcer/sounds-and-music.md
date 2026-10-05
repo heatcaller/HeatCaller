@@ -39,6 +39,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 | **Yellow flag** | No | – |
 | **Red flag** | No | – |
 | **Green flag** (racing resumes after a yellow or red) | No | – |
+| **Warning or black flag** (from race control) | Yes | – |
 | **Race time over** (last lap) | Yes | – |
 | **Race completed** | Yes | – |
 
@@ -46,6 +47,8 @@ The rows with a weight are the per-lap sounds; only they have **Weight** and **C
 
 !!! note "After updating from 0.58 or earlier"
     **Personal best**, **Countdown ticks**, **Jump start**, **Yellow flag**, **Red flag** and **Green flag** are new, and start switched off, on the pack most of your other sounds use. The one exception is **Jump start**: a jump start used to play the **Invalid lap** buzzer, so if that sound was on, **Jump start** starts on too.
+
+**Warning or black flag** plays when Race Control calls a warning or a black flag, just before the announcer says it. It used to play the **Invalid lap** buzzer, so after updating it starts the way that sound was set: on if **Invalid lap** was on, with the same sound, and off if it wasn't. If you'd never changed your sounds, it starts on. Your own soundscapes get it the same way; the built-in ones have it on.
 
 The race-moment sounds (such as the **Race started** horn, the **Race time over (last lap)** buzzer and the **Race completed** fanfare) play as well as the announcer's spoken call for that moment, not instead of it. The sound plays first and the call follows. The start and time-up calls wait at most about 3 seconds; if the sound is longer, it's cut off so the call isn't late. The finish call waits up to 8 seconds and never cuts the fanfare short.
 
@@ -185,7 +188,7 @@ These are on the **Behaviour** card, under the library.
 
 ### After the race
 
-By default the music keeps playing after a race: the gap between heats is when a soundtrack is most wanted. If you'd rather it ended, set **Music after the recap:** on the **Mixer** (below), or tick **At the flag, stop:** **Music** to stop it the moment the race ends. The music only stops or fades after the race recap has finished speaking, not at the checkered flag, so it doesn't cut across the summary. If commentary is off or the model doesn't answer, it happens after the teaser has been spoken. If the teaser and commentary are both off, it happens once the race is over. It also works after a demo race you didn't save and after a race with no racers.
+By default the music keeps playing after a race: the gap between heats is when a soundtrack is most wanted. If you'd rather it ended, set **Music after the recap:** on the **Mixer** (below; it only applies while **Start for:** **Races** is ticked there), or tick **At the flag, stop:** **Music** to stop it the moment the race ends. The music only stops or fades after the race recap has finished speaking, not at the checkered flag, so it doesn't cut across the summary. If commentary is off or the model doesn't answer, it happens after the teaser has been spoken. If the teaser and commentary are both off, it happens once the race is over. It also works after a demo race you didn't save and after a race with no racers.
 
 The recap can still be speaking when the next heat is staged. If that heat has brought the music up itself (**When a session starts** on the **Mixer** with **Bring up:** **Music** ticked), the last race's fade or stop is skipped and the music plays on for the new session, with "[audio] Music kept playing - the next session has already started." in the console.
 
@@ -333,7 +336,7 @@ Voice lines are a soundscape's fixed race calls (staging, the countdown, the sta
 | Menu item | What it does |
 |---|---|
 | **Record *n* voice lines (about *x* characters)...** | Records every line. When some are already recorded, it reads **Record the *n* missing voice lines (about *x* characters)...** instead. |
-| **Re-record all *n*...** | Records every line again, replacing the takes you have. Only there once some are recorded. |
+| **Re-record all *n*...** | Records a new take of every line, replacing the takes you have. Only there once some are recorded. The HeatCaller voice keeps one take of each line, so re-recording with it brings back the same takes; record with your own ElevenLabs key for new ones. |
 | **Delete the *n* recorded lines** | Deletes the recordings, after asking. Those lines go back to being spoken live. Only there once some are recorded. |
 | **What are voice lines?** | Explains them. |
 
@@ -458,9 +461,9 @@ The **When a session starts** card brings audio up automatically, so you don't h
 | **Bring up:** **Unmute announcer** | Unmutes the announcer (and everything the sidebar mute silenced) if it was left muted. | On |
 | **At the flag, stop:** **Music** | Stops the music as soon as the race ends (at the checkered flag, or when the race is stopped), before the recap. While it's ticked, **Music after the recap:** is greyed out. | Off |
 | **At the flag, stop:** **Ambience** | Stops the ambience when the session ends, after the finish celebration has played out. | On |
-| **Music after the recap:** | **Keep playing**, **Fade out** (over the number of seconds you set, 0.5 to 30, default 6) or **Stop**. | Keep playing |
+| **Music after the recap:** | **Keep playing**, **Fade out** (over the number of seconds you set, 0.5 to 30, default 6) or **Stop**. It acts after races only, so it applies only while **Start for:** **Races** is ticked, and is grayed out otherwise. | Keep playing |
 
-Only audio that auto-start brought up is stopped. Anything you started by hand keeps going.
+These act on whatever is playing at the time, not only on what auto-start brought up. **At the flag, stop:** **Ambience** fades the crowd even if you started it by hand on the **Ambience** tab, and **At the flag, stop:** **Music** and **Music after the recap:** end music you started by hand too. Music that's already playing when a session brings the music up keeps going, and is treated as that session's music.
 
 If a session that brings the music up starts while the last one's **Fade out** is still going, the fade is called off and the music plays on at its set level.
 

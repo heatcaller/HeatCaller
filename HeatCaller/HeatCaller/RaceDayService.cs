@@ -648,6 +648,73 @@ public sealed partial class RaceDayService
     private string NameOfTransponder(string transponder) =>
         _host.Profiles.Get(transponder) is { } profile ? NameOf(profile) : transponder;
 
+    /// <summary>
+    /// NameOf for text that goes back to the phone - a refusal, a question,
+    /// an answer - rather than the laptop's own console and undo list. An
+    /// unnamed driver is their transponder as this channel may see it (see
+    /// ShownName), not the whole number: "1234567 is entered in Stock"
+    /// went out through the relay to anyone holding the manager PIN.
+    /// </summary>
+    private static string ShownNameOf(DriverProfile profile, RaceDayChannel channel) =>
+        ShownName(profile.DriverName, profile.Transponder, channel);
+
+    /// <summary>NameOfTransponder for text that goes back to the phone. See ShownNameOf.</summary>
+    private string ShownNameOfTransponder(string transponder, RaceDayChannel channel) =>
+        _host.Profiles.Get(transponder) is { } profile ? ShownNameOf(profile, channel) : ShowTransponder(transponder, channel);
+
+    /// <summary>
+    /// A bump-up row's name for the phone (RaceProgramControl.PlanBumpUps).
+    /// The row is named as the feeder's result was filed, which for a car
+    /// nobody has named is the transponder it was heard on - its main one or
+    /// one of its others - and that went out in full through the relay in
+    /// the bump-up question. On the Wi-Fi it is left as the desk shows it.
+    /// </summary>
+    internal static string ShownPromotionName(MainsBuilder.PlannedPromotion promotion, ProfileStore profiles, RaceDayChannel channel)
+    {
+        if (channel == RaceDayChannel.WiFi)
+        {
+            return promotion.DriverName;
+        }
+
+        var name = (promotion.DriverName ?? string.Empty).Trim();
+
+        return profiles.Get(promotion.Transponder) is { } profile && profile.AllTransponderIds.Contains(name, StringComparer.OrdinalIgnoreCase)
+            ? ShownNameOf(profile, channel)
+            : ShownName(name, promotion.Transponder, channel);
+    }
+
+    /// <summary>
+    /// ProfileStore.DescribeClash for an answer to the phone. An unnamed
+    /// owner is described by their main transponder, which went out in
+    /// full through the relay - "Transponder 555 is already one of the
+    /// profile for 7654321's transponders" gave away a number the phone
+    /// never typed. So every number but the ones the phone sent
+    /// (<paramref name="typed"/>) is written as ShowTransponder writes it.
+    /// </summary>
+    internal static string? ClashForPhone(ProfileStore profiles, DriverProfile candidate, string? editing, RaceDayChannel channel, params string[] typed) =>
+        profiles.DescribeClash(candidate, editing, id =>
+            typed.Any(t => string.Equals(t?.Trim(), id?.Trim(), StringComparison.OrdinalIgnoreCase)) ? id : ShowTransponder(id, channel));
+
+    /// <summary>
+    /// The laptop's undo list as a phone on this channel may see it: every
+    /// entry on the track's Wi-Fi, none through the relay, which is only
+    /// told how many there are (undoCount). The entries are the desk's own
+    /// words and name transponders in full - "Transfer transponder 1234567
+    /// to Alex", "Phone: Add driver '7654321'" for a car with no name - and
+    /// one about a number nobody owns any more can't be picked out of the
+    /// text to be shortened.
+    ///
+    /// Through the relay, one line with just the count in place of the
+    /// entries. The relay is deployed on its own, and its page from before
+    /// undoCount shows this list as it comes: sent empty, it said "Nothing
+    /// to undo." with changes waiting. The page that reads undoCount
+    /// ignores the line.
+    /// </summary>
+    internal static IReadOnlyList<string> UndoListFor(IReadOnlyList<string> pending, RaceDayChannel channel) =>
+        channel == RaceDayChannel.WiFi ? pending
+        : pending.Count == 0 ? Array.Empty<string>()
+        : new[] { pending.Count == 1 ? "1 change - undo it on the laptop" : $"{pending.Count} changes - undo them on the laptop" };
+
     // ------------------------------------------------------------------
     //  Ops
     // ------------------------------------------------------------------

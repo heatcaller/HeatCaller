@@ -487,6 +487,24 @@ public sealed class DayScheduleStore
                 return false;
             }
 
+            // Into the slot on the round's far side - as its first line going
+            // down, its last going up, which is the one place along. The slot
+            // is shared with any lines already there, and a shared slot is
+            // ordered by storage, which this used to leave alone: the line
+            // landed wherever the file happened to hold it, several places
+            // past where the press looked like it would go. Those lines sit
+            // right beyond the round on screen; the nearest is put beside.
+            // Storage first, as below, so a failure leaves the anchor alone.
+            var across = beside + step;
+
+            if (across >= 0 && across < order.Count
+                && !order[across].IsGenerated
+                && EffectiveAnchor(order[across], rounds) == moved
+                && !PlaceBeside(entry, order[across], -step))
+            {
+                return false;
+            }
+
             entry.AfterRounds = moved;
         }
         else if (EffectiveAnchor(neighbour, rounds) != mine)

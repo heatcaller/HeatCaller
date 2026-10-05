@@ -568,9 +568,12 @@ public sealed class MixerControl : UserControl
 
         endGrid.AddRow("At the flag, stop:", Choices(_chkStopMusic, _chkStopAmbience), stretch: true);
         endGrid.AddRow("Music after the recap:", FieldGrid.Inline(_cmbMusicEnd, lblFadeOver, _numMusicFade, lblFadeSuffix));
-        endGrid.AddHint("Only stops what was started automatically - anything you started by hand keeps going. "
+        // It used to promise that only what auto-start brought up is
+        // stopped - but a crowd or music started by hand is ended too.
+        endGrid.AddHint("Stops whatever is playing then, even if you started it by hand. "
                       + "Ambience waits for the finish celebration to play out first. "
-                      + "With Music ticked above, the music stops at the flag and the choice after the recap doesn't apply.");
+                      + "With Music ticked above, the music stops at the flag and the choice after the recap doesn't apply. "
+                      + "Music after the recap is for races only, so it needs Start for: Races.");
 
         var endCard = new Section("When it ends");
 
@@ -820,13 +823,24 @@ public sealed class MixerControl : UserControl
         _chkStopAmbience.Enabled = on;
         _chkStopMusic.Enabled = on;
 
-        // Music stopped at the flag has nothing left to do after the recap.
-        var afterRecap = on && !_chkStopMusic.Checked;
+        // Music stopped at the flag has nothing left to do after the recap,
+        // and practice has no recap - it used to stay live with only
+        // Practice ticked, and a Fade out set there never happened.
+        var afterRecap = MusicAfterRecapApplies(_chkStartRaces.Checked, _chkStopMusic.Checked);
         _cmbMusicEnd.Enabled = afterRecap;
 
         // The fade length only means anything when fading.
         _numMusicFade.Enabled = afterRecap && SelectedMusicEnd() == MusicEndBehaviour.FadeOut;
     }
+
+    /// <summary>
+    /// Whether "Music after the recap" does anything: only with Start for:
+    /// Races ticked, since the end of the broadcast is raised for races
+    /// alone (see MainForm.EndsMusicAfterRecap), and not while the music
+    /// already stops at the flag.
+    /// </summary>
+    internal static bool MusicAfterRecapApplies(bool startForRaces, bool stopMusicAtFlag) =>
+        startForRaces && !stopMusicAtFlag;
 
     /// <summary>
     /// Starts or stops an audition of every source at once.

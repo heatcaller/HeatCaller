@@ -1030,6 +1030,23 @@ public sealed class FirstRunWizard : Form
         Close();
     }
 
+    /// <summary>
+    /// Closed with the title-bar X: the step on screen is kept, as Back, Next
+    /// and Skip setup keep it. Nothing did, and MainForm marks the first run
+    /// done however the window went, so the drivers or classes typed on the
+    /// open step were lost and the wizard never came back to ask again.
+    /// Finish has already saved, and SaveCurrentStep is safe twice anyway.
+    /// </summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (DialogResult != DialogResult.OK)
+        {
+            SaveCurrentStep();
+        }
+
+        base.OnFormClosing(e);
+    }
+
     /// <summary>Commits the step being left. Safe to call more than once for the same step.</summary>
     private void SaveCurrentStep()
     {
@@ -1265,10 +1282,11 @@ public sealed class FirstRunWizard : Form
               + "No decoder here yet? You can still try everything with a simulated race in Demo Mode.";
     }
 
-    /// <summary>Lists the COM ports present now, the remembered one selected - the same rule as the Connection page.</summary>
+    /// <summary>Lists the COM ports present now and picks one of them, or none (see PortToSelect).</summary>
     private void FillSerialPorts()
     {
         var ports = ILapClient.AvailablePorts();
+        var current = _cmbSerialPort.SelectedItem as string;
 
         _cmbSerialPort.Items.Clear();
         _cmbSerialPort.Items.AddRange(ports);
@@ -1276,13 +1294,59 @@ public sealed class FirstRunWizard : Form
         // As wide as the longest port's name, now the list holds them.
         FitPicker(_cmbSerialPort, PortWidth);
 
-        if (ports.Length == 0)
+        _cmbSerialPort.SelectedIndex = PortToSelect(ports, _settings.ILapPort, current, _listedPorts);
+        _listedPorts = ports;
+    }
+
+    /// <summary>The ports the last FillSerialPorts listed - null before the first - so a Rescan can tell which one just appeared.</summary>
+    private string[]? _listedPorts;
+
+    /// <summary>
+    /// Where the COM port picker lands: on the port already picked while
+    /// it is still listed; else on the one port that appeared since the last
+    /// listing - the decoder just plugged in, as the hint asks before
+    /// Rescan; else on the remembered port; else on nothing (-1).
+    ///
+    /// Never on a port nobody chose. It used to fall back to the last port
+    /// listed, as the Connection page does - but whatever is selected here
+    /// is saved as the I-Lap's port when the step is left (SaveTiming), and
+    /// "Connect when HeatCaller starts" then opened that port by itself: a
+    /// laptop's Bluetooth port, taken for the I-Lap before it was plugged
+    /// in. So the first listing, with nothing to compare, picks no new port,
+    /// and nor does a Rescan that found two. A Rescan used to go by the
+    /// remembered port alone, which left the picker blank once the decoder
+    /// was plugged in, and dropped a port already picked by hand.
+    /// </summary>
+    internal static int PortToSelect(IReadOnlyList<string> ports, string? remembered, string? current = null, IReadOnlyList<string>? listedBefore = null)
+    {
+        int IndexOf(string? port)
         {
-            return;
+            for (var i = 0; i < ports.Count; i++)
+            {
+                if (string.Equals(ports[i], port, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
-        var remembered = Array.FindIndex(ports, p => string.Equals(p, _settings.ILapPort, StringComparison.OrdinalIgnoreCase));
-        _cmbSerialPort.SelectedIndex = remembered >= 0 ? remembered : ports.Length - 1;
+        if (!string.IsNullOrEmpty(current) && IndexOf(current) is var kept and >= 0)
+        {
+            return kept;
+        }
+
+        if (listedBefore is not null)
+        {
+            var appeared = ports.Where(p => !listedBefore.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (appeared.Count == 1)
+            {
+                return IndexOf(appeared[0]);
+            }
+        }
+
+        return IndexOf(remembered);
     }
 
     /// <summary>What each step came to, as the last step shows it - see BuildDone.</summary>

@@ -6,7 +6,7 @@ A backup is a single `.zip` file holding everything HeatCaller has saved: driver
 
 ## What's in a backup
 
-A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, with every file and subfolder in it. That includes your music library and photos, so a backup can be large. See [Data files](data-files.md) for what each file is.
+A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, with every file and subfolder in it. That includes your music library and photos, so a backup can be large. The finish camera's pictures (the `photo-finish` folder) are left out: they pile up quickly and would make every backup bigger, so copy that folder yourself if you want to keep them. See [Data files](data-files.md) for what each file is.
 
 Music tracks inside the data folder's music library are remembered by their place in that folder, so the library still works after a restore onto another PC or another Windows account.
 
@@ -175,7 +175,7 @@ HeatCaller tells you, once, what needs entering again:
 Everything else (drivers, classes, history, championships, tracks, sounds, soundscapes) comes across whether or not there was a password.
 
 !!! note
-    While HeatCaller is waiting to recover keys, it doesn't make automatic backups or new racer PINs. It picks up again once the recovery is dealt with.
+    While HeatCaller is waiting to recover keys, it doesn't make automatic backups or new racer PINs. It picks up again once the recovery is dealt with. If it has to wait until the next start (because a file was in use), a **Keys not recovered yet** message says so. A key or PIN you type in meanwhile works until HeatCaller closes but isn't saved, so it can't replace the backup's. The same goes for a backup password: **Set Password** then says it's set for this session only. Enter them again once the keys are back, if you still need to.
 
 If you still have the old PC, its settings are untouched: the keys on it still open there.
 
@@ -198,6 +198,8 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 ## Save Support Info
 
 When something has gone wrong and you want help with it, **Save Support Info** on the **Getting help** card saves one `.zip` file to attach to an email. You can also right-click the console on the **Developer console** card of the **Connection** page and choose **Save support info...**.
+
+The card says where to send it: **support@heatcaller.com**. Clicking the address opens your email program, and **Copy Address** puts it on the clipboard for a phone or another PC. The crash dialog points at the same place.
 
 1. Click **Save Support Info**.
 2. Choose where to save it. It suggests your desktop and a name like `HeatCaller support 2026-09-27 21-30.zip`.

@@ -202,6 +202,13 @@ public static class BackupService
         var folder = SafeBackupFolder(destinationFolder);
         Directory.CreateDirectory(folder);
 
+        // Only when no other backup is being written: one that is has its
+        // own .tmp in this folder.
+        if (Volatile.Read(ref _backupsRunning) == 1)
+        {
+            DeleteLeftovers(folder, ".tmp");
+        }
+
         if (!Directory.Exists(DataDirectory) || !Directory.EnumerateFileSystemEntries(DataDirectory).Any())
         {
             throw new InvalidOperationException("No saved data found to back up yet - nothing has been configured or raced yet.");
@@ -242,7 +249,9 @@ public static class BackupService
     /// <summary>
     /// Zips the data folder the way ZipFile.CreateFromDirectory does -
     /// every file, plus an entry for each empty folder - leaving out any
-    /// secrets file lying in it, and adding this backup's own.
+    /// secrets file lying in it, and adding this backup's own. The undo
+    /// holding folder and the photo-finish frames are left out too (see
+    /// IsLeftOutOfBackup).
     ///
     /// Built by hand rather than with CreateFromDirectory and then edited,
     /// because editing a zip (ZipArchiveMode.Update) in .NET reads the
@@ -277,8 +286,23 @@ public static class BackupService
             // Zip entry names use forward slashes, as CreateFromDirectory's do.
             var entryName = EntryNameFor(item.FullName, basePath);
 
-            // Files set aside for Undo are not club data - see IsUndoHolding.
-            if (IsUndoHolding(entryName))
+            // Files set aside for Undo, and photo-finish frames - see
+            // IsLeftOutOfBackup.
+            if (IsLeftOutOfBackup(entryName))
+            {
+                continue;
+            }
+
+            // Backups are not data. With the Backups page pointed somewhere
+            // inside the data folder, every backup used to zip every backup
+            // before it, doubling in size each time until the disk filled.
+            // Only this app's own backup zips are left
+            // out, wherever in the data folder they lie (the backup folder,
+            // its Pre-Restore safety subfolder, or anywhere else): the
+            // folder the Backups page points at can be one that also holds
+            // real data - DriverPhotos, the music library - and leaving out
+            // the whole folder would leave that data out of every backup.
+            if (item is FileInfo backupZip && BackupPrefix(backupZip) is not null)
             {
                 continue;
             }
@@ -360,7 +384,7 @@ public static class BackupService
             foreach (var file in root.EnumerateFiles("*.json", SearchOption.AllDirectories))
             {
                 if (!file.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase)
-                    || IsUndoHolding(EntryNameFor(file.FullName, basePath)))
+                    || IsLeftOutOfBackup(EntryNameFor(file.FullName, basePath)))
                 {
                     continue;
                 }
@@ -455,6 +479,26 @@ public static class BackupService
 
     private const string RetiredDriverPhotosEntry = "DriverPhotos/Retired/";
 
+    /// <summary>
+    /// Whether a zip entry name is left out of every backup: the undo
+    /// holding folder (see IsUndoHolding), and the photo-finish frames
+    /// (PhotoFinish.Root).
+    ///
+    /// The frames used to go into every backup. Each car taking the flag
+    /// keeps a couple of MB of JPEGs, which barely squash, and nothing ever
+    /// deletes them, so every automatic backup - daily, fourteen kept, and
+    /// copied to the cloud folders too - zipped every night's pictures
+    /// again, until the backups filled the laptop's disk. Every shot.json
+    /// was also read while every save waited. They are pictures to look at
+    /// on the night, not club data. A restore is a separate decision and
+    /// still goes by IsUndoHolding alone, so a backup made before this
+    /// puts its frames back; frames already on the laptop are never touched.
+    /// </summary>
+    private static bool IsLeftOutOfBackup(string entryName) =>
+        IsUndoHolding(entryName)
+        || entryName.Equals(PhotoFinish.FolderName, StringComparison.OrdinalIgnoreCase)
+        || entryName.StartsWith(PhotoFinish.FolderName + "/", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>As CreateEntryFromFile does: a zip can't hold a time outside 1980-2107, and the setter throws on one.</summary>
     private static DateTime ZipSafeTime(DateTime lastWrite) =>
         lastWrite.Year < 1980 || lastWrite.Year > 2107
@@ -487,7 +531,62 @@ public static class BackupService
         }
         catch
         {
-            // A leftover .tmp is harmless: the next backup deletes it first.
+            // A leftover .tmp is harmless: a later backup clears it away
+            // (see DeleteLeftovers).
+        }
+    }
+
+    /// <summary>How long a half-written backup must have been left alone before a later backup takes it for one that was cut off.</summary>
+    private static readonly TimeSpan LeftoverAge = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Deletes half-written backups an earlier one left in
+    /// <paramref name="folder"/>: this app's backup names ending ".zip"
+    /// plus <paramref name="suffix"/> (".tmp" here, ".partial" in a cloud
+    /// folder - see CloudBackup.CopyToTargets), untouched for an hour or
+    /// more. Never throws.
+    ///
+    /// A backup cut off partway - HeatCaller closed, Windows shut down, or a
+    /// new look picked while the automatic one was still zipping - left its
+    /// temp file behind for good. Each one is named for its own backup's
+    /// time, so the check for this backup's own name before it starts never
+    /// matched one, and the backup list only shows .zip files, so they piled
+    /// up unseen: possibly GBs each, and uploaded by the cloud app. The hour
+    /// is so a backup still being written somewhere is never taken for one.
+    /// </summary>
+    internal static void DeleteLeftovers(string folder, string suffix)
+    {
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(folder, "HeatCaller-*", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(path);
+
+                if (!name.EndsWith(".zip" + suffix, StringComparison.OrdinalIgnoreCase)
+                    || !(name.StartsWith(ManualPrefix, StringComparison.OrdinalIgnoreCase)
+                         || name.StartsWith(AutomaticPrefix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    // Asked of the file itself, not the listing, whose
+                    // times can lag behind a file still being written.
+                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(path) >= LeftoverAge)
+                    {
+                        File.Delete(path);
+                    }
+                }
+                catch
+                {
+                    // In use or gone - tried again by the next backup.
+                }
+            }
+        }
+        catch
+        {
+            // A folder that can't be listed has nothing this can tidy.
         }
     }
 
@@ -635,6 +734,20 @@ public static class BackupService
                 TryDelete(journalPath);
             }
 
+            // The same again for every other store file the backup has no
+            // copy of. A restore that only adds and replaces left this
+            // laptop's garage, seasons, check-in, relay results and so on
+            // beside the backup's drivers and races - a mix of two clubs'
+            // data that neither was ever in. Moved into the undo holding
+            // folder rather than deleted: they are in the pre-restore
+            // safety backup too, so restoring that puts them back, and the
+            // holding copy is a second way back for a week. Only the
+            // settings files at the top of the data folder - the stores -
+            // are touched: music, photos, logs and the holding folder are
+            // not, and settings.json and RestoredSettings' record (written
+            // just above for this restore) are always left in place.
+            SetAsideFilesNotInBackup(root, staged.Values, journalPath, settingsPath, result);
+
             // The data first, then the music and logs, so that if anything
             // is going to go wrong it is more likely to be with a song than
             // with the driver list. Every file is tried whatever happened to
@@ -679,6 +792,52 @@ public static class BackupService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Moves each store file (a .json at the top of the data folder) that
+    /// the backup being restored has no copy of into a fresh undo holding
+    /// folder, so the restored data is the backup's alone rather than the
+    /// backup's laid over whatever this laptop had that it didn't. Never
+    /// throws: a file that can't be moved is left as it was and named in
+    /// the result's Failed list, which the Backups page already reads as
+    /// "still holds the data from before the restore".
+    /// </summary>
+    private static void SetAsideFilesNotInBackup(string root, IEnumerable<string> restoredDestinations, string journalPath, string settingsPath, RestoreResult result)
+    {
+        List<string> live;
+        try
+        {
+            live = Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly).ToList();
+        }
+        catch
+        {
+            return;
+        }
+
+        var restored = new HashSet<string>(restoredDestinations, StringComparer.OrdinalIgnoreCase);
+        string? holding = null;
+
+        foreach (var file in live)
+        {
+            var fullPath = Path.GetFullPath(file);
+
+            if (!Path.GetExtension(fullPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
+                || restored.Contains(fullPath)
+                || IsRestoreRecord(fullPath)
+                || string.Equals(fullPath, settingsPath, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fullPath, journalPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            holding ??= UndoHoldingFolder.NewFolder();
+
+            if (UndoHoldingFolder.MoveIn(fullPath, holding) is null && File.Exists(fullPath))
+            {
+                result.Failed.Add($"{Path.GetFileName(fullPath)} (not in the backup, and couldn't be set aside)");
+            }
+        }
     }
 
     /// <summary>

@@ -365,6 +365,11 @@ internal static class LayoutAudit
         // The glossary from Next Steps' Glossary: the sport's words and what they mean (RacingWordsForm).
         "What these words mean",
 
+        // What the app is, which build it is, where to write for help, and every
+        // third-party component it ships - from Backup & Restore's Getting help
+        // card (AboutForm).
+        "About HeatCaller",
+
         // The scan-to-join poster over Print, Full screen and Close (JoinPosterForm, titled "<heading> - scan to join").
         "Scan to join",
 

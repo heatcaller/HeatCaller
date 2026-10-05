@@ -277,7 +277,10 @@ public sealed partial class RaceDayService
     private OpResult ProgramBumpUps(OpContext context)
     {
         var className = RequireClassName(context);
-        var plan = _host.Program.PlanBumpUps(className);
+
+        // The drivers it would move, named as the phone's channel may see
+        // them - see ShownPromotionName.
+        var plan = _host.Program.PlanBumpUps(className, p => ShownPromotionName(p, _host.Profiles, context.Channel));
 
         if (!plan.Ok || plan.Target is not { } target)
         {
@@ -392,7 +395,7 @@ public sealed partial class RaceDayService
 
         if (from is not null && !from.AssignedTransponders.Contains(transponder, StringComparer.OrdinalIgnoreCase))
         {
-            throw new OpRefused($"{NameOfTransponder(transponder)} isn't in {from.RoundLabel}.");
+            throw new OpRefused($"{ShownNameOfTransponder(transponder, context.Channel)} isn't in {from.RoundLabel}.");
         }
 
         var classRounds = TodaysRoundsForClass(className);
@@ -403,7 +406,10 @@ public sealed partial class RaceDayService
                 .Select(r => new HeatBalanceForm.HeatState(r, r.IsRecorded, r.AssignedTransponders))
                 .ToList();
 
-            if (HeatBalanceForm.DescribeMoveBlocker(heats, from, to, transponder, _host.Program.HasRaceDay, NameOfTransponder) is { } refusal)
+            // The refusal goes back to the phone, so it names drivers as the
+            // phone's channel may see them - see ShownNameOf.
+            if (HeatBalanceForm.DescribeMoveBlocker(
+                    heats, from, to, transponder, _host.Program.HasRaceDay, t => ShownNameOfTransponder(t, context.Channel)) is { } refusal)
             {
                 throw new OpRefused(refusal);
             }
@@ -418,7 +424,7 @@ public sealed partial class RaceDayService
 
             if (after.Count == 0 && !context.Confirmed)
             {
-                return OpResult.Ask($"{from.RoundLabel} will have no drivers left. Move {NameOfTransponder(transponder)} anyway?");
+                return OpResult.Ask($"{from.RoundLabel} will have no drivers left. Move {ShownNameOfTransponder(transponder, context.Channel)} anyway?");
             }
 
             changes.Add(new HeatBalanceForm.RosterChange(from.Id, before, after));
@@ -439,9 +445,10 @@ public sealed partial class RaceDayService
             return OpResult.Refuse(done.Message);
         }
 
-        var name = NameOfTransponder(transponder);
-
-        var line = (from, to) switch
+        // Said twice: in full on the laptop's console, and to the phone as
+        // its channel may see the driver - an unnamed car's whole
+        // transponder went back through the relay here. See ShownNameOf.
+        string Said(string name) => (from, to) switch
         {
             ({ } a, { } b) => $"Moved {name} from {a.RoundLabel} to {b.RoundLabel}",
             ({ } a, null) => $"Took {name} out of {a.RoundLabel}",
@@ -449,7 +456,9 @@ public sealed partial class RaceDayService
             _ => $"Moved {name}",
         };
 
-        return OpResult.Done($"{line} ({className})", $"{line}.");
+        return OpResult.Done(
+            $"{Said(NameOfTransponder(transponder))} ({className})",
+            $"{Said(ShownNameOfTransponder(transponder, context.Channel))}.");
     }
 
     /// <summary>

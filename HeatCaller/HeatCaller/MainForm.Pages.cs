@@ -74,6 +74,22 @@ public partial class MainForm
         // happens to navigate away and back.
         raceControl.SessionSaved += () =>
         {
+            // The heat just recorded comes off the timetable here, open or
+            // shut. Only the Timetable page used to tick lines off, as it
+            // opened, so with it shut the Big Screen's ON DECK, the phones
+            // and the online schedule stayed on the first heat all night.
+            TickOffRecordedHeats(_daySchedule, _rounds);
+
+            try
+            {
+                _daySchedulePage?.RefreshAll();
+            }
+            catch
+            {
+                // Raised before the race's journal is let go (RaceFiling.Commit):
+                // redrawing a page must never stop that.
+            }
+
             RefreshActiveRoundCombo();
             RefreshCurrentPage();
         };
@@ -371,7 +387,12 @@ public partial class MainForm
         // status there instead of merging the two records together.
         checkIn.InspectRequested += profile =>
         {
-            var latest = _techInspections.Today(profile.Transponder, profile.ClassName);
+            // The class the desk's Tech column is showing, not always their
+            // main one: a driver through tech in Stock and not in Modified
+            // used to have their Stock pass opened, and switching it to
+            // Modified replaced it.
+            var className = checkIn.InspectClassFor(profile);
+            var latest = _techInspections.Today(profile.Transponder, className);
 
             // Only today's inspection is opened for editing. A race day can
             // span a weekend, and the inspection that counts on Sunday
@@ -389,7 +410,7 @@ public partial class MainForm
 
             using var form = existing is not null
                 ? new TechInspectionEditForm(existing, _profiles, _raceClasses)
-                : new TechInspectionEditForm(null, _profiles, _raceClasses, profile.Transponder);
+                : new TechInspectionEditForm(null, _profiles, _raceClasses, profile.Transponder, className);
 
             if (form.ShowDialog(this) != DialogResult.OK)
             {
@@ -580,7 +601,8 @@ public partial class MainForm
                     SetClassesRacing: eventTab.SetRacingClassesFromElsewhere,
                     PlanBuild: () => _raceProgram.PlanQualifyingBuild(),
                     Build: () => _raceProgram.BuildQualifying(string.Empty),
-                    Sound: MakeSoundOfferHost()),
+                    Sound: MakeSoundOfferHost(),
+                    SetCheckedIn: SetCheckedInFromWizard),
                 startStep);
 
             wizard.ShowDialog(this);
@@ -1094,7 +1116,16 @@ public partial class MainForm
                 // The Track box follows the day that just opened, rather
                 // than staying on whatever was used last. See
                 // SyncTrackLayoutToRaceDay for what that was costing.
-                SyncTrackLayoutToRaceDay();
+                //
+                // Not while a race or practice is under way: the box is the
+                // track the running race is filed under, and switching it to
+                // the other day's layout moved the race and its records to a
+                // track it was never run on. (The running round is kept the
+                // same way - see RefreshActiveRoundCombo.)
+                if (!RaceUnderWay)
+                {
+                    SyncTrackLayoutToRaceDay();
+                }
 
                 // And the sidebar, if this was a day opening or the last one
                 // closing. A no-op when the grouping is unchanged.
@@ -1135,6 +1166,7 @@ public partial class MainForm
             Cars = _cars,
             Packs = _batteryPacks,
             GhostCars = () => _ghostStore.Current.Ghosts.ToList(),
+            GhostsJoinedLate = GhostsSwitchedOnMidRace,
         };
 
         raceControl.AchievementStores = badgeStores;
@@ -1470,6 +1502,10 @@ public partial class MainForm
         // screens wear, and the club logo - with no tabs. It held two tabs
         // until 0.56, when Announcer Style (now Soundscapes) moved to Sounds.
         _looksControl = new LooksControl(_settings, _undo, ApplyHeaderAnimationSetting, RefreshHeaderLogo, RestartForNewLook) { Dock = DockStyle.Fill };
+
+        // Its "Use for the App" restarts the app, which would end a race -
+        // the same question Backup & Restore asks before its restart.
+        _looksControl.IsRaceUnderWay = () => _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
         pageThemes.Controls.Add(_looksControl);
 
         // Looks shows what settings and the looks file hold, and those can
@@ -1949,4 +1985,12 @@ public partial class MainForm
                 + (warming.Elapsed.TotalSeconds >= 1 && timing is not null ? $" {timing}" : string.Empty));
         };
     }
+
+    /// <summary>
+    /// What a saved race does to the timetable (Race Control's SessionSaved,
+    /// in PopulateTabs): every line whose heat is now recorded is ticked off.
+    /// On its own so a test can run the same thing the handler does.
+    /// </summary>
+    internal static int TickOffRecordedHeats(DayScheduleStore schedule, RoundDefinitionStore rounds) =>
+        schedule.AutoCompleteRecorded(id => rounds.Get(id)?.IsRecorded == true);
 }

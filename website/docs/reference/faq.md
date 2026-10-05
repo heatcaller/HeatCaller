@@ -188,12 +188,16 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Sti
 
 ### How do I report a problem?
 
-Include these:
+Email **support@heatcaller.com**, and include these:
 
-- The version, from the title bar or startup screen (for example **BETA 0.59.0**).
+- The version, from the title bar, the startup screen or **About HeatCaller...** (for example **BETA 0.59.0**).
 - What you were doing.
-- The console text. Use **Copy** on the Developer Console on the **Connection** page.
-- `%AppData%\HeatCaller\crash.log`, if an error box appeared.
+- The support file: **Save Support Info** on the **Getting help** card of the **Backup & Restore** page. It has the console, the crash log, the version and the PC in it already, with driver names and email addresses taken out. See [Save Support Info](../admin/backups.md#save-support-info).
+
+The address is on the **Getting help** card, with **Copy Address** beside it, and in the box that appears when something goes wrong.
 
 See [Troubleshooting](../admin/troubleshooting.md).
-<!-- TODO: add where to send bug reports (email/forum/issue tracker) -->
+
+### What other software is inside HeatCaller?
+
+**About HeatCaller...** on the **Getting help** card of the **Backup & Restore** page lists every third-party component HeatCaller ships with and the licence it is under — the audio playback, the decoder connections, the QR codes, the free on-PC voice and the two typefaces. All of it is free to use and redistribute, and the font licence files travel with the fonts as those licences require.
