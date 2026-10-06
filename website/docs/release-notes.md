@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Cloud backup now tells you at a glance whether it's working.** **Backup & Restore** and **Mission Control** show one line with a color: green when every folder you picked got tonight's copy, red when none of them did or the last attempt failed, amber when it's only partly working, has never copied, or hasn't copied in over two weeks. Before, you had to read the dates and work it out yourself.
+
 - **The app now says what's inside it and where to get help.** **Backup & Restore**'s **Getting help** card has a new **About HeatCaller...** button: the build you're on, what HeatCaller is, where the guides are, and every piece of software HeatCaller ships with and the license it's under. The same card now shows the support address, **support@heatcaller.com**, as a link with **Copy Address** beside it, and the box that appears when something goes wrong names it too, after **Save Support Info**. Before, both told you how to make the support file and not who to send it to.
 
 - **One version number.** The version comes from one place in the project itself now, so the title bar, and later the installer and the updater, can never claim different builds. It used to be typed in a second time by hand.

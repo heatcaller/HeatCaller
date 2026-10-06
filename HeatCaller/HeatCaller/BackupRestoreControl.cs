@@ -62,6 +62,15 @@ public sealed class BackupRestoreControl : UserControl
     private readonly Button _btnRestoreSelected = new();
     private readonly Button _btnDeleteSelected = new();
     private readonly Dictionary<CloudService, CheckBox> _cloudChecks = new();
+
+    /// <summary>The cloud backup light and the two or three words beside it - see RefreshCloudStatus.</summary>
+    private readonly Panel _pnlCloudLight = new();
+
+    private readonly Label _lblCloudLight = new();
+
+    /// <summary>What is wrong and what to do about it, under the light.</summary>
+    private readonly Label _lblCloudDetail = new();
+
     private readonly Label _lblCloudStatus = new();
     private readonly Button _btnChangeFolder = new();
     private readonly TextBox _txtBackupPassword = new();
@@ -375,12 +384,27 @@ public sealed class BackupRestoreControl : UserControl
         btnCheckCloud.Click += (_, _) => RefreshCloudStatus();
         cloudRow.Add(btnCheckCloud);
 
-        // What each service's app is doing on this PC - found and where, or
-        // what to install - so a copy that can't happen is visible here,
-        // not only in the log after a backup. A line kept for each service
-        // and one for the note after them, whatever it says, so the text
-        // changing with what is ticked or found does not move "Last backup"
-        // under it; it still grows for more when a line wraps.
+        // Whether the backups are actually reaching the cloud: a green,
+        // amber or red light and, beside and under it, what is wrong and
+        // what to do. It used to be only the muted grey lines below - which
+        // said what each service needed in the same colour as everything
+        // else, so a club whose OneDrive folder had been unlinked read right
+        // past it. See CloudBackupStatus, which Mission Control's tile
+        // reads too.
+        var cloudLight = new StatusLine(_pnlCloudLight, _lblCloudLight);
+
+        _lblCloudDetail.AutoSize = true;
+        _textSize.Wear(_lblCloudDetail, () => AppTheme.SmallFont);
+
+        // Two lines kept for the detail, so the wording changing with what
+        // is ticked or found does not move everything under it; it still
+        // grows for a third when it needs one.
+        _textSize.ReserveLines(_lblCloudDetail, 2);
+
+        // Where each service's copies go on this PC. The light above says
+        // whether they are getting there; this says where, which is what a
+        // club checking its own OneDrive folder wants. A line kept for each
+        // service and one for the note after them, for the same reason.
         _lblCloudStatus.AutoSize = true;
         _lblCloudStatus.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblCloudStatus, () => AppTheme.SmallFont);
@@ -398,6 +422,8 @@ public sealed class BackupRestoreControl : UserControl
         card.Add(folderRow);
         card.Add(lblCloud, gapBelow: UiLayout.HintGap);
         card.Add(FieldGrid.Inline(cloudRow.ToArray()), gapBelow: UiLayout.HintGap);
+        card.Add(cloudLight, gapBelow: UiLayout.HintGap);
+        card.Add(_lblCloudDetail, gapBelow: UiLayout.HintGap);
         card.Add(_lblCloudStatus);
         card.Add(_lblLastBackup, gapBelow: 0);
 
@@ -737,13 +763,28 @@ public sealed class BackupRestoreControl : UserControl
 
     /// <summary>
     /// Looks for each cloud service's folder on this PC again (it can be
-    /// installed or signed into while the app is open) and says what was
-    /// found. The boxes stay clickable either way - greyed-out text was
-    /// unreadable on the dark looks, and the line for each service already
-    /// says what it needs.
+    /// installed or signed into while the app is open) and says how the
+    /// cloud copies stand: the light, what to do about it, and where each
+    /// service's copies go. The boxes stay clickable either way - greyed-out
+    /// text was unreadable on the dark looks, and the light already says
+    /// what is needed.
     /// </summary>
     private void RefreshCloudStatus()
     {
+        // Judged in one place, so this page and Mission Control's tile can
+        // never disagree about whether the backups are reaching the cloud.
+        var state = CloudBackupStatus.Assess(CloudBackupStatus.Read(_settings, DateTime.UtcNow));
+
+        _pnlCloudLight.BackColor = LightColor(state.Level);
+        _lblCloudLight.ForeColor = LightColor(state.Level);
+        _lblCloudLight.Text = state.Headline;
+
+        // The detail stays in the ordinary muted ink: the light and the few
+        // words beside it carry the colour, and two sentences of red is
+        // harder to read than it is alarming.
+        _lblCloudDetail.ForeColor = AppTheme.TextMuted;
+        _lblCloudDetail.Text = state.Detail;
+
         var lines = new List<string>();
 
         foreach (var (service, check) in _cloudChecks)
@@ -752,14 +793,9 @@ public sealed class BackupRestoreControl : UserControl
 
             if (root is not null)
             {
-                if (check.Checked)
-                {
-                    lines.Add($"{CloudBackup.NameOf(service)}: copies go to {Path.Combine(root, CloudBackup.FolderName)}");
-                }
-            }
-            else if (check.Checked)
-            {
-                lines.Add($"{CloudBackup.NameOf(service)}: not found on this PC - install and sign in to {CloudBackup.AppNameOf(service)}, then press Check Again.");
+                lines.Add(check.Checked
+                    ? $"{CloudBackup.NameOf(service)}: copies go to {Path.Combine(root, CloudBackup.FolderName)}"
+                    : $"{CloudBackup.NameOf(service)}: found on this PC, but not ticked.");
             }
             else
             {
@@ -770,6 +806,19 @@ public sealed class BackupRestoreControl : UserControl
         lines.Add("Copies upload whenever the laptop is online. Set a backup password below to include your keys, locked.");
         _lblCloudStatus.Text = string.Join(Environment.NewLine, lines);
     }
+
+    /// <summary>
+    /// The light's colour for a level - the same green, amber and red
+    /// Mission Control's tiles use (MissionControlForm), through the theme,
+    /// so it follows every look and never comes out unreadable on a dark one.
+    /// </summary>
+    private static Color LightColor(MissionControl.Level level) => level switch
+    {
+        MissionControl.Level.Problem => AppTheme.Danger,
+        MissionControl.Level.Watch => AppTheme.Warning,
+        MissionControl.Level.Good => AppTheme.Success,
+        _ => AppTheme.TextMuted,
+    };
 
     private string CurrentFolder() =>
         // The guarded answer, so the page shows where backups will REALLY
@@ -890,11 +939,34 @@ public sealed class BackupRestoreControl : UserControl
         var made = $"Backup created: {Path.GetFileName(path)}.";
         _lblStatus.Text = made + " Copying to the cloud...";
 
-        var results = await Task.Run(() => CloudBackup.CopyToTargets(path, clouds, keep));
+        var results = await Task.Run(() => CloudBackup.Copy(path, clouds, keep));
 
-        if (!IsDisposed && !Disposing)
+        if (IsDisposed || Disposing || SafeFile.IsFrozen)
         {
-            _lblStatus.Text = made + " " + string.Join(" ", results);
+            return;
+        }
+
+        _lblStatus.Text = made + " " + string.Join(" ", results.Select(r => r.Line));
+
+        // What the copies did, written down for the light - see
+        // CloudBackupStatus. Not from the rehearsal copy, which copies
+        // nothing on purpose: its "not copied" lines are not a fault.
+        if (AppPaths.IsRehearsal)
+        {
+            return;
+        }
+
+        try
+        {
+            CloudBackupStatus.Record(_settings, results, DateTime.UtcNow);
+            _settings.Save();
+            RefreshCloudStatus();
+        }
+        catch (Exception ex)
+        {
+            // The backup and its copies are made; only the note about them
+            // failed to save. Said on the line, not in a dialog over it.
+            _lblStatus.Text = made + $" Couldn't note how the cloud copies went: {ex.Message}";
         }
     }
 

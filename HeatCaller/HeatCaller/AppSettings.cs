@@ -105,6 +105,17 @@ public sealed class AppSettings
     public bool CloudBackupICloudDrive { get; set; }
     public bool CloudBackupOneDrive { get; set; }
 
+    /// <summary>
+    /// When a copy of a backup last reached every cloud service switched on;
+    /// null when none ever has. What the cloud backup light reads, so it can
+    /// still say how things stand long after the console line scrolled away
+    /// - see CloudBackupStatus.
+    /// </summary>
+    public DateTime? LastCloudBackupUtc { get; set; }
+
+    /// <summary>Why the last attempt at a cloud copy didn't get there, in the words it was reported in; empty when the last one worked. See CloudBackupStatus.</summary>
+    public string LastCloudBackupProblem { get; set; } = string.Empty;
+
     // Race control settings, remembered across sessions so they don't need
     // re-entering every time the app is reopened. 0 for LapLimit/TimeLimitMinutes
     // means "no limit", matching the UI's own convention.

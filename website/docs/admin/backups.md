@@ -74,13 +74,31 @@ It uses each service's own Windows app, which you install and sign in to once:
 | iCloud Drive | iCloud for Windows (from the Microsoft Store) |
 | OneDrive | Built into Windows. Sign in from the OneDrive icon by the clock. |
 
-Then, on **Backup & Restore**, on the **Automatic backups** card, tick the services under **Also copy every backup to:**. A service that isn't installed and signed in on this PC is greyed out, and the line below says what to install. Press **Check Again** after installing it.
+Then, on **Backup & Restore**, on the **Automatic backups** card, tick the services under **Also copy every backup to:**. Press **Check Again** after installing one.
 
 - Every backup gets copied: automatic ones and **Back Up Now**.
 - Copies go in a **HeatCaller Backups** folder at the top of your Drive, iCloud Drive or OneDrive. The service's app uploads them whenever the laptop is online, so an offline race night is fine.
 - The same **Keep the last** count applies there: older automatic copies are deleted, and backups you made by hand are kept.
-- A copy that fails never affects the backup on the laptop. The reason shows on the page after **Back Up Now**, and in the Developer Console for automatic backups.
+- A copy that fails never affects the backup on the laptop.
 - HeatCaller never signs in to your cloud account, and holds no password or token for it.
+
+### Is it working?
+
+Under the tick boxes is a light that says whether your backups are really reaching the cloud, with a line under it saying what to do when they aren't. The same answer is a **Cloud backup** tile in [Mission Control](../race-control/running-a-race.md#mission-control), so it is one of the things you can check before a race night.
+
+| Light | What it means | What to do |
+|---|---|---|
+| Grey - **Off** | No cloud service is ticked. Backups stay on this laptop only. | Nothing, if that is what you want. Otherwise tick a service above. |
+| Green - **Up to date** | The last backup reached every service you ticked, and recently. | Nothing. |
+| Amber - **Not yet** | The services are ticked but no backup has gone up yet. | Wait for the next automatic backup, or press **Back Up Now**. |
+| Amber - **Out of date** | A copy did reach the cloud, but over two weeks ago. | Check backups are still being made, then press **Back Up Now**. |
+| Amber - **Partly working** | One service is working, another isn't installed or signed in. | Install and sign in to the one named, then press **Check Again**. |
+| Red - **Can't copy** | No service you ticked is installed and signed in here, so nothing is reaching the cloud. | Install and sign in to the one named, then press **Check Again**. |
+| Red - **Copy failed** | The last copy was tried and didn't get there - a full drive, a folder that has gone, a permission refused. The light says which. | Fix what it says, then press **Back Up Now**. |
+
+The commonest red is a cloud folder that has been moved, unlinked or signed out of since you ticked it. Nothing on the laptop looks wrong, which is exactly why the light is there.
+
+Below the light, a line for each service says where its copies go on this PC. Automatic backups also report each copy in the Developer Console.
 
 To restore from a cloud copy, use **Restore from File** and pick the zip in the **HeatCaller Backups** folder (on a new PC, install and sign in to the service's app first).
 

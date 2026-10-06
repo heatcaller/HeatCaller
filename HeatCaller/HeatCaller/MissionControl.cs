@@ -3,8 +3,9 @@ namespace HeatCaller;
 /// <summary>
 /// Everything that has to be right before a green flag, judged in one
 /// place: the decoder, its heartbeat, the split loop, the cars being heard,
-/// this race's grid, timing, transponders that are fading, the website and
-/// the sound. MissionControlForm shows the answer as a wall of tiles.
+/// this race's grid, timing, transponders that are fading, the website, the
+/// sound and the cloud backups. MissionControlForm shows the answer as a
+/// wall of tiles.
 ///
 /// Rehearsal 4 staged a heat with the decoder unplugged, and lost an EasyLap
 /// off USB mid-main. Each fault was on some page somewhere - a dot on
@@ -47,6 +48,7 @@ internal static class MissionControl
     /// <param name="Fading">Transponders reading weaker than they usually do, already worded ("Frank - reading 32% weaker than usual").</param>
     /// <param name="Relay">The website relay's status; null when the club doesn't publish.</param>
     /// <param name="VoiceMuted">The announcer is muted.</param>
+    /// <param name="CloudBackup">Whether the club's backups are reaching the cloud, already judged (CloudBackupStatus); null when it wasn't asked.</param>
     public sealed record Inputs(
         string LineDecoder,
         DecoderConnectionState LineState,
@@ -60,7 +62,8 @@ internal static class MissionControl
         string? TimingProblem,
         IReadOnlyList<string> Fading,
         RelayStatus? Relay,
-        bool VoiceMuted);
+        bool VoiceMuted,
+        CloudBackupStatus.State? CloudBackup = null);
 
     /// <summary>The heartbeat comes once a second; this long without one and the decoder or its cable has stopped.</summary>
     internal static readonly TimeSpan HeartbeatLate = TimeSpan.FromSeconds(5);
@@ -81,6 +84,7 @@ internal static class MissionControl
             Transponders(inputs),
             Website(inputs),
             Sound(inputs),
+            Cloud(inputs),
         };
 
         return tiles;
@@ -205,6 +209,18 @@ internal static class MissionControl
             (relay.LastError ?? "Can't reach the relay.") + (relay.Queued > 0 ? $" {Plural.Of(relay.Queued, "update")} waiting." : string.Empty),
             behind || relay.Queued > 0 ? Level.Watch : Level.Off);
     }
+
+    /// <summary>
+    /// Whether the backups are reaching the cloud. A pre-race check because
+    /// that is the one page the club looks at before a night, and "the
+    /// club's backups are not leaving this PC" is the kind of thing nobody
+    /// finds out until the PC dies. Judged in CloudBackupStatus, which the
+    /// Backup &amp; Restore page's own light reads too, so the two always
+    /// agree.
+    /// </summary>
+    private static Tile Cloud(Inputs i) => i.CloudBackup is { } cloud
+        ? new("cloud", "Cloud backup", cloud.Headline, cloud.Detail, cloud.Level)
+        : new("cloud", "Cloud backup", "-", "Not checked.", Level.Off);
 
     private static Tile Sound(Inputs i) => i.VoiceMuted
         ? new("sound", "Sound", "Muted", "The announcer is muted - unmute before the green if it should be heard.", Level.Watch)

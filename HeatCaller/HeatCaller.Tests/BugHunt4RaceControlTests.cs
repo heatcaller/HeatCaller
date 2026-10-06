@@ -90,7 +90,7 @@ public sealed class BugHunt4RaceControlTests : IDisposable
     /// answers on a window's thread, and a window can't be made on Linux.
     /// </summary>
     [Fact]
-    public void The_race_day_manager_refuses_a_yellow_during_practice_and_leaves_the_flag_alone()
+    public async Task The_race_day_manager_refuses_a_yellow_during_practice_and_leaves_the_flag_alone()
     {
         using var window = new Control();
         _ = window.Handle;
@@ -125,7 +125,7 @@ public sealed class BugHunt4RaceControlTests : IDisposable
         });
 
         var request = JsonSerializer.Serialize(new { op = "race.flag", args = new { flag = "yellow" } });
-        var json = phone.HandleJsonAsync(request, RaceDayChannel.WiFi, CancellationToken.None).GetAwaiter().GetResult();
+        var json = await phone.HandleJsonAsync(request, RaceDayChannel.WiFi, CancellationToken.None);
 
         using var answer = JsonDocument.Parse(json);
         Assert.False(answer.RootElement.GetProperty("ok").GetBoolean(), json);

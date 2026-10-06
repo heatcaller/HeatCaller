@@ -32,7 +32,7 @@ public sealed class BugHuntResultsTests : IDisposable
     });
 
     [Fact]
-    public void A_journal_held_open_for_a_moment_at_startup_is_still_offered_back()
+    public async Task A_journal_held_open_for_a_moment_at_startup_is_still_offered_back()
     {
         File.WriteAllText(JournalPath, RunningRace());
 
@@ -47,7 +47,7 @@ public sealed class BugHuntResultsTests : IDisposable
         });
 
         var entry = RaceJournal.Unfinished();
-        release.Wait();
+        await release;
 
         Assert.NotNull(entry);
         Assert.Equal(5, entry!.LapCount);

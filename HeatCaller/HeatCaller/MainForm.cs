@@ -2187,7 +2187,7 @@ public partial class MainForm : Form
 
                 // After the local backup is safely made: a cloud copy that
                 // fails is reported, but never undoes or blocks that.
-                var cloudResults = CloudBackup.CopyToTargets(path, clouds, keep);
+                var cloudResults = CloudBackup.Copy(path, clouds, keep);
                 return (Path: path, Cloud: cloudResults);
             })
             .ContinueWith(task =>
@@ -2207,13 +2207,26 @@ public partial class MainForm : Form
                 }
 
                 _settings.LastAutoBackupUtc = DateTime.UtcNow;
+
+                // What the cloud copies did, written down for the cloud
+                // backup light to say later - see CloudBackupStatus. The
+                // console lines below used to be the only record, and they
+                // had scrolled away long before anyone needed them. Not
+                // from the rehearsal copy, which deliberately copies
+                // nothing: its "not copied" lines are not a fault to show.
+                if (!AppPaths.IsRehearsal)
+                {
+                    CloudBackupStatus.Record(_settings, task.Result.Cloud, DateTime.UtcNow);
+                    _cloudBackupLight = null;
+                }
+
                 _settings.Save();
 
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [backup] Automatic backup created: {Path.GetFileName(task.Result.Path)}");
 
-                foreach (var line in task.Result.Cloud)
+                foreach (var outcome in task.Result.Cloud)
                 {
-                    OnClientRawMessage($"{AppTime.LogStampNow()}  [backup] {line}");
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [backup] {outcome.Line}");
                 }
             },
             uiThread);

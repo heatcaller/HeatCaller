@@ -4,8 +4,8 @@ namespace HeatCaller;
 /// MainForm's side of Mission Control (MissionControl, MissionControlForm)
 /// and of the transponder health record (TransponderHealthStore): gathering
 /// the snapshot the checks are judged from - the decoders, the cars heard,
-/// the next race's grid, timing, the website, the sound - and feeding every
-/// pass to the health record.
+/// the next race's grid, timing, the website, the sound, the cloud backups -
+/// and feeding every pass to the health record.
 ///
 /// Here because the decoders, the relay and the announcer are MainForm's;
 /// Race Control lends the next race's roster (PreRaceRoster).
@@ -166,7 +166,39 @@ public partial class MainForm
             TimingProblem: _timingProblemText,
             Fading: fading,
             Relay: _relayPublisher.Status,
-            VoiceMuted: _announcer.Muted);
+            VoiceMuted: _announcer.Muted,
+            CloudBackup: CloudBackupLight());
+    }
+
+    /// <summary>The cloud backup light as last worked out, and when (Environment.TickCount64). UI thread.</summary>
+    private CloudBackupStatus.State? _cloudBackupLight;
+
+    private long _cloudBackupLightTicks;
+
+    /// <summary>How long the cloud backup light is kept before it is worked out again - see CloudBackupLight.</summary>
+    private static readonly TimeSpan CloudBackupLightFor = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Whether the backups are reaching the cloud (CloudBackupStatus), kept
+    /// for half a minute at a time.
+    ///
+    /// Mission Control reads its checks once a second, and working this one
+    /// out looks for each service's sync folder on disk - which is why
+    /// CloudBackup.FindSyncRoot takes such care over drives that can hang.
+    /// Nothing about it changes by the second, so it is not asked by the
+    /// second either.
+    /// </summary>
+    private CloudBackupStatus.State CloudBackupLight()
+    {
+        var now = Environment.TickCount64;
+
+        if (_cloudBackupLight is { } kept && now - _cloudBackupLightTicks < CloudBackupLightFor.TotalMilliseconds)
+        {
+            return kept;
+        }
+
+        _cloudBackupLightTicks = now;
+        return _cloudBackupLight = CloudBackupStatus.Assess(CloudBackupStatus.Read(_settings, DateTime.UtcNow));
     }
 
     /// <summary>A driver's name for a transponder, or the number when nobody has it.</summary>

@@ -34,6 +34,14 @@ internal static class CloudBackup
     /// <summary>A service that is switched on, and where its copies go (null when its sync folder isn't on this PC).</summary>
     internal sealed record Target(CloudService Service, string Name, string? Folder);
 
+    /// <summary>
+    /// What one target's copy did: whether it got there, and the line said
+    /// about it. The line alone used to be all a caller got, so telling a
+    /// copy that worked from one that didn't meant reading its wording -
+    /// see CloudBackupStatus, which records the answer for the light.
+    /// </summary>
+    internal sealed record CopyOutcome(CloudService Service, bool Copied, string Line);
+
     public static string NameOf(CloudService service) => service switch
     {
         CloudService.GoogleDrive => "Google Drive",
@@ -131,8 +139,16 @@ internal static class CloudBackup
     /// into a rehearsal.
     /// </summary>
     internal static IReadOnlyList<string> CopyToTargets(string backupPath, IReadOnlyList<Target> targets, int keepAutomatic, bool isRehearsal)
+        => Copy(backupPath, targets, keepAutomatic, isRehearsal).Select(o => o.Line).ToList();
+
+    /// <summary>CopyToTargets, with whether each target got the copy as well as the line about it - see CopyOutcome.</summary>
+    public static IReadOnlyList<CopyOutcome> Copy(string backupPath, IReadOnlyList<Target> targets, int keepAutomatic)
+        => Copy(backupPath, targets, keepAutomatic, AppPaths.IsRehearsal);
+
+    /// <summary>Copy with the rehearsal flag passed in, for the same reason CopyToTargets has one.</summary>
+    internal static IReadOnlyList<CopyOutcome> Copy(string backupPath, IReadOnlyList<Target> targets, int keepAutomatic, bool isRehearsal)
     {
-        var results = new List<string>();
+        var results = new List<CopyOutcome>();
 
         foreach (var target in targets)
         {
@@ -154,13 +170,13 @@ internal static class CloudBackup
             // version - with the switches still on - is covered as well.
             if (isRehearsal)
             {
-                results.Add($"Not copied to {target.Name}: this is the rehearsal copy of HeatCaller, whose backups stay in its own folder.");
+                results.Add(new CopyOutcome(target.Service, false, $"Not copied to {target.Name}: this is the rehearsal copy of HeatCaller, whose backups stay in its own folder."));
                 continue;
             }
 
             if (target.Folder is null)
             {
-                results.Add($"Not copied to {target.Name}: {AppNameOf(target.Service)} isn't installed or signed in on this PC.");
+                results.Add(new CopyOutcome(target.Service, false, $"Not copied to {target.Name}: {AppNameOf(target.Service)} isn't installed or signed in on this PC."));
                 continue;
             }
 
@@ -194,7 +210,7 @@ internal static class CloudBackup
                 }
 
                 BackupService.PruneOldBackups(destinationFolder, keepAutomatic);
-                results.Add($"Copied to {target.Name}.");
+                results.Add(new CopyOutcome(target.Service, true, $"Copied to {target.Name}."));
             }
             catch (Exception ex)
             {
@@ -212,7 +228,7 @@ internal static class CloudBackup
                     }
                 }
 
-                results.Add($"Not copied to {target.Name}: {ex.Message}");
+                results.Add(new CopyOutcome(target.Service, false, $"Not copied to {target.Name}: {ex.Message}"));
             }
         }
 

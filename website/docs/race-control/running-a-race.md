@@ -373,6 +373,7 @@ The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to r
 | **Transponders** | None reading weaker than usual. | Names the transponders that are fading. See [Signal over time](../timing/transponders.md#signal-over-time). | |
 | **Website** | Online and up to date, or updates on their way. | Switched on but not set up, or offline with results waiting. | |
 | **Sound** | The announcer will be heard. | The announcer is muted. | |
+| **Cloud backup** | The last backup reached every cloud service you ticked. | No copy has gone up yet, the last one is over two weeks old, or one of several services isn't signed in. | No service is signed in here, or the last copy failed - the tile says which and what to do. Dimmed when you keep no cloud copies. See [Copies in the cloud](../admin/backups.md#copies-in-the-cloud). |
 
 **Next race** uses the same drivers as the pre-race check: the selected round's roster, or the drivers on the leaderboard when no round is selected.
 ## Photo finish

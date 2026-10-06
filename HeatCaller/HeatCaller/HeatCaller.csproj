@@ -143,4 +143,75 @@
     <None Include="Assets\Fonts\*.txt" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- ONNX Runtime (pulled in by KokoroSharp.CPU) ships its native library
+       for every platform it supports: Android (onnxruntime.aar), iOS
+       (onnxruntime.xcframework.zip), macOS (.dylib), Linux (.so) and three
+       Windows architectures. A build with no runtime identifier - the plain
+       `dotnet build`, and anything packed from its output - takes the whole
+       set: 211 MB of natives, of which a Windows PC can load 36 MB and a
+       Windows x64 PC 12 MB. It also carries onnxruntime.lib and
+       onnxruntime_providers_shared.lib, which are import libraries for a
+       C++ linker and are never loaded at runtime by anything.
+
+       Dropped here, before the copy step reads the list. Scoped to the one
+       package and to those file kinds, so the Windows DLLs that do the work
+       are untouched and no other package is affected - the targeted removal
+       rather than a rule about runtimes\ in general. The self-contained
+       win-x64 publish would pick only win-x64 by itself, but the Debug
+       output a developer runs from, and any publish cut without a runtime
+       identifier, would not: this makes both honest. -->
+  <Target Name="DropOnnxNativesNoWindowsPcCanLoad"
+          AfterTargets="ResolvePackageAssets"
+          BeforeTargets="ResolveLockFileCopyLocalFiles">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
+                                    Condition="'%(RuntimeTargetsCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'
+                                               and ('%(RuntimeTargetsCopyLocalItems.Extension)' == '.aar'
+                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.zip'
+                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.dylib'
+                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.so'
+                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.lib')" />
+      <!-- The same list again for a runtime-identifier build, where the
+           chosen platform's natives arrive as NativeCopyLocalItems and land
+           flat beside the exe instead of under runtimes\. That is the shape
+           the installer is cut from, and it is where the two .lib files
+           would otherwise turn up next to HeatCaller.exe. -->
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
+                            Condition="'%(NativeCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'
+                                       and ('%(NativeCopyLocalItems.Extension)' == '.aar'
+                                         or '%(NativeCopyLocalItems.Extension)' == '.zip'
+                                         or '%(NativeCopyLocalItems.Extension)' == '.dylib'
+                                         or '%(NativeCopyLocalItems.Extension)' == '.so'
+                                         or '%(NativeCopyLocalItems.Extension)' == '.lib')" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Kokoro's voice files (voices\*.npy, and Kokoro's own licence with
+       them) are copied beside the exe by KokoroSharp's own targets, whose
+       CopyContent target runs AfterTargets="Build" and copies straight into
+       $(OutputPath) with a Copy task. Nothing about that reaches publish:
+       the files are not items the publish step knows, so `dotnet publish`
+       produced a folder with no voices\ at all, and KokoroSpeech - which
+       looks in AppContext.BaseDirectory\voices - would have told the first
+       club to install the real installer "Kokoro's voices folder is missing
+       from beside HeatCaller.exe - reinstall HeatCaller."
+
+       So they are handed to publish here, taken from the build output they
+       were already copied into rather than from a hard-coded package path
+       that would need editing on every KokoroSharp bump. RecursiveDir keeps
+       voices-zh\ where it belongs; KokoroSpeech searches subfolders. -->
+  <Target Name="PublishKokoroVoiceFiles" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_KokoroVoiceFile Include="$(OutputPath)voices\**\*" />
+      <ResolvedFileToPublish Include="@(_KokoroVoiceFile)">
+        <RelativePath>voices\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+    <!-- Loud rather than silent: a publish with no voices beside the exe is
+         a published app whose Kokoro voice cannot speak. -->
+    <Warning Condition="'@(_KokoroVoiceFile)' == ''"
+             Text="No Kokoro voice files found in $(OutputPath)voices - the published app will not be able to speak in the Kokoro voice. Build before publishing, and check KokoroSharp's CopyContent target still copies them." />
+  </Target>
+
 </Project>

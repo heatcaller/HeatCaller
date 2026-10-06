@@ -154,7 +154,7 @@ public sealed class BugHunt4AboutTests
 
         var notShipping = ThirdPartyCatalog.Components.Where(component => !component.Ships).ToList();
 
-        Assert.Empty(notShipping.Where(component => component.Name != "Kokoro 82M"));
+        Assert.DoesNotContain(notShipping, component => component.Name != "Kokoro 82M");
     }
 
     [Fact]

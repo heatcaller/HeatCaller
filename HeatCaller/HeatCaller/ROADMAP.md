@@ -42,7 +42,7 @@ What follows from that:
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
 | Tests | `HeatCaller.Tests`: 1,052 tests in 134 classes (5 Oct), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
-| Relay | TypeScript on Fly.io (`relay\`), 34 test files. **Owed a deploy**: the heat line-up privacy fix and the check-in PIN fix are in the relay's own code |
+| Relay | TypeScript on Fly.io (`relay\`), 34 test files, 461 tests. **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -549,15 +549,27 @@ data would go with the app. Not Inno Setup: no updater, so that would be a
 second project. Not WiX/MSI: too heavy.
 
 **Packaging**
-- [ ] **Self-contained build**: `dotnet publish -c Release -r win-x64
-      --self-contained true`, so a club installs nothing else. On .NET 10
-      first (Next, 5) - the runtime it bundles is the one the club gets.
-      No trimming (WinForms doesn't support it); ReadyToRun optional, for startup.
-      Fonts, sound packs and music already copy beside the exe and are
-      found through `AppContext.BaseDirectory` - no change needed.
+- [x] **Self-contained build** - **set up 5 Oct 2026.** `publish.cmd` runs
+      `dotnet publish -c Release -r win-x64 --self-contained true`, so a club
+      installs nothing else. No trimming (WinForms doesn't support it);
+      ReadyToRun is in the csproj but commented out, for startup later.
+      Two things it turned up, both fixed in the csproj:
+      - **the Kokoro `voices\` folder was missing from every publish.**
+        `KokoroSharp.targets` copies it `AfterTargets="Build"` with a plain
+        `Copy` into `$(OutputPath)`, which publish knows nothing about, so
+        `KokoroSpeech.VoicesFolder` (`AppContext.BaseDirectory\voices`) would
+        not have existed in an installed app. A new `PublishKokoroVoiceFiles`
+        target adds them as `ResolvedFileToPublish`. Fonts, sound packs and
+        music do travel on their own - the voices were the exception, and
+        the one most likely to have shipped broken.
+      - **185 MB of ONNX natives no Windows PC can load** (Android `.aar`,
+        macOS `.dylib`, Linux `.so`) were being copied. A new
+        `DropOnnxNativesNoWindowsPcCanLoad` target removes them: build output
+        498 MB -> 314 MB. `PublishLayoutTests` pins both targets.
 - [ ] **The whole Kokoro voice goes in the installer** (Asher, 5 Oct
-      2026). Today the 61 voice files ship beside the exe (with Kokoro's
-      own Apache-2.0 licence, copied by `KokoroSharp.targets`) but the
+      2026). Today the voice files ship beside the exe - 164 files, 82 MB,
+      with Kokoro's own Apache-2.0 licence, copied by `KokoroSharp.targets`
+      into the build and now into the publish too (above) - but the
       ~310 MB `kokoro.onnx` does not: `KokoroSpeech` downloads it into
       `%LocalAppData%\HeatCaller\Kokoro` the first time a club chooses
       that voice. Bundling it means a club at a track with bad Wi-Fi gets
@@ -566,11 +578,16 @@ second project. Not WiX/MSI: too heavy.
       - ship `kokoro.onnx` with the app and have `KokoroSpeech` prefer a
         copy beside the exe over `%LocalAppData%`, keeping the download as
         the fallback for anyone who has one already;
-      - the installer goes to roughly half a gigabyte (the self-contained
-        runtime, plus 69 MB of MisakiSharp lexicons, plus the model). The
-        first download is the whole thing; **Velopack's delta updates keep
-        later ones small, because the model never changes** - which is the
-        argument that makes this affordable at all;
+      - measured 5 Oct 2026: the publish folder is **314 MB** as it stands,
+        so roughly 430-465 MB installed once Velopack's own files are in,
+        and **750-780 MB with the model**. The first download is the whole
+        thing; **Velopack's delta updates keep later ones small, because the
+        model never changes** - which is the argument that makes this
+        affordable at all;
+      - while we are in there: **66 MB of the shipped voices can never be
+        chosen.** `IsEnglishVoice` filters 126 of the 157 `.npy` files out
+        of the picker, and they are copied anyway. Dropping them pays for a
+        fifth of the model;
       - licence-wise it is clear: Kokoro is Apache-2.0 and redistributable
         (see Licences below), with attribution already travelling with the
         voices.
