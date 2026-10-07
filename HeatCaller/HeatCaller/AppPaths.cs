@@ -22,13 +22,25 @@ namespace HeatCaller;
 /// </summary>
 internal static class AppPaths
 {
+    /// <summary>
+    /// The folder name under both %AppData% and %LocalAppData%.
+    ///
+    /// Named rather than typed twice because something else now depends on
+    /// it: Velopack installs the app into %LocalAppData%\&lt;package id&gt;, so
+    /// the package id must NOT be this name, or the installer would put the
+    /// app inside the voice-line cache and uninstalling would delete lines
+    /// the club paid ElevenLabs for. The package id is HeatCallerApp; see
+    /// publish.cmd and InstallerTests.
+    /// </summary>
+    internal const string FolderName = "HeatCaller";
+
     private static readonly string RealRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "HeatCaller");
+        FolderName);
 
     private static readonly string RealLocalRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HeatCaller");
+        FolderName);
 
     /// <summary>The test folder everything is redirected to, or null for the real one.</summary>
     private static volatile string? _redirect;

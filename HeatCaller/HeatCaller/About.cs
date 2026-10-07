@@ -16,17 +16,40 @@ namespace HeatCaller;
 /// packs are the club's own, synthesised by the scripts in audio-tools, so
 /// nothing in them is anyone else's to license.
 ///
-/// NOTHING IN HERE IS COPYLEFT. That matters for the installer: the Kokoro
-/// voice is MIT (the code) over Apache-2.0 (the model and its voices), and
-/// Kokoro's text processing is MisakiSharp, a C# port that is explicit about
-/// having no espeak-ng in it - espeak-ng is GPL-3.0, and a copy of it inside
-/// the installer would put the whole download under the GPL. So the 310 MB
-/// model can be bundled if the club would rather not download it. The two
-/// conditions that do travel with HeatCaller are attribution ones: the OFL
-/// licence files must stay beside the fonts (Assets\Fonts\OFL-*.txt, and the
-/// csproj copies them), and the Apache-2.0 components want their licence
+/// EVERY LICENCE HERE IS PERMISSIVE, and no copyleft-licensed binary ships:
+/// the Kokoro voice is MIT (the code) over Apache-2.0 (the model and its
+/// voices), and there is no copy of espeak-ng - GPL-3.0 - inside the
+/// installer, which is the thing that would have put the whole download
+/// under the GPL. So the 310 MB model can be bundled.
+///
+/// ONE THING IS NOT SETTLED, found on 6 Oct 2026 when MisakiSharp's NOTICE
+/// was finally fetched (Assets\Licences\MisakiSharp-NOTICE.txt, and read it
+/// rather than this summary). MisakiSharp is Apache-2.0 and ships no
+/// copyleft code, but its own NOTICE says two of its parts were derived from
+/// copyleft sources rather than merely behaving like them:
+///
+///   - "num2words (LGPL-2.1) - the English number verbalization logic was
+///     ported from its sources". English number verbalization is on
+///     HeatCaller's hot path: it is what turns 3 into "third" and 1:04.2
+///     into a lap time read aloud.
+///   - "phonemizer (GPL-3.0) - EspeakG2P/EspeakFallback reproduce its espeak
+///     backend behavior ... via misaki". Those two classes are the espeak
+///     path; whether anything in HeatCaller can reach them has not been
+///     traced.
+///
+/// So "no espeak-ng in it" is true and still not the whole question, and the
+/// line that used to stand here - nothing in here is copyleft - was resting
+/// on it. This is upstream's characterisation of upstream's own code, and
+/// what it means for a redistributed binary is a question for somebody
+/// qualified to answer it, before the public beta. It is not a reason to
+/// stop: MisakiSharp's own licence grant is Apache-2.0.
+///
+/// The conditions that do travel with HeatCaller are attribution ones: the
+/// OFL licence files must stay beside the fonts (Assets\Fonts\OFL-*.txt, and
+/// the csproj copies them), the Apache-2.0 components want their licence
 /// text passed on - which is why Kokoro's own LICENSE lands in voices\
-/// beside the exe.
+/// beside the exe - and Apache-2.0 4(d) wants MisakiSharp's NOTICE passed
+/// on, which is why Assets\Licences\ now ships beside the exe too.
 ///
 /// A new PackageReference goes on this list in the same change that adds it.
 /// </summary>
@@ -78,7 +101,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "Talks to an EasyLap decoder over USB.",
             new[] { "HidSharp" },
-            Note: "The package itself carries no licence file, only a link to the project's own LICENSE.txt. Confirm the text before the installer ships."),
+            Note: "By James F. Bellinger, copyright 2007-2025. The package carries no licence file, only a dead link; confirmed 6 Oct 2026 from the author's own page (software.seekye.com/hidsharp, where zer7.com/software/hidsharp now redirects), which states the Apache licence without naming a version. The package's old licenseUrl pointed at Apache-2.0."),
 
         new Component(
             "System.IO.Ports",
@@ -124,7 +147,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "Works out how the Kokoro voice should pronounce a line.",
             new[] { "MisakiSharp" },
-            Note: "A C# port of hexgrad's misaki, with no espeak-ng in it - so no GPL code comes in with it. Its NOTICE file, which Apache-2.0 asks to be passed on, is not in the package; take it from the project."),
+            Note: "A C# port of hexgrad's misaki, with no espeak-ng binary in it. Its NOTICE, which Apache-2.0 4(d) asks to be passed on, is not in the package - fetched from the project on 6 Oct 2026 and now shipped as Assets\\Licences\\MisakiSharp-NOTICE.txt. Read it: it names num2words (LGPL-2.1) and phonemizer (GPL-3.0) as sources two of its parts were ported from. See the note at the top of this file."),
 
         new Component(
             "ONNX Runtime",
@@ -148,7 +171,7 @@ internal static class ThirdPartyCatalog
             "MIT",
             "Audio playback KokoroSharp brings with it.",
             new[] { "OpenTK.Audio.OpenAL", "OpenTK.Core", "OpenTK.Mathematics" },
-            Note: "The packages state no licence at all - this is the project's own. Confirm the text before the installer ships."),
+            Note: "The packages state no licence at all. Confirmed 6 Oct 2026 from the project's own LICENSE.md: MIT, \"Copyright (c) 2006-2019 Stefanos Apostolopoulos for the Open Toolkit project\". MIT wants that notice passed on, so it ships as Assets\\Licences\\OpenTK-LICENSE.txt. Still a pre-release (5.0.0-pre.13), pulled in by KokoroSharp."),
 
         new Component(
             "System.Numerics.Tensors",

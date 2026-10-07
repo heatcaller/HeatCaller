@@ -12,6 +12,13 @@ rem ALL GREEN. This script cannot tell whether you did - it builds the app,
 rem but it does not run the tests - and a release cut from a red build is a
 rem release that was never tested.
 rem
+rem AND RUN fetch-kokoro.cmd ONCE on this machine first. The 310 MB Kokoro
+rem model is not in git; it is fetched into HeatCaller\HeatCaller\Assets\Kokoro
+rem and shipped from there. Without it this publish still works and the app
+rem still works - it falls back to downloading the model from Voice Settings -
+rem but the publish prints a warning, and an installer cut from it asks a club
+rem on the track's Wi-Fi to fetch 310 MB before the natural voice can speak.
+rem
 rem The folder it writes is OUTSIDE this one on purpose: half a gigabyte of
 rem build output has no business anywhere git can see it.
 rem
@@ -83,8 +90,21 @@ if errorlevel 1 echo (could not measure the folder - look at its properties in E
 
 echo.
 echo PUBLISHED - %OUT%
-echo Next: vpk pack from that folder. The Kokoro model is not in it - a club
-echo still downloads that from Voice Settings the first time it picks Kokoro.
+echo.
+echo Next: pack it. From this folder, with the version from the csproj:
+echo.
+echo   vpk pack -u HeatCallerApp -v ^<version^> -p "%OUT%" -e HeatCaller.exe ^^
+echo            --packTitle "HeatCaller" --packAuthors "Asher Kent" -c beta
+echo.
+echo   -u HeatCallerApp, NEVER HeatCaller. Velopack installs into
+echo   %%LocalAppData%%\^<packId^>, and %%LocalAppData%%\HeatCaller is already the
+echo   voice-line cache (AppPaths.LocalRoot). The same name would mix the app
+echo   into it and uninstalling would delete lines the club paid for.
+echo.
+echo   -v must match ^<Version^> in HeatCaller.csproj - that is the one number,
+echo   and the updater compares against it.
+echo.
+echo   -c beta is the channel clubs install from now; stable comes later.
 exit /b 0
 
 :notours

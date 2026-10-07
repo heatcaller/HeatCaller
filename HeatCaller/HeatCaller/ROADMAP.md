@@ -566,8 +566,38 @@ second project. Not WiX/MSI: too heavy.
         macOS `.dylib`, Linux `.so`) were being copied. A new
         `DropOnnxNativesNoWindowsPcCanLoad` target removes them: build output
         498 MB -> 314 MB. `PublishLayoutTests` pins both targets.
-- [ ] **The whole Kokoro voice goes in the installer** (Asher, 5 Oct
-      2026). Today the voice files ship beside the exe - 164 files, 82 MB,
+- [x] **The whole Kokoro voice goes in the installer** - **done 6 Oct
+      2026.** `kokoro.onnx` ships beside the exe and `KokoroSpeech` looks
+      there first (`BundledModelPath`), keeping `%LocalAppData%` as the
+      fallback (`DownloadedModelPath`) for a club that already has one and
+      for a developer running from `bin\Debug`, where the model is
+      deliberately not copied. Three things fell out of it that the plan
+      below did not have:
+      - **a download must never write into the install folder.** With a
+        bundled model, `ModelPath` IS the file in the install folder, so the
+        download now writes to `DownloadedModelPath` explicitly - over the
+        file it was loading from, otherwise, in a folder the app is not
+        meant to be able to change.
+      - **a bad bundled model must not outrank a download.** If the bundled
+        one is what failed to load and a downloaded one is there, the
+        downloaded one wins - or the Download button on Voice Settings
+        would appear to do nothing on exactly the PC that needed it.
+      - **"downloaded and ready" is the wrong thing to say** on a build that
+        shipped with the model. Voice Settings says "Ready on this PC" now,
+        and `IsModelAvailable` (either place) is what the test button and
+        the warm-up read; `IsModelDownloaded` keeps its literal meaning for
+        the download code.
+      New `fetch-kokoro.cmd` fetches it into `Assets\Kokoro\` (gitignored -
+      310 MB of someone else's binary has no business in every clone), and
+      `PublishKokoroModel` in the csproj ships it from there, with a warning
+      rather than an error when it is missing: a publish without it is still
+      a working app, just not the installer we mean a club to have.
+      **Also done in the same pass: the 126 voices the picker can never
+      show are no longer published** - 66 MB, a fifth of what the model
+      costs back - with Kokoro's own LICENSE picked up separately so
+      narrowing the voices can never drop it. **Still to measure: the
+      packed size both ways, which needs `vpk pack` to have been run once.**
+      The old plan, for the record. Today the voice files ship beside the exe - 164 files, 82 MB,
       with Kokoro's own Apache-2.0 licence, copied by `KokoroSharp.targets`
       into the build and now into the publish too (above) - but the
       ~310 MB `kokoro.onnx` does not: `KokoroSpeech` downloads it into
@@ -602,21 +632,36 @@ second project. Not WiX/MSI: too heavy.
       updater and the title bar disagreeing is worse. `AppVersionTests`
       pins it, and it caught the two numbers already drifting (the csproj
       had no `<Version>`, so the assembly said 1.0.0 while the app said
-      0.59.0). **One thing left:** `website\STYLE.md` also carries
-      "Current version: 0.59.0" - a third place a bump has to be
-      remembered.
-- [ ] **Package id `HeatCallerApp`, never `HeatCaller`.** Velopack
+      0.59.0). ~~**One thing left:** `website\STYLE.md` also carries
+      "Current version: 0.59.0".~~ **Dropped 6 Oct 2026** - that line now
+      points at the csproj instead of repeating the number, so there are two
+      places again and only one of them is a number.
+- [x] **Package id `HeatCallerApp`, never `HeatCaller`** - **done 6 Oct
+      2026.** `publish.cmd` ends by printing the `vpk pack` line with
+      `-u HeatCallerApp` and why; `AppPaths.FolderName` is now a named
+      constant so `InstallerTests` can hold the two apart. Velopack
       installs into `%LocalAppData%\<package id>`, and
       `%LocalAppData%\HeatCaller` is already `AppPaths.LocalRoot` - the
       voice-line cache and its undo folder. The same name would mix the
       app's files into it, and uninstalling would delete the voice cache
       (lines the club paid ElevenLabs for).
-- [ ] **`VelopackApp.Build().Run()` first in `Main`**, before the
-      rehearsal switch and the single-instance mutex - it is where the
-      install, update and uninstall hooks run.
-- [ ] **Shortcuts**: Start menu and desktop from Velopack; the
-      **HeatCaller Rehearsal** shortcut (`--rehearsal`) made in our own
-      install hook.
+- [x] **`VelopackApp.Build().Run()` first in `Main`** - **done 6 Oct
+      2026**, before the freeze-dump helper, the single-instance mutex and
+      the rehearsal switch; `InstallerTests` pins that order. Also
+      `SetAutoApplyOnStartup(false)`: left on, a staged update would install
+      itself at the next start, and "usually the right moment" is not the
+      standard for a race-night laptop. HeatCaller asks instead - see
+      `AppUpdates`. **Needs `dotnet add package Velopack` before it
+      compiles**: the csproj says so where the reference goes, rather than
+      carrying a version number typed from memory.
+- [x] **Shortcuts** - **done 6 Oct 2026.** Start menu and desktop from
+      Velopack; the **HeatCaller Rehearsal** shortcut (`--rehearsal`) made
+      by `AppShortcuts` in the after-install hook and removed in the
+      before-uninstall one. It points at Velopack's STUB exe in the folder
+      above `current\`, not at the exe inside it, or the first update would
+      move the target out from under it. Written through WScript.Shell by
+      way of PowerShell: .NET has no API for a .lnk, and one shortcut made
+      once does not earn a COM reference in the app.
 - [ ] **Uninstall** removes the app's folder only. `%AppData%\HeatCaller`,
       the voice cache and the rehearsal folder stay - tested, not assumed.
 
@@ -634,12 +679,40 @@ second project. Not WiX/MSI: too heavy.
 - [ ] **Feed**: a small **public** releases repo on GitHub, or a folder
       on heatcaller.com. Not the source repo while it is private - reading
       it would need a token shipped inside the app.
-- [ ] **When**: check quietly at startup and when idle (no internet = say
-      nothing); download in the background; **apply only with no race day
-      open, Race Control idle and the race journal empty**. Ask: "Update
-      now / After tonight / Not now". Never restart on its own.
-- [ ] **Backup first**: an automatic backup before a new version's first
-      run, named with the version that made it.
+- [x] **When** - **written 6 Oct 2026** (`AppUpdates`, wired in
+      `MainForm.WireUpdates`), **not yet run against a real feed.** First
+      check two minutes after startup so it is never part of why the app was
+      slow to open, then every six hours; silent on every failure, because
+      an update check is not something a club asked for and so may not
+      interrupt them to fail. `NothingInProgress` is the gate - no race day
+      open, `RaceState.Idle`, nothing unfinished in the journal - and
+      `HeldBecause` says which of the three is holding it, in the console,
+      so a club that wonders why it has not updated can read the answer.
+      The three answers: **Update now** backs up and restarts;
+      **After tonight** keeps the download and installs it at the next
+      start, which is the only moment that is safe by definition, and is
+      remembered in `settings.UpdateWaitingForNextStart` because it is a
+      promise that has to outlive the process; **Not now** does nothing and
+      is asked again next start. Escape and a closed window both mean the
+      last button, which is why "Not now" is last. `UpdateChecksOn` is the
+      switch for a club that wants none of it.
+- [x] **Backup first** - **done 6 Oct 2026**, with one piece outstanding.
+      No update is applied unless the backup succeeded: a failed backup
+      stops the install and says so. It is taken with the MANUAL prefix on
+      purpose, so pruning (which only ever removes automatic ones) can never
+      delete the one backup standing between a club and a bad release. The
+      call sits immediately after `BackupService.SecretsProvider` is wired
+      in `MainForm`'s constructor and before `PopulateTabs`, and that
+      position is exact: taken any earlier it would come out with no relay
+      token and no PINs in it.
+      **Outstanding: it is not NAMED with the version.** The name is
+      `<prefix><stamp>.zip` and `BackupService.BackupTime` parses the stamp
+      as everything after the prefix, so appending a version makes the parse
+      fall back to the file's modified time - and ordering by that is what
+      could make pruning delete the newest. It wants a third prefix and a
+      stamp parse of fixed width, which is a change to the backup code and
+      should be made with the tests runnable, not blind. The version is in
+      the console line either way.
 - [ ] **Rolling back** = publishing the previous build again under a higher
       version number, plus restoring that backup if data changed. The risk
       to design against from the first release: an older version reading
@@ -656,11 +729,21 @@ second project. Not WiX/MSI: too heavy.
       volunteer to run HeatCaller as administrator or to paste two netsh
       commands into an admin Command Prompt. (The code that used to run
       them when elevated went with HTTPS in 0.26.2 - see `HttpsSetup.cs`.)
-      **Decided 5 Oct 2026: build the button.** A "Set up phone pages"
-      button on Local Screens that asks for admin once (a UAC prompt,
-      `Verb = "runas"`), runs both commands, and reports what happened -
-      so a club volunteer never pastes netsh into a terminal. The hint
-      text stays as the fallback for a locked-down PC.
+      **Built 6 Oct 2026.** "Set up phone pages" is a third button on
+      Local Screens' Server card: it asks first (the UAC prompt surprises a
+      volunteer who was not expecting one), then one elevated `cmd.exe` runs
+      both commands and the page says in a sentence what happened, with what
+      netsh itself said going to the console for a support bundle.
+      HeatCaller is never elevated by it. Both commands **delete their own
+      entry before adding it**, which is what makes the button safe to press
+      twice - and avoids depending on what netsh prints when something is
+      already there, which is translated on non-English Windows and so
+      cannot be read. The commands live in a written-out `.cmd` file rather
+      than a long `/c` line, because the SDDL string is full of brackets cmd
+      parses differently inside a block and `%errorlevel%` in a `/c` string
+      is expanded before the first command has run. `UrlReservationHint`
+      stays as the fallback, and the two commands are logged on any failure
+      so somebody with an admin account can still paste them.
 - [ ] **Decoder drivers**: EasyLap needs none. An I-Lap on a USB-to-serial
       adapter may need the adapter's own driver - said in the guide, not
       bundled.
@@ -673,20 +756,36 @@ second project. Not WiX/MSI: too heavy.
       than from memory. **Nothing is copyleft** - the espeak-ng/GPL worry
       does not apply, because MisakiSharp is a distilled G2P with no
       espeak in it. Three things still owed:
-      - **MisakiSharp ships no NOTICE file.** Apache-2.0 4(d) asks for it;
-        fetch it from github.com/Lyrcaxis/MisakiSharp and put it in the
-        installer.
-      - **HidSharp and OpenTK carry no licence in their packages** (only a
-        dead `licenseUrl`, and nothing at all for OpenTK). Almost
-        certainly Apache-2.0 and MIT; somebody with a browser should read
-        both texts and confirm before the public beta. OpenTK is also a
+      - ~~**MisakiSharp ships no NOTICE file.**~~ **Fetched 6 Oct 2026**
+        and shipped as `Assets\Licences\MisakiSharp-NOTICE.txt`, with a new
+        csproj item putting `Assets\Licences\` beside the exe.
+        **AND IT CHANGED THE ANSWER ABOVE.** The NOTICE says two of
+        MisakiSharp's parts were PORTED from copyleft sources rather than
+        merely behaving like them: "num2words (LGPL-2.1) - the English
+        number verbalization logic was ported from its sources", and
+        "phonemizer (GPL-3.0) - EspeakG2P/EspeakFallback reproduce its
+        espeak backend behavior". English number verbalization is on
+        HeatCaller's hot path - it is what reads a lap time aloud. No
+        copyleft BINARY ships and MisakiSharp's own grant is Apache-2.0, so
+        this is not a reason to stop; but "nothing in here is copyleft" was
+        resting on "no espeak-ng in it", and that is a narrower claim than
+        it looked. **Wants somebody qualified, before the public beta.**
+        Written up at the top of `About.cs`.
+      - ~~**HidSharp and OpenTK carry no licence in their packages.**~~
+        **Both read and confirmed 6 Oct 2026.** OpenTK is MIT, from the
+        project's own `LICENSE.md`: "Copyright (c) 2006-2019 Stefanos
+        Apostolopoulos for the Open Toolkit project" - shipped as
+        `Assets\Licences\OpenTK-LICENSE.txt`, because MIT wants that notice
+        passed on. HidSharp is Apache, from James F. Bellinger's own page
+        (`software.seekye.com/hidsharp`, where `zer7.com` now redirects),
+        copyright 2007-2025; the page does not name the version, and the
+        package's old `licenseUrl` pointed at Apache-2.0. OpenTK is still a
         pre-release (`5.0.0-pre.13`), pulled in by KokoroSharp.
-      - **The build copies ONNX Runtime natives for Android, iOS, Linux
-        and macOS** into the output, `onnxruntime.aar` and
-        `onnxruntime.xcframework.zip` among them, plus `.lib` import
-        libraries for three Windows architectures. Tens of MB of files no
-        Windows PC can load. Exclude them by RuntimeIdentifier before the
-        installer is cut.
+      - ~~**The build copies ONNX Runtime natives for Android, iOS, Linux
+        and macOS.**~~ **Done 5 Oct 2026** - the
+        `DropOnnxNativesNoWindowsPcCanLoad` target in the csproj, 498 MB ->
+        314 MB, pinned by `PublishLayoutTests`. (It is ticked under
+        Packaging above; it was still listed here as owed.)
 
 **Release pipeline and discipline**
 - [ ] **A tag makes a release**: GitHub Actions runs `check.cmd`, then

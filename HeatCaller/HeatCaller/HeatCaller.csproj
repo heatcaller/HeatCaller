@@ -89,6 +89,14 @@
          under voices\; the 310 MB model is NOT shipped - it is downloaded
          once from Voice Settings, only by a club that chooses Kokoro. -->
     <PackageReference Include="KokoroSharp.CPU" Version="0.8.4" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+
+    <!-- The installer and the updater (Velopack, MIT). VelopackApp.Build().Run()
+         is the first thing Main does, and AppUpdates is the rest of it.
+         ADD IT WITH: dotnet add package Velopack
+         - run from this folder, so NuGet writes the current stable version in
+         here itself rather than this file carrying one typed from memory.
+         Until it is added, Program.cs and AppUpdates.cs do not compile. -->
   </ItemGroup>
 
   <ItemGroup>
@@ -133,6 +141,14 @@
          of each other. -->
     <None Include="Assets\SoundPacks\**\*.wav" Link="Assets\SoundPacks\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
+    <!-- Licence texts that have to travel with the app because the package
+         they belong to does not carry one: MisakiSharp's NOTICE (Apache-2.0
+         4(d) asks for it) and OpenTK's MIT notice. Kokoro's own LICENSE is
+         not here - KokoroSharp already lands it in voices\. See
+         ThirdPartyCatalog in About.cs, which is the list the About box
+         shows and the thing to keep in step with this folder. -->
+    <None Include="Assets\Licences\*.txt" Link="Assets\Licences\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
     <None Include="Assets\Fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\Fonts\*.otf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Globbed, not named. A literal Include of a file that is not there
@@ -160,29 +176,15 @@
        win-x64 publish would pick only win-x64 by itself, but the Debug
        output a developer runs from, and any publish cut without a runtime
        identifier, would not: this makes both honest. -->
-  <Target Name="DropOnnxNativesNoWindowsPcCanLoad"
-          AfterTargets="ResolvePackageAssets"
-          BeforeTargets="ResolveLockFileCopyLocalFiles">
+  <Target Name="DropOnnxNativesNoWindowsPcCanLoad" AfterTargets="ResolvePackageAssets" BeforeTargets="ResolveLockFileCopyLocalFiles">
     <ItemGroup>
-      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
-                                    Condition="'%(RuntimeTargetsCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'
-                                               and ('%(RuntimeTargetsCopyLocalItems.Extension)' == '.aar'
-                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.zip'
-                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.dylib'
-                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.so'
-                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.lib')" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(RuntimeTargetsCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'&#xA;                                               and ('%(RuntimeTargetsCopyLocalItems.Extension)' == '.aar'&#xA;                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.zip'&#xA;                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.dylib'&#xA;                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.so'&#xA;                                                 or '%(RuntimeTargetsCopyLocalItems.Extension)' == '.lib')" />
       <!-- The same list again for a runtime-identifier build, where the
            chosen platform's natives arrive as NativeCopyLocalItems and land
            flat beside the exe instead of under runtimes\. That is the shape
            the installer is cut from, and it is where the two .lib files
            would otherwise turn up next to HeatCaller.exe. -->
-      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)"
-                            Condition="'%(NativeCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'
-                                       and ('%(NativeCopyLocalItems.Extension)' == '.aar'
-                                         or '%(NativeCopyLocalItems.Extension)' == '.zip'
-                                         or '%(NativeCopyLocalItems.Extension)' == '.dylib'
-                                         or '%(NativeCopyLocalItems.Extension)' == '.so'
-                                         or '%(NativeCopyLocalItems.Extension)' == '.lib')" />
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(NativeCopyLocalItems.NuGetPackageId)' == 'Microsoft.ML.OnnxRuntime'&#xA;                                       and ('%(NativeCopyLocalItems.Extension)' == '.aar'&#xA;                                         or '%(NativeCopyLocalItems.Extension)' == '.zip'&#xA;                                         or '%(NativeCopyLocalItems.Extension)' == '.dylib'&#xA;                                         or '%(NativeCopyLocalItems.Extension)' == '.so'&#xA;                                         or '%(NativeCopyLocalItems.Extension)' == '.lib')" />
     </ItemGroup>
   </Target>
 
@@ -202,16 +204,63 @@
        voices-zh\ where it belongs; KokoroSpeech searches subfolders. -->
   <Target Name="PublishKokoroVoiceFiles" BeforeTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
-      <_KokoroVoiceFile Include="$(OutputPath)voices\**\*" />
-      <ResolvedFileToPublish Include="@(_KokoroVoiceFile)">
+      <!-- The English voices only. KokoroSharp ships 157 .npy files; the
+           picker shows the 31 that pass KokoroSpeech.IsEnglishVoice - an
+           American or British, female or male name, so af_, am_, bf_, bm_ -
+           and the other 126 were being copied into the installer where
+           nothing could ever choose them. 66 MB, which is a fifth of the
+           model this same publish now carries. The prefixes are spelled out
+           because MSBuild globs cannot express the one-line rule the C# does;
+           if IsEnglishVoice ever widens, widen this with it (PublishLayoutTests
+           holds the two together). -->
+      <_KokoroVoiceFile Include="$(OutputPath)voices\**\af_*.npy;$(OutputPath)voices\**\am_*.npy;$(OutputPath)voices\**\bf_*.npy;$(OutputPath)voices\**\bm_*.npy" />
+
+      <!-- Everything in voices\ that is not a voice: Kokoro's own
+           Apache-2.0 LICENSE above all, which has to travel with the model
+           and its voices. Separate from the filter above so narrowing the
+           voices can never drop the licence with them. -->
+      <_KokoroVoiceExtra Include="$(OutputPath)voices\**\*" Exclude="$(OutputPath)voices\**\*.npy" />
+
+      <ResolvedFileToPublish Include="@(_KokoroVoiceFile);@(_KokoroVoiceExtra)">
         <RelativePath>voices\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
     </ItemGroup>
     <!-- Loud rather than silent: a publish with no voices beside the exe is
          a published app whose Kokoro voice cannot speak. -->
-    <Warning Condition="'@(_KokoroVoiceFile)' == ''"
-             Text="No Kokoro voice files found in $(OutputPath)voices - the published app will not be able to speak in the Kokoro voice. Build before publishing, and check KokoroSharp's CopyContent target still copies them." />
+    <Warning Condition="'@(_KokoroVoiceFile)' == ''" Text="No Kokoro voice files found in $(OutputPath)voices - the published app will not be able to speak in the Kokoro voice. Build before publishing, and check KokoroSharp's CopyContent target still copies them." />
+  </Target>
+
+  <!-- The Kokoro model itself (~310 MB), shipped beside the exe so a club at
+       a track with bad Wi-Fi gets a working natural voice with nothing to go
+       wrong on the night. KokoroSpeech.BundledModelPath is where it looks for
+       it, which is why it lands flat beside HeatCaller.exe and not in a
+       subfolder.
+
+       NOT IN GIT, and not copied into a build either - only into a publish.
+       A 310 MB file has no business in the repository and no business being
+       copied on every F5 when a developer already has the downloaded copy in
+       %LocalAppData%\HeatCaller\Kokoro. Put it in Assets\Kokoro\ once, with
+       fetch-kokoro.cmd, and it is picked up from there every publish after.
+
+       Globbed rather than named for the usual reason: a literal Include of a
+       file that is not there fails the copy outright (MSB3030), while a glob
+       that matches nothing is simply empty - so the project still builds and
+       publishes on a clone with no model, and the warning below says what
+       that publish will be missing. -->
+  <Target Name="PublishKokoroModel" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_KokoroModelFile Include="Assets\Kokoro\kokoro.onnx" Condition="Exists('Assets\Kokoro\kokoro.onnx')" />
+      <ResolvedFileToPublish Include="@(_KokoroModelFile)">
+        <RelativePath>kokoro.onnx</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+    <!-- A warning, not an error: a publish without the model is still a
+         working app - KokoroSpeech falls back to the download, exactly as it
+         did before this was bundled - it is just not the installer we mean to
+         ship to a club. -->
+    <Warning Condition="'@(_KokoroModelFile)' == ''" Text="Assets\Kokoro\kokoro.onnx is not there, so the Kokoro voice is NOT in this publish - a club installing it would have to download 310 MB from Voice Settings before the natural voice could speak. Run fetch-kokoro.cmd and publish again." />
   </Target>
 
 </Project>

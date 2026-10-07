@@ -1,4 +1,5 @@
 using System.Text;
+using Velopack;
 
 namespace HeatCaller;
 
@@ -41,9 +42,53 @@ internal static class Program
     // so it can't be collected - and a collected mutex is a released one.
     private static Mutex? _singleInstance;
 
+    /// <summary>The version Velopack's first-run hook saw, waiting for the session log to exist. Null on every ordinary start.</summary>
+    private static string? _firstRunAfterInstall;
+
     [STAThread]
     private static void Main()
     {
+        // VELOPACK FIRST. Before the dump helper, before the single-instance
+        // mutex, before the rehearsal switch - before anything.
+        //
+        // This is where the installer's own hooks run. When Setup.exe or an
+        // update starts HeatCaller.exe with one of Velopack's switches, Run()
+        // does that job and ends the process; it returns only on an ordinary
+        // start. Anything above it would run during an install, and anything
+        // that waited - the mutex waits eight seconds for a closing copy -
+        // could still be waiting when Velopack's 30-second hook limit killed
+        // it, leaving a half-installed app with no shortcut and no
+        // explanation.
+        VelopackApp.Build()
+
+            // HeatCaller decides when an update is applied, never Velopack.
+            // Left on (the default), a staged update would install itself at
+            // the next start - which is usually the right moment, but "usually"
+            // is not the standard for a laptop that runs a race night. The
+            // club is asked, and what it answered is kept in settings; see
+            // AppUpdates.ApplyWhatWasHeldForNextStart, which is what turns
+            // "After tonight" into an install at the next start.
+            .SetAutoApplyOnStartup(false)
+
+            // The rehearsal shortcut. Velopack makes the ordinary Start menu
+            // and desktop ones; this second one is the same exe with
+            // --rehearsal on it, which no package format can be told to want.
+            // Both are fast callbacks: Velopack runs them and exits, so
+            // AppShortcuts does its work in a few seconds and swallows
+            // everything (a shortcut is not worth failing an install over).
+            .OnAfterInstallFastCallback(_ => AppShortcuts.CreateRehearsal())
+            .OnBeforeUninstallFastCallback(_ => AppShortcuts.RemoveRehearsal())
+
+            // Remembered, not logged: this hook runs before SessionLog has
+            // been started (it starts below, after the rehearsal switch has
+            // decided which folder it writes into), so the line goes out
+            // once there is somewhere for it to go. It is worth having -
+            // this is the one moment a club's install is brand new, and the
+            // first-night guide will want to lean on it.
+            .OnFirstRun(version => _firstRunAfterInstall = version.ToString())
+
+            .Run();
+
         // HeatCaller.exe --write-freeze-dump <process> <file>: not the app at
         // all, but the helper the freeze watchdog starts to dump a frozen
         // copy of it from outside (see HangWatchdog). First, before the
@@ -158,6 +203,11 @@ internal static class Program
             // to it. After the rehearsal switch (it decides the folder) and
             // the migration (it moves the folders this writes into).
             SessionLog.Start();
+
+            if (_firstRunAfterInstall is { } installed)
+            {
+                SessionLog.Write($"[update] First run of HeatCaller {installed} after installing.");
+            }
 
             if (StartedDpiAware)
             {

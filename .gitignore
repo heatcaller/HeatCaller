@@ -28,6 +28,13 @@ HeatCaller Sound Options/
 # bin folder - made again on every run.
 layout-check/
 
+# The Kokoro voice model, fetched by fetch-kokoro.cmd into
+# HeatCaller\HeatCaller\Assets\Kokoro and shipped beside the exe by the
+# publish (see PublishKokoroModel in the csproj). 310 MB of someone else's
+# published binary: it is downloaded on the machine that cuts a release, not
+# carried in here, where it would be in every clone and every fetch forever.
+HeatCaller/HeatCaller/Assets/Kokoro/
+
 # Python leftovers from audio-tools
 __pycache__/
 *.pyc

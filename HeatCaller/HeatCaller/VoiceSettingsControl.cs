@@ -1101,9 +1101,14 @@ public sealed partial class VoiceSettingsControl : UserControl
     private void UpdateKokoroControls(bool kokoroChosen)
     {
         var downloading = KokoroSpeech.IsDownloading;
-        var downloaded = KokoroSpeech.IsModelDownloaded;
 
-        _btnTestKokoroVoice.Enabled = downloaded && !downloading && !_kokoroTestRunning;
+        // IsModelAvailable, not IsModelDownloaded: since the model ships in
+        // the installer, "is there one to test" and "did this club download
+        // one" are two different questions, and this row is asking the first.
+        // A bundled build has nothing downloaded and is perfectly ready.
+        var available = KokoroSpeech.IsModelAvailable;
+
+        _btnTestKokoroVoice.Enabled = available && !downloading && !_kokoroTestRunning;
         ShowKokoroDownloadButton();
 
         // A test or a download owns the line while it runs.
@@ -1112,7 +1117,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
-        if (!downloaded)
+        if (!available)
         {
             _lblKokoroStatus.Text = kokoroChosen
                 ? $"Kokoro isn't downloaded on this PC yet - press Download ({KokoroSpeech.DownloadSizeText}, once). Until then the Windows voice speaks."
@@ -1126,9 +1131,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
         else
         {
+            // "Ready", not "downloaded and ready": on a build that shipped
+            // with the model nobody downloaded anything, and saying so
+            // invites a club to go looking for a download it never made.
             _lblKokoroStatus.Text = kokoroChosen
-                ? "Speaking with Kokoro - downloaded and ready on this PC. Nothing is billed, however much the announcer talks."
-                : "Downloaded and ready on this PC.";
+                ? "Speaking with Kokoro - ready on this PC. Nothing is billed, however much the announcer talks."
+                : "Ready on this PC.";
             _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
         }
     }
@@ -1296,7 +1304,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (!Gone)
             {
-                _btnTestKokoroVoice.Enabled = KokoroSpeech.IsModelDownloaded && !KokoroSpeech.IsDownloading;
+                _btnTestKokoroVoice.Enabled = KokoroSpeech.IsModelAvailable && !KokoroSpeech.IsDownloading;
             }
         }
     }

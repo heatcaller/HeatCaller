@@ -640,6 +640,31 @@ public sealed class AppSettings
     public string WebServerCheckInPin { get; set; } = string.Empty;
     public bool WebServerAutoStart { get; set; }
 
+    // --- Updates ------------------------------------------------------
+    //
+    // See AppUpdates. Only what has to outlive the process is here: the
+    // answer "After tonight", which is a promise to apply an update at the
+    // next start, and that is a different run of the app.
+
+    /// <summary>
+    /// A version that has been downloaded and that the club asked to have
+    /// installed at the next start - the "After tonight" answer. Empty when
+    /// there is nothing waiting.
+    ///
+    /// The version and not just a flag: a stale true, left by an update that
+    /// was superseded before it was ever applied, would otherwise install
+    /// whatever happened to be staged. AppUpdates checks this against what
+    /// is actually pending and ignores it if the two disagree.
+    /// </summary>
+    public string UpdateWaitingForNextStart { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether to look for updates at all. On by default, and the one switch
+    /// a club that does not want its race-night laptop changing under it can
+    /// turn off. Nothing is downloaded while this is off.
+    /// </summary>
+    public bool UpdateChecksOn { get; set; } = true;
+
     // --- Race-day manager ---------------------------------------------
     //
     // Running the day from a phone - see RaceDayService.

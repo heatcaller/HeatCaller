@@ -20,6 +20,16 @@ public sealed class WebServerControl : UserControl
     private readonly CheckBox _chkShowPins = new ThemedCheckBox();
     private readonly Button _btnStart = new();
     private readonly Button _btnStop = new();
+
+    /// <summary>
+    /// The one-off administrator step phones need - see NetworkSetup. Not
+    /// enabled while it runs: it opens a UAC prompt, and a second press
+    /// behind that prompt would open another.
+    /// </summary>
+    private readonly Button _btnSetUpPhonePages = new();
+
+    /// <summary>Whether the phone-pages setup is waiting on the administrator prompt or on netsh.</summary>
+    private bool _settingUpPhonePages;
     private readonly Label _lblStatus = new();
     private readonly Label _lblLastAction = new();
     private readonly TextBox _txtResultsUrl = new();
@@ -378,6 +388,9 @@ public sealed class WebServerControl : UserControl
             UpdateUi();
         };
 
+        _btnSetUpPhonePages.Text = "Set up phone pages";
+        _btnSetUpPhonePages.Click += BtnSetUpPhonePages_Click;
+
         // At the end of the buttons' line, cut short with "..." rather than
         // wrapped - or on a line of its own when it no longer fits there
         // (FieldRow).
@@ -387,7 +400,7 @@ public sealed class WebServerControl : UserControl
 
         var run = new FieldRow();
 
-        run.Add(null, new ButtonBar().With(_btnStart, _btnStop));
+        run.Add(null, new ButtonBar().With(_btnStart, _btnStop, _btnSetUpPhonePages));
         run.AddLast(null, _lblStatus, () => _lblStatus.GetPreferredSize(Size.Empty).Width);
 
         var card = new Section("Server");
@@ -542,6 +555,99 @@ public sealed class WebServerControl : UserControl
     ///
     /// Run again when the text size changes (TextSize.Keep).
     /// </summary>
+    /// <summary>
+    /// The one-off administrator step: a URL reservation and a firewall rule,
+    /// so phones on the track's Wi-Fi can reach these pages. Asks first,
+    /// because it opens a UAC prompt and a volunteer who did not expect one
+    /// will answer No to it.
+    ///
+    /// Why there is a button at all: both changes are administrator-only, so
+    /// a per-user installer cannot make them, and the alternative is a
+    /// volunteer pasting two netsh commands into an admin Command Prompt on a
+    /// race night. See NetworkSetup.
+    /// </summary>
+    private async void BtnSetUpPhonePages_Click(object? sender, EventArgs e)
+    {
+        if (_settingUpPhonePages)
+        {
+            return;
+        }
+
+        var port = (int)_numPort.Value;
+
+        var answer = AppDialog.Show(this,
+            "Windows needs two one-off changes before phones on this Wi-Fi can open HeatCaller's "
+            + $"pages: permission for the app to accept connections on port {port}, and a firewall "
+            + "rule to let them through.\r\n\r\n"
+            + "Both need administrator, so Windows will ask you to allow it once. HeatCaller itself "
+            + "keeps running as it is - nothing else changes, and this doesn't need doing again "
+            + "unless you change the port.",
+            "Set up phone pages",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Information);
+
+        if (answer != DialogResult.OK)
+        {
+            return;
+        }
+
+        _settingUpPhonePages = true;
+        _btnSetUpPhonePages.Text = "Setting up...";
+        UpdateUi();
+
+        NetworkSetup.Result result;
+
+        try
+        {
+            result = await NetworkSetup.RunAsync(port);
+        }
+        finally
+        {
+            _settingUpPhonePages = false;
+
+            // IsDisposed: this page is rebuilt when a soundscape, a venue
+            // or Lap times only is applied, and the await above outlives
+            // that - the same trap the Kokoro download has to guard against
+            // on Voice Settings.
+            if (!IsDisposed)
+            {
+                _btnSetUpPhonePages.Text = "Set up phone pages";
+                UpdateUi();
+            }
+        }
+
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        // The console gets what netsh actually said - it is what a support
+        // bundle will be read for if this goes wrong on somebody else's PC -
+        // and the dialog gets the sentence.
+        if (result.Transcript.Length > 0)
+        {
+            SessionLog.Write($"[web] Phone pages setup, port {port}:\r\n{result.Transcript}");
+        }
+        else
+        {
+            SessionLog.Write($"[web] Phone pages setup, port {port}: {result.Message}");
+        }
+
+        if (!result.Done)
+        {
+            // The commands themselves, so somebody with an admin account can
+            // run them by hand - the fallback this button was meant to
+            // replace, not remove.
+            SessionLog.Write("[web] The two commands, for an admin Command Prompt:\r\n" + NetworkSetup.BothCommands(port));
+        }
+
+        AppDialog.Show(this,
+            result.Message,
+            result.Done ? "Phone pages are set up" : "Phone pages aren't set up",
+            MessageBoxButtons.OK,
+            result.Done ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
     private void SizeFields()
     {
         var digits = new string('0', ((int)_numPort.Maximum).ToString().Length);
@@ -734,6 +840,11 @@ public sealed class WebServerControl : UserControl
 
         _btnStart.Enabled = !running;
         _btnStop.Enabled = running;
+
+        // Allowed whether the server is running or not: the usual way a club
+        // finds out it is needed is starting the server and watching every
+        // phone time out.
+        _btnSetUpPhonePages.Enabled = !_settingUpPhonePages;
         // Enabled, not ReadOnly, for the port: on a NumericUpDown ReadOnly
         // only stops typing, and the spin buttons, the arrow keys and the
         // mouse wheel still change the value. A stray wheel over the box

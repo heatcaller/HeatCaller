@@ -569,6 +569,39 @@ public partial class MainForm : Form
         // password-locked copy of them from.
         SecretRecovery.RememberStartupState(_settings, _voiceStore);
         BackupService.SecretsProvider = () => BackupSecrets.Capture(_settings, _voiceStore);
+
+        // An update the club answered "After tonight" to goes in HERE. This
+        // start IS the next start it was waiting for, and it is the safest
+        // moment there is: nothing is open, no race is running, nobody is
+        // looking at a screen. Velopack replaces this process when it
+        // applies, so nothing below this line runs at all.
+        //
+        // The position is exact, and both halves of it matter. AFTER the two
+        // lines above, because the backup taken before an update has to
+        // carry the sealed secrets, and SecretsProvider is what gives them
+        // to it - taken any earlier, the one backup standing between a club
+        // and a bad release would come out without the relay token or the
+        // PINs in it. BEFORE PopulateTabs, because the alternative is
+        // building thirty pages and then throwing the process away.
+        //
+        // The log goes to the session log, not the console: the console is
+        // part of a window that does not exist yet. WireUpdates swaps it for
+        // the console once there is one.
+        AppUpdates.Log = SessionLog.Write;
+
+        // No marshalling here: this is the UI thread, in the constructor,
+        // with nothing else running yet. WireUpdates replaces this with the
+        // version that marshals, for the checks that happen later on a
+        // background thread.
+        AppUpdates.BackUp = () => BackupService.CreateBackup(
+            BackupService.SafeBackupFolder(_settings.AutoBackupFolder),
+            automatic: false,
+            BackupService.CaptureSecrets());
+
+        if (AppUpdates.ApplyWhatWasHeldForNextStart(_settings))
+        {
+            return;
+        }
         _soundStore = SoundEffectsStore.Load();
         _trackLayouts = TrackLayoutStore.Load();
         _sessionHistory = SessionHistoryStore.Load();
@@ -2016,6 +2049,80 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Hands AppUpdates the three things only this window can answer - what
+    /// the app is doing, how to ask a question, and how to make a backup -
+    /// and starts the slow check. See AppUpdates for the rules; this is only
+    /// the wiring.
+    ///
+    /// The marshalling is the point. AppUpdates calls all of this from a
+    /// background thread, and race state and windows belong to this one.
+    /// </summary>
+    private void WireUpdates()
+    {
+        if (!AppUpdates.Available(_settings))
+        {
+            // Not an installed build (a developer running from bin\Debug, or
+            // a portable copy), or the club turned checks off. Nothing is
+            // wired, nothing is downloaded, and nothing is said - an app
+            // that cannot update itself has no business mentioning updates.
+            return;
+        }
+
+        // The console in place of the session log now there is a window to
+        // show it in - and the log file still gets everything, because
+        // OnClientRawMessage writes to both.
+        AppUpdates.Log = line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
+
+        AppUpdates.NothingInProgressNow = () => Invoke(() => AppUpdates.NothingInProgress(
+            raceDayOpen: _raceEvents.Active is { IsLegacy: false, IsOpen: true },
+            raceState: _race.State,
+            unfinishedRaceInJournal: RaceJournal.Unfinished() is not null));
+
+        AppUpdates.Ask = (newVersion, thisVersion) => Invoke(() => (AppUpdates.Answer)AppDialog.Choose(
+            this,
+            AppUpdates.Question(newVersion, thisVersion),
+            "A new version of HeatCaller",
+            MessageBoxIcon.Information,
+            AppUpdates.AnswerLabels));
+
+        // The secrets have to be taken on this thread (BackupSecrets.Capture
+        // reads the live settings, which this thread is free to be changing);
+        // the zip itself is then free to run wherever it was called from, and
+        // it is the slow part.
+        AppUpdates.BackUp = () =>
+        {
+            var folder = Invoke(() => BackupService.SafeBackupFolder(_settings.AutoBackupFolder));
+            var secrets = Invoke(() => BackupService.CaptureSecrets());
+
+            return BackupService.CreateBackup(folder, automatic: false, secrets);
+        };
+
+        // Not at startup: two minutes in, so an update check is never part
+        // of why the app was slow to open, and never the thing a club is
+        // waiting on while they are trying to start a race night.
+        _updateCheck = new System.Windows.Forms.Timer { Interval = (int)AppUpdates.FirstCheckAfter.TotalMilliseconds };
+
+        _updateCheck.Tick += (_, _) =>
+        {
+            // The first tick is the short one; every tick after it is the
+            // slow interval.
+            if (_updateCheck is { } timer && timer.Interval != (int)AppUpdates.CheckEvery.TotalMilliseconds)
+            {
+                timer.Interval = (int)AppUpdates.CheckEvery.TotalMilliseconds;
+            }
+
+            // Started and forgotten. AppUpdates refuses to run two at once,
+            // and says nothing at all when there is no internet.
+            _ = AppUpdates.CheckAsync(_settings);
+        };
+
+        _updateCheck.Start();
+    }
+
+    /// <summary>The slow update check - see WireUpdates. Null on a build that cannot update itself.</summary>
+    private System.Windows.Forms.Timer? _updateCheck;
+
     private void RaiseReady()
     {
         if (_readyRaised)
@@ -2091,6 +2198,9 @@ public partial class MainForm : Form
         // The decoders, by themselves, now the window is up and its log can
         // be read - see ConnectAtStartup.
         ConnectAtStartup();
+
+        // Updates, quietly, from here on - see WireUpdates and AppUpdates.
+        WireUpdates();
 
         Ready?.Invoke(this, EventArgs.Empty);
     }

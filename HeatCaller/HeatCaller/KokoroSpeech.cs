@@ -20,12 +20,28 @@ internal sealed record KokoroVoiceChoice(string Name, string Display)
 /// no key, no internet once it is downloaded - and nothing is ever billed, so
 /// it costs a club nothing per race however much the announcer talks.
 ///
-/// THE MODEL is not shipped with the app: it is about 310 MB, and a club on
-/// ElevenLabs or the HeatCaller voice would never use it. Voice Settings has
-/// a Download button that fetches it once into LocalRoot\Kokoro - the same
-/// machine-only folder as the saved-voice library, so it never goes into a
-/// backup. Until it is there this voice is simply unavailable, and the
-/// Windows voice says what it would have.
+/// THE MODEL (about 310 MB) now SHIPS IN THE INSTALLER, beside the exe, so a
+/// club at a track with bad Wi-Fi has a working natural voice on the night
+/// with no download step and nothing to go wrong. Two places are looked at,
+/// in this order:
+///
+///   1. beside HeatCaller.exe - BundledModelPath, what the installer puts
+///      there;
+///   2. LocalRoot\Kokoro - DownloadedModelPath, where Voice Settings'
+///      Download button has always put it. Kept as the fallback, because
+///      every club running a build from before this change already has one
+///      there and there is no reason to make them fetch it again. It is also
+///      the only copy a developer running from `dotnet run` has, since the
+///      model is deliberately not copied into a build (see the csproj).
+///
+/// Whichever is found, nothing is ever written beside the exe: a download
+/// always goes to LocalRoot\Kokoro - a per-user folder the app can write to
+/// without admin, which the install folder is not - and a bundled model
+/// simply wins the lookup afterwards. LocalRoot is machine-only, so neither
+/// copy goes into a backup.
+///
+/// Until one of them is there this voice is unavailable, and the Windows
+/// voice says what it would have.
 ///
 /// The voices themselves (small .npy files) come with the KokoroSharp package
 /// and are copied next to the exe on build, under voices\.
@@ -77,6 +93,9 @@ internal static class KokoroSpeech
     private static string? _loadFailure;
     private static DateTime _loadFailedAtUtc;
 
+    /// <summary>Which model file the failed load was reading - see ModelPath. Null when nothing has failed.</summary>
+    private static string? _loadFailurePath;
+
     private static readonly object ReportLock = new();
     private static readonly HashSet<string> MissingVoicesReported = new(StringComparer.OrdinalIgnoreCase);
 
@@ -93,26 +112,87 @@ internal static class KokoroSpeech
     /// <summary>The folder the model is kept in - this PC only, never backed up.</summary>
     internal static string Folder => Path.Combine(AppPaths.LocalRoot, "Kokoro");
 
-    internal static string ModelPath => Path.Combine(Folder, "kokoro.onnx");
+    /// <summary>
+    /// The model the installer ships, beside HeatCaller.exe. Preferred over
+    /// the downloaded one, and never written to - see DownloadedModelPath.
+    /// </summary>
+    internal static string BundledModelPath => Path.Combine(AppContext.BaseDirectory, "kokoro.onnx");
+
+    /// <summary>
+    /// Where Voice Settings' Download button puts the model, and the only
+    /// path anything in this class ever writes to.
+    /// </summary>
+    internal static string DownloadedModelPath => Path.Combine(Folder, "kokoro.onnx");
+
+    /// <summary>
+    /// The model to load: the one the installer shipped if it is there, else
+    /// the downloaded one. Falls back to the downloaded path when neither is
+    /// there, so a load failure names the folder a club can do something
+    /// about rather than the install folder.
+    ///
+    /// With ONE exception, and it is the whole point of Voice Settings still
+    /// offering a download on a bundled build: if the bundled model is the one
+    /// that would not load, and a downloaded one is there, the downloaded one
+    /// wins. Otherwise a corrupt file in the install folder - a half-written
+    /// update, a disk going bad - would outrank every download a club made to
+    /// get round it, and the Download button would appear to do nothing.
+    /// </summary>
+    internal static string ModelPath
+    {
+        get
+        {
+            var bundled = BundledModelPath;
+
+            if (!IsRealModel(bundled))
+            {
+                return DownloadedModelPath;
+            }
+
+            bool bundledWouldNotLoad;
+            lock (EngineLock)
+            {
+                bundledWouldNotLoad = _loadFailure is not null
+                    && string.Equals(_loadFailurePath, bundled, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return bundledWouldNotLoad && IsRealModel(DownloadedModelPath)
+                ? DownloadedModelPath
+                : bundled;
+        }
+    }
 
     /// <summary>The voices folder KokoroSharp's package copies next to the exe.</summary>
     private static string VoicesFolder => Path.Combine(AppContext.BaseDirectory, "voices");
 
-    internal static bool IsModelDownloaded
+    /// <summary>A file that is there and big enough to be the model rather than a stub or a broken download.</summary>
+    private static bool IsRealModel(string path)
     {
-        get
+        try
         {
-            try
-            {
-                var file = new FileInfo(ModelPath);
-                return file.Exists && file.Length >= SmallestRealModel;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            var file = new FileInfo(path);
+            return file.Exists && file.Length >= SmallestRealModel;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
+
+    /// <summary>
+    /// Whether this PC has the model at all, from either place. The question
+    /// everything outside this class actually wants - can the Kokoro voice
+    /// speak - which is why the test button and the warm-up read this.
+    /// </summary>
+    internal static bool IsModelAvailable => IsRealModel(BundledModelPath) || IsRealModel(DownloadedModelPath);
+
+    /// <summary>
+    /// Whether a DOWNLOADED model is on this PC - the literal question, kept
+    /// apart from IsModelAvailable because the download code needs it: a club
+    /// running a bundled build has no downloaded copy and needs none, and
+    /// "Download" vs "Download Again" is about this one, not about the one in
+    /// the install folder.
+    /// </summary>
+    internal static bool IsModelDownloaded => IsRealModel(DownloadedModelPath);
 
     /// <summary>
     /// Why the Kokoro voice can't speak on this PC - lower case, to go inside
@@ -122,7 +202,7 @@ internal static class KokoroSpeech
     {
         get
         {
-            if (!IsModelDownloaded)
+            if (!IsModelAvailable)
             {
                 return "the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)";
             }
@@ -163,15 +243,22 @@ internal static class KokoroSpeech
     /// and the button used to be hidden whenever a file of the right size
     /// was there.
     /// </summary>
-    internal static bool ShouldOfferDownload => !IsModelDownloaded || LoadFailure is not null;
+    internal static bool ShouldOfferDownload => !IsModelAvailable || LoadFailure is not null;
 
-    /// <summary>Tests only: as if the model had failed to load at <paramref name="atUtc"/>, for <paramref name="reason"/>.</summary>
-    internal static void RecordLoadFailureForTests(string? reason, DateTime atUtc)
+    /// <summary>
+    /// Tests only: as if the model had failed to load at <paramref name="atUtc"/>,
+    /// for <paramref name="reason"/>. <paramref name="path"/> is the model file
+    /// that failed, which is what ModelPath reads to decide whether a
+    /// downloaded model should take over from a bundled one; null for a
+    /// failure that is not about either file in particular.
+    /// </summary>
+    internal static void RecordLoadFailureForTests(string? reason, DateTime atUtc, string? path = null)
     {
         lock (EngineLock)
         {
             _loading = null;
             _loadFailure = reason;
+            _loadFailurePath = reason is null ? null : path;
             _loadFailedAtUtc = atUtc;
         }
     }
@@ -183,7 +270,7 @@ internal static class KokoroSpeech
     /// </summary>
     internal static void WarmUp()
     {
-        if (!IsModelDownloaded)
+        if (!IsModelAvailable)
         {
             return;
         }
@@ -437,13 +524,19 @@ internal static class KokoroSpeech
 
         static KokoroWavSynthesizer Load()
         {
+            // Read once and remembered: which of the two files this attempt
+            // used is what makes a download able to replace a bad bundled
+            // model - see ModelPath.
+            var path = ModelPath;
+
             try
             {
-                var engine = new KokoroWavSynthesizer(ModelPath);
+                var engine = new KokoroWavSynthesizer(path);
 
                 lock (EngineLock)
                 {
                     _loadFailure = null;
+                    _loadFailurePath = null;
                 }
 
                 return engine;
@@ -455,6 +548,7 @@ internal static class KokoroSpeech
                 lock (EngineLock)
                 {
                     _loadFailure = reason;
+                    _loadFailurePath = path;
                     _loadFailedAtUtc = DateTime.UtcNow;
                 }
 
@@ -550,7 +644,7 @@ internal static class KokoroSpeech
     {
         if (!IsDownloading)
         {
-            TryDelete(ModelPath + ".part");
+            TryDelete(DownloadedModelPath + ".part");
         }
     }
 
@@ -578,7 +672,14 @@ internal static class KokoroSpeech
     internal static async Task SaveModelAsync(Stream source, long? length, IProgress<double>? progress, CancellationToken cancel)
     {
         Directory.CreateDirectory(Folder);
-        var part = ModelPath + ".part";
+
+        // DownloadedModelPath, never ModelPath: on a bundled build ModelPath
+        // is the file in the install folder, and a download must not write
+        // over the file it is loading from - nor into the install folder at
+        // all, which the app is not meant to be able to change. A download
+        // always lands in LocalRoot\Kokoro, and ModelPath picks it up from
+        // there when the bundled one is what failed to load.
+        var part = DownloadedModelPath + ".part";
 
         try
         {
@@ -633,7 +734,7 @@ internal static class KokoroSpeech
                 }
             }
 
-            File.Move(part, ModelPath, overwrite: true);
+            File.Move(part, DownloadedModelPath, overwrite: true);
         }
         catch (Exception)
         {

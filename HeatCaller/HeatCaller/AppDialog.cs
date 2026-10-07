@@ -110,6 +110,77 @@ public static class AppDialog
     }
 
     /// <summary>
+    /// A question whose answers are not Yes, No or Cancel: the buttons carry
+    /// the words the answer is in - "Update now", "After tonight", "Not now" -
+    /// and this hands back WHICH was pressed, by its place in
+    /// <paramref name="labels"/>.
+    ///
+    /// Three named buttons rather than Yes/No/Cancel because a volunteer
+    /// reads the buttons, not the sentence above them, and "No" is not an
+    /// answer to "shall I install this now, after tonight, or not at all".
+    ///
+    /// Escape, Alt+F4 and the last button all mean the LAST label, so the
+    /// labels must be written with the safest answer last: a stray keypress
+    /// has to land on the one that changes nothing.
+    /// </summary>
+    /// <returns>The index in <paramref name="labels"/> of the button pressed; the last index if the window was closed without one.</returns>
+    public static int Choose(IWin32Window? owner, string text, string caption, MessageBoxIcon icon, params string[] labels)
+    {
+        if (labels is null || labels.Length == 0)
+        {
+            throw new ArgumentException("A question needs at least one button.", nameof(labels));
+        }
+
+        if (ThrowInsteadOfShowing)
+        {
+            throw new InvalidOperationException(
+                $"A question would have opened here, which nobody can answer in a test: \"{caption}\" - {text} [{string.Join(" / ", labels)}]");
+        }
+
+        var last = labels.Length - 1;
+
+        try
+        {
+            using var dialog = new DialogForm(text, caption, MessageBoxButtons.OK, icon, MessageBoxDefaultButton.Button1, labels);
+
+            var answer = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
+
+            // Make() gives the buttons DialogResult.Yes, No, Cancel, Retry...
+            // in order; anything else (the window closed) is the last label.
+            var picked = Array.IndexOf(CustomResults, answer);
+            return picked >= 0 && picked <= last ? picked : last;
+        }
+        catch
+        {
+            // No themed window could open. The system box cannot carry these
+            // labels, so the question is put as the nearest thing it has and
+            // mapped back - a worse dialog is better than a silent one.
+            var buttons = labels.Length >= 3 ? MessageBoxButtons.YesNoCancel
+                : labels.Length == 2 ? MessageBoxButtons.YesNo
+                : MessageBoxButtons.OK;
+
+            var spelled = $"{text}\r\n\r\n" + string.Join("\r\n", labels.Select((l, i) =>
+                $"{(buttons == MessageBoxButtons.OK ? "OK" : CustomResultNames[Math.Min(i, CustomResultNames.Length - 1)])} = {l}"));
+
+            var answer = owner is not null
+                ? MessageBox.Show(owner, spelled, caption, buttons, icon)
+                : MessageBox.Show(spelled, caption, buttons, icon);
+
+            var picked = Array.IndexOf(CustomResults, answer);
+            return picked >= 0 && picked <= last ? picked : last;
+        }
+    }
+
+    /// <summary>The results Choose's buttons carry, in order - see MakeButtons(string[]).</summary>
+    private static readonly DialogResult[] CustomResults =
+    {
+        DialogResult.Yes, DialogResult.No, DialogResult.Cancel, DialogResult.Retry, DialogResult.Abort, DialogResult.Ignore,
+    };
+
+    /// <summary>What those results are called on a system message box, for the fallback in Choose.</summary>
+    private static readonly string[] CustomResultNames = { "Yes", "No", "Cancel" };
+
+    /// <summary>
     /// For the layout test (LayoutTests.EveryConvertedWindowFitsAtEverySize):
     /// the message box as it would open, not opened.
     /// </summary>
@@ -148,7 +219,11 @@ public static class AppDialog
         /// <summary>The button Enter presses and the focus starts on. See OnShown.</summary>
         private readonly Button _defaultButton;
 
-        public DialogForm(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton)
+        /// <param name="labels">
+        /// Words for the buttons, in place of <paramref name="buttons"/>'s
+        /// own - see AppDialog.Choose. Null for an ordinary message box.
+        /// </param>
+        public DialogForm(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton, string[]? labels = null)
         {
             _accent = AccentFor(icon);
 
@@ -215,7 +290,7 @@ public static class AppDialog
                 body.Add(lblText, gapBelow: 0);
             }
 
-            var made = MakeButtons(buttons);
+            var made = labels is null ? MakeButtons(buttons) : MakeButtons(labels);
 
             // Against the right-hand edge, the way every dialog in Windows
             // puts them, in the order Windows' own message box has them: the
@@ -349,6 +424,17 @@ public static class AppDialog
                 Close();
             }
         }
+
+        /// <summary>
+        /// One button per label, carrying the results AppDialog.CustomResults
+        /// lists in the same order - that pairing is how Choose turns the
+        /// answer back into which button was pressed, so the two must not
+        /// drift apart.
+        /// </summary>
+        private Button[] MakeButtons(string[] labels) => labels
+            .Take(CustomResults.Length)
+            .Select((label, i) => Make(label, CustomResults[i]))
+            .ToArray();
 
         private Button[] MakeButtons(MessageBoxButtons buttons) => buttons switch
         {
