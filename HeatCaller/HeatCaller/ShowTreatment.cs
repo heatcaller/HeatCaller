@@ -482,9 +482,47 @@ internal sealed class ShowTreatment
     /// </summary>
     public async Task<bool> RunAsync(Action speak, CancellationToken ct = default)
     {
-        if (!_settings.ShowThemeEnabled)
+        var run = await StartAsync(ct).ConfigureAwait(true);
+
+        if (run is null)
         {
             return false;
+        }
+
+        try
+        {
+            speak();
+
+            await WaitForQuietAsync(ct).ConfigureAwait(true);
+        }
+        finally
+        {
+            await run.FinishAsync().ConfigureAwait(true);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Opens a show and hands back the handle that ends it: the opener
+    /// plays, the bed comes up under it, and this returns at the point the
+    /// voice should start. Null when there is no music to play, in which
+    /// case the caller carries on exactly as it did before.
+    ///
+    /// For a read the caller drives itself. The race recap is a sequence
+    /// rather than a line - opening, teaser, recap, the mechanic, the
+    /// sign-off, each waiting on the one before - so it cannot be handed
+    /// over as a single speak() the way a segment can. It opens the show,
+    /// runs its own sequence, and finishes the show when it is done.
+    ///
+    /// Whoever calls this MUST call FinishAsync, from a finally: until
+    /// they do, the club's music stays silenced.
+    /// </summary>
+    public async Task<ShowRun?> StartAsync(CancellationToken ct = default)
+    {
+        if (!_settings.ShowThemeEnabled)
+        {
+            return null;
         }
 
         var opener = Music.Opener(out var openerProblem);
@@ -500,7 +538,7 @@ internal sealed class ShowTreatment
 
         if (opener is null && bed is null)
         {
-            return false;
+            return null;
         }
 
         var openerLevel = Level(_settings.ShowOpenerLevel, 0.9f);
@@ -514,7 +552,7 @@ internal sealed class ShowTreatment
 
         // A plain delegate in a local, not a method group off a local
         // function: a local function that captures anything is not promised
-        // the same delegate instance twice, so the -= below might take
+        // the same delegate instance twice, so the -= in ShowRun might take
         // nothing off and leave this handler - and this show - attached to
         // the announcer for the rest of the night.
         Action<bool> onSpeaking = speaking =>
@@ -558,11 +596,9 @@ internal sealed class ShowTreatment
 
             // The opener alone, up to the point the voice comes in over it.
             //
-            // ConfigureAwait(true) throughout, so speak() below runs on
-            // whichever thread called in - the announcer screen's, which is
-            // where every other segment is spoken from. The voice queue
-            // takes a line from any thread, but there is no reason for the
-            // show to be the one place that does it differently.
+            // ConfigureAwait(true) so the caller resumes on whichever
+            // thread called in - the announcer screen's or Race Control's -
+            // which is where the lines that follow are queued from.
             if (opener is not null)
             {
                 await Task.Delay(VoiceEntersAfter(opener), ct).ConfigureAwait(true);
@@ -578,45 +614,20 @@ internal sealed class ShowTreatment
             _speaking = false;
             _announcer.SpeakingChanged += onSpeaking;
 
-            try
-            {
-                speak();
-
-                await WaitForQuietAsync(ct).ConfigureAwait(true);
-            }
-            finally
-            {
-                _announcer.SpeakingChanged -= onSpeaking;
-            }
-
-            if (running is not null)
-            {
-                // Back to the bed's own level for the ending - the piece's
-                // own fade should be heard, not heard through a duck.
-                bedGain!.Target = bedLevel;
-                running.WindUp();
-
-                // The ending is as long as the piece's own fade. The cap is
-                // only there so a clip that never completes - an output
-                // device pulled out mid-show - cannot hold the music off.
-                await WithTimeout(bedPlaying, bed!.Length + TimeSpan.FromSeconds(5)).ConfigureAwait(true);
-            }
-
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            // Shutting down. The clips are cut off with the bus.
-            return true;
+            return new ShowRun(_announcer, onSpeaking, running, bedGain, bedPlaying, bed?.Length ?? TimeSpan.Zero, bedLevel, Status);
         }
         catch (Exception ex)
         {
-            Status?.Invoke($"[show] {ex.GetType().Name}: {ex.Message}");
-            return true;
-        }
-        finally
-        {
+            // Nothing is handed back, so nothing will call FinishAsync -
+            // the music has to be let go of here or it stays silenced.
             ShowOnAir.End();
+
+            if (ex is not OperationCanceledException)
+            {
+                Status?.Invoke($"[show] {ex.GetType().Name}: {ex.Message}");
+            }
+
+            return null;
         }
     }
 
@@ -705,18 +716,103 @@ internal sealed class ShowTreatment
         Status?.Invoke($"[show] The read ran past {LongestRead.TotalMinutes:0} minutes - winding the music up anyway.");
     }
 
-    private static async Task WithTimeout(Task task, TimeSpan longest)
-    {
-        var timeout = Task.Delay(longest);
-
-        if (await Task.WhenAny(task, timeout).ConfigureAwait(false) == task)
-        {
-            await task.ConfigureAwait(false);
-        }
-    }
-
     private static float Level(int percent, float fallback) =>
         percent is >= 0 and <= 100 ? percent / 100f : fallback;
+}
+
+/// <summary>
+/// A show that is on air: the bed running, the club's music silenced, the
+/// announcer's speaking watched so the bed ducks under it.
+///
+/// Handed back by ShowTreatment.StartAsync and ended by FinishAsync, which
+/// MUST be called - from a finally - or the club's music stays silenced
+/// for the rest of the night. Calling it twice is harmless, which is what
+/// lets a caller end the show at its natural end AND guarantee it in a
+/// finally without ending up with two.
+/// </summary>
+internal sealed class ShowRun
+{
+    private readonly AnnouncementService _announcer;
+    private readonly Action<bool> _onSpeaking;
+    private readonly ShowBed? _bed;
+    private readonly SmoothGainSampleProvider? _gain;
+    private readonly Task _playing;
+    private readonly TimeSpan _bedLength;
+    private readonly float _bedLevel;
+    private readonly Action<string>? _status;
+
+    /// <summary>0 running, 1 finished. Interlocked, because the finally and the natural end can race.</summary>
+    private int _finished;
+
+    internal ShowRun(
+        AnnouncementService announcer,
+        Action<bool> onSpeaking,
+        ShowBed? bed,
+        SmoothGainSampleProvider? gain,
+        Task playing,
+        TimeSpan bedLength,
+        float bedLevel,
+        Action<string>? status)
+    {
+        _announcer = announcer;
+        _onSpeaking = onSpeaking;
+        _bed = bed;
+        _gain = gain;
+        _playing = playing;
+        _bedLength = bedLength;
+        _bedLevel = bedLevel;
+        _status = status;
+    }
+
+    /// <summary>
+    /// Hands the bed over to the piece's own ending, waits for it to play
+    /// out, and gives the club's music back. Safe to call twice and from
+    /// any thread; the second call returns at once.
+    /// </summary>
+    public async Task FinishAsync()
+    {
+        if (Interlocked.Exchange(ref _finished, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            _announcer.SpeakingChanged -= _onSpeaking;
+
+            if (_bed is not null)
+            {
+                // Back to the bed's own level for the ending - the piece's
+                // own fade should be heard, not heard through a duck.
+                if (_gain is not null)
+                {
+                    _gain.Target = _bedLevel;
+                }
+
+                _bed.WindUp();
+
+                // The ending is as long as the piece's own fade. The cap is
+                // only there so a clip that never completes - an output
+                // device pulled out mid-show - cannot hold the music off.
+                var timeout = Task.Delay(_bedLength + TimeSpan.FromSeconds(5));
+
+                if (await Task.WhenAny(_playing, timeout).ConfigureAwait(false) == _playing)
+                {
+                    await _playing.ConfigureAwait(false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _status?.Invoke($"[show] {ex.GetType().Name} ending the show: {ex.Message}");
+        }
+        finally
+        {
+            // Last, and whatever happened above: until this runs the
+            // club's music is silenced.
+            ShowOnAir.End();
+        }
+    }
 }
 
 /// <summary>
@@ -745,16 +841,28 @@ internal static class ShowSegments
     /// The segments a club may put the music under, as the Commentary page
     /// offers them.
     ///
-    /// The set pieces: the ones that happen between races, where a club is
-    /// filling time on purpose and a theme belongs. Deliberately NOT the
-    /// race intro, the recap, or anything that fires during a race - those
-    /// land in the middle of the start sequence, the flag calls and the
-    /// lap chatter, where an opener would be talking over the race rather
-    /// than introducing it.
+    /// The set pieces: the moments between races where a club is filling
+    /// time on purpose and a theme belongs.
+    ///
+    /// THE RECAP IS ON THIS LIST AND THE INTRO IS NOT, and the difference
+    /// is not the obvious one. Both sit beside a race, so the first cut of
+    /// this list left both off together - wrongly. The intro fires into the
+    /// start sequence, among the staging call, the countdown and the horn,
+    /// where an opener would be playing over the start of a race. The recap
+    /// runs in the quiet AFTER the flag, which is the one moment in the
+    /// evening a broadcast would certainly score - and it is not one line
+    /// but a sequence (opening, teaser, recap, the mechanic, the sign-off),
+    /// so the bed runs under the whole of it. See
+    /// RaceControlControl.SpeakRaceSummary, which opens and ends that show
+    /// itself rather than going through the director.
+    ///
+    /// Nothing that fires DURING a race is here: a battle call or a record
+    /// lap is a remark over a race in progress, not a set piece.
     /// </summary>
     public static readonly IReadOnlyList<SegmentKind> Candidates = new[]
     {
         SegmentKind.ColdOpen,
+        SegmentKind.RaceRecap,
         SegmentKind.SignOffNumbers,
         SegmentKind.MidMeetingStandings,
         SegmentKind.ChampionshipCheck,

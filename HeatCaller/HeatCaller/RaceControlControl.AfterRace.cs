@@ -358,6 +358,40 @@ public sealed partial class RaceControlControl
                 }
             }
 
+            // The show's music, if this club scores its recaps - see
+            // ShowTreatment. Null when they don't, when there are no files
+            // in, or when the audio device is gone, and then everything
+            // below runs exactly as it did before there was any of this.
+            //
+            // Held like the deep duck above and ended the same way: once,
+            // however the sequence ends. Until it is ended the club's
+            // music stays silenced, so a path out that skipped it would
+            // leave the room quiet for the rest of the night.
+            ShowRun? show = null;
+
+            async Task EndShowAsync()
+            {
+                // Plainly, not interlocked: the natural end and the finally
+                // run one after the other on this one sequence, never at
+                // once. FinishAsync is idempotent as well, so even a double
+                // call would only end the show once.
+                var run = show;
+                show = null;
+
+                if (run is not null)
+                {
+                    try
+                    {
+                        await run.FinishAsync();
+                    }
+                    catch
+                    {
+                        // FinishAsync gives the music back in its own
+                        // finally; nothing here is worth failing a recap for.
+                    }
+                }
+            }
+
             try
             {
                 var sequenceStarted = DateTime.UtcNow;
@@ -461,6 +495,24 @@ public sealed partial class RaceControlControl
                 var recapTask = generation is null
                     ? null
                     : BuildRecapAsync(generation, delivery);
+
+                // 2b. On air.
+                //
+                // Here, and not earlier: the flag pause is for the finish
+                // call and the cheering to land, and an opener over the top
+                // of those is the one thing it must not do. Here, and not
+                // later: the recap is away to the model on the line above,
+                // and the opener plays across that wait instead of leaving
+                // it silent.
+                //
+                // Opening the show WAITS - the opener lands and the voice
+                // comes in over its tail, a couple of seconds - so the
+                // teaser below queues at the hand-over, exactly as a
+                // segment's lines do.
+                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
+                {
+                    show = await treatment.StartAsync(nextRace.Token);
+                }
 
                 // 3. The teaser, straight after the finish call.
                 //
@@ -653,6 +705,11 @@ public sealed partial class RaceControlControl
                 }
 
                 ReleaseDeepDuck();
+
+                // The broadcast is over and the queue is drained, so the
+                // bed hands over to its own fade now - over the quiet
+                // after the sign-off, which is what that fade is for.
+                await EndShowAsync();
             }
             catch
             {
@@ -686,6 +743,14 @@ public sealed partial class RaceControlControl
                 {
                     // A failing handler must not stop the clean-up below.
                 }
+
+                // And the same for the show: any way out of the sequence
+                // that opened it and skipped the end above - the recap
+                // dropped because the next race was called, a synthesis
+                // failure part-way - must still give the club's music
+                // back. Does nothing if it was never opened or has already
+                // ended.
+                await EndShowAsync();
 
                 _race.StateChanged -= onNextRace;
 

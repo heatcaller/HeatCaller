@@ -1347,6 +1347,11 @@ public partial class MainForm
         // Wired here because this is the first point at which both exist.
         _raceControlControl.Commentary = () => announcer.Director;
 
+        // And the show's music, for the recap: Race Control runs that
+        // sequence itself, so it opens and ends the show rather than
+        // handing a line to the director.
+        _raceControlControl.ShowMusic = () => announcer.ShowMusicTreatment;
+
         announcer.RaceClassName = () => _activeRound?.ClassName;
 
         WireCommentaryReaders(announcer.Director);

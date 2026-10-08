@@ -406,6 +406,33 @@ public sealed class ShowAudioTests : IDisposable
     }
 
     [Fact]
+    public void The_recap_can_be_scored_and_the_race_intro_cannot()
+    {
+        // The recap runs in the quiet after the flag, which is the one
+        // moment of the evening a broadcast would certainly score, and it
+        // is a whole sequence rather than a line. The intro fires into the
+        // start sequence, among the staging call and the countdown, where
+        // an opener would play over the start of a race.
+        Assert.Contains(SegmentKind.RaceRecap, ShowSegments.Candidates);
+        Assert.DoesNotContain(SegmentKind.RaceIntro, ShowSegments.Candidates);
+
+        // Nor anything that fires DURING a race.
+        Assert.DoesNotContain(SegmentKind.BattleWatch, ShowSegments.Candidates);
+        Assert.DoesNotContain(SegmentKind.PaceNote, ShowSegments.Candidates);
+    }
+
+    [Fact]
+    public void The_recap_is_remembered_once_it_is_chosen()
+    {
+        // It is an Essential-tier segment, which the switches for the
+        // OTHER list (CommentarySegmentsOff) refuse to hold - so this one
+        // has to keep it, or ticking the recap would do nothing.
+        var saved = ShowSegments.Save(new[] { SegmentKind.RaceRecap });
+
+        Assert.Contains(SegmentKind.RaceRecap, ShowSegments.Parse(saved));
+    }
+
+    [Fact]
     public void A_name_from_a_newer_version_is_ignored_rather_than_throwing()
     {
         // A setting written by a newer version and then rolled back must

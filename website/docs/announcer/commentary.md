@@ -222,9 +222,11 @@ The announcer has to be unmuted for it, since the whole point is judging the bed
 
 #### Which segments get it
 
-The set pieces between races, where filling time is the point. The cold open and the sign-off come ticked; the rest are yours to choose.
+The set pieces — the moments where filling time is the point. The cold open and the sign-off come ticked; the rest are yours to choose.
 
-Race intros and recaps are deliberately **not** on the list. Those land in the middle of the start sequence, the flag calls and the lap chatter, where an opener would be talking over the race rather than introducing it.
+**The race recap** is on the list, and it's the one most worth ticking. The recap isn't one line, it's a sequence: the broadcast opening, the teaser, the recap itself, the mechanic's interview after a main, and the sign-off. The opener lands once the flag pause is over, and the bed runs under *all* of it, ending on its own fade after the sign-off. If the next race is called to the grid partway through, the music is wound up with the rest of the sequence.
+
+**Race intros are deliberately not on the list.** They fire into the start sequence, among the staging call, the countdown and the horn — an opener there would be playing over the start of a race rather than introducing it. Nor is anything that fires *during* a race: a battle call or a record lap is a remark over a race in progress, not a set piece.
 
 Untick all of them and nothing gets music, which is a different thing from switching the feature off — the files stay chosen.
 
@@ -275,5 +277,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | The bed stops dead instead of ending | The piece has no fade of its own, so it's faded out over about 2.5 seconds. | Normal. Use a piece that ends on a fade if you want its own ending. |
 | "Use something under 5 minutes" | The file is too long to loop. | Use a shorter piece — the bed is looped, so it doesn't need length. |
 | The club's playlist doesn't come back after a show | Shouldn't happen; the music is always released. | Check the console for lines starting `[show]`, and tell us what it says. |
+| No music under the recap | **Race recaps** isn't ticked under **Which segments get it**, or recaps themselves are off. | Tick it, and check **Race recaps** is on under **What it writes**. |
+| The recap's music stops before the sign-off | The next race was called to the grid, which ends the whole sequence — interview and sign-off included. | Normal. Stage the next race after the broadcast finishes if you want all of it. |
 
 For more, see [Troubleshooting](../admin/troubleshooting.md).

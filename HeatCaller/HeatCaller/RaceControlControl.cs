@@ -170,6 +170,18 @@ public sealed partial class RaceControlControl : UserControl
     public Func<CommentaryDirector?>? Commentary { get; set; }
 
     /// <summary>
+    /// The show's music, once MainForm has it - a function for the same
+    /// reason the director is one: the announcer screen owns it and this
+    /// page is made first.
+    ///
+    /// Used by the recap sequence, which scores the whole post-race
+    /// broadcast when the club has asked for it - see
+    /// SpeakRaceSummary and ShowTreatment. Internal because ShowTreatment
+    /// is; nothing outside the app sets it.
+    /// </summary>
+    internal Func<ShowTreatment?>? ShowMusic { get; set; }
+
+    /// <summary>
     /// Whether the PA is saying anything right now, from the announcer's
     /// own counted signal.
     ///

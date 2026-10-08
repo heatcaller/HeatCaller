@@ -119,6 +119,14 @@ public partial class AnnouncerControl
     /// </summary>
     public void ReloadShowMusic() => ShowMusic.Reload();
 
+    /// <summary>
+    /// The show's music, for Race Control's recap sequence - the one show
+    /// this control does not run itself, because the recap is a sequence
+    /// of its own with its own waits and its own cancellation. Null until
+    /// there is a commentary service and settings to build it with.
+    /// </summary>
+    internal ShowTreatment? ShowMusicTreatment => Treatment;
+
     /// <summary>A line for the Commentary page's Test button - the kind of thing a cold open says.</summary>
     private const string ShowTestLine =
         "Good evening and welcome to the club, where the track is clean, the batteries are charged, "
