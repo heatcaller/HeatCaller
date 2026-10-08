@@ -39,6 +39,8 @@ public sealed class InstallerTests
 
     private static string PublishScript => File.ReadAllText(Path.Combine(RepoRoot, "publish.cmd"));
 
+    private static string PackScript => File.ReadAllText(Path.Combine(RepoRoot, "pack.cmd"));
+
     private static string FetchScript => File.ReadAllText(Path.Combine(RepoRoot, "fetch-kokoro.cmd"));
 
     // --- The Kokoro model, bundled ------------------------------------------
@@ -166,12 +168,16 @@ public sealed class InstallerTests
         // voice-line cache and its undo folder. The same name would mix the
         // app into it, and uninstalling would delete lines the club paid
         // ElevenLabs for.
-        Assert.Contains("vpk pack -u HeatCallerApp", PublishScript, StringComparison.Ordinal);
+        //
+        // This reads pack.cmd, not publish.cmd: pack.cmd is where the vpk
+        // command is RUN. publish.cmd only prints a reminder to run it, and
+        // a guard on printed text guards nothing.
+        Assert.Contains("vpk pack -u HeatCallerApp", PackScript, StringComparison.Ordinal);
 
         // And never the bare name. Spelled out as its own check because the
         // failure it guards against is silent and irreversible: a club
         // uninstalls, and the voice lines go with the app.
-        Assert.DoesNotContain("vpk pack -u HeatCaller ", PublishScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("vpk pack -u HeatCaller ", PackScript, StringComparison.Ordinal);
 
         // AppPaths.LocalRoot is redirected under test (see
         // AppPaths.RedirectForTests), so the clash cannot be shown from the
@@ -308,7 +314,45 @@ public sealed class InstallerTests
     [Fact]
     public void The_channel_the_app_reads_is_the_channel_the_release_is_packed_on() =>
         // A mismatch here means a club is told there is nothing new, forever.
-        Assert.Contains($"-c {AppUpdates.Channel}", PublishScript, StringComparison.Ordinal);
+        Assert.Contains($"-c {AppUpdates.Channel}", PackScript, StringComparison.Ordinal);
+
+    [Fact]
+    public void The_publish_hands_off_to_the_pack_that_signs() =>
+        // publish.cmd builds and stops; pack.cmd packs and signs. The one
+        // thing publish.cmd still owes whoever runs it is the name of the
+        // next step, and a name that no longer matches a script that exists
+        // ends the release trail in a command that fails.
+        Assert.Contains("pack.cmd", PublishScript, StringComparison.Ordinal);
+
+    [Fact]
+    public void The_release_is_signed_by_the_account_identity_validation_was_done_on()
+    {
+        // pack.cmd signs through Artifact Signing, and the account and
+        // certificate profile it signs with are named in this file rather
+        // than typed on a command line that could drift from it. Nothing
+        // secret is in it - the token comes from az login on the machine
+        // cutting the release - which is why it is in git and why this can
+        // read it.
+        var metadata = File.ReadAllText(Path.Combine(RepoRoot, "signing-metadata.json"));
+
+        Assert.Contains("\"CodeSigningAccountName\": \"heatcallersigning\"", metadata, StringComparison.Ordinal);
+        Assert.Contains("codesigning.azure.net", metadata, StringComparison.Ordinal);
+
+        // And an unsigned release is a deliberate act, never the default:
+        // pack.cmd passes the file unless it is told not to.
+        Assert.Contains("--azureTrustedSignFile", PackScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_pack_is_built_for_the_architecture_the_publish_produced()
+    {
+        // publish.cmd produces a win-x64 self-contained folder. If pack.cmd
+        // does not say so, vpk defaults to x86 and stamps an x64-only build
+        // as an x86 release. It warns, in one line among forty, and the
+        // wrong architecture goes into the installer either way.
+        Assert.Contains("-r win-x64", PublishScript, StringComparison.Ordinal);
+        Assert.Contains("-r win-x64", PackScript, StringComparison.Ordinal);
+    }
 
     // --- Phone pages: the one-off administrator step -------------------------
 

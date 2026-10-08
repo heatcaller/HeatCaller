@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Tenant } from "./tenancy.js";
+import { readBrainConfig, readBrainPlan, type BrainConfig } from "./brain.js";
 import { readVoiceConfig, readVoicePlan, type VoiceConfig } from "./voice.js";
 
 export interface RelayConfig {
@@ -14,6 +15,12 @@ export interface RelayConfig {
    * Windows voice.
    */
   readonly voice: VoiceConfig;
+  /**
+   * The commentary brain's model and defaults. Absent means no model,
+   * which is a relay that does not write commentary at all - clubs carry
+   * on with Ollama on the race laptop, or with no commentary.
+   */
+  readonly brain: BrainConfig;
 }
 
 interface RawConfig {
@@ -22,6 +29,7 @@ interface RawConfig {
   maxBodyBytes?: unknown;
   clubs?: unknown;
   voice?: unknown;
+  brain?: unknown;
 }
 
 /**
@@ -86,6 +94,7 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
   // naming one the catalogue does not have is a misconfiguration worth
   // refusing to start over rather than discovering on a race night.
   const voice = readVoiceConfig(raw.voice, source);
+  const brain = readBrainConfig(raw.brain, source);
 
   const tenants: Tenant[] = raw.clubs.map((entry, index) => {
     const club = entry as Partial<Tenant>;
@@ -105,6 +114,8 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
       publishRoster: club.publishRoster === true,
       // Opt-in as well, and for a harder reason: this one spends money.
       voice: readVoicePlan((entry as Record<string, unknown>)["voice"], voice, club.club, source),
+      // Opt-in as well, and for the same reason as the voice above.
+      brain: readBrainPlan((entry as Record<string, unknown>)["brain"], brain, club.club, source),
     };
   });
 
@@ -114,6 +125,7 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
     maxBodyBytes: readMaxBody(raw.maxBodyBytes, source),
     tenants,
     voice,
+    brain,
   };
 }
 

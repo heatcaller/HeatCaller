@@ -84,7 +84,7 @@ The **Tonight's program** card lists the race day's rounds, all classes together
 | **Track** | The track layout, or "-". |
 | **Status** | **Recorded** (run and saved), **NEXT** (the next round to run, highlighted), or **Scheduled**. |
 
-Only rounds that belong to the current race day are listed, so last week's heats don't appear. The **Class:** filter above the list shows one class at a time (**All classes** shows everything), and HeatCaller remembers your choice. **NEXT** is always the next round for the whole day, whichever class you're looking at.
+Only rounds that belong to the current race day are listed, so last week's heats don't appear. The **Class:** filter above the list shows one class at a time (**All classes** shows everything), and HeatCaller remembers your choice. It lists only the classes racing today, not every class on the club's books; a remembered class that isn't racing today falls back to **All classes** and is picked up again on the next race day that runs it. **NEXT** is always the next round for the whole day, whichever class you're looking at.
 
 The buttons under the list come in two groups:
 

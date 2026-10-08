@@ -26,6 +26,19 @@ internal static class TestSetup
     internal static void RedirectAppData() => AppPaths.RedirectForTests(SessionRoot);
 
     /// <summary>
+    /// No sound out of the test run.
+    ///
+    /// Several tests drive the announcer far enough that it really plays:
+    /// the warning buzzer and its spoken line, in the Windows voice on a
+    /// default install, two calls over each other. A test run is not a
+    /// race night and must not sound like one - and a test whose timing
+    /// depends on an audio device is a test that fails on a machine with
+    /// no speaker.
+    /// </summary>
+    [ModuleInitializer]
+    internal static void SilenceAudio() => AudioBus.Silent = true;
+
+    /// <summary>
     /// Windows set up the way the app sets them up (ApplicationConfiguration
     /// .Initialize, from HeatCaller.csproj) - before any test makes one,
     /// since none of these can be changed once a window exists.

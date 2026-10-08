@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import type { BrainPlan } from "./brain.js";
 import type { VoicePlan } from "./voice.js";
 
 /**
@@ -48,6 +49,15 @@ export interface Tenant {
    * key or the free Windows voice, and nothing is spent on its behalf.
    */
   readonly voice?: VoicePlan;
+  /**
+   * What this club may do with the commentary brain - the words of an
+   * intro, a recap or a mechanic's interview, written through this relay
+   * on HeatCaller's account rather than on the club's own laptop.
+   *
+   * Absent means not included, for the same reason as the voice: it
+   * spends money, so it is opted into rather than out of.
+   */
+  readonly brain?: BrainPlan;
 }
 
 export interface TenantConfig {

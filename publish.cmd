@@ -91,20 +91,20 @@ if errorlevel 1 echo (could not measure the folder - look at its properties in E
 echo.
 echo PUBLISHED - %OUT%
 echo.
-echo Next: pack it. From this folder, with the version from the csproj:
+echo Next: pack it. From this folder:
 echo.
-echo   vpk pack -u HeatCallerApp -v ^<version^> -p "%OUT%" -e HeatCaller.exe ^^
-echo            --packTitle "HeatCaller" --packAuthors "Asher Kent" -c beta
+echo   pack.cmd --test     prove the signing path works (test certificate)
+echo   pack.cmd            cut the real, signed release
 echo.
-echo   -u HeatCallerApp, NEVER HeatCaller. Velopack installs into
-echo   %%LocalAppData%%\^<packId^>, and %%LocalAppData%%\HeatCaller is already the
-echo   voice-line cache (AppPaths.LocalRoot). The same name would mix the app
-echo   into it and uninstalling would delete lines the club paid for.
+echo   pack.cmd reads the version from the csproj, signs with Artifact
+echo   Signing, and writes to %%USERPROFILE%%\HeatCaller-releases. It packs
+echo   as -u HeatCallerApp, NEVER HeatCaller: Velopack installs into
+echo   %%LocalAppData%%\^<packId^>, and %%LocalAppData%%\HeatCaller is already
+echo   the voice-line cache (AppPaths.LocalRoot). The same name would mix the
+echo   app into it and uninstalling would delete lines the club paid for.
 echo.
-echo   -v must match ^<Version^> in HeatCaller.csproj - that is the one number,
-echo   and the updater compares against it.
+echo   Run pack.cmd --test first on a machine that has not signed before.
 echo.
-echo   -c beta is the channel clubs install from now; stable comes later.
 exit /b 0
 
 :notours

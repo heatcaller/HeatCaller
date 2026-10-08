@@ -1,4 +1,4 @@
-namespace HeatCaller;
+﻿namespace HeatCaller;
 
 /// <summary>
 /// The day's running order, and the one thing to do next.
@@ -105,6 +105,12 @@ public sealed class RaceProgramControl : UserControl
     private readonly Button _btnStart = new();
     private readonly Button _btnEditDrivers = new();
     private readonly ComboBox _cmbFilter = new();
+
+    /// <summary>
+    /// True while RefreshFilter is refilling the class list, so the
+    /// selection it moves on the way is not mistaken for the user's.
+    /// </summary>
+    private bool _fillingFilter;
     private readonly Button _btnStandings = new();
     private readonly Button _btnMarshals = new();
     private readonly Button _btnBumpUps = new();
@@ -323,6 +329,18 @@ public sealed class RaceProgramControl : UserControl
         _cmbFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbFilter.SelectedIndexChanged += (_, _) =>
         {
+            // While the list is being refilled the selection is the list's
+            // doing, not the user's, and must not be written down: clearing
+            // the items alone moves it to nothing, and a class that isn't
+            // racing today is no longer in the list at all (RefreshFilter),
+            // so the filter lands on "All classes". Saving that would
+            // forget the class this club usually watches for every race day
+            // after this one. The refill's own RefreshGrid is RefreshAll's.
+            if (_fillingFilter)
+            {
+                return;
+            }
+
             _settings.LastRaceProgramClass = FilterClass;
             _settings.Save();
             RefreshGrid();
@@ -801,6 +819,56 @@ public sealed class RaceProgramControl : UserControl
             .ToList();
     }
 
+    /// <summary>
+    /// The classes the Class filter offers: the ones with a round on
+    /// tonight's programme.
+    ///
+    /// A different question from RacingClassNames, which is who is ENTERED
+    /// for tonight - the Event tab's list. A class can be entered and have
+    /// nothing built for it yet, and offering one of those in the filter
+    /// only ever led to an empty list and a "why is this blank". The filter
+    /// is a view of what is on the programme, so it shows what is on it.
+    ///
+    /// Before the first build nothing is on it, and a filter holding only
+    /// "All classes" would leave the class-scoped tools with no way to be
+    /// pointed at a class, so tonight's entered classes stand in until
+    /// there is a round. Building never needs this either way:
+    /// BuildQualifyingProgramme builds for every one of tonight's classes
+    /// that has a roster, whatever the filter is set to.
+    /// </summary>
+    private List<string> FilterClassNames()
+    {
+        var scheduled = DayRounds()
+            .Select(r => r.ClassName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+
+        if (scheduled.Count == 0)
+        {
+            return RacingClassNames();
+        }
+
+        // In the classes' own order rather than the order the rounds
+        // happen to run in, so the list reads the same as everywhere else.
+        var listed = _raceClasses.All
+            .Where(c => scheduled.Contains(c.Name, StringComparer.OrdinalIgnoreCase))
+            .Select(c => c.Name)
+            .ToList();
+
+        // A round filed against a class that has since been renamed or
+        // deleted is still on tonight's programme, and the filter is the
+        // only way to get to it. Kept at the end, after the real ones.
+        foreach (var name in scheduled)
+        {
+            if (!listed.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                listed.Add(name);
+            }
+        }
+
+        return listed;
+    }
+
     // --- The same readings, for the phone (RaceDayService) ---
     //
     // Public views of the private helpers above rather than copies of
@@ -1209,31 +1277,43 @@ public sealed class RaceProgramControl : UserControl
         RefreshGrid();
     }
 
+    /// <summary>
+    /// Fills the class filter with the classes that have a round on
+    /// tonight's programme and only those - see FilterClassNames.
+    ///
+    /// Every class on the club's books used to be listed, so that a filter
+    /// pinned to a class not racing tonight still resolved. It also meant a
+    /// club with a dozen classes on the books picked tonight's three out of
+    /// a list of twelve, every time, on the page it uses most of a race
+    /// night - and picking one of the nine showed an empty programme with
+    /// nothing to say why. A pinned class with no rounds tonight falls back
+    /// to "All classes" instead, and is left in the settings for the next
+    /// race day that does run it - see the guard on the filter's
+    /// SelectedIndexChanged, which is what keeps it there.
+    /// </summary>
     private void RefreshFilter()
     {
         var previous = FilterClass.Length > 0 ? FilterClass : _settings.LastRaceProgramClass;
 
-        _cmbFilter.Items.Clear();
-        _cmbFilter.Items.Add(AllClasses);
+        _fillingFilter = true;
 
-        foreach (var name in RacingClassNames())
+        try
         {
-            _cmbFilter.Items.Add(name);
-        }
+            _cmbFilter.Items.Clear();
+            _cmbFilter.Items.Add(AllClasses);
 
-        // Any class at all, not just today's, so a filter pinned to a class
-        // that is not racing today still resolves instead of silently
-        // jumping back to "all".
-        foreach (var raceClass in _raceClasses.All)
-        {
-            if (!_cmbFilter.Items.Contains(raceClass.Name))
+            foreach (var name in FilterClassNames())
             {
-                _cmbFilter.Items.Add(raceClass.Name);
+                _cmbFilter.Items.Add(name);
             }
-        }
 
-        var index = string.IsNullOrEmpty(previous) ? 0 : _cmbFilter.Items.IndexOf(previous);
-        _cmbFilter.SelectedIndex = index >= 0 ? index : 0;
+            var index = string.IsNullOrEmpty(previous) ? 0 : _cmbFilter.Items.IndexOf(previous);
+            _cmbFilter.SelectedIndex = index >= 0 ? index : 0;
+        }
+        finally
+        {
+            _fillingFilter = false;
+        }
 
         // The longest class may have come or gone: measured again, and the
         // row with it.

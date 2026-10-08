@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -219,6 +219,109 @@ public sealed class AppSettings
     public bool CommentaryEnabled { get; set; }
     public string CommentaryEndpoint { get; set; } = "http://localhost:11434";
     public string CommentaryModel { get; set; } = "llama3.2:3b";
+
+    /// <summary>
+    /// Write the commentary through the club's relay when it can, rather
+    /// than on this laptop.
+    ///
+    /// On by default, and the default is the point: the relay writes
+    /// through a model no club laptop could run beside a race, costs about
+    /// a penny a race night, and needs nothing installed - where Ollama
+    /// asks a volunteer for a command prompt before the best feature in
+    /// the app does anything. Ollama stays behind it either way (see
+    /// FallbackCommentaryBrain), so turning this off is only for a club
+    /// that would rather nothing left the building.
+    /// </summary>
+    public bool CommentaryUseRelay { get; set; } = true;
+
+    // --- What the night may spend (CommentaryBudget) ---
+    //
+    // The relay meters commentary in lines per club per month, and a club
+    // night with every segment switched on can spend most of a week's
+    // worth in an evening. These are the three dials a club has over how
+    // that is paced; the arithmetic is all in CommentaryBudget.
+
+    /// <summary>
+    /// Run every segment tonight whatever it costs, spending against next
+    /// week on purpose. For a meeting that matters - a regional, an open
+    /// day - and deliberately a tick somebody makes rather than a default.
+    /// </summary>
+    public bool CommentaryKeepEverything { get; set; }
+
+    /// <summary>
+    /// The lowest tier of segment this club wants at all, as a SegmentTier
+    /// - 3 (Flourish) for everything. A club that never wants the
+    /// furniture sets this once, rather than hearing it whenever the month
+    /// happens to be quiet. Stored as an int: append to SegmentTier only.
+    /// </summary>
+    public int CommentaryLowestTier { get; set; } = (int)SegmentTier.Flourish;
+
+    /// <summary>
+    /// How many race days a month this club runs, used to divide the
+    /// month's remaining lines into a night's share. Four - a weekly club
+    /// - until the schedule says otherwise.
+    /// </summary>
+    public int CommentaryNightsPerMonth { get; set; } = 4;
+
+    /// <summary>
+    /// Tonight's spend, carried across a restart. A laptop gets closed
+    /// between the heats and the mains often enough that losing this would
+    /// hand the second half of the evening a whole fresh allotment. Held
+    /// as CommentaryBudget wrote it, and ignored when it belongs to
+    /// another race day.
+    /// </summary>
+    public string CommentaryBudgetNight { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The broadcast segments this club has switched off, by name, comma
+    /// separated - see CommentaryBudget.SaveSwitches.
+    ///
+    /// The ones that are OFF rather than the ones that are on, so a
+    /// segment added in a later version arrives switched on: a club
+    /// should not have to go and find a tick box to get something they
+    /// already pay for. Race intros and recaps are never in here - they
+    /// have their own boxes under "What it writes".
+    /// </summary>
+    public string CommentarySegmentsOff { get; set; } = string.Empty;
+
+    // --- The co-host (second voice in the booth) ---
+    //
+    // The mechanic's interview showed what a second voice is worth: two
+    // people talking stops sounding like an app reading out facts and
+    // starts sounding like coverage. The co-host does the same for the
+    // segments that suit it - a fight, a form guide, the championship -
+    // and is written in one request and split, never two. See
+    // CommentaryExchange.
+
+    /// <summary>Whether the segments that suit it are written as a two-hander rather than one voice.</summary>
+    public bool CommentaryCoHost { get; set; }
+
+    /// <summary>What the announcer calls the co-host. Blank: they are talked to but never named.</summary>
+    public string CommentaryCoHostName { get; set; } = string.Empty;
+
+    // The co-host's voice, one per engine, exactly as the mechanic's is
+    // held - the club can switch engine on Voice Settings at any time and
+    // a voice id means nothing to the others. Blank for an engine means
+    // the announcer's own voice reads both halves, which still reads as a
+    // conversation and is better than silence.
+    public string CoHostElevenLabsVoiceId { get; set; } = string.Empty;
+    public string CoHostElevenLabsVoiceName { get; set; } = string.Empty;
+    public string CoHostHeatCallerVoice { get; set; } = string.Empty;
+    public string CoHostHeatCallerVoiceName { get; set; } = string.Empty;
+    public string CoHostHeatCallerRev { get; set; } = string.Empty;
+    public string CoHostWindowsVoiceName { get; set; } = string.Empty;
+    public string CoHostKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>The co-host's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
+    [JsonIgnore]
+    public SecondVoice CoHostVoice => new(
+        CoHostElevenLabsVoiceId ?? string.Empty,
+        CoHostElevenLabsVoiceName ?? string.Empty,
+        CoHostHeatCallerVoice ?? string.Empty,
+        CoHostHeatCallerVoiceName ?? string.Empty,
+        CoHostHeatCallerRev ?? string.Empty,
+        CoHostWindowsVoiceName ?? string.Empty,
+        CoHostKokoroVoiceName ?? string.Empty);
     // Was 6 - too short for Ollama's own documented cold-load behaviour on
     // a model's first request (commonly 13s+, even for a small model on
     // modest hardware). The warm-up call in LocalLlmClient pays that cost

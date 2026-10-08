@@ -1,4 +1,4 @@
-namespace HeatCaller;
+﻿namespace HeatCaller;
 
 /// <summary>
 /// Settings for local LLM colour commentary.
@@ -17,6 +17,22 @@ public sealed class CommentaryControl : UserControl
     private readonly TextBox _txtEndpoint = new();
     private readonly TextBox _txtModel = new();
     private readonly NumericUpDown _numTimeout = new();
+    private readonly CheckBox _chkUseRelay = new ThemedCheckBox();
+
+    /// <summary>
+    /// One tick box per broadcast segment, built from CommentaryBudget's
+    /// own table rather than declared here.
+    ///
+    /// A segment is meant to be one row in that table and nothing else;
+    /// thirteen fields and thirteen handlers on this page would mean two
+    /// places to add a segment and one of them getting forgotten. A
+    /// segment added later turns up here on its own, switched on.
+    /// </summary>
+    private readonly Dictionary<SegmentKind, CheckBox> _segmentBoxes = new();
+
+    private readonly CheckBox _chkCoHost = new ThemedCheckBox();
+    private readonly TextBox _txtCoHostName = new();
+    private readonly ComboBox _cmbCoHostVoice = new();
     private readonly CheckBox _chkIntros = new ThemedCheckBox();
     private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
     private readonly CheckBox _chkSummaries = new ThemedCheckBox();
@@ -46,6 +62,14 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     private readonly SteadyLabel _lblTestResult = new();
 
+    /// <summary>
+    /// Which brain the page expects to write, under the relay box. As tall
+    /// as the longest of the things it says, so ticking the box or filling
+    /// the Club Website page in never moves the Connection card under it
+    /// (SteadyLabel).
+    /// </summary>
+    private readonly SteadyLabel _lblRelayState = new();
+
     // --- Broadcast (27 Sep 2026) ---
     private readonly CheckBox _chkOpening = new ThemedCheckBox();
     private readonly CheckBox _chkClosing = new ThemedCheckBox();
@@ -65,6 +89,7 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. The mechanic's is forgotten whenever its list is filled.</summary>
     private (Font Font, int Count, int Width)? _toneWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
+    private (Font Font, int Count, int Width)? _coHostVoiceWidth;
 
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
     private const string TestCaption = "Test Connection";
@@ -291,8 +316,8 @@ public sealed class CommentaryControl : UserControl
 
         var lblIntro = new Label
         {
-            Text = "Optional colour commentary from a language model running on this machine. Nothing is sent over the "
-                 + "internet and nothing ships with this app - it talks to a local Ollama install.",
+            Text = "Optional colour commentary from a language model. HeatCaller can have it written by the club relay, "
+                 + "which needs nothing installed here, or by an Ollama install on this machine.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -300,8 +325,10 @@ public sealed class CommentaryControl : UserControl
         var lblRequirement = _textSize.Wear(
             new Label
             {
-                Text = "Requires Ollama (ollama.com) running locally with a model pulled - e.g. \"ollama pull llama3.2:3b\". "
-                     + "If it isn't running, commentary is skipped and the normal announcement lines are used instead.",
+                Text = "The relay writes for clubs whose plan includes commentary - set the Club Website page up and leave the "
+                     + "box below ticked. Ollama is what writes otherwise, and it needs ollama.com running locally with a model "
+                     + "pulled - e.g. \"ollama pull llama3.2:3b\". If neither answers, commentary is skipped and the normal "
+                     + "announcement lines are used instead.",
                 AutoSize = true,
                 ForeColor = AppTheme.Accent,
             },
@@ -321,6 +348,35 @@ public sealed class CommentaryControl : UserControl
             {
                 TriggerWarmUp();
             }
+        };
+
+        // ------------------------------------------------------------------
+        // Where the writing happens
+        //
+        // Above the Connection card rather than in it: it decides which
+        // brain writes, and the card under it is only one of the two.
+        // ------------------------------------------------------------------
+
+        Check(_chkUseRelay, "Write through the relay when it can");
+        _chkUseRelay.Checked = _settings.CommentaryUseRelay;
+        _chkUseRelay.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryUseRelay = _chkUseRelay.Checked;
+            _settings.Save();
+            ApplyToService();
+            UpdateEnabledState();
+        };
+
+        var relayHint = Hint(
+            "The relay writes with a hosted model no race laptop could run, and needs nothing installed here. Ollama below "
+            + "covers whatever the relay can't write - the internet down, the club's lines for the month used up, or "
+            + "commentary not included in the club's plan yet. Untick this and Ollama writes everything.");
+
+        _lblRelayState.Wordings = new[]
+        {
+            "Everything is written by Ollama below.",
+            "The Club Website page isn't set up yet, so everything is written by Ollama below.",
+            "The Club Website page is set up, so the relay writes first and Ollama below covers what it can't.",
         };
 
         // ------------------------------------------------------------------
@@ -394,6 +450,9 @@ public sealed class CommentaryControl : UserControl
 
         var connection = new Section("Connection");
 
+        connection.Add(Hint(
+            "Ollama on this machine. It writes everything when the relay box above is off, and covers whatever the relay "
+            + "can't write when it is on."));
         connection.Add(connectionGrid);
         connection.Add(testRow, gapBelow: 0);
 
@@ -783,6 +842,107 @@ public sealed class CommentaryControl : UserControl
         broadcast.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
+        // Which segments to run
+        //
+        // Built from CommentaryBudget.AllSpecs, grouped by tier, with the
+        // tier's own heading saying when it goes quiet - because "why did
+        // it stop doing the cold open" is otherwise unanswerable from
+        // this page. Intros and recaps are not here on purpose: they have
+        // their own boxes above, and a second switch for the same thing
+        // in a different place is how a settings page starts lying.
+        // ------------------------------------------------------------------
+
+        var segments = new Section("Segments");
+
+        segments.Add(Hint(
+            "What the announcer covers beyond the intros and recaps above. Each one only speaks when the race actually "
+            + "gives it something to say, so switching them all on does not mean hearing them all every race."));
+
+        var switchedOff = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(_settings.CommentarySegmentsOff));
+
+        foreach (var tier in new[] { SegmentTier.Core, SegmentTier.Colour, SegmentTier.Flourish })
+        {
+            var inTier = CommentaryBudget.AllSpecs.Where(spec => spec.Tier == tier).ToList();
+
+            if (inTier.Count == 0)
+            {
+                continue;
+            }
+
+            var heading = _textSize.Wear(
+                new Label { Text = TierHeading(tier), AutoSize = true, ForeColor = AppTheme.TextDark },
+                () => AppTheme.BoldFont);
+
+            segments.Add(heading, stretch: false, gapBelow: 0);
+            segments.Add(Hint(TierWhen(tier)), gapBelow: UiLayout.HintGap);
+
+            foreach (var spec in inTier)
+            {
+                var box = new ThemedCheckBox();
+
+                Check(box, spec.Title);
+                box.Checked = !switchedOff.Contains(spec.Kind);
+
+                var kind = spec.Kind;
+
+                box.CheckedChanged += (_, _) =>
+                {
+                    SaveSegmentSwitches();
+                    UpdateEnabledState();
+                };
+
+                _segmentBoxes[kind] = box;
+
+                segments.Add(box, stretch: false, gapBelow: 0);
+                segments.Add(Hint(spec.What + (spec.CanBeExchange ? "  Can be a two-hander with the co-host." : string.Empty)),
+                    gapBelow: UiLayout.HintGap);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // The co-host
+        // ------------------------------------------------------------------
+
+        Check(_chkCoHost, "Two voices in the booth");
+        _textSize.Wear(_chkCoHost, () => AppTheme.BoldFont);
+        _chkCoHost.Checked = _settings.CommentaryCoHost;
+        _chkCoHost.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryCoHost = _chkCoHost.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
+        _txtCoHostName.MaxLength = 40;
+        _txtCoHostName.Text = _settings.CommentaryCoHostName ?? string.Empty;
+        _txtCoHostName.TextChanged += (_, _) =>
+        {
+            _settings.CommentaryCoHostName = _txtCoHostName.Text.Trim();
+            _settings.Save();
+        };
+
+        _cmbCoHostVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbCoHostVoice.SelectedIndexChanged += (_, _) => SaveCoHostVoice();
+
+        var coHostGrid = new FieldGrid();
+
+        Stepped(coHostGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
+        Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice)));
+        coHostGrid.AddHint(
+            "With no voice picked for the engine in use, the announcer's own voice reads both halves - still a conversation, "
+            + "and better than nothing. The list is filled from the same engine as the mechanic's, beside Load Voices above.");
+
+        var coHost = new Section("The co-host");
+
+        coHost.Add(Hint(
+            "A second commentator, for the segments that suit one. The announcer makes a remark and the co-host answers - "
+            + "written as one request and split in two, so the answer actually answers the question. Segments marked above "
+            + "as a two-hander use them; the rest stay single-voice, and anything that can't be split cleanly is simply "
+            + "said in one voice instead."));
+        coHost.Add(_chkCoHost, stretch: false);
+        coHost.Add(coHostGrid, gapBelow: 0);
+
+        // ------------------------------------------------------------------
         // The page
         // ------------------------------------------------------------------
 
@@ -791,8 +951,13 @@ public sealed class CommentaryControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.HintGap);
         page.Add(lblRequirement, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
+        page.Add(_chkUseRelay, stretch: false, gapBelow: UiLayout.HintGap);
+        page.Add(relayHint, gapBelow: UiLayout.HintGap);
+        page.Add(_lblRelayState, gapBelow: UiLayout.RowGap);
         page.Add(connection);
         page.Add(writes);
+        page.Add(segments);
+        page.Add(coHost);
         page.Add(style);
         page.Add(recap);
         page.Add(broadcast, gapBelow: 0);
@@ -807,7 +972,7 @@ public sealed class CommentaryControl : UserControl
         _textSize.Keep(() => FieldGrid.LineUp(new[]
         {
             connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
-            pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid,
+            pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, coHostGrid,
         }));
 
         _textSize.Keep(SizeFields);
@@ -830,10 +995,19 @@ public sealed class CommentaryControl : UserControl
         // so the list is set out again for it whenever the page is shown.
         VisibleChanged += (_, _) =>
         {
-            if (Visible && EngineInUse?.Invoke() is { } engine && engine != _voiceListEngine)
+            if (!Visible)
+            {
+                return;
+            }
+
+            if (EngineInUse?.Invoke() is { } engine && engine != _voiceListEngine)
             {
                 FillMechanicVoices(engine);
             }
+
+            // The Club Website page can be filled in after this one, and
+            // what the relay line says depends on it.
+            UpdateRelayState();
         };
 
         UpdateEnabledState();
@@ -857,10 +1031,12 @@ public sealed class CommentaryControl : UserControl
         Fit(_txtModel, UiLayout.AtTextSize(EndpointWidth));
         Fit(_txtShowName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_txtMechanicName, UiLayout.AtTextSize(MechanicNameWidth));
+        Fit(_txtCoHostName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtTeaser, UiLayout.AtTextSize(TeaserWidth), Pieces.LineHeight(_txtTeaser.Font) * TeaserLines + UiLayout.HintGap * 2);
 
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
         Fit(_cmbMechanicVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbMechanicVoice, ref _voiceWidth)));
+        Fit(_cmbCoHostVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
 
         foreach (var number in new[]
                  {
@@ -921,10 +1097,21 @@ public sealed class CommentaryControl : UserControl
     };
 
     /// <summary>The voice saved for the mechanic on this engine, as a list entry - the announcer's own when none is.</summary>
-    private VoiceChoice SavedMechanicVoice(VoiceEngine engine)
-    {
-        var voice = _settings.MechanicVoice;
+    private VoiceChoice SavedMechanicVoice(VoiceEngine engine) => SavedSecondVoice(_settings.MechanicVoice, engine);
 
+    /// <summary>The same reading, for the co-host - held exactly as the mechanic's is, one voice per engine.</summary>
+    private VoiceChoice SavedCoHostVoice(VoiceEngine engine) => SavedSecondVoice(_settings.CoHostVoice, engine);
+
+    /// <summary>
+    /// Which voice a second speaker has saved for an engine, as the
+    /// picker shows it.
+    ///
+    /// Shared between the mechanic and the co-host rather than written
+    /// twice: they are the same seven settings in a different prefix, and
+    /// two copies would drift the first time an engine was added.
+    /// </summary>
+    private static VoiceChoice SavedSecondVoice(SecondVoice voice, VoiceEngine engine)
+    {
         static string Shown(string name, string id) => string.IsNullOrWhiteSpace(name) ? id : name;
 
         return engine switch
@@ -983,6 +1170,31 @@ public sealed class CommentaryControl : UserControl
 
             var index = saved.Id.Length == 0 ? 0 : choices.FindIndex(c => string.Equals(c.Id, saved.Id, StringComparison.Ordinal)) + 1;
             _cmbMechanicVoice.SelectedIndex = Math.Max(0, index);
+
+            // The co-host picks from the same engine's voices, and is
+            // filled in the same pass: one Load Voices for both, and no
+            // way for the two lists to be showing different engines.
+            var coHostSaved = SavedCoHostVoice(shown);
+            var coHostChoices = choices.ToList();
+
+            if (coHostSaved.Id.Length > 0 && !coHostChoices.Any(c => string.Equals(c.Id, coHostSaved.Id, StringComparison.Ordinal)))
+            {
+                coHostChoices.Insert(0, coHostSaved);
+            }
+
+            _cmbCoHostVoice.Items.Clear();
+            _cmbCoHostVoice.Items.Add(AnnouncersVoice);
+
+            foreach (var choice in coHostChoices)
+            {
+                _cmbCoHostVoice.Items.Add(choice);
+            }
+
+            var coHostIndex = coHostSaved.Id.Length == 0
+                ? 0
+                : coHostChoices.FindIndex(c => string.Equals(c.Id, coHostSaved.Id, StringComparison.Ordinal)) + 1;
+
+            _cmbCoHostVoice.SelectedIndex = Math.Max(0, coHostIndex);
         }
         finally
         {
@@ -993,9 +1205,81 @@ public sealed class CommentaryControl : UserControl
             ? $"{EngineLabel(shown)} voices"
             : Plural.Of(loaded.Count, $"{EngineLabel(shown)} voice");
 
-        // The longest voice may have come or gone: the picker measured again.
+        // The longest voice may have come or gone: the pickers measured again.
         _voiceWidth = null;
+        _coHostVoiceWidth = null;
         SizeFields();
+    }
+
+    /// <summary>
+    /// What a tier is called on the settings page.
+    ///
+    /// The tier names in the code - Core, Colour, Flourish - are about
+    /// what goes quiet first. On the page they have to say what the
+    /// segments in them ARE, because nobody setting up a race night cares
+    /// about the ladder until something stops happening.
+    /// </summary>
+    private static string TierHeading(SegmentTier tier) => tier switch
+    {
+        SegmentTier.Core => "During the race",
+        SegmentTier.Colour => "Around the race",
+        _ => "The show",
+    };
+
+    /// <summary>And when it goes quiet, which is the part that is otherwise unanswerable from this page.</summary>
+    private static string TierWhen(SegmentTier tier) => tier switch
+    {
+        SegmentTier.Core => "The live ones. The last to be paused if the month's writing runs short.",
+        SegmentTier.Colour => "Depth between the races. Paused before the live ones are.",
+        _ => "The top and tail of the evening. The first to be paused.",
+    };
+
+    /// <summary>
+    /// Writes the switched-off segments to settings.
+    ///
+    /// The OFF list, so a segment added in a later version arrives
+    /// switched on rather than needing somebody to come and find its box.
+    /// See CommentaryBudget.SaveSwitches.
+    /// </summary>
+    private void SaveSegmentSwitches()
+    {
+        _settings.CommentarySegmentsOff = CommentaryBudget.SaveSwitches(
+            _segmentBoxes.Where(pair => !pair.Value.Checked).Select(pair => pair.Key));
+
+        _settings.Save();
+    }
+
+    /// <summary>Saves the co-host's picked voice against the engine the list is showing.</summary>
+    private void SaveCoHostVoice()
+    {
+        if (_fillingVoices || _cmbCoHostVoice.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        switch (_voiceListEngine)
+        {
+            case VoiceEngine.Windows:
+                _settings.CoHostWindowsVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.Kokoro:
+                _settings.CoHostKokoroVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.HeatCaller:
+                _settings.CoHostHeatCallerVoice = choice.Id;
+                _settings.CoHostHeatCallerVoiceName = choice.Name;
+                _settings.CoHostHeatCallerRev = choice.Rev;
+                break;
+
+            default:
+                _settings.CoHostElevenLabsVoiceId = choice.Id;
+                _settings.CoHostElevenLabsVoiceName = choice.Name;
+                break;
+        }
+
+        _settings.Save();
     }
 
     /// <summary>Saves the picked voice against the engine the list is showing.</summary>
@@ -1131,6 +1415,7 @@ public sealed class CommentaryControl : UserControl
     private void UpdateEnabledState()
     {
         var on = _chkEnabled.Checked;
+        _chkUseRelay.Enabled = on;
         _txtEndpoint.Enabled = on;
         _txtModel.Enabled = on;
         _numTimeout.Enabled = on;
@@ -1177,6 +1462,50 @@ public sealed class CommentaryControl : UserControl
         _cmbTone.Enabled = on;
         _numMaxWords.Enabled = on;
         _numVariety.Enabled = on;
+
+        foreach (var box in _segmentBoxes.Values)
+        {
+            box.Enabled = on;
+        }
+
+        // The co-host is only worth setting up when something is going to
+        // use them, so the row goes dark when every two-hander segment is
+        // switched off as well as when commentary is.
+        var anyExchange = _segmentBoxes.Any(pair => pair.Value.Checked && CommentaryBudget.Spec(pair.Key).CanBeExchange);
+
+        _chkCoHost.Enabled = on && anyExchange;
+        _txtCoHostName.Enabled = on && anyExchange && _chkCoHost.Checked;
+        _cmbCoHostVoice.Enabled = on && anyExchange && _chkCoHost.Checked;
+
+        UpdateRelayState();
+    }
+
+    /// <summary>
+    /// What the relay box says underneath it. The relay rides on the Club
+    /// Website page's address, club and token - the same ones the results
+    /// publishing uses - so a club that has publishing set up has this with
+    /// nothing more to do, and a club that hasn't should be told that here
+    /// rather than finding out from a race that wrote nothing.
+    ///
+    /// Worked out again whenever the page is shown, not once at startup:
+    /// the Club Website page is usually filled in after this one.
+    /// </summary>
+    private void UpdateRelayState()
+    {
+        if (!_chkUseRelay.Checked)
+        {
+            _lblRelayState.Text = "Everything is written by Ollama below.";
+            _lblRelayState.ForeColor = AppTheme.TextMuted;
+            return;
+        }
+
+        var ready = new RelayCommentaryClient(_settings).RelayConfigured;
+
+        _lblRelayState.Text = ready
+            ? "The Club Website page is set up, so the relay writes first and Ollama below covers what it can't."
+            : "The Club Website page isn't set up yet, so everything is written by Ollama below.";
+
+        _lblRelayState.ForeColor = ready ? AppTheme.TextMuted : AppTheme.Accent;
     }
 
     /// <summary>
@@ -1200,12 +1529,26 @@ public sealed class CommentaryControl : UserControl
             return;
         }
 
-        var client = new LocalLlmClient
+        var local = new LocalLlmClient
         {
             Endpoint = _settings.CommentaryEndpoint,
             Model = _settings.CommentaryModel,
             Timeout = TimeSpan.FromSeconds(Math.Clamp(_settings.CommentaryTimeoutSeconds, 2, 60)),
         };
+
+        // The relay goes in front of Ollama when the Club Website page is
+        // set up and the club hasn't turned it off: it writes through a
+        // model no race laptop could run, and needs nothing installed.
+        // Ollama stays behind it rather than being replaced - it is what
+        // writes with the internet down, and what writes for a club the
+        // relay has not included for commentary yet. The choice is made
+        // per line, not here; see FallbackCommentaryBrain.
+        var relay = _settings.CommentaryUseRelay ? new RelayCommentaryClient(_settings) : null;
+
+        ICommentaryBrain client = relay is { RelayConfigured: true }
+            ? new FallbackCommentaryBrain(relay, local)
+            : local;
+
         client.StatusMessage += msg =>
         {
             _lastClientDetail = msg;

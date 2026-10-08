@@ -23,6 +23,7 @@ import {
   type PageContext,
 } from "./pages.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
+import { BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { VOICE_PLAN_OFF, type VoiceService } from "./voice.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -685,6 +686,12 @@ export interface RelayOptions {
    * voice, exactly as before this existed.
    */
   readonly voice?: VoiceService | undefined;
+  /**
+   * The commentary brain. Absent means this relay writes no commentary:
+   * clubs use Ollama on the race laptop, or go without, exactly as
+   * before this existed.
+   */
+  readonly brain?: BrainService | undefined;
 }
 
 interface Parsed {
@@ -723,6 +730,7 @@ export class Relay {
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
   private readonly voice: VoiceService | undefined;
+  private readonly brain: BrainService | undefined;
   private readonly listings = new Map<string, Buffer>();
   private listingBytes = 0;
   /**
@@ -897,6 +905,7 @@ export class Relay {
     this.collectionReads = new Limiter(COLLECTION_READS_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     this.voice = options.voice;
+    this.brain = options.brain;
   }
 
   /**
@@ -1787,6 +1796,19 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "voice" && rest[1] === "speak") {
       await this.voiceSpeak(request, response, club);
+      return;
+    }
+
+    // The commentary brain: the laptop sends the facts it has already
+    // worked out and gets back the words. See brain.ts - and note the
+    // model is only ever asked to phrase, never to work anything out.
+    if (method === "GET" && rest.length === 2 && rest[0] === "brain" && rest[1] === "catalogue") {
+      await this.brainCatalogue(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "brain" && rest[1] === "write") {
+      await this.brainWrite(request, response, club);
       return;
     }
 
@@ -3006,6 +3028,139 @@ export class Relay {
       "x-voice-used": String(result.usage.used),
       "x-voice-allowance": String(result.usage.allowance),
       "x-voice-resets": result.usage.resetsAt,
+    });
+  }
+
+  /**
+   * Whether this club has the commentary brain, and where its month
+   * stands. Asked when the Commentary page opens, like the voice's.
+   */
+  private async brainCatalogue(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    // Counted with the voice's traffic rather than given a limiter of its
+    // own: both are the costly work a token can hold open, they are asked
+    // for by the same laptop minutes apart, and one budget is one thing to
+    // reason about when a club says the announcer went quiet.
+    const asking = `${club}|${clientAddress(request)}`;
+
+    if (this.voiceTraffic.blocked(asking)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a moment and try again." });
+      return;
+    }
+
+    this.voiceTraffic.hit(asking);
+
+    if (this.brain === undefined) {
+      sendJson(response, 200, {
+        ok: true,
+        enabled: false,
+        model: "",
+        usage: { used: 0, allowance: 0, resetsAt: null },
+      });
+      return;
+    }
+
+    const view = await this.brain.catalogue(club, who.brain ?? BRAIN_PLAN_OFF);
+
+    sendJson(response, 200, { ok: true, ...view });
+  }
+
+  /**
+   * One line of commentary, written for this club.
+   *
+   * Answers the line as JSON, or JSON saying why not - and the app treats
+   * every refusal the same way: Ollama on the race laptop writes it
+   * instead, or the announcer's template lines do. Nothing here is ever
+   * allowed to stop a race, which is why none of it is on the path of a
+   * flag call.
+   */
+  private async brainWrite(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      this.log(`[relay] refused: a token asked "${club}" for a commentary line, which is not its club.`);
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const whoFrom = `${club}|${clientAddress(request)}`;
+
+    if (this.voiceTraffic.blocked(whoFrom)) {
+      sendJson(response, 429, { ok: false, error: "Too many lines at once. Wait a moment and try again." });
+      return;
+    }
+
+    this.voiceTraffic.hit(whoFrom);
+
+    // Bigger than the voice's 8 KiB: a recap carries the finishing order,
+    // the gaps and any rivalries, which is more than a line to speak.
+    // Still far smaller than anything that would cost real money.
+    const body = await readBody(request, response, 32 * 1024);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    if (this.brain === undefined) {
+      sendJson(response, 503, {
+        ok: false,
+        refusal: "off",
+        error: "The commentary brain isn't switched on for this relay.",
+      });
+      return;
+    }
+
+    const system = typeof body["system"] === "string" ? body["system"] : "";
+    const facts = typeof body["facts"] === "string" ? body["facts"] : "";
+    const words = typeof body["words"] === "number" ? body["words"] : 60;
+    const variety = typeof body["variety"] === "number" ? body["variety"] : 0.7;
+
+    const result = await this.brain.write(
+      club,
+      who.brain ?? BRAIN_PLAN_OFF,
+      system,
+      facts,
+      // Clamped here as well as in the service: a laptop asking for a
+      // thousand words is a bug, and the bill is HeatCaller's.
+      Math.max(10, Math.min(Math.round(words), 300)),
+      Math.max(0, Math.min(variety, 1)),
+    );
+
+    if (!result.ok) {
+      sendJson(response, result.status, {
+        ok: false,
+        refusal: result.refusal,
+        error: result.message,
+        ...(result.usage === undefined
+          ? {}
+          : { used: result.usage.used, allowance: result.usage.allowance, resetsAt: result.usage.resetsAt }),
+      });
+      return;
+    }
+
+    sendJson(response, 200, {
+      ok: true,
+      text: result.text,
+      used: result.usage.used,
+      allowance: result.usage.allowance,
+      resetsAt: result.usage.resetsAt,
     });
   }
 

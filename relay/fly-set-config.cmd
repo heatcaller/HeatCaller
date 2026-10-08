@@ -9,6 +9,21 @@ rem
 rem Node does the quoting: it reads the file, checks it parses, and prints
 rem it as ONE line for "fly secrets import" - which is the only way to get
 rem JSON through a Windows shell with its quotes intact.
+rem
+rem THE TWO KEYS ARE NOT IN HERE AND ARE NOT SET BY THIS.
+rem
+rem RELAY_VOICE_KEY (ElevenLabs, for the HeatCaller voice) and
+rem RELAY_BRAIN_KEY (Anthropic, for the commentary the relay writes) are
+rem secrets of their own, set once by hand:
+rem
+rem   fly secrets set RELAY_VOICE_KEY=sk_...
+rem   fly secrets set RELAY_BRAIN_KEY=sk-ant-...
+rem
+rem They are rotated on their own schedule and must never land in the file
+rem a club's token hash is pasted into - which is the file this script
+rem sends. Without either key the relay still starts and says which of
+rem them is missing; clubs then speak with their own ElevenLabs key or the
+rem Windows voice, and write commentary with Ollama or not at all.
 
 if not exist relay.config.json (
   echo No relay.config.json here. Run this from the relay folder, and mint a club first if you have none.
@@ -36,3 +51,7 @@ if errorlevel 1 (
 
 echo.
 echo Done - the relay restarts itself with the new config in a few seconds.
+echo.
+echo Watch it come up with: fly logs
+echo It prints a line for each of the voice and the commentary brain,
+echo saying how many clubs are included - or that the key is not set.

@@ -1,6 +1,15 @@
 # Commentary
 
-Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the [Announcer screen](voice.md#announcer-screen). The recap can be dressed up as a TV broadcast, with an opening, a sign-off and, after a main, a quick interview with the winner's mechanic in a second voice. The words are written by a language model running on your own laptop through a free program called Ollama. It's optional. Without it, HeatCaller's normal announcements work exactly the same.
+Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the [Announcer screen](voice.md#announcer-screen). The recap can be dressed up as a TV broadcast, with an opening, a sign-off and, after a main, a quick interview with the winner's mechanic in a second voice. The words are written by a language model. It's optional: without it, HeatCaller's normal announcements work exactly the same.
+
+There are two places the writing can happen, and HeatCaller uses whichever it can:
+
+| Where | What it needs | What it's like |
+|---|---|---|
+| **The relay** (preferred) | The [Club Website page](../online/setup.md) set up, and commentary switched on for your club | Writes through a model far larger than a race laptop could run. Nothing to install. Needs internet during the race. |
+| **Ollama on the race laptop** | [Ollama](https://ollama.com) installed, with a model pulled | Works with the internet down. The models small enough to run beside a race write plainly. |
+
+It tries the relay first and falls back to Ollama **for each line**, not once when you save the page. So a club with both gets the better words when the relay can be reached and the local ones when it can't, and a club with only one of them simply gets that one.
 
 Settings are on **Voice → Commentary**.
 
@@ -19,7 +28,17 @@ Commentary is never used for live lap-by-lap calls. A lap takes a few seconds an
 
 Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice → Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Windows voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
 
-## Before you start
+## Using the relay
+
+Nothing to install. If the Club Website page is set up and your club is included for commentary, switch commentary on under **Voice → Commentary** and it works.
+
+Whether your club is included is the relay's decision, not the laptop's - the account is HeatCaller's. When commentary is on and nothing is being said, the console says which it is: that the relay will write for this club, that it won't yet, or that it couldn't be reached. Lines are counted against a monthly allowance, generous enough that no club night comes near it, and the console shows where it stands after every line.
+
+**Write through the relay when it can** on the Commentary tab turns this off, for a club that would rather nothing left the building. Ollama then does all of it.
+
+## Using Ollama instead
+
+Ollama is the fallback, and the only brain that writes with the internet down. You need:
 
 - A Windows laptop with enough memory to run a small model alongside HeatCaller. <!-- TODO: confirm recommended RAM / hardware for llama3.2:3b alongside HeatCaller -->
 - Ollama installed and running on the same laptop.
@@ -168,7 +187,7 @@ The last race summary is shown under **LAST RACE SUMMARY** on the Announcer scre
 
 ## Privacy
 
-With the default endpoint, the model runs entirely on your laptop. The page says it plainly: nothing is sent over the internet and nothing ships with HeatCaller; it talks to a local Ollama install.
+Where the writing happens decides this. With **Write through the relay when it can** ticked - how it comes - the facts below go to your club's relay and on to the model it writes with. Untick it and the model runs entirely on your laptop: nothing is sent over the internet and nothing ships with HeatCaller; it talks to a local Ollama install.
 
 What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, championship positions, the show name, and, for the mechanic's interview, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
 

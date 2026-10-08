@@ -905,6 +905,54 @@ network interface, like any relay, so Windows will ask about the firewall
 the first time - "private networks" is enough, and "no" still leaves it
 working for this laptop.
 
+### The commentary brain (token required)
+
+```
+GET  /api/v1/c/:club/brain/catalogue   -> whether this club has it, and its allowance
+POST /api/v1/c/:club/brain/write       -> { "text": "..." }, or JSON saying why not
+```
+
+The words, where the voice above is the speaking. Claude on HeatCaller's
+account, so a club needs no key of its own: the key lives in
+`RELAY_BRAIN_KEY` and nowhere else, and the model is named in the config
+and never served.
+
+`write` takes `{ "system": "...", "facts": "...", "words": 60, "variety": 0.7 }`.
+The laptop sends the announcer's character as `system` and the facts it has
+already worked out as `facts` - positions, gaps, margins, rivalries. **The
+model is only ever asked to phrase them, never to work anything out**,
+which is what keeps a wrong lap time off the PA.
+
+A refusal is JSON with a `refusal` field: `off` (no key or no model on this
+relay), `not-included` (not on this club's plan), `text` (empty, or over
+8,000 characters of prompt), `allowance` (the month's lines are spent),
+`busy`, or `upstream` (the model itself). The app treats every one the same
+way: Ollama on the race laptop writes that line instead, or the announcer's
+template lines do. Commentary is the garnish, and nothing here is on the
+path of a flag call.
+
+**What it costs and what stops it.** Counted in **lines, not characters**:
+a request costs about the same whatever comes back, because the facts sent
+up dominate it. At Haiku prices a whole race night is a few cents, so
+`brain.monthlyLines` is a runaway guard rather than a budget - 400 a month
+by default, which is roughly twenty race nights and more than any club
+runs. Counts live in `dataDir/.brain/usage/<club>.json`, beside the
+voice's rather than inside it: different money, different file. A line is
+taken off the month **before** the model is asked and handed back if
+nothing came of it, so a failure costs a club nothing. A count file that
+will not read refuses the line rather than granting a fresh allowance. Two
+lines at once per club, no more.
+
+The model is pinned (`claude-haiku-4-5-20251001`), not floated on an alias.
+How a club's race nights sound is a product decision, and a model that
+changed underneath them mid-season would change it without anyone choosing
+that.
+
+Clubs start with no brain: a club needs `"brain": { "enabled": true }` in
+the config, exactly like the voice, and for the same reason - it spends
+money, so it is opted into rather than out of. A relay configured with no
+`brain.model` does not offer it at all.
+
 ### Race control
 
 ```
@@ -993,6 +1041,20 @@ Without it the relay starts and says so, and every club carries on with
 its own key or the free Windows voice. Restrict the key in ElevenLabs to
 the text-to-speech endpoints and give it a credit limit - it is the
 circuit breaker behind the per-club allowances.
+
+The Anthropic key for the commentary brain is a third secret, on the same
+terms:
+
+```
+fly secrets set RELAY_BRAIN_KEY=sk-ant-...
+```
+
+Without it the relay starts and says so, and clubs write commentary with
+Ollama on the race laptop or go without. Give this one a spend limit too.
+It is much the cheaper of the two - a race night of commentary is cents
+where a race night of speech is not - but a loop that asks for a line per
+lap would still be a bill, and the per-club line allowance is only the
+inner guard.
 
 One rule to know about: `PORT` and `RELAY_DATA` from the environment beat
 whatever the config says. That is deliberate. A laptop config pasted into

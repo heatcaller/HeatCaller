@@ -17,7 +17,7 @@ namespace HeatCaller;
 /// there's a hard timeout on every call rather than trusting the endpoint to
 /// be responsive.
 /// </summary>
-public sealed class LocalLlmClient
+public sealed class LocalLlmClient : ICommentaryBrain
 {
     // Its own HttpClient with no BaseAddress, since the endpoint is a user
     // setting rather than a fixed service.
@@ -53,6 +53,9 @@ public sealed class LocalLlmClient
 
     /// <summary>Raised with diagnostic detail - surfaced in the console so a misconfigured endpoint is findable.</summary>
     public event Action<string>? StatusMessage;
+
+    /// <inheritdoc />
+    public string Describe => string.IsNullOrWhiteSpace(Model) ? "Ollama" : $"Ollama ({Model})";
 
     /// <summary>
     /// Asks the model for a single line. Returns null on any failure at all -

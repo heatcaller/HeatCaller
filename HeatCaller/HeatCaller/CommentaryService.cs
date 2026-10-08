@@ -182,7 +182,7 @@ public sealed class CommentaryService
     public bool HasRivalryAmong(IEnumerable<string> transponders) => RivalryLinesFor(transponders).Count > 0;
 
     /// <summary>Configured externally so the settings page can rebuild it without restarting anything.</summary>
-    public LocalLlmClient? Client { get; set; }
+    public ICommentaryBrain? Client { get; set; }
 
     public bool IsAvailable => Client is not null;
 
@@ -1612,6 +1612,150 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// Writes one broadcast segment from facts the app has already worked
+    /// out.
+    ///
+    /// THE ONE ENTRY POINT EVERY NEW SEGMENT USES
+    ///
+    /// The intro, the recap and the interview each grew their own prompt
+    /// builder, which was fine while there were three of them. A dozen
+    /// would be a dozen places to get the facts block wrong, and a dozen
+    /// different answers to "what does this segment cost". So a segment is
+    /// now a FactBlock builder plus a row in CommentaryBudget's table, and
+    /// this turns the pack into a line.
+    ///
+    /// The caller owns the order the facts and the budget are spent in -
+    /// see FactPack, which sets it out. In short: pack first (free),
+    /// reserve second (free), write third, and spend both only once a line
+    /// has actually come back.
+    /// </summary>
+    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty)
+        {
+            return null;
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + InstructionFor(kind);
+
+        return await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
+            BuildSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
+    }
+
+    /// <summary>
+    /// Writes one segment as a conversation between the announcer and the
+    /// co-host, or returns nothing when it could not be.
+    ///
+    /// One request for the whole exchange, not one per turn. Two requests
+    /// would cost twice the allowance and twice the wait, and - the real
+    /// reason - the second half would be written without having seen the
+    /// first, so the answer would not answer the question. The mechanic's
+    /// interview has always worked this way.
+    ///
+    /// Nothing comes back when the model ignored the format. The caller
+    /// then writes the same segment in one voice from the facts it
+    /// already holds, which costs a second line but never a silence. See
+    /// CommentaryExchange.
+    /// </summary>
+    public async Task<IReadOnlyList<ExchangeTurn>> BuildExchangeAsync(
+        SegmentKind kind,
+        PackedFacts facts,
+        string? announcer,
+        string? coHost,
+        int turns = 2,
+        CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty || !CommentaryBudget.Spec(kind).CanBeExchange)
+        {
+            return Array.Empty<ExchangeTurn>();
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + InstructionFor(kind) +
+            "\n\n" + CommentaryExchange.Brief(announcer, coHost, turns);
+
+        // Two people need more words than one. The limit on the page is
+        // what a single line may run to, so each extra turn is given
+        // another line's worth rather than the pair sharing one.
+        var extra = Math.Max(0, _settings.CommentaryMaxWords)
+            * Math.Clamp(turns - 1, 1, CommentaryExchange.MostTurns - 1);
+
+        var written = await Client.GenerateAsync(
+            BuildSystemPrompt(extra), body, maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct);
+
+        var split = CommentaryExchange.Split(written);
+
+        if (split.Count == 0)
+        {
+            return Array.Empty<ExchangeTurn>();
+        }
+
+        // Recorded flat, because the Announcer screen and "repeat that"
+        // show what was said rather than replaying it in two voices.
+        await RecordAndReturn(LabelFor(kind), Task.FromResult<string?>(CommentaryExchange.Flatten(split, announcer, coHost)));
+
+        return split;
+    }
+
+    /// <summary>
+    /// What the model is asked to do with a segment's facts.
+    ///
+    /// One line each, and every one of them says how much to write, because
+    /// the single most common failure is a model handed four facts and no
+    /// brief writing a paragraph about all of them.
+    /// </summary>
+    private static string InstructionFor(SegmentKind kind) => kind switch
+    {
+        // Explicitly NOT asked who will win. A prediction is the one thing
+        // in here the app has not worked out, so it is the one thing the
+        // model would have to invent.
+        SegmentKind.BattleWatch =>
+            "Call this fight for the crowd in one sentence. Say who is ahead and by how much. Do not predict who will win.",
+
+        SegmentKind.PaceNote =>
+            "Call this lap in one sentence, as a commentator would the moment it flashed up.",
+
+        SegmentKind.ComingUpNext =>
+            "Tell the crowd what is coming up next, in one short sentence.",
+
+        // The history segments are handed several facts and have to pick.
+        // Told to choose, they choose; left to their own devices they
+        // list, and a list read aloud is the opposite of a broadcast.
+        SegmentKind.GridHistory =>
+            "Pick the single most interesting of these and work it into one sentence about the race about to start. "
+            + "Ignore the rest - do not list them.",
+
+        SegmentKind.QualifyingReport =>
+            "Read this as a short qualifying report, two sentences at most. Lead with pole.",
+
+        SegmentKind.ChampionshipCheck =>
+            "Give the championship picture in one or two sentences, as a commentator would between races.",
+
+        _ => "Write what a commentator could say about this right now, in one sentence.",
+    };
+
+    /// <summary>What the console and "repeat that" call a segment. See RecordAndReturn.</summary>
+    private static string LabelFor(SegmentKind kind) => kind switch
+    {
+        SegmentKind.RaceIntro => "Intro",
+        SegmentKind.RaceRecap => SummaryKind,
+        SegmentKind.BattleWatch => "Battle",
+        SegmentKind.PaceNote => "Pace",
+        SegmentKind.ComingUpNext => "Coming up",
+        SegmentKind.GridHistory => "Grid",
+        SegmentKind.QualifyingReport => "Qualifying",
+        SegmentKind.ChampionshipCheck => "Championship",
+        _ => kind.ToString(),
+    };
+
+    /// <summary>
     /// The car a driver actually ran in THIS session, falling back to their
     /// current profile only when the session didn't record one.
     ///
@@ -1731,7 +1875,7 @@ public sealed class CommentaryService
     /// line only, no brackets of any kind (they could fake an audio tag or
     /// close the facts block), and short enough that it can only be a name.
     /// </summary>
-    private static string Field(string? value, int maxChars = MaxFieldChars)
+    internal static string Field(string? value, int maxChars = MaxFieldChars)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

@@ -64,6 +64,25 @@ internal static class AudioBus
     }
 
     /// <summary>
+    /// Opens no audio device and plays nothing, for the test run.
+    ///
+    /// Set once by TestSetup before any test runs, and never by the app.
+    /// Without it the suite is audible: the tests that exercise the
+    /// announcer end to end really do fetch a voice and really do play it,
+    /// several at once and over each other, out of a laptop that is
+    /// supposed to be running tests. Worse than the noise, it is a test
+    /// run whose timing depends on a sound card.
+    ///
+    /// Here rather than in each test, and here rather than muting the
+    /// announcer: muting is a behaviour those tests are checking (a muted
+    /// announcer returns before it logs what it would have played), so a
+    /// test that muted to stay quiet would no longer test anything. This
+    /// is the last step before the speaker, below everything any test has
+    /// an opinion about.
+    /// </summary>
+    public static bool Silent { get; set; }
+
+    /// <summary>
     /// Plays a sound and completes when it has been handed to the device -
     /// cut short, and completed straight away, if the token is cancelled.
     /// Throws InvalidOperationException when there is no usable output.
@@ -78,7 +97,7 @@ internal static class AudioBus
     /// unity, exactly as before.
     public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false)
     {
-        if (cancellationToken.IsCancellationRequested)
+        if (Silent || cancellationToken.IsCancellationRequested)
         {
             return Task.CompletedTask;
         }

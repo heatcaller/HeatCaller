@@ -38,3 +38,12 @@ HeatCaller/HeatCaller/Assets/Kokoro/
 # Python leftovers from audio-tools
 __pycache__/
 *.pyc
+
+# Velopack's release output, if vpk is ever run without -o and drops it here.
+# pack.cmd writes releases to %USERPROFILE%\HeatCaller-releases instead, for
+# the same reason the publish goes outside this folder.
+Releases/
+
+# NOTE: signing-metadata.json and signing-metadata-test.json ARE kept. They
+# name the Azure signing account and certificate profile and hold no secret -
+# the signing token comes from `az login` on the machine cutting the release.

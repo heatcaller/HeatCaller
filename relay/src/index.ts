@@ -1,5 +1,6 @@
 import { lchown, lstat, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { anthropicWriter, BrainService } from "./brain.js";
 import { loadConfig, redirectOriginFrom } from "./config.js";
 import { mint } from "./mint.js";
 import { Relay } from "./server.js";
@@ -108,12 +109,30 @@ async function serve(): Promise<number> {
           log: (line) => console.log(line),
         });
 
+  // The one Anthropic key, from a secret for the same reasons as the
+  // voice key: rotated on its own, never near the file a club's token
+  // hash is pasted into, and a relay started without it simply does not
+  // write commentary - clubs fall back to Ollama on the race laptop, or
+  // to no commentary, and nothing else about a race night changes.
+  const brainKey = (process.env["RELAY_BRAIN_KEY"] ?? "").trim();
+
+  const brain =
+    config.brain.model.length === 0
+      ? undefined
+      : new BrainService({
+          config: config.brain,
+          dataDir: config.dataDir,
+          write: brainKey.length > 0 ? anthropicWriter(brainKey, config.brain.model) : undefined,
+          log: (line) => console.log(line),
+        });
+
   const relay = new Relay({
     store,
     tenants,
     maxBodyBytes: config.maxBodyBytes,
     redirectOrigin,
     voice,
+    brain,
   });
 
   if (voice !== undefined) {
@@ -123,6 +142,16 @@ async function serve(): Promise<number> {
       voice.available
         ? `[relay] HeatCaller voice: ${config.voice.voices.length} voice(s), ${clubs} club(s) included`
         : `[relay] HeatCaller voice: a catalogue is configured but RELAY_VOICE_KEY is not set, so it is switched off`,
+    );
+  }
+
+  if (brain !== undefined) {
+    const clubs = config.tenants.filter((tenant) => tenant.brain?.enabled === true).length;
+
+    console.log(
+      brain.available
+        ? `[relay] commentary brain: ${config.brain.model}, ${clubs} club(s) included`
+        : `[relay] commentary brain: a model is configured but RELAY_BRAIN_KEY is not set, so it is switched off`,
     );
   }
 
