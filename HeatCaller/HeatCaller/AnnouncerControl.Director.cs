@@ -89,6 +89,77 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
+    /// The show's music, built on first use beside the director and for
+    /// the same reasons. Null until there are settings and an announcer
+    /// to build it with.
+    /// </summary>
+    private ShowTreatment? Treatment
+    {
+        get
+        {
+            if (_treatment is not null || _settings is null)
+            {
+                return _treatment;
+            }
+
+            _treatment = new ShowTreatment(_settings, _announcer);
+            _treatment.Status += line => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
+
+            return _treatment;
+        }
+    }
+
+    private ShowTreatment? _treatment;
+
+    /// <summary>
+    /// Forgets the loaded show music, so the next show reads the files
+    /// again. Called from the Commentary page when a club chooses
+    /// different music - the page has a ShowMusic of its own, so the two
+    /// caches have to be told separately.
+    /// </summary>
+    public void ReloadShowMusic() => ShowMusic.Reload();
+
+    /// <summary>A line for the Commentary page's Test button - the kind of thing a cold open says.</summary>
+    private const string ShowTestLine =
+        "Good evening and welcome to the club, where the track is clean, the batteries are charged, "
+        + "and we have got a full programme ahead of us tonight.";
+
+    /// <summary>
+    /// Plays a show open with a test line over it, exactly as a real
+    /// segment would - the only way to set the levels by ear without
+    /// running a race night. Returns what is wrong, or null if it ran.
+    ///
+    /// Deliberately the real path (SpeakReminder through the queue) rather
+    /// than the announcer's test line: a test line bypasses the queue and
+    /// so never raises SpeakingChanged, which means the bed would not duck
+    /// - and the duck is half of what there is to listen for. The cost is
+    /// that a muted announcer says nothing, which is said plainly below
+    /// rather than left as silence.
+    /// </summary>
+    public async Task<string?> TestShowMusicAsync()
+    {
+        if (Treatment is not { } treatment)
+        {
+            return "The commentary isn't set up on this PC yet.";
+        }
+
+        if (!treatment.Music.Ready(out var problem))
+        {
+            return problem;
+        }
+
+        if (_announcer.Muted)
+        {
+            return "The announcer is muted, so you would hear the music with nobody over it. "
+                + "Unmute it on the Mixer and try again.";
+        }
+
+        await treatment.RunAsync(() => _announcer.SpeakReminder(ShowTestLine, showOnScreens: false)).ConfigureAwait(true);
+
+        return null;
+    }
+
+    /// <summary>
     /// One tick: tell the director where the race is, then ask whether
     /// anything is worth saying.
     ///
@@ -287,6 +358,66 @@ public partial class AnnouncerControl
     /// about a fight when the next race is being called to the grid.
     /// </summary>
     private void Speak(SpokenSegment said)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        // The show segments get an opener in front of them and a bed
+        // underneath - see ShowTreatment. Fire and forget: the treatment
+        // waits out the opener, queues the lines itself, and then waits
+        // for the read to finish so it can play the music out. Nothing on
+        // screen waits on any of that.
+        //
+        // RunAsync returns false when there was no music to play, having
+        // deliberately NOT spoken - so the line is said the ordinary way
+        // rather than lost to a club that never dropped the files in.
+        if (Treatment is { } treatment && treatment.Treats(said.Kind))
+        {
+            _ = RunAsShowAsync(treatment, said);
+            return;
+        }
+
+        SpeakPlainly(said);
+    }
+
+    /// <summary>
+    /// Runs a segment as a show, falling back to saying it plainly when
+    /// there turns out to be no music.
+    /// </summary>
+    private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said)
+    {
+        // Whether the treatment got as far as queueing the lines. A
+        // segment said twice is far worse than one said without music, so
+        // the fallback below only runs when nothing has been said yet.
+        var spoken = false;
+
+        void SpeakOnce()
+        {
+            spoken = true;
+            SpeakPlainly(said);
+        }
+
+        try
+        {
+            await treatment.RunAsync(SpeakOnce).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (!spoken)
+        {
+            // No music to play, or it failed before the lines went in -
+            // said the ordinary way. The words are the part that matters.
+            SpeakOnce();
+        }
+    }
+
+    /// <summary>Says it with no music in front of it - what every segment did before the show treatment.</summary>
+    private void SpeakPlainly(SpokenSegment said)
     {
         if (_settings is null)
         {

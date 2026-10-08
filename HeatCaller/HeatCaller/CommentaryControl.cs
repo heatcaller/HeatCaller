@@ -83,6 +83,36 @@ public sealed class CommentaryControl : UserControl
     /// <summary>Which engine's voices the mechanic's list holds - see FillMechanicVoices.</summary>
     private readonly Label _lblVoiceSource = new();
 
+    // --- The show's music (8 Oct 2026) ---
+    //
+    // An opener in front of the voice and a bed under it, for the segments
+    // that open and close the evening. The levels are the part that needs
+    // an ear rather than a number, so there is a Test button that runs a
+    // real show rather than a preview of one.
+    private readonly CheckBox _chkShowMusic = new ThemedCheckBox();
+    private readonly NumericUpDown _numOpenerLevel = new();
+    private readonly NumericUpDown _numBedLevel = new();
+    private readonly NumericUpDown _numBedDuck = new();
+    private readonly NumericUpDown _numVoiceEnters = new();
+    private readonly Button _btnOpenerPick = new();
+    private readonly Button _btnOpenerClear = new();
+    private readonly Button _btnBedPick = new();
+    private readonly Button _btnBedClear = new();
+    private readonly Button _btnTestShow = new();
+    private readonly Label _lblOpenerFile = new();
+    private readonly Label _lblBedFile = new();
+    private readonly Label _lblShowResult = new();
+
+    /// <summary>The boxes for which segments get the music, by segment - see ShowSegments.Candidates.</summary>
+    private readonly Dictionary<SegmentKind, CheckBox> _showBoxes = new();
+
+    /// <summary>
+    /// The club's show music, for choosing and describing the files. The
+    /// announcer screen keeps one of its own and is told when this one
+    /// changes anything - see ShowMusicChanged.
+    /// </summary>
+    private readonly ShowMusic _showMusic;
+
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -94,6 +124,7 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
     private const string TestCaption = "Test Connection";
     private const string LoadVoicesCaption = "Load Voices";
+    private const string TestShowCaption = "Play It";
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields.</summary>
     private const int EndpointWidth = 300;
@@ -133,6 +164,34 @@ public sealed class CommentaryControl : UserControl
     /// <summary>Says a test line in the mechanic's voice, even while the announcer is muted. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsMechanic { get; set; }
 
+    /// <summary>
+    /// Plays a show open with a test line over it, as a real segment
+    /// would, and hands back what was wrong or null. Set by the host,
+    /// which has the announcer.
+    /// </summary>
+    internal Func<Task<string?>>? TestShowMusic { get; set; }
+
+    /// <summary>
+    /// Tells the announcer screen that the show's music has changed, so it
+    /// reads the files again rather than playing the take it loaded at the
+    /// start of the evening. Set by the host.
+    /// </summary>
+    internal Action? ShowMusicChanged { get; set; }
+
+    /// <summary>
+    /// The club's commentary count for the month, as the relay reports it
+    /// on the way past - how many lines are spent, and the cap.
+    ///
+    /// Raised here because this page is what builds the relay client, and
+    /// it builds a new one every time a setting changes. The budget that
+    /// wants these numbers lives on the announcer screen's director, which
+    /// this page cannot reach; the host joins them up (MainForm.Pages).
+    ///
+    /// Without it the budget paces a night against a month it knows
+    /// nothing about, and falls back to running everything.
+    /// </summary>
+    internal event Action<int, int>? AllowanceSeen;
+
     // Guards against a second click while a test is running. Used INSTEAD
     // of disabling the button: disabling the focused control pushes focus
     // to the next tab stop (wrapping to the top of the page), and the
@@ -151,6 +210,7 @@ public sealed class CommentaryControl : UserControl
     {
         _settings = settings;
         _commentary = commentary;
+        _showMusic = new ShowMusic(settings);
 
         Dock = DockStyle.Fill;
         ForeColor = AppTheme.TextDark;
@@ -949,6 +1009,149 @@ public sealed class CommentaryControl : UserControl
         coHost.Add(coHostGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
+        // The show's music (8 Oct 2026)
+        //
+        // The club's own opener and bed. Last on the page because it is
+        // staging on top of everything above it: what it writes, which
+        // segments, who says them, how they sound - and then how the show
+        // is dressed.
+        // ------------------------------------------------------------------
+
+        Check(_chkShowMusic, "Play an opener and a music bed under the show");
+        _textSize.Wear(_chkShowMusic, () => AppTheme.BoldFont);
+        _chkShowMusic.Checked = _settings.ShowThemeEnabled;
+        _chkShowMusic.CheckedChanged += (_, _) =>
+        {
+            _settings.ShowThemeEnabled = _chkShowMusic.Checked;
+            _settings.Save();
+            ShowMusicChanged?.Invoke();
+            UpdateEnabledState();
+        };
+
+        _btnOpenerPick.Text = "Choose...";
+        _btnOpenerPick.Click += (_, _) => PickShowMusic(opener: true);
+
+        _btnOpenerClear.Text = "Remove";
+        _btnOpenerClear.Click += (_, _) => ClearShowMusic(opener: true);
+
+        _btnBedPick.Text = "Choose...";
+        _btnBedPick.Click += (_, _) => PickShowMusic(opener: false);
+
+        _btnBedClear.Text = "Remove";
+        _btnBedClear.Click += (_, _) => ClearShowMusic(opener: false);
+
+        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblShowResult })
+        {
+            label.AutoSize = true;
+            label.ForeColor = AppTheme.TextMuted;
+            _textSize.Wear(label, () => AppTheme.SmallFont);
+        }
+
+        // A floor of 10%: a show whose opener is at 2% reads as the feature
+        // being broken rather than as a quiet opener.
+        _numOpenerLevel.Minimum = 10;
+        _numOpenerLevel.Maximum = 100;
+        _numOpenerLevel.Value = Math.Clamp(_settings.ShowOpenerLevel, 10, 100);
+        _numOpenerLevel.ValueChanged += (_, _) =>
+        {
+            _settings.ShowOpenerLevel = (int)_numOpenerLevel.Value;
+            _settings.Save();
+        };
+
+        _numBedLevel.Minimum = 2;
+        _numBedLevel.Maximum = 100;
+        _numBedLevel.Value = Math.Clamp(_settings.ShowBedLevel, 2, 100);
+        _numBedLevel.ValueChanged += (_, _) =>
+        {
+            _settings.ShowBedLevel = (int)_numBedLevel.Value;
+            _settings.Save();
+        };
+
+        _numBedDuck.Minimum = 5;
+        _numBedDuck.Maximum = 100;
+        _numBedDuck.Value = Math.Clamp(_settings.ShowBedDuckPercent, 5, 100);
+        _numBedDuck.ValueChanged += (_, _) =>
+        {
+            _settings.ShowBedDuckPercent = (int)_numBedDuck.Value;
+            _settings.Save();
+        };
+
+        _numVoiceEnters.Minimum = 0;
+        _numVoiceEnters.Maximum = 15000;
+        _numVoiceEnters.Increment = 100;
+        _numVoiceEnters.Value = Math.Clamp(_settings.ShowVoiceEntersMs, 0, 15000);
+        _numVoiceEnters.ValueChanged += (_, _) =>
+        {
+            _settings.ShowVoiceEntersMs = (int)_numVoiceEnters.Value;
+            _settings.Save();
+        };
+
+        _btnTestShow.Text = TestShowCaption;
+        _btnTestShow.Click += async (_, _) => await TestShowMusicAsync();
+
+        var showMusicGrid = new FieldGrid();
+
+        Stepped(showMusicGrid.AddRow("Opener:", Line(_btnOpenerPick, _btnOpenerClear, _lblOpenerFile)));
+        Stepped(showMusicGrid.AddRow("Music bed:", Line(_btnBedPick, _btnBedClear, _lblBedFile)));
+        showMusicGrid.AddHint(
+            "Your own files, copied into the club's data so a backup carries them to the next laptop. The bed is "
+            + "looped for as long as the show runs and then finishes on its own fade, so anything from half a minute "
+            + "up works - it does not have to be long.");
+
+        Stepped(showMusicGrid.AddRow("Opener level:", Line(_numOpenerLevel, Suffix("%", muted: false))));
+        Stepped(showMusicGrid.AddRow("Bed level:", Line(_numBedLevel, Suffix("% - a bed sits well under the voice, so this is low on purpose"))));
+        Stepped(showMusicGrid.AddRow("and drops to:", Line(_numBedDuck, Suffix("% of that while the announcer is actually speaking"))));
+        Stepped(showMusicGrid.AddRow("Voice comes in:", Line(_numVoiceEnters, Suffix("ms into the opener - 0 finds it, where the opener stops hitting and starts ringing out"))));
+        Stepped(showMusicGrid.AddRow("Hear it:", Line(Steady(_btnTestShow, TestShowCaption), _lblShowResult)));
+
+        // ------------------------------------------------------------------
+        // Which segments get it
+        //
+        // The set pieces only - see ShowSegments.Candidates for why the
+        // race intro and the recap are not on this list.
+        // ------------------------------------------------------------------
+
+        var musicOn = new HashSet<SegmentKind>(ShowSegments.Parse(_settings.ShowSegments));
+
+        var show = new Section("The show's music");
+
+        show.Add(Hint(
+            "A piece of music in front of the voice and another underneath it, for the segments that open and close "
+            + "the evening. The opener lands, the bed comes up under it, and the first words arrive over the opener's "
+            + "tail rather than after it - so it sounds like a broadcast coming on air rather than a clip followed by "
+            + "an announcement. The club's own playlist goes quiet while it runs and comes back after."));
+        show.Add(_chkShowMusic, stretch: false, gapBelow: UiLayout.HintGap);
+        show.Add(showMusicGrid);
+
+        var musicHeading = _textSize.Wear(
+            new Label { Text = "Which segments get it", AutoSize = true, ForeColor = AppTheme.TextDark },
+            () => AppTheme.BoldFont);
+
+        show.Add(musicHeading, stretch: false, gapBelow: 0);
+        show.Add(Hint(
+            "The set pieces between races, where filling time is the point. Race intros and recaps are not on the "
+            + "list: those land in the middle of the start sequence and the flag calls, where an opener would be "
+            + "talking over the race rather than introducing it."),
+            gapBelow: UiLayout.HintGap);
+
+        for (var i = 0; i < ShowSegments.Candidates.Count; i++)
+        {
+            var kind = ShowSegments.Candidates[i];
+            var box = new ThemedCheckBox();
+
+            Check(box, CommentaryBudget.Spec(kind).Title);
+            box.Checked = musicOn.Contains(kind);
+            box.CheckedChanged += (_, _) => SaveShowSegments();
+
+            _showBoxes[kind] = box;
+
+            // Nothing under the last one: the section's own room follows it.
+            var last = i == ShowSegments.Candidates.Count - 1;
+
+            show.Add(box, stretch: false, gapBelow: last ? 0 : UiLayout.RowGap);
+        }
+
+        // ------------------------------------------------------------------
         // The page
         // ------------------------------------------------------------------
 
@@ -966,7 +1169,8 @@ public sealed class CommentaryControl : UserControl
         page.Add(coHost);
         page.Add(style);
         page.Add(recap);
-        page.Add(broadcast, gapBelow: 0);
+        page.Add(broadcast);
+        page.Add(show, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -979,6 +1183,7 @@ public sealed class CommentaryControl : UserControl
         {
             connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
             pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, coHostGrid,
+            showMusicGrid,
         }));
 
         _textSize.Keep(SizeFields);
@@ -994,6 +1199,8 @@ public sealed class CommentaryControl : UserControl
                 _lblTestResult.Margin = new Padding(0, top, 0, 0);
             }
         });
+
+        RefreshShowMusic();
 
         FillMechanicVoices(null);
 
@@ -1048,6 +1255,7 @@ public sealed class CommentaryControl : UserControl
                  {
                      _numTimeout, _numFinishers, _numInterval, _numObservations, _numMaxWords, _numVariety,
                      _numSummaryDelay, _numTeaserGap, _numStability, _numStyleEx, _numDuckPercent,
+                     _numOpenerLevel, _numBedLevel, _numBedDuck, _numVoiceEnters,
                  })
         {
             Fit(number, NumberWidth(number));
@@ -1256,6 +1464,144 @@ public sealed class CommentaryControl : UserControl
     }
 
     /// <summary>Saves the co-host's picked voice against the engine the list is showing.</summary>
+    /// <summary>
+    /// Which segments get the music, saved by name. An empty choice is
+    /// saved as "none" rather than blank - see ShowSegments.Save.
+    /// </summary>
+    private void SaveShowSegments()
+    {
+        _settings.ShowSegments = ShowSegments.Save(
+            _showBoxes.Where(pair => pair.Value.Checked).Select(pair => pair.Key));
+
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Takes a file as the opener or the bed. The file is checked before
+    /// it is copied, so a piece that is no use as a loop is turned away
+    /// here rather than on a race night - see ShowMusic.Install.
+    /// </summary>
+    private void PickShowMusic(bool opener)
+    {
+        var what = opener ? "opener" : "music bed";
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = $"Choose the {what}",
+            Filter = $"Audio ({string.Join(";", ShowMusic.Extensions.Select(e => "*" + e))})"
+                + $"|{string.Join(";", ShowMusic.Extensions.Select(e => "*" + e))}|All files (*.*)|*.*",
+
+            // The folder the files end up in, so a club swapping one out
+            // can see what is already there. Blank - not null - for the
+            // usual Windows choice when it isn't there yet.
+            InitialDirectory = Directory.Exists(ShowMusic.Folder) ? ShowMusic.Folder : string.Empty,
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (!_showMusic.Install(dialog.FileName, opener, out var problem))
+        {
+            AppDialog.Show(
+                this,
+                problem ?? $"That file couldn't be used as the {what}.",
+                $"Couldn't use that {what}",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        _lblShowResult.Text = string.Empty;
+
+        ShowMusicChanged?.Invoke();
+        RefreshShowMusic();
+    }
+
+    /// <summary>Takes the opener or the bed away, so that part of the show is read without it.</summary>
+    private void ClearShowMusic(bool opener)
+    {
+        var what = opener ? "opener" : "music bed";
+
+        if (AppDialog.Show(
+                this,
+                $"Remove the {what}? The show will be read without it until you choose another.",
+                $"Remove the {what}",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _showMusic.Remove(opener);
+        _lblShowResult.Text = string.Empty;
+
+        ShowMusicChanged?.Invoke();
+        RefreshShowMusic();
+    }
+
+    /// <summary>
+    /// What the two files are, and what the measurement made of them -
+    /// how much of the bed loops and whether it has an ending of its own.
+    /// Measured rather than set, so this is the only way a club can see
+    /// what their file is going to do.
+    /// </summary>
+    private void RefreshShowMusic()
+    {
+        _lblOpenerFile.Text = _showMusic.Describe(opener: true);
+        _lblBedFile.Text = _showMusic.Describe(opener: false);
+
+        UpdateEnabledState();
+    }
+
+    /// <summary>
+    /// Plays a show open with a test line over it - a real one, through
+    /// the announcer, because the levels are the whole point and they can
+    /// only be judged against an actual voice.
+    /// </summary>
+    private async Task TestShowMusicAsync()
+    {
+        if (TestShowMusic is null)
+        {
+            return;
+        }
+
+        // The button stays down for the length of the show, so nobody
+        // starts a second one over the first.
+        _btnTestShow.Enabled = false;
+        _btnTestShow.Text = "Playing...";
+        _lblShowResult.Text = string.Empty;
+        _lblShowResult.ForeColor = AppTheme.TextMuted;
+
+        try
+        {
+            var problem = await TestShowMusic.Invoke();
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _lblShowResult.Text = problem ?? "That is how it will sound.";
+            _lblShowResult.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+        }
+        catch (Exception ex)
+        {
+            _lblShowResult.Text = ex.Message;
+            _lblShowResult.ForeColor = AppTheme.Accent;
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _btnTestShow.Text = TestShowCaption;
+                UpdateEnabledState();
+            }
+        }
+    }
+
     private void SaveCoHostVoice()
     {
         if (_fillingVoices || _cmbCoHostVoice.SelectedItem is not VoiceChoice choice)
@@ -1483,6 +1829,31 @@ public sealed class CommentaryControl : UserControl
         _txtCoHostName.Enabled = on && anyExchange && _chkCoHost.Checked;
         _cmbCoHostVoice.Enabled = on && anyExchange && _chkCoHost.Checked;
 
+        // The show's music dresses the segments, so it goes dark with
+        // commentary itself. Remove is dark when there is nothing there to
+        // remove, which is also how the page says a file never arrived.
+        _chkShowMusic.Enabled = on;
+
+        var musicOn = on && _chkShowMusic.Checked;
+
+        _btnOpenerPick.Enabled = musicOn;
+        _btnOpenerClear.Enabled = musicOn && _showMusic.OpenerPath is not null;
+        _btnBedPick.Enabled = musicOn;
+        _btnBedClear.Enabled = musicOn && _showMusic.BedPath is not null;
+        _numOpenerLevel.Enabled = musicOn;
+        _numBedLevel.Enabled = musicOn;
+        _numBedDuck.Enabled = musicOn;
+        _numVoiceEnters.Enabled = musicOn;
+
+        // Nothing to play: a Test button that does nothing reads as the
+        // feature being broken rather than as a club with no files in yet.
+        _btnTestShow.Enabled = musicOn && (_showMusic.OpenerPath is not null || _showMusic.BedPath is not null);
+
+        foreach (var box in _showBoxes.Values)
+        {
+            box.Enabled = musicOn;
+        }
+
         UpdateRelayState();
     }
 
@@ -1550,6 +1921,24 @@ public sealed class CommentaryControl : UserControl
         // relay has not included for commentary yet. The choice is made
         // per line, not here; see FallbackCommentaryBrain.
         var relay = _settings.CommentaryUseRelay ? new RelayCommentaryClient(_settings) : null;
+
+        if (relay is not null)
+        {
+            // The club's month, as the relay counts it - passed straight
+            // through to whoever is pacing the night against it. Attached
+            // to each new client, since a settings change builds one.
+            relay.AllowanceSeen += (spent, cap) =>
+            {
+                try
+                {
+                    AllowanceSeen?.Invoke(spent, cap);
+                }
+                catch
+                {
+                    // A listener's failure must not become a write failure.
+                }
+            };
+        }
 
         ICommentaryBrain client = relay is { RelayConfigured: true }
             ? new FallbackCommentaryBrain(relay, local)

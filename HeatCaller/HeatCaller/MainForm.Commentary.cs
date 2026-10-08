@@ -24,6 +24,34 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Hooks the show's music up to the Commentary page.
+    ///
+    /// The page chooses the files; the announcer screen owns the treatment
+    /// that plays them, because that is where a segment is spoken. Neither
+    /// can reach the other, so both go through here.
+    /// </summary>
+    private static void WireShowMusic(AnnouncerControl announcer, CommentaryControl commentary)
+    {
+        commentary.TestShowMusic = announcer.TestShowMusicAsync;
+
+        // The loaded audio is shared (ShowMusic), so this is really telling
+        // the announcer screen to drop it - said explicitly rather than
+        // relied on, because "the page clears a cache the announcer happens
+        // to share" is exactly the kind of thing that stops being true.
+        commentary.ShowMusicChanged = announcer.ReloadShowMusic;
+    }
+
+    /// <summary>
+    /// Hands the relay's own count of the club's month to the budget that
+    /// paces the night against it.
+    ///
+    /// The director is fetched when the count arrives rather than held: it
+    /// is built on first use and may not exist when this is wired.
+    /// </summary>
+    private static void WireCommentaryAllowance(AnnouncerControl announcer, CommentaryControl commentary) =>
+        commentary.AllowanceSeen += (spent, cap) => announcer.Director?.MonthlyUsage(spent, cap);
+
+    /// <summary>
     /// Hands the director the readers it cannot reach on its own.
     ///
     /// Each one is read fresh when the segment is considered, not held:
@@ -61,6 +89,24 @@ public partial class MainForm
             _sessionHistory,
             _profiles,
             ClassOnTrack());
+
+        // How far through tonight's programme we are, which is what the
+        // budget releases the night's allotment against. Counted from the
+        // rounds themselves rather than from a tally kept as the night
+        // runs, so a laptop closed between the heats and the mains comes
+        // back knowing where it was.
+        director.NightProgress = () =>
+        {
+            // Null from ActiveRoundScope means "don't filter" - the legacy
+            // holder, where every round is tonight's.
+            var scope = _raceEvents.ActiveRoundScope();
+
+            var tonight = scope is null
+                ? _rounds.All
+                : _rounds.All.Where(r => scope.Contains(r.Id)).ToList();
+
+            return (tonight.Count(r => r.IsRecorded), tonight.Count);
+        };
 
         director.Championship = () => CommentaryReaders.Championship(
             ChampionshipLive.Compute(

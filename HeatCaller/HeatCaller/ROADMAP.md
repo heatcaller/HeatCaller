@@ -41,7 +41,7 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: 1,052 tests in 134 classes (5 Oct), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
+| Tests | `HeatCaller.Tests`: 1,410 tests (8 Oct), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 34 test files, 461 tests. **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
@@ -1297,6 +1297,14 @@ opening and sign-off, and after a main a pit-lane interview with the
 winner's mechanic in a second voice, who talks from the setup changes the
 Garage has for the winning car (`MechanicBrief`, `SetupDiff`). Intros and
 recaps say heat or main, and intros can be kept to mains and rivalries.
+
+The segments that open and close the evening can be scored with the club's
+own music (8 Oct 2026): an opener in front of the voice and a bed
+underneath it, with the first words arriving over the opener's tail rather
+than after it, and the club's playlist silenced for the duration
+(`ShowAudio`, `ShowTreatment`, `ShowOnAir`). The bed is looped and its own
+fade kept back as the show's ending - both found by measuring the file, so
+any club's music works rather than only the two it was built against.
 
 **Online:** the relay publishes live timing, the schedule, results with
 share cards, standings, badges and tracks; check-in with staff and personal

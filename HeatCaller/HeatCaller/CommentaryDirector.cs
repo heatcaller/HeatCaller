@@ -150,6 +150,19 @@ public sealed class CommentaryDirector
     /// <summary>A class's championship, after its last main.</summary>
     public Func<IReadOnlyList<ChampionshipStanding>>? Championship { get; set; }
 
+    /// <summary>
+    /// How much of tonight's programme has run, and how much there is -
+    /// what the budget releases the night's allotment against.
+    ///
+    /// A reader rather than something pushed in, like the rest of them: the
+    /// programme belongs to stores this class cannot reach, and a reader is
+    /// one line for the host to set rather than a tick for it to remember
+    /// to call. Until it is set the budget sits at its opening float all
+    /// night, which starves the later segments - the whole point of the
+    /// ladder is that it loosens as the programme is got through.
+    /// </summary>
+    public Func<(int Run, int Total)>? NightProgress { get; set; }
+
     // ------------------------------------------------------------------
     // The night
     // ------------------------------------------------------------------
@@ -182,6 +195,44 @@ public sealed class CommentaryDirector
 
     /// <summary>How much of tonight's programme has run. Called whenever the programme is refreshed.</summary>
     public void NightShape(int roundsRun, int roundsTotal) => Budget.NightShape(roundsRun, roundsTotal);
+
+    /// <summary>When the programme was last counted - see ReadNightProgress.</summary>
+    private DateTime _progressReadAt = DateTime.MinValue;
+
+    /// <summary>How often the programme is counted. It changes once a race, so this is far more often than it needs.</summary>
+    private static readonly TimeSpan ProgressEvery = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Tells the budget how far through the programme the night is.
+    ///
+    /// Throttled because NextAsync runs twice a second and counting the
+    /// rounds walks the round store, where what it finds can only change
+    /// when a race is filed - minutes apart. A reading that arrives late
+    /// cannot cost anything either: the entitlement only ever ratchets up
+    /// (see CommentaryBudget's high-water mark).
+    /// </summary>
+    private void ReadNightProgress()
+    {
+        if (NightProgress is null || _clock() - _progressReadAt < ProgressEvery)
+        {
+            return;
+        }
+
+        _progressReadAt = _clock();
+
+        try
+        {
+            var (run, total) = NightProgress.Invoke();
+
+            Budget.NightShape(run, total);
+        }
+        catch (Exception ex)
+        {
+            // A reader that throws must not stop the segments - it only
+            // means the budget paces on what it last knew.
+            Status?.Invoke($"[brain] Couldn't read the programme's progress: {ex.Message}");
+        }
+    }
 
     /// <summary>The club's month, as the relay reported it on its last answer.</summary>
     public void MonthlyUsage(int used, int allowance) => Budget.MonthlyUsage(used, allowance);
@@ -256,6 +307,8 @@ public sealed class CommentaryDirector
         {
             return null;
         }
+
+        ReadNightProgress();
 
         foreach (var kind in Order())
         {

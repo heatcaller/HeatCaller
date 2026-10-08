@@ -170,6 +170,64 @@ The interview and the sign-off are written straight after the recap, while the t
 - If the next race is called to the grid, whatever hasn't been spoken yet is dropped.
 - If the model's interview can't be split into the announcer's and the mechanic's lines, it isn't used.
 
+### The show's music
+
+The segments that open and close the evening can be scored: a piece of music in front of the voice and another running underneath it. It's your club's own music, so your broadcast sounds like yours and not like every other club's.
+
+A show runs in this shape:
+
+1. The **opener** lands.
+2. The **bed** comes up quietly underneath it.
+3. As the opener rings out it's ridden down and the first words arrive **over its tail** — so it sounds like a broadcast coming on air, not a clip followed by an announcement.
+4. The bed runs under the whole read, dropping a little further whenever the announcer is actually speaking.
+5. When the read finishes, the bed hands over to the piece's **own ending** and plays out.
+
+Your club's music playlist goes quiet while this runs and comes back after. The crowd bed is left alone — crowd noise under a broadcast open is the atmosphere the segment is there to sell.
+
+#### Choose the two pieces
+
+Tick **Play an opener and a music bed under the show**, then use **Choose...** beside **Opener:** and **Music bed:**.
+
+The file is checked when you choose it and then **copied into your club's data**, so a backup carries it to the next laptop and tidying your Downloads folder can't break it. Either piece works on its own: an opener with no bed, or a bed with no opener, are both fine.
+
+Beside each one HeatCaller says what it made of the file — how long it is, how much of the bed will loop, and whether it has an ending of its own. That's worth a look, because those are **measured, not set**:
+
+- The bed is **looped**, so it doesn't have to be long — anything from about half a minute up works.
+- Most music has a **fade-out on the end**. HeatCaller finds it, keeps it back, and plays it once as the show's ending. That's a better ending than anything the app could fade for itself.
+- The loop's join is **crossfaded**, so you don't have to find a musically perfect loop point.
+- A piece with no fade of its own is faded out over about two and a half seconds instead.
+- Anything over **five minutes** is turned away, with a message saying so. A bed that long isn't a loop, it's an album track.
+
+!!! tip
+    You can also just drop the files in yourself. They live in `%AppData%\HeatCaller\ShowMusic` as `opener.mp3` and `bed.mp3` — any of `.mp3`, `.wav`, `.m4a`, `.aac`, `.wma`, `.flac` or `.ogg` works.
+
+#### Set the levels
+
+| Setting | What it does |
+|---|---|
+| **Opener level** | How loud the opener is. It's meant to land, so it sits near the top. |
+| **Bed level** | How loud the bed is under the voice. **Low on purpose** — see below. |
+| **and drops to** | How far the bed drops, as a percentage of its own level, while the announcer is actually speaking. |
+| **Voice comes in** | How far into the opener the first words start. Leave it at **0** and HeatCaller finds the spot — where the opener stops hitting and starts ringing out. |
+
+**Bed level** is the one that matters and the one people get wrong. A finished piece of music is mastered loud, and a bed belongs 15 to 20 dB under the voice — so most of that gap is made by this setting, and the duck only trims it. If the bed is fighting the announcer, turn this down rather than reaching for the duck.
+
+These are **not** the announcer's duck or the crowd's duck. Those answer "how far should this drop while somebody is talking"; a bed is the opposite question — it sits well under the voice the whole time and only moves a little.
+
+#### Hear it before the night
+
+Press **Play It**. It runs a real show — opener, bed, a test line through the announcer, the ending — so what you hear is what you'll get. Set the levels by ear from this rather than from the numbers.
+
+The announcer has to be unmuted for it, since the whole point is judging the bed against an actual voice. If it's muted, the page says so instead of playing music with nobody over it.
+
+#### Which segments get it
+
+The set pieces between races, where filling time is the point. The cold open and the sign-off come ticked; the rest are yours to choose.
+
+Race intros and recaps are deliberately **not** on the list. Those land in the middle of the start sequence, the flag calls and the lap chatter, where an opener would be talking over the race rather than introducing it.
+
+Untick all of them and nothing gets music, which is a different thing from switching the feature off — the files stay chosen.
+
 ## When Ollama isn't there
 
 Commentary is best-effort. If Ollama isn't running, the model name is wrong, or the model doesn't answer in time, HeatCaller just carries on:
@@ -209,5 +267,13 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | No interview after a main | The round isn't set up as a main, the model didn't answer in time, or its answer couldn't be split into two voices. | Check the console lines starting `[commentary]` after the race. The interview only follows a race run as a main from the race program. |
 | The mechanic sounds like the announcer | No mechanic's voice is picked for the voice engine in use. | Pick one under **Mechanic's voice:** after choosing the engine on **Voice Settings**. |
 | The mechanic never talks about the car | No setup is logged for the winning car on the day. | Log the setup against the car in the **Garage** before the main. |
+| **Play It** does nothing | No opener or bed has been chosen yet. | Choose at least one of the two. The button is greyed out until there's something to play. |
+| **Play It** says the announcer is muted | Sound is muted on the **Mixer**. | Unmute it. The test needs a real voice to judge the bed against. |
+| The music plays but nobody talks over it | The announcer was muted after the show started, or the voice couldn't be fetched. | Check the console lines starting `[voice]`. |
+| The bed fights the announcer | **Bed level** is too high — the usual cause, since music is mastered loud. | Turn **Bed level** down to around 20%, then adjust **and drops to** if you still need more. |
+| The bed dips and snaps back every time round | Rare: the piece's fade couldn't be found, so part of it is inside the loop. | Trim the fade off the end of the file in any audio editor and choose it again. |
+| The bed stops dead instead of ending | The piece has no fade of its own, so it's faded out over about 2.5 seconds. | Normal. Use a piece that ends on a fade if you want its own ending. |
+| "Use something under 5 minutes" | The file is too long to loop. | Use a shorter piece — the bed is looped, so it doesn't need length. |
+| The club's playlist doesn't come back after a show | Shouldn't happen; the music is always released. | Check the console for lines starting `[show]`, and tell us what it says. |
 
 For more, see [Troubleshooting](../admin/troubleshooting.md).

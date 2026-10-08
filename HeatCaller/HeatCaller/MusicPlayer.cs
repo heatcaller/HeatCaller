@@ -568,6 +568,37 @@ public sealed class MusicPlayer : IDisposable
 
     private bool _adBreakMuted;
 
+    /// <summary>
+    /// Silences the club's music while the show's own opener and bed are
+    /// playing - see ShowTreatment and ShowOnAir.
+    ///
+    /// Not a duck, for the same reason an ad break isn't: two pieces of
+    /// music at once is a mess whichever is louder, and the show's bed is
+    /// the one the voice was written over. Like an ad break it ignores
+    /// DuckUnderAnnouncements, which is a setting about the announcer and
+    /// should not decide whether the club's playlist plays over its own
+    /// broadcast open.
+    ///
+    /// Held apart from the ad break's flag rather than sharing one: a
+    /// sponsor spot during a show is entirely possible, and whichever ends
+    /// first must not bring the playlist back up underneath the other.
+    /// </summary>
+    public void SetShowMuted(bool muted)
+    {
+        lock (_lock)
+        {
+            if (_showMuted == muted)
+            {
+                return;
+            }
+
+            _showMuted = muted;
+            ApplyDuckLocked();
+        }
+    }
+
+    private bool _showMuted;
+
     public void SetDucked(bool ducked)
     {
         lock (_lock)
@@ -617,9 +648,10 @@ public sealed class MusicPlayer : IDisposable
     }
 
     private float DuckFactorLocked() =>
-        // An ad break wins over everything: silence, not a duck, and not
-        // subject to DuckUnderAnnouncements. See SetAdBreakMuted.
-        _adBreakMuted ? 0f
+        // An ad break or the show's own music wins over everything:
+        // silence, not a duck, and not subject to
+        // DuckUnderAnnouncements. See SetAdBreakMuted and SetShowMuted.
+        _adBreakMuted || _showMuted ? 0f
         : _ducked && Settings.DuckUnderAnnouncements
             // Override wins - the recap ducks deeper than an announcement.
             ? Math.Clamp(_duckOverride ?? Settings.DuckToFraction, 0.02f, 1f)

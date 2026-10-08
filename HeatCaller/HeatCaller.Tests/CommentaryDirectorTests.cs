@@ -119,6 +119,81 @@ public sealed class CommentaryDirectorTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // The night's shape
+    //
+    // Unwired, this is silent and expensive: the budget sits at its
+    // opening float all evening and the later segments starve, with
+    // nothing in any log to say why the second half of the night went
+    // quiet.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task The_programme_s_progress_is_read_and_handed_to_the_budget()
+    {
+        _rig.Director.NightProgress = () => (20, 30);
+
+        await _rig.Director.NextAsync();
+
+        Assert.Equal(20, _rig.Director.Budget.RoundsRun);
+        Assert.Equal(30, _rig.Director.Budget.RoundsTotal);
+    }
+
+    [Fact]
+    public async Task The_programme_is_not_counted_on_every_tick()
+    {
+        // NextAsync runs twice a second all night and counting the rounds
+        // walks a store, where what it finds can only change when a race
+        // is filed - minutes apart.
+        var counted = 0;
+
+        _rig.Director.NightProgress = () =>
+        {
+            counted++;
+            return (1, 30);
+        };
+
+        for (var i = 0; i < 10; i++)
+        {
+            await _rig.Director.NextAsync();
+            _rig.Clock.Advance(TimeSpan.FromMilliseconds(500));
+        }
+
+        Assert.Equal(1, counted);
+
+        // Past the throttle, it looks again.
+        _rig.Clock.Advance(TimeSpan.FromSeconds(10));
+        await _rig.Director.NextAsync();
+
+        Assert.Equal(2, counted);
+    }
+
+    [Fact]
+    public async Task A_programme_reader_that_throws_does_not_stop_the_segments()
+    {
+        _rig.Director.NightProgress = () => throw new InvalidOperationException("the round store is being saved");
+
+        _rig.AFight();
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Contains(_rig.Console, line => line.Contains("progress", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Without_a_reader_the_budget_keeps_what_it_was_told()
+    {
+        // The rig sets 10 of 30 by hand. Nothing should undo that just
+        // because no reader is wired.
+        Assert.Null(_rig.Director.NightProgress);
+
+        await _rig.Director.NextAsync();
+
+        Assert.Equal(10, _rig.Director.Budget.RoundsRun);
+        Assert.Equal(30, _rig.Director.Budget.RoundsTotal);
+    }
+
+    // ------------------------------------------------------------------
     // The happy path
     // ------------------------------------------------------------------
 

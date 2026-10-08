@@ -276,6 +276,9 @@ public partial class MainForm : Form
     /// </summary>
     private Action<bool>? _adBreakHandler;
 
+    /// <summary>Held for the same reason <see cref="_adBreakHandler"/> is, on ShowOnAir's static event.</summary>
+    private Action<bool>? _showOnAirHandler;
+
     /// <summary>How long speaking has to last before the music and crowd duck - see the SpeakingChanged handler.</summary>
     private const int DuckOnsetDelayMs = 60;
     private readonly CommentaryService _commentary;
@@ -1201,6 +1204,18 @@ public partial class MainForm : Form
 
         AdBreak.PlayingChanged += _adBreakHandler;
 
+        // The show's own opener and bed are playing under a segment: the
+        // club's playlist goes silent for the duration, because two pieces
+        // of music at once is a mess and the bed is the one the words were
+        // written over. See ShowOnAir and ShowTreatment.
+        //
+        // The crowd is deliberately left alone. It is not music, and crowd
+        // noise under a broadcast open is the atmosphere the segment is
+        // there to sell; it ducks under the voice as it always has.
+        _showOnAirHandler = playing => _music.SetShowMuted(playing);
+
+        ShowOnAir.PlayingChanged += _showOnAirHandler;
+
         _music.Settings = _musicStore.Current;
         _music.StatusMessage += OnClientRawMessage;
 
@@ -1737,6 +1752,12 @@ public partial class MainForm : Form
             {
                 AdBreak.PlayingChanged -= _adBreakHandler;
                 _adBreakHandler = null;
+            }
+
+            if (_showOnAirHandler is not null)
+            {
+                ShowOnAir.PlayingChanged -= _showOnAirHandler;
+                _showOnAirHandler = null;
             }
 
             // Closing can take a while (saving, stopping the decoder), and

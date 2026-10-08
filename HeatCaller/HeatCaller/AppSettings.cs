@@ -284,6 +284,58 @@ public sealed class AppSettings
     /// </summary>
     public string CommentarySegmentsOff { get; set; } = string.Empty;
 
+    // --- The show's own music (ShowTreatment) ---
+    //
+    // An opener in front of the voice and a bed underneath it, for the
+    // segments that open and close the evening. Both pieces are the
+    // club's own files, dropped into %AppData%\HeatCaller\ShowMusic as
+    // opener.* and bed.*, or chosen by path below - so a club can brand
+    // the top of their own broadcast rather than every club in the sport
+    // sounding identical.
+
+    /// <summary>
+    /// Whether the show segments get music at all. On, because a club that
+    /// has dropped no files in hears nothing either way, and one that has
+    /// should not also have to find a tick box.
+    /// </summary>
+    public bool ShowThemeEnabled { get; set; } = true;
+
+    /// <summary>The opener, if one was chosen by path. Blank: opener.* in the show music folder.</summary>
+    public string ShowOpenerPath { get; set; } = string.Empty;
+
+    /// <summary>The bed, if one was chosen by path. Blank: bed.* in the show music folder.</summary>
+    public string ShowBedPath { get; set; } = string.Empty;
+
+    /// <summary>The opener's level, as a percentage. It is meant to land, so near the top.</summary>
+    public int ShowOpenerLevel { get; set; } = 90;
+
+    /// <summary>
+    /// The bed's level under the voice, as a percentage.
+    ///
+    /// Low on purpose. A finished piece of music masters near -16 LUFS,
+    /// and a bed belongs 15 to 20 dB under the voice - so most of the
+    /// gap is made here rather than by the duck, which only trims it.
+    /// </summary>
+    public int ShowBedLevel { get; set; } = 22;
+
+    /// <summary>How far the bed drops while the announcer is actually speaking, as a percentage of its own level.</summary>
+    public int ShowBedDuckPercent { get; set; } = 55;
+
+    /// <summary>
+    /// How far into the opener the voice comes in, in milliseconds. Zero -
+    /// the default - measures it: the voice enters where the opener stops
+    /// being a hit and starts ringing out. See ShowTreatment.
+    /// </summary>
+    public int ShowVoiceEntersMs { get; set; }
+
+    /// <summary>
+    /// The segments that get the music, by name, comma separated - see
+    /// ShowSegments. Blank means the default pair (the cold open and the
+    /// sign-off); the word "none" means no music on anything, which a
+    /// blank string cannot say.
+    /// </summary>
+    public string ShowSegments { get; set; } = string.Empty;
+
     // --- The co-host (second voice in the booth) ---
     //
     // The mechanic's interview showed what a second voice is worth: two

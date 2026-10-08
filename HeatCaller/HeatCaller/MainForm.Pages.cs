@@ -1397,6 +1397,14 @@ public partial class MainForm
         // MainForm.Commentary.cs.
         WireRecapBroadcast(raceControl, commentary);
 
+        // The show's music: the page chooses the files, the announcer
+        // screen plays them - see MainForm.Commentary.cs.
+        WireShowMusic(announcer, commentary);
+
+        // And the relay's count of the club's month, which the night's
+        // budget paces against - see MainForm.Commentary.cs.
+        WireCommentaryAllowance(announcer, commentary);
+
         // The model client's "[llm] ..." lines, which Race Control's "any
         // [llm] line above says why" points at. Stamped here, as the client
         // sends them bare; OnClientRawMessage is safe from any thread.

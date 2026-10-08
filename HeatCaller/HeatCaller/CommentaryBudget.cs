@@ -420,6 +420,17 @@ public sealed class CommentaryBudget
     public bool AllowanceKnown => _allowance > 0;
 
     /// <summary>
+    /// How much of tonight's programme has run, and how much of it there
+    /// is, as NightShape was last told - what the entitlement is released
+    /// against. Readable so a settings page can show where the night is
+    /// up to, and so a test can check the reader reached here at all.
+    /// </summary>
+    public int RoundsRun => _roundsRun;
+
+    /// <inheritdoc cref="RoundsRun"/>
+    public int RoundsTotal => _roundsTotal;
+
+    /// <summary>
     /// About how many lines tonight may have. Shown to the operator as
     /// "about", because the arithmetic behind it moves as the month does.
     /// </summary>
