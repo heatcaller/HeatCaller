@@ -91,6 +91,21 @@
     <PackageReference Include="KokoroSharp.CPU" Version="0.8.4" />
     <PackageReference Include="Velopack" Version="1.2.161" />
 
+    <!-- Sponsor VIDEO slides on the Big Screen (see SponsorVideo.cs). The
+         managed wrapper, its WinForms VideoView, and VLC's own native
+         libraries - all three from VideoLAN, all LGPL-2.1-or-later, which
+         is why the About box lists them and Assets\Licences carries the
+         licence text.
+
+         Windows Media Foundation would have been smaller, but it plays
+         only what the PC has codecs for, and a club's sponsor hands over
+         whatever their agency exported. LibVLC carries its own decoders,
+         so a video that plays on the operator's laptop plays on the track
+         PC. The size that buys is dealt with directly below. -->
+    <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="LibVLCSharp.WinForms" Version="3.10.1" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+
     <!-- The installer and the updater (Velopack, MIT). VelopackApp.Build().Run()
          is the first thing Main does, and AppUpdates is the rest of it.
          ADD IT WITH: dotnet add package Velopack
@@ -157,6 +172,97 @@
          with no fonts dropped in. This carries the OFL licence files, which
          have to travel with the fonts when the app is redistributed. -->
     <None Include="Assets\Fonts\*.txt" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- VideoLAN.LibVLC.Windows ships THREE complete copies of VLC - x64,
+       x86 and arm64 - at about 108 MB each, and picks which to copy from
+       $(Platform). A .NET SDK project's Platform is AnyCPU, which its
+       targets read as "all of them": 315 MB into every build output and
+       every publish, of which the app can load one.
+
+       The two the app can never load are switched off here. HeatCaller
+       publishes -r win-x64 (publish.cmd), so win-x64 is the only copy that
+       could ever be loaded - an ARM64 Windows PC runs the x64 build, and
+       this x64 VLC with it, under the same emulation. The property names
+       are the package's own (VideoLAN.LibVLC.Windows.targets); it offers no
+       way to say "just the one for my RID", which is why this is three
+       properties rather than one.
+
+       The target folder is left at the package's default, libvlc\win-x64,
+       because SponsorVideoEngine.NativeFolderName is the other half of that
+       agreement and PublishLayoutTests holds the two together. -->
+  <PropertyGroup>
+    <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
+    <VlcWindowsArm64Enabled>false</VlcWindowsArm64Enabled>
+  </PropertyGroup>
+
+  <!-- What of the remaining x64 copy actually ships.
+
+       Declared rather than left to the package, whose default is
+       "libvlc.*;libvlccore.*;hrtfs\**;lua\**;plugins\**". That default
+       carries libvlc.lib and libvlccore.lib - import libraries for a C++
+       linker, never loaded at runtime by anything, exactly like the two
+       .lib files the ONNX target below drops - and 103 MB of plugins, for a
+       player that does one thing: play a local video file on a screen.
+
+       The %2A escaping is the package's: these items are run through
+       MSBuild::Unescape inside its targets, so a literal * here would be
+       globbed against this folder and match nothing.
+
+       Kept deliberately broad within plugins\: every DECODER and every
+       DEMUXER stays, because the whole reason for choosing LibVLC over
+       Media Foundation was that a club's sponsor sends whatever their
+       agency exported. What goes is whole categories this app has no path
+       to - sending a stream out, discovering servers, writing files,
+       drawing music visualisations, reading metadata - and nothing that
+       could be asked to open an ad. Roughly 75 MB of plugins remain. If a
+       club ever reports a video that plays in VLC but not in HeatCaller,
+       this list is the first place to look: add the category back rather
+       than guessing at a codec. -->
+  <ItemGroup>
+    <!-- hrtfs\ is 92 KB and is how VLC folds a 5.1 soundtrack down to the
+         two speakers on a club's screen. Left out at first, and LibVLC said
+         so on every ad with surround sound ("Could not load the SOFA
+         HRTF") - a sponsor's agency exports 5.1 more often than it should. -->
+    <VlcWindowsX64IncludeFiles Include="libvlc.dll;libvlccore.dll;hrtfs\%2A%2A;plugins\%2A%2A" />
+
+    <!-- Muxing and sending media OUT. HeatCaller never does: the OBS
+         overlay is a web page (see WebServerService), not a VLC stream. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\access_output\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\stream_out\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\mux\%2A%2A" />
+
+    <!-- Finding media on a network, and the credentials for it. A sponsor
+         slide is a file in %AppData%\HeatCaller\Sponsors and nothing else -
+         SponsorMedia.VideoExtensions deliberately excludes playlists so
+         that stays true. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\services_discovery\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\keystore\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\stream_extractor\%2A%2A" />
+
+    <!-- VLC's own interface furniture: music visualisations, media-library
+         metadata, splitting one video across several screens. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\visualization\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\meta_engine\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\video_splitter\%2A%2A" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\lua\%2A%2A" />
+
+    <!-- The four biggest access plugins, all of them for pulling media off
+         a network or an optical disc: SRT and RIST are broadcast transports,
+         DCP is digital-cinema, and libbluray reads Blu-ray structures.
+         11 MB between them, and no route to any of them from a file on
+         disk. Named one by one, unlike the categories above, because
+         plugins\access also holds the filesystem reader that opens the ad. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\access\libaccess_srt_plugin.dll" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\access\librist_plugin.dll" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\access\libdcp_plugin.dll" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\access\liblibbluray_plugin.dll" />
+
+    <!-- ENCODERS, not decoders: x264 and AOM's AV1 encoder are for making
+         video files, which nothing here does. dav1d, the AV1 DECODER,
+         deliberately stays. -->
+    <VlcWindowsX64ExcludeFiles Include="plugins\codec\libx26410b_plugin.dll" />
+    <VlcWindowsX64ExcludeFiles Include="plugins\codec\libaom_plugin.dll" />
   </ItemGroup>
 
   <!-- ONNX Runtime (pulled in by KokoroSharp.CPU) ships its native library

@@ -16,11 +16,44 @@ namespace HeatCaller;
 /// packs are the club's own, synthesised by the scripts in audio-tools, so
 /// nothing in them is anyone else's to license.
 ///
-/// EVERY LICENCE HERE IS PERMISSIVE, and no copyleft-licensed binary ships:
-/// the Kokoro voice is MIT (the code) over Apache-2.0 (the model and its
-/// voices), and there is no copy of espeak-ng - GPL-3.0 - inside the
-/// installer, which is the thing that would have put the whole download
-/// under the GPL. So the 310 MB model can be bundled.
+/// The voice stack is permissive throughout: the Kokoro voice is MIT (the
+/// code) over Apache-2.0 (the model and its voices), and there is no copy
+/// of espeak-ng - GPL-3.0 - inside the installer, which is the thing that
+/// would have put the whole download under the GPL. So the 310 MB model can
+/// be bundled.
+///
+/// ONE COPYLEFT COMPONENT DOES SHIP, from 0.60.0: LibVLC and LibVLCSharp,
+/// both LGPL-2.1-or-later, which play sponsor VIDEO slides on the Big
+/// Screen (see SponsorVideo.cs). The line that used to stand here said
+/// every licence was permissive and no copyleft binary shipped; that was
+/// true until videos were added and is not true now.
+///
+/// The LGPL is a weak copyleft and HeatCaller meets it the way it is
+/// designed to be met, but the conditions are real and worth stating
+/// rather than filing away:
+///
+///   - HeatCaller is NOT a derived work of LibVLC. It links to it
+///     dynamically - LibVLCSharp is P/Invoke over libvlc.dll - so section
+///     6 applies and HeatCaller's own source stays HeatCaller's.
+///   - The licence text must travel with the binary. Neither package
+///     carries one, so it was fetched from the FSF on 8 Oct 2026 and now
+///     ships as Assets\Licences\LibVLC-LGPL-2.1.txt.
+///   - A club must be able to REPLACE the library. It can: libvlc.dll,
+///     libvlccore.dll and plugins\ sit in libvlc\win-x64 beside the exe as
+///     ordinary files, not packed into it, so dropping in another build of
+///     the same version works. Nothing here must ever start linking LibVLC
+///     statically or packing it into a single-file publish without taking
+///     that obligation seriously first - which is one more reason
+///     PublishLayoutTests pins the folder it lands in.
+///   - VLC's plugin set is trimmed in HeatCaller.csproj. Removing files
+///     from an unmodified library is a choice about what to distribute,
+///     not a modification of it, and every plugin that ships is byte for
+///     byte VideoLAN's.
+///
+/// This is a straightforward LGPL dynamic-linking case rather than an open
+/// question like the MisakiSharp one below, but it is still a question for
+/// somebody qualified to sign off before the public beta, and it is now on
+/// the list of what to show them.
 ///
 /// ONE THING IS NOT SETTLED, found on 6 Oct 2026 when MisakiSharp's NOTICE
 /// was finally fetched (Assets\Licences\MisakiSharp-NOTICE.txt, and read it
@@ -44,12 +77,13 @@ namespace HeatCaller;
 /// qualified to answer it, before the public beta. It is not a reason to
 /// stop: MisakiSharp's own licence grant is Apache-2.0.
 ///
-/// The conditions that do travel with HeatCaller are attribution ones: the
-/// OFL licence files must stay beside the fonts (Assets\Fonts\OFL-*.txt, and
-/// the csproj copies them), the Apache-2.0 components want their licence
-/// text passed on - which is why Kokoro's own LICENSE lands in voices\
-/// beside the exe - and Apache-2.0 4(d) wants MisakiSharp's NOTICE passed
-/// on, which is why Assets\Licences\ now ships beside the exe too.
+/// The conditions that do travel with HeatCaller are attribution ones, plus
+/// the LGPL ones above: the OFL licence files must stay beside the fonts
+/// (Assets\Fonts\OFL-*.txt, and the csproj copies them), the Apache-2.0
+/// components want their licence text passed on - which is why Kokoro's own
+/// LICENSE lands in voices\ beside the exe - and Apache-2.0 4(d) wants
+/// MisakiSharp's NOTICE passed on, which is why Assets\Licences\ now ships
+/// beside the exe too.
 ///
 /// A new PackageReference goes on this list in the same change that adds it.
 /// </summary>
@@ -125,6 +159,30 @@ internal static class ThirdPartyCatalog
             "MIT",
             "Draws the QR codes on check-in badges and the scan-to-join poster.",
             new[] { "QRCoder" }),
+
+        new Component(
+            "Velopack",
+            "1.2.161",
+            "MIT",
+            "Installs HeatCaller and brings it its updates.",
+            new[] { "Velopack" },
+            Note: "Velopack Ltd, Caelan Sayler and Kevin Bost. Missing from this list until 8 Oct 2026 - it shipped from the day the installer was built and was in neither this catalogue nor the audited list in BugHunt4AboutTests, so the test that holds the two together passed by agreeing about nothing. It has no dependencies of its own on this target framework; the Newtonsoft.Json and Microsoft.Win32.Registry its package names are for .NET Framework and .NET Standard, not net10.0."),
+
+        new Component(
+            "LibVLCSharp",
+            "3.10.1",
+            "LGPL-2.1-or-later",
+            "Plays sponsor video slides on the Big Screen.",
+            new[] { "LibVLCSharp", "LibVLCSharp.WinForms" },
+            Note: "VideoLAN. The packages state the licence as an expression and carry no licence file; the text ships as Assets\\Licences\\LibVLC-LGPL-2.1.txt, shared with LibVLC below. Linked dynamically - see the LGPL note at the top of this file."),
+
+        new Component(
+            "LibVLC",
+            "3.0.24",
+            "LGPL-2.1-or-later",
+            "VLC itself - the decoders a sponsor's video is actually played by.",
+            new[] { "VideoLAN.LibVLC.Windows" },
+            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its licence text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one."),
 
         new Component(
             "KokoroSharp",

@@ -536,6 +536,38 @@ public sealed class MusicPlayer : IDisposable
 
     private float? _duckOverride;
 
+    /// <summary>
+    /// Silences the music outright while a sponsor video with its own sound
+    /// is on the Big Screen - see AdBreak.
+    ///
+    /// Not a duck. A duck leaves the music audible under a voice, which is
+    /// right for an announcement and wrong for an ad: the ad has its own
+    /// soundtrack, and a club that sold the spot has promised the sponsor
+    /// that nothing plays over it. It also deliberately ignores
+    /// DuckUnderAnnouncements, which a club may well have switched off -
+    /// that setting is about the announcer, and it should not decide
+    /// whether a paid ad is talked over.
+    ///
+    /// The glide is the same one the duck uses (SmoothGainSampleProvider),
+    /// so the music fades out in about a tenth of a second rather than
+    /// cutting, and comes back over half a second when the ad ends.
+    /// </summary>
+    public void SetAdBreakMuted(bool muted)
+    {
+        lock (_lock)
+        {
+            if (_adBreakMuted == muted)
+            {
+                return;
+            }
+
+            _adBreakMuted = muted;
+            ApplyDuckLocked();
+        }
+    }
+
+    private bool _adBreakMuted;
+
     public void SetDucked(bool ducked)
     {
         lock (_lock)
@@ -585,7 +617,10 @@ public sealed class MusicPlayer : IDisposable
     }
 
     private float DuckFactorLocked() =>
-        _ducked && Settings.DuckUnderAnnouncements
+        // An ad break wins over everything: silence, not a duck, and not
+        // subject to DuckUnderAnnouncements. See SetAdBreakMuted.
+        _adBreakMuted ? 0f
+        : _ducked && Settings.DuckUnderAnnouncements
             // Override wins - the recap ducks deeper than an announcement.
             ? Math.Clamp(_duckOverride ?? Settings.DuckToFraction, 0.02f, 1f)
             : 1f;

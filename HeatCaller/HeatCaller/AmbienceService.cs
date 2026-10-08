@@ -351,6 +351,39 @@ public sealed class AmbienceService : IDisposable
 
     private float? _duckOverride;
 
+    /// <summary>
+    /// Silences the crowd bed while a sponsor video with its own sound is
+    /// on the Big Screen - see AdBreak, and MusicPlayer.SetAdBreakMuted,
+    /// which says why this is a mute rather than a duck and why it ignores
+    /// DuckUnderAnnouncements.
+    ///
+    /// The bed is included with the music because an ad talked over by a
+    /// crowd is as broken as one talked over by a song, and a club that
+    /// leaves the ambience running all night would otherwise have no way to
+    /// get a clean spot.
+    /// </summary>
+    public void SetAdBreakMuted(bool muted)
+    {
+        lock (_lock)
+        {
+            if (_adBreakMuted == muted)
+            {
+                return;
+            }
+
+            _adBreakMuted = muted;
+
+            if (!_running)
+            {
+                return;
+            }
+
+            ApplyDuckLocked();
+        }
+    }
+
+    private bool _adBreakMuted;
+
     public void SetDucked(bool ducked)
     {
         lock (_lock)
@@ -393,7 +426,10 @@ public sealed class AmbienceService : IDisposable
 
     /// <summary>The factor applied to every layer while ducked. 1.0 when not.</summary>
     private float DuckFactor =>
-        _ducked && Settings.DuckUnderAnnouncements
+        // An ad break wins over everything: silence, not a duck, and not
+        // subject to DuckUnderAnnouncements. See SetAdBreakMuted.
+        _adBreakMuted ? 0f
+        : _ducked && Settings.DuckUnderAnnouncements
             // The override wins when set - the recap ducks deeper than a
             // routine announcement does.
             ? Math.Clamp(_duckOverride ?? Settings.DuckToFraction, 0.02f, 1f)

@@ -175,6 +175,56 @@ public sealed class SponsorStore
     }
 
     /// <summary>
+    /// Copies a video in from wherever the user picked it, and puts it in
+    /// the rotation beside the pictures. Returns the stored filename, or
+    /// null with the reason in <paramref name="error"/>.
+    ///
+    /// Copied with File.Copy rather than read and written back the way
+    /// AddSlide does it: an ad can be hundreds of megabytes, and AddSlide's
+    /// way - ReadAllBytes then WriteAllBytes - would hold the whole thing
+    /// in memory twice over. Nothing here needs the bytes, because nothing
+    /// decodes a video on the way in; SponsorMedia.PickedProblem has
+    /// already looked at its length and its header.
+    /// </summary>
+    public string? AddVideo(string sourceFilePath, out string? error)
+    {
+        try
+        {
+            if (SponsorMedia.PickedProblem(sourceFilePath) is { } problem)
+            {
+                error = problem;
+                return null;
+            }
+
+            Directory.CreateDirectory(ImageFolder);
+
+            var fileName = NewSlideFileName(sourceFilePath);
+            var destination = SlidePath(ImageFolder, fileName);
+
+            if (destination is null)
+            {
+                // NewSlideFileName already holds its result to IsSafeLeaf,
+                // so this cannot happen - but a silent wrong-folder copy is
+                // not the failure to risk being wrong about.
+                error = "That file's name can't be stored safely. Rename it and try again.";
+                return null;
+            }
+
+            File.Copy(sourceFilePath, destination, overwrite: false);
+
+            _settings.SlideFileNames.Add(fileName);
+            Save();
+            error = null;
+            return fileName;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
     /// A stored slide's bytes, ready to decode - or null when the file is
     /// more than AddSlide takes in: too long, not a PNG, JPEG, GIF or BMP,
     /// or by its header too many pixels. A slide is kept exactly as it was
@@ -306,6 +356,23 @@ public sealed class SponsorSettings
 
     /// <summary>Never interrupt the leaderboard to show a slide while a race is actually running - on by default, since mid-race is exactly when people need the live standings.</summary>
     public bool PauseDuringRace { get; set; } = true;
+
+    /// <summary>
+    /// Whether a sponsor video plays its own soundtrack. On by default: an
+    /// ad with no sound is half an ad, and a club that adds a video has
+    /// almost certainly been given one with a voiceover.
+    /// </summary>
+    public bool PlayVideoSound { get; set; } = true;
+
+    /// <summary>
+    /// Whether the music and the crowd bed go silent while a sponsor video
+    /// with sound is playing. On by default - see
+    /// MusicPlayer.SetAdBreakMuted.
+    ///
+    /// Only has any effect while PlayVideoSound is on: a silent video has
+    /// nothing to be talked over.
+    /// </summary>
+    public bool MuteMusicDuringVideo { get; set; } = true;
 
     public List<string> SlideFileNames { get; set; } = new();
 }

@@ -87,7 +87,7 @@ The page at `/` is a read-only view of the race, for spectators' phones or a dis
     - **Lap times**: a line chart of each driver's laps (up to ten drivers). It needs two laps before it has anything to draw.
     - **Best lap & consistency**: a bar for each driver's best lap, with a paler tail showing how much their lap times vary.
     - **Track map**: the cars going round the track, as on the Big Screen. It needs a plan for the layout being raced on, and shows "No track plan for this layout." without one. A car that seems to have stopped is red and pulses, and the line under the map says who and where. See [Track map](big-screen.md#track-map).
-- If you've set up sponsor slides on the **Sponsors** page, the page cuts to them between spells of standings, using the timings set there. See [The Big Screen and sponsors](big-screen.md).
+- If you've set up sponsor slides on the **Sponsors** page, the page cuts to them between spells of standings, using the timings set there. Videos play to their own end, muted. See [The Big Screen and sponsors](big-screen.md).
 
 The page refreshes itself every second. Before any laps are in, it shows "Waiting for lap data...".
 
@@ -238,9 +238,11 @@ Changes made from a phone go on the laptop's **Undo** list, named "Phone: ..." (
 
 The manager works the same way, tab for tab, whether it's opened here on the venue's Wi-Fi or - if the club has turned that on - [through the relay from anywhere](../online/setup.md#race-day-manager). The one difference is the **Race** tab: it never appears over the relay, and the laptop refuses a start, a stop or a flag from anywhere but this Wi-Fi even if one were sent, so the manager can never run a race except from here. Over the relay, drivers' transponder numbers are also left out, the same as everywhere else off this Wi-Fi, and **Today** says only how many changes can be undone on the laptop, not what they were.
 
-### Sponsor images
+### Sponsor images and videos
 
-The server also sends the sponsor slide images to the live results page. There's nothing to set up here; the slides come from the **Sponsors** page.
+The server also sends the sponsor slides to the live results page. There's nothing to set up here; the slides come from the **Sponsors** page.
+
+Videos are streamed off the laptop's disk rather than held in memory, so a long ad costs the same whether one phone is watching or thirty. They always play **muted** on a phone, whatever the Big Screen's sound setting is: browsers refuse to autoplay sound on a page nobody has tapped. See [Videos](big-screen.md#videos).
 
 ### Colors and logo
 

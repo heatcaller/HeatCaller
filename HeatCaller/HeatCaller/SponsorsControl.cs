@@ -12,6 +12,16 @@ public sealed class SponsorsControl : UserControl
     private readonly NumericUpDown _numLeaderboardSeconds = new();
     private readonly NumericUpDown _numSlideSeconds = new();
     private readonly CheckBox _chkPauseDuringRace = new ThemedCheckBox();
+    private readonly CheckBox _chkPlayVideoSound = new ThemedCheckBox();
+    private readonly CheckBox _chkMuteMusicDuringVideo = new ThemedCheckBox();
+
+    /// <summary>
+    /// Sits over the preview and says what a video slide is, since there is
+    /// nothing to decode into the picture box. A child of the picture box
+    /// rather than a row of its own, so the card's layout is the same
+    /// whichever kind of slide is selected.
+    /// </summary>
+    private readonly Label _lblVideoNote = new();
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -60,6 +70,9 @@ public sealed class SponsorsControl : UserControl
         _numLeaderboardSeconds.Value = Math.Clamp(_store.Current.LeaderboardSeconds, 5, 600);
         _numSlideSeconds.Value = Math.Clamp(_store.Current.SlideSeconds, 2, 120);
         _chkPauseDuringRace.Checked = _store.Current.PauseDuringRace;
+        _chkPlayVideoSound.Checked = _store.Current.PlayVideoSound;
+        _chkMuteMusicDuringVideo.Checked = _store.Current.MuteMusicDuringVideo;
+        SyncVideoSoundEnabled();
 
         RefreshSlides();
     }
@@ -104,8 +117,9 @@ public sealed class SponsorsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Show sponsor or promo images in rotation on the Big Screen between leaderboard views. Leave this off entirely " +
-                   "for a home setup - it's meant for a shop or club venue with sponsors to display.",
+            Text = "Show sponsor or promo images and videos in rotation on the Big Screen between leaderboard views. Leave this off " +
+                   "entirely for a home setup - it's meant for a shop or club venue with sponsors to display. A video plays to its " +
+                   "own end rather than for the slide time below.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -128,9 +142,18 @@ public sealed class SponsorsControl : UserControl
         _picPreview.SizeMode = PictureBoxSizeMode.Zoom;
         _picPreview.BackColor = AppTheme.Surface;
 
+        _lblVideoNote.Dock = DockStyle.Fill;
+        _lblVideoNote.TextAlign = ContentAlignment.MiddleCenter;
+        _lblVideoNote.ForeColor = AppTheme.TextMuted;
+        _lblVideoNote.Visible = false;
+        _picPreview.Controls.Add(_lblVideoNote);
+
         // Sized to their own captions by the bar they sit in.
         var btnAdd = new Button { Text = "Add Image..." };
         btnAdd.Click += (_, _) => AddSlide();
+
+        var btnAddVideo = new Button { Text = "Add Video..." };
+        btnAddVideo.Click += (_, _) => AddVideo();
 
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
@@ -153,7 +176,7 @@ public sealed class SponsorsControl : UserControl
         var slidesCard = new Section("Slides (shown in this order)");
 
         slidesCard.AddFill(band, () => band.LeastHeight(Math.Max(1, band.Width)));
-        slidesCard.Add(new ButtonBar().With(btnAdd, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
+        slidesCard.Add(new ButtonBar().With(btnAdd, btnAddVideo, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
 
         // --- Timing ---
 
@@ -228,6 +251,44 @@ public sealed class SponsorsControl : UserControl
         timingCard.Add(_chkPauseDuringRace, stretch: false);
         timingCard.Add(new ButtonBar().With(btnTimingDefaults), gapBelow: 0);
 
+        // --- Video sound ---
+
+        _chkPlayVideoSound.Text = "Play a sponsor video's own sound";
+        _chkPlayVideoSound.AutoSize = true;
+        _chkPlayVideoSound.Checked = _store.Current.PlayVideoSound;
+        _chkPlayVideoSound.CheckedChanged += (_, _) =>
+        {
+            _store.Current.PlayVideoSound = _chkPlayVideoSound.Checked;
+            _store.Save();
+            SyncVideoSoundEnabled();
+        };
+
+        _chkMuteMusicDuringVideo.Text = "Silence the music and the crowd while it plays (recommended)";
+        _chkMuteMusicDuringVideo.AutoSize = true;
+        _chkMuteMusicDuringVideo.Checked = _store.Current.MuteMusicDuringVideo;
+        _chkMuteMusicDuringVideo.CheckedChanged += (_, _) =>
+        {
+            _store.Current.MuteMusicDuringVideo = _chkMuteMusicDuringVideo.Checked;
+            _store.Save();
+        };
+
+        var lblVideoSound = new Label
+        {
+            Text = "A sponsor who paid for a spot has been promised nobody talks over it, so the music and the crowd bed fade out "
+                   + "while a video with sound is on screen and fade back when it ends. The announcer still speaks - a race call "
+                   + "always wins.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        var videoCard = new Section("Video sound");
+
+        videoCard.Add(lblVideoSound, gapBelow: UiLayout.RowGap);
+        videoCard.Add(_chkPlayVideoSound, stretch: false);
+        videoCard.Add(_chkMuteMusicDuringVideo, stretch: false, gapBelow: 0);
+
+        SyncVideoSoundEnabled();
+
         // The number boxes at the text size in use - see SizeFields.
         _textSize.Keep(SizeFields);
 
@@ -238,7 +299,8 @@ public sealed class SponsorsControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
         page.AddFill(slidesCard, slidesCard.LeastHeight);
-        page.Add(timingCard, gapBelow: 0);
+        page.Add(timingCard);
+        page.Add(videoCard, gapBelow: 0);
 
         Controls.Add(page);
     }
@@ -307,6 +369,7 @@ public sealed class SponsorsControl : UserControl
     {
         _picPreview.Image?.Dispose();
         _picPreview.Image = null;
+        _lblVideoNote.Visible = false;
 
         if (_lstSlides.SelectedItem is not string fileName)
         {
@@ -316,6 +379,22 @@ public sealed class SponsorsControl : UserControl
         var path = _store.ResolvePath(fileName);
         if (path is null)
         {
+            return;
+        }
+
+        // A video isn't decoded into the preview. Showing a still from it
+        // would mean starting LibVLC just to draw this page, every time the
+        // selection moved - so the preview says what it is and how long it
+        // will hold the screen, which is what an operator picking slide
+        // order actually needs to know.
+        if (SponsorMedia.IsVideoName(fileName))
+        {
+            var size = TryFileLength(path);
+
+            _lblVideoNote.Text = "Video\n\n" + Path.GetFileName(fileName)
+                                 + (size is { } bytes ? $"\n{bytes / (1024 * 1024)} MB" : string.Empty)
+                                 + "\n\nIt plays to its own end on the Big Screen.";
+            _lblVideoNote.Visible = true;
             return;
         }
 
@@ -388,6 +467,84 @@ public sealed class SponsorsControl : UserControl
 
         RefreshSlides();
     }
+
+    /// <summary>
+    /// Takes a video into the rotation. Multiselect, and one reason per
+    /// file that failed, exactly as AddSlide does it - the two differ only
+    /// in what they accept and in that a video is copied rather than read
+    /// (see SponsorStore.AddVideo).
+    /// </summary>
+    private void AddVideo()
+    {
+        // Said before the file dialog rather than after: a club picking a
+        // video on a build that can't play one should hear so before it
+        // spends a minute copying 200 MB into %AppData%.
+        if (!SponsorVideoEngine.NativesPresent)
+        {
+            AppDialog.Show(this,
+                "This copy of HeatCaller can't play videos - the video player's files are missing from beside HeatCaller.exe. "
+                + "Reinstall HeatCaller, and sponsor images will keep working in the meantime.",
+                "Video unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Add a sponsor video",
+            Filter = SponsorMedia.VideoFilter,
+            Multiselect = true,
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var failures = new List<string>();
+        foreach (var file in dialog.FileNames)
+        {
+            if (_store.AddVideo(file, out var error) is null)
+            {
+                failures.Add($"{Path.GetFileName(file)}: {error}");
+            }
+        }
+
+        if (failures.Count > 0)
+        {
+            const int listed = 3;
+
+            var more = failures.Count > listed
+                ? $"\n\n... and {Plural.Of(failures.Count - listed, "more file")}."
+                : string.Empty;
+
+            AppDialog.Show(this,
+                $"Couldn't add {Plural.Of(failures.Count, "file")} you selected.\n\n{string.Join("\n\n", failures.Take(listed))}{more}",
+                "Some files failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        RefreshSlides();
+    }
+
+    /// <summary>A stored slide's size on disk, or null when it can't be read - the preview says nothing about size rather than failing to draw.</summary>
+    private static long? TryFileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Greys the music switch out while video sound is off: with no sound
+    /// to talk over there is nothing to silence, and a live-looking tick
+    /// that does nothing is worse than one plainly turned off.
+    /// </summary>
+    private void SyncVideoSoundEnabled() =>
+        _chkMuteMusicDuringVideo.Enabled = _chkPlayVideoSound.Checked;
 
     private void RemoveSelected()
     {

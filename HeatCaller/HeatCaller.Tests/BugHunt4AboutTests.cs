@@ -31,12 +31,24 @@ public sealed class BugHunt4AboutTests
     /// to contain, and the point of this one is to notice when what ships
     /// stops matching what was audited. When a PackageReference changes,
     /// both this list and ThirdPartyCatalog change with it.
+    ///
+    /// THE WEAKNESS OF THAT, found on 8 Oct 2026: Velopack shipped from the
+    /// day the installer was built and was missing from BOTH this list and
+    /// ThirdPartyCatalog, so the two tests below - which only check that the
+    /// lists agree with each other - passed by agreeing about nothing. A
+    /// package added without being written down here is invisible to them.
+    /// So when a PackageReference is added, read
+    /// HeatCaller\obj\project.assets.json for what it resolved to and what
+    /// it dragged in with it, rather than only adding the name that was
+    /// typed into the csproj.
     /// </summary>
     private static readonly string[] PackagesThatShip = new[]
     {
         "HidSharp",
         "KokoroSharp",
         "KokoroSharp.CPU",
+        "LibVLCSharp",
+        "LibVLCSharp.WinForms",
         "Microsoft.ML.OnnxRuntime",
         "Microsoft.ML.OnnxRuntime.Managed",
         "MisakiSharp",
@@ -55,6 +67,8 @@ public sealed class BugHunt4AboutTests
         "System.IO.Ports",
         "System.Numerics.Tensors",
         "System.Speech",
+        "Velopack",
+        "VideoLAN.LibVLC.Windows",
         "runtime.native.System.IO.Ports",
     };
 
@@ -157,20 +171,91 @@ public sealed class BugHunt4AboutTests
         Assert.DoesNotContain(notShipping, component => component.Name != "Kokoro 82M");
     }
 
+    /// <summary>
+    /// The components that make the Kokoro voice speak. The question the
+    /// original audit was done to answer - whether the 310 MB model can be
+    /// bundled in the installer - is a question about THIS stack, because
+    /// bundling it is what would put a derived-work argument anywhere near
+    /// the voice pipeline. See the note at the top of About.cs.
+    /// </summary>
+    private static readonly string[] TheVoiceStack = new[]
+    {
+        "KokoroSharp", "Kokoro 82M", "MisakiSharp", "ONNX Runtime", "NumSharp", "OpenTK",
+        "System.Numerics.Tensors", "System.Speech",
+    };
+
     [Fact]
-    public void Nothing_on_the_licence_list_is_copyleft()
+    public void Nothing_in_the_voice_stack_is_copyleft()
     {
         // The reason the whole audit was done: the owner is deciding whether
         // to bundle the Kokoro model in the installer, and one GPL or LGPL
-        // component in that stack would decide it for them. Nothing in it is
+        // component IN THAT STACK would decide it for them. Nothing in it is
         // - MisakiSharp is a port with no espeak-ng (GPL-3.0) in it - and
         // this fails the day something changes that.
-        foreach (var component in ThirdPartyCatalog.Components)
+        //
+        // Narrowed from "nothing on the whole list" on 8 Oct 2026, when
+        // sponsor videos brought in LibVLC (LGPL-2.1-or-later). That does
+        // not touch this question: LibVLC is linked dynamically and sits in
+        // the installer beside the voice rather than inside it, and two
+        // separate works on one installer are not one work. The tripwire
+        // that still matters is the one below.
+        foreach (var name in TheVoiceStack)
         {
-            Assert.DoesNotContain("GPL", component.License, StringComparison.OrdinalIgnoreCase);
+            var component = ThirdPartyCatalog.Components.SingleOrDefault(c => c.Name == name);
+
+            Assert.NotNull(component);
+            Assert.DoesNotContain("GPL", component!.License, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Mozilla Public", component.License, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Eclipse Public", component.License, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void The_only_copyleft_components_that_ship_are_the_video_player()
+    {
+        // Everything else on the list is permissive, and this is what says
+        // so. A new PackageReference under any copyleft licence fails here
+        // and has to be argued for in About.cs's own notes before this list
+        // grows - which is the point: the LGPL obligations HeatCaller now
+        // carries (a replaceable DLL, the licence text shipped beside it)
+        // were a deliberate decision, not something that crept in.
+        var copyleft = ThirdPartyCatalog.Components
+            .Where(component =>
+                component.License.Contains("GPL", StringComparison.OrdinalIgnoreCase)
+                || component.License.Contains("Mozilla Public", StringComparison.OrdinalIgnoreCase)
+                || component.License.Contains("Eclipse Public", StringComparison.OrdinalIgnoreCase))
+            .Select(component => component.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(new[] { "LibVLC", "LibVLCSharp" }, copyleft);
+
+        // Both are the weak copyleft that dynamic linking is designed for,
+        // not the GPL - the distinction the whole arrangement rests on.
+        foreach (var name in copyleft)
+        {
+            var component = ThirdPartyCatalog.Components.Single(c => c.Name == name);
+
+            Assert.Equal("LGPL-2.1-or-later", component.License);
+        }
+    }
+
+    [Fact]
+    public void The_video_players_licence_text_ships_with_the_app()
+    {
+        // The LGPL wants its text to travel with the binary, and neither
+        // VideoLAN package carries one - so it is in Assets\Licences, which
+        // the csproj copies beside the exe. Checked in the build output,
+        // because that is what an installer is cut from.
+        var licence = Path.Combine(AppContext.BaseDirectory, "Assets", "Licences", "LibVLC-LGPL-2.1.txt");
+
+        Assert.True(File.Exists(licence),
+            licence + " is missing - an installer cut from this build would distribute LibVLC with no licence text.");
+
+        var text = File.ReadAllText(licence);
+
+        Assert.Contains("GNU LESSER GENERAL PUBLIC LICENSE", text, StringComparison.Ordinal);
+        Assert.Contains("Version 2.1, February 1999", text, StringComparison.Ordinal);
     }
 
     [Fact]

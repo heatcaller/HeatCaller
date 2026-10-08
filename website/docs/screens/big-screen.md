@@ -190,18 +190,35 @@ The Streak column is highlighted from the same streak threshold the announcer us
 
 ## Sponsors
 
-The **Sponsors** page shows sponsor or promo images on the Big Screen in rotation with the leaderboard. It's meant for a shop or club venue with sponsors to display. Leave it off for a home setup.
+The **Sponsors** page shows sponsor or promo images and videos on the Big Screen in rotation with the leaderboard. It's meant for a shop or club venue with sponsors to display. Leave it off for a home setup.
 
 ### Add slides
 
 1. Open the **Sponsors** page.
 2. Tick **Show sponsor slides on the Big Screen**.
-3. Press **Add Image** and choose one or more pictures: PNG, JPEG, GIF or BMP.
-4. Put the slides in order with **Move Up** and **Move Down**. They're shown in the order listed on the **Slides (shown in this order)** card, with the selected slide's preview beside the list.
+3. Press **Add Image** and choose one or more pictures: PNG, JPEG, GIF or BMP. For a video, press **Add Video** and choose one or more MP4, M4V, MOV, WEBM, MKV, AVI or WMV files.
+4. Put the slides in order with **Move Up** and **Move Down**. They're shown in the order listed on the **Slides (shown in this order)** card, with the selected slide's preview beside the list. Pictures and videos share one list and one rotation.
 5. Set the timing (below).
 6. Open the Big Screen, or close it and open it again if it's already open. The rotation starts when the Big Screen opens.
 
-The images are copied into HeatCaller's own data folder, so moving or deleting the originals doesn't break the display mid-event. **Remove** takes the selected slide out of the rotation, after asking; it can be undone.
+The images and videos are copied into HeatCaller's own data folder, so moving or deleting the originals doesn't break the display mid-event. **Remove** takes the selected slide out of the rotation, after asking; it can be undone.
+
+### Videos
+
+A video plays **to its own end** rather than for the slide time, because cutting a sponsor's 30-second spot off after eight seconds would be worse than not showing it. Everything else about a video slide works like a picture: it takes the leaderboard area, the banner and clocks stay on screen, and it waits for the grid roll call and for a running race in the usual way.
+
+HeatCaller plays videos with VLC's own decoders, bundled inside it, so a file that plays on your laptop plays on the track PC — there's nothing to install and no codec pack to chase. A video over 512 MB is turned away, and so is a file with a video's name that isn't one inside.
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Play a sponsor video's own sound** | The video's soundtrack plays through the Big Screen PC's speakers. | On |
+| **Silence the music and the crowd while it plays (recommended)** | The music and the crowd bed fade out while a video with sound is on screen, and fade back when it ends. | On |
+
+The announcer still speaks over a video — a race call always wins. The music fades rather than cuts, over about a tenth of a second down and half a second back.
+
+On the live results page over the Wi-Fi, sponsor videos always play **muted**, whatever the setting above. Every phone browser refuses to start sound on a page nobody has tapped, so a muted video that plays beats an unmuted one that doesn't — and there's no sound coming out of the phones to be silenced.
+
+If a video is 5 minutes long or stalls part way, the Big Screen takes the leaderboard back after 5 minutes regardless.
 
 Each picture is checked before it's added. A file over 50 MB, a picture over 20000 pixels across or down or over 40 million pixels in all, and anything that isn't a PNG, JPEG, GIF or BMP picture are turned away. A slide is kept just as it's picked, so a phone's 48 or 50 megapixel full-resolution photo is too big: save a smaller copy and add that. If some of the files you picked can't be added, a **Some files failed** message says so, for example "Couldn't add 2 files you selected.", and lists each file with its reason (the first three, if there are more).
 
@@ -219,7 +236,7 @@ These are on the **Rotation timing** card, under the slides.
 | **Each slide shows for (sec):** | 2 to 120. How long each slide stays up before going back to the leaderboard. | 8 |
 | **Never interrupt the leaderboard while a race is actually running (recommended)** | While a race is running, the slide is skipped and the leaderboard stays up for another full interval. | On |
 
-The Big Screen alternates: leaderboard, one slide, leaderboard, the next slide, and so on through the list. **Restore Defaults** sets the timing back to 60 seconds, 8 seconds and the recommended setting.
+The Big Screen alternates: leaderboard, one slide, leaderboard, the next slide, and so on through the list. **Restore Defaults** sets the timing back to 60 seconds, 8 seconds and the recommended setting. **Each slide shows for (sec):** applies to pictures only — a video plays to its own end.
 
 Leave **Never interrupt the leaderboard while a race is actually running (recommended)** on unless you have a good reason: mid-race is exactly when people want the live standings.
 
@@ -231,6 +248,10 @@ Leave **Never interrupt the leaderboard while a race is actually running (recomm
 | The Big Screen turned light after updating to 0.48 | The crowd screens match the app, and the app uses a light look such as **Daylight**. | On the **Themes** page, choose **Race Wall** (or another dark look) for the crowd screens. |
 | Sponsor slides never appear | **Show sponsor slides on the Big Screen** is off, no slides are listed, or a race is running with the recommended setting on. | Check the **Sponsors** page; wait until the race ends; reopen the Big Screen after turning slides on. |
 | One slide never shows, and its preview on the **Sponsors** page is blank | The image is missing, unreadable, or over the size limits (50 MB, 20000 pixels across or down, 40 million pixels in all). | Remove it, save a smaller copy of the picture, and add that. |
+| **Add Video** says video is unavailable | The video player's files are missing from beside `HeatCaller.exe`. | Reinstall HeatCaller. Sponsor images keep working in the meantime. |
+| A video slide is skipped, pictures are fine | VLC couldn't open that particular file. | Re-export it as an MP4 (H.264) from whatever made it, and add that. |
+| The music keeps playing over a sponsor video | **Play a sponsor video's own sound** is off, so there's nothing to silence, or **Silence the music and the crowd while it plays** is off. | Check both on the **Sponsors** page. |
+| A sponsor video is silent on a phone but has sound on the Big Screen | Deliberate. Phone browsers won't autoplay sound. | Nothing to fix. |
 | ON DECK bar is empty | Everything on the timetable is done, or there's nothing on it. | Build tonight's program on **Race Day → Next Steps** (the timetable fills itself from it), or add lines in the **Timetable** window. |
 | Countdown is blank | The race has no lap or time limit. | Set a limit on **Race Control**. See [Running a race](../race-control/running-a-race.md). |
 | Qual column shows dashes | The current session isn't a qualifier. | Nothing to fix. |

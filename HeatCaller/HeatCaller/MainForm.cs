@@ -268,6 +268,14 @@ public partial class MainForm : Form
     private int _duckGeneration;
     private readonly object _duckLock = new();
 
+    /// <summary>
+    /// Held in a field so it can be taken off AdBreak's static event at
+    /// shutdown. A static event holding a handler that closes over this
+    /// window keeps the whole window alive after it has closed, and in the
+    /// test run it would reach across from one test to the next.
+    /// </summary>
+    private Action<bool>? _adBreakHandler;
+
     /// <summary>How long speaking has to last before the music and crowd duck - see the SpeakingChanged handler.</summary>
     private const int DuckOnsetDelayMs = 60;
     private readonly CommentaryService _commentary;
@@ -1176,6 +1184,23 @@ public partial class MainForm : Form
             }, TaskScheduler.Default);
         };
 
+        // A sponsor video with its own sound is on the Big Screen: the music
+        // and the crowd bed go silent under it until it finishes. The Big
+        // Screen says when (AdBreak) rather than being handed the music -
+        // it is built by Race Control and by Practice Mode, neither of which
+        // has the player.
+        //
+        // No onset delay, unlike the announcer's duck above: that delay is
+        // there so a line dropped before it speaks doesn't dip the music for
+        // nothing, and an ad break is never that short.
+        _adBreakHandler = playing =>
+        {
+            _ambience.SetAdBreakMuted(playing);
+            _music.SetAdBreakMuted(playing);
+        };
+
+        AdBreak.PlayingChanged += _adBreakHandler;
+
         _music.Settings = _musicStore.Current;
         _music.StatusMessage += OnClientRawMessage;
 
@@ -1705,6 +1730,14 @@ public partial class MainForm : Form
 
             _closingDown = true;
             _webServer.HostReady = false;
+
+            // Off AdBreak's static event before the audio goes - see
+            // _adBreakHandler.
+            if (_adBreakHandler is not null)
+            {
+                AdBreak.PlayingChanged -= _adBreakHandler;
+                _adBreakHandler = null;
+            }
 
             // Closing can take a while (saving, stopping the decoder), and
             // the window stops answering pings as it goes - which is not a

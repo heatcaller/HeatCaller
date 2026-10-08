@@ -73,6 +73,31 @@ public sealed class BigScreenForm : Form
     private int _sponsorIndex = -1;
     private bool _showingSponsor;
 
+    /// <summary>
+    /// The video player, made the first time a video slide comes round and
+    /// kept for the window's life - see SponsorVideoSurface. Null until
+    /// then, so a club with only pictures never loads LibVLC at all.
+    /// </summary>
+    private SponsorVideoSurface? _video;
+
+    /// <summary>
+    /// Whether this window currently holds an ad break open (AdBreak.Begin
+    /// without its End). Kept so the release happens exactly once, from
+    /// whichever comes first: the video ending, the rotation moving on, or
+    /// the window closing.
+    /// </summary>
+    private bool _adBreakHeld;
+
+    /// <summary>
+    /// The longest a video slide may hold the screen before the rotation
+    /// takes it back, whatever the file says. A video that stalls part way,
+    /// or one whose container lies about its length, would otherwise keep
+    /// the standings off the wall for the rest of the night - the timer is
+    /// the backstop behind SponsorVideoSurface.Finished, not the normal way
+    /// a video ends.
+    /// </summary>
+    private const int VideoBackstopMs = 5 * 60 * 1000;
+
     private readonly Label _lblAnnouncement = new();
     private DateTime? _lastAnnouncementUtc;
 
@@ -276,6 +301,15 @@ public sealed class BigScreenForm : Form
             _sponsorTimer.Dispose();
 
             _picSponsor.Image?.Dispose();
+
+            // Before anything else that could throw: a window closed mid-ad
+            // must not leave the music muted for the rest of the night, and
+            // this is the only place that can put it right once the window
+            // is gone.
+            StopSponsorVideo();
+            _video?.Dispose();
+            _video = null;
+
             _race.LapProcessed -= OnRaceEvent;
             _race.StandingAdjusted -= OnStandingAdjusted;
             _race.StandingRemoved -= OnStandingAdjusted;
@@ -835,10 +869,19 @@ public sealed class BigScreenForm : Form
         }
 
         _sponsorIndex = (_sponsorIndex + 1) % _sponsors.SlideFileNames.Count;
-        var path = _sponsors.ResolvePath(_sponsors.SlideFileNames[_sponsorIndex]);
+        var fileName = _sponsors.SlideFileNames[_sponsorIndex];
+        var path = _sponsors.ResolvePath(fileName);
         if (path is null)
         {
             return; // missing file - skip this slot rather than showing a blank screen
+        }
+
+        // A video is played rather than decoded. Its slot ends when the
+        // video does, not after SlideSeconds (see ShowSponsorVideo).
+        if (SponsorMedia.IsVideoName(fileName))
+        {
+            ShowSponsorVideo(path);
+            return;
         }
 
         try
@@ -871,6 +914,11 @@ public sealed class BigScreenForm : Form
             return; // unreadable image - stay on the leaderboard
         }
 
+        // A picture following a video: the video surface comes down and the
+        // music comes back, even though the rotation never returned to the
+        // leaderboard in between.
+        StopSponsorVideo();
+
         _grid.Visible = false;
         _attractBoard.Visible = false;
         _attractShowing = false;
@@ -880,9 +928,120 @@ public sealed class BigScreenForm : Form
         UpdateTrackMap();
     }
 
+    /// <summary>
+    /// Plays a video slide, full-screen in the leaderboard's area, with the
+    /// music muted under it if that is how the club has it set.
+    ///
+    /// The slot lasts as long as the video does: the rotation's SlideSeconds
+    /// is about how long a still picture is worth looking at, and cutting an
+    /// ad off after eight seconds would be worse than not showing it. The
+    /// timer is set to VideoBackstopMs instead, purely so a stalled video
+    /// cannot keep the standings off the wall.
+    ///
+    /// Falls back to leaving the leaderboard up when the video can't play at
+    /// all - a PC where LibVLC won't load, or a file LibVLC turns away. The
+    /// slide is skipped exactly as an unreadable picture is.
+    /// </summary>
+    private void ShowSponsorVideo(string path)
+    {
+        _video ??= MakeVideoSurface();
+
+        if (!_video.Available)
+        {
+            return;
+        }
+
+        var sound = _sponsors!.Current.PlayVideoSound;
+
+        if (!_video.Play(path, sound))
+        {
+            return;
+        }
+
+        // Only while the video actually has sound to be talked over, and
+        // only when the club wants it. A silent ad over the music is a
+        // perfectly reasonable thing to want.
+        if (sound && _sponsors.Current.MuteMusicDuringVideo && !_adBreakHeld)
+        {
+            _adBreakHeld = true;
+            AdBreak.Begin();
+        }
+
+        _grid.Visible = false;
+        _attractBoard.Visible = false;
+        _attractShowing = false;
+        _picSponsor.Visible = false;
+        _video.View.Visible = true;
+
+        // No BringToFront. What takes this area is decided by visibility, not
+        // z-order - the board and the picture are hidden above - and bringing
+        // the video forward would put it over the track map, which is docked
+        // down the right and deliberately added last to stay on top of
+        // whatever is showing.
+        _showingSponsor = true;
+        _sponsorTimer.Interval = VideoBackstopMs;
+        UpdateTrackMap();
+    }
+
+    /// <summary>
+    /// Makes the video surface and puts it in the leaderboard's area, where
+    /// the picture and the board already live - one visible at a time.
+    ///
+    /// Added here rather than in BuildLayout because making it loads LibVLC
+    /// and its plugins, and most clubs will never show a video. What takes
+    /// this area is decided by visibility rather than z-order, exactly as it
+    /// is for the picture - see ShowSponsorVideo.
+    /// </summary>
+    private SponsorVideoSurface MakeVideoSurface()
+    {
+        var surface = new SponsorVideoSurface();
+
+        surface.View.Dock = DockStyle.Fill;
+        surface.View.Visible = false;
+        _pnlLeaderboardArea.Controls.Add(surface.View);
+
+        // Finished arrives on a LibVLC thread. SafeInvoke puts it on the UI
+        // thread, which is both where the controls can be touched and - just
+        // as important - off LibVLC's own callback, from inside which its
+        // methods must not be called at all.
+        surface.Finished += () => SafeInvoke(() =>
+        {
+            // The video that just ended is the one on screen, and not one
+            // the rotation has already moved past.
+            if (_showingSponsor && _video is not null && _video.View.Visible)
+            {
+                ShowLeaderboardAgain();
+            }
+        });
+
+        return surface;
+    }
+
+    /// <summary>
+    /// Takes the video off the screen, stops it, and lets the music back up.
+    /// Safe when no video is playing, and safe twice - which it has to be,
+    /// because it is called from the video's own end, from the rotation
+    /// moving on, and from the window closing.
+    /// </summary>
+    private void StopSponsorVideo()
+    {
+        if (_video is not null)
+        {
+            _video.View.Visible = false;
+            _video.Stop();
+        }
+
+        if (_adBreakHeld)
+        {
+            _adBreakHeld = false;
+            AdBreak.End();
+        }
+    }
+
     private void ShowLeaderboardAgain()
     {
         _picSponsor.Visible = false;
+        StopSponsorVideo();
 
         // Not over the roll call, while one is up - it shows the board
         // again itself once the race goes green.

@@ -2306,6 +2306,17 @@ public sealed partial class WebServerService
             return;
         }
 
+        // A video is streamed off disk, never cached. SlideBytes keeps up to
+        // 64 MB of pictures in memory because a picture is small and is
+        // asked for once per phone per turn; a single ad can be bigger than
+        // that whole budget on its own, and every phone in the building asks
+        // for it at once.
+        if (SponsorMedia.IsVideoName(slides[index]))
+        {
+            HandleSponsorVideo(context, path);
+            return;
+        }
+
         try
         {
             // Only a slide the Sponsors page would take in, sized from its
@@ -2335,6 +2346,167 @@ public sealed partial class WebServerService
             context.Response.StatusCode = 500;
             WriteText(context, "Error");
         }
+    }
+
+    /// <summary>
+    /// Sends a sponsor video, streamed from disk in chunks and with Range
+    /// requests answered.
+    ///
+    /// Range matters: a &lt;video&gt; element in Safari will not play at all
+    /// from a server that answers every request with the whole file, and
+    /// Chrome asks for a range as soon as anything seeks. Only a single
+    /// "bytes=from-to" range is handled, which is all a browser sends for
+    /// ordinary playback - a multipart range gets the whole file, which is a
+    /// legal answer to a range request as long as the status says 200.
+    ///
+    /// Nothing is held in memory: an 80 KB buffer walks the file, so twenty
+    /// phones streaming the same ad cost twenty buffers rather than twenty
+    /// copies.
+    /// </summary>
+    private void HandleSponsorVideo(HttpListenerContext context, string path)
+    {
+        const int ChunkBytes = 80 * 1024;
+
+        try
+        {
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            var length = file.Length;
+            var from = 0L;
+            var to = length - 1;
+
+            // The browser tells the phone not to guess at a type (nosniff),
+            // so this has to be right. From the extension, which AddVideo
+            // vouched for against the file's own header before it was
+            // stored - see SponsorMedia.
+            context.Response.ContentType = Path.GetExtension(path).ToLowerInvariant() switch
+            {
+                ".mp4" or ".m4v" => "video/mp4",
+                ".mov" => "video/quicktime",
+                ".webm" => "video/webm",
+                ".mkv" => "video/x-matroska",
+                ".avi" => "video/x-msvideo",
+                ".wmv" => "video/x-ms-wmv",
+                _ => "application/octet-stream",
+            };
+
+            context.Response.Headers["Accept-Ranges"] = "bytes";
+
+            if (TryReadRange(context.Request.Headers["Range"], length, out var wantedFrom, out var wantedTo))
+            {
+                from = wantedFrom;
+                to = wantedTo;
+
+                context.Response.StatusCode = 206;
+                context.Response.Headers["Content-Range"] = $"bytes {from}-{to}/{length}";
+            }
+
+            var sending = to - from + 1;
+            context.Response.ContentLength64 = sending;
+            file.Seek(from, SeekOrigin.Begin);
+
+            var buffer = new byte[ChunkBytes];
+            var left = sending;
+
+            while (left > 0)
+            {
+                var read = file.Read(buffer, 0, (int)Math.Min(buffer.Length, left));
+
+                if (read <= 0)
+                {
+                    // The file was truncated under us - stop rather than
+                    // spin. The browser sees a short body and gives up on
+                    // this slide, which is the same outcome as a 404.
+                    break;
+                }
+
+                context.Response.OutputStream.Write(buffer, 0, read);
+                left -= read;
+            }
+
+            context.Response.OutputStream.Close();
+        }
+        catch
+        {
+            // Nearly always the phone navigating away mid-stream, which
+            // closes the connection under the write above. Nothing to say
+            // and nowhere to say it - and setting a status now would throw
+            // again, because the headers went out with the first chunk.
+        }
+    }
+
+    /// <summary>
+    /// A single "bytes=from-to" Range header, held to the file's length.
+    /// False when there is no range, when it isn't one this understands, or
+    /// when it asks for nothing inside the file - in each of which cases the
+    /// caller sends the whole thing.
+    /// </summary>
+    internal static bool TryReadRange(string? header, long length, out long from, out long to)
+    {
+        from = 0;
+        to = length - 1;
+
+        if (length <= 0 || string.IsNullOrWhiteSpace(header)
+            || !header.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var span = header["bytes=".Length..].Trim();
+
+        // A multipart range ("bytes=0-99,200-299") is answered with the
+        // whole file instead. Browsers only send one for playback.
+        if (span.Contains(','))
+        {
+            return false;
+        }
+
+        var dash = span.IndexOf('-');
+        if (dash < 0)
+        {
+            return false;
+        }
+
+        var left = span[..dash].Trim();
+        var right = span[(dash + 1)..].Trim();
+
+        if (left.Length == 0)
+        {
+            // "bytes=-500": the LAST 500 bytes, not the first.
+            if (!long.TryParse(right, out var fromEnd) || fromEnd <= 0)
+            {
+                return false;
+            }
+
+            from = Math.Max(0, length - fromEnd);
+            to = length - 1;
+            return true;
+        }
+
+        if (!long.TryParse(left, out from) || from < 0 || from >= length)
+        {
+            from = 0;
+            return false;
+        }
+
+        if (right.Length == 0)
+        {
+            // "bytes=500-": from there to the end.
+            to = length - 1;
+            return true;
+        }
+
+        if (!long.TryParse(right, out to) || to < from)
+        {
+            from = 0;
+            to = length - 1;
+            return false;
+        }
+
+        // An end past the file is clamped rather than refused, which is what
+        // the HTTP spec asks for.
+        to = Math.Min(to, length - 1);
+        return true;
     }
 
     /// <summary>
@@ -2583,6 +2755,19 @@ public sealed partial class WebServerService
             sponsorLeaderboardSecs = _sponsors?.Current.LeaderboardSeconds ?? 60,
             sponsorSlideSecs = _sponsors?.Current.SlideSeconds ?? 8,
             sponsorPauseDuringRace = _sponsors?.Current.PauseDuringRace ?? true,
+
+            // Which slots are videos, so a page knows to use its <video>
+            // element rather than its <img> - indexes into the same list
+            // /api/sponsor?i= serves. Sent as indexes rather than a kind per
+            // slide because almost every club's list is all pictures, and
+            // then this is an empty array.
+            sponsorVideos = _sponsors?.Current.Enabled == true
+                ? _sponsors.SlideFileNames
+                    .Select((name, index) => (name, index))
+                    .Where(slide => SponsorMedia.IsVideoName(slide.name))
+                    .Select(slide => slide.index)
+                    .ToList()
+                : new List<int>(),
             standings,
         };
 
@@ -3092,7 +3277,7 @@ public sealed partial class WebServerService
                   border-bottom:1px solid var(--border); font-size:15px; }
         #sponsor { display:none; position:fixed; inset:0; background:var(--bg); z-index:99;
                    align-items:center; justify-content:center; }
-        #sponsor img { max-width:92%; max-height:92%; object-fit:contain; }
+        #sponsor img, #sponsor video { max-width:92%; max-height:92%; object-fit:contain; }
         /* Overlay mode for OBS: transparent background and no chrome, so it
            composites cleanly over a video feed instead of covering it. */
         body.overlay { background:transparent; }
@@ -3168,7 +3353,7 @@ public sealed partial class WebServerService
         </div>
         <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
 
-        <div id="sponsor"><img id="sponsorImg" src=""></div>
+        <div id="sponsor"><img id="sponsorImg" src=""><video id="sponsorVid" muted playsinline preload="auto" style="display:none"></video></div>
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -3183,6 +3368,9 @@ public sealed partial class WebServerService
         if (overlay) document.body.classList.add('overlay');
 
         let sponsorCount = 0, sponsorIdx = -1, showingSponsor = false, sinceSwap = 0;
+        // Which slots are videos (indexes into the same list /api/sponsor
+        // serves). Empty for the club whose slides are all pictures.
+        let sponsorVideos = [];
         // Timings come from the server on every poll rather than being fixed
         // here, so edits on the Sponsors page take effect on already-open
         // pages without needing a refresh or a server restart.
@@ -3222,6 +3410,7 @@ public sealed partial class WebServerService
             drawPace(d.standings);
 
             sponsorCount = d.sponsorCount || 0;
+            sponsorVideos = d.sponsorVideos || [];
             leaderboardSecs = d.sponsorLeaderboardSecs || 60;
             slideSecs = d.sponsorSlideSecs || 8;
             pauseDuringRace = d.sponsorPauseDuringRace !== false;
@@ -3235,9 +3424,14 @@ public sealed partial class WebServerService
           if (sponsorCount === 0) { hideSponsor(); return; }
           sinceSwap++;
           if (showingSponsor) {
-            if (sinceSwap >= slideSecs) hideSponsor();
+            // A video holds the page until it ends (sponsorVid.onended),
+            // exactly as it holds the Big Screen - the slide time is for
+            // still pictures.
+            if (!showingVideo && sinceSwap >= slideSecs) hideSponsor();
           } else if (sinceSwap >= leaderboardSecs && !(pauseDuringRace && state === 'Racing')) {
             sponsorIdx = (sponsorIdx + 1) % sponsorCount;
+
+            if (sponsorVideos.indexOf(sponsorIdx) >= 0) { startSponsorVideo(); return; }
             // Put up only once it has arrived (sponsorImg.onload). The overlay
             // used to go up as the slide was asked for, and a slide missing
             // or too big to send - answered 404 - covered the standings with
@@ -3262,6 +3456,51 @@ public sealed partial class WebServerService
         // Skipped: the board stays up for another full turn, as on the Big Screen.
         sponsorImg.onerror = function(){
           if (!loadingSponsor) return;
+          loadingSponsor = false; sinceSwap = 0;
+        };
+
+        // --- Video slides ---------------------------------------------------
+        //
+        // ALWAYS MUTED here, and not a setting. Every browser refuses to
+        // autoplay sound on a page the viewer hasn't interacted with, and a
+        // phone that silently refused to start would simply show no ad at
+        // all - so a muted video that plays beats an unmuted one that
+        // doesn't. The Sponsors page's sound setting is about the Big
+        // Screen, which is HeatCaller's own window and has no such rule.
+        //
+        // This is also why the phones don't need the music muted: there is
+        // no sound coming out of them to be talked over.
+        const sponsorVid = document.getElementById('sponsorVid');
+        let showingVideo = false;
+
+        function startSponsorVideo(){
+          loadingSponsor = true; sinceSwap = 0;
+          sponsorVid.src = '/api/sponsor?i=' + sponsorIdx + '&t=' + Date.now();
+          // load() rather than waiting: a src set on an element that already
+          // played keeps the old buffered data on some browsers.
+          try { sponsorVid.load(); } catch(e){}
+        }
+
+        // Up only once there are frames to show, the same rule the picture
+        // follows - a video that 404s or won't decode never covers the
+        // standings.
+        sponsorVid.oncanplay = function(){
+          if (!loadingSponsor) return;
+          loadingSponsor = false; sinceSwap = 0;
+          if (pauseDuringRace && sponsorState === 'Racing') return;
+          sponsorImg.style.display = 'none';
+          sponsorVid.style.display = 'block';
+          document.getElementById('sponsor').style.display = 'flex';
+          showingSponsor = true; showingVideo = true;
+          const playing = sponsorVid.play();
+          // Refused anyway (an older iOS, a battery-saving mode): treated as
+          // a slide that didn't arrive rather than left as a frozen frame.
+          if (playing && playing.catch) playing.catch(function(){ hideSponsor(); });
+        };
+
+        sponsorVid.onended = function(){ hideSponsor(); };
+        sponsorVid.onerror = function(){
+          if (!loadingSponsor) { hideSponsor(); return; }
           loadingSponsor = false; sinceSwap = 0;
         };
 
@@ -3688,6 +3927,17 @@ public sealed partial class WebServerService
         function hideSponsor(){
           document.getElementById('sponsor').style.display = 'none';
           showingSponsor = false; loadingSponsor = false; sinceSwap = 0;
+
+          // The video is stopped and let go of, not just hidden: a hidden
+          // <video> with a src keeps the connection open and keeps
+          // buffering, and over a race night that is one stream per slide
+          // per phone, all of them live at once.
+          if (showingVideo) {
+            showingVideo = false;
+            try { sponsorVid.pause(); sponsorVid.removeAttribute('src'); sponsorVid.load(); } catch(e){}
+            sponsorVid.style.display = 'none';
+            sponsorImg.style.display = '';
+          }
         }
         tick(); setInterval(tick, 1000);
         </script><script>{{LookWatchScript}}</script></body></html>
