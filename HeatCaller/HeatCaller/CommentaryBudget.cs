@@ -222,7 +222,9 @@ public sealed class CommentaryBudget
             // about laps four to nine is worthless by lap twenty, however
             // well written, so it is thrown away rather than spoken late.
             new(SegmentKind.BattleWatch,        SegmentTier.Core, 1, true, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(40), 8,  4, "Battle watch", "Calls a fight when two cars have been locked together for a while.", true),
-            new(SegmentKind.PaceNote,           SegmentTier.Core, 1, true, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(40), 10, 5, "Record laps", "Calls a lap when a record falls - the race's, the night's or the layout's."),
+            // Its gap is shorter than its life, so a record lap that lands
+            // just after another line can still be said before it is stale.
+            new(SegmentKind.PaceNote,           SegmentTier.Core, 1, true, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(25), 10, 5, "Record laps", "Calls a lap when a record falls - the race's, the night's or the layout's."),
             new(SegmentKind.ComingUpNext,       SegmentTier.Core, 1, true, TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(20), 12, 12, "Coming up next", "Says what is on next, in the gap between races."),
             new(SegmentKind.ChampionshipCheck,  SegmentTier.Core, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(20), 6,  1, "Championship check", "Where the season stands, after a class's last main.", true),
 

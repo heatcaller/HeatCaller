@@ -893,9 +893,15 @@ public sealed class CommentaryControl : UserControl
 
                 _segmentBoxes[kind] = box;
 
+                // The room under the last one in a group is what separates
+                // the groups. Without it the three headings are just bold
+                // rows in one long list, and "paused first" stops being
+                // attached to anything.
+                var last = ReferenceEquals(spec, inTier[^1]);
+
                 segments.Add(box, stretch: false, gapBelow: 0);
                 segments.Add(Hint(spec.What + (spec.CanBeExchange ? "  Can be a two-hander with the co-host." : string.Empty)),
-                    gapBelow: UiLayout.HintGap);
+                    gapBelow: last ? UiLayout.SectionGap : UiLayout.HintGap);
             }
         }
 

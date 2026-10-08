@@ -1,8 +1,15 @@
 namespace HeatCaller;
 
 /// <summary>
-/// A driver as the club's history knows them, scoped to the class and the
-/// track in question.
+/// A driver as the club's history knows them.
+///
+/// SCOPED BY WHOEVER FILLED IT IN. CommentaryReaders counts these over
+/// one class's races when it knows the class, and over everything the
+/// club has run when it does not - and the builders are told which, so
+/// the line says so. "Sam has won the last two races here" is false the
+/// moment Sam also runs Open and lost one in between; "the last two Box
+/// Stock races here" is true either way, and the first fact a driver can
+/// disprove is the last one anybody believes.
 ///
 /// Worked out by the caller from DriverStats, RaceJournal and
 /// SessionHistoryStore, and handed over flat. The builders below choose
@@ -12,10 +19,10 @@ namespace HeatCaller;
 /// </summary>
 /// <param name="DriverId">However the caller identifies a driver - a transponder, a profile id.</param>
 /// <param name="Name">As it should be said.</param>
-/// <param name="RacesHere">Starts in this class at this club. Zero means a debut.</param>
-/// <param name="WinsHere">Wins in this class at this club.</param>
-/// <param name="PodiumsHere">Podiums in this class at this club.</param>
-/// <param name="RecentFinishes">Finishing positions, most recent FIRST. A DNF is zero.</param>
+/// <param name="RacesHere">Starts at this club, across every class. Zero means a debut.</param>
+/// <param name="WinsHere">Wins at this club, across every class.</param>
+/// <param name="PodiumsHere">Podiums at this club, across every class.</param>
+/// <param name="RecentFinishes">Finishing positions, most recent FIRST, across every class. A DNF is zero.</param>
 /// <param name="LastWinDescribed">"March", "last season", "their first meeting" - the caller's words, because only it knows the calendar.</param>
 /// <param name="ChampionshipPosition">Where they stand in the season, when there is one.</param>
 public readonly record struct DriverForm(
@@ -29,7 +36,7 @@ public readonly record struct DriverForm(
     int? ChampionshipPosition = null);
 
 /// <summary>
-/// How two drivers have got on against each other, in this class.
+/// How two drivers have got on against each other, across everything they both race.
 /// </summary>
 /// <param name="AId">One of them.</param>
 /// <param name="BId">The other.</param>
@@ -81,13 +88,30 @@ public static class CommentaryHistoryFacts
     private const int Podium = 3;
 
     /// <summary>
-    /// Somebody's first ever start in this class here.
+    /// The class as an adjective - "Box Stock " - or nothing.
+    ///
+    /// Every line here is built from numbers the reader scoped to one
+    /// class, so every line has to say which. "Sam has won the last two
+    /// races here" is false the moment Sam also runs Open and lost one in
+    /// between; "the last two Box Stock races here" is true either way.
+    /// Blank when the reader could not scope it, and then the line is
+    /// about the club as a whole - which is what it says.
+    /// </summary>
+    private static string Of(string? scope)
+    {
+        var cleaned = CommentaryFacts.Clean(scope);
+
+        return cleaned.Length > 0 ? cleaned + " " : string.Empty;
+    }
+
+    /// <summary>
+    /// Somebody's first ever start at this club.
     ///
     /// The highest payload per character in the whole layer: it costs one
     /// integer to know, it is never not true when it is true, and it is
     /// the line the driver's family remembers.
     /// </summary>
-    public static FactBlock? Debut(DriverForm driver, string raceKey)
+    public static FactBlock? Debut(DriverForm driver, string raceKey, string? scope = null)
     {
         if (driver.RacesHere > 0)
         {
@@ -98,7 +122,7 @@ public static class CommentaryHistoryFacts
 
         return name.Length == 0
             ? null
-            : new FactBlock($"debut:{raceKey}:{driver.DriverId}", $"{name} is making their first ever start in this class here.");
+            : new FactBlock($"debut:{raceKey}:{driver.DriverId}", $"{name} is making their first ever {Of(scope)}start at this club.");
     }
 
     /// <summary>
@@ -108,7 +132,7 @@ public static class CommentaryHistoryFacts
     /// row and still hasn't won it" is a better story than a fourth win,
     /// and it is the kind of thing only the app could know.
     /// </summary>
-    public static FactBlock? Streak(DriverForm driver, string raceKey)
+    public static FactBlock? Streak(DriverForm driver, string raceKey, string? scope = null)
     {
         var finishes = driver.RecentFinishes;
 
@@ -131,7 +155,7 @@ public static class CommentaryHistoryFacts
 
         if (wins >= 2)
         {
-            return new FactBlock(key, $"{name} has won the last {Spell(wins)} in this class.");
+            return new FactBlock(key, $"{name} has won the last {Spell(wins)} {Of(scope)}races here.");
         }
 
         // The nearly-man: a run of the same placing, never first.
@@ -144,7 +168,7 @@ public static class CommentaryHistoryFacts
             if (run >= StreakRaces)
             {
                 return new FactBlock(key,
-                    $"{name} has finished {CommentaryFacts.Ordinal(sameSpot)} in the last {Spell(run)} in this class, and hasn't won one.");
+                    $"{name} has finished {CommentaryFacts.Ordinal(sameSpot)} in the last {Spell(run)} {Of(scope)}races here, and hasn't won one.");
             }
         }
 
@@ -152,7 +176,7 @@ public static class CommentaryHistoryFacts
 
         if (podiums >= StreakRaces)
         {
-            return new FactBlock(key, $"{name} has been on the podium in the last {Spell(podiums)} in this class.");
+            return new FactBlock(key, $"{name} has been on the podium in the last {Spell(podiums)} {Of(scope)}races here.");
         }
 
         // A run of retirements is a story too, and the one most likely to
@@ -161,7 +185,7 @@ public static class CommentaryHistoryFacts
 
         if (outs >= 2)
         {
-            return new FactBlock(key, $"{name} hasn't finished either of the last {Spell(outs)}.");
+            return new FactBlock(key, $"{name} hasn't finished either of the last {Spell(outs)} {Of(scope)}races.");
         }
 
         return null;
@@ -175,7 +199,7 @@ public static class CommentaryHistoryFacts
     /// eight starts" about a driver who has never been near the podium is
     /// not a story, it is a slight.
     /// </summary>
-    public static FactBlock? ChasingAFirstWin(DriverForm driver, string raceKey)
+    public static FactBlock? ChasingAFirstWin(DriverForm driver, string raceKey, string? scope = null)
     {
         if (driver.WinsHere > 0 || driver.RacesHere < DroughtStarts || driver.PodiumsHere == 0)
         {
@@ -192,7 +216,7 @@ public static class CommentaryHistoryFacts
         var podiums = driver.PodiumsHere == 1 ? "a podium" : $"{driver.PodiumsHere} podiums";
 
         return new FactBlock($"firstwin:{raceKey}:{driver.DriverId}",
-            $"{name} is still looking for a first win in this class here, after {driver.RacesHere} starts and {podiums}.");
+            $"{name} is still looking for a first {Of(scope)}win here, after {driver.RacesHere} starts and {podiums}.");
     }
 
     /// <summary>
@@ -203,7 +227,7 @@ public static class CommentaryHistoryFacts
     /// four-three record is neither, and saying it out loud is how a
     /// broadcast starts sounding like a database being read aloud.
     /// </summary>
-    public static FactBlock? Rivalry(HeadToHead record, Func<string, string?> nameFor, string raceKey)
+    public static FactBlock? Rivalry(HeadToHead record, Func<string, string?> nameFor, string raceKey, string? scope = null)
     {
         var met = record.AAhead + record.BAhead;
 
@@ -233,12 +257,12 @@ public static class CommentaryHistoryFacts
                 ? (a, b, $"{record.AAhead}-{record.BAhead}")
                 : (b, a, $"{record.BAhead}-{record.AAhead}");
 
-            return new FactBlock(key, $"{winner} has finished ahead of {loser} {score} in their {met} meetings in this class.{when}");
+            return new FactBlock(key, $"{winner} has finished ahead of {loser} {score} in their {met} {Of(scope)}meetings here.{when}");
         }
 
         if (record.AAhead == record.BAhead)
         {
-            return new FactBlock(key, $"{a} and {b} are dead level at {record.AAhead} apiece over {met} meetings in this class.{when}");
+            return new FactBlock(key, $"{a} and {b} are dead level at {record.AAhead} apiece over {met} {Of(scope)}meetings here.{when}");
         }
 
         return null;
@@ -250,7 +274,7 @@ public static class CommentaryHistoryFacts
     /// </summary>
     /// <param name="driver">Their record BEFORE this race. The caller must not have counted tonight in yet, or every win is their first.</param>
     /// <param name="finishPosition">Where they came. One is a win.</param>
-    public static FactBlock? ResultInContext(DriverForm driver, int finishPosition, string raceKey)
+    public static FactBlock? ResultInContext(DriverForm driver, int finishPosition, string raceKey, string? scope = null)
     {
         var name = CommentaryFacts.Clean(driver.Name);
 
@@ -266,22 +290,22 @@ public static class CommentaryHistoryFacts
             if (driver.WinsHere == 0)
             {
                 return new FactBlock(key, driver.RacesHere > 1
-                    ? $"That is {name}'s first ever win in this class here, at the {CommentaryFacts.Ordinal(driver.RacesHere + 1)} attempt."
-                    : $"That is {name}'s first ever win in this class here.");
+                    ? $"That is {name}'s first ever {Of(scope)}win here, at the {CommentaryFacts.Ordinal(driver.RacesHere + 1)} attempt."
+                    : $"That is {name}'s first ever {Of(scope)}win here.");
             }
 
             if (driver.LastWinDescribed is { Length: > 0 } since)
             {
                 return new FactBlock(key,
-                    $"{name}'s {CommentaryFacts.Ordinal(driver.WinsHere + 1)} win in this class here, and the first since {CommentaryFacts.CleanLong(since)}.");
+                    $"{name}'s {CommentaryFacts.Ordinal(driver.WinsHere + 1)} {Of(scope)}win here, and the first since {CommentaryFacts.CleanLong(since)}.");
             }
 
-            return new FactBlock(key, $"{name}'s {CommentaryFacts.Ordinal(driver.WinsHere + 1)} win in this class here.");
+            return new FactBlock(key, $"{name}'s {CommentaryFacts.Ordinal(driver.WinsHere + 1)} {Of(scope)}win here.");
         }
 
         if (finishPosition <= Podium && driver.PodiumsHere == 0)
         {
-            return new FactBlock(key, $"{name}'s first ever podium in this class here.");
+            return new FactBlock(key, $"{name}'s first ever {Of(scope)}podium here.");
         }
 
         return null;
@@ -304,6 +328,7 @@ public static class CommentaryHistoryFacts
         IReadOnlyList<DriverForm> grid,
         IReadOnlyList<HeadToHead> rivalries,
         string raceKey,
+        string? scope = null,
         int most = 4)
     {
         var names = grid.ToDictionary(d => d.DriverId, d => d.Name, StringComparer.Ordinal);
@@ -311,7 +336,7 @@ public static class CommentaryHistoryFacts
 
         foreach (var driver in grid)
         {
-            if (Debut(driver, raceKey) is { } debut)
+            if (Debut(driver, raceKey, scope) is { } debut)
             {
                 found.Add(debut);
             }
@@ -319,7 +344,7 @@ public static class CommentaryHistoryFacts
 
         foreach (var pair in rivalries)
         {
-            if (Rivalry(pair, id => names.GetValueOrDefault(id), raceKey) is { } rivalry)
+            if (Rivalry(pair, id => names.GetValueOrDefault(id), raceKey, scope) is { } rivalry)
             {
                 found.Add(rivalry);
             }
@@ -327,7 +352,7 @@ public static class CommentaryHistoryFacts
 
         foreach (var driver in grid)
         {
-            if (ChasingAFirstWin(driver, raceKey) is { } chasing)
+            if (ChasingAFirstWin(driver, raceKey, scope) is { } chasing)
             {
                 found.Add(chasing);
             }
@@ -335,7 +360,7 @@ public static class CommentaryHistoryFacts
 
         foreach (var driver in grid)
         {
-            if (Streak(driver, raceKey) is { } streak)
+            if (Streak(driver, raceKey, scope) is { } streak)
             {
                 found.Add(streak);
             }

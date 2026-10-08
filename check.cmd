@@ -12,7 +12,7 @@ if /i "%~1"=="relay" goto :relay
 
 echo.
 echo === HeatCaller: build and run the tests ===
-dotnet test "HeatCaller\HeatCaller.sln"
+powershell -NoProfile -ExecutionPolicy Bypass -File "test-progress.ps1" -Solution "HeatCaller\HeatCaller.sln"
 if errorlevel 1 goto :fail
 if /i "%~1"=="app" goto :green
 

@@ -1,4 +1,4 @@
-namespace HeatCaller;
+﻿namespace HeatCaller;
 
 /// <summary>
 /// Race Control's layout: building the page (BuildLayout), the clock
@@ -1054,6 +1054,23 @@ public sealed partial class RaceControlControl
         body.AddSide(_statStrip);
 
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
+
+        // Under the Next Up bar, where the race director's eye already
+        // goes between races. Hidden until there is commentary to report
+        // on - see AnnouncerStrip.
+        _announcerStrip.Visible = false;
+        _announcerStrip.HoldChanged += held =>
+        {
+            if (Commentary?.Invoke() is { } director)
+            {
+                director.Held = held;
+
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] "
+                    + (held ? "Segments held by the race director." : "Segments released."));
+            }
+        };
+
+        _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 

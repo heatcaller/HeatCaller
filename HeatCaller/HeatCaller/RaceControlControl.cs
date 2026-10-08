@@ -1,4 +1,4 @@
-namespace HeatCaller;
+﻿namespace HeatCaller;
 
 /// <summary>
 /// Standalone race control window: staging/countdown/flags, the race clock,
@@ -152,6 +152,33 @@ public sealed partial class RaceControlControl : UserControl
 
     // --- The Next Up bar ---
     private readonly NextUpBar _nextUpBar = new();
+
+    /// <summary>
+    /// What the announcer is about to do, under the Next Up bar.
+    ///
+    /// Off the page until a club actually has commentary running - see
+    /// AnnouncerStrip, which also explains why the race director needs
+    /// this at all when everything else reports to the console.
+    /// </summary>
+    private readonly AnnouncerStrip _announcerStrip = new();
+
+    /// <summary>
+    /// The director, once MainForm has one. A function rather than the
+    /// thing itself because the announcer screen builds it and this page
+    /// is made first.
+    /// </summary>
+    public Func<CommentaryDirector?>? Commentary { get; set; }
+
+    /// <summary>
+    /// Whether the PA is saying anything right now, from the announcer's
+    /// own counted signal.
+    ///
+    /// Volatile and nothing else: SpeakingChanged is raised from whichever
+    /// thread finished a line, and the strip reads it on the UI tick a
+    /// moment later. Marshalling it would mean a BeginInvoke per spoken
+    /// line for a lamp that is redrawn once a second anyway.
+    /// </summary>
+    private volatile bool _speaking;
     private readonly Button _btnStartNext = new();
     private readonly Button _btnReseed = new();
 
@@ -428,6 +455,10 @@ public sealed partial class RaceControlControl : UserControl
         _journal.StatusChanged += message =>
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {message}");
 
+        // Any voice line, not just a segment: somebody about to pick up
+        // the mic cares that the speakers are busy, not whose line it is.
+        _announcer.SpeakingChanged += speaking => _speaking = speaking;
+
         _clockRefreshTimer.Tick += (_, _) =>
         {
             UpdateClockDisplay();
@@ -452,6 +483,11 @@ public sealed partial class RaceControlControl : UserControl
             {
                 _nextUpDueUtc = DateTime.UtcNow.AddSeconds(1);
                 UpdateNextUpBar();
+
+                // On the same second. "Writing" is the state worth
+                // catching and a line takes seconds to write, so once a
+                // second is a warning rather than a record of one.
+                _announcerStrip.Show(Commentary?.Invoke(), _settings.CommentaryEnabled, _speaking);
             }
         };
         _clockRefreshTimer.Start();

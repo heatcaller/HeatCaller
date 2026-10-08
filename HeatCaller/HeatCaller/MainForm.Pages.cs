@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace HeatCaller;
 
@@ -1331,6 +1331,25 @@ public partial class MainForm
         // the lot each time the window was closed.
         _announcerControl = new AnnouncerControl(_race, _profiles, _sessionHistory, _daySchedule, _announcer, _commentary, _settings, _undo) { Dock = DockStyle.Fill };
         var announcer = _announcerControl;
+
+        // The broadcast segments' own console lines. Every refusal says
+        // why, which is the only thing that makes a quiet race night
+        // explainable afterwards.
+        announcer.StatusMessage += OnClientRawMessage;
+
+        // Which race day the night's spend and its facts belong to. Read
+        // on every tick rather than once, so starting a new day mid-session
+        // starts a new night rather than carrying the last one's budget.
+        announcer.RaceDayId = () => _raceEvents.Active?.Id ?? string.Empty;
+
+        // And the other way: Race Control shows what the announcer is
+        // about to say, and holds it when the race director needs the mic.
+        // Wired here because this is the first point at which both exist.
+        _raceControlControl.Commentary = () => announcer.Director;
+
+        announcer.RaceClassName = () => _activeRound?.ClassName;
+
+        WireCommentaryReaders(announcer.Director);
 
         // One click each way between the only two screens anybody is on
         // while a race is running.

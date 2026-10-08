@@ -1,4 +1,4 @@
-namespace HeatCaller;
+﻿namespace HeatCaller;
 
 /// <summary>
 /// A view for whoever is on the microphone.
@@ -11,7 +11,7 @@ namespace HeatCaller;
 /// running, someone's personal best), keeps the running order to a glanceable
 /// few, and lets one driver be pinned for a story to follow.
 /// </summary>
-public sealed class AnnouncerControl : UserControl
+public sealed partial class AnnouncerControl : UserControl
 {
     private readonly RaceControlSession _race;
     private readonly ProfileStore _profiles;
@@ -1077,6 +1077,11 @@ public sealed class AnnouncerControl : UserControl
         // Ahead of the visibility check, so a page opened during the break
         // never flashes the last race's quote for a tick before it goes.
         DropStaleSuggestion();
+
+        // Also ahead of it, and for a stronger reason: the broadcast
+        // segments are spoken over the PA rather than shown here, so a
+        // club that never opens the announcer screen must still get them.
+        FeedTheDirector();
 
         if (!Visible)
         {
