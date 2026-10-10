@@ -31,15 +31,22 @@ No, and most clubs won't want one. **Voice → Voice Settings** offers three voi
 
 - **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. No account, no key, no bill. It needs the club set up on the **Club Website** page and internet at the track, it has a monthly allowance of characters, and the wording it speaks is the standard set of lines.
 - **Your own ElevenLabs account** — your key and your credits, and complete control of the voice, the tuning and every word.
-- **The free Windows voice** — no account, no internet, nothing to pay, and the wording is yours.
+- **The free Kokoro voice** — a natural-sounding voice that runs on the club's own PC. No account, no internet, nothing to pay however much the announcer talks, and the wording is yours.
 
-A new install starts on the Windows voice. See [Choose the voice](../announcer/voice.md#choose-the-voice).
+A new install starts on the Kokoro voice, and Kokoro is also what speaks whenever the voice you chose can't. See [Choose the voice](../announcer/voice.md#choose-the-voice).
+
+### Can I hear a voice before I choose it?
+
+Yes. On **Voice → Voice Settings**, **Hear It** beside **Announcer voice:** plays a short sample of the HeatCaller voice you've highlighted. It costs nothing and needs no token, so it works before your club has signed up for anything. **Preview**, beside **Your own words:**, has that voice say words of your own — your class names, your drivers' names — out of a small daily allowance kept separate from the race-night one, so an afternoon of auditioning can't leave you short on Saturday. The Kokoro voice has **Test Kokoro Voice** beside **Kokoro voice:**. See [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it).
+
+!!! note
+    **Hear It** and **Preview** need a relay that has been deployed again since they were added. An older relay answers "This relay doesn't offer voice samples yet." If you run the relay yourself, deploy it again; otherwise ask whoever does.
 
 ### What happens when the HeatCaller voice's allowance runs out?
 
-The free Windows voice speaks every line until the allowance starts again next month — including lines already saved on the laptop, so the night is one voice rather than two. Nothing is thrown away: every saved line is still there next month and plays again then. The console says so, and **Sounds → Mixer** shows an amber notice with the reason. See [When the HeatCaller voice can't speak a line](../announcer/voice.md#when-the-heatcaller-voice-cant-speak-a-line).
+The free Kokoro voice speaks every line until the allowance starts again next month — including lines already saved on the laptop, so the night is one voice rather than two. Nothing is thrown away: every saved line is still there next month and plays again then. The console says so, and **Sounds → Mixer** shows an amber notice with the reason. See [When the HeatCaller voice can't speak a line](../announcer/voice.md#when-the-heatcaller-voice-cant-speak-a-line).
 
-You get a warning first. At nine tenths spent the console says, once a month, how much is left and when it starts again, so the first sign isn't a whole race in the Windows voice.
+You get a warning first. At nine tenths spent the console says, once a month, how much is left and when it starts again, so the first sign isn't a whole race in the Kokoro voice.
 
 Most fixed lines cost nothing in the first place: a line with no driver's name in it is rendered once for every club, so your allowance mostly goes on lap times, positions and names.
 
@@ -47,13 +54,13 @@ Most fixed lines cost nothing in the first place: a line with no driver's name i
 
 No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice → Announcements** and the **Rivalries** phrasing box are read-only, and a soundscape applied on **Sounds → Soundscapes** brings its sounds but not its wording.
 
-To write your own, choose your own ElevenLabs key or the free Windows voice under **Speak with** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
+To write your own, choose your own ElevenLabs key or the free Kokoro voice under **Speak with** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
 
 ### Do I need internet at the track?
 
-Not to race. Timing, race control, results, the Big Screen, the Wi-Fi pages for phones and the free Windows voice all work offline. You need internet for:
+Not to race. Timing, race control, results, the Big Screen, the Wi-Fi pages for phones and the free Kokoro voice all work offline. You need internet for:
 
-- the HeatCaller voice, which speaks through the relay (lines already saved on the laptop still play offline, and new ones go to the Windows voice)
+- the HeatCaller voice, which speaks through the relay (lines already saved on the laptop still play offline, and new ones go to the Kokoro voice)
 - the ElevenLabs voice, if you use your own account
 - publishing to your online relay
 - emailing racer PINs
@@ -106,11 +113,11 @@ No. The next time HeatCaller starts, it asks **Restore the unfinished race?**. T
 Check these in order:
 
 1. The mute icon at the bottom of the sidebar is red, or hovering it shows **Unmute Announcer**. If so, the announcer is muted. Click it.
-2. The Windows voice is chosen under **Speak with** on **Voice → Voice Settings**, but the PC has no Windows voice it can use.
-3. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Windows voice isn't standing in (its box under the ElevenLabs choice is unticked).
-4. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC with no Windows voice to stand in. On any PC that has one, this shows up as the whole night in the Windows voice rather than silence.
+2. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Kokoro voice isn't standing in (its box under the ElevenLabs choice is unticked).
+3. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC that hasn't got Kokoro's voice file to stand in. On any PC that has it, this shows up as the whole night in the Kokoro voice rather than silence.
+4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice Settings** and press **Download (about 310 MB)** beside **Kokoro voice:**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
 
-**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." See [Voice announcements](../announcer/voice.md).
+**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice Settings** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
 ### Where do I find the results?
 

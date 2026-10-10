@@ -11,13 +11,13 @@ namespace HeatCaller;
 ///
 /// WHY, when VoiceLibrary already keeps every ElevenLabs line after the
 /// first time: VoiceLibrary is keyed by the voice settings too, so it only
-/// helps while those stay the same, and it never helps a PC on the Windows
-/// voice. A recorded line is keyed by its WORDS alone. Once Pit Lane's
-/// "THERE'S THE BELL - LAST LAP!" is recorded, it plays in that recorded
-/// voice on this PC whatever voice is chosen - including the free Windows
-/// voice, and with no internet - so the big race moments always sound the
-/// part. Lines with a driver's name or a time in them change every race and
-/// are never recorded; they are spoken live as always.
+/// helps while those stay the same. A recorded line is keyed by its WORDS
+/// alone. Once Pit Lane's "THERE'S THE BELL - LAST LAP!" is recorded, it
+/// plays in that recorded voice on this PC whatever voice is chosen -
+/// including the free one, and with no internet - so the big race moments
+/// always sound the part. Lines with a driver's name or a time in them
+/// change every race and are never recorded; they are spoken live as
+/// always.
 ///
 /// MATCHING. By the line's words with audio tags ([excited]) and spacing
 /// taken out and case ignored - the voice engine may or may not have
@@ -62,13 +62,44 @@ public sealed class StingerLibrary
     // good. Lines recorded meanwhile wait in _unreadIndex and are merged in
     // once the file reads; nothing is written over it until then.
     private Dictionary<string, Entry>? _unreadIndex;
+
+    // Lines DELETED while index.json couldn't be read - see Tombstone. The
+    // deletion only took the entry out of _unreadIndex, which the next
+    // successful read threw away wholesale, so the file's own entry came
+    // back pointing at audio that really was gone.
+    private HashSet<string>? _unreadDeleted;
+
     private bool _holdWrites;
     private bool _reportedUnreadable;
     private DateTime _nextReadAttemptUtc;
 
+    /// <summary>
+    /// How long to wait before trying an unreadable index.json again - see
+    /// Index(). An instance field only so the test run can set it to
+    /// nothing; nothing in the app ever changes it.
+    /// </summary>
+    private TimeSpan _readRetry = TimeSpan.FromSeconds(30);
+
     private StingerLibrary(string folder)
     {
         _folder = folder;
+    }
+
+    /// <summary>
+    /// A library of its own, on a folder of its own, for the test run.
+    ///
+    /// <see cref="Shared"/> is a singleton on the club's folder and keeps
+    /// its index for the life of the process, which is no use to a test
+    /// that has to meet an index.json it cannot read.
+    /// <paramref name="readRetry"/> is the wait before an unreadable file
+    /// is tried again - zero, so a test does not sit out the real thirty
+    /// seconds.
+    /// </summary>
+    internal static StingerLibrary ForTests(string folder, TimeSpan readRetry)
+    {
+        var library = new StingerLibrary(folder);
+        library._readRetry = readRetry;
+        return library;
     }
 
     private string IndexPath => Path.Combine(_folder, "index.json");
@@ -85,7 +116,29 @@ public sealed class StingerLibrary
     /// The lines of a soundscape that can be recorded: every line of the
     /// fixed moments that are switched on, with nothing filled in at race time.
     /// </summary>
-    public static IReadOnlyList<string> RecordableLines(VoiceProfile voice)
+    /// <param name="identLine">
+    /// The club's voice-ID, if they have typed one - "You're listening to
+    /// Thunder Valley Raceway". Appended as one more recordable line, which
+    /// is the whole of what a voice-ID needs from this class.
+    ///
+    /// WHY HERE AND NOT IN A STORE OF ITS OWN. A voice-ID is a fixed line
+    /// said the same way every time, which is precisely what this class
+    /// already is - keyed by its words, kept beside the club's data, with an
+    /// undo, a re-record and a count. A second recording store for one line
+    /// would have been a second set of all five of those, and the first
+    /// place they would have disagreed is the one that matters: whether the
+    /// take on disk is still the one the index says it is.
+    ///
+    /// LAST IN THE LIST on purpose. The race lines keep the order they
+    /// always had, so a club reading "9 of 11 voice lines recorded" sees the
+    /// same race lines in the same places with the voice-ID on the end,
+    /// rather than everything shifted by one.
+    ///
+    /// Put through the same guards as a race line below: blank and
+    /// brace-bearing text is left out, and a voice-ID that happens to be
+    /// word for word one of the race lines is not listed twice.
+    /// </param>
+    public static IReadOnlyList<string> RecordableLines(VoiceProfile voice, string? identLine = null)
     {
         var lines = new List<string>();
         var seen = new HashSet<string>();
@@ -115,8 +168,62 @@ public sealed class StingerLibrary
             }
         }
 
+        // The voice-ID, on the end - see the remarks on identLine.
+        if (!string.IsNullOrWhiteSpace(identLine) && !identLine.Contains('{'))
+        {
+            var identKey = KeyFor(identLine);
+
+            if (identKey.Length > 0 && seen.Add(identKey))
+            {
+                lines.Add(identLine.Trim());
+            }
+        }
+
         return lines;
     }
+
+    /// <summary>
+    /// What to write down as the voice a take was recorded in - the string
+    /// that goes into <see cref="Entry.VoiceName"/>.
+    ///
+    /// THE ONLY PLACE THIS SENTENCE IS BUILT. It was built inline on the
+    /// Soundscapes page, which was fine while one screen recorded and
+    /// nothing ever read it back. The voice-ID reads it back - that is how a
+    /// club is told their voice-ID is still in last month's voice - and two
+    /// spellings of the same voice would have read as a voice change on
+    /// every single night. Compare with <see cref="SameVoice"/> and nothing
+    /// else.
+    ///
+    /// KOKORO. The Soundscapes page turns a club away before it gets here,
+    /// because nothing is rendered for recording in the free voice
+    /// (AnnouncementService.RecordVoiceLineAsync returns null for it), so
+    /// that branch never ran there and nothing it writes can change. It is
+    /// answered anyway, because what is asked here is "which voice is this
+    /// PC speaking in" and a club on the free voice has an answer to that.
+    /// </summary>
+    public static string VoiceNameFor(VoiceProfile voice) => voice.EffectiveEngine switch
+    {
+        VoiceEngine.Kokoro => "the Kokoro voice",
+
+        VoiceEngine.HeatCaller => string.IsNullOrWhiteSpace(voice.HeatCallerVoiceName)
+            ? "the HeatCaller voice"
+            : $"the HeatCaller voice ({voice.HeatCallerVoiceName})",
+
+        _ => string.IsNullOrWhiteSpace(voice.VoiceName) ? "your ElevenLabs voice" : voice.VoiceName,
+    };
+
+    /// <summary>
+    /// Whether two voice names written by <see cref="VoiceNameFor"/> mean
+    /// the same voice.
+    ///
+    /// Case and surrounding space ignored, because the names come from
+    /// boxes a club typed into and "Ivy " is not a new voice. Anything else
+    /// different IS a new voice: a take recorded with one ElevenLabs voice
+    /// and played under a show in another is the thing the voice-ID has to
+    /// be able to tell a club about.
+    /// </summary>
+    public static bool SameVoice(string? a, string? b) =>
+        string.Equals((a ?? string.Empty).Trim(), (b ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
 
     private Dictionary<string, Entry> Index()
     {
@@ -166,7 +273,7 @@ public sealed class StingerLibrary
                 // Could not be read - see _unreadIndex. Not cached, so the
                 // next look after a short wait tries the file again.
                 _unreadIndex ??= index;
-                _nextReadAttemptUtc = DateTime.UtcNow.AddSeconds(30);
+                _nextReadAttemptUtc = DateTime.UtcNow + _readRetry;
                 return _unreadIndex;
             }
 
@@ -178,19 +285,40 @@ public sealed class StingerLibrary
         _holdWrites = false;
         _index = index;
 
-        // Lines recorded while the file couldn't be read: merge them in
-        // (they are the newer takes) and write the whole index now.
-        if (_unreadIndex is { Count: > 0 } pending)
+        // What happened while the file couldn't be read, applied to what it
+        // turned out to say: lines deleted come out first, then lines
+        // recorded go in over the top - that order, so a line deleted and
+        // then recorded again keeps its new take. Deletions used to be left
+        // out of this merge altogether and the entry came back pointing at
+        // audio that had really been deleted; Has and CountRecorded said
+        // the line was recorded and TryLoad found nothing. Then the whole
+        // index is written now.
+        var pending = _unreadIndex;
+        var forgotten = _unreadDeleted;
+
+        if (pending is { Count: > 0 } || forgotten is { Count: > 0 })
         {
-            foreach (var entry in pending.Values)
+            if (forgotten is not null)
             {
-                index[entry.Key] = entry;
+                foreach (var key in forgotten)
+                {
+                    index.Remove(key);
+                }
+            }
+
+            if (pending is not null)
+            {
+                foreach (var entry in pending.Values)
+                {
+                    index[entry.Key] = entry;
+                }
             }
 
             SafeFile.WriteAllText(IndexPath, JsonSerializer.Serialize(index.Values.ToList(), new JsonSerializerOptions { WriteIndented = true }));
         }
 
         _unreadIndex = null;
+        _unreadDeleted = null;
         return index;
     }
 
@@ -229,6 +357,24 @@ public sealed class StingerLibrary
         return PlainFileName.IsInside(_folder, path) ? path : null;
     }
 
+    /// <summary>
+    /// Remembers that a line's recording has been deleted while index.json
+    /// could not be read, so the merge in <see cref="Index"/> takes it out
+    /// of what the file turns out to say rather than letting it come back.
+    ///
+    /// Only while writes are being held off: with a readable index the
+    /// removal is in _index already and SaveIndex writes it out as it
+    /// always did. Callers hold _gate, as everything that touches the
+    /// index does.
+    /// </summary>
+    private void Tombstone(string key)
+    {
+        if (_index is null && _holdWrites)
+        {
+            (_unreadDeleted ??= new HashSet<string>(StringComparer.Ordinal)).Add(key);
+        }
+    }
+
     private void SaveIndex()
     {
         var index = Index();
@@ -249,6 +395,34 @@ public sealed class StingerLibrary
         lock (_gate)
         {
             return Index().ContainsKey(KeyFor(text));
+        }
+    }
+
+    /// <summary>
+    /// What was recorded for a line - which voice, which soundscape, when -
+    /// or null when nothing was.
+    ///
+    /// <see cref="Has"/> answers the question the race calls ask ("is there
+    /// a take?"); this answers the one the club's voice-ID asks ("whose
+    /// voice is the take in?"). The entry is a record and the index is
+    /// never handed out, so a caller cannot change what is on disk by
+    /// holding this.
+    ///
+    /// Says nothing about whether the audio is still THERE - TryLoad is the
+    /// only thing that touches the file. Deliberately: this is read to
+    /// decide what to tell a club on a settings page, where going to disk
+    /// for every row of a list is how a page comes to take a second to draw.
+    /// </summary>
+    public Entry? Recorded(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return Index().TryGetValue(KeyFor(text), out var entry) ? entry : null;
         }
     }
 
@@ -337,10 +511,14 @@ public sealed class StingerLibrary
             var index = Index();
             foreach (var line in lines)
             {
-                if (!index.Remove(KeyFor(line), out var entry))
+                var key = KeyFor(line);
+
+                if (!index.Remove(key, out var entry))
                 {
                     continue;
                 }
+
+                Tombstone(key);
 
                 string? heldFile = null;
 
@@ -428,9 +606,13 @@ public sealed class StingerLibrary
             var index = Index();
             foreach (var line in lines)
             {
-                if (index.Remove(KeyFor(line), out var entry))
+                var key = KeyFor(line);
+
+                if (index.Remove(key, out var entry))
                 {
                     removed++;
+                    Tombstone(key);
+
                     try
                     {
                         // Never a file outside the folder - see Index().

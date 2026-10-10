@@ -109,11 +109,15 @@ public static class CommentaryReportFacts
                 {
                     var runnerUp = CommentaryFacts.Clean(second.Name);
 
+                    // Every margin in this file goes in with a decimal
+                    // POINT whatever the PC's region: on a comma-decimal
+                    // laptop "0,21s" was read out over the PA as "nought,
+                    // twenty one". See CommentaryFacts.Invariant.
                     text = gap > DominantPoleSeconds
-                        ? $"{poleName} takes pole in {cls} by {gap:0.00}s - a long way, for this class."
+                        ? $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s - a long way, for this class."
                         : runnerUp.Length > 0
-                            ? $"{poleName} takes pole in {cls} by {gap:0.00}s from {runnerUp}."
-                            : $"{poleName} takes pole in {cls} by {gap:0.00}s.";
+                            ? $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s from {runnerUp}."
+                            : $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s.";
                 }
             }
 
@@ -137,7 +141,7 @@ public static class CommentaryReportFacts
                 var places = mover.SeasonAveragePosition!.Value - mover.Position;
 
                 found.Add(new FactBlock($"mover:{raceKey}:{mover.DriverId}",
-                    $"{moverName} qualified {CommentaryFacts.Ordinal(mover.Position)}, about {places:0} places better than they usually manage in {cls}."));
+                    $"{moverName} qualified {CommentaryFacts.Ordinal(mover.Position)}, about {CommentaryFacts.Invariant(places, "0")} places better than they usually manage in {cls}."));
             }
         }
 
@@ -157,7 +161,7 @@ public static class CommentaryReportFacts
             if (missedBy > 0 && missedBy <= NarrowMissSeconds && missedName.Length > 0)
             {
                 found.Add(new FactBlock($"missed:{raceKey}:{firstOut.DriverId}",
-                    $"{missedName} missed the top main by {missedBy:0.00}s."));
+                    $"{missedName} missed the top main by {CommentaryFacts.Invariant(missedBy, "0.00")}s."));
             }
         }
 

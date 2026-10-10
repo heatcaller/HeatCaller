@@ -56,11 +56,29 @@ public partial class MainForm
                 return true;
             }
 
-            // Ctrl+F: the page search at the top of the sidebar.
+            // Ctrl+F: the page search at the top of the sidebar. With the
+            // sidebar narrowed to its icons the box is hidden, so the sidebar
+            // is opened first - the alternative is putting the focus in a box
+            // nobody can see and typing into nothing.
             if (keyData == (Keys.Control | Keys.F) && !_raceMode)
             {
+                if (_navIconsOnly)
+                {
+                    SetNavIconsOnly(false);
+                }
+
                 txtNavSearch.Focus();
                 txtNavSearch.SelectAll();
+                return true;
+            }
+
+            // Ctrl+B: the sidebar down to its icons, and back. Not in Race
+            // Mode, where there is no sidebar to narrow - F11 took it away
+            // altogether. Safe in a text box: Ctrl+B is not an editing key
+            // in one, unlike Ctrl+Z, which is why that one asks first.
+            if (keyData == (Keys.Control | Keys.B) && !_raceMode)
+            {
+                ToggleNavIconsOnly();
                 return true;
             }
 

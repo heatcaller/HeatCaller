@@ -42,8 +42,25 @@ public sealed partial class RaceControlControl
 
     private void WireRaceControl()
     {
+        // The show's block is abandoned the moment the race moves, and
+        // BEFORE the marshal to the UI thread rather than after it.
+        //
+        // A block can hold two or three items with music under them (see
+        // ShowBlock). Staging, a countdown, a green or any flag means the
+        // room's attention is on the track, and anything the block had left
+        // to say is dropped - never queued, because "still to come, the
+        // A-main" said after the A-main started is worse than silence.
+        //
+        // Before the marshal because a post sits behind whatever the UI
+        // thread is already doing, and the whole point is that it stops
+        // NOW. AbandonBlock is built to be called off the UI thread.
+        // Harmless when there is no block, and harmless twice - the recap
+        // and the round intro also pass their own cancellation token, so
+        // this is the belt to their braces.
         _stateChangedHandler = state =>
         {
+            ShowMusic?.Invoke()?.AbandonBlock();
+
             if (InvokeRequired) { BeginInvoke(() => OnRaceStateChanged(state)); return; }
             OnRaceStateChanged(state);
         };
@@ -51,6 +68,8 @@ public sealed partial class RaceControlControl
 
         _flagChangedHandler = flag =>
         {
+            ShowMusic?.Invoke()?.AbandonBlock();
+
             if (InvokeRequired) { BeginInvoke(() => OnFlagChanged(flag)); return; }
             OnFlagChanged(flag);
         };

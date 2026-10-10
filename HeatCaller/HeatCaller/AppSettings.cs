@@ -306,6 +306,18 @@ public sealed class AppSettings
     /// <summary>The bed, if one was chosen by path. Blank: bed.* in the show music folder.</summary>
     public string ShowBedPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The sting, if one was chosen by path. Blank: sting.* in the show
+    /// music folder.
+    ///
+    /// The third piece, and the only optional one that is not music to
+    /// listen to: it is the punctuation BETWEEN two items of a block - see
+    /// ShowBlock. A club with no sting still gets punctuation, because a
+    /// swell of the bed does the same job; this is for a club who have a
+    /// mark of their own and would rather hear it.
+    /// </summary>
+    public string ShowStingPath { get; set; } = string.Empty;
+
     /// <summary>The opener's level, as a percentage. It is meant to land, so near the top.</summary>
     public int ShowOpenerLevel { get; set; } = 90;
 
@@ -322,6 +334,16 @@ public sealed class AppSettings
     public int ShowBedDuckPercent { get; set; } = 55;
 
     /// <summary>
+    /// The sting's level, as a percentage.
+    ///
+    /// High, like the opener's and for the same reason - a mark that has to
+    /// be listened for is not a mark - but a shade under it: the sting lands
+    /// on top of a bed that is already running, where the opener lands on
+    /// nothing.
+    /// </summary>
+    public int ShowStingLevel { get; set; } = 80;
+
+    /// <summary>
     /// How far into the opener the voice comes in, in milliseconds. Zero -
     /// the default - measures it: the voice enters where the opener stops
     /// being a hit and starts ringing out. See ShowTreatment.
@@ -335,6 +357,35 @@ public sealed class AppSettings
     /// blank string cannot say.
     /// </summary>
     public string ShowSegments { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether a show later in the evening comes in on the opener's
+    /// ring-out instead of playing it from the top - the broadcast
+    /// rejoin. See ShowRunningOrder.
+    ///
+    /// On, because the alternative is what this feature started as: the
+    /// full theme in front of every scored segment, which with race
+    /// intros ticked is eleven times in an evening and stops being heard
+    /// somewhere around the third heat. Off is for a club whose opener is
+    /// their own jingle and who want all of it every time; it only takes
+    /// the SHORTENING away, not the rest of the running order.
+    ///
+    /// Nothing to set for a club with a short opener either way - a piece
+    /// with too little ring-out to come in on is always played whole, and
+    /// the Commentary page says which of the two theirs is.
+    /// </summary>
+    public bool ShowRejoinEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The club's voice-ID: one line saying whose station this is, said at
+    /// the top of the night and on the way out - see ShowIdent. Blank means
+    /// none, and the show is exactly the show it always was.
+    ///
+    /// Recorded for free alongside the fixed race calls on Themes -&gt;
+    /// Soundscapes, so after one press it plays from the club's own PC with
+    /// no internet; unrecorded, the free Kokoro voice says it live.
+    /// </summary>
+    public string ShowIdentLine { get; set; } = string.Empty;
 
     // --- The co-host (second voice in the booth) ---
     //
@@ -361,8 +412,13 @@ public sealed class AppSettings
     public string CoHostHeatCallerVoice { get; set; } = string.Empty;
     public string CoHostHeatCallerVoiceName { get; set; } = string.Empty;
     public string CoHostHeatCallerRev { get; set; } = string.Empty;
-    public string CoHostWindowsVoiceName { get; set; } = string.Empty;
     public string CoHostKokoroVoiceName { get; set; } = string.Empty;
+
+    // CoHostWindowsVoiceName was here, and MechanicWindowsVoiceName below
+    // it. The free Windows voice was retired on 10 Oct 2026, so there is no
+    // Windows voice to pick one of. An older settings.json still carries
+    // both keys; System.Text.Json passes over a property this class does
+    // not have, so the file loads with everything else in it intact.
 
     /// <summary>The co-host's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
@@ -372,7 +428,6 @@ public sealed class AppSettings
         CoHostHeatCallerVoice ?? string.Empty,
         CoHostHeatCallerVoiceName ?? string.Empty,
         CoHostHeatCallerRev ?? string.Empty,
-        CoHostWindowsVoiceName ?? string.Empty,
         CoHostKokoroVoiceName ?? string.Empty);
     // Was 6 - too short for Ollama's own documented cold-load behaviour on
     // a model's first request (commonly 13s+, even for a small model on
@@ -605,7 +660,6 @@ public sealed class AppSettings
     public string MechanicHeatCallerVoice { get; set; } = string.Empty;
     public string MechanicHeatCallerVoiceName { get; set; } = string.Empty;
     public string MechanicHeatCallerRev { get; set; } = string.Empty;
-    public string MechanicWindowsVoiceName { get; set; } = string.Empty;
     public string MechanicKokoroVoiceName { get; set; } = string.Empty;
 
     /// <summary>The mechanic's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
@@ -616,7 +670,6 @@ public sealed class AppSettings
         MechanicHeatCallerVoice ?? string.Empty,
         MechanicHeatCallerVoiceName ?? string.Empty,
         MechanicHeatCallerRev ?? string.Empty,
-        MechanicWindowsVoiceName ?? string.Empty,
         MechanicKokoroVoiceName ?? string.Empty);
     /// <summary>Whether reaching a lap or time limit puts the checkered out rather than stopping the race on the spot.</summary>
     public bool RaceFinishOnNextCrossing { get; set; } = true;
@@ -657,6 +710,20 @@ public sealed class AppSettings
     /// else afterwards keeps it there.
     /// </summary>
     public bool NavConnectionAboveBackup { get; set; }
+
+    /// <summary>
+    /// The sidebar narrowed to a rail of icons - the chevron at the top of
+    /// it, or Ctrl+B. Off for a new install: a club meeting the app for the
+    /// first time needs the page names.
+    ///
+    /// Remembered, because it is a choice about the screen somebody is
+    /// actually sitting at - a 1366-wide laptop at the track, where the 160
+    /// pixels this gives back is a leaderboard column - and having to narrow
+    /// it again at every start would make it not worth using. Race Mode
+    /// (F11) hides the sidebar outright and is deliberately NOT remembered;
+    /// this is the everyday version of the same want.
+    /// </summary>
+    public bool NavIconsOnly { get; set; }
 
     /// <summary>
     /// 0 = Light, 1 = Dark, 2 = Synthwave. Since 0.48 the app runs with a

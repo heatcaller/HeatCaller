@@ -62,7 +62,8 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 | <kbd>M</kbd> | Mutes or unmutes all sound, the same as the mute button at the bottom of the sidebar. |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo, the same as the **Undo** button at the bottom of the sidebar. In a text box, it undoes your typing instead. |
 | <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> | Opens that page in the sidebar, counting from the top (hidden pages are skipped). Not in Race Mode. |
-| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Puts the cursor in the **Search pages...** box. Not in Race Mode. |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Puts the cursor in the **Search pages...** box. If the sidebar is down to its icons, it opens again first. Not in Race Mode. |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> | Narrows the sidebar to just its icons, and opens it again. The chevron beside the **Search pages...** box does the same. How you leave it is remembered. Not in Race Mode, which has no sidebar. |
 | <kbd>F11</kbd> | Turns **Race Mode** on or off. Race Mode is full screen with no sidebar, showing only the **Race Control** page. Turning it on also selects **Race Control** in the sidebar. |
 | <kbd>Esc</kbd> | Leaves Race Mode (only while it's on, and not while you're editing a grid cell or a list is open). |
 | <kbd>Ctrl</kbd>+<kbd>+</kbd> | Makes all text in the app bigger, 10% at a time (up to 200%). |
@@ -77,6 +78,7 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 |---|---|
 | <kbd>F11</kbd> | Turns full screen on or off. |
 | <kbd>M</kbd> | Shows or hides the track map, when the layout has a plan. See [Track map](../screens/big-screen.md#track-map). |
+| <kbd>O</kbd> | Shows or hides the ON AIR band, which is up while the announcer's show is on air. Unlike <kbd>M</kbd>, the choice is remembered between sessions. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
 | <kbd>Esc</kbd> | Closes the Big Screen window. |
 
 The Big Screen shows a reminder of these keys. Click the Big Screen window first so it has the focus. See [Big Screen](../screens/big-screen.md).
@@ -121,6 +123,7 @@ In the **Track Designer** (**Track Layouts** → **Track Designer**):
 | <kbd>5</kbd> | **Route** tool |
 | <kbd>6</kbd> | **Erase** tool |
 | <kbd>7</kbd> | **Photo** tool |
+| <kbd>8</kbd> | **Select** tool |
 | <kbd>R</kbd> | Turns markings 90 degrees |
 | <kbd>F</kbd> | Fits the whole plan in view (same as **Fit**) |
 | <kbd>G</kbd> | Shows or hides the grid |
@@ -135,6 +138,44 @@ With the mouse:
 - **Ctrl-drag** with the Floor tool takes floor tiles back off.
 - With the Route tool, right-click removes a point.
 - The **mouse wheel** zooms. With the Photo tool, it resizes the traced photo instead.
+
+### Picking part of a plan up
+
+Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers is picked up, and because the box snaps out to whole tiles, the rails round the edge of a block of tiles come with it rather than being left behind.
+
+Then:
+
+| Key | What it does |
+|---|---|
+| Arrow keys | Nudges what's picked one tile |
+| <kbd>]</kbd> | Turns it a quarter clockwise, where it stands |
+| <kbd>[</kbd> | Turns it a quarter the other way |
+| <kbd>Delete</kbd> | Takes it off the plan |
+| <kbd>Esc</kbd> | Drops it - nothing is picked any more |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Picks up the whole plan |
+| <kbd>Ctrl</kbd>+<kbd>C</kbd> | Copies it |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Cuts it |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> | Puts a copy down where the pointer is |
+| <kbd>Ctrl</kbd>+<kbd>D</kbd> | Duplicates it, one tile along |
+
+These need the plan to have the focus, like the tool keys. **Turn**, **Flip across**, **Flip down**, **Duplicate** and **Remove** on the toolbar do the same things, and are grayed out while nothing is picked.
+
+With the mouse:
+
+- **Drag inside** what's picked to move it.
+- **Shift-drag** another box to add to what's picked - or, over something already picked, to take it back out.
+- **Click** bare floor to drop the selection.
+
+A turn or a mirror keeps the top-left corner of the box where it is, so turning a layout never slides it off the floor you had it lined up with. One drag, nudge, turn or mirror is one press of <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+
+!!! note "What a move lands on, it replaces"
+    A plan holds one tile, one rail and one marking per place. So if you move or paste something onto part of the plan that's already occupied, what was underneath is taken off and what you moved stays. <kbd>Ctrl</kbd>+<kbd>Z</kbd> puts it all back.
+
+!!! note "The racing line comes too"
+    Route points inside the box are picked up with everything else, so <kbd>Ctrl</kbd>+<kbd>A</kbd> and then an arrow key moves the whole plan, racing line included. Picking up only part of the line moves only those points, which bends it - that's deliberate, but it's easy to do by accident on a half-covered layout.
+
+!!! tip "Picking up a plan changes nothing by itself"
+    Dragging a box is only looking, so it takes no undo step. <kbd>Ctrl</kbd>+<kbd>Z</kbd> straight after a marquee takes back your last *edit*, not your last look.
 
 ## Mixer faders
 

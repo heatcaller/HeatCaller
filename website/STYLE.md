@@ -68,8 +68,8 @@ docs/race-control/running-a-race.md            Race Control page: staging → co
 docs/race-control/corrections-and-recovery.md  Lap adjust, penalties, undo, crash recovery journal, closing mid-race, restarts
 docs/race-control/practice-and-ghosts.md       Practice, Ghost Cars, Demo Mode, Handicaps
 docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, tonight's standings
-docs/announcer/voice.md                        Voice → Voice Settings (Speak with: ElevenLabs, the HeatCaller voice or the free Windows voice), Announcements, Rivalries; the Announcer screen; ElevenLabs setup, templates, events
-docs/announcer/commentary.md                   Commentary (local LLM / Ollama)
+docs/announcer/voice.md                        Voice → Voice Settings (Speak with: ElevenLabs, the HeatCaller voice or the free Kokoro voice), Announcements, Rivalries; the Announcer screen; hearing a voice first (Hear It, Preview), the Kokoro voice and its download, ElevenLabs setup, templates, events
+docs/announcer/commentary.md                   Commentary (local LLM / Ollama); the mechanic's own Kokoro voice
 docs/announcer/sounds-and-music.md             Sounds → Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps; audio auto-start
 docs/timing/decoders.md                        Connection page: direct EasyLap, I-Lap; auto-connect; troubleshooting (Next Level Timing retired in 0.50.0)
 docs/timing/transponders.md                    Transponder handling, unknown transponders, rentals, signal/readiness, minimum lap time
@@ -80,6 +80,7 @@ docs/online/index.md                           What the online relay is; pages i
 docs/online/setup.md                           Club Website page: address, club, token, test connection, what's published, Look (welcome line), Share/posters
 docs/online/check-in.md                        Online check-in: QR check-ins/QR, staff PIN, personal PINs, rotation, photos switch, the racer's view
 docs/online/email.md                           Emailing racer PINs: Gmail/iCloud app passwords, settings, test, automatic sending, troubleshooting
+docs/online/sign-up.md                         Driver sign-up: invites, the racer's form, approving a sign-up, what it creates
 docs/admin/relay-hosting.md                    Hosting the relay on Fly.io end to end (install flyctl, mint, config, volume, deploy, probe, day-to-day, moving/forwarder)
 docs/admin/security-and-privacy.md             Security model: secrets encryption, tokens, PINs, rate limits, what's public, children's data, LAN server hardening
 docs/admin/backups.md                          Backup & Restore page, automatic backups, backup password, restoring on a new PC, unreadable files

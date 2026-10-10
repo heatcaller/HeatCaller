@@ -163,7 +163,10 @@ public sealed class LocalLlmClient : ICommentaryBrain
                 text = whole;
             }
 
-            return CleanLine(text, maxTokens);
+            // The brief's own shape decides how the answer may be tidied:
+            // a tagged two-hander has to keep its tags and its line breaks
+            // (see AsksForTaggedTurns).
+            return CleanLine(text, maxTokens, AsksForTaggedTurns(userPrompt));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -347,7 +350,27 @@ public sealed class LocalLlmClient : ICommentaryBrain
         return null;
     }
 
-    private static string? CleanLine(string? text, int maxTokens)
+    /// <summary>
+    /// True when the brief asked for an answer tagged line by line - the
+    /// co-host's two-hander, as CommentaryExchange.Brief asks for it.
+    ///
+    /// Read off the prompt because there is nowhere else to read it from:
+    /// the brain is spoken to through ICommentaryBrain, and GenerateAsync
+    /// says nothing about the shape of the answer wanted. The brief is the
+    /// only thing this app sends that puts those two tags in quotes.
+    /// </summary>
+    internal static bool AsksForTaggedTurns(string? userPrompt) =>
+        userPrompt is not null
+        && userPrompt.Contains($"\"{CommentaryExchange.AnnouncerTag}\"", StringComparison.Ordinal)
+        && userPrompt.Contains($"\"{CommentaryExchange.CoHostTag}\"", StringComparison.Ordinal);
+
+    /// <param name="taggedTurns">
+    /// True when the answer is a tagged two-hander and must reach
+    /// CommentaryExchange.Split with its tags and its line breaks intact.
+    /// Internal, with the rest of this, so the shape can be tested without
+    /// a model on the end of it.
+    /// </param>
+    internal static string? CleanLine(string? text, int maxTokens, bool taggedTurns = false)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -356,20 +379,43 @@ public sealed class LocalLlmClient : ICommentaryBrain
 
         var line = text.Trim();
 
-        // Strip a leading label like "Commentary:" or "Announcer:".
-        var colon = line.IndexOf(':');
-        if (colon > 0 && colon < 16 && !line[..colon].Contains(' '))
+        // The label strip and the newline collapse below are both for a
+        // single line headed straight for the speech queue, and both
+        // destroy a two-hander: the first takes the "A:" off the opening
+        // turn, the second runs the turns together, and Split then finds
+        // nothing tagged. So the co-host never once worked on Ollama -
+        // every exchange fell through to a second, single-voice write, and
+        // BattleWatch's twenty seconds were gone by the time it did.
+        // CommentaryService.ParseInterview has guarded the interview
+        // against exactly this all along.
+        if (!taggedTurns)
         {
-            line = line[(colon + 1)..].Trim();
+            // Strip a leading label like "Commentary:" or "Announcer:".
+            var colon = line.IndexOf(':');
+            if (colon > 0 && colon < 16 && !line[..colon].Contains(' '))
+            {
+                line = line[(colon + 1)..].Trim();
+            }
         }
 
         line = line.Trim('"', '\u201C', '\u201D', '\'').Trim();
 
-        // Collapse newlines into spaces - this is headed for a speech
-        // queue, so paragraph breaks have no meaning, but the text itself
-        // is kept. Longer settings legitimately produce multi-sentence
-        // answers now.
-        line = line.Replace('\r', ' ').Replace('\n', ' ');
+        if (taggedTurns)
+        {
+            // The breaks stay, because Split looks for a tag at the start
+            // of a line. Only the carriage returns go, so a model that
+            // answers with CRLF still splits.
+            line = line.Replace("\r\n", "\n").Replace('\r', '\n');
+        }
+        else
+        {
+            // Collapse newlines into spaces - this is headed for a speech
+            // queue, so paragraph breaks have no meaning, but the text itself
+            // is kept. Longer settings legitimately produce multi-sentence
+            // answers now.
+            line = line.Replace('\r', ' ').Replace('\n', ' ');
+        }
+
         while (line.Contains("  "))
         {
             line = line.Replace("  ", " ");

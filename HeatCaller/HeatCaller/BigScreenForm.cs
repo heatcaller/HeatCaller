@@ -181,6 +181,28 @@ public sealed class BigScreenForm : Form
     private readonly Func<IfItEndedNow?>? _ifItEndedNow;
     private bool _tickerShowing;
 
+    /// <summary>
+    /// The on-air lower third (OnAirTreatment): a band at the very foot of
+    /// the window while the announcer's show is on air, below even the On
+    /// Deck bar, so the room sees a broadcast as well as hearing one.
+    ///
+    /// A band of its own rather than anything over the board, because a race
+    /// always wins this screen - see the long note on OnAirTreatment for the
+    /// argument and for what was turned down.
+    /// </summary>
+    private readonly OnAirBar _onAir = new();
+
+    /// <summary>
+    /// Held in a field so it can be taken off ShowOnAir's static event again
+    /// when the window closes - the same reason the look's handler is, and
+    /// with a worse ending: ShowOnAir is run by the announcer screen's
+    /// director and outlives every Big Screen ever opened, so a dead form
+    /// left on it is both a leak and a handler marshalling into a window
+    /// that has been disposed.
+    /// </summary>
+    private readonly Action<bool> _onAirChangedHandler;
+    private bool _onAirSubscribed;
+
     private bool _isFullscreen;
     private FormBorderStyle _restoreBorderStyle;
     private FormWindowState _restoreWindowState;
@@ -239,6 +261,13 @@ public sealed class BigScreenForm : Form
         Looks.DisplaysChanged += _displaysChangedHandler;
         _displaysSubscribed = true;
 
+        // The announcer's show going on and off air. Taken off again in
+        // FormClosed AND in Dispose, the two places UnsubscribeDisplays is
+        // called from and for the same reason - see UnsubscribeOnAir.
+        _onAirChangedHandler = _ => NudgeOnAir();
+        ShowOnAir.PlayingChanged += _onAirChangedHandler;
+        _onAirSubscribed = true;
+
         // Held in fields rather than inline lambdas, because an inline
         // lambda can't be unsubscribed - these two were left attached when
         // the window closed, so a reopened-and-closed Big Screen accumulated
@@ -284,6 +313,16 @@ public sealed class BigScreenForm : Form
                 _mapWanted = !_mapWanted;
                 UpdateTrackMap();
             }
+            else if (e.KeyCode == Keys.O)
+            {
+                // The club's switch for the on-air treatment, remembered
+                // between nights - see OnAirTreatment.Wanted for why it is a
+                // key on this screen rather than a tick box on a settings
+                // page. Applied here and not left to the tick, so pressing
+                // it in front of a room does something straight away.
+                OnAirTreatment.Wanted = !OnAirTreatment.Wanted;
+                UpdateOnAir();
+            }
             else if (e.KeyCode == Keys.F11)
             {
                 ToggleFullscreen();
@@ -320,6 +359,7 @@ public sealed class BigScreenForm : Form
             _race.SplitCrossed -= _splitCrossedHandler;
             _announcer.AnnouncementTextReady -= OnAnnouncementTextReady;
             UnsubscribeDisplays();
+            UnsubscribeOnAir();
         };
 
         RefreshAll();
@@ -341,6 +381,22 @@ public sealed class BigScreenForm : Form
         }
     }
 
+    /// <summary>
+    /// Comes off ShowOnAir's static event. Safe twice, which it has to be:
+    /// it is called from FormClosed and again from Dispose, exactly as
+    /// UnsubscribeDisplays is, so a window disposed without ever being
+    /// closed cannot stay on a static event that lives for the rest of the
+    /// day.
+    /// </summary>
+    private void UnsubscribeOnAir()
+    {
+        if (_onAirSubscribed)
+        {
+            ShowOnAir.PlayingChanged -= _onAirChangedHandler;
+            _onAirSubscribed = false;
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -351,6 +407,7 @@ public sealed class BigScreenForm : Form
             // (The logo image goes with the logo box, one of this window's
             // own controls, which base.Dispose disposes.)
             UnsubscribeDisplays();
+            UnsubscribeOnAir();
         }
 
         base.Dispose(disposing);
@@ -496,7 +553,7 @@ public sealed class BigScreenForm : Form
     {
         // Colours are left to ApplyLook, which runs straight after this and
         // again whenever the crowd-screen look changes.
-        _lblHint.Text = "F11: toggle fullscreen     M: track map     Esc: close";
+        _lblHint.Text = "F11: toggle fullscreen     M: track map     O: on air     Esc: close";
         _lblHint.Dock = DockStyle.Top;
         _lblHint.Height = UiLayout.AtDpi(24);
         _lblHint.TextAlign = ContentAlignment.MiddleRight;
@@ -639,8 +696,21 @@ public sealed class BigScreenForm : Form
         _lblWarning.TextAlign = ContentAlignment.MiddleCenter;
         _lblWarning.Visible = false;
 
+        _onAir.Dock = DockStyle.Bottom;
+        _onAir.Visible = false;
+
         Controls.Add(_pnlLeaderboardArea);
         Controls.Add(_pnlOnDeck);
+
+        // Added AFTER the On Deck bar on purpose. Docking is laid out from
+        // the last control added to the first (see the band above), so this
+        // claims the very bottom of the window and On Deck sits above it -
+        // which is where a lower third belongs, under everything, and which
+        // leaves the bar's championship ticker where a club already reads
+        // it. Nothing else moves: the clock, the countdown, the flag band
+        // and the board are all laid out before this is even considered.
+        Controls.Add(_onAir);
+
         Controls.Add(_pnlCountdown);
         Controls.Add(_lblWarning);
         Controls.Add(_pnlTop);
@@ -730,6 +800,15 @@ public sealed class BigScreenForm : Form
 
             _pnlOnDeck.Height = Sized(62);
             _lblWarning.Height = Sized(84);
+
+            // Taller than the On Deck bar and shorter than the warning: a
+            // lower third has to read as broadcast furniture from the back
+            // of a hall, and it is also a band the leaderboard gives up for
+            // the length of a show, so it takes no more room than it needs
+            // to carry two lines' worth of type. The band draws itself from
+            // this height (OnAirBar.Draw), so it is the right size on a
+            // laptop and on a projector without being told which.
+            _onAir.Height = Sized(96);
 
             // The faces made again at this size; the old ones disposed once
             // nothing wears them.
@@ -1333,6 +1412,7 @@ public sealed class BigScreenForm : Form
         UpdateAttract();
         UpdateTrackMap();
         UpdateTicker();
+        UpdateOnAir();
 
         // Also refresh the banner here, not just on lap events - otherwise
         // it goes stale between laps, and never recovers once a displayed
@@ -1381,6 +1461,20 @@ public sealed class BigScreenForm : Form
                 // was left of its time - the opening laps, with long slides.
                 if (_showingSponsor && _sponsors is not null)
                 {
+                    // A VIDEO has to be stopped, not merely stopped being
+                    // "showing". Only the picture was put away here, so
+                    // LibVLC carried on playing the ad's sound under the roll
+                    // call and over the start of the race - and with
+                    // _showingSponsor false nothing could finish the slot:
+                    // neither SponsorTimer_Tick nor the video's own Finished
+                    // got as far as ShowLeaderboardAgain, which is the only
+                    // route to StopSponsorVideo and so the only route to
+                    // AdBreak.End. The music and the crowd bed stayed muted
+                    // for the whole heat, and with PauseDuringRace on they
+                    // stayed muted until after it. Safe when no video is
+                    // playing, and safe twice - see StopSponsorVideo.
+                    StopSponsorVideo();
+
                     _showingSponsor = false;
                     _sponsorTimer.Interval = SponsorIntervalMs(_sponsors.Current.LeaderboardSeconds);
                 }
@@ -1546,6 +1640,131 @@ public sealed class BigScreenForm : Form
         }
     }
 
+    /// <summary>
+    /// The show has gone on or off air. Raised by ShowOnAir on whatever
+    /// thread started or ended it - a thread-pool one in practice, because
+    /// ShowTreatment's ending awaits with ConfigureAwait(false) - and raised
+    /// WHILE ShowOnAir's own lock is held. So this does the least it
+    /// possibly can: it posts, and returns.
+    ///
+    /// BeginInvoke, NEVER Invoke. Invoke would wait for the UI thread, and
+    /// the UI thread asks ShowOnAir whether a show is on twice a second
+    /// (UpdateOnAir) - so a show ending on a background thread would hold
+    /// that lock waiting for a UI thread that was waiting for the lock, and
+    /// a race night would stop dead with the club's music silenced. The same
+    /// shape of bug AdBreak and ShowOnAir both describe in their own notes,
+    /// one step further along: there it was the counting that crossed
+    /// threads, here it would be the SUBSCRIBER doing the waiting.
+    ///
+    /// Nothing is read off ShowOnAir in here either. Reading Caption would
+    /// re-enter the lock this is already inside - legal, since it is
+    /// re-entrant on the one thread - but there is no need: UpdateOnAir asks
+    /// for itself once it is on the UI thread and the lock is long gone.
+    ///
+    /// And it does not throw. A subscriber that throws is swallowed on
+    /// purpose, so that a bug in here can never leave the club's music down
+    /// for the night - but leaning on somebody else's catch is not a design.
+    /// </summary>
+    private void NudgeOnAir()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(new Action(UpdateOnAir));
+        }
+        catch
+        {
+            // No handle yet - a show already on air as this window is being
+            // built - or the handle went away between the check above and
+            // the post, which means the window is closing. Either way the
+            // half-second tick asks again: this event only makes the answer
+            // prompt, it is NOT how the band gets on or off the screen.
+        }
+    }
+
+    /// <summary>
+    /// Puts the on-air band up while the announcer's show is on air, and
+    /// takes it down when it is not.
+    ///
+    /// ASKED ON THE TICK, not done from the event, and that is the whole
+    /// safety argument. The sponsor video stayed on screen with its sound
+    /// over the start of a race because StopSponsorVideo was the only route
+    /// off the screen and the roll call went round it (see UpdateRollCall) -
+    /// furniture with exactly one route off stays on the moment that route
+    /// is missed. Here there is no route at all: twice a second this asks
+    /// the show itself whether it is on and makes the band agree, so a show
+    /// that ends, fails halfway, or ends while this window was being built
+    /// or was not listening all come to the same place within half a second.
+    /// Nothing is remembered between calls, so there is nothing that can go
+    /// stale.
+    ///
+    /// Nothing else on this screen is touched - not the board, the roll
+    /// call, a sponsor slide, a video or the cards. The band is a dock of
+    /// its own at the foot of the window, so the question "what happens when
+    /// a show and the roll call both want the screen" has no answer to give:
+    /// they are not asking for the same room. See OnAirTreatment.
+    /// </summary>
+    private void UpdateOnAir()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        bool show;
+        var caption = string.Empty;
+
+        try
+        {
+            // ShowOnAir's lock, from the UI thread, while this thread holds
+            // nothing of its own - which is the half of the bargain that
+            // makes NudgeOnAir's BeginInvoke safe. Behind each of these is a
+            // compare and a field read.
+            show = OnAirTreatment.Showing(ShowOnAir.Playing, OnAirTreatment.Wanted);
+
+            if (show)
+            {
+                caption = OnAirTreatment.Caption(ShowOnAir.Caption);
+            }
+        }
+        catch
+        {
+            // No band rather than no Big Screen - the same bargain
+            // UpdateAttract, UpdateTicker and UpdateRollCall all make.
+            show = false;
+        }
+
+        if (show)
+        {
+            // Before it is shown, so the band's first paint already has the
+            // words in it rather than wiping on empty and filling in.
+            _onAir.Say(caption);
+        }
+
+        if (_onAir.Visible != show)
+        {
+            _onAir.Visible = show;
+        }
+    }
+
+    /// <summary>
+    /// Whether the on-air band is up - for the test that drives a real show
+    /// past a real Big Screen (ShowOnScreenTests). Nothing in the app reads
+    /// it: the alternative was that test reaching in by reflection, which
+    /// would go quietly wrong the day a field is renamed.
+    /// </summary>
+    internal bool OnAirUpForTests => _onAir.Visible;
+
+    /// <summary>What the on-air band says - for the same test.</summary>
+    internal string OnAirSaysForTests => _onAir.Saying;
+
+    /// <summary>Whether the leaderboard is still up - the same test's proof that the band covers nothing.</summary>
+    internal bool BoardUpForTests => _grid.Visible;
+
     /// <summary>The roll call in the look's colours - called as it opens, and whenever the look changes.</summary>
     private void ColourRollCall()
     {
@@ -1568,6 +1787,17 @@ public sealed class BigScreenForm : Form
         _attractBoard.Highlight = HighlightColor;
         _attractBoard.Rule = GridLineColor;
         _attractBoard.Invalidate();
+
+        // The on-air band's plate is the look's Surface, except in a look
+        // whose Surface IS its background - several are - where it takes the
+        // hairline colour instead, the same stand-in the track map takes for
+        // its tarmac above. It is handed no ink: the caption's colour is
+        // worked out from the plate it lands on, because a plate this size
+        // can be any colour a club's look makes it (OnAirBar.Draw).
+        _onAir.Canvas = CanvasColor;
+        _onAir.Plate = PanelColor == CanvasColor ? GridLineColor : PanelColor;
+        _onAir.Highlight = HighlightColor;
+        _onAir.Invalidate();
     }
 
     private void ToggleFullscreen()

@@ -134,6 +134,9 @@ internal static partial class WindowCatalog
         // The windows a new club meets first (30 Sep).
         all.AddRange(FirstRunWindows());
         all.AddRange(DriverProfileWindows());
+
+        // Hearing a driver's name before it is read out (10 Oct).
+        all.AddRange(NameCheckWindows());
         all.AddRange(ClassWindows());
         all.AddRange(ClassRuleWindows());
         all.AddRange(RentalWindows());

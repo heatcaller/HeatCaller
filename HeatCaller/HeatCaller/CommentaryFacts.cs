@@ -322,6 +322,23 @@ public static class CommentaryFacts
     internal static string CleanLong(string? value) => CommentaryService.Field(value, 60);
 
     /// <summary>
+    /// A lap time, a gap or a margin written with a decimal POINT whatever
+    /// the PC's region.
+    ///
+    /// The same guard the recap has had since it was written, and for the
+    /// same reason: these numbers go into the prompt, the model repeats
+    /// them, and the line is spoken - where on a comma-decimal PC (German,
+    /// French, Dutch, Spanish, all common at a club) "12,345s" escapes the
+    /// spoken-time rewrite, which looks for a point, and is read out as
+    /// "twelve thousand three hundred forty-five seconds". The whole newer
+    /// fact layer formatted on the current culture and had the bug back.
+    /// A copy rather than a shared call because the service's own one is
+    /// private to it.
+    /// </summary>
+    internal static string Invariant(double value, string format) =>
+        value.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
     /// What is coming up, for the gap between races.
     ///
     /// Takes the estimate rather than working one out: how long a club
@@ -359,7 +376,7 @@ public static class CommentaryFacts
         }
 
         var when = inAbout is { TotalMinutes: >= 1 and < 120 }
-            ? $" The next one is about {inAbout.Value.TotalMinutes:0} minutes away."
+            ? $" The next one is about {Invariant(inAbout.Value.TotalMinutes, "0")} minutes away."
             : string.Empty;
 
         return new FactBlock(
@@ -393,8 +410,8 @@ public static class CommentaryFacts
 
         var text = new StringBuilder();
 
-        text.Append($"{behind} has been within {battle.NowSeconds:0.00}s of {ahead} for {battle.For.TotalSeconds:0} seconds, fighting for {where}. ");
-        text.Append($"Closest they have been: {battle.ClosestSeconds:0.00}s.");
+        text.Append($"{behind} has been within {Invariant(battle.NowSeconds, "0.00")}s of {ahead} for {Invariant(battle.For.TotalSeconds, "0")} seconds, fighting for {where}. ");
+        text.Append($"Closest they have been: {Invariant(battle.ClosestSeconds, "0.00")}s.");
 
         if (battle.LeadChanges == 1)
         {
@@ -426,7 +443,7 @@ public static class CommentaryFacts
             _ => "a personal best",
         };
 
-        var text = new StringBuilder($"{who} has just set {what}: {note.LapSeconds:0.000}s.");
+        var text = new StringBuilder($"{who} has just set {what}: {Invariant(note.LapSeconds, "0.000")}s.");
 
         if (note.Beaten is { } beaten && beaten > note.LapSeconds)
         {
@@ -434,8 +451,8 @@ public static class CommentaryFacts
             var by = beaten - note.LapSeconds;
 
             text.Append(holder.Length > 0 && !string.Equals(holder, who, StringComparison.OrdinalIgnoreCase)
-                ? $" It takes {by:0.000}s off {holder}'s {beaten:0.000}s."
-                : $" That is {by:0.000}s better than the previous {beaten:0.000}s.");
+                ? $" It takes {Invariant(by, "0.000")}s off {holder}'s {Invariant(beaten, "0.000")}s."
+                : $" That is {Invariant(by, "0.000")}s better than the previous {Invariant(beaten, "0.000")}s.");
         }
 
         // The kind is in the key, not just the driver: a personal best and

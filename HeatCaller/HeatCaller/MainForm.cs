@@ -376,6 +376,27 @@ public partial class MainForm : Form
     /// </summary>
     private int SelectedDecoder => DecoderConnection.ValueAt(cmbConnectionType.SelectedIndex);
 
+    // The eighteen stores and services this window owns are assigned in the
+    // constructor below, every one of them unconditionally, between its lines
+    // 616 and 926 - no branch, no early return, no try. The compiler reports
+    // CS8618 for all eighteen anyway ("must contain a non-null value when
+    // exiting constructor"), because this constructor is about 1,490 lines
+    // long and Roslyn's nullable flow analysis gives up on a method that
+    // size and reports the fields it could not follow.
+    //
+    // So this is the compiler failing to see an assignment, not a field that
+    // can really be null, and that is why the warning is turned off for this
+    // one constructor rather than fixed at the eighteen declarations. The
+    // alternative - "= null!" on each of them - would also silence every
+    // GENUINE null warning about those fields for ever after, and would tell
+    // the next reader they can be null, which they cannot: a window with a
+    // null _announcer or _webServer has never existed and could not start.
+    //
+    // Scoped to the constructor on purpose. If you add a field here that is
+    // NOT assigned in the constructor, you want to hear about it - so keep
+    // the restore immediately after the closing brace, and never widen this
+    // to the file.
+#pragma warning disable CS8618
     public MainForm()
     {
         // Settings (specifically DarkMode) must be loaded before
@@ -1411,6 +1432,15 @@ public partial class MainForm : Form
             // when somebody switches to I-Lap, and this used to go on
             // opening the EasyLap every three seconds regardless - two
             // decoders feeding one race.
+            //
+            // Connecting is deliberately NOT in the list below, and that is
+            // what guards the three-second tick now Connect is asynchronous:
+            // a connect still waiting on the driver leaves the state at
+            // Connecting, so this tick lets it be rather than asking for
+            // another one on top of it every three seconds.
+            // (DirectDecoderClient refuses a second one anyway - see its
+            // _connecting - but the state is what keeps the console and the
+            // buttons honest.)
             if (chkAutoConnect.Checked
                 && RoleOf(DecoderConnection.EasyLap) != DecoderRole.None
                 && _decoderClient.State is DecoderConnectionState.Disconnected or DecoderConnectionState.Error)
@@ -1855,6 +1885,7 @@ public partial class MainForm : Form
             _music.Dispose();
         };
     }
+#pragma warning restore CS8618
 
     /// <summary>
     /// Raised once, after the window has finished painting for the first
@@ -1994,6 +2025,39 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Asks the UI thread something from another one and waits for the
+    /// answer, or gives back <paramref name="whenGone"/> if the window
+    /// cannot take the question. The waiting twin of <see cref="TryPost"/>,
+    /// with the same four checks and the same catch.
+    ///
+    /// Written for AppUpdates (see WireUpdates), which called Invoke
+    /// directly for all three of the things it asks this window - with no
+    /// check and no catch - from its own background thread, two minutes
+    /// after launch and every six hours after that. One of those landing
+    /// while the window was closing threw ObjectDisposedException on a
+    /// thread nobody was watching and took the app down on its way out:
+    /// exactly what TryPost was written for, at the one door that still
+    /// had none of it.
+    /// </summary>
+    private T TryAsk<T>(Func<T> ask, T whenGone)
+    {
+        if (_closingDown || IsDisposed || Disposing || !IsHandleCreated)
+        {
+            return whenGone;
+        }
+
+        try
+        {
+            return Invoke(ask);
+        }
+        catch (InvalidOperationException)
+        {
+            // The handle went between the check and the call - see TryPost.
+            return whenGone;
+        }
+    }
+
     /// <summary>Shows the console lines that arrived before there was a handle to show them with. See _pendingConsoleLines.</summary>
     protected override void OnHandleCreated(EventArgs e)
     {
@@ -2128,17 +2192,23 @@ public partial class MainForm : Form
         // OnClientRawMessage writes to both.
         AppUpdates.Log = line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
 
-        AppUpdates.NothingInProgressNow = () => Invoke(() => AppUpdates.NothingInProgress(
+        // All three go through TryAsk rather than Invoke: this window may be
+        // closing when the updater's background thread asks, and a bare
+        // Invoke then throws on that thread with nobody to catch it. Each
+        // one's fallback is the cautious answer - nothing is in progress is
+        // answered "something is", which holds the update back, and the
+        // question nobody can be shown is answered "not now".
+        AppUpdates.NothingInProgressNow = () => TryAsk(() => AppUpdates.NothingInProgress(
             raceDayOpen: _raceEvents.Active is { IsLegacy: false, IsOpen: true },
             raceState: _race.State,
-            unfinishedRaceInJournal: RaceJournal.Unfinished() is not null));
+            unfinishedRaceInJournal: RaceJournal.Unfinished() is not null), whenGone: false);
 
-        AppUpdates.Ask = (newVersion, thisVersion) => Invoke(() => (AppUpdates.Answer)AppDialog.Choose(
+        AppUpdates.Ask = (newVersion, thisVersion) => TryAsk(() => (AppUpdates.Answer)AppDialog.Choose(
             this,
             AppUpdates.Question(newVersion, thisVersion),
             "A new version of HeatCaller",
             MessageBoxIcon.Information,
-            AppUpdates.AnswerLabels));
+            AppUpdates.AnswerLabels), whenGone: AppUpdates.Answer.NotNow);
 
         // The secrets have to be taken on this thread (BackupSecrets.Capture
         // reads the live settings, which this thread is free to be changing);
@@ -2146,10 +2216,21 @@ public partial class MainForm : Form
         // it is the slow part.
         AppUpdates.BackUp = () =>
         {
-            var folder = Invoke(() => BackupService.SafeBackupFolder(_settings.AutoBackupFolder));
-            var secrets = Invoke(() => BackupService.CaptureSecrets());
+            // Both reads in one hop, guarded like the two above. A backup
+            // that could not be taken has to THROW rather than hand back
+            // something that looks like a path: AppUpdates.TryBackUp catches
+            // it and refuses to install anything without one.
+            var taken = TryAsk<(string Folder, BackupSecrets? Secrets)?>(
+                () => (BackupService.SafeBackupFolder(_settings.AutoBackupFolder), BackupService.CaptureSecrets()),
+                whenGone: null);
 
-            return BackupService.CreateBackup(folder, automatic: false, secrets);
+            if (taken is not { } ready)
+            {
+                throw new InvalidOperationException(
+                    "HeatCaller is closing down, so the backup before the update could not be taken.");
+            }
+
+            return BackupService.CreateBackup(ready.Folder, automatic: false, ready.Secrets);
         };
 
         // Not at startup: two minutes in, so an update check is never part

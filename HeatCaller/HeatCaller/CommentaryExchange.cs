@@ -48,6 +48,76 @@ public static class CommentaryExchange
     public const int MostTurns = 4;
 
     /// <summary>
+    /// The beat the booth leaves between one voice and the other.
+    ///
+    /// WHY AN EXCHANGE NEEDED THIS AT ALL
+    ///
+    /// The turns were already split and already said in two voices, and it
+    /// still came out sounding concatenated - because they were queued back
+    /// to back, and the announcer's queue speaks what it is given with no
+    /// gap at all. Two people in a booth do not do that. The one who is
+    /// about to answer waits for the other to finish the thought, and that
+    /// wait is what tells a room there are two of them rather than one voice
+    /// with a setting changed halfway through.
+    ///
+    /// Just under half a second. A real hand-over is quicker than people
+    /// think - a full second reads as one of them having missed their cue -
+    /// and this is time on air, so it is counted into what an item costs
+    /// (ShowItem.Estimate) rather than quietly spent.
+    ///
+    /// It only happens where the staging can hold a gap open, which means
+    /// inside a show block: see ShowTreatment, which waits for each turn to
+    /// have been heard before it queues the next one. Said plainly, with no
+    /// block around it, the turns still go out back to back as they always
+    /// did - nothing is made worse by this, and the pacing arrives with the
+    /// programme it belongs to.
+    /// </summary>
+    public static readonly TimeSpan HandoffBeat = TimeSpan.FromMilliseconds(450);
+
+    /// <summary>
+    /// How far the bed is nudged up across the hand-over, as a multiple of
+    /// its own level.
+    ///
+    /// A hair over one. It is NOT the lift at the end of a read (ShowRun
+    /// .LiftFactor, about 4 dB) and must not sound like one: that move means
+    /// "the talking has stopped", and a room told that in the middle of a
+    /// two-hander hears the segment end and then start again. This is the
+    /// bed coming out from under the voice for the length of the beat and
+    /// going straight back, which is barely a sound on its own and is the
+    /// difference between a gap and a hole.
+    ///
+    /// Clamped where it is used, so a club running the bed near full scale
+    /// cannot have a hand-over push it past the show's own ceiling.
+    /// </summary>
+    public const float HandoffNudge = 1.15f;
+
+    /// <summary>
+    /// Which turns the voice changes hands in FRONT of - the positions a
+    /// beat goes into.
+    ///
+    /// Worked out here rather than at each call site because "the voice
+    /// changed" is this file's business: the tags, the split and who is
+    /// talking all live here, and a caller comparing FromCoHost for itself
+    /// is a caller that will get it wrong the day a three-way exchange
+    /// exists. Never includes 0 - there is nothing in front of the first
+    /// turn to hand over from.
+    /// </summary>
+    public static IReadOnlyList<int> Handoffs(IReadOnlyList<ExchangeTurn> turns)
+    {
+        var at = new List<int>();
+
+        for (var i = 1; i < turns.Count; i++)
+        {
+            if (turns[i].FromCoHost != turns[i - 1].FromCoHost)
+            {
+                at.Add(i);
+            }
+        }
+
+        return at;
+    }
+
+    /// <summary>
     /// How the model is told to write an exchange.
     ///
     /// The tags are deliberately "A" and "B" rather than the real names: a

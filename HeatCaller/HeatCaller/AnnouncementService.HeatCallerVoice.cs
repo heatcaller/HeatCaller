@@ -17,7 +17,7 @@ public sealed partial class AnnouncementService
     // relay (see HeatCallerVoice.cs). The club pays nothing and holds no
     // key, so the rules are different from a club's own key in one way that
     // matters: when the month's characters are gone, EVERY line switches to
-    // the free Windows voice, saved ones included, until the allowance
+    // the free Kokoro voice, saved ones included, until the allowance
     // starts again. A night that is half one voice and half another is what
     // a club hears as "the announcer is broken"; one voice, with the reason
     // in the log and on the Mixer, is honest. Nothing is thrown away - the
@@ -136,7 +136,7 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// The audio for one line with the HeatCaller voice: the saved copy, the
-    /// relay, or the Windows voice standing in.
+    /// relay, or the Kokoro voice standing in.
     /// </summary>
     private async Task<SynthesisResult> RenderWithHeatCallerAsync(VoiceProfile profile, string text)
     {
@@ -172,9 +172,9 @@ public sealed partial class AnnouncementService
         {
             LogStandInOnce(
                 "heatcaller-setup",
-                "[voice] No HeatCaller voice is chosen yet - the free Windows voice is speaking. Pick one on Voice Settings.");
+                "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one on Voice Settings.");
 
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
 
         if (resting)
@@ -193,7 +193,7 @@ public sealed partial class AnnouncementService
                 // background, to notice it coming back - a minute apart for
                 // something that may mend itself, half an hour apart for
                 // something somebody has to put right. The line itself has
-                // already gone to the Windows voice, so nothing waits on it.
+                // already gone to Kokoro, so nothing waits on it.
                 probe = !_heatCallerProbeRunning && DateTime.UtcNow >= _heatCallerRetryUtc;
 
                 if (probe)
@@ -207,7 +207,7 @@ public sealed partial class AnnouncementService
                 StartHeatCallerProbe(client, profile, text);
             }
 
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
 
         try
@@ -221,16 +221,16 @@ public sealed partial class AnnouncementService
         catch (HeatCallerVoiceException ex)
         {
             NoteHeatCallerRefusal(ex);
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
         catch (SynthesisSlotTimeoutException)
         {
             // This laptop's own queue, not the relay: nothing to rest over.
             LogStandInOnce(
                 "heatcaller-slot",
-                "[voice] The voice queue was full, so the free Windows voice said a line. Said once, not for every line.");
+                "[voice] The voice queue was full, so the free Kokoro voice said a line. Said once, not for every line.");
 
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
     }
 
@@ -371,7 +371,7 @@ public sealed partial class AnnouncementService
     ///
     /// Without this the relay refused the line as too long, and the recap -
     /// the line of the night a club most wants in the HeatCaller voice - was
-    /// read by the Windows voice while every other line used the HeatCaller
+    /// read by the free voice while every other line used the HeatCaller
     /// one, with the reason logged once a session and never again.
     ///
     /// The length is counted with the audio tags in, which is how the relay
@@ -412,7 +412,7 @@ public sealed partial class AnnouncementService
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // This one line's problem, like a line too long: the Windows
+                // This one line's problem, like a line too long: the Kokoro
                 // voice says it, and nothing rests over it.
                 throw new HeatCallerVoiceException(HeatCallerRefusal.Text, $"A piece of a long line came back unreadable ({ex.Message}).");
             }
@@ -425,7 +425,7 @@ public sealed partial class AnnouncementService
             {
                 // Two pieces of one voice from one relay should never differ,
                 // but joined raw they would play at the wrong speed or as
-                // noise. Better the Windows voice than that.
+                // noise. Better the Kokoro voice than that.
                 throw new HeatCallerVoiceException(HeatCallerRefusal.Text, "The pieces of a long line came back in different audio formats.");
             }
             else
@@ -578,7 +578,7 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Tries one line through the relay in the background while it rests.
-    /// The line itself has already gone to the Windows voice; this is to
+    /// The line itself has already gone to Kokoro; this is to
     /// find out whether the relay is back - and if it is, the take is saved
     /// like any other, so that line plays in the HeatCaller voice next time.
     /// </summary>
@@ -601,7 +601,7 @@ public sealed partial class AnnouncementService
                 // not, and a cached answer rightly doesn't end the rest.
                 // Those are exactly the lines most likely to be the one
                 // tried, so after a top-up or a new month every try came
-                // back cached and the voice stayed on Windows, half an hour
+                // back cached and the voice stayed on Kokoro, half an hour
                 // at a time, all night. The allowance is asked for directly
                 // instead - the same catalogue read the Voice Settings page
                 // makes, which costs nothing.
@@ -721,7 +721,7 @@ public sealed partial class AnnouncementService
             // with nothing in the log to say why.
             LogStandInOnce(
                 "heatcaller-still-spent",
-                $"[voice] {Capitalised(HeatCallerAllowanceSpentReason)} - the free Windows voice speaks every line until it starts again. "
+                $"[voice] {Capitalised(HeatCallerAllowanceSpentReason)} - the free Kokoro voice speaks every line until it starts again. "
                 + "Nothing is lost: every line already saved is kept and plays again then.");
         }
 
@@ -761,7 +761,7 @@ public sealed partial class AnnouncementService
     /// different question: a spent allowance on a test relay says nothing
     /// about the club's own, and a token or voice the relay turned down may
     /// be exactly what was just put right. Resting on over it kept the
-    /// Windows voice speaking for up to half an hour - or, for the
+    /// Kokoro voice speaking for up to half an hour - or, for the
     /// allowance, the rest of the month - after the club had fixed it. The
     /// same thing a new ElevenLabs key does for a rest over the old one.
     /// </summary>
@@ -811,7 +811,7 @@ public sealed partial class AnnouncementService
     /// The one rule behind the saved-line check in RenderWithHeatCallerAsync,
     /// the release calls read straight from the library, and the prepared
     /// flag and release takes - so that none of them plays in the HeatCaller
-    /// voice on a night the rest is in the Windows voice.
+    /// voice on a night the rest is in the Kokoro voice.
     ///
     /// Only the allowance. While the relay merely can't be reached, saved
     /// lines DO still play in the HeatCaller voice - that is what the docs
@@ -895,7 +895,7 @@ public sealed partial class AnnouncementService
                 }
 
                 // Nine tenths spent, said once a month: the first sign of a
-                // spent allowance is otherwise a whole race in the Windows
+                // spent allowance is otherwise a whole race in the Kokoro
                 // voice, on the night, with nothing having warned anybody.
                 warn = !_heatCallerAllowanceWarned
                        && allowance.Allowance > 0
@@ -928,7 +928,7 @@ public sealed partial class AnnouncementService
         {
             StatusMessage?.Invoke(
                 $"[voice] The HeatCaller voice has used {allowance.Used:N0} of {allowance.Allowance:N0} characters this month. "
-                + "When it's gone, the free Windows voice speaks every line until it starts again"
+                + "When it's gone, the free Kokoro voice speaks every line until it starts again"
                 + (allowance.ResetsUtc is { } resets ? $" on {resets.ToLocalTime():d MMM}." : ".")
                 + " Lines already saved are kept either way.");
         }
@@ -952,7 +952,7 @@ public sealed partial class AnnouncementService
         if (back)
         {
             StatusMessage?.Invoke(
-                "[voice] The HeatCaller voice is back - it speaks from the next line, and the Windows voice stands down.");
+                "[voice] The HeatCaller voice is back - it speaks from the next line, and the Kokoro voice stands down.");
         }
     }
 
@@ -960,7 +960,7 @@ public sealed partial class AnnouncementService
     private void NoteHeatCallerRefusal(HeatCallerVoiceException ex)
     {
         // Asked of the relay or voice the club has since changed: the line
-        // went to the Windows voice, and that is all. Resting the new relay
+        // went to Kokoro, and that is all. Resting the new relay
         // over the old one's answer is what the reset was there to stop.
         if (ex.AskedBeforeReset)
         {
@@ -971,7 +971,7 @@ public sealed partial class AnnouncementService
         // Nothing rests over it - the next line may be perfectly speakable.
         if (ex.Refusal == HeatCallerRefusal.Text)
         {
-            LogStandInOnce("heatcaller-text", $"[voice] The HeatCaller voice couldn't speak a line ({ex.Message}) - the free Windows voice said it.");
+            LogStandInOnce("heatcaller-text", $"[voice] The HeatCaller voice couldn't speak a line ({ex.Message}) - the free Kokoro voice said it.");
             return;
         }
 
@@ -1043,9 +1043,9 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke(ex.Refusal == HeatCallerRefusal.Allowance
-            ? $"[voice] {Capitalised(reason)} - the free Windows voice speaks every line until it starts again. "
+            ? $"[voice] {Capitalised(reason)} - the free Kokoro voice speaks every line until it starts again. "
               + "Nothing is lost: every line already saved is kept and plays again then. " + ex.Message
-            : $"[voice] {Capitalised(reason)} ({ex.Message}) - the free Windows voice is standing in. "
+            : $"[voice] {Capitalised(reason)} ({ex.Message}) - the free Kokoro voice is standing in. "
               + (settled
                   ? "It is tried again about every half hour."
                   : "It is tried again in the background about once a minute."));

@@ -10,8 +10,8 @@ namespace HeatCaller;
 /// one of them is a table test because nothing it touches knows what a
 /// store is. That stays true only if something else does the reading -
 /// this. It is the one place in the commentary layer that knows about
-/// the session history, the qualifying calculator and the live
-/// championship, and
+/// the session history, the programme, the qualifying calculator and the
+/// live championship, and
 /// it holds no state and makes no judgements: stores in, records out.
 ///
 /// It reads the session history directly for a driver's form rather than
@@ -45,6 +45,186 @@ public static class CommentaryReaders
 
     /// <summary>How many pairs to offer the intro. Ten drivers are forty-five pairs; three is a race intro.</summary>
     private const int MostRivalries = 3;
+
+    /// <summary>
+    /// How many of tonight's remaining rounds are offered.
+    ///
+    /// Three, because that is what CommentaryFacts.ComingUpNext reads out
+    /// and one reader should not decide for it. The continuity bridges take
+    /// only the first (CommentaryContinuity.Ahead); the segment takes all
+    /// three.
+    /// </summary>
+    private const int MostUpcoming = 3;
+
+    /// <summary>
+    /// How long after a race was filed "that was the B-main" is still true.
+    ///
+    /// It is a look-back, not a history lesson. A club breaks for tea, comes
+    /// back an hour later and the first thing the announcer says must not be
+    /// about the race before the sandwiches - and on a night that was
+    /// abandoned after one heat, the next day's announcements must not open
+    /// with "that was Q1 Heat 1" because that is still the newest thing
+    /// filed. Twenty minutes is longer than any gap a programme plans and
+    /// shorter than any break a club takes.
+    /// </summary>
+    private static readonly TimeSpan JustRunWithin = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// What is left on tonight's programme, in running order, with the
+    /// estimate handed straight through - what CommentaryDirector.Upcoming
+    /// wants.
+    ///
+    /// WHY THE ESTIMATE IS A PARAMETER AND NOT WORKED OUT HERE
+    ///
+    /// How long a club night actually runs against its schedule is
+    /// WhereTimeGoes's question, and a reader that guessed at it would be
+    /// inventing the one number an announcer gets held to - the rule
+    /// CommentaryFacts.ComingUpNext states and this follows. Null is a
+    /// perfectly good answer: every line that would have used it is said
+    /// without it.
+    ///
+    /// WHAT <paramref name="skipRoundId"/> IS FOR, AND WHY IT MATTERS
+    ///
+    /// A round is only "recorded" once its race has been FILED, so in the
+    /// window between the flag and the filing the race that has just
+    /// finished is still the first unrecorded round on the programme - and
+    /// "still to come, Q2 Heat 1" said about the heat the room has just
+    /// watched is the worst thing a continuity line can do. The host knows
+    /// which round is in hand and whether its race is over; it passes that
+    /// round's id here and this leaves it out.
+    /// </summary>
+    /// <param name="rounds">Tonight's programme.</param>
+    /// <param name="scope">The round ids belonging to the race day in hand, or null for the legacy holder where every round is tonight's - RaceEventStore.ActiveRoundScope's own answer.</param>
+    /// <param name="inAbout">Roughly how long until the next one, where the host knows. Handed through untouched.</param>
+    /// <param name="skipRoundId">The round in hand, where its race has already run and not yet been filed. See the remarks.</param>
+    /// <param name="most">How many to offer. Defaults to <see cref="MostUpcoming"/>.</param>
+    public static (IReadOnlyList<UpcomingRound> Rounds, TimeSpan? InAbout) Upcoming(
+        RoundDefinitionStore rounds,
+        IReadOnlySet<string>? scope = null,
+        TimeSpan? inAbout = null,
+        string? skipRoundId = null,
+        int most = MostUpcoming)
+    {
+        var next = new List<UpcomingRound>();
+        var want = Math.Max(1, most);
+
+        // Unrecorded, in the programme's own order - the store's answer, not
+        // a second opinion about what "still to run" means.
+        foreach (var round in rounds.Unrecorded(scope))
+        {
+            if (!string.IsNullOrEmpty(skipRoundId)
+                && string.Equals(round.Id, skipRoundId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var label = Typed(round.RoundLabel);
+
+            // A round with no label has no name to say. Left out rather
+            // than given one: "still to come, round four" would be this
+            // reader inventing what the club calls it.
+            if (label.Length == 0)
+            {
+                continue;
+            }
+
+            // A roster of nobody is not an empty round - a main built from
+            // the heats has no roster until the heats are in - so it is
+            // offered with a count of none and the lines that would have
+            // mentioned cars say nothing about them.
+            next.Add(new UpcomingRound(
+                label,
+                Typed(round.ClassName),
+                round.AssignedTransponders.Count));
+
+            if (next.Count >= want)
+            {
+                break;
+            }
+        }
+
+        return (next, inAbout);
+    }
+
+    /// <summary>
+    /// The round whose race has just been run, for the look-back half of a
+    /// continuity line - or null when there is nothing recent enough to
+    /// look back on.
+    ///
+    /// Read from what has been FILED rather than from the programme's order,
+    /// because a club runs races out of order all evening: the newest
+    /// session with a result and a round behind it is the one the room has
+    /// just watched, whatever position that round sits in. The same history
+    /// the form guide is counted over, read the same way.
+    ///
+    /// Three things each silence it rather than guessing: a session filed
+    /// against no round, a round belonging to another race day, and one
+    /// filed longer ago than <see cref="JustRunWithin"/>. Nothing here is
+    /// said unless the history says it.
+    /// </summary>
+    /// <param name="rounds">Tonight's programme, for the round's label and class.</param>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="scope">The round ids belonging to the race day in hand, or null to accept any - see <see cref="Upcoming"/>.</param>
+    /// <param name="now">Now, for how long ago it was. UTC, as the records are.</param>
+    /// <param name="within">How recent it has to be. Defaults to <see cref="JustRunWithin"/>.</param>
+    public static RoundJustRun? JustRan(
+        RoundDefinitionStore rounds,
+        SessionHistoryStore history,
+        IReadOnlySet<string>? scope = null,
+        DateTime? now = null,
+        TimeSpan? within = null)
+    {
+        var newest = history.All
+            .Where(record => record.SessionType != RaceSessionType.Practice)
+            .Where(record => record.Results.Count > 0)
+            .Where(record => !string.IsNullOrWhiteSpace(record.RoundId))
+            .OrderByDescending(record => record.EndedAtUtc)
+            .FirstOrDefault();
+
+        if (newest?.RoundId is not { } roundId)
+        {
+            return null;
+        }
+
+        if (scope is not null && !scope.Contains(roundId))
+        {
+            return null;
+        }
+
+        var today = now ?? DateTime.UtcNow;
+
+        // A record stamped in the future is a clock that has been put back,
+        // which is not a race that has just run. The same care Since takes
+        // with the same comparison.
+        if (newest.EndedAtUtc > today || today - newest.EndedAtUtc > (within ?? JustRunWithin))
+        {
+            return null;
+        }
+
+        if (rounds.Get(roundId) is not { } round)
+        {
+            return null;
+        }
+
+        var label = Typed(round.RoundLabel);
+
+        return label.Length == 0
+            ? null
+            : new RoundJustRun(label, Typed(round.ClassName));
+    }
+
+    /// <summary>
+    /// A label or a class name as somebody typed it, trimmed, and empty
+    /// where there is nothing in it.
+    ///
+    /// Null-tolerant although neither property is declared nullable: these
+    /// come back from JSON on disk, which is perfectly capable of holding a
+    /// null in a field the app says cannot be one, and a continuity line is
+    /// not worth a NullReferenceException on a race night. The same care
+    /// RacesIn above takes with the same two properties.
+    /// </summary>
+    private static string Typed(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 
     /// <summary>
     /// The drivers in a race as the club's history knows them, counted

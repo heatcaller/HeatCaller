@@ -78,6 +78,14 @@ public sealed class SessionHistoryStore
                 {
                     return new SessionHistoryStore(list);
                 }
+
+                // Present, parsed, and not the shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" parses to nothing without
+                // throwing: it used to fall straight through to the empty
+                // store below with the flag left false, so the first race of
+                // the night was written over every result the club has.
+                unreadable = true;
             }
         }
         catch (Exception ex)

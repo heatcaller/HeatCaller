@@ -657,6 +657,9 @@ public sealed class AmbienceService : IDisposable
 
     public void Stop()
     {
+        IWavePlayer? retiredOutput = null;
+        List<LoopingSampleProvider> retiredLoops = new();
+
         lock (_lock)
         {
             if (!_running)
@@ -664,9 +667,22 @@ public sealed class AmbienceService : IDisposable
                 return;
             }
 
-            DisposeAudioLocked();
+            TakeAudioLocked(out retiredOutput, out retiredLoops);
             StatusMessage?.Invoke("[ambience] Stopped.");
         }
+
+        // With the lock let go: the device is stopped and closed here, and
+        // that is the slow part. This runs on the thread pool at the end of a
+        // session's fade (FadeOutAndStopAsync), and the UI thread reads
+        // IsRunning on every change of race state - it used to wait for the
+        // whole of waveOutReset and waveOutClose for it. See TakeAudioLocked.
+        //
+        // What this does allow is a Start on the UI thread opening the next
+        // bed while the last one is still closing. That is the same trade
+        // AudioBus and OnOutputStopped already make, and it is inaudible
+        // where it matters: the fade that leads to this Stop has already
+        // taken the old bed to silence.
+        DisposeRetired(retiredOutput, retiredLoops);
     }
 
     /// <summary>
@@ -1146,35 +1162,40 @@ public sealed class AmbienceService : IDisposable
             : "[ambience] Playback stopped unexpectedly - it will start again with the next race, or press Start.");
     }
 
-    private void DisposeAudioLocked()
+    /// <summary>
+    /// Takes the bed out of the fields and hands back the parts that have to
+    /// be let go of, for the caller to pass to DisposeRetired with the lock
+    /// released.
+    ///
+    /// The device used to be stopped and disposed in here, under the lock:
+    /// waveOutReset and waveOutClose, which take as long as the sound system
+    /// makes them take - a Bluetooth speaker reconfigures itself, and one
+    /// that has wandered off takes seconds. Stop runs on the thread pool at
+    /// the end of a session's fade (FadeOutAndStopAsync is awaited from a
+    /// Task.Run in MainForm.Audio), and the UI thread reads IsRunning on
+    /// every change of race state, so it waited for all of it.
+    ///
+    /// Nothing can reach the output once this has returned: it is out of the
+    /// field with its PlaybackStopped unhooked, and OnOutputStopped ignores
+    /// an event whose sender is not the current one anyway. The loops go
+    /// with it rather than being disposed here, because they must not be
+    /// closed until the device that is reading them has stopped.
+    /// </summary>
+    private void TakeAudioLocked(out IWavePlayer? output, out List<LoopingSampleProvider> loops)
     {
-        try
-        {
-            // Unhooked first: this is a stop we asked for, and its
-            // PlaybackStopped must not be read as the device going away.
-            if (_output is not null)
-            {
-                _output.PlaybackStopped -= OnOutputStopped;
-            }
+        output = _output;
 
-            _output?.Stop();
-            _output?.Dispose();
-        }
-        catch
+        // Unhooked first: this is a stop we asked for, and its
+        // PlaybackStopped must not be read as the device going away.
+        if (output is not null)
         {
-            // Disposing a device that's already gone is not worth reporting.
+            output.PlaybackStopped -= OnOutputStopped;
         }
+
+        loops = _loops.ToList();
+        _loops.Clear();
 
         StopFadeLocked();
-
-        // After the output is stopped, so nothing is still pulling samples
-        // from these (and Read is guarded against a late call regardless).
-        foreach (var loop in _loops)
-        {
-            loop.Dispose();
-        }
-
-        _loops.Clear();
 
         _output = null;
         _mixer = null;
@@ -1189,6 +1210,46 @@ public sealed class AmbienceService : IDisposable
         _fadeSpans.Clear();
         _fadeSpanTargets.Clear();
         _running = false;
+    }
+
+    /// <summary>
+    /// Stops and lets go of a bed taken out by TakeAudioLocked. Call it with
+    /// the lock released.
+    /// </summary>
+    private static void DisposeRetired(IWavePlayer? output, List<LoopingSampleProvider> loops)
+    {
+        try
+        {
+            output?.Stop();
+            output?.Dispose();
+        }
+        catch
+        {
+            // Disposing a device that's already gone is not worth reporting.
+        }
+
+        // After the output is stopped, so nothing is still pulling samples
+        // from these (and Read is guarded against a late call regardless).
+        foreach (var loop in loops)
+        {
+            loop.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Takes the bed out and lets it go in one step, with the lock held.
+    ///
+    /// Left as it was for the two places that are already on the thread that
+    /// would have been doing the waiting: StartBeds, when opening the output
+    /// throws (it runs on the UI thread, and is called from Restart with the
+    /// lock deliberately held across the whole restart), and OnOutputStopped,
+    /// which has taken the dead device out itself already and disposes it on
+    /// another thread. Stop is the one that had to be split.
+    /// </summary>
+    private void DisposeAudioLocked()
+    {
+        TakeAudioLocked(out var output, out var loops);
+        DisposeRetired(output, loops);
     }
 
     public void Dispose() => Stop();

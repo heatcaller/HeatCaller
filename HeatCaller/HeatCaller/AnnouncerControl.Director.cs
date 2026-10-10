@@ -28,6 +28,20 @@
 /// stores this control does not hold. They are properties on the director
 /// for MainForm to set, and until it does those segments say nothing and
 /// cost nothing - see CommentaryDirector.
+///
+/// That now includes the continuity readers - director.Upcoming and
+/// director.JustRan - and they are the two that decide whether an evening
+/// sounds like a programme. Unwired, every bridge in this file is silent
+/// and every running order falls back to the one segment it always was:
+/// correct, and quieter than it should be. See ContinuityShow.
+///
+/// AND WHAT A SHOW IS NOW
+///
+/// A show used to wrap one segment. It is a BLOCK - open once, item, mark,
+/// item, ending, with the bed under all of it - so this page builds the
+/// running order rather than handing over a single line, and holds its
+/// one-at-a-time guard for as long as the block runs rather than only for
+/// as long as the writing takes. See SpeakNextSegmentAsync and ShowBlock.
 /// </summary>
 public partial class AnnouncerControl
 {
@@ -39,6 +53,13 @@ public partial class AnnouncerControl
     private int _directorGeneration = -1;
     private bool _segmentInFlight;
     private string _directorDay = string.Empty;
+
+    /// <summary>
+    /// The hand-over this page has already made, named by the two rounds it
+    /// sat between - see <see cref="HandOverIfItIsTimeAsync"/>. Empty before
+    /// the first one.
+    /// </summary>
+    private string _handedOver = string.Empty;
 
     /// <summary>
     /// Which race day is open, as MainForm reads it. Null until wired,
@@ -202,6 +223,16 @@ public partial class AnnouncerControl
             _directorDay = day;
             _directorGeneration = -1;
             _lapsFed.Clear();
+            _handedOver = string.Empty;
+
+            // A fresh evening for the show's running order too, so the first
+            // show of the night gets the whole opener. Without this it is
+            // inferred from a twenty-minute quiet spell, which gets it wrong
+            // for a club that set their levels with Play It ten minutes
+            // before the first race - they would hear a rejoin as their cold
+            // open. Here rather than in NewMeeting because this is the one
+            // place that already knows the day actually changed.
+            Treatment?.NewNight();
         }
 
         var racing = _race.State == RaceState.Racing;
@@ -228,6 +259,27 @@ public partial class AnnouncerControl
 
             director.Standings(PairsFrom(ordered));
             FeedLaps(ordered);
+        }
+
+        // NOT while a race is being called to the grid.
+        //
+        // Staging is not "between races" - it is seconds before a start.
+        // A between-races segment started here is written while the grid
+        // forms, and the countdown bins it the moment it arrives: the
+        // voice queue says "dropped - the countdown started while it was
+        // being synthesised". The club paid the relay for that line and
+        // nobody heard it, once per staged race, all night.
+        //
+        // The budget cannot catch this. It is asked whether a line is
+        // affordable, not whether the next ten seconds are about to be a
+        // countdown, and by the time the line comes back it has already
+        // been spent.
+        //
+        // Essentials are unaffected: the race intro is spoken from Race
+        // Control's own staging chain, not from here.
+        if (_race.State is RaceState.Staging or RaceState.Countdown)
+        {
+            return;
         }
 
         _ = SpeakNextSegmentAsync(director);
@@ -312,6 +364,19 @@ public partial class AnnouncerControl
     /// seconds, so without the guard the requests would pile up far faster
     /// than they complete - the same reason the talking point has one.
     /// Fire and forget, because nothing on screen waits on it.
+    ///
+    /// THE GUARD NOW COVERS THE WHOLE SHOW, not just the writing.
+    ///
+    /// It used to let go the moment the words were handed to the staging,
+    /// which was fine when a show was one line over an opener and over in
+    /// seconds. A BLOCK holds two or three items and PACES them - it waits
+    /// for each to have been heard before queueing the next, which is the
+    /// only reason a mark between two of them is audible - so it owns the
+    /// gap for as long as it runs. Let go early, the tick half a second
+    /// later would ask the director for another segment and start a second
+    /// block on top of the first, and the tick after that would offer a
+    /// sponsor's paid read into the same gap. "Never two voices at once"
+    /// has to be true of a programme as well as of a line.
     /// </summary>
     private async Task SpeakNextSegmentAsync(CommentaryDirector director)
     {
@@ -328,6 +393,25 @@ public partial class AnnouncerControl
 
             if (said is null || IsDisposed)
             {
+                // Nothing from the segment ladder. THAT is the quiet a
+                // sponsor's paid read is for, and it is asked second on
+                // purpose: a recap or a "coming up next" always outranks
+                // somebody's advert. See CommentaryDirector.NextSegmentRead.
+                if (said is null && !IsDisposed)
+                {
+                    // And if nobody has bought the quiet either, the
+                    // programme can still say where it is. A hand-over is
+                    // asked LAST of the three because it is the only one
+                    // that costs nothing: the ladder's line was paid for
+                    // and the sponsor's was sold, and neither should be
+                    // pushed out of a gap by two sentences this laptop
+                    // wrote for free. See HandOverIfItIsTimeAsync.
+                    if (!SayTheSponsorsReadIfThereIsOne(director))
+                    {
+                        await HandOverIfItIsTimeAsync(director).ConfigureAwait(true);
+                    }
+                }
+
                 return;
             }
 
@@ -344,7 +428,15 @@ public partial class AnnouncerControl
                 return;
             }
 
-            Speak(said);
+            // A hand-over's whole job is to say what has just gone and
+            // what is next, and a segment block says both of those round
+            // the segment itself. Marked here so the two cannot both fire
+            // into one gap and say the same thing twice in different
+            // words, which is the single most noticeable thing an
+            // announcer can get wrong.
+            _handedOver = HandOverKey(director.ContinuityNow());
+
+            await SpeakAsync(said, director).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -357,48 +449,160 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
-    /// Says it - in two voices where the director wrote a two-hander.
+    /// Continuity on its own: "That was the B-main for Stock. Still to come,
+    /// the A-main for Stock." No segment, no model, no allowance.
     ///
-    /// Queued a turn at a time in order rather than waited on one by one:
-    /// the announcer's own queue keeps them in order, and anything more
-    /// urgent - a staging call, a flag - goes in front of what has not
-    /// been spoken yet, which is exactly what should happen to a remark
-    /// about a fight when the next race is being called to the grid.
+    /// WHY THIS IS THE ONE THAT MATTERS
+    ///
+    /// Everything else on this page needs the relay and a month's
+    /// allowance behind it. This needs neither - the lines are built by
+    /// concatenating the programme and what has been filed - so it is what
+    /// a club hears on the evening the allowance has run out, on the
+    /// evening they never switched the AI on at all, and on the evening the
+    /// relay is down. Two sentences and a beat between them is still a
+    /// programme where silence over the top of the playlist is not. See
+    /// CommentaryContinuity.
+    ///
+    /// ONCE PER HAND-OVER. This is reached from a tick that runs twice a
+    /// second, so without the key below the club would get a bridge, then
+    /// the same thing in different words, then again, until the rotation
+    /// ran out of ways to say it - sixty lines a minute, and about twenty
+    /// seconds of airtime before it went quiet for the rest of the night.
+    /// The key is the two rounds the hand-over sits between, so it re-arms
+    /// itself when the programme moves on: once a race, which is what a
+    /// hand-over is.
     /// </summary>
-    private void Speak(SpokenSegment said)
+    private async Task HandOverIfItIsTimeAsync(CommentaryDirector director)
     {
-        if (_settings is null)
+        // Held means the race director has the mic and Writing means a line
+        // is about to arrive; the director checks both before it offers a
+        // paid read and this is in exactly the same position.
+        if (Treatment is not { } treatment || director.Held || director.Writing || IsDisposed)
         {
             return;
         }
 
-        // The show segments get an opener in front of them and a bed
-        // underneath - see ShowTreatment. Fire and forget: the treatment
-        // waits out the opener, queues the lines itself, and then waits
-        // for the read to finish so it can play the music out. Nothing on
-        // screen waits on any of that.
-        //
-        // RunAsync returns false when there was no music to play, having
-        // deliberately NOT spoken - so the line is said the ordinary way
-        // rather than lost to a club that never dropped the files in.
-        if (Treatment is { } treatment && treatment.Treats(said.Kind))
+        // Not over a race. Staging and the countdown are already turned
+        // away before this is reached (FeedTheDirector, which explains at
+        // length why), so a race on track is the one left - and "still to
+        // come" said over one is the thing ShowBlock was written about.
+        if (_race.State == RaceState.Racing)
         {
-            _ = RunAsShowAsync(treatment, said);
             return;
         }
 
-        SpeakPlainly(said);
+        var facts = director.ContinuityNow();
+        var key = HandOverKey(facts);
+
+        if (key.Length == 0 || string.Equals(_handedOver, key, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // Marked BEFORE the block runs, not after. The tick does not wait
+        // for this method, so a block that takes twenty seconds would
+        // otherwise be started again by every tick inside it. Marked even
+        // when nothing goes out: a gap too short for a block now is a gap
+        // too short for one half a second later, and retrying it forty
+        // times would only fill the console.
+        _handedOver = key;
+
+        if (ContinuityShow.HandOver(facts, director.Continuity, SayContinuityLine) is not { } block)
+        {
+            return;
+        }
+
+        try
+        {
+            await treatment.RunBlockAsync(block).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
-    /// Runs a segment as a show, falling back to saying it plainly when
-    /// there turns out to be no music.
+    /// Which hand-over this is: the round that has just run and the round
+    /// that is next, which together name the one moment a hand-over
+    /// belongs in.
+    ///
+    /// Empty when either end is unknown, which is also the bar
+    /// ContinuityShow.HandOver sets for saying anything at all - a
+    /// hand-over with one end missing is not a hand-over.
     /// </summary>
-    private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said)
+    private static string HandOverKey(ContinuityFacts facts)
     {
-        // Whether the treatment got as far as queueing the lines. A
-        // segment said twice is far worse than one said without music, so
-        // the fallback below only runs when nothing has been said yet.
+        if (facts.JustRan is not { } ran || facts.Upcoming.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var next = facts.Upcoming[0];
+
+        return $"{ran.Label}/{ran.ClassName}>{next.Label}/{next.ClassName}";
+    }
+
+    /// <summary>
+    /// Says it: as a show where the club wants one round this segment, and
+    /// plainly where they do not.
+    ///
+    /// Returns a task the caller AWAITS, which is the one change here worth
+    /// knowing about. It used to be fired and forgotten; a block owns the
+    /// gap while it paces its items, so the caller's one-at-a-time guard
+    /// has to stay on for as long as it runs. See SpeakNextSegmentAsync.
+    /// </summary>
+    private Task SpeakAsync(SpokenSegment said, CommentaryDirector director)
+    {
+        if (_settings is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        // The show segments get an opener in front of them and a bed
+        // underneath - see ShowTreatment - and, where the night around
+        // them gives anything to bridge to, continuity either side.
+        //
+        // Still gated on the club's own tick list. A block IS a show: it
+        // plays the opener and silences the playlist exactly as one line
+        // over staging does, so running one for a segment the club did not
+        // tick would be this feature overruling the Commentary page.
+        if (Treatment is { } treatment && treatment.Treats(said.Kind))
+        {
+            return RunAsShowAsync(treatment, said, director);
+        }
+
+        SpeakPlainly(said);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Runs a segment as a show - as a running order with continuity round
+    /// it where there is anything to bridge to, and as the one line it
+    /// always was where there is not - falling back to saying it plainly
+    /// when there turns out to be no music.
+    ///
+    /// THE FALLBACK IS THE DELICATE PART, AND A BLOCK CHANGES IT
+    ///
+    /// RunAsync hands the words BACK when there is no music to play, having
+    /// deliberately not spoken, and the line is then said the ordinary way
+    /// rather than lost to a club that never dropped the files in.
+    /// RunBlockAsync does the opposite: it speaks the items itself either
+    /// way, because the programme is the items and their order and the
+    /// music is only how it is dressed.
+    ///
+    /// So the flag below is what both paths are judged on, and it is set
+    /// inside the delegates that queue the words - which is the only thing
+    /// that knows. A segment said twice is far worse than one said without
+    /// music.
+    /// </summary>
+    private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)
+    {
+        // Whether the staging got as far as queueing the words. See the
+        // remarks: this is the ONE signal, and it is deliberately not
+        // "did the block report an item" - an exchange that got one turn
+        // out has been spoken, however the block then ended.
         var spoken = false;
 
         void SpeakOnce()
@@ -407,21 +611,127 @@ public partial class AnnouncerControl
             SpeakPlainly(said);
         }
 
+        void SpeakTurn(ExchangeTurn turn)
+        {
+            spoken = true;
+            SpeakTurnPlainly(turn);
+        }
+
+        // A race moved on and took the block with it. The segment is then
+        // NOT said plainly afterwards: the room's attention is on the
+        // track, a race call is already in front of it on the voice queue,
+        // and a recap of the last race arriving over a countdown is the
+        // exact thing ShowTreatment.AbandonBlock exists to stop.
+        var abandoned = false;
+
         try
         {
-            await treatment.RunAsync(SpeakOnce).ConfigureAwait(true);
+            // The facts are read here, on the thread this came back on,
+            // and handed over - the rule CommentaryDirector.NextAsync
+            // follows for the same reason. Null when the night gives
+            // nothing to bridge to: no programme entered, nothing filed
+            // yet, the last race of the evening already run.
+            var order = ContinuityShow.Around(
+                said,
+                director.ContinuityNow(),
+                director.Continuity,
+                SpeakOnce,
+                SpeakTurn,
+                SayContinuityLine);
+
+            if (order is { } block)
+            {
+                var result = await treatment.RunBlockAsync(block).ConfigureAwait(true);
+
+                abandoned = result.Abandoned;
+            }
+            else
+            {
+                // said.Kind, so the running order can tell a sign-off from an
+                // ordinary segment. It is the one cue that cannot be worked out
+                // from the clock - "last show of the night" is only knowable from
+                // what is being said - and without it the sign-off never gets its
+                // playout. See ShowRunningOrder.
+                await treatment.RunAsync(SpeakOnce, said.Kind).ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {ex.GetType().Name}: {ex.Message}");
         }
 
-        if (!spoken)
+        if (spoken)
         {
-            // No music to play, or it failed before the lines went in -
-            // said the ordinary way. The words are the part that matters.
-            SpeakOnce();
+            return;
         }
+
+        if (abandoned)
+        {
+            // Said out loud in the console rather than left as silence: the
+            // club paid a write for this line and nobody heard it, and a
+            // quiet night with no reason in the log is the thing this whole
+            // layer is logged to death to avoid.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Written, then dropped - the race moved on before the block reached it.");
+
+            return;
+        }
+
+        // No music to play, or it failed before the lines went in, or the
+        // gap had no room for a block at all - said the ordinary way. The
+        // words are the part that matters, and this is exactly what
+        // happened before any of the staging existed.
+        SpeakOnce();
+    }
+
+    /// <summary>
+    /// A continuity line, queued like every other spoken line so a flag
+    /// call can jump in front of whatever of it is unspoken.
+    ///
+    /// On the screens, like a segment: "Still to come, the A-main" is for
+    /// the room, and the room is looking at the Big Screen.
+    /// </summary>
+    private void SayContinuityLine(string line) => _announcer.SpeakReminder(line, showOnScreens: true);
+
+    /// <summary>
+    /// A sponsor's own words, read in the gap the segments left empty.
+    ///
+    /// Written by a human and read as written, so it needs no model and no
+    /// budget - which is the point of it: a club with the AI commentary
+    /// switched off entirely still reads the advert somebody paid for.
+    ///
+    /// Through SpeakReminder, like every segment, so the line goes on the
+    /// voice queue and a flag call can jump in front of whatever of it is
+    /// still unspoken. The director refuses while a race is on track, while
+    /// a hold is on and while it is writing, so there is nothing to check
+    /// again here.
+    ///
+    /// Returns whether a read actually went out, so the caller knows
+    /// whether the gap is still empty. A hand-over goes into the quiet
+    /// AFTER this has had its turn and never over the top of it: the
+    /// sponsor's words were sold and the hand-over's were free.
+    /// </summary>
+    private bool SayTheSponsorsReadIfThereIsOne(CommentaryDirector director)
+    {
+        // The real gap where the host knows it, so copy longer than the gap
+        // is split at a sentence rather than run into the next race; no
+        // limit otherwise, where the read's own 25-second cap still applies.
+        var gap = director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
+
+        var paid = director.NextAdBreakRead(gap) ?? director.NextSegmentRead(gap);
+
+        if (paid is null)
+        {
+            return false;
+        }
+
+        // Counted before it is said: SpeakReminder is fire and forget, and a
+        // read that went out but was never counted would be read again in the
+        // next gap, which is the one thing a paying sponsor would notice.
+        director.SalesReadSaid(paid);
+        _announcer.SpeakReminder(paid.Text, showOnScreens: true);
+
+        return true;
     }
 
     /// <summary>Says it with no music in front of it - what every segment did before the show treatment.</summary>
@@ -438,14 +748,38 @@ public partial class AnnouncerControl
             return;
         }
 
-        var coHost = _settings.CoHostVoice;
-
         foreach (var turn in said.Turns)
         {
-            // Null for the announcer's own voice. A club that has not
-            // picked a co-host voice for the engine in use hears both
-            // halves in one voice, which still reads as a conversation.
-            _announcer.SpeakReminder(turn.Line, null, turn.FromCoHost ? coHost : null, showOnScreens: true);
+            SpeakTurnPlainly(turn);
         }
+    }
+
+    /// <summary>
+    /// One turn of a two-hander, in whichever voice it belongs to.
+    ///
+    /// Split out of SpeakPlainly because a BLOCK says an exchange a turn at
+    /// a time: it waits for each to have been heard before queueing the
+    /// next, and puts a beat and a nudge of the bed at the change of voice
+    /// (ShowItem.Exchange, CommentaryExchange.HandoffBeat). That is the
+    /// difference between two people talking and one voice reading out a
+    /// transcript of two people talking - and without a block round it the
+    /// turns still go out back to back exactly as they always did, which is
+    /// what the loop above does.
+    /// </summary>
+    private void SpeakTurnPlainly(ExchangeTurn turn)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        // Null for the announcer's own voice. A club that has not
+        // picked a co-host voice for the engine in use hears both
+        // halves in one voice, which still reads as a conversation.
+        _announcer.SpeakReminder(
+            turn.Line,
+            null,
+            turn.FromCoHost ? _settings.CoHostVoice : null,
+            showOnScreens: true);
     }
 }

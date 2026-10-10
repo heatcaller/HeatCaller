@@ -42,6 +42,23 @@ public sealed class SponsorStore
                     loaded.SlideFileNames = (loaded.SlideFileNames ?? new List<string>())
                         .Where(PlainFileName.IsSafeLeaf)
                         .ToList();
+
+                    // A hand-edited file, or one from a backup written
+                    // before the sponsors themselves were kept here, can
+                    // hold a sponsor with no id of its own - and an id is
+                    // what the rotation counts a sponsor's reads against,
+                    // so one without would be counted against every other
+                    // sponsor that also had none. Filled in once, here.
+                    loaded.Sponsors = loaded.Sponsors ?? new List<SponsorBooking>();
+
+                    foreach (var sponsor in loaded.Sponsors)
+                    {
+                        if (string.IsNullOrWhiteSpace(sponsor.Id))
+                        {
+                            sponsor.Id = NewSponsorId();
+                        }
+                    }
+
                     return new SponsorStore(loaded);
                 }
             }
@@ -341,6 +358,238 @@ public sealed class SponsorStore
             (_settings.SlideFileNames[newIndex], _settings.SlideFileNames[index]);
         Save();
     }
+
+    // ------------------------------------------------------------------
+    // The sponsors themselves, and the reads they bought
+    //
+    // WHY THEY LIVE HERE AND NOT IN AppSettings
+    //
+    // This file already IS the club's sponsor settings - the slides, the
+    // videos, the rotation's timing - and a sponsor's name, their tagline
+    // and the copy they paid to have read are the same kind of thing: a
+    // commercial arrangement one club has and the club next door does not.
+    // AppSettings is the race laptop's settings, it is already the largest
+    // file in the app, and a club that exports or restores their sponsors
+    // should get all of them in one go, which they do here (sponsors.json
+    // sits beside the Sponsors folder the slides are in).
+    //
+    // The rotation that decides whose turn it is lives in SponsorReads.cs
+    // and holds no settings at all. This gives it the list; it gives
+    // nothing back.
+    // ------------------------------------------------------------------
+
+    /// <summary>The club's sponsors, in the order they were listed. Empty on a fresh install.</summary>
+    public IReadOnlyList<SponsorBooking> Sponsors => _settings.Sponsors;
+
+    /// <summary>
+    /// A short id for a new sponsor. Short because it goes in a saved
+    /// rotation and in the console, and never shown to anybody - the club
+    /// identifies a sponsor by their name, which they are free to change
+    /// without the night's read counts moving to somebody else.
+    /// </summary>
+    private static string NewSponsorId() => Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>
+    /// Adds a sponsor and returns it, so the page can select it and put the
+    /// cursor in the name box. Named rather than blank: a list row with no
+    /// text in it reads as a fault.
+    /// </summary>
+    public SponsorBooking AddSponsor(string name = "New sponsor")
+    {
+        var sponsor = new SponsorBooking { Id = NewSponsorId(), Name = name };
+
+        _settings.Sponsors.Add(sponsor);
+        Save();
+
+        return sponsor;
+    }
+
+    /// <summary>The sponsor with this id, or null. Asked by the page for whatever is selected.</summary>
+    public SponsorBooking? Sponsor(string? id) =>
+        string.IsNullOrWhiteSpace(id)
+            ? null
+            : _settings.Sponsors.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Takes a sponsor off the list and returns where they were, for undo -
+    /// the same shape as RemoveSlide, minus the file to move aside. Minus
+    /// one when there was no such sponsor.
+    ///
+    /// Nothing is moved to the undo holding folder because nothing here is
+    /// a file: the whole record goes back in through
+    /// <see cref="RestoreSponsor"/>, which is why the caller must keep hold
+    /// of it BEFORE calling this.
+    /// </summary>
+    public int RemoveSponsor(string id)
+    {
+        var sponsor = Sponsor(id);
+
+        if (sponsor is null)
+        {
+            return -1;
+        }
+
+        var index = _settings.Sponsors.IndexOf(sponsor);
+
+        _settings.Sponsors.Remove(sponsor);
+        Save();
+
+        return index;
+    }
+
+    /// <summary>
+    /// Puts a removed sponsor back where they were. Pairs with
+    /// <see cref="RemoveSponsor"/>. A sponsor already on the list is not
+    /// listed twice - the undo may be run after the club has re-added them
+    /// by hand.
+    /// </summary>
+    public void RestoreSponsor(SponsorBooking sponsor, int index)
+    {
+        if (string.IsNullOrWhiteSpace(sponsor.Id) || Sponsor(sponsor.Id) is not null)
+        {
+            return;
+        }
+
+        var at = index >= 0 && index <= _settings.Sponsors.Count ? index : _settings.Sponsors.Count;
+
+        _settings.Sponsors.Insert(at, sponsor);
+        Save();
+    }
+
+    /// <summary>
+    /// Moves a sponsor up or down the list. The order only decides who gets
+    /// the very first read of a night with no history behind it - after
+    /// that the rotation is on shares, not on order - but that first read
+    /// is the one a club notices.
+    /// </summary>
+    public void MoveSponsor(string id, int direction)
+    {
+        var sponsor = Sponsor(id);
+
+        if (sponsor is null)
+        {
+            return;
+        }
+
+        var index = _settings.Sponsors.IndexOf(sponsor);
+        var moved = index + direction;
+
+        if (index < 0 || moved < 0 || moved >= _settings.Sponsors.Count)
+        {
+            return;
+        }
+
+        (_settings.Sponsors[index], _settings.Sponsors[moved]) =
+            (_settings.Sponsors[moved], _settings.Sponsors[index]);
+
+        Save();
+    }
+
+    /// <summary>
+    /// Who is sold and where the club lets them be heard - what
+    /// CommentaryDirector.SponsorReads is wired to.
+    ///
+    /// Built fresh each time rather than held: a sponsor sold at the sign-up
+    /// desk mid-evening has to be in the rotation by the next gap, and the
+    /// rotation handles a late arrival itself (SponsorRotation catches them
+    /// up rather than making them wait their turn).
+    ///
+    /// A sponsor with no name is left out, not read as a blank - the
+    /// rotation drops them too, but the club's own count of "how many are
+    /// being read" should not include a half-filled row somebody added and
+    /// walked away from.
+    /// </summary>
+    public SponsorReadPlan ReadPlan()
+    {
+        var slots = _settings.Sponsors
+            .Where(s => s.Enabled)
+            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+            .Where(s => !string.IsNullOrWhiteSpace(s.Name))
+            .Select(s => new SponsorSlot(
+                s.Id,
+                s.Name,
+                Spoken(s.Tagline),
+                Math.Clamp(s.Weight, 1, 10),
+                Spoken(s.SalesCopy)))
+            .ToList();
+
+        var placement = SponsorPlacement.Nowhere;
+
+        if (_settings.ReadDuringAdBreaks)
+        {
+            placement |= SponsorPlacement.AdBreaks;
+        }
+
+        if (_settings.ReadDuringSegments)
+        {
+            placement |= SponsorPlacement.Segments;
+        }
+
+        return new SponsorReadPlan(slots, placement);
+    }
+
+    /// <summary>
+    /// A typed field as the rotation wants it: null when there is nothing
+    /// in it. The rotation treats an empty tagline and an absent one the
+    /// same, but "null means they did not buy one" is the thing the code
+    /// downstream reads, so it is said here rather than left to a
+    /// whitespace test in three places.
+    /// </summary>
+    private static string? Spoken(string? typed) =>
+        string.IsNullOrWhiteSpace(typed) ? null : typed;
+}
+
+/// <summary>
+/// One sponsor the club has sold airtime to, as the Sponsors page edits
+/// them and sponsors.json keeps them.
+///
+/// A class with settable properties rather than the record struct the
+/// rotation uses (SponsorSlot): this is what is saved and what a text box
+/// writes into as it is typed, and the rotation's one is a snapshot handed
+/// over for a single decision. Keeping them apart is what lets the rotation
+/// stay a table test with no store anywhere near it.
+/// </summary>
+public sealed class SponsorBooking
+{
+    /// <summary>
+    /// What the night's read counts are kept against. Set when the sponsor
+    /// is added and never changed - the name can be corrected mid-evening
+    /// without the reads already given moving to somebody else.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The name as it should be SAID, which is not always as it is written
+    /// on the banner: "and co" rather than "&amp; Co.", and the
+    /// pronunciation spelt out where it has to be. Read by a synthetic
+    /// voice, so an ampersand or an abbreviation is a gamble.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>One short line, where they gave one. Heard on their first read of the night only.</summary>
+    public string Tagline { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The few sentences they paid to have read out, spoken as written.
+    /// Held to SponsorCopy.MaxChars by the page that edits it and again by
+    /// SponsorCopy.Tidy, which is what every read goes through.
+    /// </summary>
+    public string SalesCopy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How big a share of the night's reads they bought. One by default; a
+    /// sponsor on two gets twice the reads of a sponsor on one, however
+    /// many reads the night turns out to have room for.
+    /// </summary>
+    public int Weight { get; set; } = 1;
+
+    /// <summary>
+    /// Whether they are in the rotation at all. On by default, and turned
+    /// off rather than deleted for a sponsor whose season has finished -
+    /// their copy is kept, which is the whole point, and they stop being
+    /// read tonight.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
 }
 
 public sealed class SponsorSettings
@@ -375,4 +624,30 @@ public sealed class SponsorSettings
     public bool MuteMusicDuringVideo { get; set; } = true;
 
     public List<string> SlideFileNames { get; set; } = new();
+
+    /// <summary>
+    /// The sponsors the club has sold airtime to, in the order they listed
+    /// them. Empty on a fresh install, which is the opt-in: nothing is read
+    /// out until somebody puts a sponsor in here.
+    /// </summary>
+    public List<SponsorBooking> Sponsors { get; set; } = new();
+
+    /// <summary>
+    /// Whether a paid read goes out on the tail of an ad break - once the
+    /// sponsor's own video has finished and before the screen goes back to
+    /// the standings.
+    ///
+    /// On by default, unlike nearly everything else in this file, and for a
+    /// different reason: the list above is what a home setup leaves empty,
+    /// so this only ever applies to a club that has already typed a sponsor
+    /// in. One that typed copy wants it read; the switch is here for the
+    /// club that wants the slides and not the voice.
+    /// </summary>
+    public bool ReadDuringAdBreaks { get; set; } = true;
+
+    /// <summary>
+    /// Whether a paid read goes out in the gap between races, where the
+    /// commentary segments live. On by default, for the reason above.
+    /// </summary>
+    public bool ReadDuringSegments { get; set; } = true;
 }

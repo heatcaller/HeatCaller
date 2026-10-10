@@ -30,6 +30,18 @@ internal static class AudioBus
     private const int SampleRate = 44100;
 
     /// <summary>
+    /// The rate the mix runs at, for anything that takes the mix as it is
+    /// rather than handing a sound in - see <see cref="IMixListener"/>.
+    /// Named so a listener never has to guess it, and so it can never need
+    /// a resampler: resampling the mix would be work on the device's own
+    /// thread, which is the one thing this class exists to keep clear of.
+    /// </summary>
+    public const int MixSampleRate = SampleRate;
+
+    /// <summary>See <see cref="MixSampleRate"/>. The mix is interleaved stereo.</summary>
+    public const int MixChannels = 2;
+
+    /// <summary>
     /// Silence still worth putting in front of a sound. The device is
     /// already awake, so this only has to cover nothing - kept as a hair
     /// of space so a sound doesn't begin on a hard edge.
@@ -162,7 +174,13 @@ internal static class AudioBus
 
         try
         {
-            output.Init(new SampleToWaveProvider16(mixer));
+            // Through Tapped, always, whether anything is listening or not:
+            // with no listener it is one null check per buffer, and building
+            // the chain the same way every time means a recording started
+            // mid-evening never has to touch an output that is already
+            // running - which would mean stopping it, and stopping it is
+            // the stall this whole class exists to avoid.
+            output.Init(new SampleToWaveProvider16(new Tapped(mixer)));
             output.PlaybackStopped += OnPlaybackStopped;
             output.Play();
         }
@@ -246,6 +264,88 @@ internal static class AudioBus
     /// <summary>One sound in the mix. Finishes when its source runs out, or when it is cut off.</summary>
     /// <summary>The most a boosted clip is raised by - see PlayAsync.</summary>
     public const float MaxBoost = 2f;
+
+    /// <summary>
+    /// Something that wants the finished mix as it goes to the speaker -
+    /// the race recorder, and nothing else so far.
+    ///
+    /// <see cref="Mixed"/> is called ON THE SOUND DEVICE'S OWN THREAD, which
+    /// makes the contract short and absolute: copy what you need and
+    /// return. No disk, no network, no lock that anything slow stands
+    /// behind, no allocation worth the name, and NOTHING THAT THROWS - an
+    /// exception from here would come out of the device's read, which is
+    /// how the music used to skip. A listener that does throw is dropped
+    /// rather than tried again.
+    ///
+    /// The buffer is the mixer's own and is reused the moment this returns,
+    /// so it must be copied, never kept.
+    /// </summary>
+    public interface IMixListener
+    {
+        /// <param name="buffer">Interleaved stereo floats at <see cref="MixSampleRate"/> - see <see cref="MixChannels"/>.</param>
+        /// <param name="offset">Where this read's samples start in the buffer.</param>
+        /// <param name="count">How many samples (not frames) are this read's.</param>
+        void Mixed(float[] buffer, int offset, int count);
+    }
+
+    /// <summary>
+    /// The one listener, or null. One rather than a list on purpose: a list
+    /// would be walked on the device's thread, and the only thing that wants
+    /// the mix is a recording, of which there is one at a time.
+    /// </summary>
+    private static volatile IMixListener? _listener;
+
+    /// <summary>
+    /// Starts giving <paramref name="listener"/> the mix. Replaces whatever
+    /// was listening - a second recording never quietly joins a first.
+    /// Opens nothing and stops nothing, so it is safe mid-race.
+    /// </summary>
+    public static void Listen(IMixListener listener) => _listener = listener;
+
+    /// <summary>Stops giving this listener the mix. Does nothing when something else is listening by now.</summary>
+    public static void StopListening(IMixListener listener)
+    {
+        if (ReferenceEquals(_listener, listener))
+        {
+            _listener = null;
+        }
+    }
+
+    /// <summary>
+    /// Hands each read of the mix to the listener on its way to the device -
+    /// see <see cref="IMixListener"/>. With nobody listening it is a null
+    /// check and a return.
+    /// </summary>
+    private sealed class Tapped : ISampleProvider
+    {
+        private readonly ISampleProvider _source;
+
+        public Tapped(ISampleProvider source) => _source = source;
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            var read = _source.Read(buffer, offset, count);
+
+            if (read > 0 && _listener is { } listener)
+            {
+                try
+                {
+                    listener.Mixed(buffer, offset, read);
+                }
+                catch
+                {
+                    // A listener is a nice-to-have and this is the device's
+                    // thread. One that throws is taken off rather than
+                    // given another chance to do it on the next buffer.
+                    StopListening(listener);
+                }
+            }
+
+            return read;
+        }
+    }
 
     /// <summary>
     /// Leaves a sample alone up to the knee, and bends anything above it

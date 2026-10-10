@@ -975,6 +975,28 @@ public sealed class DayScheduleControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Which of the lines a delete took should go back when it is undone:
+    /// the ones that are not on the sheet now. Pure, so the undo's rule can
+    /// be tested without the page.
+    ///
+    /// By id across every race day, not just the current one, so an undo
+    /// made after switching days still reaches the day it was made on - the
+    /// line carries its own EventId - and so a line somebody typed again by
+    /// hand since is left exactly as it is rather than the sheet ending up
+    /// with two of it. The same rule DayScheduleStore.RestoreTimes keeps.
+    /// </summary>
+    internal static List<ScheduleEntry> LinesToPutBack(
+        IEnumerable<ScheduleEntry> deleted,
+        IEnumerable<ScheduleEntry> onSheetNow)
+    {
+        var there = new HashSet<string>(onSheetNow.Select(e => e.Id), StringComparer.Ordinal);
+
+        // Add is false for an id already there, which also stops the same
+        // line being put back twice if it is in the list twice.
+        return deleted.Where(e => there.Add(e.Id)).ToList();
+    }
+
     private void DeleteSelected()
     {
         var removed = _grid.SelectedRows
@@ -1027,14 +1049,41 @@ public sealed class DayScheduleControl : UserControl
             return;
         }
 
-        // A single snapshot restores the whole list however many were removed.
-        var snapshot = _schedule.Snapshot();
+        // Just these lines, put back by id - not a snapshot of the whole
+        // sheet.
+        //
+        // Restore(snapshot) puts the sheet back as it stood BEFORE the
+        // delete, which takes back everything done to it since: a second
+        // delete made after this one came back with it (and left a stale
+        // entry on the undo stack), a round's line that appeared since went
+        // away, and the order of the club's own lines inside a slot was
+        // reset. The Edit undo a few lines above already keeps the right
+        // rule, and so do CheckInStore.RestoreCheckedIn and
+        // RaceDayOpsToday.DayUpdate - an undo takes back the one thing it
+        // names and nothing else.
+        //
+        // Read before the delete, like the Edit undo: _schedule into a local
+        // so the undo does not reach through a page that has been disposed.
+        var schedule = _schedule;
+        var deleted = removed.ToList();
+
         _undo.Capture(
             removed.Count == 1 ? $"Delete '{DescribeEntry(removed[0])}'" : $"Delete {removed.Count} schedule entries",
             () =>
             {
-                _schedule.Restore(snapshot);
-                RefreshAll();
+                // The same objects that were taken out, so each line comes
+                // back with its own id, its day, its anchor, its time and its
+                // tick. A line typed again by hand since keeps the one that is
+                // there - see LinesToPutBack.
+                foreach (var entry in LinesToPutBack(deleted, schedule.Everything))
+                {
+                    schedule.Add(entry);
+                }
+
+                if (!IsDisposed)
+                {
+                    RefreshAll();
+                }
             });
 
         foreach (var entry in removed)

@@ -19,6 +19,15 @@
 public sealed partial class RaceControlControl
 {
     /// <summary>
+    /// The Big Screen this page has open, if any - see where _actBigScreen
+    /// is built. Null until one is opened and again as soon as it is closed.
+    ///
+    /// No initializer, so it belongs in this part of the class rather than
+    /// with the fields in RaceControlControl.cs.
+    /// </summary>
+    private BigScreenForm? _bigScreen;
+
+    /// <summary>
     /// Puts the host's Session row - the Name, Track and Round pickers,
     /// which MainForm owns - at the top of the page, above the Next Up bar.
     ///
@@ -280,17 +289,56 @@ public sealed partial class RaceControlControl
         // The transponder watch and the next race's roster give it the grid
         // roll call before the green (RollCall) - the same cars the
         // pre-race check checks.
-        _actBigScreen = () => new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector,
-            () => _achievements,
-            watch: _transponderWatch,
-            roster: () => PreRaceRoster().Roster,
-            trackMap: TrackMap,
+        //
+        // One window, however many ways there are to ask for it. This used to
+        // build a new one every time, and it is reached from two buttons -
+        // this page's own and Local Screens, through TriggerOpenBigScreen - so
+        // a second press put an identical window exactly over the first: two
+        // subscriptions to LapProcessed, StateChanged, FlagChanged,
+        // SectorsRecorded and SplitCrossed, two 500ms timers, two sponsor
+        // rotations, and closing the top one revealed the other, so Escape
+        // read as not working. AdBreak's note about two Big Screens is about
+        // two different HOSTS - Practice Mode can open its own while this one
+        // is up - which still works: this only keeps one per host.
+        _actBigScreen = () =>
+        {
+            if (_bigScreen is { IsDisposed: false } already)
+            {
+                // Brought to the front rather than opened again. Minimized
+                // counts as open: a window on the taskbar is still subscribed
+                // to everything, and a second one would be the bug.
+                if (already.WindowState == FormWindowState.Minimized)
+                {
+                    already.WindowState = FormWindowState.Normal;
+                }
 
-            // Between races, the attract cards; during one that counts
-            // towards a championship, "if it ended now" - see
-            // RaceControlControl.Tonight.
-            attract: AttractCards,
-            ifItEndedNow: ChampionshipIfItEndedNow).Show();
+                already.Activate();
+                already.BringToFront();
+
+                return;
+            }
+
+            var screen = new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings, _projector,
+                () => _achievements,
+                watch: _transponderWatch,
+                roster: () => PreRaceRoster().Roster,
+                trackMap: TrackMap,
+
+                // Between races, the attract cards; during one that counts
+                // towards a championship, "if it ended now" - see
+                // RaceControlControl.Tonight.
+                attract: AttractCards,
+                ifItEndedNow: ChampionshipIfItEndedNow);
+
+            // The window can be closed by whoever is in front of it - Escape,
+            // the X, its own button - so the field must stop pointing at it
+            // when it goes. Holding a closed window would mean the button did
+            // nothing at all for the rest of the night.
+            screen.FormClosed += (_, _) => _bigScreen = null;
+
+            _bigScreen = screen;
+            screen.Show();
+        };
         _btnBigScreen.Click += (_, _) => _actBigScreen();
 
         // --- The flags ---

@@ -275,8 +275,14 @@ public enum VoiceEngine
     /// <summary>The club's own ElevenLabs account - its key, its voices, its credits.</summary>
     ElevenLabs = 0,
 
-    /// <summary>The free speech voice built into Windows. No account, no internet.</summary>
-    Windows = 1,
+    // 1 was the free Windows speech voice (System.Speech / SAPI 5),
+    // retired on 10 Oct 2026 - see VoiceEngines.RetiredWindows below, the
+    // only thing that still knows the number. It was both a choice a club
+    // could pick and the voice that spoke whenever nothing else could, and
+    // Kokoro
+    // is now both: it sounds like a person rather than a 1998 car satnav,
+    // it costs nothing either, and keeping two free voices meant every
+    // "what speaks when" question had two answers.
 
     /// <summary>
     /// The HeatCaller voice: ElevenLabs, spoken through the club's relay on
@@ -286,19 +292,50 @@ public enum VoiceEngine
     /// Everything that costs a character is fixed in this mode - the
     /// announcer's wording, the voice's settings, the model - because the
     /// club is not the one paying. A club that wants its own words, its own
-    /// voice or the Test buttons uses its own key, or the free Windows
-    /// voice, where both are theirs to spend.
+    /// voice or the Test buttons uses its own key, or the free Kokoro voice,
+    /// where both are theirs to spend.
     /// </summary>
     HeatCaller = 2,
 
     /// <summary>
     /// Kokoro: a free, natural-sounding voice that runs on this PC. No
     /// account, no internet once downloaded, and nothing billed however much
-    /// the announcer talks. The model is a one-off download from Voice
-    /// Settings (see KokoroSpeech); until it is there the Windows voice says
-    /// what Kokoro would have.
+    /// the announcer talks. It ships in the installer, and Voice Settings
+    /// fetches it when it is missing (see KokoroSpeech).
+    ///
+    /// Since 10 Oct 2026 this is also the voice that speaks whenever the
+    /// chosen one cannot: no ElevenLabs key, the quota gone, the relay out of
+    /// reach or out of allowance. There is nothing underneath it - if the
+    /// model is not on the PC the announcer cannot speak at all, and says
+    /// so loudly rather than going quiet (AnnouncementService.CanSpeak).
     /// </summary>
     Kokoro = 3,
+}
+
+/// <summary>
+/// The engine numbers that are no longer offered but are still spoken for.
+///
+/// <see cref="VoiceEngine"/> is persisted as a NUMBER - "Engine" in
+/// voice-settings.json - so those numbers are a storage format, not a
+/// presentation detail. They never change and are never reused, exactly as
+/// the decoder numbers don't (see DecoderConnection, which keeps the
+/// retired Next Level Timing decoder as a number for the same reason).
+///
+/// A number no enum member answers to still deserialises - System.Text.Json
+/// does not check that an integer names a member - so this is what tells a
+/// retired choice apart from a file written by a newer version. Both
+/// <see cref="VoiceProfile.EffectiveEngine"/> and VoiceSettingsStore read
+/// it; see each for why it has to be both.
+/// </summary>
+internal static class VoiceEngines
+{
+    /// <summary>
+    /// The free Windows speech voice. Retired on 10 Oct 2026 and no longer
+    /// offered. Kept only so a 1 read back from an older voice-settings.json
+    /// is recognised - it is treated as <see cref="VoiceEngine.Kokoro"/>,
+    /// which is the free voice now.
+    /// </summary>
+    internal const int RetiredWindows = 1;
 }
 
 /// <summary>
@@ -313,7 +350,6 @@ public sealed record SecondVoice(
     string HeatCallerVoice,
     string HeatCallerVoiceName,
     string HeatCallerRev,
-    string WindowsVoiceName,
     string KokoroVoiceName = "")
 {
     /// <summary>Whether a voice has been picked for this engine - otherwise the announcer's own is used.</summary>
@@ -321,7 +357,6 @@ public sealed record SecondVoice(
     {
         VoiceEngine.ElevenLabs => !string.IsNullOrWhiteSpace(ElevenLabsVoiceId),
         VoiceEngine.HeatCaller => !string.IsNullOrWhiteSpace(HeatCallerVoice),
-        VoiceEngine.Windows => !string.IsNullOrWhiteSpace(WindowsVoiceName),
         VoiceEngine.Kokoro => !string.IsNullOrWhiteSpace(KokoroVoiceName),
         _ => false,
     };
@@ -331,7 +366,6 @@ public sealed record SecondVoice(
     {
         VoiceEngine.ElevenLabs => ElevenLabsVoiceName,
         VoiceEngine.HeatCaller => HeatCallerVoiceName,
-        VoiceEngine.Windows => WindowsVoiceName,
         VoiceEngine.Kokoro => KokoroSpeech.Describe(KokoroVoiceName),
         _ => string.Empty,
     };
@@ -463,10 +497,11 @@ public sealed class VoiceProfile
     public string ModelId { get; set; } = "eleven_multilingual_v2";
 
     /// <summary>
-    /// What speaks: ElevenLabs or the free Windows voice.
+    /// What speaks: ElevenLabs, the HeatCaller relay's voice, or Kokoro on
+    /// this PC.
     ///
-    /// Nullable on purpose - null is how a file written before the Windows
-    /// voice existed is told apart from one that chose, and
+    /// Nullable on purpose - null is how a file written before there was
+    /// more than one voice is told apart from one that chose, and
     /// VoiceSettingsStore.Load turns it into a real choice once. Code reads
     /// <see cref="EffectiveEngine"/>, never this.
     /// </summary>
@@ -477,13 +512,27 @@ public sealed class VoiceProfile
     /// this version doesn't know) is treated the way Load migrates it - see
     /// <see cref="InferEngine"/>.
     /// </summary>
+    /// <remarks>
+    /// The retired Windows voice is matched here BY NUMBER as well as in
+    /// VoiceSettingsStore.ChooseEngineForOlderFile, which is what writes
+    /// the migration to disk. Both, because a profile reaches the announcer
+    /// without going through the store at all: a theme carries one, so does
+    /// a restored backup, and the Voice Settings page builds a fresh one
+    /// from its boxes. Left to InferEngine, a club that had a key AND chose
+    /// the Windows voice would have been handed ElevenLabs - and charged
+    /// for a voice it had deliberately turned off.
+    /// </remarks>
     [System.Text.Json.Serialization.JsonIgnore]
     public VoiceEngine EffectiveEngine => Engine switch
     {
         VoiceEngine.ElevenLabs => VoiceEngine.ElevenLabs,
-        VoiceEngine.Windows => VoiceEngine.Windows,
         VoiceEngine.HeatCaller => VoiceEngine.HeatCaller,
         VoiceEngine.Kokoro => VoiceEngine.Kokoro,
+
+        // Matched through a guard rather than as a constant pattern: the
+        // retired number is an int constant, and "a choice was made, and it
+        // was that one" reads as what it is.
+        { } chosen when (int)chosen == VoiceEngines.RetiredWindows => VoiceEngine.Kokoro,
         _ => InferEngine(),
     };
 
@@ -513,25 +562,34 @@ public sealed class VoiceProfile
     /// <summary>
     /// The engine for a profile that never chose one: ElevenLabs when it has
     /// a key - including one sealed on another PC, which still means "this
-    /// club uses ElevenLabs" - and the free Windows voice otherwise.
+    /// club uses ElevenLabs" - and the free Kokoro voice otherwise.
     /// </summary>
     internal VoiceEngine InferEngine() =>
-        !string.IsNullOrWhiteSpace(ApiKey) || ApiKeyLocked ? VoiceEngine.ElevenLabs : VoiceEngine.Windows;
+        !string.IsNullOrWhiteSpace(ApiKey) || ApiKeyLocked ? VoiceEngine.ElevenLabs : VoiceEngine.Kokoro;
+
+    // WindowsVoiceName was here: which of Windows' own SAPI voices to speak
+    // with. The Windows voice went on 10 Oct 2026, so nothing reads it. An
+    // older voice-settings.json still carries the key and is passed over -
+    // System.Text.Json ignores a property the class does not have, which is
+    // why removing it is safe and why there is nothing to migrate: the
+    // chosen VOICE is what matters, and that migration is the Engine
+    // number's (see EffectiveEngine).
 
     /// <summary>
-    /// The Windows voice to speak with, by the name Windows gives it
-    /// ("Microsoft Zira Desktop"). Blank means Windows' own default voice.
-    /// Used both when the Windows voice is chosen and when it stands in.
-    /// </summary>
-    public string WindowsVoiceName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// With ElevenLabs chosen: whether the Windows voice says a line
+    /// With ElevenLabs chosen: whether the free Kokoro voice says a line
     /// ElevenLabs can't - no key, no internet, the quota used up - rather
     /// than the line being skipped. On by default, so a flag call is never
-    /// silent. Means nothing with the Windows voice chosen.
+    /// silent. Means nothing with Kokoro itself chosen.
     /// </summary>
-    public bool WindowsVoiceStandsIn { get; set; } = true;
+    /// <remarks>
+    /// Saved under its old name. This was WindowsVoiceStandsIn, and the
+    /// setting is the same question with a different voice answering it, so
+    /// the JSON name is kept rather than retired: renaming it would have
+    /// read as "never set" on every existing file and quietly turned the
+    /// stand-in back ON for the clubs that had deliberately turned it off.
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonPropertyName("WindowsVoiceStandsIn")]
+    public bool KokoroStandsIn { get; set; } = true;
 
     /// <summary>
     /// The Kokoro voice to speak with, by Kokoro's own name for it
@@ -548,8 +606,8 @@ public sealed class VoiceProfile
     /// text - "open bracket, excited" - so tags must be stripped rather
     /// than sent, which is what SanitiseForModel below does.
     ///
-    /// Never with the Windows voice, whatever model is set for ElevenLabs:
-    /// it reads a tag out as words too. That also stops the AI recap
+    /// Never with Kokoro, whatever model is set for ElevenLabs: it reads a
+    /// tag out as words too. That also stops the AI recap
     /// writing tags for a voice that can't use them (MainForm feeds this to
     /// CommentaryService).
     /// </summary>
@@ -579,7 +637,7 @@ public sealed class VoiceProfile
 
     /// <summary>
     /// Takes the [audio tags] out of a line and tidies the spaces they
-    /// leave. Shared by SanitiseForModel and the Windows voice, which always
+    /// leave. Shared by SanitiseForModel and the Kokoro voice, which always
     /// strips them - it has no way to perform one, only to read it out.
     ///
     /// The result is part of a saved line's key (see VoiceLibrary), so this
@@ -636,8 +694,7 @@ public sealed class VoiceProfile
         // with ElevenLabs, whatever was chosen. The engine goes over as the
         // resolved choice - this copy has no key of its own to infer from.
         Engine = EffectiveEngine,
-        WindowsVoiceName = WindowsVoiceName,
-        WindowsVoiceStandsIn = WindowsVoiceStandsIn,
+        KokoroStandsIn = KokoroStandsIn,
         KokoroVoiceName = KokoroVoiceName,
 
         // The HeatCaller voice and its revision go too: they are what a
@@ -652,7 +709,7 @@ public sealed class VoiceProfile
     /// <summary>
     /// A copy that speaks in another voice - every picked part of
     /// <paramref name="voice"/> replacing the announcer's, the rest (key,
-    /// model, delivery, speed) kept. The Windows voice goes over too when one
+    /// model, delivery, speed) kept. The Kokoro voice goes over too when one
     /// is picked, so a stand-in for an ElevenLabs line is still a different
     /// voice from the announcer's.
     /// </summary>
@@ -671,11 +728,6 @@ public sealed class VoiceProfile
             copy.HeatCallerVoice = voice.HeatCallerVoice;
             copy.HeatCallerRev = voice.HeatCallerRev;
             copy.HeatCallerVoiceName = voice.HeatCallerVoiceName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(voice.WindowsVoiceName))
-        {
-            copy.WindowsVoiceName = voice.WindowsVoiceName;
         }
 
         if (!string.IsNullOrWhiteSpace(voice.KokoroVoiceName))
@@ -761,7 +813,6 @@ public sealed class VoiceProfile
         HeatCallerVoice ??= string.Empty;
         HeatCallerRev ??= string.Empty;
         HeatCallerVoiceName ??= string.Empty;
-        WindowsVoiceName ??= string.Empty;
         TextNormalization ??= string.Empty;
         LanguageCode ??= string.Empty;
         OutputFormat ??= string.Empty;
@@ -784,12 +835,14 @@ public sealed class VoiceProfile
         // Stamped current so a brand-new install doesn't immediately run
         // the line-upgrade pass against lines it just created.
         //
-        // A new install speaks with the free Windows voice: it has no
+        // A new install speaks with the free Kokoro voice: it has no
         // ElevenLabs key yet, and the announcer should work out of the box.
+        // The model ships in the installer, so on an ordinary install this
+        // really does speak the first time anybody presses a flag.
         var p = new VoiceProfile
         {
             TemplateVersion = VoiceSettingsStore.CurrentTemplateVersion,
-            Engine = VoiceEngine.Windows,
+            Engine = VoiceEngine.Kokoro,
         };
         p.Events[nameof(AnnouncementEventType.RaceStaging)] = new AnnouncementEventConfig
         {

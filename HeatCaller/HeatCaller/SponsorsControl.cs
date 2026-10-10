@@ -1,6 +1,15 @@
 namespace HeatCaller;
 
-/// <summary>Manage sponsor/promo slides shown in rotation on the Big Screen, and how long each stays up.</summary>
+/// <summary>
+/// Manage sponsor/promo slides shown in rotation on the Big Screen, how
+/// long each stays up - and the sponsors the announcer reads out, with the
+/// sales copy each of them paid for.
+///
+/// The two halves are one page on purpose. A club's sponsors are one
+/// arrangement: the same shop that gave them a banner for the screen gave
+/// them the words to read, and setting them up is one sitting. See
+/// BuildSponsorReadsCard.
+/// </summary>
 public sealed class SponsorsControl : UserControl
 {
     private readonly SponsorStore _store;
@@ -14,6 +23,30 @@ public sealed class SponsorsControl : UserControl
     private readonly CheckBox _chkPauseDuringRace = new ThemedCheckBox();
     private readonly CheckBox _chkPlayVideoSound = new ThemedCheckBox();
     private readonly CheckBox _chkMuteMusicDuringVideo = new ThemedCheckBox();
+
+    // --- The sponsors themselves, and the copy they paid to have read ---
+
+    private readonly CheckBox _chkReadInAdBreaks = new ThemedCheckBox();
+    private readonly CheckBox _chkReadInSegments = new ThemedCheckBox();
+    private readonly ListBox _lstSponsors = new();
+    private readonly TextBox _txtSponsorName = new();
+    private readonly TextBox _txtSponsorTagline = new();
+    private readonly TextBox _txtSponsorCopy = new();
+    private readonly NumericUpDown _numSponsorWeight = new();
+    private readonly CheckBox _chkSponsorEnabled = new ThemedCheckBox();
+
+    /// <summary>How long the selected sponsor's copy takes to read, under the copy box.</summary>
+    private readonly Label _lblCopyLength = new();
+
+    /// <summary>
+    /// Set while the fields are being filled in from the selected sponsor,
+    /// so the handlers that save what is typed do not save it straight back
+    /// over itself - and, worse, do not write the sponsor that was selected
+    /// a moment ago into the one selected now. The pattern every edit-beside
+    /// -a-list page in the app needs and the reason this one needed a flag
+    /// at all.
+    /// </summary>
+    private bool _fillingSponsor;
 
     /// <summary>
     /// Sits over the preview and says what a video slide is, since there is
@@ -37,6 +70,19 @@ public sealed class SponsorsControl : UserControl
     /// <summary>The fewest slides the list shows before the page scrolls instead.</summary>
     private const int ListLeastRows = 4;
 
+    /// <summary>
+    /// The sponsor fields' widths and heights at the normal text size -
+    /// scaled with it in SizeFields, never set in pixels at the size the
+    /// page happens to be running at.
+    /// </summary>
+    private const int SponsorListWidth = 260;
+    private const int SponsorNameWidth = 300;
+    private const int SalesCopyWidth = 440;
+
+    /// <summary>How many sponsors the list shows, and how many lines of copy the box shows, before each scrolls.</summary>
+    private const int SponsorRows = 5;
+    private const int SalesCopyLines = 4;
+
     public SponsorsControl(SponsorStore store, UndoService undo)
     {
         _store = store;
@@ -50,6 +96,7 @@ public sealed class SponsorsControl : UserControl
 
         BuildLayout();
         RefreshSlides();
+        RefreshSponsors();
 
         // Undo changes the store, never this page - see OnStoreRestored.
         _store.Restored += OnStoreRestored;
@@ -72,9 +119,12 @@ public sealed class SponsorsControl : UserControl
         _chkPauseDuringRace.Checked = _store.Current.PauseDuringRace;
         _chkPlayVideoSound.Checked = _store.Current.PlayVideoSound;
         _chkMuteMusicDuringVideo.Checked = _store.Current.MuteMusicDuringVideo;
+        _chkReadInAdBreaks.Checked = _store.Current.ReadDuringAdBreaks;
+        _chkReadInSegments.Checked = _store.Current.ReadDuringSegments;
         SyncVideoSoundEnabled();
 
         RefreshSlides();
+        RefreshSponsors();
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -289,6 +339,8 @@ public sealed class SponsorsControl : UserControl
 
         SyncVideoSoundEnabled();
 
+        var readsCard = BuildSponsorReadsCard();
+
         // The number boxes at the text size in use - see SizeFields.
         _textSize.Keep(SizeFields);
 
@@ -300,15 +352,155 @@ public sealed class SponsorsControl : UserControl
         page.Add(_chkEnabled, stretch: false);
         page.AddFill(slidesCard, slidesCard.LeastHeight);
         page.Add(timingCard);
-        page.Add(videoCard, gapBelow: 0);
+        page.Add(videoCard);
+        page.Add(readsCard, gapBelow: 0);
 
         Controls.Add(page);
+    }
+
+    /// <summary>
+    /// The sponsors the announcer reads out, and the copy each of them paid
+    /// for.
+    ///
+    /// A card on this page rather than a window of its own, deliberately. A
+    /// club setting their sponsors up does it once, for all of them, at the
+    /// same sitting as they load the slides - and three of them in a dialog
+    /// each is three times the clicking for no gain. It is also the list
+    /// and the fields beside it that every other page in the app uses for
+    /// this shape, so nothing new has to be learnt.
+    ///
+    /// Everything is placed by the layout pieces, in a FieldGrid, so the
+    /// whole card follows the text size from 85% to 200% without a single
+    /// pixel being worked out here - see SizeFields for the two things that
+    /// do need a measurement.
+    /// </summary>
+    private Section BuildSponsorReadsCard()
+    {
+        var lblReadsIntro = new Label
+        {
+            Text = "A sponsor can have a read - a few sentences somebody wrote to be spoken aloud - and the announcer will read it "
+                   + "as written, in whichever gaps you allow below. It costs nothing to run and needs no AI: the words are yours, "
+                   + "not the app's. A race call always comes first, so a read waits for the next gap rather than going over a flag.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _chkReadInAdBreaks.Text = "Read at the end of an ad break, once the sponsor's video has finished";
+        _chkReadInAdBreaks.AutoSize = true;
+        _chkReadInAdBreaks.Checked = _store.Current.ReadDuringAdBreaks;
+        _chkReadInAdBreaks.CheckedChanged += (_, _) =>
+        {
+            _store.Current.ReadDuringAdBreaks = _chkReadInAdBreaks.Checked;
+            _store.Save();
+        };
+
+        _chkReadInSegments.Text = "Read in the gap between races, when the commentary has nothing to say";
+        _chkReadInSegments.AutoSize = true;
+        _chkReadInSegments.Checked = _store.Current.ReadDuringSegments;
+        _chkReadInSegments.CheckedChanged += (_, _) =>
+        {
+            _store.Current.ReadDuringSegments = _chkReadInSegments.Checked;
+            _store.Save();
+        };
+
+        _lstSponsors.IntegralHeight = false;
+        _lstSponsors.SelectedIndexChanged += (_, _) => FillSponsorFields();
+
+        var btnAddSponsor = new Button { Text = "Add Sponsor" };
+        btnAddSponsor.Click += (_, _) => AddSponsor();
+
+        var btnRemoveSponsor = new Button { Text = "Remove" };
+        btnRemoveSponsor.Click += (_, _) => RemoveSponsor();
+
+        var btnSponsorUp = new Button { Text = "Move Up" };
+        btnSponsorUp.Click += (_, _) => MoveSponsor(-1);
+
+        var btnSponsorDown = new Button { Text = "Move Down" };
+        btnSponsorDown.Click += (_, _) => MoveSponsor(1);
+
+        _txtSponsorName.TextChanged += (_, _) => SaveSponsorField(s => s.Name = _txtSponsorName.Text);
+        _txtSponsorTagline.TextChanged += (_, _) => SaveSponsorField(s => s.Tagline = _txtSponsorTagline.Text);
+
+        // The list's wording follows the fields when the cursor LEAVES
+        // them, not as they are typed. Replacing a row in a list box takes
+        // the native control's selection with it, and doing that on every
+        // keystroke would put the page through its own selection handler
+        // once a letter - as well as flickering the list under somebody
+        // typing into the box above it.
+        _txtSponsorName.Leave += (_, _) => RefreshSponsorLabels();
+        _txtSponsorCopy.Leave += (_, _) => RefreshSponsorLabels();
+
+        // Held to the same number SponsorCopy keeps, so what is typed is
+        // what is read: a cap applied silently further down is how a club
+        // finds out their last sentence went missing from the sponsor.
+        _txtSponsorCopy.MaxLength = SponsorCopy.MaxChars;
+        _txtSponsorCopy.Multiline = true;
+        _txtSponsorCopy.ScrollBars = ScrollBars.Vertical;
+        _txtSponsorCopy.BackColor = AppTheme.Surface;
+        _txtSponsorCopy.ForeColor = AppTheme.TextDark;
+        _txtSponsorCopy.BorderStyle = BorderStyle.FixedSingle;
+        _txtSponsorCopy.TextChanged += (_, _) =>
+        {
+            SaveSponsorField(s => s.SalesCopy = _txtSponsorCopy.Text);
+            ShowCopyLength();
+        };
+
+        _numSponsorWeight.Minimum = 1;
+        _numSponsorWeight.Maximum = 10;
+        _numSponsorWeight.Value = 1;
+        _numSponsorWeight.ValueChanged += (_, _) =>
+        {
+            SaveSponsorField(s => s.Weight = (int)_numSponsorWeight.Value);
+            RefreshSponsorLabels();
+        };
+
+        _chkSponsorEnabled.Text = "In tonight's rotation";
+        _chkSponsorEnabled.AutoSize = true;
+        _chkSponsorEnabled.Checked = true;
+        _chkSponsorEnabled.CheckedChanged += (_, _) =>
+        {
+            SaveSponsorField(s => s.Enabled = _chkSponsorEnabled.Checked);
+            RefreshSponsorLabels();
+        };
+
+        // The list, its buttons and the selected sponsor's fields. The note
+        // and the two switches go on the card itself rather than in here,
+        // exactly as the video card above does it - a wrapping note belongs
+        // to the card's width, not to a grid's field column.
+        var grid = new FieldGrid();
+
+        grid.AddRow("Sponsors:", _lstSponsors);
+        grid.AddField(new ButtonBar().With(btnAddSponsor, btnRemoveSponsor, btnSponsorUp, btnSponsorDown));
+        grid.AddRow("Name, as it's said:", _txtSponsorName);
+        grid.AddHint("Spell it the way it should sound - \"and co\" rather than the ampersand on their banner. A voice reads what it is given.");
+        grid.AddRow("One-line tagline:", _txtSponsorTagline);
+        grid.AddHint("Heard once, on their first read of the night. Leave it empty if they only bought the full read.");
+        grid.AddRow("Their read:", _txtSponsorCopy);
+        grid.AddHint(_lblCopyLength);
+        grid.AddRow("Share of the reads:", _numSponsorWeight);
+        grid.AddHint("Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share.");
+        grid.AddField(_chkSponsorEnabled);
+
+        var card = new Section("Sponsor reads");
+
+        card.Add(lblReadsIntro, gapBelow: UiLayout.RowGap);
+        card.Add(_chkReadInAdBreaks, stretch: false);
+        card.Add(_chkReadInSegments, stretch: false, gapBelow: UiLayout.SectionGap);
+        card.Add(grid, gapBelow: 0);
+
+        return card;
     }
 
     /// <summary>
     /// The number boxes: as wide as three digits and their arrows need in the
     /// page's face, and never narrower than a number box at this text size.
     /// Only when it changed - a new width lays the grid out again.
+    ///
+    /// The sponsor fields are here too, for the same reason: a name box, a
+    /// read box of four lines of its own font, and a list of five rows -
+    /// each the width it was at the normal text size, at the size in use.
+    /// A box left to size itself would be one line tall and a list would be
+    /// one row.
     /// </summary>
     private void SizeFields()
     {
@@ -316,11 +508,44 @@ public sealed class SponsorsControl : UserControl
             UiLayout.AtTextSize(UiLayout.NumericWidth),
             TextRenderer.MeasureText("000", Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
-        foreach (var spinner in new[] { _numLeaderboardSeconds, _numSlideSeconds })
+        foreach (var spinner in new[] { _numLeaderboardSeconds, _numSlideSeconds, _numSponsorWeight })
         {
             if (spinner.Width != number)
             {
                 spinner.Width = number;
+            }
+        }
+
+        Fit(_txtSponsorName, UiLayout.AtTextSize(SponsorNameWidth));
+        Fit(_txtSponsorTagline, UiLayout.AtTextSize(SalesCopyWidth));
+
+        // Four lines of the box's own font, and the hint's gap twice over
+        // for the room a text box keeps inside its edge - exactly how the
+        // Commentary page sizes its teaser box.
+        Fit(
+            _txtSponsorCopy,
+            UiLayout.AtTextSize(SalesCopyWidth),
+            Pieces.LineHeight(_txtSponsorCopy.Font) * SalesCopyLines + UiLayout.HintGap * 2);
+
+        Fit(_lstSponsors, UiLayout.AtTextSize(SponsorListWidth), _lstSponsors.ItemHeight * SponsorRows + 4);
+
+        static void Fit(Control field, int width, int? height = null)
+        {
+            if (height is { } tall)
+            {
+                var size = new Size(width, tall);
+
+                if (field.Size != size)
+                {
+                    field.Size = size;
+                }
+
+                return;
+            }
+
+            if (field.Width != width)
+            {
+                field.Width = width;
             }
         }
     }
@@ -606,5 +831,340 @@ public sealed class SponsorsControl : UserControl
         _store.Move(fileName, direction);
         RefreshSlides();
         _lstSlides.SelectedItem = fileName;
+    }
+
+    // ------------------------------------------------------------------
+    // The sponsors the announcer reads
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A sponsor in the list: the id it really is, and the line the list
+    /// shows.
+    ///
+    /// The id and not the name, because the name is what is being edited:
+    /// a list that held names would lose its place on the first keystroke
+    /// in the name box, and a club renaming a sponsor would find the
+    /// selection jump away mid-word.
+    /// </summary>
+    private sealed record SponsorRow(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>The id of the sponsor selected in the list, or null when none is.</summary>
+    private string? SelectedSponsorId => (_lstSponsors.SelectedItem as SponsorRow)?.Id;
+
+    /// <summary>
+    /// Re-reads the sponsors into the list and fills the fields from
+    /// whichever is selected, keeping the selection where it was. Called
+    /// when the page is built, after an undo, and after anything that adds,
+    /// removes or reorders.
+    /// </summary>
+    private void RefreshSponsors()
+    {
+        var was = SelectedSponsorId;
+
+        _lstSponsors.Items.Clear();
+
+        foreach (var sponsor in _store.Sponsors)
+        {
+            _lstSponsors.Items.Add(Row(sponsor));
+        }
+
+        var back = _lstSponsors.Items
+            .OfType<SponsorRow>()
+            .FirstOrDefault(row => string.Equals(row.Id, was, StringComparison.Ordinal));
+
+        if (back is not null)
+        {
+            _lstSponsors.SelectedItem = back;
+        }
+        else if (_lstSponsors.Items.Count > 0)
+        {
+            _lstSponsors.SelectedIndex = 0;
+        }
+        else
+        {
+            // Nothing selected raises no SelectedIndexChanged, so the
+            // fields are cleared by hand - otherwise the last sponsor
+            // removed would still be showing in them.
+            FillSponsorFields();
+        }
+    }
+
+    /// <summary>
+    /// The line the list shows for a sponsor: their name, and what they
+    /// bought. The share only where it is more than one, and "read" only
+    /// where there is copy - a list where every row carries the same two
+    /// notes is a list nobody reads.
+    /// </summary>
+    private static SponsorRow Row(SponsorBooking sponsor)
+    {
+        var name = string.IsNullOrWhiteSpace(sponsor.Name) ? "(no name yet)" : sponsor.Name.Trim();
+
+        var notes = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(sponsor.SalesCopy))
+        {
+            notes.Add("read");
+        }
+
+        if (sponsor.Weight > 1)
+        {
+            notes.Add($"share {sponsor.Weight}");
+        }
+
+        if (!sponsor.Enabled)
+        {
+            notes.Add("off tonight");
+        }
+
+        return new SponsorRow(sponsor.Id, notes.Count == 0 ? name : $"{name}  -  {string.Join(", ", notes)}");
+    }
+
+    /// <summary>
+    /// Re-labels the rows whose wording has changed, so a name typed into
+    /// the box above shows in the list as well.
+    ///
+    /// Row by row rather than cleared and refilled, so a list of eight
+    /// sponsors is not rebuilt because one letter changed. Replacing a row
+    /// can take the list's selection with it - the native control does not
+    /// promise to keep it - so the selection is put back; the fields are
+    /// then filled from the store, which already holds what was typed, and
+    /// setting a box to what it already says raises nothing.
+    /// </summary>
+    private void RefreshSponsorLabels()
+    {
+        var selected = _lstSponsors.SelectedIndex;
+        var replaced = false;
+
+        for (var i = 0; i < _lstSponsors.Items.Count; i++)
+        {
+            if (_lstSponsors.Items[i] is not SponsorRow row || _store.Sponsor(row.Id) is not { } sponsor)
+            {
+                continue;
+            }
+
+            var fresh = Row(sponsor);
+
+            if (string.Equals(fresh.Label, row.Label, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            _lstSponsors.Items[i] = fresh;
+            replaced = true;
+        }
+
+        if (replaced && selected >= 0 && selected < _lstSponsors.Items.Count && _lstSponsors.SelectedIndex != selected)
+        {
+            _lstSponsors.SelectedIndex = selected;
+        }
+    }
+
+    /// <summary>
+    /// Fills the fields from the selected sponsor, or empties and greys
+    /// them when there is none.
+    ///
+    /// Guarded with _fillingSponsor: every one of these boxes saves what it
+    /// holds as it changes, and without the guard selecting a sponsor would
+    /// write the one before it over the one just picked.
+    /// </summary>
+    private void FillSponsorFields()
+    {
+        var sponsor = _store.Sponsor(SelectedSponsorId);
+
+        _fillingSponsor = true;
+
+        try
+        {
+            _txtSponsorName.Text = sponsor?.Name ?? string.Empty;
+            _txtSponsorTagline.Text = sponsor?.Tagline ?? string.Empty;
+            _txtSponsorCopy.Text = sponsor?.SalesCopy ?? string.Empty;
+            _numSponsorWeight.Value = Math.Clamp(sponsor?.Weight ?? 1, (int)_numSponsorWeight.Minimum, (int)_numSponsorWeight.Maximum);
+            _chkSponsorEnabled.Checked = sponsor?.Enabled ?? true;
+        }
+        finally
+        {
+            _fillingSponsor = false;
+        }
+
+        var on = sponsor is not null;
+
+        _txtSponsorName.Enabled = on;
+        _txtSponsorTagline.Enabled = on;
+        _txtSponsorCopy.Enabled = on;
+        _numSponsorWeight.Enabled = on;
+        _chkSponsorEnabled.Enabled = on;
+
+        ShowCopyLength();
+    }
+
+    /// <summary>
+    /// Writes one typed field onto the selected sponsor and saves. Does
+    /// nothing while the fields are being filled in - see _fillingSponsor -
+    /// and nothing when no sponsor is selected.
+    /// </summary>
+    private void SaveSponsorField(Action<SponsorBooking> set)
+    {
+        if (_fillingSponsor || _store.Sponsor(SelectedSponsorId) is not { } sponsor)
+        {
+            return;
+        }
+
+        set(sponsor);
+        _store.Save();
+    }
+
+    /// <summary>
+    /// How long the copy in the box takes to read, and over how many gaps.
+    ///
+    /// Worth saying plainly, because it is the one thing about sales copy a
+    /// club cannot judge by looking at it: four lines of text is nearly a
+    /// minute out loud, and copy longer than a gap is read over two or
+    /// three of them rather than cut - which is a surprise unless it is on
+    /// the screen in front of whoever is pasting it in.
+    /// </summary>
+    private void ShowCopyLength()
+    {
+        var copy = SponsorCopy.Tidy(_txtSponsorCopy.Text);
+
+        if (copy.Length == 0)
+        {
+            _lblCopyLength.Text = "A few sentences, as they should be spoken. Leave it empty and the sponsor gets the one-line mention instead.";
+            return;
+        }
+
+        var seconds = Math.Max(1, (int)Math.Round(SponsorCopy.SpokenLength(copy).TotalSeconds));
+        var parts = 0;
+        var at = 0;
+
+        // Counted by walking the copy exactly as a race night would, so the
+        // number here is the number the club will actually hear - rather
+        // than a division that disagrees with it by one.
+        while (parts < 10)
+        {
+            var fit = SponsorCopy.Fit(copy, at, SponsorCopy.LongestRead);
+
+            if (fit.Text.Length == 0)
+            {
+                break;
+            }
+
+            parts++;
+
+            if (!fit.More)
+            {
+                break;
+            }
+
+            at = fit.ResumeAt;
+        }
+
+        var over = parts > 1 ? $", read over {parts} gaps" : string.Empty;
+
+        _lblCopyLength.Text = $"About {Plural.Of(seconds, "second")} to read{over}. "
+                              + $"{copy.Length} of {SponsorCopy.MaxChars} characters used.";
+    }
+
+    /// <summary>
+    /// Adds a sponsor, selects it and puts the cursor in the name box -
+    /// which is the only field that has to be filled in for anything to
+    /// happen, so it is where the club is sent.
+    /// </summary>
+    private void AddSponsor()
+    {
+        var added = _store.AddSponsor();
+
+        var store = _store;
+        var id = added.Id;
+
+        _undo.Capture($"Add sponsor {added.Name}", () =>
+        {
+            store.RemoveSponsor(id);
+            store.NotifyRestored();
+        });
+
+        RefreshSponsors();
+
+        _lstSponsors.SelectedItem = _lstSponsors.Items
+            .OfType<SponsorRow>()
+            .FirstOrDefault(row => string.Equals(row.Id, id, StringComparison.Ordinal));
+
+        _txtSponsorName.Focus();
+        _txtSponsorName.SelectAll();
+    }
+
+    /// <summary>
+    /// Takes the selected sponsor off the list, keeping the whole record
+    /// for undo.
+    ///
+    /// The record is captured BEFORE the removal and put back whole, the
+    /// same shape as removing a slide: a sponsor's read is a few sentences
+    /// somebody wrote and may be the only copy of them anywhere, so an
+    /// undo that brought back the name and not the words would be worse
+    /// than no undo at all.
+    /// </summary>
+    private void RemoveSponsor()
+    {
+        if (_store.Sponsor(SelectedSponsorId) is not { } sponsor)
+        {
+            return;
+        }
+
+        var name = string.IsNullOrWhiteSpace(sponsor.Name) ? "this sponsor" : sponsor.Name.Trim();
+
+        if (AppDialog.Show(this,
+                $"Remove {name} from the reads? Their slides and videos stay where they are.",
+                "Confirm remove", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var store = _store;
+        var index = _store.RemoveSponsor(sponsor.Id);
+
+        if (index >= 0)
+        {
+            _undo.Capture($"Remove sponsor {name}", () =>
+            {
+                store.RestoreSponsor(sponsor, index);
+                store.NotifyRestored();
+            });
+        }
+
+        RefreshSponsors();
+    }
+
+    /// <summary>
+    /// Moves the selected sponsor up or down. Undone by moving the same
+    /// sponsor back the other way, which leaves any other reordering since
+    /// alone - exactly as a slide's move is undone.
+    /// </summary>
+    private void MoveSponsor(int direction)
+    {
+        if (_store.Sponsor(SelectedSponsorId) is not { } sponsor)
+        {
+            return;
+        }
+
+        var from = _store.Sponsors.ToList().IndexOf(sponsor);
+        var to = from + direction;
+
+        if (from >= 0 && to >= 0 && to < _store.Sponsors.Count)
+        {
+            var store = _store;
+            var id = sponsor.Id;
+
+            _undo.Capture(direction < 0 ? $"Move sponsor {sponsor.Name} up" : $"Move sponsor {sponsor.Name} down", () =>
+            {
+                store.MoveSponsor(id, -direction);
+                store.NotifyRestored();
+            });
+        }
+
+        _store.MoveSponsor(sponsor.Id, direction);
+
+        RefreshSponsors();
     }
 }

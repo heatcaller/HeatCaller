@@ -489,7 +489,36 @@ public static class ResultEditor
             .ThenByDescending(e => e.Laps)
             .ThenBy(e => e.ElapsedMs)
 
-            // A tie keeps the order the race itself recorded.
+            // A tie keeps the order the race itself recorded - judged on
+            // the raced LAPS AND TIME first, and only then on the stored
+            // place.
+            //
+            // The stored place is not always the raced one. ApplyTo takes
+            // AsRaced.Position from entry.Position the first time a result
+            // is corrected, and by then an earlier correction round may
+            // already have had this renumbered 1..N - so the first
+            // correction made to a driver after somebody else has been
+            // corrected keeps a renumbered place in a field that is meant
+            // to hold what the race recorded. The race had A P1 100.000s,
+            // B P2 101.000s, C P3 102.000s; B took +2.000s, which put C
+            // second, and C then took +1.000s. B and C are level on laps
+            // and on 103.000s, both carried the key 2, and C - who was
+            // third as raced - came out ahead of B.
+            //
+            // The raced laps and time settle it instead. They are the very
+            // figures the race ordered on - most laps, then least time, see
+            // RaceControlSession.GetOrderedStandings - so within a group
+            // they reproduce the raced place wherever that place is sound,
+            // and give the right answer where it is not. Only a dead heat
+            // in the race itself, identical raced laps AND time, falls
+            // through to the stored place, and there the race's own order is
+            // all anybody has.
+            //
+            // Nothing here changes what AsRaced.Position holds. Putting the
+            // raced place itself right would mean keeping it for rows
+            // nobody has corrected, which a saved result has nowhere to put.
+            .ThenByDescending(e => e.AsRaced?.Laps ?? e.Laps)
+            .ThenBy(e => e.AsRaced?.ElapsedMs ?? e.ElapsedMs)
             .ThenBy(e => e.AsRaced?.Position ?? e.Position)
             .ToList();
 

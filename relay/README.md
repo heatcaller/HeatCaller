@@ -342,6 +342,14 @@ All club routes live under `/api/v1/c/:club/`. There is no route that
 reads or writes anything without naming a club, which is what makes "could
 this have touched another club's data" answerable by reading the URL.
 
+The one exception is the three `/voice/` routes (see **Hearing a voice**).
+Two of them take no token and belong to no club - they serve a sample of
+each HeatCaller voice to anyone at all - and the third, the Preview button,
+has only a token to go on. That one is safe for the very reason the rule
+exists: the token *is* the club, so there is nothing in the URL that could
+name a different one, and the only thing it writes is that club's own
+preview count.
+
 ### Publish (token required)
 
 ```
@@ -450,9 +458,16 @@ of a listing that would then be held.
 
 ```
 GET    /healthz                 -> {"ok":true,"clubs":N}
+GET    /voice/samples           no token; -> the voices there is a sample of
+GET    /voice/sample/:voiceId   no token; -> audio/mpeg
+POST   /voice/preview           token required; -> audio/mpeg
 GET    /api/v1/c/:club/whoami   token required; -> {ok, club, name, publishRoster}
 DELETE /api/v1/c/:club          token required; erases everything that club published
 ```
+
+The three `/voice/` routes are documented under **Hearing a voice before
+choosing it**; they are listed here because they are the only routes
+outside `/api/v1/c/:club/` that are not a page.
 
 The delete takes the club's wrong-PIN counts with it - check-in's and the
 manager's alike - from memory as well as disk, and waits for a save of
@@ -792,7 +807,7 @@ The answer carries `x-voice-cache` (`hit` or `miss`), `x-voice-used`,
 club's plan), `unknown-voice`, `text` (empty or over `voice.maxChars`),
 `allowance` (402 - the month's characters are spent), `busy`, or `upstream`
 (ElevenLabs itself). The app treats every one of them the same way: the
-free Windows voice speaks that line instead, so a flag call is never
+free Kokoro voice speaks that line instead, so a flag call is never
 silent.
 
 **What it costs and what stops it.** Only a cache miss is counted, so the
@@ -808,6 +823,75 @@ the laptop's Prepare Lines to walk a whole announcer style.
 Clubs start with no voice: a club needs `"voice": { "enabled": true }` in
 the config, and the relay refuses to start if a club names a voice the
 catalogue does not have.
+
+#### Hearing a voice before choosing it
+
+```
+GET  /voice/samples            no token; -> {"samples":[{id,name,url}]}
+GET  /voice/sample/:voiceId    no token; -> audio/mpeg, or 404 and a reason
+POST /voice/preview            token required; -> audio/mpeg, or JSON saying why not
+```
+
+Hear it before you buy it. The catalogue above could only ever give a club
+a name and a line of description, so a club chose the voice its members
+would hear all season by reading about it. These three are the fix, and the
+first two are also the first thing somebody who has never run HeatCaller
+can try.
+
+**The samples are open to the internet**, with no token and no club in
+them. Each one is the same fixed, neutral line - *"Drivers, this is your
+two minute call for the next heat. Make your way to the rostrum and check
+your transponder."* - spoken in that voice, about eight seconds of it. The
+same words in every voice, so two of them can actually be compared; nobody's
+name in it, so it is not personal data and not a recording of a race.
+
+`/voice/samples` lists only the voices there is a sample of, each with the
+address of its own, and never the ElevenLabs voice id. A relay with no
+voice configured answers `{"samples":[]}` rather than a 404.
+
+**What a sample can cost, in total, for all time: one short line per voice
+in the catalogue.** Nothing a caller sends decides what is rendered - the
+words are a constant in the source and the voice must be one the catalogue
+names - so the first visitor to ask for a voice nobody has asked for yet
+pays for one render on HeatCaller's account, it is kept in
+`dataDir/.voice/samples/`, and every visitor after that is served from
+there for nothing. Two first visitors arriving together are one render, not
+two. A deploy does not pay again. That ceiling is the whole reason these
+two can be open at all; what the per-address limit of 60 a minute stops is
+the bandwidth, not the bill. The answer carries
+`cache-control: public, max-age=31536000` and an
+`access-control-allow-origin: *`, so a browser, a proxy or the HeatCaller
+website can all hold and play a copy.
+
+**`/voice/preview` is the Preview button on Voice Settings**: the club's own
+words, in a voice it may use. It takes
+`{ "voiceId": "clubhouse", "text": "..." }` with the club's ordinary publish
+token, and the token is what names the club - there is no club in the path.
+
+It is charged against a **separate daily allowance**, never the month's
+characters: `voice.previewDailyChars` (3,000 by default, about fifteen to
+thirty previews) a day, UTC, kept in `dataDir/.voice/preview/<club>.json`.
+That separation is the point of it. A club must not be able to arrive on a
+race night and find it spent its voice on Tuesday deciding which one to
+use. Over the day's allowance the answer is **429** and says so in words,
+along with `used`, `allowance` and `resetsAt` - and the message says the
+race-night allowance has not been touched, because the first thing anybody
+seeing it will want to know is whether Saturday is still safe.
+
+One preview is capped at `voice.previewMaxChars` (200 by default, and never
+more than `voice.maxChars`): a preview is a sentence, not a recap. The
+answer carries `x-voice-cache` and `x-voice-preview-used`,
+`x-voice-preview-allowance` and `x-voice-preview-resets` - named apart from
+`speak`'s headers on purpose, so a day of auditioning is never mistaken for
+the month's characters. Refusals use the same `refusal` field as `speak`:
+`off`, `not-included`, `unknown-voice`, `text` (empty or over the cap),
+`allowance` (429 here, not 402), `busy`, `upstream`.
+
+Previews are cached with the club's own lines and never shared - a preview
+is whatever somebody typed into the box, which may well be a driver's name -
+so hearing the same sentence twice is paid for once. Setting
+`previewDailyChars` to `0` switches previews off and leaves the samples
+working.
 
 #### Metering: what each club has spoken, and topping one up
 
@@ -974,7 +1058,7 @@ own network.
 | 405 | A method the relay takes nowhere (PUT, PATCH, ...). `Allow` lists the ones it does. |
 | 409 | Online check-in, or the race-day manager, is not open - including a tap that was waiting while the desk closed check-in. |
 | 413 | Payload over `maxBodyBytes`, or a collection document over 256 KB. The connection is closed after the answer. |
-| 429 | Too many wrong PINs (from one address, or for the whole club - the error says which and for how long, check-in and the manager kept entirely apart), or too many check-in or manager requests. |
+| 429 | Too many wrong PINs (from one address, or for the whole club - the error says which and for how long, check-in and the manager kept entirely apart), or too many check-in or manager requests. Also a club that has used its day of voice previews, and one address asking for voice samples faster than 60 a minute. |
 | 503 | The check-in queue is full: the laptop has not collected taps. The manager's own request queue is full the same way (300 requests, or 952 KB of them). Or a stored document is there but could not be read just now - try again. |
 | 507 | The club is at its 50 MB quota (the manager's tunnel not counted) and the document would not fit even with its oldest results forgotten. Or a year of `resultsindex` that would only fit in the index's own 2 MB by pushing out a later year. |
 
@@ -1005,8 +1089,23 @@ characters given on top of a plan (see Metering). They are content-addressed - t
 the voice's settings and the words - and swept oldest-used-first when a
 folder goes over its size (200 MB shared, 25 MB a club). None of it counts
 against a club's 50 MB publishing quota. A club that deletes everything it
-has published loses its own lines, its usage file and its top-ups along
-with it.
+has published loses its own recorded lines; its usage file, its history and
+its top-ups stay, because those are what it is billed by and a delete must
+not hand it a fresh month's allowance.
+
+Two more folders there belong to hearing a voice before choosing it:
+`samples/` holds one pre-rendered sample per voice, named `<id>-<rev>.mp3`
+so that changing a voice's settings renders a new one rather than serving
+audio that no longer sounds like the voice a club would get; and
+`preview/<club>.json` holds the day's preview count and nothing else.
+Neither is swept - there are only ever as many samples as there are voices,
+and a swept sample would be paid for again, which is the one thing a sample
+must not be. The preview count has a folder of its own so that it can never
+be read as a month's character count or written over one; it is also
+deliberately less carefully guarded than the month's count, because the most
+a mangled preview file can cost is one club one day of auditioning, where
+the month's file holds three years of what a club is billed by. A club's
+delete leaves both alone, for the reason above.
 
 ## Deploying
 
@@ -1038,7 +1137,7 @@ fly secrets set RELAY_VOICE_KEY=sk_...
 ```
 
 Without it the relay starts and says so, and every club carries on with
-its own key or the free Windows voice. Restrict the key in ElevenLabs to
+its own key or the free Kokoro voice. Restrict the key in ElevenLabs to
 the text-to-speech endpoints and give it a credit limit - it is the
 circuit breaker behind the per-club allowances.
 
@@ -1164,7 +1263,9 @@ src/card.ts      the drawn 1200x630 results card a shared link carries
 src/font.ts      setting type from the pre-rendered atlas: metrics, scaling, ellipsis
 src/font-data.ts GENERATED - Poppins as packed alpha coverage. tools/build-font.py makes it
 src/voice.ts     the HeatCaller voice: the catalogue, the ElevenLabs call, the shared and
-                 per-club caches, and the monthly allowance with its reserve and refund
+                 per-club caches, the monthly allowance with its reserve and refund, and
+                 hearing a voice before choosing it - the open samples and the Preview
+                 button's own daily allowance
 src/preview.ts   the link-preview card for one session, read narrowly out of the club's
                  results index - the second and last document the relay reads itself
 src/config.ts    config loading, and refusing to start rather than starting wrong
@@ -1174,10 +1275,11 @@ src/voiceadmin.ts the `voice-usage` and `voice-topup` subcommands: every club's 
                  usage, its history, and characters given on top of a plan
 tools/build-font.py   rasterises Poppins into src/font-data.ts. Build-time only; needs Pillow
 
-test/            430 tests: tenancy, publishing, isolation, persistence, minting, pages,
+test/            506 tests: tenancy, publishing, isolation, persistence, minting, pages,
                  check-in, the race-day manager's tunnel and its budget, locking on disk, PIN limits and
                  lockouts, listing limits, theming, the voice's catalogue, caching, refusals and
-                 allowance and its metering, the results archive's meta and by-id reads, the preview reader and
+                 allowance and its metering, the open voice samples (rendered once, ever) and the
+                 Preview button's separate daily allowance, the results archive's meta and by-id reads, the preview reader and
                  its route, the drawn card and the type it is set in, and a relay woken by a burst
                  (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file
 

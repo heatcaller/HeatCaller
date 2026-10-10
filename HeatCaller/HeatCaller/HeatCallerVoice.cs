@@ -17,6 +17,22 @@ internal sealed record HeatCallerVoiceChoice(string Id, string Name, string What
     public override string ToString() => string.IsNullOrWhiteSpace(What) ? Name : $"{Name} - {What}";
 }
 
+/// <summary>
+/// One voice in the relay's free sample list: the id to send when previewing
+/// or choosing it, the name to show, and where its recording is - as the
+/// relay gave it, relative to the relay's own root.
+///
+/// Apart from HeatCallerVoiceChoice above on purpose. A sample needs no
+/// token and no plan, so the list of them answers for a club that has never
+/// signed up - and a sample carries no revision, because nothing is keyed by
+/// it: a sample is played once and thrown away, never saved as a line.
+/// </summary>
+internal sealed record HeatCallerVoiceSample(string Id, string Name, string Url)
+{
+    /// <summary>What a picker shows. Overridden for the same reason HeatCallerVoiceChoice overrides it: a record's own ToString prints its fields.</summary>
+    public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Id : Name;
+}
+
 /// <summary>Where a club stands with its HeatCaller voice this month. Characters, because that is what ElevenLabs counts.</summary>
 internal sealed record HeatCallerAllowance(int Used, int Allowance, DateTime? ResetsUtc)
 {
@@ -33,7 +49,7 @@ internal sealed record HeatCallerAllowance(int Used, int Allowance, DateTime? Re
 /// <summary>What the relay said about this club's HeatCaller voice.</summary>
 internal sealed record HeatCallerCatalogue(bool Enabled, IReadOnlyList<HeatCallerVoiceChoice> Voices, HeatCallerAllowance Allowance);
 
-/// <summary>Why the relay would not speak a line. The app treats every one of them the same way: the Windows voice says it instead.</summary>
+/// <summary>Why the relay would not speak a line. The app treats every one of them the same way: the free Kokoro voice says it instead.</summary>
 internal enum HeatCallerRefusal
 {
     /// <summary>Something else - a bad answer, a server error.</summary>
@@ -45,7 +61,7 @@ internal enum HeatCallerRefusal
     /// <summary>Not on this club's plan.</summary>
     NotIncluded,
 
-    /// <summary>The month's characters are spent. Everything speaks with the Windows voice until it resets.</summary>
+    /// <summary>The month's characters are spent. Everything speaks with the Kokoro voice until it resets.</summary>
     Allowance,
 
     /// <summary>A voice this club may not use - usually one taken out of the catalogue since it was chosen.</summary>
@@ -82,7 +98,7 @@ internal sealed class HeatCallerVoiceException : Exception
     /// <summary>
     /// True when the request was asked of the relay, voice or token as they
     /// were BEFORE Voice Settings or the Club Website page changed them. The line
-    /// still goes to the Windows voice, but the refusal says nothing about
+    /// still goes to the Kokoro voice, but the refusal says nothing about
     /// the relay now in use, so the announcer does not rest over it. Set by
     /// the announcer, which is what knows when a change was made.
     /// </summary>
@@ -105,8 +121,25 @@ internal sealed class HeatCallerVoiceException : Exception
 /// what keeps a club's night sounding the way it was designed to, and
 /// keeps the bill predictable.
 ///
+/// HEAR IT BEFORE YOU BUY IT. Three of the endpoints below are about
+/// choosing a voice rather than racing with one, and two of them carry no
+/// token at all:
+///
+///   - Samples (<see cref="SamplesAsync"/>, <see cref="SampleAsync"/>) are
+///     the relay's own fixed recording of each voice. No token, so they play
+///     for a club that has never signed up and has no allowance to spend -
+///     which is the whole point: a club should hear the voices before it is
+///     asked to commit to anything.
+///   - A preview (<see cref="PreviewAsync"/>) speaks the club's OWN words in
+///     the chosen voice, with the token, charged to a small daily preview
+///     allowance the relay keeps APART from the race-night voice budget. The
+///     night's characters are for the night; trying wording out must never
+///     eat into them, and when the preview allowance is gone the relay says
+///     429 and the app says so in words rather than quietly spending the
+///     other one.
+///
 /// NOTHING HERE EVER THROWS PAST ITS OWN DOOR except as
-/// HeatCallerVoiceException, which the announcer turns into "the Windows
+/// HeatCallerVoiceException, which the announcer turns into "the Kokoro
 /// voice says this one".
 /// </summary>
 internal sealed class HeatCallerVoiceClient
@@ -122,7 +155,12 @@ internal sealed class HeatCallerVoiceClient
     /// up. Redirects are off for the same reason as the publisher's: the
     /// token rides on every request.
     /// </summary>
-    private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false })
+    /// <remarks>
+    /// Settable so the tests can serve the relay's answers without a relay,
+    /// exactly as KokoroSpeech.Http lets them serve a model download. The
+    /// app never sets it.
+    /// </remarks>
+    internal static HttpClient Http { get; set; } = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         Timeout = TimeSpan.FromSeconds(35),
         MaxResponseContentBufferSize = 8 * 1024 * 1024,
@@ -474,6 +512,331 @@ internal sealed class HeatCallerVoiceClient
         }
     }
 
+    // --- Hear it before you buy it ------------------------------------------
+    //
+    // The three paths below are fixed by the relay's own contract and are
+    // written out here rather than built from the club path above: the two
+    // sample paths carry NO token and no club id, because they have to
+    // answer for a laptop that has never been signed up - which is exactly
+    // the laptop whose owner is deciding whether to sign up. Named as
+    // constants so that, if the relay ever moves them, this is the one place
+    // that has to know.
+
+    /// <summary>The relay's catalogue of free samples. No token, no club.</summary>
+    private const string SamplesPath = "/voice/samples";
+
+    /// <summary>One free sample, by voice id. No token, no club. The catalogue gives this url itself; this is the fallback shape.</summary>
+    private const string SamplePath = "/voice/sample/";
+
+    /// <summary>A preview of the club's own words, on the preview allowance. WITH the club's voice token.</summary>
+    private const string PreviewPath = "/voice/preview";
+
+    /// <summary>The longest line a preview will carry. The relay caps it too; this saves a pointless round trip and a refusal a club has to read.</summary>
+    internal const int MaxPreviewCharacters = 300;
+
+    /// <summary>
+    /// The relay root the SAMPLES are asked of: the voice relay's own when
+    /// one is set, otherwise the club's.
+    ///
+    /// No club id and no token, so none of Target's credential rules apply -
+    /// a sample is a fixed recording anybody may fetch, and that is what
+    /// makes "hear it before you buy it" work on a laptop with nothing set
+    /// up but an address. The restored-backup hold is still honoured: an
+    /// address a restore brought in has not been looked at by anybody yet,
+    /// and this laptop should not be reaching for it until it has.
+    /// </summary>
+    private string? SampleRoot()
+    {
+        var root = TargetRoot();
+
+        if (root.Length == 0)
+        {
+            return null;
+        }
+
+        return HeldAfterRestore(root, RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl)) is null ? root : null;
+    }
+
+    /// <summary>True when there is an address to ask for samples. Needs no club and no token - see <see cref="SampleRoot"/>.</summary>
+    internal bool SamplesReachable => SampleRoot() is not null;
+
+    /// <summary>
+    /// Why there is nowhere to ask for samples. Its own sentence rather than
+    /// NoRelay's: that one sends a club to the Club Website page to set up
+    /// publishing, and a club that only wants to HEAR the voices has not got
+    /// that far yet and should not be told it must.
+    /// </summary>
+    private HeatCallerVoiceException NoSampleRelay() => new(
+        HeatCallerRefusal.Off,
+        HeldAfterRestore(TargetRoot(), RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl))
+        ?? "There's no relay address to fetch the voice samples from yet. Fill the relay address in on the Club Website page - "
+           + "the samples themselves are free and need no sign-up.");
+
+    /// <summary>
+    /// The free sample list. No token: this answers before a club has signed
+    /// up, has a plan, or has any allowance at all.
+    ///
+    /// An empty list is a perfectly good answer - a relay with no samples
+    /// recorded yet - and is not an error. What the page does with that is
+    /// its business (it hides the Hear it buttons and says why).
+    /// </summary>
+    internal async Task<IReadOnlyList<HeatCallerVoiceSample>> SamplesAsync(CancellationToken cancel = default)
+    {
+        if (SampleRoot() is not { } root)
+        {
+            throw NoSampleRelay();
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, root + SamplesPath);
+
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await Http.SendAsync(request, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
+        {
+            // HttpClient's own timeout arrives as a TaskCanceledException
+            // with nobody having cancelled anything - see CatalogueAsync.
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
+        }
+
+        using (response)
+        {
+            var body = await ReadTextAsync(response, cancel, response.IsSuccessStatusCode ? CatalogueMaxBytes : RefusalMaxBytes)
+                .ConfigureAwait(false);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // A relay from before samples existed. Said plainly rather
+                // than as a 404: the club can ask whoever runs the relay.
+                throw new HeatCallerVoiceException(
+                    HeatCallerRefusal.Off,
+                    "This relay doesn't offer voice samples yet.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HeatCallerVoiceException(
+                    HeatCallerRefusal.Unknown,
+                    $"The relay couldn't list the samples ({(int)response.StatusCode}).");
+            }
+
+            try
+            {
+                using var json = JsonDocument.Parse(body);
+                var samples = new List<HeatCallerVoiceSample>();
+
+                if (json.RootElement.TryGetProperty("samples", out var list) && list.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var entry in list.EnumerateArray())
+                    {
+                        var id = Text(entry, "id");
+
+                        if (id.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        // The url the relay gave, kept as it came. It is the
+                        // relay's to decide, and guessing it here would go
+                        // wrong the first time it changed - the fallback
+                        // shape is only for a relay that leaves it out.
+                        var url = Text(entry, "url");
+
+                        samples.Add(new HeatCallerVoiceSample(
+                            id,
+                            Text(entry, "name") is { Length: > 0 } name ? name : id,
+                            url.Length > 0 ? url : SamplePath + Uri.EscapeDataString(id)));
+                    }
+                }
+
+                return samples;
+            }
+            // InvalidOperationException too: valid JSON of the wrong shape -
+            // see CatalogueAsync, where the same thing had to be caught.
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay's answer couldn't be read.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// One voice's free sample, as MP3 bytes. No token, nothing charged to
+    /// anybody.
+    /// </summary>
+    /// <param name="urlOrId">
+    /// The url the sample list gave for this voice (relative to the relay's
+    /// root, which is the only form the relay sends), or the voice id on its
+    /// own. An absolute address is refused rather than followed: the token
+    /// does not ride on this request, but a relay answer that could send
+    /// this laptop anywhere is still not something to act on.
+    /// </param>
+    internal async Task<byte[]> SampleAsync(string urlOrId, CancellationToken cancel = default)
+    {
+        if (SampleRoot() is not { } root)
+        {
+            throw NoSampleRelay();
+        }
+
+        if (string.IsNullOrWhiteSpace(urlOrId))
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.UnknownVoice, "No voice was named.");
+        }
+
+        var tail = urlOrId.Trim();
+
+        if (tail.Contains("://", StringComparison.Ordinal) || tail.StartsWith("//", StringComparison.Ordinal))
+        {
+            throw new HeatCallerVoiceException(
+                HeatCallerRefusal.Unknown,
+                "The relay gave a sample address somewhere else entirely, so it wasn't fetched.");
+        }
+
+        var path = tail.StartsWith('/') ? tail : SamplePath + Uri.EscapeDataString(tail);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, root + path);
+
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await Http.SendAsync(request, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                var audio = await response.Content.ReadAsByteArrayAsync(cancel).ConfigureAwait(false);
+
+                if (audio.Length == 0)
+                {
+                    throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay answered with no audio.");
+                }
+
+                return audio;
+            }
+
+            // 404 is the relay's own answer for "no sample for that voice",
+            // with a reason in the body - read like any other refusal so the
+            // club sees the relay's words rather than a number.
+            var body = await ReadTextAsync(response, cancel).ConfigureAwait(false);
+            var (refusal, message, _) = ReadRefusal(response, body);
+
+            throw new HeatCallerVoiceException(
+                response.StatusCode == System.Net.HttpStatusCode.NotFound ? HeatCallerRefusal.UnknownVoice : refusal,
+                message);
+        }
+    }
+
+    /// <summary>
+    /// The club's own words, spoken in one of the relay's voices, charged to
+    /// the relay's small DAILY PREVIEW allowance - never to the club's
+    /// race-night voice budget.
+    /// </summary>
+    /// <remarks>
+    /// The separation is the relay's and is not negotiable from here: this
+    /// endpoint spends the preview allowance and nothing else, and a spent
+    /// preview allowance comes back as <see cref="HeatCallerRefusal.Busy"/>
+    /// from a 429 with a sentence a club can read. The app must NOT answer
+    /// that by asking SpeakAsync for the same line - the night's characters
+    /// are for the night, and a page where "try it again" quietly eats the
+    /// race budget is a page nobody can trust.
+    /// </remarks>
+    internal async Task<byte[]> PreviewAsync(string voiceId, string text, CancellationToken cancel = default)
+    {
+        if (Target() is not { } target)
+        {
+            throw NoRelay();
+        }
+
+        if (string.IsNullOrWhiteSpace(voiceId))
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.UnknownVoice, "No HeatCaller voice is chosen.");
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Text, "There was nothing to say.");
+        }
+
+        // Counted without the audio tags, for the same reason SpeakAsync
+        // counts that way: the relay keeps the tags for a voice that can use
+        // them and takes them out for one that can't, so this is the least it
+        // could count. It is only a quick no for a line no voice could take.
+        if (VoiceProfile.StripAudioTags(text).Length > MaxPreviewCharacters)
+        {
+            throw new HeatCallerVoiceException(
+                HeatCallerRefusal.Text,
+                $"A preview can be up to {MaxPreviewCharacters} characters. Shorten the line and try again.");
+        }
+
+        // voiceId and text, and nothing else. The relay fixes the model and
+        // the voice settings for a preview exactly as it does for a race
+        // line, so what a club hears here is what it will get.
+        var payload = JsonSerializer.Serialize(new { voiceId, text });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, target.Root + PreviewPath)
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json"),
+        };
+
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
+
+        HttpResponseMessage response;
+
+        try
+        {
+            response = await Http.SendAsync(request, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
+        {
+            throw new HeatCallerVoiceException(HeatCallerRefusal.Unreachable, $"The relay didn't answer ({Plain(ex)}).");
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                var audio = await response.Content.ReadAsByteArrayAsync(cancel).ConfigureAwait(false);
+
+                if (audio.Length == 0)
+                {
+                    throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay answered with no audio.");
+                }
+
+                return audio;
+            }
+
+            var body = await ReadTextAsync(response, cancel).ConfigureAwait(false);
+            var (refusal, message, _) = ReadRefusal(response, body);
+
+            // A spent preview allowance arrives as 429, which ReadRefusal
+            // reads as Busy - "try later" - and that is right, because it
+            // does start again. Said in the preview's own words, though: a
+            // club reading "the HeatCaller voice is busy" would press the
+            // button again all evening. NOTHING here falls through to
+            // SpeakAsync; see the remarks above.
+            throw new HeatCallerVoiceException(
+                refusal,
+                response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && body.Length == 0
+                    ? "Today's previews are used up. They start again tomorrow - and this is a separate allowance, "
+                      + "so your race-night voice is untouched."
+                    : message);
+        }
+    }
+
+    /// <summary>True when a refusal is the preview allowance being used up for today, rather than anything a club can fix now.</summary>
+    internal static bool IsPreviewAllowanceSpent(HeatCallerVoiceException ex) =>
+        ex.Refusal is HeatCallerRefusal.Busy or HeatCallerRefusal.Allowance;
+
     /// <summary>Turns the relay's refusal into something the announcer can act on. Never shows a raw status code to a club if the relay gave words.</summary>
     private static (HeatCallerRefusal Refusal, string Message, HeatCallerAllowance? Allowance) ReadRefusal(
         HttpResponseMessage response,
@@ -500,7 +863,7 @@ internal sealed class HeatCallerVoiceClient
             // JSON that isn't an object, which TryGetProperty throws on.
             // Either way the status code says what it can; left to escape,
             // this was not a HeatCallerVoiceException, so the line never
-            // went to the Windows voice.
+            // went to the Kokoro voice.
         }
 
         var refusal = named switch

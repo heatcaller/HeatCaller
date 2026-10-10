@@ -489,8 +489,13 @@ public sealed class ThemeStore
                 voice.WirelessSpeaker = now.WirelessSpeaker;
                 voice.OutputFormat = now.OutputFormat;
                 voice.Engine = now.Engine;
-                voice.WindowsVoiceName = now.WindowsVoiceName;
-                voice.WindowsVoiceStandsIn = now.WindowsVoiceStandsIn;
+
+                // WindowsVoiceName was copied here too, until the Windows
+                // voice was retired on 10 Oct 2026 and the property went with
+                // it. WindowsVoiceStandsIn is now KokoroStandsIn - the same
+                // question with a different voice answering it, which is why
+                // it still serialises under the old name.
+                voice.KokoroStandsIn = now.KokoroStandsIn;
                 voice.KokoroVoiceName = now.KokoroVoiceName;
                 voice.HeatCallerVoice = now.HeatCallerVoice;
                 voice.HeatCallerVoiceName = now.HeatCallerVoiceName;
@@ -604,14 +609,18 @@ public sealed class ThemeStore
         }
 
         // And a style never moves a club between ElevenLabs, the HeatCaller
-        // voice and the Windows voice, or changes which Windows voice it
-        // uses - every style has one of these saved in it (the built-in ones
-        // say Windows), and applying it would otherwise switch the club
-        // over. The HeatCaller voice's own choice is kept for the same
-        // reason: it is the club's, and no style knows about it.
+        // voice and the free one - every style has one of these saved in it
+        // (the built-in ones were written when that meant the Windows voice,
+        // and a saved engine number of 1 now reads as Kokoro - see
+        // VoiceEngines.RetiredWindows), and applying it would otherwise
+        // switch the club over. The HeatCaller voice's own choice is kept for
+        // the same reason: it is the club's, and no style knows about it.
         voiceCopy.Engine = current.EffectiveEngine;
-        voiceCopy.WindowsVoiceName = current.WindowsVoiceName;
-        voiceCopy.WindowsVoiceStandsIn = current.WindowsVoiceStandsIn;
+
+        // WindowsVoiceName was kept here too, until the Windows voice went on
+        // 10 Oct 2026. KokoroStandsIn is the old WindowsVoiceStandsIn under a
+        // new name, and is the club's choice rather than the style's.
+        voiceCopy.KokoroStandsIn = current.KokoroStandsIn;
         voiceCopy.KokoroVoiceName = current.KokoroVoiceName;
         voiceCopy.HeatCallerVoice = current.HeatCallerVoice;
         voiceCopy.HeatCallerVoiceName = current.HeatCallerVoiceName;

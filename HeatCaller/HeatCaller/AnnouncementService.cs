@@ -3,8 +3,9 @@ using NAudio.Wave;
 namespace HeatCaller;
 
 /// <summary>
-/// Turns race events into audio: spoken announcements via ElevenLabs TTS or
-/// the free Windows voice (see RenderLineAsync for which speaks when),
+/// Turns race events into audio: spoken announcements via ElevenLabs TTS,
+/// the HeatCaller relay or the free Kokoro voice on this PC (see
+/// RenderLineAsync for which speaks when),
 /// and short local sound effects for lap feedback (good/invalid lap,
 /// consistency streaks) in the style of Next Level Timing's own per-lap
 /// audio cues. Driven by the app's race-control layer, whichever decoder
@@ -322,9 +323,14 @@ public sealed partial class AnnouncementService
     /// flag. For a routine voice-queue line it is the generation it was
     /// dequeued under; for a flag call it is the generation that flag itself
     /// started, so only a NEWER flag silences it. Null for everything that
-    /// must not be dropped this way: priority lines (a race-control line
-    /// queued earlier stays, as ClearTheDecksFor keeps it) and anything
-    /// spoken outside the voice queue.
+    /// must not be dropped this way: the lines a flag spares (a race-control
+    /// line queued earlier stays, as ClearTheDecksFor keeps it - see
+    /// SurvivesAFlag) and anything spoken outside the voice queue.
+    ///
+    /// Not every PRIORITY line, which is what it used to be and what made
+    /// the two guards below dead code for a Reminder: scheduled speech is
+    /// priority so that chatter cannot drop it, which is no reason for a
+    /// stale recap to speak over a flag.
     /// </summary>
     private readonly AsyncLocal<int?> _dequeuedUnderGeneration = new();
 
@@ -878,10 +884,10 @@ public sealed partial class AnnouncementService
             profile = profile.CloneWithVoice(voice);
         }
 
-        // Whichever voice would say it live - the Windows voice, ElevenLabs,
-        // or the Windows voice standing in. This used to ask for a key and a
-        // voice only, which with the Windows voice chosen would have sent
-        // every recap to the slower speak-time path.
+        // Whichever voice would say it live - Kokoro, ElevenLabs, the relay,
+        // or Kokoro standing in. This used to ask for a key and a voice
+        // only, which with a free voice chosen would have sent every recap
+        // to the slower speak-time path.
         if (!CanSpeak(profile))
         {
             return null;
@@ -914,12 +920,11 @@ public sealed partial class AnnouncementService
     /// StingerLibrary), in that soundscape's delivery.
     ///
     /// Only a real announcer voice is kept - ElevenLabs on the club's key or
-    /// the HeatCaller voice. Null when the Windows or Kokoro voice would say
-    /// it - both speak any line for free on this PC, so there is nothing to
-    /// keep -
-    /// including the Windows voice standing in because ElevenLabs couldn't:
-    /// a recording is played for good, and a stand-in take recorded by
-    /// accident would replace the announcer on that line every race.
+    /// the HeatCaller voice. Null when Kokoro would say it - it speaks any
+    /// line for free on this PC, so there is nothing to keep - including
+    /// Kokoro standing in because ElevenLabs couldn't: a recording is played
+    /// for good, and a stand-in take recorded by accident would replace the
+    /// announcer on that line every race.
     /// </summary>
     /// <param name="fresh">
     /// True for Re-record all: a new ElevenLabs take, not the one the
@@ -931,7 +936,7 @@ public sealed partial class AnnouncementService
     public async Task<byte[]?> RecordVoiceLineAsync(string text, double stability, double style, bool fresh = false)
     {
         var profile = _voiceStore.Current.CloneForDelivery(stability, style);
-        if (profile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro || string.IsNullOrWhiteSpace(text))
+        if (profile.EffectiveEngine == VoiceEngine.Kokoro || string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
@@ -1078,7 +1083,7 @@ public sealed partial class AnnouncementService
         // spent allowance holds until the relay speaks a line again or the
         // month is over - a restart mid-night used to forget it, and every
         // saved line played in the HeatCaller voice again while the new ones
-        // were in the Windows voice. A date already past is last month's and
+        // were in the Kokoro voice. A date already past is last month's and
         // is ignored. The first line after a restart with the allowance
         // spent sets the background check going straight away (the retry
         // time is left at its start), so a top-up since is noticed at once.
@@ -1108,19 +1113,26 @@ public sealed partial class AnnouncementService
         VoiceLibrary.Shared.Log = message => StatusMessage?.Invoke(message);
         VoiceLibrary.Shared.StartPruneOnce();
 
-        // The free Windows voice reports into the same console. Its list of
-        // voices is read now, in the background, so the first line - or the
-        // Voice Settings and Mixer pages being built - doesn't wait for it.
-        WindowsVoice.Log = message => StatusMessage?.Invoke(message);
-        WindowsVoice.WarmUp();
-
-        // Kokoro too - but its model is only loaded when it is the voice
-        // chosen: it takes a few hundred MB of memory, which a club on
-        // another voice has no reason to give up. Choosing it on Voice
-        // Settings loads it then.
+        // The free Kokoro voice reports into the same console.
         KokoroSpeech.Log = message => StatusMessage?.Invoke(message);
         KokoroSpeech.DeleteLeftoverDownload();
-        if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
+
+        // Loaded now, in the background, whenever it is the voice that
+        // would speak - whether because the club chose it or because it is
+        // what stands in for the chosen one.
+        //
+        // It used to be loaded only when it was the voice CHOSEN, because
+        // the model takes a few hundred MB of memory and a club on
+        // ElevenLabs had no reason to give that up: the free Windows voice
+        // was what covered for ElevenLabs, and that needed no loading. With
+        // Windows gone, Kokoro is what covers - and the first load reads
+        // 310 MB off a track PC's disk. A yellow flag thrown the moment the
+        // club Wi-Fi drops would have waited the whole of that, which is
+        // exactly as bad as being silent. A club that has turned the
+        // stand-in off still pays nothing (StandInAllowed says no).
+        var profile = _voiceStore.Current;
+
+        if (profile.EffectiveEngine == VoiceEngine.Kokoro || StandInAllowed(profile))
         {
             KokoroSpeech.WarmUp();
         }

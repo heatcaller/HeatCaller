@@ -67,6 +67,7 @@ partial class MainForm
     private SidebarNavList lstNav = new();
     private TextBox txtNavSearch = new();
     private Panel pnlNavSearch = new();
+    private Button btnCollapseNav = new();
     private Panel pnlSidebarFooter = new();
     private Button btnManageNav = new();
     private Button btnMuteToggle = new();
@@ -285,6 +286,21 @@ partial class MainForm
         txtNavSearch.BackColor = AppTheme.SidebarHover;
         txtNavSearch.ForeColor = AppTheme.SidebarText;
         pnlNavSearch.Controls.Add(txtNavSearch);
+
+        // The chevron that narrows the sidebar to its icons (Ctrl+B - see
+        // MainForm.SetNavIconsOnly), in the search row rather than in a strip
+        // of its own, so the toggle costs the nav list no height. Added after
+        // the search box, which puts it in front of it: the box is docked
+        // Fill until FitNavSearchHeight gives it measured bounds, and until
+        // then it covers the whole row. Styled in SetUpCollapseButton and
+        // placed in FitNavSearchHeight; both run on the first theme pass.
+        btnCollapseNav.FlatStyle = FlatStyle.Flat;
+        btnCollapseNav.BackColor = AppTheme.SidebarBackground;
+        btnCollapseNav.ForeColor = AppTheme.SidebarText;
+        btnCollapseNav.Size = new Size(UiLayout.AtDpi(24), UiLayout.AtDpi(24));
+        btnCollapseNav.TabStop = false;
+        btnCollapseNav.Cursor = Cursors.Hand;
+        pnlNavSearch.Controls.Add(btnCollapseNav);
 
         pnlSidebar.Controls.Add(lstNav);
         pnlSidebar.Controls.Add(pnlNavSearch);

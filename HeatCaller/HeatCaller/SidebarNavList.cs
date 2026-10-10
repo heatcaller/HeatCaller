@@ -65,6 +65,22 @@ public sealed class SidebarNavList : Panel, IMessageFilter
     private int _contentHeight;
     private Func<string, string?>? _sectionOf;
 
+    /// <summary>Narrowed to a rail of icons - see IconsOnly.</summary>
+    private bool _iconsOnly;
+
+    /// <summary>
+    /// The hovered row's name while the list is a rail, which is the only
+    /// place the name is readable then.
+    ///
+    /// One tooltip for the whole list, with its text swapped as the cursor
+    /// moves: the rows are drawn rather than being controls of their own, so
+    /// there is nothing per row to hang a tooltip on.
+    /// </summary>
+    private readonly ToolTip _hoverTip = new();
+
+    /// <summary>The page _hoverTip's text is currently set for, so it is not set again on every mouse move - see ShowHoverTip.</summary>
+    private string? _tipFor;
+
     /// <summary>
     /// Counts to show as a pill against a nav item - "3 rentals still out"
     /// needs to be visible from whatever page you're on, not only once you
@@ -102,6 +118,56 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         }
     }
 
+    /// <summary>
+    /// Narrowed to a rail of icons: no names, no group headings and no count
+    /// figures. Set by MainForm from the chevron at the top of the sidebar or
+    /// Ctrl+B, and remembered between launches (AppSettings.NavIconsOnly).
+    ///
+    /// The rail is the same list - the same rows, in the same order, with the
+    /// same selected plate and the same drag to reorder. What goes is
+    /// everything that needs width. A row's name moves into a tooltip, which
+    /// is then the only way to read it, so every page in MainForm's _navItems
+    /// needs an icon of its own: AppTheme.DrawNavIcon has a shape for each,
+    /// and its fallback is a plain dot, which on the rail would be a row with
+    /// nothing to tell it apart. See NavIconsOnlyTests.
+    /// </summary>
+    public bool IconsOnly
+    {
+        get => _iconsOnly;
+        set
+        {
+            if (_iconsOnly == value)
+            {
+                return;
+            }
+
+            _iconsOnly = value;
+
+            // The tooltip belongs to the rail only: a row that shows its own
+            // name does not need one, and leaving it set put a tooltip up
+            // over the name it was repeating.
+            _hoverTip.Active = value;
+            _tipFor = null;
+            _hoverTip.SetToolTip(this, string.Empty);
+
+            // The headings take less room on the rail, so every row below one
+            // moves - and the scrolling range with them.
+            RecalculateRows();
+            _scrollOffset = Math.Clamp(_scrollOffset, 0, MaxScrollOffset);
+            EnsureVisible(_selectedIndex);
+            Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// The room a group heading takes above its first page.
+    ///
+    /// On the rail there is no heading to draw - "ESSENTIALS" in a 60px rail
+    /// is two letters and an ellipsis - so the groups are kept apart by the
+    /// hairline alone, which needs a third of the height.
+    /// </summary>
+    private int SectionHeight => _iconsOnly ? UiLayout.AtTextSize(11) : HeaderHeight;
+
     /// <summary>Works out where every heading and row sits. The only place row positions come from.</summary>
     private void RecalculateRows()
     {
@@ -118,7 +184,7 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             if (section is not null && !string.Equals(section, current, StringComparison.Ordinal))
             {
                 _headers.Add((y, section));
-                y += HeaderHeight;
+                y += SectionHeight;
             }
 
             current = section;
@@ -151,6 +217,10 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         // intercept the wheel whenever the cursor is over us, which is
         // what people actually expect from a scrollable list.
         Application.AddMessageFilter(this);
+
+        // Off until the list is narrowed: a row showing its own name has no
+        // use for a tooltip that repeats it.
+        _hoverTip.Active = false;
     }
 
     public IReadOnlyList<string> Items => _items;
@@ -261,6 +331,7 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         if (disposing)
         {
             Application.RemoveMessageFilter(this);
+            _hoverTip.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -365,6 +436,10 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             _badges.Remove(itemName);
         }
 
+        // The hovered row's tooltip carries the count on the rail, so a count
+        // that changes under the cursor has to be allowed to set it again.
+        _tipFor = null;
+
         Invalidate();
     }
 
@@ -439,7 +514,7 @@ public sealed class SidebarNavList : Panel, IMessageFilter
     /// </summary>
     private void DrawHeader(Graphics g, int top, string text, bool first)
     {
-        var bounds = new Rectangle(0, top, Width, HeaderHeight);
+        var bounds = new Rectangle(0, top, Width, SectionHeight);
         if (bounds.Bottom < 0 || bounds.Top > Height)
         {
             return;
@@ -448,6 +523,22 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         using (var back = new SolidBrush(AppTheme.SidebarBackground))
         {
             g.FillRectangle(back, bounds);
+        }
+
+        if (_iconsOnly)
+        {
+            // The hairline alone, and none above the first group - the same
+            // rule as the headings it stands in for. Inset to the plates
+            // under it rather than to the heading's text, which is not drawn.
+            if (!first)
+            {
+                using var railLine = new Pen(Color.FromArgb(50, AppTheme.SidebarText));
+                var railY = bounds.Top + bounds.Height / 2;
+                var inset = PlateLeft + UiLayout.AtDpi(5);
+                g.DrawLine(railLine, inset, railY, Math.Max(inset + 1, Width - inset), railY);
+            }
+
+            return;
         }
 
         // In line with the icons under it (PlateLeft + IconInset), and run to
@@ -554,8 +645,30 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         // them - at the text size in use, so it stays in proportion to the
         // name drawn beside it.
         var iconSize = UiLayout.AtTextSize(18);
-        var iconBounds = new Rectangle(plate.Left + IconInset, bounds.Top + (bounds.Height - iconSize) / 2, iconSize, iconSize);
+        var iconBounds = new Rectangle(
+            _iconsOnly ? plate.Left + Math.Max(0, (plate.Width - iconSize) / 2) : plate.Left + IconInset,
+            bounds.Top + (bounds.Height - iconSize) / 2,
+            iconSize,
+            iconSize);
         AppTheme.DrawNavIcon(g, iconBounds, name, iconColor);
+
+        if (_iconsOnly)
+        {
+            // A count has no room for its figure in the rail, so it becomes a
+            // dot in the plate's corner: "something is waiting on this page"
+            // survives the narrowing even though "3" does not. The figure
+            // itself is in the hover tooltip - see ShowHoverTip.
+            if (_badges.TryGetValue(name, out var waiting) && waiting > 0)
+            {
+                var dot = UiLayout.AtTextSize(7);
+                var edge = UiLayout.AtDpi(5);
+
+                using var dotFill = new SolidBrush(AppTheme.Accent);
+                g.FillEllipse(dotFill, plate.Right - dot - edge, plate.Top + edge, dot, dot);
+            }
+
+            return;
+        }
 
         // Between the name, or the pill, and the plate's right-hand end. A
         // gap, on the screen's scale only - see IconInset.
@@ -613,6 +726,7 @@ public sealed class SidebarNavList : Panel, IMessageFilter
             InvalidateItem(_hoverIndex);
             _hoverIndex = index;
             InvalidateItem(_hoverIndex);
+            ShowHoverTip(index);
         }
 
         if (e.Button != MouseButtons.Left || _dragSourceIndex < 0)
@@ -667,6 +781,46 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         base.OnMouseLeave(e);
         InvalidateItem(_hoverIndex);
         _hoverIndex = -1;
+        ShowHoverTip(-1);
+    }
+
+    /// <summary>
+    /// The hovered row's name, as a tooltip, while the list is a rail of
+    /// icons - with its count in brackets when it has one, since the rail
+    /// shows only a dot for that.
+    ///
+    /// Only on the row changing, which is what _tipFor is for: setting the
+    /// same text again on every mouse move restarted the tooltip's own
+    /// timing, so it never settled and nothing was ever shown. Hidden first,
+    /// because a tooltip already up for the row above does not notice its
+    /// text changing under it while the cursor stays inside the control.
+    /// </summary>
+    private void ShowHoverTip(int index)
+    {
+        if (!_iconsOnly)
+        {
+            return;
+        }
+
+        var name = index >= 0 && index < _items.Count ? _items[index] : null;
+
+        if (string.Equals(name, _tipFor, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _tipFor = name;
+        _hoverTip.Hide(this);
+
+        if (name is null)
+        {
+            _hoverTip.SetToolTip(this, string.Empty);
+            return;
+        }
+
+        _hoverTip.SetToolTip(this, _badges.TryGetValue(name, out var waiting) && waiting > 0
+            ? $"{name} ({waiting})"
+            : name);
     }
 
     protected override void OnDragOver(DragEventArgs drgevent)

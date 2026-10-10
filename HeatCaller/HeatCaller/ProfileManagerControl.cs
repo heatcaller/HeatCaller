@@ -115,6 +115,27 @@ public sealed partial class ProfileManagerControl : UserControl
     /// <summary>Shows the app's list of unknown transponders on this page's banner.</summary>
     public void AttachUnknownTransponders(UnknownTransponders unknowns) => _unknownBanner.Attach(unknowns);
 
+    /// <summary>
+    /// Reads a line out in the club's own announcer voice - for Check
+    /// Names... and for the Hear It beside a driver's Announcer name.
+    ///
+    /// A delegate rather than the AnnouncementService itself, because the
+    /// speed the club has set lives on the voice settings and this page has
+    /// no other use for either of them: the two things the caller knows and
+    /// this page does not are the service and that speed, and one line
+    /// hands over both. Settable rather than a constructor argument for the
+    /// reason VoiceSettingsControl.Announcer is - every other page is built
+    /// here with the stores it reads, and the announcer is not a store.
+    ///
+    /// Null means there is no voice on this page: Check Names... still
+    /// lists what will be read out, and Hear It is left off the profile
+    /// dialog rather than shown doing nothing.
+    ///
+    /// Wire it where this page is built:
+    ///     driverProfiles.SpeakName = text =&gt; _announcer.SpeakTest(text, _voiceStore.Current.Speed);
+    /// </summary>
+    public Action<string>? SpeakName { get; set; }
+
     public ProfileManagerControl(
         ProfileStore store,
         RaceClassStore classStore,
@@ -314,12 +335,24 @@ public sealed partial class ProfileManagerControl : UserControl
         var btnTemplate = new Button { Text = "Download Template..." };
         btnTemplate.Click += (_, _) => DownloadTemplate();
 
+        // With the other whole-list buttons, and hard against the right-hand
+        // edge where this app puts the things you reach for rather than the
+        // things you do (SplitBar's glossary). It is about the roster as a
+        // whole, not the driver on the card: the point of it is one pass
+        // down every name, which is why it is not a button on the card.
+        var btnCheckNames = new Button { Text = "Check Names..." };
+        btnCheckNames.Click += (_, _) => CheckNames();
+
         SpreadBar? bottom = null;
 
         bottom = new SpreadBar(
             new ButtonBar().With(btnAdd, btnDelete),
             new ButtonBar().With(_btnCardEdit, _btnCardPhoto),
-            new ButtonBar(alignRight: true).With(btnImport, btnTemplate),
+
+            // Added last so Tab still reaches Import and Template in the
+            // order it always did - the bar takes its buttons right to
+            // left, so the last one added is the leftmost on screen.
+            new ButtonBar(alignRight: true).With(btnImport, btnTemplate, btnCheckNames),
             () => bottom is { IsHandleCreated: true } && card.IsHandleCreated && card.Visible
                 ? bottom.PointToClient(card.PointToScreen(Point.Empty)).X + Section.Inset.Left
                 : 0);
@@ -2057,7 +2090,7 @@ public sealed partial class ProfileManagerControl : UserControl
 
     private void AddNew()
     {
-        using var form = new ProfileForm(existing: null, _classStore, undo: _undo, profiles: _store);
+        using var form = new ProfileForm(existing: null, _classStore, undo: _undo, profiles: _store, speakName: SpeakName);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             // TryAdd, not Upsert: Upsert replaces whatever is stored under
@@ -2092,7 +2125,7 @@ public sealed partial class ProfileManagerControl : UserControl
         // puts back, and the live profile can be changed in place elsewhere.
         var before = ProfileStore.Snapshot(existing);
 
-        using var form = new ProfileForm(existing, _classStore, fixedTransponder: transponder, undo: _undo, profiles: _store);
+        using var form = new ProfileForm(existing, _classStore, fixedTransponder: transponder, undo: _undo, profiles: _store, speakName: SpeakName);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             var afterPhoto = form.Result.PhotoFileName;
@@ -2134,6 +2167,32 @@ public sealed partial class ProfileManagerControl : UserControl
             _store.Upsert(form.Result);
             RefreshAll();
         }
+    }
+
+    /// <summary>
+    /// Reads the roster's names out, one at a time, so a name the voice says
+    /// wrong is found before a room full of people hears it.
+    ///
+    /// Handed the drivers in the roster as it stands, in the order it shows
+    /// them - so a search typed in the box above it ("Stock", "Novice")
+    /// narrows what gets checked, and the window's own tick box narrows it
+    /// again to whoever is checked in for the race day that is open. The
+    /// whole saved roster would be the wrong list on a club night: nobody is
+    /// going to sit through two hundred names to find the three that matter
+    /// tonight.
+    ///
+    /// The profiles themselves rather than their transponders, because the
+    /// window reads DriverProfile.SpokenName - the same property the
+    /// announcer reads when it fills {driver} on the night.
+    /// </summary>
+    private void CheckNames()
+    {
+        var drivers = _list.Items
+            .Cast<ListViewItem>()
+            .Select(item => _store.Get((string)item.Tag!))
+            .ToList();
+
+        NameCheckForm.ShowFor(this, drivers, SpeakName, _sources?.CheckIns);
     }
 
     private void DeleteSelected()

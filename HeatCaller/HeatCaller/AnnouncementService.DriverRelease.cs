@@ -107,8 +107,8 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// A release call held as decoded audio, ready to play as-is. Source
-    /// says who spoke it, so a take the Windows voice made standing in is
-    /// not played once ElevenLabs can speak again - see PreparedTakeMatches.
+    /// says who spoke it, so a take Kokoro made standing in is not played
+    /// once ElevenLabs can speak again - see PreparedTakeMatches.
     /// </summary>
     private sealed record PreparedClip(string Text, byte[] Pcm, WaveFormat Format, string Signature, LineSource Source);
 
@@ -218,7 +218,7 @@ public sealed partial class AnnouncementService
             // of this line on its own would have - so a later release call,
             // or the live fallback in NotifyDriverRelease, finds it. Always
             // genuine ElevenLabs audio: this batch is only ever an ElevenLabs
-            // request, and the Windows voice's renders never come near it.
+            // request, and Kokoro's renders never come near it.
             try
             {
                 VoiceLibrary.Shared.Save(renderProfile, lines[i].Text, EncodeWav(clip, format));
@@ -254,7 +254,7 @@ public sealed partial class AnnouncementService
         var profile = _voiceStore.Current;
 
         // Whichever voice will say them - not only when there is an
-        // ElevenLabs key, which left the Windows voice (chosen, or standing
+        // ElevenLabs key, which left the free voice (chosen, or standing
         // in) rendering every release call at the moment the car was due.
         if (!CanSpeak(profile))
         {
@@ -326,19 +326,18 @@ public sealed partial class AnnouncementService
 
         _ = Task.Run(async () =>
         {
-            // The Windows or Kokoro voice chosen: no saved lines and no
-            // batch - the library holds ElevenLabs lines only, and each
-            // release call is simply rendered here on this PC, one after
-            // another.
-            var windows = renderProfile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro;
+            // Kokoro chosen: no saved lines and no batch - the library
+            // holds ElevenLabs lines only, and each release call is simply
+            // rendered here on this PC, one after another.
+            var onThisPc = renderProfile.EffectiveEngine == VoiceEngine.Kokoro;
 
             // Nor with the HeatCaller voice's allowance spent: saved lines
             // are passed over then, exactly as RenderWithHeatCallerAsync
             // passes them over for a live line, so the release calls don't
             // come out in the HeatCaller voice on a night everything else is
-            // in the Windows voice. Each goes line by line below, where the
-            // Windows voice says it.
-            var passOverSaved = windows || HeatCallerSavedLinesPassedOver(renderProfile);
+            // in the Kokoro voice. Each goes line by line below, where
+            // Kokoro says it.
+            var passOverSaved = onThisPc || HeatCallerSavedLinesPassedOver(renderProfile);
 
             // Otherwise whatever the saved-voice library already has first.
             // Those need no request at all, and on a regular club night that
@@ -406,11 +405,10 @@ public sealed partial class AnnouncementService
                            && ElevenLabsReady(renderProfile)
                            && !(StandInAllowed(renderProfile) && ElevenLabsRestingFor(renderProfile));
 
-            // The voice chosen again since these were set going - the Windows
-            // voice picked while the grid was being rendered, say: what is
-            // left is for a voice nobody is using, and with the Windows voice
-            // chosen every line asked of ElevenLabs would be paid for and
-            // thrown away.
+            // The voice chosen again since these were set going - Kokoro
+            // picked while the grid was being rendered, say: what is left is
+            // for a voice nobody is using, and with Kokoro chosen every line
+            // asked of ElevenLabs would be paid for and thrown away.
             if (_voiceStore.Current.EffectiveEngine != renderProfile.EffectiveEngine)
             {
                 return;
@@ -460,9 +458,9 @@ public sealed partial class AnnouncementService
 
                 try
                 {
-                    // The same rules as a live line: the Windows voice when
-                    // it is chosen, ElevenLabs otherwise, and the Windows
-                    // voice standing in for any line ElevenLabs can't do.
+                    // The same rules as a live line: Kokoro when it is
+                    // chosen, ElevenLabs otherwise, and Kokoro standing in
+                    // for any line ElevenLabs can't do.
                     var rendered = await RenderLineAsync(renderProfile, line);
                     var (pcm, format) = DecodeAudio(rendered.Audio);
 
@@ -472,7 +470,7 @@ public sealed partial class AnnouncementService
                     }
 
                     StatusMessage?.Invoke(rendered.Source == LineSource.StandIn
-                        ? $"[voice] Release call ready for {key}, in the Windows voice (standing in for ElevenLabs): \"{line}\""
+                        ? $"[voice] Release call ready for {key}, in the Kokoro voice (standing in for ElevenLabs): \"{line}\""
                         : $"[voice] Release call ready for {key}: \"{line}\"");
                 }
                 catch (Exception ex)

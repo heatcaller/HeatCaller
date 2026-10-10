@@ -103,6 +103,24 @@ public sealed class DirectDecoderClient : IDisposable
     private HidStream? _stream;
     private CancellationTokenSource? _cts;
 
+    /// <summary>
+    /// 1 while a connect is in flight on a thread of its own.
+    ///
+    /// The auto-connect retry timer asks every three seconds, so a connect
+    /// still inside the driver WILL be asked for again before it is done -
+    /// and two of them would open two streams and start two read loops on
+    /// one decoder, both framing the same bytes.
+    /// </summary>
+    private int _connecting;
+
+    /// <summary>
+    /// Bumped by every Connect and every Disconnect. A connect that comes
+    /// back out of the driver to find this number moved on is working for a
+    /// connection nobody wants any more: it closes whatever it opened
+    /// rather than publishing it over what happened in the meantime.
+    /// </summary>
+    private int _generation;
+
     // What is done with the bytes once they are read - framing, decoding,
     // the console lines - is EasyLapFramer, so a captured night can be
     // played back through it with no decoder attached.
@@ -127,67 +145,198 @@ public sealed class DirectDecoderClient : IDisposable
 
     public DecoderConnectionState State { get; private set; } = DecoderConnectionState.Disconnected;
 
+    /// <summary>
+    /// Starts connecting to the decoder, and hands back as soon as that is
+    /// under way - with <see cref="State"/> already Connecting.
+    ///
+    /// All of this used to run on the caller's thread, and the caller is the
+    /// UI thread: the auto-connect retry timer is a
+    /// System.Windows.Forms.Timer ticking every three seconds. Nothing in
+    /// the sequence has a timeout - the old stream's Dispose waits for the
+    /// read loop to come out of stream.Read, GetHidDevices is a SetupAPI
+    /// enumeration, TryOpen is a CreateFile, and the two feature reports are
+    /// driver IOCTLs - so a CP2110 wedged on the bus with its device node
+    /// still present froze the window with no exception and almost no CPU.
+    /// That is the ten-second freeze rehearsal 2 saw, and the reason
+    /// HangWatchdog exists. The READS were moved off this thread then (see
+    /// ReadTimeout in ReadLoop); the connect was left behind. It is off it
+    /// now, and the result is marshalled back the same way the read loop's
+    /// is - through SetState and the status event.
+    ///
+    /// What callers see is unchanged: they set the buttons around this and
+    /// then read State, and State is Connecting the instant this returns.
+    /// That is also what stops the retry timer asking again mid-connect - it
+    /// acts only on Disconnected or Error.
+    /// </summary>
     public void Connect()
     {
-        Disconnect();
+        if (Interlocked.Exchange(ref _connecting, 1) == 1)
+        {
+            // One at a time. Nothing is said about it: the retry timer asks
+            // every three seconds and would fill the console with it.
+            return;
+        }
 
-        // A new connection may be a different decoder, or the same one
-        // restarted: its clock is learned again from scratch.
-        Clock.Reset();
+        var generation = Interlocked.Increment(ref _generation);
 
         SetState(DecoderConnectionState.Connecting, "Looking for the EasyLap decoder (Silicon Labs CP2110)...");
 
-        HidDevice? device;
-        try
-        {
-            device = DeviceList.Local.GetHidDevices(VendorId, ProductId).FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            SetState(DecoderConnectionState.Error, $"Failed to enumerate HID devices: {ex.Message}");
-            return;
-        }
+        _ = Task.Run(() => ConnectCore(generation));
+    }
 
-        if (device is null)
+    /// <summary>
+    /// The connect itself, on a pool thread: tear the old one down, find the
+    /// decoder, open it, configure the UART, start the read loop. Everything
+    /// in here is allowed to block for as long as the driver likes.
+    /// </summary>
+    /// <param name="generation">
+    /// This attempt's number - see <see cref="_generation"/>. Once it has
+    /// moved on, this attempt says nothing and keeps nothing.
+    /// </param>
+    private void ConnectCore(int generation)
+    {
+        void Report(DecoderConnectionState state, string message)
         {
-            SetState(DecoderConnectionState.Error,
-                "No CP2110 device found (VID 0x10C4, PID 0x86B9). Is the EasyLap decoder plugged in?");
-            return;
-        }
-
-        Log($"Found device: {SafeDescribe(device)}");
-
-        if (!device.TryOpen(out _stream) || _stream is null)
-        {
-            SetState(DecoderConnectionState.Error,
-                "Found the decoder but could not open it. If Next Level Timing (or another instance of this app) " +
-                "already has it open, only one application can use a HID device at a time - close the other one first.");
-            return;
+            // Nothing is published on behalf of an attempt that has been
+            // overtaken: the Disconnect that overtook it has had the last
+            // word, and an Error arriving after it would turn the status
+            // light red for a decoder nobody is trying to open.
+            if (Volatile.Read(ref _generation) == generation)
+            {
+                SetState(state, message);
+            }
         }
 
         try
         {
-            _stream.SetFeature(UartEnableReport);
-            Log($"Sent UART Enable report: {ToHex(UartEnableReport)}");
+            // The old connection goes first, off the UI thread with the rest
+            // of it. State is deliberately left alone here - Connecting has
+            // already been published and this is still the same attempt, not
+            // a disconnection.
+            Teardown();
 
-            _stream.SetFeature(UartConfigReport);
-            Log($"Sent UART Config report (38400 8N1): {ToHex(UartConfigReport)}");
+            // A new connection may be a different decoder, or the same one
+            // restarted: its clock is learned again from scratch.
+            Clock.Reset();
+
+            HidDevice? device;
+            try
+            {
+                device = DeviceList.Local.GetHidDevices(VendorId, ProductId).FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                Report(DecoderConnectionState.Error, $"Failed to enumerate HID devices: {ex.Message}");
+                return;
+            }
+
+            if (device is null)
+            {
+                Report(DecoderConnectionState.Error,
+                    "No CP2110 device found (VID 0x10C4, PID 0x86B9). Is the EasyLap decoder plugged in?");
+                return;
+            }
+
+            Log($"Found device: {SafeDescribe(device)}");
+
+            // Into a local, not straight into _stream: until this attempt
+            // has been checked for still being the current one, the stream
+            // it opened is nobody's.
+            HidStream? stream;
+
+            if (!device.TryOpen(out stream) || stream is null)
+            {
+                Report(DecoderConnectionState.Error,
+                    "Found the decoder but could not open it. If Next Level Timing (or another instance of this app) " +
+                    "already has it open, only one application can use a HID device at a time - close the other one first.");
+                return;
+            }
+
+            try
+            {
+                stream.SetFeature(UartEnableReport);
+                Log($"Sent UART Enable report: {ToHex(UartEnableReport)}");
+
+                stream.SetFeature(UartConfigReport);
+                Log($"Sent UART Config report (38400 8N1): {ToHex(UartConfigReport)}");
+            }
+            catch (Exception ex)
+            {
+                Report(DecoderConnectionState.Error, $"Failed to configure the UART: {ex.Message}");
+                CloseQuietly(stream);
+                return;
+            }
+
+            var maxInputReportLength = device.GetMaxInputReportLength();
+
+            // The last look before this stream becomes the live one. A
+            // Disconnect - or a later Connect - while the driver had us
+            // means this decoder was opened for nobody, so it is closed
+            // again rather than published over whatever is there now. This
+            // is the check that stops two read loops running on one
+            // decoder.
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                CloseQuietly(stream);
+                return;
+            }
+
+            var cts = new CancellationTokenSource();
+            var token = cts.Token;
+
+            _stream = stream;
+            _cts = cts;
+
+            // Looked at once more now the stream IS the live one: a
+            // Disconnect landing between the look above and this assignment
+            // would have found nothing to close, and the read loop would
+            // have started on a decoder nobody wanted.
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                Teardown();
+                return;
+            }
+
+            SetState(DecoderConnectionState.Connected, "Connected. Listening for lap events.");
+
+            _ = Task.Run(() => ReadLoop(stream, maxInputReportLength, token), token);
         }
         catch (Exception ex)
         {
-            SetState(DecoderConnectionState.Error, $"Failed to configure the UART: {ex.Message}");
-            _stream.Dispose();
-            _stream = null;
-            return;
+            // Nobody waits on this task, so anything escaping here would be
+            // an unobserved exception on a pool thread - which takes the app
+            // down later, from the finalizer, with nothing to say why.
+            try
+            {
+                Report(DecoderConnectionState.Error, $"Connecting to the decoder failed: {ex.Message}");
+            }
+            catch
+            {
+                // A subscriber threw while reporting the failure - nothing more we can do here.
+            }
         }
+        finally
+        {
+            // Cleared last, so the retry timer's next tick may try again. A
+            // driver call that NEVER returns leaves this set and no further
+            // connect is attempted - which is the right answer: the window
+            // is free either way, and asking a wedged driver again only
+            // wedges another thread behind the first.
+            Volatile.Write(ref _connecting, 0);
+        }
+    }
 
-        SetState(DecoderConnectionState.Connected, "Connected. Listening for lap events.");
-
-        var maxInputReportLength = device.GetMaxInputReportLength();
-        _cts = new CancellationTokenSource();
-        var token = _cts.Token;
-        var stream = _stream!;
-        _ = Task.Run(() => ReadLoop(stream, maxInputReportLength, token), token);
+    /// <summary>Closes a stream a connect opened and is not going to use. Never throws.</summary>
+    private static void CloseQuietly(HidStream stream)
+    {
+        try
+        {
+            stream.Dispose();
+        }
+        catch
+        {
+            // ignore - nothing is listening on it
+        }
     }
 
     private void ReadLoop(HidStream stream, int maxInputReportLength, CancellationToken ct)
@@ -289,6 +438,26 @@ public sealed class DirectDecoderClient : IDisposable
 
     public void Disconnect()
     {
+        // Any connect still inside the driver is now working for a
+        // connection nobody wants - see ConnectCore.
+        Interlocked.Increment(ref _generation);
+
+        Teardown();
+
+        if (State != DecoderConnectionState.Disconnected)
+        {
+            SetState(DecoderConnectionState.Disconnected, "Disconnected.");
+        }
+    }
+
+    /// <summary>
+    /// Stops the read loop and lets the stream go, without touching
+    /// <see cref="State"/>. Its own method because a connect does this too,
+    /// on its own thread, and must not publish Disconnected in the middle of
+    /// connecting.
+    /// </summary>
+    private void Teardown()
+    {
         if (_cts is not null)
         {
             _cts.Cancel();
@@ -310,11 +479,6 @@ public sealed class DirectDecoderClient : IDisposable
                 // ignore - tearing down anyway
             }
             _stream = null;
-        }
-
-        if (State != DecoderConnectionState.Disconnected)
-        {
-            SetState(DecoderConnectionState.Disconnected, "Disconnected.");
         }
     }
 

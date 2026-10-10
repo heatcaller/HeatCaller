@@ -24,7 +24,7 @@ The roster is down the left and the driver you pick is beside it.
 
 - Under the roster: **Add Driver** (see [Add a driver](#add-a-driver)) and **Delete**, for the drivers selected.
 - Under the driver: **Edit Profile**, which opens the profile form (double-clicking a driver in the roster does the same), and **Photo**.
-- On the right, for the whole list: **Import from CSV** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)).
+- On the right, for the whole list: **Import from CSV** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
 
 The driver has six tabs:
 
@@ -166,7 +166,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 |---|---|
 | **Transponder:** | Required. The transponder number the decoder reports. Locked after the profile is saved. |
 | **Driver name:** | The driver's name, as shown on screens, results and heat sheets. |
-| **Announcer name:** | What the announcer says, if it's different from the driver name — a nickname, or a spelling the voice pronounces correctly. Leave it blank to use the driver name. It takes effect straight away. |
+| **Announcer name:** | What the announcer reads instead of their real name: a nickname the crowd knows, or the name spelled the way it sounds, which is how you fix a name the voice says wrong. Leave it blank to use the driver name. It takes effect straight away, and **Hear It** under the box reads it back to you. See [The name the announcer says](#the-name-the-announcer-says). |
 | **Active car:** | The car they race in now — the one that's announced and recorded. Pick one of their cars from the list. To add a new car, type its name and click **Add**; it's added to their garage when you save (a name you type but don't add is saved too). To retire a car or give it to someone else, use their [garage](#a-drivers-garage). |
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Home track:** | Home club or town. |
@@ -191,6 +191,59 @@ If the driver has earned any achievements, a **Badges** line appears at the bott
     Both **Rental / loaner transponder** and **Exclude from track records and points** stop the driver from setting an all-time track record, and keep them off the records published online.
 
     **Exclude from track records and points** also takes the driver out of championship points: on the **Championship** page, in the standings export and on the club's online pages, the drivers behind them close up and score as if the excluded driver hadn't been there. When an excluded driver finishes a race, the Race Control log says they're "excluded from track records and championship points".
+
+### The name the announcer says
+
+**Announcer name:** on a driver's profile changes the name the announcer says, and nothing else about the driver. It has two uses, and the hint under the box names both:
+
+> What the announcer reads instead of their real name. Two uses: a nickname the crowd knows, or the name spelled the way it SOUNDS, which is how you fix one the voice gets wrong - "Jacques" typed as "Zhock", "Siobhan" as "Shiv-awn". They keep their real name everywhere else. Hear It reads it out exactly as the announcer will.
+
+The second use is the one clubs miss: the box takes a phonetic spelling. Put "Zhock" in it and the announcer says Jacques properly, while he stays Jacques on the heat sheet, in the results and on the club's website. Nothing checks that what you type is a real name, because a respelling isn't one. When the announcer name differs from the name on screen, the driver card shows it under their name as `Announced as "Zhock"`, so you can see at a glance which drivers have one.
+
+To try a spelling before you save it:
+
+1. Open the driver's profile: pick them in the roster and click **Edit Profile**, or double-click them.
+2. Type the name the way it sounds in **Announcer name:**.
+3. Click **Hear It**, under the box.
+4. Not right? Change the spelling and click **Hear It** again. Click **Save** when it is.
+
+**Hear It** reads whatever is in the box at that moment, in the voice the club is set up with. Nothing is saved first and no race is involved, and it speaks even while the announcer is muted, so you can try a spelling in the middle of a race night. With **Announcer name:** empty it reads the **Driver name:** instead, and with no name at all the transponder number — which is what the announcer would say for that driver as things stand. With every one of those fields still blank there's nothing to read, and a **Nothing to read** message says so.
+
+**Hear It** is on the **Add Driver Profile** dialog too, which is where you'll be glad of it: a transponder nobody recognizes gets a name at seven o'clock on a race night, and you can hear how that name comes out before the driver's first heat.
+
+For the voices themselves and how one is chosen, see [Voice announcements](../announcer/voice.md).
+
+### Check how names are read
+
+**Check Names**, at the bottom right of the **Drivers** view, opens **Check How Names Are Read**: the roster with the name the announcer will say for each driver, read out one press at a time. Do it before the doors open, so a name that comes out wrong is found by you and not by a room full of people.
+
+<!-- screenshot: Check How Names Are Read, the roster listed with the line saying what is being read under it -->
+
+1. On the **Driver Hub** page, click **Check Names**.
+2. Leave **Only the drivers checked in tonight** ticked to hear just tonight's drivers, or untick it for everyone in the list.
+3. Click **Say the Next One** over and over to work down the list. To hear one driver, pick their row and click **Say It** — double-clicking the row does the same.
+4. Note the ones that come out wrong, click **Close**, and fix each in that driver's **Announcer name:** box (see [The name the announcer says](#the-name-the-announcer-says)).
+
+The list has three columns:
+
+| Column | What it shows |
+|---|---|
+| **Driver** | The driver's name, or their transponder in brackets when they haven't got one. An unnamed profile is worth finding here, because the announcer reads the number out. |
+| **What the announcer says** | The words handed to the voice: the announcer name when there is one, otherwise the driver name, otherwise the transponder. It's the same name the race calls use, not a second opinion on it. |
+| **Spelling set** | "Yes" when there's something in that driver's **Announcer name:** box. It means somebody has had a go at this driver, not that the spelling differs from their real name. |
+
+Under the list, a line says what is being read, word for word — "Saying: Zhock" — and "Nothing read yet." before you've started. Under that, a count reads like "40 drivers - 3 with a spelling set."
+
+A few things worth knowing:
+
+- The window is handed the drivers the roster is showing, in the order it shows them. So the **Find** box above the roster narrows what gets checked — type a class to walk that class's drivers — and **Only the drivers checked in tonight** narrows it again.
+- That tick box is only there when the race day you have open has a check-in sheet with somebody on it, and it starts ticked when it is. Nobody is going to sit through two hundred saved drivers to find the three that matter tonight.
+- **Say the Next One** follows the order on screen and goes back to the top at the end, so clicking a column heading to re-sort changes the order you walk — sort on **Spelling set** to go through the ones already respelled.
+- The window changes nothing and saves nothing. It's the ear, not the editor: the fixes are made on the driver's profile.
+- If you hear nothing from **Say It** or from **Hear It**, the club's voice isn't set up yet or can't be reached. See [Voice announcements](../announcer/voice.md).
+
+!!! tip
+    This is a before-the-doors-open job: five quiet minutes with the PA down, not something to start mid-program. The names worth listening to are the new drivers and anything that isn't spelled the way an English reader would say it — the rest the voice usually gets right. Three names fixed at ten to seven is the whole point of it.
 
 ### Photos
 
@@ -501,17 +554,22 @@ The Track Designer lets you draw an RCP-style tile track: lay the foam floor, st
 
 <!-- screenshot: Track Designer with a traced photo underneath and rails drawn over it -->
 
-The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, **Erase** and **Photo** (keys <kbd>1</kbd> to <kbd>7</kbd>). The status line under the drawing area explains how the current tool works. Other toolbar buttons:
+The toolbar tools are **Floor**, **Rails**, **Turns**, **Markings**, **Route**, **Erase**, **Photo** and **Select** (keys <kbd>1</kbd> to <kbd>8</kbd>). The status line under the drawing area explains how the current tool works. Other toolbar buttons:
 
 - **Wall the edge** puts a rail round every open edge of the floor.
 - **Trace route** follows the corridor between the rails and lays the racing line down it.
 - **Reverse** turns the racing line round, so it runs the way the cars go.
 - **Play** sends a car round the line you drew; **Stop** ends it.
 - **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>), **Redo** (<kbd>Ctrl</kbd>+<kbd>Y</kbd>), **Fit** (<kbd>F</kbd>) and **Clear**.
+- **Turn**, **Flip across**, **Flip down**, **Duplicate** and **Remove** act on whatever you've picked up with the **Select** tool, and are grayed out while nothing is picked.
 
 In any tool, <kbd>Ctrl</kbd>+click or right-click erases. <kbd>R</kbd> turns markings 90 degrees, and <kbd>G</kbd> shows or hides the grid. The tool keys only work while the drawing area has focus, so they don't interfere with typing the track name.
 
 The palette on the left holds floor pieces, barriers (with **Turn radius, in tiles:** buttons for 0.5, 1, 1.5 and 2) and markings.
+
+**Pick part of the plan up.** Take the **Select** tool (<kbd>8</kbd>) and drag a box round part of the plan. Everything the box covers comes up together - tiles, rails, turns, markings and racing-line points - and because the box snaps out to whole tiles, the rails round the edge of a block come with it rather than being left behind. Then drag inside it to move it, or use the arrow keys to nudge it a tile at a time. **Turn** (<kbd>]</kbd>) turns it a quarter clockwise and <kbd>[</kbd> turns it the other way; **Flip across** and **Flip down** mirror it. <kbd>Ctrl</kbd>+<kbd>C</kbd> and <kbd>Ctrl</kbd>+<kbd>V</kbd> copy it - a paste lands where the pointer is - <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates it one tile along, <kbd>Ctrl</kbd>+<kbd>A</kbd> picks up the whole plan, <kbd>Delete</kbd> takes it off and <kbd>Esc</kbd> drops it. Shift-drag a second box to add to what's picked, or drag over something already picked to take it back out.
+
+A turn or a mirror keeps the top-left corner of the box where it is, so turning a corner complex never slides it off the floor you had it lined up with. If you move or paste something onto a part of the plan that's already occupied, what was underneath comes off and what you moved stays - a plan holds one tile, one rail and one marking per place. Every drag, nudge, turn and mirror is one press of <kbd>Ctrl</kbd>+<kbd>Z</kbd>; picking something up isn't an edit at all, so it takes no undo step. See [Picking part of a plan up](../reference/keyboard-shortcuts.md#picking-part-of-a-plan-up).
 
 **Split loops.** The markings include **Split 1 loop**, **Split 2 loop** and **Split 3 loop**: a blue band marked S1, S2 or S3, for where a [split loop](../timing/decoders.md#a-split-loop) lies across the track. A plan has one of each; placing it somewhere else moves it. With the finish line on the plan and the racing line drawn through the loops, **The lap** lists each sector's length along the racing line, for example "Sector 1: 4.50 m / 14.8 ft". Race Control uses those lengths for the sector speed columns. If they can't be measured, it says why, for example "The racing line doesn't pass over Split 1." Number the loops in the order cars reach them. The racing line has to close into a lap and run the way the cars go; its arrows show which way, and **Reverse** on the toolbar turns it round.
 
@@ -521,7 +579,9 @@ The side panel on the right has:
 - **Tile size** — **30 cm**, **50 cm**, or any size in mm.
 - **Trace a photo** — **Choose photo** puts a photo of the real track underneath. Use the **Photo** tool to drag it into place and the mouse wheel to size it until its tiles line up with the grid, then draw over it. **Hide**, **Remove** and a transparency slider control it. This is the quickest way to get a real layout in exactly. The photo gets the same size and type check as a track photo (above), and it must be on this PC: one on another computer is refused with "That photo is on another computer. Copy it to this PC first, then choose the copy." A photo that's refused, or that passes the check but still won't open, gets a **Photo not loaded** message instead of being traced, and the plan keeps whatever photo it already had. **Undo** and **Redo** put the photo back with the plan, so undoing a photo brings the previous one back on screen.
 - **The lap** — tick **The line closes into a lap** for a circuit. Below it, HeatCaller shows the floor tile count and area, rail counts, and the lap length in meters and feet, with the average speed at the layout's average lap time (12 seconds if the layout has none).
-- **Check against a kit** — pick **30cm Mini-96** or **50cm Wide-L / Oblong** to see whether your layout fits in that box, or what it's short of.
+- **Start from a kit** — opens one of RCP's sets as a layout you can change: the two 96-tile serpentines, the Wide L, the Oblong, the 50cm Oval, the Oval Wide and the Double Oval Wide. The floor and the parts list are exact - each one uses exactly the tiles the box holds and fits inside the rails it holds - but the circuit inside is a layout *buildable from* that kit rather than a copy of RCP's own, because the published rail counts rule out the tight corners their photographs appear to show. It's a starting point. Starting from a kit costs one <kbd>Ctrl</kbd>+<kbd>Z</kbd> if it wasn't what you wanted, and it leaves the room alone.
+- **The room it goes in** — the width and depth of the hall, in feet or meters. HeatCaller draws it round the plan and says whether the layout fits, turned either way, with how much room to spare or how much too big it is. A plan that's a beautiful circuit and four inches too wide for the hall is a plan nobody can build.
+- **Check against a kit** — pick any of RCP's sets to see whether your layout fits in that box, or what it's short of. RCP publish a full parts list for some sets and only a tile count for others; where they don't publish the rails, HeatCaller checks the tiles and says so rather than inventing a rail count to check against.
 
 When the designer opens a plan whose traced photo can't be shown, the plan opens without it and the status line says why:
 

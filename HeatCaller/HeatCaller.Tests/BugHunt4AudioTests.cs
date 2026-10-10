@@ -192,7 +192,13 @@ public sealed class BugHunt4AudioTests : IDisposable
         voices.Current.Engine = VoiceEngine.ElevenLabs;
         voices.Current.VoiceId = "club-voice";
         voices.Current.ApiKey = "not-a\nkey";
-        voices.Current.WindowsVoiceStandsIn = false;
+
+        // No stand-in, so a render that fails fails here rather than coming
+        // back in the Kokoro voice: this test is about what Re-record all
+        // asks ElevenLabs for. Saved under the old JSON name, which is why
+        // the property reads KokoroStandsIn and the file says
+        // WindowsVoiceStandsIn - see VoiceProfile.
+        voices.Current.KokoroStandsIn = false;
 
         var announcer = new AnnouncementService(ProfileStore.Load(), voices, SoundEffectsStore.Load());
 

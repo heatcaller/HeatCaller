@@ -29,6 +29,14 @@ public sealed class RoundDefinitionStore
                 {
                     return new RoundDefinitionStore(list);
                 }
+
+                // Present, parsed, and not the shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" parses to nothing without
+                // throwing: it used to fall straight through to the empty
+                // store below with the flag left false, so the first heat
+                // added or recorded replaced the whole race programme.
+                unreadable = true;
             }
         }
         catch (Exception ex)

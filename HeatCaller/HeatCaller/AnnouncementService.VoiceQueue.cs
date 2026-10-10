@@ -270,13 +270,13 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Shared synthesize-then-play logic used by every voice announcement
-    /// path, generic or rivalry-specific alike - ElevenLabs or the Windows
-    /// voice, as RenderLineAsync decides.
+    /// path, generic or rivalry-specific alike - ElevenLabs, the HeatCaller
+    /// relay or Kokoro, as RenderLineAsync decides.
     /// </summary>
     /// <param name="skippedLogMessage">
     /// Said when ElevenLabs is chosen and the line can't be spoken at all -
-    /// no key or voice, and no stand-in to cover. The Windows voice being
-    /// unavailable says so in its own words.
+    /// no key or voice, and no stand-in to cover. A missing Kokoro model
+    /// says so in its own words, below.
     /// </param>
     /// <param name="deliveryOverride">
     /// Optional per-call voice settings. Used by the race summary, which
@@ -333,9 +333,9 @@ public sealed partial class AnnouncementService
         // unsaved model change makes tests and races behave differently -
         // this makes that visible instead of leaving it to be guessed at.
         //
-        // ElevenLabs only. The Windows voice never uses tags, so taking them
-        // out for it is expected rather than a model to go and change - and
-        // the advice to pick a v3 model would be wrong for it.
+        // ElevenLabs only. Kokoro never uses tags, so taking them out for
+        // it is expected rather than a model to go and change - and the
+        // advice to pick a v3 model would be wrong for it.
         if (currentProfile.EffectiveEngine == VoiceEngine.ElevenLabs
             && !ReferenceEquals(beforeSanitise, text) && beforeSanitise != text)
         {
@@ -345,16 +345,29 @@ public sealed partial class AnnouncementService
         }
 
         // Whether ANY voice can say it. This asked for an ElevenLabs key and
-        // voice only, which with the Windows voice chosen - or standing in
-        // for a club with no key - would have skipped every line.
+        // voice only, which with a free voice chosen - or standing in for a
+        // club with no key - would have skipped every line.
+        //
+        // The Kokoro arm is the loud one. Since the Windows voice went there
+        // is nothing under Kokoro, so a PC without the model is a PC that
+        // cannot say a word - and the only honest thing to do with that is
+        // say which button fixes it, in the console, in words. Said once per
+        // reason rather than per line (LogStandInOnce) so a race night does
+        // not fill the console with the same sentence a hundred times, and
+        // the Mixer carries the same thing as a banner for anyone not
+        // watching the log (DescribeVoiceBlocker).
         if (!CanSpeak(currentProfile))
         {
-            StatusMessage?.Invoke(currentProfile.EffectiveEngine switch
+            if (currentProfile.EffectiveEngine == VoiceEngine.Kokoro)
             {
-                VoiceEngine.Windows => $"[voice] Skipped announcement - {WindowsVoice.UnavailableReason ?? "the Windows voice can't speak on this PC"}.",
-                VoiceEngine.Kokoro => $"[voice] Skipped announcement - {KokoroSpeech.UnavailableReason ?? "the Kokoro voice can't speak on this PC"}, and there's no Windows voice to stand in.",
-                _ => skippedLogMessage,
-            });
+                var why = KokoroSpeech.UnavailableReason ?? "the Kokoro voice can't speak on this PC";
+
+                LogStandInOnce("no-voice", NoVoiceAtAllMessage(why));
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - {why}.");
+                return;
+            }
+
+            StatusMessage?.Invoke(skippedLogMessage);
             return;
         }
 
@@ -475,8 +488,12 @@ public sealed partial class AnnouncementService
     /// <summary>
     /// Whether a voice could speak at all right now, and why not if it can't.
     ///
-    /// Null while the Windows voice is standing in for ElevenLabs - there IS
-    /// a voice then. DescribeStandIn says why it is standing in.
+    /// Null while Kokoro is standing in for ElevenLabs or the relay - there
+    /// IS a voice then. DescribeStandIn says why it is standing in.
+    ///
+    /// Kokoro itself being unable to speak is NOT a stand-in: nothing covers
+    /// for it, so it answers here, and what reads this (the Mixer's red NO
+    /// VOICE banner) is what a club sees without watching the console.
     /// </summary>
     public string? DescribeVoiceBlocker()
     {
@@ -487,21 +504,18 @@ public sealed partial class AnnouncementService
             return "the announcer is muted";
         }
 
-        if (profile.EffectiveEngine == VoiceEngine.Windows)
-        {
-            return WindowsVoice.UnavailableReason;
-        }
-
         if (StandInReasonFor(profile) is not null)
         {
             return null;
         }
 
-        // Kokoro can speak, or the Windows voice is standing in (above) - so
-        // the only way this cannot speak is neither being there.
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
         {
-            return KokoroSpeech.UnavailableReason;
+            // The load failure as well as the reason: UnavailableReason lets
+            // a failed load go after a minute so a line can try again, and
+            // reading only that had the Mixer say "Ready" between tries on a
+            // PC where nothing could speak at all.
+            return KokoroSpeech.UnavailableReason ?? KokoroSpeech.LoadFailure;
         }
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
@@ -513,10 +527,10 @@ public sealed partial class AnnouncementService
 
             // Nothing is standing in - that was checked above - so the only
             // way this cannot speak is the relay refusing on a PC with no
-            // Windows voice to cover for it.
+            // Kokoro model to cover for it.
             lock (_heatCallerLock)
             {
-                return WindowsVoice.IsAvailable ? null : _heatCallerReason;
+                return KokoroSpeech.IsAvailable ? null : _heatCallerReason;
             }
         }
 
@@ -539,14 +553,14 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
-    /// Why the free Windows voice is standing in for ElevenLabs right now -
-    /// "the free Windows voice is standing in - the ElevenLabs quota is used
+    /// Why the free Kokoro voice is standing in for ElevenLabs right now -
+    /// "the free Kokoro voice is standing in - the ElevenLabs quota is used
     /// up" - or null when it isn't. For the Mixer, which shows it as a notice
     /// rather than the red NO VOICE banner: the announcer can still speak.
     /// </summary>
     public string? DescribeStandIn() =>
         StandInReasonFor(_voiceStore.Current) is { } reason
-            ? $"the free Windows voice is standing in - {reason}"
+            ? $"the free Kokoro voice is standing in - {reason}"
             : null;
 
     // True while a voice line is actively being synthesized/played. Used to
@@ -608,6 +622,45 @@ public sealed partial class AnnouncementService
         // teaser fires immediately after the RaceCompleted call, so it was
         // dropped every single time.
         AnnouncementEventType.Reminder;
+
+    /// <summary>
+    /// Which of those a flag call SPARES: the queued lines a yellow, a red,
+    /// a green, the start or the finish leaves in the queue, and the lines
+    /// a flag cannot overtake once they have been taken off it (see
+    /// _dequeuedUnderGeneration).
+    ///
+    /// "Priority" carries four things at once - not dropped behind chatter,
+    /// spoken under a caution, bins the routine lines queued ahead of it,
+    /// and survives a flag clearing the queue. Reminder was made priority
+    /// for the first of those (scheduled speech was being dropped whenever
+    /// anything else happened to be speaking, and the recap teaser fires
+    /// straight after the finish call, so it went every time) and took the
+    /// fourth with it. That is the one it should never have had: a reminder
+    /// is the only priority type that is not an instruction to a driver,
+    /// and the only one that can be a minute and a half long.
+    ///
+    /// WHAT WENT WRONG. The post-race recap is queued as a Reminder, up to
+    /// 90 seconds of it. Green pressed from Idle has no countdown, so the
+    /// countdown's own cut - the one check that was never exempt - never
+    /// runs; ClearTheDecksFor stops what is playing and bins the queue, and
+    /// spared the recap. It then won the speaker and read the PREVIOUS
+    /// race's result over a green race, with "and they're off" landing a
+    /// minute and a half late. A yellow or a red pressed while a reminder
+    /// was on the network, or waiting on the playback lock, did the same.
+    ///
+    /// Everything else stays spared, deliberately. The grid call, the
+    /// staging call and a driver release are short instructions to drivers
+    /// that a flag does not make untrue, and a badge is a race moment
+    /// queued with the finish call rather than ahead of it. A caution still
+    /// lets a reminder speak and chatter still cannot drop one - this is
+    /// only about a flag. The countdown spares nothing at all and never did
+    /// (CutForCountdown).
+    ///
+    /// Internal rather than private so the rule itself can be read back in
+    /// a test - see BugHunt5ShowLatchTests.
+    /// </summary>
+    internal static bool SurvivesAFlag(AnnouncementEventType type) =>
+        IsPriorityAnnouncement(type) && type is not AnnouncementEventType.Reminder;
 
     /// <summary>
     /// One-off race moments that wait their turn instead of being dropped
@@ -780,10 +833,10 @@ public sealed partial class AnnouncementService
                 }
                 catch (Exception ex) when (IsQuotaExceeded(ex))
                 {
-                    // Only reached with the stand-in off (or no Windows voice
-                    // to stand in with) - with it on, the Windows voice has
-                    // already said this line. The first refusal says the
-                    // quota is gone; the rest say this line was skipped.
+                    // Only reached with the stand-in off (or no Kokoro model
+                    // to stand in with) - with it on, Kokoro has already
+                    // said this line. The first refusal says the quota is
+                    // gone; the rest say this line was skipped.
                     if (!NoteQuotaExceeded(standingIn: false))
                     {
                         StatusMessage?.Invoke("[voice] Still over quota - skipping this announcement.");
@@ -908,11 +961,14 @@ public sealed partial class AnnouncementService
                     _voiceQueue.RemoveAt(0);
 
                     // Captured under the queue lock, which ClearTheDecksFor's
-                    // queue purge also takes: a routine line either gets the
+                    // queue purge also takes: a line either gets the
                     // pre-flag generation (and is dropped if still
                     // synthesising when the flag lands) or was never here.
-                    // Priority lines are exempt, matching the purge.
-                    generation = IsPriorityAnnouncement(item.Type)
+                    // Exempt exactly where the purge is exempt - this read
+                    // IsPriorityAnnouncement, which spared a Reminder and
+                    // so let a whole stale recap speak over a green. See
+                    // SurvivesAFlag.
+                    generation = SurvivesAFlag(item.Type)
                         ? null
                         : Volatile.Read(ref _interruptGeneration);
 

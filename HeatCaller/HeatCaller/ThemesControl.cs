@@ -408,7 +408,10 @@ public sealed class ThemesControl : UserControl
             .Distinct()
             .ToList();
 
-        var recordable = StingerLibrary.RecordableLines(theme.Voice);
+        // The club's voice-ID rides along here, which is what gives it the
+        // recorder, the count, the undo and Re-record all for nothing - see
+        // ShowIdent. recordable flows from here to RecordVoiceLinesAsync.
+        var recordable = StingerLibrary.RecordableLines(theme.Voice, ShowIdent.Line(_settings?.ShowIdentLine));
         var recorded = StingerLibrary.Shared.CountRecorded(recordable);
         var recordedNote = recorded == 0 ? string.Empty : $"  \u2022  {recorded} of {recordable.Count} voice lines recorded";
         var backgroundNote = theme.Background is { } bg
@@ -825,12 +828,12 @@ public sealed class ThemesControl : UserControl
             + (hasVoice ? string.Empty : ", voice and model")
             + ", the voice and sound volumes, the output format"
             + (hasLanguage ? string.Empty : ", the language")
-            + ", and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."
+            + ", and which voice speaks - ElevenLabs, the HeatCaller voice or the Kokoro voice."
             + (onHeatCaller
                 ? "\n\nThe HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines "
                   + "are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another "
                   + "voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own "
-                  + "ElevenLabs key or the free Windows voice on Voice Settings."
+                  + "ElevenLabs key or the free Kokoro voice on Voice Settings."
                 : string.Empty);
 
         var background = ThemeStore.DescribeBackground(theme, _musicStore);
@@ -1040,7 +1043,7 @@ public sealed class ThemesControl : UserControl
         menu.Items.Add("What are voice lines?", null, (_, _) => AppDialog.Show(this,
             "The fixed race calls - staging, countdown, the start, flags, last lap and the checkered flag - recorded once in this soundscape's delivery, "
             + "with your ElevenLabs voice or the HeatCaller voice.\n\n"
-            + "After that they play from this PC every race, whatever voice is chosen - even the free Windows voice, even with no internet - "
+            + "After that they play from this PC every race, whatever voice is chosen - even the free Kokoro voice, even with no internet - "
             + "so the big moments always sound the part. Lines with a driver's name or a time in them are always spoken live.",
             "Voice lines", MessageBoxButtons.OK, MessageBoxIcon.Information));
 
@@ -1067,11 +1070,14 @@ public sealed class ThemesControl : UserControl
             return;
         }
 
-        if (voice.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
+        // Kokoro alone since the Windows voice was retired on 10 Oct 2026.
+        // This used to read "Windows or Kokoro", and the sentence below had
+        // to work out which of the two to name.
+        if (voice.EffectiveEngine == VoiceEngine.Kokoro)
         {
             AppDialog.Show(this,
                 "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. "
-                + $"This PC speaks with the {(voice.EffectiveEngine == VoiceEngine.Kokoro ? "Kokoro" : "Windows")} voice, which already says these lines for free. "
+                + "This PC speaks with the Kokoro voice, which already says these lines for free. "
                 + "Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing.",
                 "Voice lines", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
@@ -1084,12 +1090,14 @@ public sealed class ThemesControl : UserControl
         }
 
         var characters = toRecord.Sum(l => VoiceProfile.StripAudioTags(l).Length);
-        var voiceName = voice.EffectiveEngine == VoiceEngine.HeatCaller
-            ? (string.IsNullOrWhiteSpace(voice.HeatCallerVoiceName) ? "the HeatCaller voice" : $"the HeatCaller voice ({voice.HeatCallerVoiceName})")
-            : (string.IsNullOrWhiteSpace(voice.VoiceName) ? "your ElevenLabs voice" : voice.VoiceName);
+        // The ONE place this name is built - see StingerLibrary.VoiceNameFor.
+        // The club's voice-ID reads the stored name back to tell a club when
+        // their take is in a voice they have stopped using, and two spellings
+        // of the same voice would read as a voice change every single night.
+        var voiceName = StingerLibrary.VoiceNameFor(voice);
 
         var heatCallerNote = voice.EffectiveEngine == VoiceEngine.HeatCaller
-            ? "\n\nWhile this PC uses the HeatCaller voice the announcer says the standard lines, so these recordings play once you switch to your own key or the Windows voice."
+            ? "\n\nWhile this PC uses the HeatCaller voice the announcer says the standard lines, so these recordings play once you switch to your own key or the Kokoro voice."
             : string.Empty;
 
         // Re-record all asks ElevenLabs for new takes (see

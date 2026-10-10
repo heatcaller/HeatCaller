@@ -221,6 +221,25 @@ public sealed class RcpTrackDesign
     /// <summary>Which kit to check the tile count against, by name.</summary>
     public string KitName { get; set; } = string.Empty;
 
+    // --- The room it has to go in ---------------------------------------------
+    // A plan that is a beautiful circuit and four inches too wide for the
+    // hall is a plan nobody can build. The grid itself is unbounded on
+    // purpose - you draw where you like - so the room is kept beside it as
+    // a measurement rather than as a limit, and the editor says whether the
+    // one fits in the other.
+
+    /// <summary>How wide the room is, in millimetres. Zero when nobody has said.</summary>
+    public double RoomWidthMm { get; set; }
+
+    /// <summary>How deep the room is, in millimetres. Zero when nobody has said.</summary>
+    public double RoomDepthMm { get; set; }
+
+    /// <summary>Whether the room was given in feet and inches rather than metres - how to show it back.</summary>
+    public bool RoomInFeet { get; set; } = true;
+
+    [JsonIgnore]
+    public bool HasRoom => RoomWidthMm > 0 && RoomDepthMm > 0;
+
     // --- Tracing a photograph ------------------------------------------------
     // The fastest way to get a layout into the editor exactly is to put a
     // photo of it underneath and draw on top, so the picture and where it
@@ -248,6 +267,9 @@ public sealed class RcpTrackDesign
         RouteClosed = RouteClosed,
         TileSizeMm = TileSizeMm,
         KitName = KitName,
+        RoomWidthMm = RoomWidthMm,
+        RoomDepthMm = RoomDepthMm,
+        RoomInFeet = RoomInFeet,
         BackdropPath = BackdropPath,
         BackdropX = BackdropX,
         BackdropY = BackdropY,
@@ -352,19 +374,55 @@ public sealed record RcpKit(
     int OuterCurveRails,
     int InnerCorners,
     int InnerCornerPieces,
-    string Footprint)
+    string Footprint,
+    int TilesInSet = 0)
 {
-    public int TotalTiles => StartFinish + Straights + OuterCurves + InnerCorners;
+    /// <summary>
+    /// Whether RCP publishes what is actually in this box, piece by piece.
+    ///
+    /// They do for some sets and not for others: the two 96-tile tracks,
+    /// the Wide L and the 30cm Oval Wide come with a full table, while the
+    /// Ovals and the Supersized say only how many tiles and how big it
+    /// comes out. One of them publishes a breakdown that does not add up
+    /// to its own advertised total and says it is based on "similar
+    /// configurations".
+    ///
+    /// So the counts here are only ever what RCP prints. Filling the gaps
+    /// with plausible-looking numbers would make a shortfall list that
+    /// reads exactly as confidently as a true one and sends somebody to
+    /// buy the wrong thing.
+    /// </summary>
+    public bool BreakdownPublished => Straights > 0 || OuterCurves > 0;
+
+    public int TotalTiles => BreakdownPublished
+        ? StartFinish + Straights + OuterCurves + InnerCorners
+        : TilesInSet;
 
     /// <summary>Every rail in the box, of any shape.</summary>
     public int TotalStraightRails => StraightRails;
 
     public int TotalTurnRails => OuterCurveRails + InnerCornerPieces;
 
+    /// <summary>
+    /// The sets RCP sells, from rcptracks.com (8 Oct 2026).
+    ///
+    /// The first two keep the names they have always had, because a saved
+    /// plan remembers the kit it was checked against by name and renaming
+    /// them would quietly un-check every plan that used one.
+    /// </summary>
     public static IReadOnlyList<RcpKit> All { get; } = new[]
     {
+        // --- 30 cm (12in) tiles ---
         new RcpKit("30cm Mini-96", 300, 2, 70, 72, 12, 12, 12, 12, "about 12ft x 9ft"),
+        new RcpKit("30cm Oval Wide", 300, 2, 28, 30, 12, 12, 12, 12, "9ft x 6ft"),
+        new RcpKit("30cm Double Oval Wide", 300, 0, 0, 0, 0, 0, 0, 0, "12ft x 9ft", TilesInSet: 108),
+
+        // --- 50 cm (20in) tiles ---
         new RcpKit("50cm Wide-L / Oblong", 500, 2, 14, 16, 12, 12, 12, 12, "12ft 4in x 9ft 8in as an L"),
+        new RcpKit("50cm Oval", 500, 0, 0, 0, 0, 0, 0, 0, "6ft 5in x 11ft 3in", TilesInSet: 28),
+        new RcpKit("50cm Short Oval", 500, 0, 0, 0, 0, 0, 0, 0, "9ft 6in x 6ft 4in", TilesInSet: 14),
+        new RcpKit("50cm Supersized Oval", 500, 0, 0, 0, 0, 0, 0, 0, "9ft 9in x 19ft 2in", TilesInSet: 52),
+        new RcpKit("50cm Large-96", 500, 2, 70, 72, 12, 12, 12, 12, "20ft x 13ft"),
     };
 
     public static RcpKit? ByName(string name) =>
@@ -384,7 +442,15 @@ public sealed class RcpInventory
     public int Dividers { get; set; }
     public int EndCaps { get; set; }
 
-    public List<string> Shortfalls(RcpKit kit)
+    /// <summary>
+    /// What this layout needs more of than the kit holds - and nothing
+    /// else. Empty means the box genuinely builds it.
+    ///
+    /// Separate from Shortfalls because Shortfalls also says when it
+    /// CANNOT tell, which is worth reading on screen but is not a
+    /// shortfall: a caller asking "does this fit?" wants the difference.
+    /// </summary>
+    public List<string> Missing(RcpKit kit)
     {
         var lines = new List<string>();
 
@@ -397,8 +463,36 @@ public sealed class RcpInventory
         }
 
         Check("tiles", Tiles, kit.TotalTiles);
-        Check("straight rails", StraightRails, kit.TotalStraightRails);
-        Check("turn rails", TurnRails, kit.TotalTurnRails);
+
+        // Only where RCP says what is in the box - see
+        // RcpKit.BreakdownPublished. "0 straight rails, need 46" would be
+        // a shortfall invented out of a number nobody published.
+        if (kit.BreakdownPublished)
+        {
+            Check("straight rails", StraightRails, kit.TotalStraightRails);
+            Check("turn rails", TurnRails, kit.TotalTurnRails);
+        }
+
+        return lines;
+    }
+
+    /// <summary>Whether this kit's rails go unchecked, because RCP never listed them.</summary>
+    public bool RailsUnlisted(RcpKit kit) =>
+        !kit.BreakdownPublished && (StraightRails > 0 || TurnRails > 0);
+
+    /// <summary>
+    /// Everything worth saying about this layout against this kit: what
+    /// it is short of, and - where RCP never published a parts list - that
+    /// the rails could not be checked at all.
+    /// </summary>
+    public List<string> Shortfalls(RcpKit kit)
+    {
+        var lines = Missing(kit);
+
+        if (RailsUnlisted(kit))
+        {
+            lines.Add($"RCP doesn't publish how many rails come with the {kit.Name}, so only the tiles are checked here");
+        }
 
         return lines;
     }
@@ -495,6 +589,53 @@ public static class RcpPlan
         }
 
         return ends;
+    }
+
+    /// <summary>
+    /// Rails with no tile under either side of them.
+    ///
+    /// A rail is not a fence - it does not stand on the floor of its own
+    /// accord. It is BOLTED THROUGH the tile it runs along, with grey
+    /// plastic pins (see RcpTrackPainter, which draws their heads). So a
+    /// rail drawn out past the edge of the floor is not a thing anybody
+    /// can build, however good the plan looks.
+    ///
+    /// Counted rather than prevented, which is this editor's way: it
+    /// reports what is wrong with a plan - dead ends, a line running
+    /// backwards - instead of refusing the stroke. Rails are often drawn
+    /// before the floor they will sit on, and a tool that fought that
+    /// would be worse than one that mentions it at the end.
+    ///
+    /// Curves are left out. An arc is anchored at a grid point and sweeps
+    /// through a quadrant, so "which tile is under it" has no one answer
+    /// worth reporting on.
+    /// </summary>
+    public static int RailsWithNoFloor(RcpTrackDesign design)
+    {
+        var floor = new HashSet<(int, int)>();
+
+        foreach (var tile in design.Tiles)
+        {
+            floor.Add((tile.Col, tile.Row));
+        }
+
+        var orphans = 0;
+
+        foreach (var wall in design.Walls)
+        {
+            // The two cells the seam lies between: one of them has to be
+            // floor for there to be anything to bolt to.
+            var (a, b) = wall.Vertical
+                ? ((wall.Col - 1, wall.Row), (wall.Col, wall.Row))
+                : ((wall.Col, wall.Row - 1), (wall.Col, wall.Row));
+
+            if (!floor.Contains(a) && !floor.Contains(b))
+            {
+                orphans++;
+            }
+        }
+
+        return orphans;
     }
 
     public static RcpInventory Count(RcpTrackDesign design)

@@ -26,6 +26,14 @@ public enum RcpTool
 
     /// <summary>Move and size the photo being traced over.</summary>
     Backdrop,
+
+    /// <summary>
+    /// Pick a piece of the plan up: drag a box round it, then move it,
+    /// turn it, mirror it, copy it or take it away. Appended at the END -
+    /// the tools are numbered on the toolbar and in the status line by the
+    /// order they come in here.
+    /// </summary>
+    Select,
 }
 
 /// <summary>One thing that can be picked out of the palette.</summary>
@@ -57,6 +65,15 @@ public enum RcpPaletteItem
 public sealed class RcpTrackCanvas : Control
 {
     private readonly System.Windows.Forms.Timer _paceTimer = new() { Interval = 33 };
+
+    /// <summary>Fires once a run of arrow-key nudges has stopped - see NudgeSelection.</summary>
+    private readonly System.Windows.Forms.Timer _nudgeSettle = new() { Interval = 350 };
+
+    /// <summary>When an arrow key last nudged (Environment.TickCount64), so a run can be told from the next one.</summary>
+    private long _nudgedAt;
+
+    /// <summary>How long a pause between arrow-key presses ends one nudge run, in milliseconds.</summary>
+    private const long NudgeRunGapMs = 700;
     private readonly List<RcpTrackDesign> _undo = new();
     private readonly List<RcpTrackDesign> _redo = new();
 
@@ -133,6 +150,43 @@ public sealed class RcpTrackCanvas : Control
     /// </summary>
     private bool _ctrlErasing;
 
+    // --- What is picked -------------------------------------------------------
+    // The pieces themselves, by reference, so a move moves the very rails
+    // that were picked and everything that reads the plan afterwards sees
+    // it (see RcpSelection). The catch is that Undo swaps in a different
+    // COPY of the plan, which leaves every reference pointing at pieces
+    // that are no longer on it - so the selection is dropped whenever the
+    // plan is replaced (ShowInstead, ClearAll, LoadStock, the Design
+    // setter) rather than left to go quietly wrong.
+
+    private RcpSelection _selection = new();
+
+    /// <summary>The marquee being dragged, in pixels. Null when there isn't one.</summary>
+    private Point? _marqueeFrom;
+    private Point? _marqueeAt;
+
+    /// <summary>Whether this marquee adds to what was already picked - Shift as it started.</summary>
+    private bool _marqueeAdds;
+
+    /// <summary>Whether this drag is moving what is picked rather than drawing a marquee round it.</summary>
+    private bool _movingSelection;
+
+    /// <summary>The cell the pointer was over at the last step of a move, so each step is a delta.</summary>
+    private Point? _moveLast;
+
+    /// <summary>Whether a move has actually moved anything, which decides if it settles and takes an undo step.</summary>
+    private bool _moved;
+
+    /// <summary>
+    /// What was copied - a standalone plan with its top-left at (0,0), not
+    /// the pieces themselves, so it goes on being what was copied however
+    /// the plan is edited afterwards.
+    /// </summary>
+    private RcpTrackDesign? _clipboard;
+
+    /// <summary>Where it was copied from, so a paste with the pointer off the board lands beside the original.</summary>
+    private Point _clipboardFrom;
+
     private float _paceDistance;
     private DateTime _paceLastTick = DateTime.UtcNow;
 
@@ -154,6 +208,7 @@ public sealed class RcpTrackCanvas : Control
         TabStop = true;
 
         _paceTimer.Tick += (_, _) => AdvancePaceCar();
+        _nudgeSettle.Tick += (_, _) => SettleNudgeRun();
     }
 
     public RcpTrackDesign Design
@@ -164,12 +219,44 @@ public sealed class RcpTrackCanvas : Control
             _design = value ?? new RcpTrackDesign();
             _undo.Clear();
             _redo.Clear();
+            ClearSelection();
             ReloadBackdrop();
             RaiseChanged();
         }
     }
 
-    public RcpTool Tool { get; set; } = RcpTool.Floor;
+    /// <summary>
+    /// What the pointer does.
+    ///
+    /// Picking a different tool drops whatever was picked. A selection only
+    /// means anything to the tool that made it - the arrow keys nudge it,
+    /// Delete takes it off, the turn and mirror buttons act on it - so
+    /// leaving it highlighted under the floor brush would be a ring round
+    /// pieces that none of those things can reach any more.
+    /// </summary>
+    public RcpTool Tool
+    {
+        get => _tool;
+        set
+        {
+            if (_tool == value)
+            {
+                return;
+            }
+
+            _tool = value;
+
+            if (value != RcpTool.Select)
+            {
+                ClearSelection();
+            }
+
+            Invalidate();
+        }
+    }
+
+    private RcpTool _tool = RcpTool.Floor;
+
     public RcpPaletteItem Item { get; set; } = RcpPaletteItem.Floor;
 
     /// <summary>Radius of the next turn rail, in tiles.</summary>
@@ -187,8 +274,15 @@ public sealed class RcpTrackCanvas : Control
     public event Action? DesignChanged;
     public event Action<string>? StatusChanged;
 
+    /// <summary>Raised when what is picked changes, so the buttons that act on it can be greyed.</summary>
+    public event Action? SelectionChanged;
+
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
+
+    public bool HasSelection => !_selection.IsEmpty;
+
+    public bool HasClipboard => _clipboard is not null;
 
     // --- Undo ----------------------------------------------------------------
 
@@ -279,6 +373,23 @@ public sealed class RcpTrackCanvas : Control
     {
         var wasOpen = _strokeOpen;
 
+        // A move that actually went somewhere lands here, however the drag
+        // finished - mouse-up, Alt-Tab, a dialog stealing the mouse. The
+        // overlap is resolved once, at the end, so sliding a block across
+        // the plan and back does not eat everything on the way (see
+        // RcpSelection.Settle).
+        if (_movingSelection && _moved)
+        {
+            _selection.Settle(_design);
+        }
+
+        _movingSelection = false;
+        _moveLast = null;
+        _moved = false;
+        _marqueeFrom = null;
+        _marqueeAt = null;
+        _marqueeAdds = false;
+
         _strokeOpen = false;
         _strokeRemembered = false;
         _lastPaintedCell = null;
@@ -337,6 +448,10 @@ public sealed class RcpTrackCanvas : Control
     {
         var photoChanged = !string.Equals(design.BackdropPath, _design.BackdropPath, StringComparison.Ordinal);
 
+        // Every piece in the selection belongs to the plan being put away,
+        // so the selection goes with it - see the field notes.
+        ClearSelection();
+
         _design = design;
 
         if (photoChanged)
@@ -345,9 +460,72 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
+    /// <summary>
+    /// Replaces what is drawn with one of RCP's own layouts, in one step
+    /// Undo takes back.
+    ///
+    /// Deliberately NOT the Design setter, which throws the undo history
+    /// away: starting from a kit, seeing it, and deciding it was not what
+    /// you wanted should cost one Ctrl+Z - not the work you did before
+    /// you tried it.
+    ///
+    /// The room is left alone. Which kit you start from says nothing
+    /// about the size of the hall it has to go in.
+    /// </summary>
+    public void LoadStock(RcpTrackDesign stock)
+    {
+        Remember();
+        ClearSelection();
+
+        _design.Tiles.Clear();
+        _design.Walls.Clear();
+        _design.Curves.Clear();
+        _design.Decals.Clear();
+        _design.Route.Clear();
+
+        _design.Tiles.AddRange(stock.Tiles);
+        _design.Walls.AddRange(stock.Walls);
+        _design.Curves.AddRange(stock.Curves);
+        _design.Decals.AddRange(stock.Decals);
+
+        _design.TileSizeMm = stock.TileSizeMm;
+        _design.KitName = stock.KitName;
+
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// The size of the room the plan has to go in - one undo step, taken
+    /// here rather than by the side panel.
+    ///
+    /// The room is part of the plan (RcpTrackDesign) and so rides on every
+    /// undo snapshot. The side panel used to write it straight into the
+    /// plan with no step of its own, so Ctrl+Z after typing the hall's size
+    /// and then drawing a rail took the rail back AND silently blanked the
+    /// measurement - the same bug the photo's own undo step was added for.
+    /// </summary>
+    public void SetRoom(double widthMm, double depthMm, bool inFeet)
+    {
+        if (_design.RoomWidthMm == widthMm
+            && _design.RoomDepthMm == depthMm
+            && _design.RoomInFeet == inFeet)
+        {
+            return;
+        }
+
+        Remember();
+
+        _design.RoomWidthMm = widthMm;
+        _design.RoomDepthMm = depthMm;
+        _design.RoomInFeet = inFeet;
+
+        RaiseChanged();
+    }
+
     public void ClearAll()
     {
         Remember();
+        ClearSelection();
 
         _design.Tiles.Clear();
         _design.Walls.Clear();
@@ -1286,6 +1464,12 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
 
+        // Brand-new points, so a selection holding the old ones would be
+        // left pointing at pieces that are no longer on the plan - drawn as
+        // dots over bare floor, and counted in the box round the selection.
+        // Every other path that replaces part of the plan drops it too.
+        ClearSelection();
+
         _design.Route = route.Select(p => new RcpRoutePoint { X = p.X, Y = p.Y }).ToList();
 
         // A lap only when the walk came back round to where it started -
@@ -1304,6 +1488,360 @@ public sealed class RcpTrackCanvas : Control
             : $"{problem} The line is left open.");
 
         RaiseChanged();
+    }
+
+    // --- Picking a piece of the plan up ---------------------------------------
+
+    /// <summary>
+    /// The block of cells a marquee covers, snapped OUT to whole tiles.
+    ///
+    /// Snapped out rather than rounded, for two reasons. A drag that
+    /// touches any part of a tile takes that tile, which is what a lasso
+    /// is for; and because the block is whole tiles, the rails round its
+    /// edge lie exactly on its boundary and come along with it (see
+    /// RcpSelection.In) rather than being left behind every time somebody
+    /// slides a layout across the room. It also means a plain click with
+    /// nothing dragged picks the one tile under the pointer.
+    /// </summary>
+    private Rectangle MarqueeCells(Point from, Point to)
+    {
+        var a = ToTile(from);
+        var b = ToTile(to);
+
+        var left = (int)MathF.Floor(Math.Min(a.X, b.X));
+        var top = (int)MathF.Floor(Math.Min(a.Y, b.Y));
+        var right = (int)MathF.Ceiling(Math.Max(a.X, b.X));
+        var bottom = (int)MathF.Ceiling(Math.Max(a.Y, b.Y));
+
+        // A drag that began and ended on the same grid line would be no
+        // cells wide, which picks nothing. One tile is the least a click
+        // can mean.
+        return Rectangle.FromLTRB(left, top, Math.Max(right, left + 1), Math.Max(bottom, top + 1));
+    }
+
+    /// <summary>Whether the pointer is over what is picked - which is what makes a drag a move rather than a new marquee.</summary>
+    private bool PointerOnSelection(Point pixel)
+    {
+        if (_selection.IsEmpty)
+        {
+            return false;
+        }
+
+        var box = _selection.Bounds();
+        var tile = ToTile(pixel);
+
+        // Grown by a third of a tile on every side. Bounds() is a box in
+        // GRID POINTS, so a selection with no tile or marking in it is
+        // degenerate - one horizontal rail is a box no tiles high, one
+        // vertical rail none wide, a lone turn rail nothing at all. The
+        // pointer could then never be "on" it, so dragging the very rail
+        // you had just picked drew a fresh marquee instead of moving it.
+        const float grab = 0.34f;
+
+        return tile.X >= box.Left - grab && tile.X <= box.Right + grab
+               && tile.Y >= box.Top - grab && tile.Y <= box.Bottom + grab;
+    }
+
+    private void AnnounceSelection()
+    {
+        SelectionChanged?.Invoke();
+        StatusChanged?.Invoke(_selection.Describe());
+        Invalidate();
+    }
+
+    public void ClearSelection()
+    {
+        if (_selection.IsEmpty)
+        {
+            return;
+        }
+
+        // Anything already moved has to land before the selection goes.
+        // Escape mid-drag - and a tool key, which comes through the Tool
+        // setter - used to empty the selection with a move still open, so
+        // EndStroke's settle found nothing to settle and left two tiles in
+        // one cell: invisible, counted twice by the inventory and the kit
+        // check, and saved that way. A nudge run waiting to settle is the
+        // same case.
+        if ((_movingSelection && _moved) || _nudgeSettle.Enabled)
+        {
+            _selection.Settle(_design);
+            _moved = false;
+        }
+
+        _nudgeSettle.Stop();
+
+        _selection = new RcpSelection();
+
+        SelectionChanged?.Invoke();
+        Invalidate();
+    }
+
+    public void SelectEverything()
+    {
+        _selection = RcpSelection.Everything(_design);
+
+        if (_selection.IsEmpty)
+        {
+            StatusChanged?.Invoke("There is nothing on the plan yet.");
+            SelectionChanged?.Invoke();
+            return;
+        }
+
+        AnnounceSelection();
+    }
+
+    public void CopySelection()
+    {
+        if (_selection.IsEmpty)
+        {
+            StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
+            return;
+        }
+
+        _clipboardFrom = _selection.Bounds().Location;
+        _clipboard = _selection.Copy();
+
+        SelectionChanged?.Invoke();
+        StatusChanged?.Invoke($"Copied. Ctrl+V puts it down where the pointer is. {_selection.Describe()}");
+    }
+
+    public void CutSelection()
+    {
+        if (_selection.IsEmpty)
+        {
+            StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
+            return;
+        }
+
+        _clipboardFrom = _selection.Bounds().Location;
+        _clipboard = _selection.Copy();
+
+        Remember();
+        _selection.DeleteFrom(_design);
+        _selection = new RcpSelection();
+
+        SelectionChanged?.Invoke();
+        StatusChanged?.Invoke("Cut. Ctrl+V puts it down where the pointer is.");
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Puts a copy down. Where the pointer is, if it is over the board -
+    /// otherwise one tile along from where it was copied, which is what
+    /// makes a paste visible rather than exactly on top of the original.
+    /// </summary>
+    public void PasteClipboard()
+    {
+        if (_clipboard is null)
+        {
+            StatusChanged?.Invoke("Nothing copied yet. Pick something and press Ctrl+C.");
+            return;
+        }
+
+        // Where the pointer is - or, with the pointer off the board, clear
+        // of where it was copied from. One tile along was not enough: the
+        // paste settles what it lands on, so it ate the original (see
+        // Beside). The clipboard is normalised to (0,0), so its own bounds
+        // are its size.
+        var at = _hoverCell
+                 ?? Beside(new Rectangle(
+                     _clipboardFrom,
+                     RcpSelection.Everything(_clipboard).Bounds().Size));
+
+        Remember();
+        _selection = RcpSelection.Paste(_design, _clipboard, at);
+
+        AnnounceSelection();
+        RaiseChanged();
+    }
+
+    /// <summary>A second copy, one tile down and across, picked up ready to be dragged where it belongs.</summary>
+    public void DuplicateSelection()
+    {
+        if (_selection.IsEmpty)
+        {
+            StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
+            return;
+        }
+
+        var box = _selection.Bounds();
+        var copy = _selection.Copy();
+
+        Remember();
+        _selection = RcpSelection.Paste(_design, copy, Beside(box));
+
+        AnnounceSelection();
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Where a copy of <paramref name="box"/> goes so that it lands CLEAR of
+    /// the original.
+    ///
+    /// It used to go one tile down and across, which looked right and was
+    /// not: a paste settles what it has landed on (RcpSelection.Settle), and
+    /// one tile of overlap meant the duplicate cleared away the original's
+    /// own tiles and rails underneath it. Duplicating a 4 by 2 block left
+    /// 13 tiles where there should have been 16, with a hole in the block
+    /// you had just copied.
+    ///
+    /// A whole box-width clear of it, plus a tile of gap so the two do not
+    /// even share a seam - which is also the more useful place for a track:
+    /// duplicate a corner complex and it lands beside the original, ready
+    /// to be dragged into line.
+    /// </summary>
+    internal static Point Beside(Rectangle box) =>
+        new(box.Left + Math.Max(1, box.Width) + 1, box.Top);
+
+    public void DeleteSelection()
+    {
+        if (_selection.IsEmpty)
+        {
+            StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
+            return;
+        }
+
+        var pieces = _selection.Pieces;
+
+        Remember();
+        _selection.DeleteFrom(_design);
+        _selection = new RcpSelection();
+
+        SelectionChanged?.Invoke();
+        StatusChanged?.Invoke($"{Plural.Of(pieces, "piece")} taken off. Ctrl+Z puts them back.");
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Moves what is picked by whole tiles - the arrow keys.
+    ///
+    /// A RUN of presses is one gesture, the way a drag is. It used to settle
+    /// on every press, which is exactly what RcpSelection.Settle says must
+    /// not happen: holding an arrow down walked the selection across the
+    /// plan eating everything it passed over, and nudging back did not bring
+    /// any of it back. Now the move happens at once and the overlap is
+    /// resolved once, a moment after the last press - so travelling over
+    /// something and carrying on costs it nothing, and stopping on it
+    /// replaces it, which is what a drag does.
+    /// </summary>
+    public void NudgeSelection(int cols, int rows)
+    {
+        if (_selection.IsEmpty)
+        {
+            return;
+        }
+
+        // One undo step for the whole run, taken on the first press of it -
+        // told apart from the next run by the gap since the last press, the
+        // same way the wheel's sizing gesture is (RememberWheelResize).
+        var now = Environment.TickCount64;
+
+        if (!_nudgeSettle.Enabled || now - _nudgedAt > NudgeRunGapMs)
+        {
+            Remember();
+        }
+
+        _nudgedAt = now;
+
+        _selection.Move(cols, rows);
+
+        // Restarted on every press, so it only fires once the run stops.
+        _nudgeSettle.Stop();
+        _nudgeSettle.Start();
+
+        AnnounceSelection();
+        RaiseChanged();
+    }
+
+    /// <summary>Settles the nudge run that has just stopped - see NudgeSelection.</summary>
+    private void SettleNudgeRun()
+    {
+        _nudgeSettle.Stop();
+
+        if (_selection.IsEmpty)
+        {
+            return;
+        }
+
+        _selection.Settle(_design);
+        RaiseChanged();
+    }
+
+    /// <summary>Quarter turns clockwise, or anticlockwise for a negative count.</summary>
+    public void TurnSelection(int quarters)
+    {
+        if (!PickedSomething())
+        {
+            return;
+        }
+
+        var turns = ((quarters % 4) + 4) % 4;
+
+        if (turns == 0)
+        {
+            return;
+        }
+
+        Remember();
+
+        for (var i = 0; i < turns; i++)
+        {
+            _selection.TurnClockwise();
+        }
+
+        _selection.Settle(_design);
+
+        AnnounceSelection();
+        RaiseChanged();
+        // Said the way it was asked for: [ asks for one quarter the other
+        // way, and is done as three clockwise because that is the same
+        // thing and there is only one mapping to get right.
+        StatusChanged?.Invoke(quarters switch
+        {
+            1 => "Turned a quarter clockwise, where it stood.",
+            -1 => "Turned a quarter anticlockwise, where it stood.",
+            _ => $"Turned {turns} quarters clockwise, where it stood.",
+        });
+    }
+
+    public void MirrorSelection(bool leftToRight)
+    {
+        if (!PickedSomething())
+        {
+            return;
+        }
+
+        Remember();
+
+        if (leftToRight)
+        {
+            _selection.MirrorLeftRight();
+        }
+        else
+        {
+            _selection.MirrorTopBottom();
+        }
+
+        _selection.Settle(_design);
+
+        AnnounceSelection();
+        RaiseChanged();
+        StatusChanged?.Invoke(leftToRight
+            ? "Mirrored left to right."
+            : "Mirrored top to bottom.");
+    }
+
+    private bool PickedSomething()
+    {
+        if (!_selection.IsEmpty)
+        {
+            return true;
+        }
+
+        StatusChanged?.Invoke("Nothing picked. Take the Select tool and drag a box round something first.");
+
+        return false;
     }
 
     // --- Pace car -------------------------------------------------------------
@@ -1496,6 +2034,34 @@ public sealed class RcpTrackCanvas : Control
                 _backdropFrom = new PointF(_design.BackdropX, _design.BackdropY);
                 break;
 
+            case RcpTool.Select:
+                _painting = true;
+
+                // Over what is already picked - and not adding to it -
+                // means this drag moves it. Otherwise it draws a marquee
+                // round something new.
+                if (PointerOnSelection(e.Location) && !ModifierKeys.HasFlag(Keys.Shift))
+                {
+                    // One drag is one undo step, taken the first time the
+                    // selection actually goes anywhere (see OnMouseMove).
+                    BeginStroke();
+                    _movingSelection = true;
+                    _moveLast = ToCell(e.Location);
+                    _moved = false;
+                }
+                else
+                {
+                    // Picking changes nothing on the plan, so it takes no
+                    // undo step - Ctrl+Z after a marquee should take back
+                    // the last edit, not the last look.
+                    _marqueeFrom = e.Location;
+                    _marqueeAt = e.Location;
+                    _marqueeAdds = ModifierKeys.HasFlag(Keys.Shift);
+                }
+
+                Invalidate();
+                break;
+
             case RcpTool.Route:
                 _draggingRoutePoint = RoutePointAt(e.Location);
 
@@ -1610,6 +2176,47 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        if (_movingSelection && e.Button == MouseButtons.Left && _moveLast is { } last)
+        {
+            var now = ToCell(e.Location);
+
+            if (now != last)
+            {
+                // Only a real move is remembered, and only once per drag
+                // (the stroke opened on the press sees to that) - so a
+                // click on the selection that leaves it where it was adds
+                // nothing to undo.
+                Remember();
+
+                _selection.Move(now.X - last.X, now.Y - last.Y);
+                _moveLast = now;
+                _moved = true;
+
+                RaiseChanged();
+            }
+
+            return;
+        }
+
+        if (_marqueeFrom is not null && e.Button == MouseButtons.Left)
+        {
+            _marqueeAt = e.Location;
+            Invalidate();
+            return;
+        }
+
+        // The pointer says what a press would do: a hand over what is
+        // picked, because dragging there moves it.
+        if (Tool == RcpTool.Select && !_panning)
+        {
+            var wanted = PointerOnSelection(e.Location) ? Cursors.SizeAll : Cursors.Default;
+
+            if (Cursor != wanted)
+            {
+                Cursor = wanted;
+            }
+        }
+
         if (_painting && e.Button == MouseButtons.Left)
         {
             switch (Tool)
@@ -1675,7 +2282,23 @@ public sealed class RcpTrackCanvas : Control
             }
         }
 
+        // What the marquee caught, before EndStroke clears it. A marquee
+        // abandoned by Alt-Tab goes through EndStroke without coming here,
+        // so it is dropped rather than applied.
+        if (e.Button == MouseButtons.Left && _marqueeFrom is { } from && _marqueeAt is { } to)
+        {
+            PickUp(from, to);
+        }
+
+        var movedSomething = _movingSelection && _moved;
+
         EndStroke();
+
+        if (movedSomething)
+        {
+            StatusChanged?.Invoke($"Moved. {_selection.Describe()}");
+            SelectionChanged?.Invoke();
+        }
 
         _painting = false;
         _draggingRoutePoint = -1;
@@ -1685,6 +2308,49 @@ public sealed class RcpTrackCanvas : Control
             _panning = false;
             Cursor = Cursors.Default;
         }
+    }
+
+    /// <summary>
+    /// Takes what a finished marquee covers.
+    ///
+    /// A click on bare floor with nothing dragged clears the selection,
+    /// which is what clicking away from something means everywhere else.
+    /// Holding Shift adds instead - or takes back out, if everything under
+    /// the marquee was already picked, so the same gesture does both.
+    /// </summary>
+    private void PickUp(Point from, Point to)
+    {
+        var dragged = Math.Abs(to.X - from.X) > 3 || Math.Abs(to.Y - from.Y) > 3;
+        var found = RcpSelection.In(_design, MarqueeCells(from, to));
+
+        if (found.IsEmpty && !_marqueeAdds)
+        {
+            if (!dragged || !_selection.IsEmpty)
+            {
+                ClearSelection();
+                StatusChanged?.Invoke("Nothing there. Drag a box round a piece of the plan to pick it up.");
+            }
+
+            return;
+        }
+
+        if (_marqueeAdds)
+        {
+            if (!found.IsEmpty && _selection.HoldsAllOf(found))
+            {
+                _selection.Remove(found);
+            }
+            else
+            {
+                _selection.Add(found);
+            }
+        }
+        else
+        {
+            _selection = found;
+        }
+
+        AnnounceSelection();
     }
 
     protected override void OnMouseLeave(EventArgs e)
@@ -1787,6 +2453,69 @@ public sealed class RcpTrackCanvas : Control
                 Invalidate();
                 e.Handled = true;
                 break;
+
+            // --- What is picked ---
+            // The clipboard keys live on the window rather than here, so
+            // picking the Select tool lights its button up as well - see
+            // RcpTrackEditorForm.ProcessCmdKey.
+
+            case Keys.Escape:
+                if (HasSelection)
+                {
+                    ClearSelection();
+                    StatusChanged?.Invoke("Dropped.");
+                    e.Handled = true;
+                }
+
+                break;
+
+            case Keys.Delete:
+            case Keys.Back:
+                if (HasSelection)
+                {
+                    DeleteSelection();
+                    e.Handled = true;
+                }
+
+                break;
+
+            case Keys.Left:
+            case Keys.Right:
+            case Keys.Up:
+            case Keys.Down:
+                if (HasSelection)
+                {
+                    NudgeSelection(
+                        e.KeyCode == Keys.Left ? -1 : e.KeyCode == Keys.Right ? 1 : 0,
+                        e.KeyCode == Keys.Up ? -1 : e.KeyCode == Keys.Down ? 1 : 0);
+
+                    e.Handled = true;
+                }
+
+                break;
+
+            // Round brackets on the number row would be Shift+9, so the
+            // square ones: ] clockwise, [ back the other way. Gated on
+            // there being something picked, like the keys above - a key
+            // that answers back with a complaint when another tool is in
+            // hand is a key nobody presses twice.
+            case Keys.OemCloseBrackets:
+                if (HasSelection)
+                {
+                    TurnSelection(1);
+                    e.Handled = true;
+                }
+
+                break;
+
+            case Keys.OemOpenBrackets:
+                if (HasSelection)
+                {
+                    TurnSelection(-1);
+                    e.Handled = true;
+                }
+
+                break;
         }
     }
 
@@ -1811,6 +2540,7 @@ public sealed class RcpTrackCanvas : Control
 
         RcpTrackPainter.Draw(g, _design, _scale, _origin, ShowRoute, showLabels: true, backdrop: _backdrop);
 
+        DrawSelection(g);
         DrawHover(g);
 
         if (_paceTimer.Enabled && PaceCarPosition() is { } pace)
@@ -1922,6 +2652,130 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
+    /// <summary>
+    /// What is picked, and the marquee picking it.
+    ///
+    /// Over the track rather than under it - a highlight drawn first is
+    /// covered by the floor, which is painted opaque. So the tiles get a
+    /// wash thin enough to read the foam through, and the rails get a
+    /// DASHED line along them at their own thickness: the dashes let a
+    /// white rail and a pink turn show through, where a solid line of the
+    /// same width would simply paint over them and lose which piece is
+    /// which.
+    /// </summary>
+    private void DrawSelection(Graphics g)
+    {
+        if (Tool != RcpTool.Select)
+        {
+            return;
+        }
+
+        if (!_selection.IsEmpty)
+        {
+            using var wash = new SolidBrush(Color.FromArgb(64, AppTheme.Accent));
+            using var dot = new SolidBrush(Color.FromArgb(220, AppTheme.Accent));
+
+            using var mark = new Pen(Color.FromArgb(235, AppTheme.Accent), Math.Max(2.5f, _scale * RcpTrackPainter.RailThickness))
+            {
+                DashStyle = DashStyle.Dash,
+                StartCap = LineCap.Flat,
+                EndCap = LineCap.Flat,
+            };
+
+            foreach (var tile in _selection.Tiles)
+            {
+                g.FillRectangle(wash, _origin.X + tile.Col * _scale, _origin.Y + tile.Row * _scale, _scale, _scale);
+            }
+
+            foreach (var decal in _selection.Decals)
+            {
+                g.FillRectangle(wash, _origin.X + decal.Col * _scale, _origin.Y + decal.Row * _scale, _scale, _scale);
+            }
+
+            foreach (var wall in _selection.Walls)
+            {
+                g.DrawLine(
+                    mark,
+                    _origin.X + wall.From.X * _scale,
+                    _origin.Y + wall.From.Y * _scale,
+                    _origin.X + wall.To.X * _scale,
+                    _origin.Y + wall.To.Y * _scale);
+            }
+
+            foreach (var curve in _selection.Curves)
+            {
+                // The same arc as the painter draws: its centre one radius
+                // into the quadrant, so the ends land on the two grid
+                // lines (RcpTrackPainter.DrawCurve).
+                var radius = Math.Max(0.25f, curve.Radius) * _scale;
+
+                var (dx, dy) = curve.Quadrant switch
+                {
+                    RcpQuadrant.NorthEast => (1f, -1f),
+                    RcpQuadrant.SouthEast => (1f, 1f),
+                    RcpQuadrant.SouthWest => (-1f, 1f),
+                    _ => (-1f, -1f),
+                };
+
+                var start = curve.Quadrant switch
+                {
+                    RcpQuadrant.NorthEast => 90f,
+                    RcpQuadrant.SouthEast => 180f,
+                    RcpQuadrant.SouthWest => 270f,
+                    _ => 0f,
+                };
+
+                var centre = new PointF(
+                    _origin.X + curve.Col * _scale + dx * radius,
+                    _origin.Y + curve.Row * _scale + dy * radius);
+
+                g.DrawArc(mark, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f, start, 90f);
+            }
+
+            foreach (var point in _selection.Route)
+            {
+                var size = Math.Max(3f, _scale * 0.1f);
+
+                g.FillEllipse(
+                    dot,
+                    _origin.X + point.X * _scale - size,
+                    _origin.Y + point.Y * _scale - size,
+                    size * 2f,
+                    size * 2f);
+            }
+
+            var box = _selection.Bounds();
+
+            using var edge = new Pen(AppTheme.Accent, 1.6f) { DashStyle = DashStyle.Dash };
+
+            g.DrawRectangle(
+                edge,
+                _origin.X + box.Left * _scale,
+                _origin.Y + box.Top * _scale,
+                Math.Max(1f, box.Width * _scale),
+                Math.Max(1f, box.Height * _scale));
+        }
+
+        // The marquee, snapped to the tiles it is going to take - so what
+        // is drawn is what will be picked, rather than where the pointer
+        // happens to be.
+        if (_marqueeFrom is { } from && _marqueeAt is { } to)
+        {
+            var cells = MarqueeCells(from, to);
+
+            using var wash = new SolidBrush(Color.FromArgb(38, AppTheme.Accent));
+            using var edge = new Pen(AppTheme.Accent, 1.6f) { DashStyle = DashStyle.Dash };
+
+            var x = _origin.X + cells.Left * _scale;
+            var y = _origin.Y + cells.Top * _scale;
+            var w = cells.Width * _scale;
+            var h = cells.Height * _scale;
+
+            g.FillRectangle(wash, x, y, w, h);
+            g.DrawRectangle(edge, x, y, w, h);
+        }
+    }
+
     private void DrawRuler(Graphics g)
     {
         var metresPerTile = _design.TileSizeMm / 1000.0;
@@ -1957,6 +2811,8 @@ public sealed class RcpTrackCanvas : Control
         {
             _paceTimer.Stop();
             _paceTimer.Dispose();
+            _nudgeSettle.Stop();
+            _nudgeSettle.Dispose();
             _backdrop?.Dispose();
         }
 

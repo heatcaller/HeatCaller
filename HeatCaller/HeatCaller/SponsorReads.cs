@@ -9,14 +9,77 @@ namespace HeatCaller;
 /// <param name="Name">As it should be said. Not as it is written on the banner - "and co" rather than "&amp; Co.".</param>
 /// <param name="Tagline">One short line they asked for, where they gave one.</param>
 /// <param name="Weight">How big a share of the night's reads they bought. One by default.</param>
-public readonly record struct SponsorSlot(string SponsorId, string Name, string? Tagline = null, int Weight = 1);
+/// <param name="SalesCopy">
+/// The few sentences they paid to have read out, where they bought a read
+/// rather than a mention. Spoken as written - see SponsorCopy.
+/// </param>
+public readonly record struct SponsorSlot(
+    string SponsorId,
+    string Name,
+    string? Tagline = null,
+    int Weight = 1,
+    string? SalesCopy = null);
+
+/// <summary>
+/// Where the club has agreed a paid read may be heard.
+///
+/// Flags rather than an either/or because "both" is the normal answer and
+/// "neither" has to be sayable: a club that has sponsors on the Big Screen
+/// but does not want the announcer reading copy turns both off and keeps
+/// the slides.
+/// </summary>
+[Flags]
+public enum SponsorPlacement
+{
+    /// <summary>Not read out at all. The slides and videos are unaffected.</summary>
+    Nowhere = 0,
+
+    /// <summary>On the tail of an ad break, once the sponsor's own video has finished.</summary>
+    AdBreaks = 1,
+
+    /// <summary>In the gap between races, where the commentary segments live.</summary>
+    Segments = 2,
+
+    /// <summary>Both of the above, which is what a club that typed any copy almost certainly wants.</summary>
+    Everywhere = AdBreaks | Segments,
+}
+
+/// <summary>
+/// Who is sold, and where the club lets them be heard - everything a paid
+/// read needs, read fresh each time it is considered.
+///
+/// One reader rather than three on the director: a sponsor sold at the
+/// sign-up desk halfway through the evening and a tick box changed on the
+/// Sponsors page both have to take effect without anything being re-wired,
+/// and that is far easier to get right when they arrive together.
+/// </summary>
+/// <param name="Sponsors">The club's sponsors, in the order the club listed them.</param>
+/// <param name="Placement">Where a paid read may be heard.</param>
+public sealed record SponsorReadPlan(IReadOnlyList<SponsorSlot> Sponsors, SponsorPlacement Placement);
 
 /// <summary>
 /// A read, ready to speak.
 /// </summary>
 /// <param name="SponsorId">Who it was for, so it can be counted against them.</param>
 /// <param name="Text">What to say. Already cleaned, already final - no model has touched it.</param>
-public sealed record SponsorRead(string SponsorId, string Text);
+/// <param name="IsSalesCopy">
+/// True when this is the copy the sponsor paid to have read, rather than
+/// the one-line mention the rotation writes itself.
+/// </param>
+/// <param name="ResumeAt">
+/// Where in the sponsor's copy their next read starts, when this one did
+/// not get through all of it. Zero when the copy is finished - the next one
+/// starts from the top.
+/// </param>
+/// <param name="MoreToCome">True when there is copy left for the next gap.</param>
+/// <param name="Moment">Where in the night this was worded for.</param>
+public sealed record SponsorRead(
+    string SponsorId,
+    string Text,
+    bool IsSalesCopy = false,
+    int ResumeAt = 0,
+    bool MoreToCome = false,
+    SponsorMoment Moment = SponsorMoment.BetweenRaces);
 
 /// <summary>
 /// Where in the night a read is going, which is all that changes about
@@ -35,6 +98,13 @@ public enum SponsorMoment
 
     /// <summary>At the end, on the way out.</summary>
     SignOff,
+
+    /// <summary>
+    /// On the tail of an ad break - the sponsor's video has just stopped
+    /// and the screen is going back to the standings. Appended at the end:
+    /// nothing stores this as a number, but the rule holds anyway.
+    /// </summary>
+    AfterTheAdvert,
 }
 
 /// <summary>
@@ -61,17 +131,41 @@ public enum SponsorMoment
 /// from us. Templates vary the sentence around the name; the name itself
 /// is never rewritten.
 ///
+/// THE SAME GOES DOUBLE FOR THE SALES COPY, which somebody outside the
+/// club wrote and the club was paid to read. Nothing here rewords it,
+/// shortens a sentence of it, or adds to it: all that is ever done to it
+/// is cleaning (SponsorCopy.Tidy), breaking it at full stops, and putting
+/// the sponsor's name in front. The whole feature works with the AI layer
+/// switched off, because none of it is writing.
+///
 /// FAIRNESS IS THE FEATURE
 ///
 /// A club selling four sponsor slots needs to be able to tell each of
 /// them how many reads they got. The rotation picks whoever is furthest
 /// behind their share, so the counts come out even however the night runs
 /// - and ReadsTonight is the number to put in front of the sponsor.
+///
+/// Sales copy does NOT change who is picked. Whose turn it is comes first
+/// and is decided exactly as it always was; only then is it asked what to
+/// say for them. Picking by "who has copy" would hand the night to
+/// whichever sponsor happened to have typed some.
 /// </summary>
 public sealed class SponsorRotation
 {
     private readonly Dictionary<string, int> _reads = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _order = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How far through their own sales copy each sponsor has been read -
+    /// a character offset into SponsorCopy.Tidy of what they have stored.
+    ///
+    /// Copy longer than a gap is read over two or three gaps rather than
+    /// cut (see SponsorCopy.Fit), so the night has to remember where it
+    /// got to. Only <see cref="Said(SponsorRead)"/> moves it: asking what
+    /// to say is free and repeatable, and the announcer is interrupted
+    /// often enough for that to matter.
+    /// </summary>
+    private readonly Dictionary<string, int> _resume = new(StringComparer.Ordinal);
 
     private string _dayId = string.Empty;
     private int _said;
@@ -92,8 +186,14 @@ public sealed class SponsorRotation
     /// very first read of a night with no history is the first sponsor on
     /// the list rather than whichever one the dictionary happened to
     /// enumerate first.
+    ///
+    /// <paramref name="gap"/> is how long there is to speak for. Left out,
+    /// this is the short mention it always was and the sales copy is not
+    /// touched - which is what the moments that have no gap to measure
+    /// still want. Given, the sponsor's paid copy is read instead where
+    /// they have any and any of it fits.
     /// </summary>
-    public SponsorRead? Next(IReadOnlyList<SponsorSlot> sponsors, SponsorMoment moment)
+    public SponsorRead? Next(IReadOnlyList<SponsorSlot> sponsors, SponsorMoment moment, TimeSpan? gap = null)
     {
         var usable = sponsors
             .Where(s => !string.IsNullOrWhiteSpace(s.SponsorId))
@@ -129,7 +229,19 @@ public sealed class SponsorRotation
             return null;
         }
 
-        return new SponsorRead(pick.SponsorId, Word(pick, moment, _reads.GetValueOrDefault(pick.SponsorId)));
+        var readsSoFar = _reads.GetValueOrDefault(pick.SponsorId);
+
+        // The paid read first where there is one and the gap has room for
+        // any of it; the mention where there is not. A sponsor who bought
+        // copy and whose turn comes up in a four-second gap gets their
+        // mention now and their copy at the next proper gap, which is
+        // better for them than silence and better than a half sentence.
+        if (gap is { } room && SalesRead(pick, moment, readsSoFar, room) is { } sold)
+        {
+            return sold;
+        }
+
+        return new SponsorRead(pick.SponsorId, Word(pick, moment, readsSoFar), Moment: moment);
     }
 
     /// <summary>
@@ -148,6 +260,33 @@ public sealed class SponsorRotation
         _order[sponsorId] = ++_said;
     }
 
+    /// <summary>
+    /// The same, for a read that may have been part of a sponsor's sales
+    /// copy - which also moves them along their copy.
+    ///
+    /// The whole reason this exists beside the plain Said: where the copy
+    /// got to is only known from the read that actually went out, and it
+    /// must only move when one did. Copy that is finished goes back to
+    /// zero, so a sponsor read four times in an evening hears their copy
+    /// twice over rather than nothing after the first time through.
+    /// </summary>
+    public void Said(SponsorRead? read)
+    {
+        if (read is null)
+        {
+            return;
+        }
+
+        Said(read.SponsorId);
+
+        if (!read.IsSalesCopy || string.IsNullOrWhiteSpace(read.SponsorId))
+        {
+            return;
+        }
+
+        _resume[read.SponsorId] = read.MoreToCome ? read.ResumeAt : 0;
+    }
+
     /// <summary>A new race day. Last week's reads are not this week's.</summary>
     public void NewMeeting(string dayId)
     {
@@ -159,8 +298,81 @@ public sealed class SponsorRotation
         _dayId = dayId ?? string.Empty;
         _reads.Clear();
         _order.Clear();
+        _resume.Clear();
         _said = 0;
     }
+
+    /// <summary>
+    /// How far through their own copy a sponsor has been read, as a
+    /// character offset. Zero means "from the top", which is also what a
+    /// sponsor whose copy is finished goes back to.
+    ///
+    /// Here so that a night's state can be looked at from outside - the
+    /// tests do, and anything that ever shows a club what their sponsors
+    /// got will want it beside ReadsTonight.
+    /// </summary>
+    public int ReadUpTo(string sponsorId) => _resume.GetValueOrDefault(sponsorId);
+
+    /// <summary>
+    /// The sponsor's own copy, as much of it as fits - or null when they
+    /// sold a mention rather than a read, or when not a sentence of it
+    /// would go in this gap.
+    ///
+    /// The lead-in is the app's, not the sponsor's: copy dropped in cold
+    /// with no name in front of it is a voice that starts mid-thought, and
+    /// a continuation with no "more from" in front of it sounds like a
+    /// fault. Everything after the lead-in is theirs, word for word.
+    /// </summary>
+    private SponsorRead? SalesRead(SponsorSlot slot, SponsorMoment moment, int readsSoFar, TimeSpan gap)
+    {
+        var copy = SponsorCopy.Tidy(slot.SalesCopy);
+
+        if (copy.Length == 0)
+        {
+            return null;
+        }
+
+        // Only picked up where the offset still lands on a sentence end of
+        // the copy as it stands - the club may have edited it since.
+        var stored = _resume.GetValueOrDefault(slot.SponsorId);
+        var from = SponsorCopy.IsBoundary(copy, stored) ? stored : 0;
+
+        var fit = SponsorCopy.Fit(copy, from, gap);
+
+        if (fit.Text.Length == 0)
+        {
+            return null;
+        }
+
+        var name = CommentaryFacts.Clean(slot.Name);
+        var lead = from == 0 ? Opening(name, moment, readsSoFar) : $"More from {name}.";
+
+        return new SponsorRead(
+            slot.SponsorId,
+            $"{lead} {fit.Text}",
+            IsSalesCopy: true,
+            ResumeAt: fit.ResumeAt,
+            MoreToCome: fit.More,
+            Moment: moment);
+    }
+
+    /// <summary>
+    /// The sentence that hands over to a sponsor's own copy.
+    ///
+    /// Short on purpose. The copy is what was paid for and what the crowd
+    /// is meant to remember; this only has to say whose words follow, and
+    /// anything longer is the app talking over its own advert. The ad-break
+    /// one names what just played, which is the only time in the evening
+    /// the crowd has already seen the sponsor's name on a screen.
+    /// </summary>
+    private static string Opening(string name, SponsorMoment moment, int readsSoFar) => moment switch
+    {
+        SponsorMoment.Opening => $"A word from tonight's sponsor, {name}.",
+        SponsorMoment.BeforeTheMain => $"Before the main, a word from {name}.",
+        SponsorMoment.SignOff => $"Our thanks tonight to {name}.",
+        SponsorMoment.AfterTheAdvert => $"That was {name}.",
+        _ => (readsSoFar % 2) == 0 ? $"A word from {name}." : $"And a word from {name}.",
+    };
 
     /// <summary>
     /// How a read is worded.
@@ -181,6 +393,7 @@ public sealed class SponsorRotation
             SponsorMoment.Opening => $"Tonight's racing is brought to you by {name}.",
             SponsorMoment.BeforeTheMain => $"The main event, brought to you by {name}.",
             SponsorMoment.SignOff => $"Our thanks tonight to {name}.",
+            SponsorMoment.AfterTheAdvert => $"That was {name}.",
             _ => (readsSoFar % 3) switch
             {
                 0 => $"Racing tonight is brought to you by {name}.",
@@ -196,17 +409,29 @@ public sealed class SponsorRotation
             : sentence;
     }
 
-    private sealed record Saved(string DayId, Dictionary<string, int>? Reads, Dictionary<string, int>? Order, int Said);
+    private sealed record Saved(
+        string DayId,
+        Dictionary<string, int>? Reads,
+        Dictionary<string, int>? Order,
+        int Said,
+        Dictionary<string, int>? Resume = null);
 
-    /// <summary>Tonight's reads, for AppSettings to hold across a restart.</summary>
+    /// <summary>Tonight's reads, for whatever holds the night's state across a restart.</summary>
     public string Save() => JsonSerializer.Serialize(
-        new Saved(_dayId, new Dictionary<string, int>(_reads), new Dictionary<string, int>(_order), _said));
+        new Saved(
+            _dayId,
+            new Dictionary<string, int>(_reads),
+            new Dictionary<string, int>(_order),
+            _said,
+            new Dictionary<string, int>(_resume)));
 
     /// <summary>
     /// Picks the rotation back up for the same race day. Losing this over
     /// a restart would hand the second half of the evening to whichever
     /// sponsor happens to be first on the list, and the club would be the
-    /// one explaining it.
+    /// one explaining it - and it would start a half-read sales copy again
+    /// from the top, so the crowd hears the same two sentences twice and
+    /// never the last one.
     /// </summary>
     public void Restore(string? saved, string dayId)
     {
@@ -241,6 +466,16 @@ public sealed class SponsorRotation
         foreach (var (id, when) in night.Order ?? new Dictionary<string, int>())
         {
             _order[id] = when;
+        }
+
+        // Written by a version that did not carry these: null, and every
+        // sponsor's copy starts from the top. Nothing worse than that.
+        foreach (var (id, at) in night.Resume ?? new Dictionary<string, int>())
+        {
+            if (at > 0)
+            {
+                _resume[id] = at;
+            }
         }
 
         _said = Math.Max(0, night.Said);

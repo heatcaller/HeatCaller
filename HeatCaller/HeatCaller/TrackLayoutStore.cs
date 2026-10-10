@@ -41,6 +41,15 @@ public sealed class TrackLayoutStore
                     }
                     return new TrackLayoutStore(layouts);
                 }
+
+                // Present, parsed, and not the shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" is four bytes and does not
+                // throw: it used to fall straight through to the empty store
+                // below with the flag left false, so the first layout added
+                // tonight - or a lap record set mid-race - replaced every
+                // track plan in the file.
+                unreadable = true;
             }
         }
         catch (Exception ex)

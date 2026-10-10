@@ -369,10 +369,32 @@ public sealed class SeasonStore
             entry.TotalPoints += carried.Points;
         }
 
+        // The last two keys settle a tie the three above cannot, and they
+        // are here because without them the table came back in whatever
+        // order the drivers happened to be met while walking the sessions -
+        // Dictionary enumeration order, which is first-appearance order.
+        // Hand the same races over newest-first rather than oldest-first
+        // and two drivers level on points, wins and best finish swapped
+        // places with no points change. Championship.SwingFor builds its
+        // "before" table from the same list minus one race, so a tied
+        // driver's first appearance could move between the two tables and
+        // the end-of-race swing reported a phantom "up 1" or "down 1" for
+        // somebody whose total had not moved - and the same arbitrary order
+        // decided who was named as the championship leader on the Big
+        // Screen.
+        //
+        // Podiums first: a count-back on finishes, which is the usual club
+        // rule - level on points, wins and best finish, the driver with
+        // more rostrum results is ahead. Then the name, which settles
+        // nothing on merit but gives the same answer every time the table
+        // is worked out, which is the whole point of it. Case-insensitive,
+        // as every other name comparison here is.
         return byDriver.Values
             .OrderByDescending(e => e.TotalPoints)
             .ThenByDescending(e => e.Wins)
             .ThenBy(e => e.BestFinish)
+            .ThenByDescending(e => e.Podiums)
+            .ThenBy(e => e.DriverName, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

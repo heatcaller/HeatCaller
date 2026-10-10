@@ -334,7 +334,7 @@ public sealed partial class WebServerService
     /// championship as it stands if it ended now. Transparent everywhere
     /// else. Parts can be left out with ?hide=tower,battle,fastest,grid,podium,champ.
     /// </summary>
-    private string BuildBroadcastPage()
+    internal string BuildBroadcastPage()
     {
         var look = CurrentPageLook();
 
@@ -469,8 +469,11 @@ public sealed partial class WebServerService
 
           // A new fastest lap of the race - not the ones already set when the page opened.
           let top = { ms: 0, id: '' };
-          // Ghosts set the pace; they don't hold the fastest lap.
-          rows.forEach(s => { if (s.best > 0 && !/^GHOST-/i.test(s.id) && (!top.ms || s.best < top.ms)) top = { ms: s.best, id: s.id }; });
+          // Ghosts set the pace; they don't hold the fastest lap. Told by
+          // the row's own flag rather than by the GHOST- on its id: the ids
+          // in /api/state are opaque now (see AddFollowing), and reading a
+          // prefix that is no longer there put a ghost's lap on the stream.
+          rows.forEach(s => { if (s.best > 0 && !s.ghost && (!top.ms || s.best < top.ms)) top = { ms: s.best, id: s.id }; });
           if (!racing && !finished) top = { ms: 0, id: '' };
           if (top.ms > 0 && (top.ms < best.ms || !best.ms) && !first && racing && want('fastest')){
             const row = rows.find(s => s.id === top.id);

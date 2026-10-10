@@ -84,6 +84,33 @@ public sealed class RcpTrackEditorForm : Form
     private readonly SteadyLabel _lblStatus = new();
     private readonly ComboBox _cmbKit = new();
     private readonly NumericUpDown _numTileSize = new();
+
+    // --- The room it has to go in (8 Oct 2026) ---
+    private readonly NumericUpDown _numRoomWidth = new();
+    private readonly NumericUpDown _numRoomDepth = new();
+    private readonly Button _btnRoomFeet = new();
+    private readonly Button _btnRoomMetres = new();
+    private readonly Label _lblRoomFit = new();
+    private readonly Label _lblRoomUnits = new();
+
+    // --- Start from one of RCP's own layouts (8 Oct 2026) ---
+    private readonly ComboBox _cmbStock = new();
+
+    /// <summary>Held so they can be greyed when there is nothing to undo - see BuildToolbar.</summary>
+    private Button? _btnUndo;
+    private Button? _btnRedo;
+
+    /// <summary>
+    /// The buttons that act on what is picked - greyed when nothing is.
+    /// A live Turn button with nothing selected is a button that does
+    /// nothing, which is how an editor teaches somebody the wrong thing
+    /// about itself.
+    /// </summary>
+    private Button[] _selectionButtons = Array.Empty<Button>();
+    private readonly Label _lblStock = new();
+
+    /// <summary>Set while the picker is being put back to its prompt, so that does not read as a choice.</summary>
+    private bool _resettingStock;
     private readonly TextBox _txtName = new();
     private readonly CheckBox _chkClosedRoute = new ThemedCheckBox();
     private readonly CheckBox _chkUseAsPhoto = new ThemedCheckBox();
@@ -100,6 +127,7 @@ public sealed class RcpTrackEditorForm : Form
 
     /// <summary>What the kit drop-down needs across for its longest choice, kept until its face or its list changes - see SideWidth.</summary>
     private (Font Font, int Count, int Width)? _kitWidth;
+    private (Font Font, int Count, int Width)? _stockWidth;
 
     private readonly string _trackName;
 
@@ -135,6 +163,7 @@ public sealed class RcpTrackEditorForm : Form
         _canvas.LapSeconds = averageLapSeconds is > 0 ? averageLapSeconds.Value : 12;
         _canvas.DesignChanged += OnDesignChanged;
         _canvas.StatusChanged += message => _lblStatus.Text = message;
+        _canvas.SelectionChanged += HighlightSelectionButtons;
 
         var page = BuildLayout();
 
@@ -263,12 +292,13 @@ public sealed class RcpTrackEditorForm : Form
         var route = Add("Route", "Draw the racing line. (5)", () => SetTool(RcpTool.Route));
         var erase = Add("Erase", "Take things off. Ctrl+click or right-click does this with any tool. (6)", () => SetTool(RcpTool.Erase));
         var photo = Add("Photo", "Drag the traced photo into place; the wheel sizes it. (7)", () => SetTool(RcpTool.Backdrop));
+        var select = Add("Select", "Drag a box round a piece of the plan, then move it, turn it, mirror it or copy it. (8)", () => SetTool(RcpTool.Select));
 
         _toolButtons = new[]
         {
             (floor, RcpTool.Floor), (wall, RcpTool.Wall), (curve, RcpTool.Curve),
             (marker, RcpTool.Marker), (route, RcpTool.Route), (erase, RcpTool.Erase),
-            (photo, RcpTool.Backdrop),
+            (photo, RcpTool.Backdrop), (select, RcpTool.Select),
         };
 
         var wallEdge = Add("Wall the edge", "Put a rail round every open edge of the floor.", () => _canvas.WallThePerimeter());
@@ -293,15 +323,36 @@ public sealed class RcpTrackEditorForm : Form
 
         var undo = Add("Undo", "Ctrl+Z", () => _canvas.Undo());
         var redo = Add("Redo", "Ctrl+Y", () => _canvas.Redo());
+
+        // Grey when there is nothing to take back. The canvas has always
+        // known (CanUndo / CanRedo) and the buttons never asked, so they
+        // looked live on an untouched plan and did nothing when pressed.
+        _btnUndo = undo;
+        _btnRedo = redo;
         var fit = Add("Fit", "Frame the whole plan. (F)", () => _canvas.Fit());
         var clear = Add("Clear", "Start again.", ClearAll);
+
+        // What to do with whatever is picked. Every one of these turns or
+        // mirrors it WHERE IT STANDS - the box round it keeps its top-left
+        // corner, so a turn never slides a layout off the floor it was
+        // lined up with (RcpSelection).
+        var turn = Add("Turn", "Turn what's picked a quarter clockwise, where it stands. (])", () => _canvas.TurnSelection(1));
+        var flipAcross = Add("Flip across", "Mirror what's picked left to right.", () => _canvas.MirrorSelection(leftToRight: true));
+        var flipDown = Add("Flip down", "Mirror what's picked top to bottom.", () => _canvas.MirrorSelection(leftToRight: false));
+        var duplicate = Add("Duplicate", "A second copy, one tile along, ready to drag where it belongs. (Ctrl+D)", () => _canvas.DuplicateSelection());
+        var remove = Add("Remove", "Take what's picked off the plan. (Delete)", () => _canvas.DeleteSelection());
+
+        _selectionButtons = new[] { turn, flipAcross, flipDown, duplicate, remove };
 
         SetTool(RcpTool.Floor);
 
         var toolbar = new FieldRow();
-        toolbar.Add(null, new ButtonBar(tight: true).With(floor, wall, curve, marker, route, erase, photo));
+        toolbar.Add(null, new ButtonBar(tight: true).With(floor, wall, curve, marker, route, erase, photo, select));
         toolbar.Add(null, new ButtonBar(tight: true).With(wallEdge, traceRoute, reverseRoute, _btnPlay));
         toolbar.Add(null, new ButtonBar(tight: true).With(undo, redo, fit, clear));
+        toolbar.Add(null, new ButtonBar(tight: true).With(turn, flipAcross, flipDown, duplicate, remove));
+
+        HighlightSelectionButtons();
 
         return toolbar;
 
@@ -336,8 +387,18 @@ public sealed class RcpTrackEditorForm : Form
         RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
         RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
         RcpTool.Erase => "Click to take off whatever is under the pointer.",
+        RcpTool.Select => "Drag a box round part of the plan to pick it up - the rails round a block of tiles come too. Then drag it to move, arrows to nudge, ] to turn, Delete to take it off.",
         _ => "Drag the photo into place and use the wheel to size it until its tiles line up with the grid.",
     };
+
+    /// <summary>Greys the buttons that act on a selection while there isn't one.</summary>
+    private void HighlightSelectionButtons()
+    {
+        foreach (var button in _selectionButtons)
+        {
+            button.Enabled = _canvas.HasSelection;
+        }
+    }
 
     /// <summary>
     /// The palette: the floor, the barriers - with the turn radius under
@@ -616,6 +677,14 @@ public sealed class RcpTrackEditorForm : Form
             // ...or the longest thing it says about why they can't be measured.
             Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
                 sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops.")),
+
+            // And the same again with rails standing on nothing, which is
+            // two more lines under all of it. Left out, the card below
+            // would jump down the moment somebody drew a rail past the
+            // edge of the floor - which is exactly when it should not.
+            Readout(railed, lengthTiles: 160f, tileSizeMm: 500, lapSeconds: _canvas.LapSeconds,
+                sectors: (null, "Draw the racing line (or press Trace route) through the finish line and the split loops."),
+                railsWithNoFloor: 12),
         };
 
         var lapCard = new Section("The lap");
@@ -671,7 +740,88 @@ public sealed class RcpTrackEditorForm : Form
         Pieces.KeepHeightTold(_cmbKit);
         kitCard.Add(_lblKitCheck, gapBelow: 0);
 
-        var cards = new[] { nameCard, tileCard, traceCard, lapCard, kitCard };
+        // --- The room it has to go in ---
+        //
+        // The grid is unbounded on purpose, so nothing here stops a plan
+        // being drawn forty feet across. What a club actually needs to
+        // know is whether it goes in the hall, which is arithmetic - see
+        // RoomFit.
+        _btnRoomFeet.Text = "Feet";
+        _btnRoomMetres.Text = "Metres";
+
+        _btnRoomFeet.Click += (_, _) => SetRoomUnits(feet: true);
+        _btnRoomMetres.Click += (_, _) => SetRoomUnits(feet: false);
+
+        foreach (var box in new[] { _numRoomWidth, _numRoomDepth })
+        {
+            box.Width = UiLayout.AtTextSize(TileSizeBoxWidth);
+            box.Minimum = 0;
+            box.Maximum = 500;
+            box.DecimalPlaces = 1;
+            box.Increment = 0.5m;
+            box.ValueChanged += (_, _) =>
+            {
+                if (_loading)
+                {
+                    return;
+                }
+
+                SaveRoom();
+                RefreshReadouts();
+            };
+        }
+
+        var lblBy = new Label
+        {
+            Text = "by",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _lblRoomUnits.Text = "feet";
+        _lblRoomUnits.AutoSize = true;
+        _lblRoomUnits.Font = AppTheme.SmallFont;
+        _lblRoomUnits.ForeColor = AppTheme.TextMuted;
+
+        // Last in the card, so the verdict can run to two lines without
+        // moving the boxes above it.
+        _lblRoomFit.AutoSize = true;
+        _lblRoomFit.Font = AppTheme.SmallFont;
+
+        var roomCard = new Section("The room it goes in");
+        roomCard.Add(new ButtonBar(tight: true).With(_btnRoomFeet, _btnRoomMetres));
+        roomCard.Add(FieldGrid.Inline(_numRoomWidth, lblBy, _numRoomDepth, _lblRoomUnits));
+        roomCard.Add(_lblRoomFit, gapBelow: 0);
+
+        LoadRoom();
+
+        // --- Start from a kit ---
+        //
+        // First in the column: it is the thing you do before you draw
+        // anything, and after that it is a thing you never touch again.
+        _cmbStock.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbStock.Items.Add(StockPrompt);
+
+        foreach (var layout in RcpStockLayout.All)
+        {
+            _cmbStock.Items.Add(layout.Name);
+        }
+
+        _cmbStock.SelectedIndex = 0;
+        _cmbStock.SelectedIndexChanged += (_, _) => StartFromKit();
+
+        _lblStock.AutoSize = true;
+        _lblStock.Font = AppTheme.SmallFont;
+        _lblStock.ForeColor = AppTheme.TextMuted;
+        _lblStock.Text = "Lays out one of RCP's own tracks to start from.";
+
+        var stockCard = new Section("Start from a kit");
+        stockCard.Add(_cmbStock);
+        Pieces.KeepHeightTold(_cmbStock);
+        stockCard.Add(_lblStock, gapBelow: 0);
+
+        var cards = new[] { stockCard, nameCard, tileCard, roomCard, lapCard, traceCard, kitCard };
         var column = CardColumn();
 
         for (var i = 0; i < cards.Length; i++)
@@ -692,8 +842,15 @@ public sealed class RcpTrackEditorForm : Form
     /// </summary>
     private int SideWidth(ButtonBar traceButtons, IReadOnlyList<Section> cards)
     {
+        // The layout picker as well as the kit's: "30cm Double Oval Wide"
+        // is longer than any kit name, and a drop-down whose choices are
+        // cut off is a drop-down you cannot choose from.
+        var pickers = Math.Max(
+            Pieces.PickerWidth(_cmbKit, ref _kitWidth),
+            Pieces.PickerWidth(_cmbStock, ref _stockWidth));
+
         var widest = Math.Max(
-            Math.Max(traceButtons.OneLineWidth, Pieces.PickerWidth(_cmbKit, ref _kitWidth)),
+            Math.Max(traceButtons.OneLineWidth, pickers),
             cards.Max(card => card.CaptionWidth));
 
         return Math.Max(
@@ -777,6 +934,111 @@ public sealed class RcpTrackEditorForm : Form
 
     /// <summary>Frames the plan in the board at the size the board has now - see the constructor.</summary>
     private void FrameUntilShown(object? sender, EventArgs e) => _canvas.Fit();
+
+    /// <summary>
+    /// Feet or metres - how the club measured the hall, not how the tiles
+    /// are sold. The plan keeps millimetres either way; this only changes
+    /// what the two boxes are read as.
+    /// </summary>
+    private void SetRoomUnits(bool feet)
+    {
+        // Through the board, for the undo step - see SaveRoom.
+        _canvas.SetRoom(Result.RoomWidthMm, Result.RoomDepthMm, feet);
+
+        LoadRoom();
+        RefreshReadouts();
+
+        _canvas.Focus();
+    }
+
+    /// <summary>Millimetres in one of whichever unit the room is being given in.</summary>
+    private double RoomUnitMm => Result.RoomInFeet ? 304.8 : 1000.0;
+
+    /// <summary>Reads the two boxes into the plan.</summary>
+    /// <summary>
+    /// Writes the room's size onto the plan - through the board, so it takes
+    /// an undo step of its own like every other edit on the plan does. It
+    /// used to be written straight into the plan here, and Ctrl+Z then
+    /// blanked it (see RcpTrackCanvas.SetRoom).
+    /// </summary>
+    private void SaveRoom() => _canvas.SetRoom(
+        (double)_numRoomWidth.Value * RoomUnitMm,
+        (double)_numRoomDepth.Value * RoomUnitMm,
+        Result.RoomInFeet);
+
+    /// <summary>
+    /// Shows the plan's room in the boxes, in the units it was given in.
+    ///
+    /// Guarded with _loading, like every other control the side panel sets
+    /// from the plan: writing a clamped value straight back would quietly
+    /// change a room typed into a settings file by hand.
+    /// </summary>
+    private void LoadRoom()
+    {
+        var was = _loading;
+        _loading = true;
+
+        try
+        {
+            _numRoomWidth.Value = (decimal)Math.Clamp(Result.RoomWidthMm / RoomUnitMm, 0, 500);
+            _numRoomDepth.Value = (decimal)Math.Clamp(Result.RoomDepthMm / RoomUnitMm, 0, 500);
+            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "metres";
+        }
+        finally
+        {
+            _loading = was;
+        }
+
+        HighlightRoomUnits();
+    }
+
+    private void HighlightRoomUnits()
+    {
+        void Mark(Button button, bool active)
+        {
+            button.BackColor = active ? AppTheme.Primary : AppTheme.SecondaryButton;
+            button.ForeColor = active ? AppTheme.OnPrimary : AppTheme.TextDark;
+            button.FlatAppearance.BorderSize = 0;
+        }
+
+        Mark(_btnRoomFeet, Result.RoomInFeet);
+        Mark(_btnRoomMetres, !Result.RoomInFeet);
+    }
+
+    /// <summary>
+    /// Whether what is drawn goes in the room, and by how much - see
+    /// RoomFit. Measured over everything drawn rather than over the floor
+    /// alone, because a rail past the edge of the tiles still has to fit
+    /// through the door.
+    /// </summary>
+    private void RefreshRoomFit()
+    {
+        if (!Result.HasRoom)
+        {
+            _lblRoomFit.Text = "Give the room's size and this says whether the layout goes in it.";
+            _lblRoomFit.ForeColor = AppTheme.TextMuted;
+            return;
+        }
+
+        var bounds = Result.BoundsInTiles(includeRoute: false);
+
+        var fit = RoomFit.Check(
+            bounds.Width * Result.TileSizeMm,
+            bounds.Height * Result.TileSizeMm,
+            Result.RoomWidthMm,
+            Result.RoomDepthMm);
+
+        _lblRoomFit.Text = fit.Verdict == RoomFit.Verdict.Unknown
+            ? "Nothing laid out yet."
+            : fit.Says;
+
+        _lblRoomFit.ForeColor = fit.Verdict switch
+        {
+            RoomFit.Verdict.Comfortable => AppTheme.TextMuted,
+            RoomFit.Verdict.Unknown => AppTheme.TextMuted,
+            _ => AppTheme.Accent,
+        };
+    }
 
     private void SetTileSize(double mm)
     {
@@ -866,6 +1128,78 @@ public sealed class RcpTrackEditorForm : Form
 
         SetTool(RcpTool.Backdrop);
         _canvas.Fit();
+    }
+
+    /// <summary>What the picker says when nothing has been chosen from it.</summary>
+    private const string StockPrompt = "Choose a layout...";
+
+    /// <summary>
+    /// Lays out one of RCP's own tracks over whatever is drawn.
+    ///
+    /// The floor and the rails round it are exact - the tile count is
+    /// published and factors into one sensible rectangle. What is inside
+    /// is read off RCP's photographs, which are three-quarter renders
+    /// rather than plans, so it is the right shape and not the right
+    /// measurements. Said on the card afterwards rather than buried in a
+    /// tooltip, because somebody laying out their hall from this is owed
+    /// the distinction.
+    /// </summary>
+    private void StartFromKit()
+    {
+        if (_loading || _resettingStock || _cmbStock.SelectedIndex <= 0)
+        {
+            return;
+        }
+
+        var name = (string)_cmbStock.SelectedItem!;
+
+        // Back to the prompt straight away, so the same layout can be
+        // chosen twice running - after an Undo, say.
+        _resettingStock = true;
+
+        try
+        {
+            _cmbStock.SelectedIndex = 0;
+        }
+        finally
+        {
+            _resettingStock = false;
+        }
+
+        if (RcpStockLayout.ByName(name) is not { } choice || RcpStockLayout.Build(name) is not { } stock)
+        {
+            return;
+        }
+
+        // Same test ClearAll uses: markings and a racing line count as
+        // work, even though IsEmpty is only about floor and rails.
+        var hasWork = !Result.IsEmpty || Result.Decals.Count > 0 || Result.Route.Count > 0;
+
+        if (hasWork)
+        {
+            var confirm = AppDialog.Show(
+                this,
+                $"Replace what you have drawn with the {name}? This can be undone with Ctrl+Z.",
+                "Start from a kit",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+        }
+
+        _canvas.LoadStock(stock);
+        _canvas.Fit();
+
+        SyncSidePanel();
+        RefreshReadouts();
+
+        _lblStock.Text = choice.What
+            + "  The floor and its rails are exact; the circuit inside is read off RCP's photographs, so move it about to taste.";
+
+        _canvas.Focus();
     }
 
     private void ClearAll()
@@ -987,6 +1321,25 @@ public sealed class RcpTrackEditorForm : Form
             {
                 _cmbKit.SelectedIndex = kitIndex;
             }
+
+            // The room, in whichever unit the plan was given in. Undo can
+            // take a room back off a plan as readily as it takes a tile
+            // off the floor, and the boxes have to follow it.
+            var unit = Result.RoomInFeet ? 304.8 : 1000.0;
+            var width = (decimal)Math.Clamp(Result.RoomWidthMm / unit, 0, 500);
+            var depth = (decimal)Math.Clamp(Result.RoomDepthMm / unit, 0, 500);
+
+            if (_numRoomWidth.Value != width)
+            {
+                _numRoomWidth.Value = width;
+            }
+
+            if (_numRoomDepth.Value != depth)
+            {
+                _numRoomDepth.Value = depth;
+            }
+
+            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "metres";
         }
         finally
         {
@@ -994,6 +1347,7 @@ public sealed class RcpTrackEditorForm : Form
         }
 
         HighlightTileSize();
+        HighlightRoomUnits();
     }
 
     private void RefreshReadouts()
@@ -1006,9 +1360,28 @@ public sealed class RcpTrackEditorForm : Form
         var inventory = RcpPlan.Count(Result);
         var lengthTiles = RcpPlan.RouteLengthInTiles(Result);
 
-        _lblStats.Text = Readout(inventory, lengthTiles, Result.TileSizeMm, _canvas.LapSeconds, RcpPlan.MeasureSectors(Result));
+        _lblStats.Text = Readout(
+            inventory,
+            lengthTiles,
+            Result.TileSizeMm,
+            _canvas.LapSeconds,
+            RcpPlan.MeasureSectors(Result),
+            RcpPlan.RailsWithNoFloor(Result));
 
         RefreshKitCheck(inventory);
+        RefreshRoomFit();
+
+        if (_btnUndo is not null)
+        {
+            _btnUndo.Enabled = _canvas.CanUndo;
+        }
+
+        if (_btnRedo is not null)
+        {
+            _btnRedo.Enabled = _canvas.CanRedo;
+        }
+
+        HighlightSelectionButtons();
     }
 
     /// <summary>
@@ -1023,7 +1396,7 @@ public sealed class RcpTrackEditorForm : Form
     /// or what stops them being measured; null with no split loops.
     /// </param>
     private static string Readout(RcpInventory inventory, float lengthTiles, double tileSizeMm, double lapSeconds,
-        (float[]? Sectors, string? Problem)? sectors = null)
+        (float[]? Sectors, string? Problem)? sectors = null, int railsWithNoFloor = 0)
     {
         var metres = lengthTiles * tileSizeMm / 1000.0;
         var feet = metres * 3.28084;
@@ -1074,6 +1447,17 @@ public sealed class RcpTrackEditorForm : Form
         {
             lines.Add(string.Empty);
             lines.Add("No rails yet - try Wall the edge, then add the dividers.");
+        }
+
+        // A rail bolts through the tile it runs along, so one out past the
+        // edge of the floor is not a piece anybody can build - see
+        // RcpPlan.RailsWithNoFloor.
+        if (railsWithNoFloor > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(railsWithNoFloor == 1
+                ? "1 rail has no floor under it - a rail bolts onto a tile, so it needs one."
+                : $"{railsWithNoFloor} rails have no floor under them - a rail bolts onto a tile, so it needs one.");
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -1134,6 +1518,42 @@ public sealed class RcpTrackEditorForm : Form
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
+        // The clipboard keys live here rather than on the board, so the
+        // ones that need the Select tool light its button up as they take
+        // it - the board cannot reach the toolbar's highlight.
+        if (keyData == (Keys.Control | Keys.A))
+        {
+            SetTool(RcpTool.Select);
+            _canvas.SelectEverything();
+            return true;
+        }
+
+        if (keyData == (Keys.Control | Keys.C))
+        {
+            _canvas.CopySelection();
+            return true;
+        }
+
+        if (keyData == (Keys.Control | Keys.X))
+        {
+            _canvas.CutSelection();
+            return true;
+        }
+
+        if (keyData == (Keys.Control | Keys.V))
+        {
+            SetTool(RcpTool.Select);
+            _canvas.PasteClipboard();
+            return true;
+        }
+
+        if (keyData == (Keys.Control | Keys.D))
+        {
+            SetTool(RcpTool.Select);
+            _canvas.DuplicateSelection();
+            return true;
+        }
+
         var tool = keyData switch
         {
             Keys.D1 => RcpTool.Floor,
@@ -1143,6 +1563,7 @@ public sealed class RcpTrackEditorForm : Form
             Keys.D5 => RcpTool.Route,
             Keys.D6 => RcpTool.Erase,
             Keys.D7 => RcpTool.Backdrop,
+            Keys.D8 => RcpTool.Select,
             _ => (RcpTool?)null,
         };
 

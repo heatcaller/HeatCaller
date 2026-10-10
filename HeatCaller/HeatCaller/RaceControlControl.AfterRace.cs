@@ -369,12 +369,39 @@ public sealed partial class RaceControlControl
             // leave the room quiet for the rest of the night.
             ShowRun? show = null;
 
+            // The show while it is still OPENING - the opener landing, a
+            // couple of seconds. Held here rather than as a local down in
+            // the sequence because there are ways out between starting it
+            // and taking hold of it (the model returning nothing, the next
+            // race being called), and a show abandoned half-open has
+            // already silenced the club's music with nothing left holding
+            // the handle that gives it back.
+            Task<ShowRun?>? opening = null;
+
             async Task EndShowAsync()
             {
                 // Plainly, not interlocked: the natural end and the finally
                 // run one after the other on this one sequence, never at
                 // once. FinishAsync is idempotent as well, so even a double
                 // call would only end the show once.
+                var starting = opening;
+                opening = null;
+
+                if (starting is not null)
+                {
+                    try
+                    {
+                        // Whatever it opened is ours to close, even if
+                        // nobody was left to want it.
+                        show ??= await starting;
+                    }
+                    catch
+                    {
+                        // StartAsync gives the music back itself when it
+                        // fails before handing anything over.
+                    }
+                }
+
                 var run = show;
                 show = null;
 
@@ -496,24 +523,6 @@ public sealed partial class RaceControlControl
                     ? null
                     : BuildRecapAsync(generation, delivery);
 
-                // 2b. On air.
-                //
-                // Here, and not earlier: the flag pause is for the finish
-                // call and the cheering to land, and an opener over the top
-                // of those is the one thing it must not do. Here, and not
-                // later: the recap is away to the model on the line above,
-                // and the opener plays across that wait instead of leaving
-                // it silent.
-                //
-                // Opening the show WAITS - the opener lands and the voice
-                // comes in over its tail, a couple of seconds - so the
-                // teaser below queues at the hand-over, exactly as a
-                // segment's lines do.
-                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
-                {
-                    show = await treatment.StartAsync(nextRace.Token);
-                }
-
                 // 3. The teaser, straight after the finish call.
                 //
                 // Deliberately NOT held back until the recap is ready. That
@@ -593,6 +602,35 @@ public sealed partial class RaceControlControl
                     ? Task.Delay(TimeSpan.FromSeconds(teaserGap))
                     : Task.CompletedTask;
 
+                // 4b. On air - the opener goes HERE, in the gap, and not
+                // before the teaser.
+                //
+                // The teaser is the line before the break ("stand by for
+                // the recap"); the recap is the one coming back from it,
+                // and it says so - "AND WE'RE BACK LIVE HERE AT THE RC
+                // TRACK". A sting in front of the teaser is three lines
+                // early and lands on nothing. In the gap it is the return
+                // from the break, which is what a sting is for.
+                //
+                // Started here rather than awaited here, so the opener
+                // plays ACROSS the gap instead of being added to it: the
+                // wait below is for whichever of the two is longer.
+                //
+                // This also puts the opener after the finish call and the
+                // race's badges with nothing special needed - they are
+                // queued ahead of the teaser, and the teaser has been
+                // heard by the time this runs. An opener landing on top
+                // of "Billy Bob has earned Nail-Biter" was the earlier
+                // arrangement's own doing.
+                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
+                {
+                    // SegmentKind.RaceRecap, so the show's running order
+                    // knows which shape of show this is - the recap gets a
+                    // rejoin on a busy night rather than the full opener for
+                    // the eleventh time. See ShowRunningOrder.
+                    opening = treatment.StartAsync(SegmentKind.RaceRecap, nextRace.Token);
+                }
+
                 var recap = await recapTask!;
                 var tookSeconds = (DateTime.UtcNow - generationStarted).TotalSeconds;
 
@@ -615,6 +653,17 @@ public sealed partial class RaceControlControl
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Recap written and rendered in {tookSeconds:0.0}s.");
 
                 await gap;
+
+                // The opener has landed and is ringing out; the recap is
+                // queued below over its tail, exactly as a cold open's
+                // first words are.
+                if (opening is not null)
+                {
+                    var starting = opening;
+                    opening = null;
+
+                    show = await starting;
+                }
 
                 // Not once the next race has been called to the grid. The
                 // model can take a minute or more, and the heats can turn
@@ -878,7 +927,6 @@ public sealed partial class RaceControlControl
 
     private static string EngineName(VoiceEngine engine) => engine switch
     {
-        VoiceEngine.Windows => "the Windows voice",
         VoiceEngine.HeatCaller => "the HeatCaller voice",
         VoiceEngine.Kokoro => "the Kokoro voice",
         _ => "ElevenLabs",
@@ -1303,6 +1351,251 @@ public sealed partial class RaceControlControl
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [audio] End-of-broadcast signal failed: {ex.Message}");
         }
+
+        // This is the one place every end of a broadcast meets - the recap
+        // finishing, and the finish call on each of the paths that has no
+        // recap - so it is where the recording of the race stops. Not at the
+        // flag: the winner's call, the result and the interview all come
+        // after it, and they are the part a driver actually wants.
+        //
+        // After the signal above rather than before it, so nothing here can
+        // delay what the music is waiting for.
+        try
+        {
+            // The recorder is the UI thread's, like everything else in the
+            // filing, and this runs on a background task on most paths.
+            if (InvokeRequired)
+            {
+                BeginInvoke(FinishRaceAudio);
+            }
+            else
+            {
+                FinishRaceAudio();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Usually a window that has been closed since, so there is no
+            // thread left to post to. The recording on disk is a complete,
+            // playable wav at every moment by design (see RaceAudioRecorder),
+            // and the next recording turns one left behind into an mp3 - so
+            // this costs the mp3 and the clips tonight, not the audio.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [audio] Could not finish off the race recording "
+                + $"({ex.Message}). It is still on disk as a .recording.wav and plays as it is; HeatCaller turns it "
+                + "into an mp3 the next time it records a race.");
+        }
+    }
+
+    // --- Recording the race -------------------------------------------------
+    //
+    // UI thread only, all of it, like the rest of the filing. The heavy work
+    // - encoding, cutting the clips - is handed to a background task at the
+    // one point where it happens (FinishRaceAudio), after the broadcast has
+    // ended, and that task touches nothing on this control.
+
+    /// <summary>Loaded on the first journal write of the night, so race-audio.json is read once a run rather than once a lap.</summary>
+    private RaceAudioStore? _raceAudioStore;
+
+    /// <summary>The recording of the race on the board, or null when nothing is being recorded.</summary>
+    private RaceAudioRecorder? _raceAudioRecorder;
+
+    /// <summary>
+    /// The session generation a recording was last started for - or tried
+    /// for and refused.
+    ///
+    /// Keyed on the generation rather than on a bool because that is what
+    /// names a race here: a reset, a re-stage and a fresh green all move it
+    /// on (StartNewGeneration), so this is what tells "the race I am already
+    /// recording" from "a new race that wants its own file". It is set even
+    /// when the recording could not start, so a disk with no room is said
+    /// once a race and not four times a second.
+    /// </summary>
+    private int _raceAudioGeneration = -1;
+
+    /// <summary>
+    /// The result as it was filed, kept only until the broadcast ends.
+    ///
+    /// This is where the drivers' names, their finishing positions and their
+    /// lap times come from - the very rows the club's results are made of.
+    /// Null when the race was never saved (a ghost-only race, a demo, a
+    /// history write that failed): then the race's own mp3 is still written
+    /// and only the per-driver clips are skipped, because there is nobody to
+    /// name them after.
+    /// </summary>
+    private SessionRecord? _raceAudioRecord;
+
+    /// <summary>Whether this race's recording has already complained. One line a race, not one a lap.</summary>
+    private bool _raceAudioProblemSaid;
+
+    /// <summary>
+    /// Each driver's release offset, read off the board at the flag,
+    /// alongside <see cref="_raceAudioRecord"/>.
+    ///
+    /// Zero for everybody in an ordinary race. In a staggered or qualifying
+    /// start each driver is let go at their own moment and their lap times
+    /// run from there, so their moments in the recording are that much later
+    /// than the lap times alone say - up to a minute for the back of a
+    /// staggered grid. The saved result does not carry the offset (only the
+    /// crash journal does, as ReleaseOffsetsMs), so it is taken from the
+    /// standings here, where they are still the ones that ran the race.
+    /// </summary>
+    private Dictionary<string, long>? _raceAudioReleaseOffsets;
+
+    /// <summary>
+    /// Keeps the recording in step with the race. Called from WriteJournal,
+    /// which is already the one place every crossing, every flag and every
+    /// correction meets - so this needs no hook of its own on the session,
+    /// and nothing about how a lap or a flag is handled changes.
+    /// </summary>
+    private void FollowRaceAudio()
+    {
+        try
+        {
+            // The next race is on the board and the last one's broadcast was
+            // never signalled as over - a director who staged and greened
+            // again straight away. The old recording is finished off here so
+            // this race gets a file of its own instead of being recorded
+            // onto the end of the last one.
+            //
+            // A reset leaves the session Idle with a recording running, for
+            // the same reasons and with the same answer.
+            if (_raceAudioRecorder is not null
+                && (_raceAudioGeneration != _race.SessionGeneration || _race.State is RaceState.Idle))
+            {
+                FinishRaceAudio();
+            }
+
+            var store = _raceAudioStore ??= RaceAudioStore.Load();
+
+            // Exactly the races the crash journal leaves alone, for exactly
+            // its reasons: a demo's laps are invented, practice runs on this
+            // same session and has its own save, and a rehearsal must never
+            // drop files in among a club's real recordings.
+            if (_race.IsDemoMode || _race.IsPracticeMode || AppPaths.IsRehearsal)
+            {
+                return;
+            }
+
+            if (_raceAudioRecorder is null
+                && store.Enabled
+                && _race.State is RaceState.Racing
+                && _raceAudioGeneration != _race.SessionGeneration)
+            {
+                // At the green, which is the one moment every start path
+                // reaches and writes the journal at: the session puts the
+                // state to Racing and THEN the flag to Green (GreenFlag), and
+                // the flag change is a forced journal write. The countdown
+                // would be nicer to have in the file but there is no journal
+                // write of its own at Countdown, so catching it would be
+                // luck on some paths and not others. Staging would be worse
+                // again - it can sit there for ten minutes while the grid is
+                // sorted out, recording an empty room.
+                _raceAudioGeneration = _race.SessionGeneration;
+                _raceAudioRecord = null;
+                _raceAudioReleaseOffsets = null;
+                _raceAudioProblemSaid = false;
+
+                _raceAudioRecorder = RaceAudioRecorder.StartFor(
+                    store,
+                    _txtSessionLabel.Text,
+                    DateTime.UtcNow,
+                    message => StatusMessage?.Invoke(message));
+            }
+
+            if (_raceAudioRecorder is not { } recorder)
+            {
+                return;
+            }
+
+            // Where the green is in the file, which is what every highlight
+            // is measured from. WriteJournal is forced at the green so this
+            // lands within a frame of it - and it is worked out from the
+            // wall clock rather than from the file's length anyway, so even
+            // a late call puts the mark in the right place.
+            if (_race.RaceStartUtc is { } green)
+            {
+                recorder.NoteGreen(green);
+            }
+
+            if (!_raceAudioProblemSaid && recorder.Problem is { } problem)
+            {
+                _raceAudioProblemSaid = true;
+
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [audio] The recording of this race stopped early: "
+                    + $"{problem}. What was recorded is kept and still becomes an mp3 when the race ends. The race "
+                    + "itself is unaffected.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // The recording is the one thing on this page nobody would miss.
+            // It is never allowed to be the reason a crossing, a flag or a
+            // journal write goes wrong - the same rule RaceJournal.Record
+            // keeps for the safety net itself.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [audio] Race recording has stopped following this race "
+                + $"({ex.Message}). The race is running as normal.");
+        }
+    }
+
+    /// <summary>
+    /// Takes the recording off the bus now, and hands the mp3 and the clips
+    /// to a background thread.
+    ///
+    /// Split that way because this is sometimes the UI thread and encoding a
+    /// twenty-minute race takes seconds. Nothing on this control is touched
+    /// by the background work: the store, the result and the log are read
+    /// out into locals first, so a Race Control closed while it runs cannot
+    /// be reached from it.
+    /// </summary>
+    private void FinishRaceAudio()
+    {
+        var recorder = _raceAudioRecorder;
+
+        if (recorder is null)
+        {
+            return;
+        }
+
+        _raceAudioRecorder = null;
+
+        var record = _raceAudioRecord;
+        _raceAudioRecord = null;
+
+        var releaseOffsets = _raceAudioReleaseOffsets;
+        _raceAudioReleaseOffsets = null;
+
+        // Instant - it unhooks the tap and stops anything more being taken
+        // in. Everything that waits is below.
+        recorder.BeginStop();
+
+        if (_raceAudioStore is not { } store)
+        {
+            // Cannot happen: a recorder only exists because the store said
+            // so. The file is still closed off properly rather than left
+            // open for the rest of the night.
+            _ = Task.Run(() => recorder.Stop());
+            return;
+        }
+
+        var log = StatusMessage;
+
+        _ = Task.Run(() => RaceAudioRecorder.Publish(
+            recorder.Stop(),
+            store,
+            record,
+            releaseOffsets,
+            message =>
+            {
+                try
+                {
+                    log?.Invoke(message);
+                }
+                catch
+                {
+                    // A console that has gone. Saying where the file went is
+                    // not worth an unobserved exception on a pool thread.
+                }
+            }));
     }
 
     /// <summary>
@@ -1323,6 +1616,18 @@ public sealed partial class RaceControlControl
     /// twice.
     /// </summary>
     private static readonly TimeSpan StagingWaitWithIntro = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The longest an intro's music may run before it ends itself.
+    ///
+    /// Normally the countdown takes it away, or the intro finishes being
+    /// read and it ends on its own fade. This is for the night where
+    /// neither happens - auto-advance off and the race director called
+    /// away between staging and the countdown - so a bed cannot loop under
+    /// an empty rostrum for the rest of the evening.
+    /// </summary>
+    private static readonly TimeSpan IntroShowLimit = TimeSpan.FromSeconds(120);
+
 
     /// <summary>
     /// Speaks an LLM-written "coming up" line for a round about to start.
@@ -1371,12 +1676,85 @@ public sealed partial class RaceControlControl
         // case after the budget plus a margin, or when a countdown starts.
         var writing = _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10));
 
+        // The show's music, if this club scores its intros. Opened inside
+        // the job below, so the opener plays ACROSS the wait for the model
+        // rather than adding to it.
+        //
+        // IT CANNOT HOLD A START UP. The staging chain waits on the
+        // announcer's own audio (ChainAfterAudio), and the bed plays
+        // through AudioBus, which is not that - so a bed still fading
+        // never delays a countdown. What it must not do is play OVER one,
+        // which is what the cut below is for.
+        //
+        // A cut can be asked for before StartAsync has handed the run over,
+        // so the show's lifetime is kept straight in ShowLifetime rather
+        // than in a latch here - see its remarks for the bug that cost the
+        // club its music for a whole evening.
+        var showLife = new ShowLifetime();
+
+        // The countdown has started - or the race has been reset, or moved
+        // on in any way. The bed goes at once rather than playing its own
+        // ending over the beeps and the horn.
+        Action<RaceState>? onLeftStaging = null;
+
+        async Task EndShowAsync(bool cutShort)
+        {
+            // Taken off exactly once however many calls are in here at a
+            // time, and before the end below - which does nothing at all
+            // when the show is still opening, and must not leave the
+            // watcher attached for the rest of the night on the way past.
+            var watcher = Interlocked.Exchange(ref onLeftStaging, null);
+
+            if (watcher is not null)
+            {
+                _race.StateChanged -= watcher;
+            }
+
+            await showLife.EndAsync(cutShort);
+        }
+
         _ = Task.Run(async () =>
         {
             string line;
 
             try
             {
+                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceIntro))
+                {
+                    // Watched BEFORE the show opens: opening it waits out
+                    // the opener, and a countdown started during that must
+                    // still take the bed away.
+                    onLeftStaging = state =>
+                    {
+                        if (state != RaceState.Staging)
+                        {
+                            _ = EndShowAsync(cutShort: true);
+                        }
+                    };
+
+                    _race.StateChanged += onLeftStaging;
+
+                    // The state as well as the lifetime: a show already
+                    // called off - the race left staging before the opener
+                    // was even asked for - should not be opened at all.
+                    if (_race.State == RaceState.Staging && !showLife.CutAlreadyWanted)
+                    {
+                        // True when a cut was asked for while this was
+                        // opening, which makes ending the show OURS: the
+                        // watcher could not do it, because the run it
+                        // needed had not been handed over yet.
+                        // SegmentKind.RaceIntro - see the recap's call above.
+                        var cutDuringOpen = showLife.Opened(await treatment.StartAsync(SegmentKind.RaceIntro));
+
+                        // That, or it left staging while the opener was
+                        // landing.
+                        if (cutDuringOpen || _race.State != RaceState.Staging)
+                        {
+                            await EndShowAsync(cutShort: true);
+                        }
+                    }
+                }
+
                 using var budget = new CancellationTokenSource(RoundIntroModelBudget);
 
                 // Set when the intro was put right or thrown out after it
@@ -1402,6 +1780,9 @@ public sealed partial class RaceControlControl
                         : budget.IsCancellationRequested ? $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - the model took longer than {RoundIntroModelBudget.TotalSeconds:0}s, so the start went on without it."
                         : $"{AppTime.LogStampNow()}  [commentary] Round intro skipped - no line came back.");
                     writing.Dispose();
+
+                    // Nothing is going to be said over it.
+                    await EndShowAsync(cutShort: true);
                     return;
                 }
 
@@ -1411,6 +1792,8 @@ public sealed partial class RaceControlControl
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Round intro skipped - {ex.Message}");
                 writing.Dispose();
+
+                await EndShowAsync(cutShort: true);
                 return;
             }
 
@@ -1422,6 +1805,8 @@ public sealed partial class RaceControlControl
                 if (IsDisposed || Disposing || !IsHandleCreated)
                 {
                     writing.Dispose();
+
+                    await EndShowAsync(cutShort: true);
                     return;
                 }
 
@@ -1454,6 +1839,27 @@ public sealed partial class RaceControlControl
                 // post - the page is closing.
                 writing.Dispose();
             }
+
+            // The line is posted. The marker above keeps the announcer
+            // counted as busy until it has been queued, so this waits
+            // through the writing, the queueing AND the reading of it -
+            // and returns on the quiet afterwards, which is when the
+            // show is over.
+            //
+            // Normally the countdown has already taken the bed away by
+            // then (see onLeftStaging). When it has not - auto-advance
+            // off, the race director not yet ready - this ends it on the
+            // piece's own fade, into the gap before the start.
+            try
+            {
+                await _announcer.WaitForAudioAsync(IntroShowLimit, CancellationToken.None);
+            }
+            catch
+            {
+                // Decoration. Never an error on the page that starts races.
+            }
+
+            await EndShowAsync(cutShort: false);
         });
 
         return true;
@@ -1666,6 +2072,23 @@ public sealed partial class RaceControlControl
         // result, logged as a correction so it can be seen and reversed in
         // Race History like any other.
         ApplyBlackFlags(record);
+
+        // Handed to the recording, which needs the drivers' names, their
+        // finishing positions and their lap times to cut each one's clip -
+        // and these are the very rows that go into the race history, not a
+        // second account of the race. Before the filing rather than inside
+        // it, so a history write that fails still leaves the race with its
+        // mp3; only the clips depend on this being here.
+        _raceAudioRecord = record;
+
+        // Off the board rather than out of the record, because the saved
+        // result does not carry it - see _raceAudioReleaseOffsets. Read here,
+        // where these rows are still the ones that ran the race: by the time
+        // the recording is written out the board has moved on.
+        _raceAudioReleaseOffsets = racers.ToDictionary(
+            s => s.TransponderId,
+            s => s.ReleaseOffsetMs,
+            StringComparer.OrdinalIgnoreCase);
 
         // The history write, and only if it landed, the round linked and the
         // journal let go - in RaceFiling, where the order is tested. What
@@ -1926,6 +2349,15 @@ public sealed partial class RaceControlControl
 
         _journal.Record(_race, _sessionStartedAtUtc, SelectedTrackName(), force,
             RoundForThisRace()?.Id, _txtSessionLabel.Text, _currentRaceIsRerun);
+
+        // Here because this is already the one place every crossing, every
+        // flag and every correction passes through - the journal's own
+        // cadence. It means the recording needs no hook of its own on the
+        // session, and nothing about how a lap or a flag is handled changes.
+        // Unlike the write above it is never throttled, so the green - which
+        // is a flag change, and so a forced write - is always noted the
+        // moment it drops.
+        FollowRaceAudio();
     }
 
     /// <summary>
@@ -2125,6 +2557,103 @@ public sealed partial class RaceControlControl
         {
             // Never let a failure here interrupt finishing a race - the
             // same card can still be generated manually from Race History.
+        }
+    }
+}
+
+/// <summary>
+/// One segment's show, where the thing that ends it can be asked for before
+/// the thing that starts it has finished starting.
+///
+/// ShowTreatment.StartAsync takes 0.8 to 3 seconds - it waits out the
+/// opener's ring-out - and only then hands back the ShowRun that ends the
+/// show. A race can leave staging inside that window (a countdown started
+/// by hand, a reset, a stop, a red flag), and whoever notices asks for the
+/// show to be cut while there is nothing yet to cut.
+///
+/// One latch could not carry that. The cut spent it, finished nothing
+/// because the run had not been handed over, and the live run that landed a
+/// moment later was then never finished at all - so ShowOnAir stayed
+/// counted up, MainForm kept the club's music muted for the rest of the
+/// evening, and the bed looped under the countdown, the horn and every heat
+/// after it, which is exactly what cutting it short exists to prevent. So a
+/// cut asked for too early is REMEMBERED here instead, and whoever opens
+/// the show reads it back and ends the run itself.
+///
+/// Both halves can run at once, on different threads, and exactly one
+/// FinishAsync comes out either way: each writes with a fence before
+/// reading what the other wrote, so at least one of them sees it, and the
+/// latch lets only the first of them end the show.
+/// </summary>
+internal sealed class ShowLifetime
+{
+    /// <summary>What StartAsync handed over, once it has. Null until then, and when there was nothing to open.</summary>
+    private ShowRun? _run;
+
+    /// <summary>0 running, 1 ended. The one FinishAsync.</summary>
+    private int _ended;
+
+    /// <summary>1 once a cut has been asked for, whether or not there was anything to cut at the time.</summary>
+    private int _cutWanted;
+
+    /// <summary>
+    /// Whether a cut has already been asked for. For the caller to check
+    /// before opening a show at all: one called off before it started
+    /// should not be started.
+    /// </summary>
+    internal bool CutAlreadyWanted => Volatile.Read(ref _cutWanted) == 1;
+
+    /// <summary>
+    /// Takes the run StartAsync handed over - null when there was nothing
+    /// to open. Returns true when a cut was asked for while it was opening,
+    /// which makes ending the show the caller's own job: see the remarks on
+    /// this class.
+    /// </summary>
+    internal bool Opened(ShowRun? run)
+    {
+        // Interlocked for the fence: this write must not slide past the
+        // read below. EndAsync does the mirror of it, so of the two of them
+        // running at once at least one sees what the other wrote.
+        Interlocked.Exchange(ref _run, run);
+
+        return Volatile.Read(ref _cutWanted) == 1;
+    }
+
+    /// <summary>
+    /// Ends the show, once, if there is one to end. A cut asked for before
+    /// the run has been handed over is remembered rather than carried out,
+    /// and leaves the latch unspent for whoever does have the run.
+    /// </summary>
+    internal async Task EndAsync(bool cutShort)
+    {
+        if (cutShort)
+        {
+            // Fenced, and ahead of the read of _run below - see Opened.
+            Interlocked.Exchange(ref _cutWanted, 1);
+        }
+
+        var run = Volatile.Read(ref _run);
+
+        if (run is null)
+        {
+            // Nothing to end: either no show ever opened, or it is still
+            // opening and the handle that ends it has not been handed over
+            // yet. The latch is left alone either way.
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _ended, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            await run.FinishAsync(cutShort);
+        }
+        catch
+        {
+            // FinishAsync gives the music back in its own finally.
         }
     }
 }

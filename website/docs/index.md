@@ -26,7 +26,7 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 
 **Race control** — running a race, fixing mistakes, practice, ghost cars and handicaps, and results and championships.
 
-**Announcer** — the voice (the HeatCaller voice, your own ElevenLabs account, or the free Windows voice), local AI commentary, and sound effects, ambience and music.
+**Announcer** — the voice (the HeatCaller voice, your own ElevenLabs account, or the free Kokoro voice), local AI commentary, and sound effects, ambience and music.
 
 **Timing** — connecting an EasyLap or I-Lap decoder, and how transponders are handled.
 

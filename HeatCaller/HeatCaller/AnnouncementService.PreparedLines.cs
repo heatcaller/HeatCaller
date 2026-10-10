@@ -21,8 +21,8 @@ public sealed partial class AnnouncementService
     /// memory.
     /// </summary>
     /// <remarks>
-    /// Source says who spoke it: a take the Windows voice made standing in is
-    /// not played once ElevenLabs can speak again (see PreparedTakeMatches),
+    /// Source says who spoke it: a take Kokoro made standing in is not
+    /// played once ElevenLabs can speak again (see PreparedTakeMatches),
     /// and only an ElevenLabs take is ever forgotten from the saved-voice
     /// library when it won't play.
     /// </remarks>
@@ -46,15 +46,21 @@ public sealed partial class AnnouncementService
     /// of voice, model or delivery throws the prepared audio away rather
     /// than speaking a flag in last week's voice.
     ///
-    /// The engine and the Windows voice are part of it: switching between
-    /// ElevenLabs and the Windows voice, or picking another Windows voice,
-    /// renders every prepared line again (an ElevenLabs line comes straight
-    /// back from the saved-voice library, so that costs nothing). Whether a
-    /// take was the stand-in's travels with the take - see PreparedTakeMatches.
+    /// The engine and the Kokoro voice are part of it: switching between
+    /// ElevenLabs and Kokoro, or picking another Kokoro voice, renders every
+    /// prepared line again (an ElevenLabs line comes straight back from the
+    /// saved-voice library, so that costs nothing). Whether a take was the
+    /// stand-in's travels with the take - see PreparedTakeMatches.
+    ///
+    /// The retired Windows voice's name used to be in here too. It is not
+    /// missed: the signature is only ever compared with another signature
+    /// made the same way, in memory, within one run - nothing on disk is
+    /// keyed by it - so dropping a part of it costs at most one re-render of
+    /// each flag line the first time the app starts after the update.
     /// </summary>
     private static string VoiceSignature(VoiceProfile profile, AnnouncementEventConfig config) =>
         string.Join("|",
-            profile.EffectiveEngine, profile.WindowsVoiceName, profile.KokoroVoiceName,
+            profile.EffectiveEngine, profile.KokoroVoiceName,
             profile.HeatCallerVoice, profile.HeatCallerRev,
             profile.VoiceId, profile.ModelId, profile.Stability, profile.SimilarityBoost,
             profile.Style, profile.Speed, profile.SpeakerBoost, profile.TextNormalization,
@@ -159,7 +165,7 @@ public sealed partial class AnnouncementService
             }
 
             StatusMessage?.Invoke(rendered.Source == LineSource.StandIn
-                ? $"[voice] {type} line ready to fire instantly, in the Windows voice (standing in for ElevenLabs)."
+                ? $"[voice] {type} line ready to fire instantly, in the Kokoro voice (standing in for ElevenLabs)."
                 : $"[voice] {type} line ready to fire instantly.");
         }
         catch (Exception ex)
@@ -250,18 +256,17 @@ public sealed partial class AnnouncementService
     {
         var profile = _voiceStore.Current;
 
-        // Nothing to prepare for the Windows voice: it renders each line on
-        // this PC as it's needed, and it never makes a request of anything.
-        // Otherwise there has to be a voice to render with - an ElevenLabs
-        // one, or a HeatCaller one the relay gave.
+        // There has to be a voice to render with - an ElevenLabs one, or a
+        // HeatCaller one the relay gave.
         var nothingToRenderWith = profile.EffectiveEngine == VoiceEngine.HeatCaller
             ? !profile.HeatCallerReady
             : string.IsNullOrWhiteSpace(profile.VoiceId);
 
-        // Nor for Kokoro: it renders on this PC as well, and its lines are
-        // never kept in the saved-voice library - preparing would render
+        // Nothing to prepare for Kokoro: it renders each line on this PC as
+        // it's needed, it never makes a request of anything, and its lines
+        // are never kept in the saved-voice library - preparing would render
         // ElevenLabs lines with the club's key, for a voice it isn't using.
-        if (nothingToRenderWith || profile.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
+        if (nothingToRenderWith || profile.EffectiveEngine == VoiceEngine.Kokoro)
         {
             return Array.Empty<PlannedLine>();
         }
@@ -383,12 +388,7 @@ public sealed partial class AnnouncementService
 
             // Chosen while this was running - checked last thing before the
             // request, since the wait above can be a whole race long. With
-            // the Windows voice chosen no ElevenLabs request is made at all.
-            if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Windows)
-            {
-                return new PrepareOutcome(rendered, alreadySaved, failed, "the Windows voice was chosen on Voice Settings");
-            }
-
+            // Kokoro chosen no ElevenLabs request is made at all.
             if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
             {
                 return new PrepareOutcome(rendered, alreadySaved, failed, "the Kokoro voice was chosen on Voice Settings");
@@ -509,7 +509,7 @@ public sealed partial class AnnouncementService
         {
             // A stand-in take is passed over once ElevenLabs can speak again:
             // the call goes live in ElevenLabs instead, a moment later, rather
-            // than the Windows voice saying this flag all night.
+            // than the Kokoro voice saying this flag all night.
             if (!_flagLines.TryGetValue(type, out prepared)
                 || !PreparedTakeMatches(prepared.Signature, prepared.Source, signature, profile))
             {
@@ -574,7 +574,7 @@ public sealed partial class AnnouncementService
                 // Forgotten, so that prime renders it afresh. The signature
                 // check above means these are the settings it was made with.
                 //
-                // An ElevenLabs take only. A Windows take was never saved,
+                // An ElevenLabs take only. A Kokoro take was never saved,
                 // and forgetting under its words would throw away the good
                 // ElevenLabs line saved for the same flag.
                 if (IsUndecodable(ex) && prepared.Source is LineSource.ElevenLabs or LineSource.Library or LineSource.HeatCaller)
@@ -624,7 +624,11 @@ public sealed partial class AnnouncementService
             // just below - there is no gap for one to slip through between.
             generation = Interlocked.Increment(ref _interruptGeneration);
 
-            clearedVoice = _voiceQueue.RemoveAll(item => !IsPriorityAnnouncement(item.Type));
+            // Everything a flag does not spare. This read
+            // IsPriorityAnnouncement, which kept the post-race recap -
+            // queued as a Reminder - and let it read the last race's
+            // result over this one. See SurvivesAFlag.
+            clearedVoice = _voiceQueue.RemoveAll(item => !SurvivesAFlag(item.Type));
         }
 
         int clearedSounds;

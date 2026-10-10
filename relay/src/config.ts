@@ -12,7 +12,7 @@ export interface RelayConfig {
    * The HeatCaller voice catalogue and its defaults. Absent from the config
    * means an empty catalogue, which is a relay that does not offer the
    * voice at all - every club carries on with its own key or the free
-   * Windows voice.
+   * Kokoro voice.
    */
   readonly voice: VoiceConfig;
   /**

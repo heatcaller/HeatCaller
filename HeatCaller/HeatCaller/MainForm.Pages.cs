@@ -171,6 +171,16 @@ public partial class MainForm
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);
+
+        // How "Hear It" and "Check Names..." on Driver Hub actually speak.
+        // The page is given a way to say a line rather than the announcer
+        // itself: it has no business with the voice queue, and what it wants
+        // is the one thing SpeakTest already does - say this text, now, in
+        // the voice the club is set up with, without touching the race's own
+        // queue. Without this line the page lists the names and says the
+        // voice is not available, and Hear It is not built at all, which is
+        // deliberate: a dead button reads as a broken feature.
+        driverProfiles.SpeakName = text => _announcer.SpeakTest(text, _voiceStore.Current.Speed);
         WireUnknownTransponders();
 
         // Next to Driver Hub in the sidebar: the two together are "who
@@ -1895,6 +1905,10 @@ public partial class MainForm
 
         btnManageNav.Click += BtnManageNav_Click;
 
+        // The chevron in the page-search row: the sidebar down to its icons
+        // and back - see SetNavIconsOnly. Ctrl+B does the same from anywhere.
+        btnCollapseNav.Click += (_, _) => ToggleNavIconsOnly();
+
         _announcer.Muted = _settings.AnnouncerMuted;
 
         // The icon and the tooltip both default to "not muted" until told
@@ -1971,6 +1985,17 @@ public partial class MainForm
         AppTheme.StyleToolTip(_footerTooltip);
 
         StartupMark("the other pages");
+
+        // The sidebar narrowed to its icons, if that is how the club left it
+        // (AppSettings.NavIconsOnly) - BEFORE the window is laid out rather
+        // than after, so it comes up narrow from the first frame instead of
+        // being seen to fold a moment after the window appears. Nothing to do
+        // when it is not: the designer builds the open sidebar, and
+        // ApplyFontScale below gives it its width either way (PlaceSidebar).
+        if (_settings.NavIconsOnly)
+        {
+            SetNavIconsOnly(true, save: false);
+        }
 
         // The theme pass, once: ApplyFontScale runs it (with the sidebar's
         // chrome put back after it), in the window's own face - which it

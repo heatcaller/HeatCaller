@@ -368,6 +368,17 @@ internal sealed class ShowBed : ISampleProvider
     /// </summary>
     public const double ShortestEndingSeconds = 0.5;
 
+    /// <summary>
+    /// How long a bed takes to get out of the way when it is cut short
+    /// rather than ended.
+    ///
+    /// A race intro's show has to be gone the moment the countdown starts,
+    /// and the piece's own ending - a three second fade, say - would play
+    /// straight over the beeps and the horn. Short enough to be clear
+    /// before a countdown is under way, long enough not to be a click.
+    /// </summary>
+    public const double CutShortSeconds = 1.0;
+
     private enum Part
     {
         /// <summary>First time through the head of the body - played straight, nothing to fade up from.</summary>
@@ -399,6 +410,9 @@ internal sealed class ShowBed : ISampleProvider
     /// <summary>Frames to fade out over when there is no ending of its own.</summary>
     private readonly int _fadeFrames;
 
+    /// <summary>Frames to fade out over when the show is cut short - see CutShort.</summary>
+    private readonly int _cutFrames;
+
     private Part _part = Part.Opening;
 
     /// <summary>
@@ -419,6 +433,12 @@ internal sealed class ShowBed : ISampleProvider
     private int _handover;
 
     private volatile bool _windUpAsked;
+    private volatile bool _cutShortAsked;
+
+    // Settled once, at the moment the ending starts, so a cut asked for
+    // midway through an ending cannot change what is already playing.
+    private int _endingPlaying;
+    private int _fadePlaying;
 
     public ShowBed(ShowClip clip)
     {
@@ -442,6 +462,7 @@ internal sealed class ShowBed : ISampleProvider
 
         _endingFrames = tail >= ShortestEndingSeconds * clip.SampleRate ? tail : 0;
         _fadeFrames = Math.Max(1, (int)(FadeOutSeconds * clip.SampleRate));
+        _cutFrames = Math.Max(1, (int)(CutShortSeconds * clip.SampleRate));
 
         WaveFormat = clip.Format;
     }
@@ -457,6 +478,22 @@ internal sealed class ShowBed : ISampleProvider
     /// </summary>
     public void WindUp() => _windUpAsked = true;
 
+    /// <summary>
+    /// Get out of the way now: a quick fade instead of the piece's own
+    /// ending - see CutShortSeconds. For a show whose moment has been
+    /// overtaken, which in practice means a race intro's bed when the
+    /// countdown starts.
+    ///
+    /// Asking for this after WindUp has already begun an ending leaves
+    /// that ending playing: it is a second or two from done, and cutting
+    /// across it would sound worse than letting it finish.
+    /// </summary>
+    public void CutShort()
+    {
+        _cutShortAsked = true;
+        _windUpAsked = true;
+    }
+
     public int Read(float[] buffer, int offset, int count)
     {
         // Whole frames. Every mixer in NAudio asks in whole frames (it
@@ -470,9 +507,14 @@ internal sealed class ShowBed : ISampleProvider
         {
             if (_windUpAsked && _part != Part.Ending)
             {
+                // What the ending is, settled here and not read again: a
+                // cut asked for while one is already playing is ignored.
+                _endingPlaying = _cutShortAsked ? 0 : _endingFrames;
+                _fadePlaying = _cutShortAsked ? _cutFrames : _fadeFrames;
+
                 _part = Part.Ending;
                 _ending = 0;
-                _handover = _endingFrames > 0 ? _seam : 0;
+                _handover = _endingPlaying > 0 ? _seam : 0;
             }
 
             var into = offset + done * _channels;
@@ -532,11 +574,11 @@ internal sealed class ShowBed : ISampleProvider
 
     private void WriteEndingFrame(float[] buffer, int into)
     {
-        if (_endingFrames == 0)
+        if (_endingPlaying == 0)
         {
-            // No ending of its own: keep looping and fade out over
-            // FadeOutSeconds. _ending counts the fade here.
-            var level = 1f - (float)_ending / _fadeFrames;
+            // No ending of its own, or cut short: keep looping and fade
+            // out. _ending counts the fade here.
+            var level = 1f - (float)_ending / _fadePlaying;
 
             WriteLoopFrame(buffer, into);
 
@@ -545,7 +587,7 @@ internal sealed class ShowBed : ISampleProvider
                 buffer[into + c] *= Math.Max(0f, level);
             }
 
-            if (++_ending >= _fadeFrames)
+            if (++_ending >= _fadePlaying)
             {
                 _part = Part.Done;
             }
@@ -579,7 +621,7 @@ internal sealed class ShowBed : ISampleProvider
             }
         }
 
-        if (++_ending >= _endingFrames)
+        if (++_ending >= _endingPlaying)
         {
             _part = Part.Done;
         }
@@ -598,31 +640,82 @@ internal sealed class ShowBed : ISampleProvider
 /// <summary>
 /// A piece of audio played once from memory, for the opener. Reads its
 /// frames out and then runs short, exactly as a file reader would.
+///
+/// IT CAN START PARTWAY IN, AND IT CAN WAIT A BEAT FIRST
+///
+/// Both are the show's billing asking for them - see ShowBilling.
+///
+/// A show in the body of the evening comes in on the opener's ring-out
+/// rather than playing the theme from the top for the eleventh time, which
+/// is <paramref name="fromFrame"/>. A seek, in other words - except there
+/// is nothing to seek, because the piece is already a sample array, which
+/// is half of why it is held as one (see ShowClip).
+///
+/// The beat of silence in front is <paramref name="airFrames"/>. The
+/// club's music is silenced the instant a show opens, so without it the
+/// playlist stops dead and the opener lands in the same sample - which
+/// sounds like the music cutting out, not like a station going live. It is
+/// carried here rather than as a Task.Delay in the staging for two
+/// reasons: a timer is good to about fifteen milliseconds and this is good
+/// to one sample, and an await in the staging is an await that the
+/// cancellation and lifetime machinery around a show has to be right
+/// about. Silence at the head of a provider is none of those things.
 /// </summary>
 internal sealed class ShowOneShot : ISampleProvider
 {
     private readonly float[] _samples;
+
+    /// <summary>Samples of silence still to write in front of the piece.</summary>
+    private int _air;
+
     private int _at;
 
-    public ShowOneShot(ShowClip clip)
+    public ShowOneShot(ShowClip clip, int fromFrame = 0, int airFrames = 0)
     {
         _samples = clip.Samples;
         WaveFormat = clip.Format;
+
+        // Multiplied up from FRAMES, never taken as a sample count: a
+        // start or a lead-in that landed half a frame in would put the
+        // channels out of step for the rest of the piece.
+        var channels = clip.Channels;
+
+        _at = Math.Clamp(fromFrame, 0, Math.Max(0, clip.Frames)) * channels;
+        _air = Math.Max(0, airFrames) * channels;
     }
 
     public WaveFormat WaveFormat { get; }
 
     public int Read(float[] buffer, int offset, int count)
     {
+        var done = 0;
+
+        if (_air > 0)
+        {
+            // Whole frames, as everywhere below: every mixer in NAudio asks
+            // in them, and both counts above are frame multiples, so the
+            // smaller of the two is as well.
+            var quiet = Math.Min(_air, count);
+
+            Array.Clear(buffer, offset, quiet);
+
+            _air -= quiet;
+            done += quiet;
+        }
+
         var left = _samples.Length - _at;
-        var take = Math.Min(count, Math.Max(0, left));
+        var take = Math.Min(count - done, Math.Max(0, left));
 
         if (take > 0)
         {
-            Array.Copy(_samples, _at, buffer, offset, take);
+            Array.Copy(_samples, _at, buffer, offset + done, take);
             _at += take;
+            done += take;
         }
 
-        return take;
+        // Short of what was asked for is the end, as it always was - which
+        // is how AudioBus knows the opener has played out. The air counts
+        // towards it, so a buffer that is all air still reads as full.
+        return done;
     }
 }

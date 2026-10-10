@@ -89,24 +89,194 @@ public partial class MainForm
         220 + Math.Clamp((int)Math.Round(220 * (AppTheme.FontScale - 1f) * 0.15f), 0, SidebarMostGrowth));
 
     /// <summary>
-    /// The sidebar at its width for the text size in use (SidebarWidth), and
-    /// the footer's row of three buttons kept in the middle under it.
+    /// The sidebar's width as a rail of icons (Ctrl+B - see SetNavIconsOnly).
+    ///
+    /// Wide enough for the list's row plate with a centred icon in it: the
+    /// plate is the rail's width less SidebarNavList's PlateNarrowerBy (16),
+    /// and the icon inside it grows with the text size while this does not -
+    /// an 18px icon at 200% is 36, inside a plate of 44, which leaves it 4
+    /// either side. So 60 is the smallest this can be and still hold the
+    /// biggest icon; it also leaves room for the list's own scroll thumb,
+    /// which takes 6 off the right when the pages overflow.
+    ///
+    /// On the screen's scale and not the text size, as SidebarWidth is, and
+    /// for the same reason: every pixel the rail takes comes off the page
+    /// beside it.
+    /// </summary>
+    internal static int SidebarNarrowWidth => UiLayout.AtDpi(60);
+
+    /// <summary>The sidebar is a rail of icons - see SetNavIconsOnly.</summary>
+    private bool _navIconsOnly;
+
+    /// <summary>The sidebar's width as things stand: the rail's while it is narrowed to its icons, otherwise SidebarWidth.</summary>
+    private int SidebarWidthNow => _navIconsOnly ? SidebarNarrowWidth : SidebarWidth;
+
+    /// <summary>
+    /// A footer button in the rail: its size, and the gap above, below and
+    /// between the three of them stacked.
+    ///
+    /// internal rather than private so NavRailTests can check for itself
+    /// that the column fits inside SidebarNarrowWidth - the kind of thing
+    /// that is right when it is written and wrong two changes later.
+    /// </summary>
+    internal const int RailFooterButtonWidth = 42;
+
+    internal const int RailFooterButtonHeight = 34;
+
+    internal const int RailFooterGap = 7;
+
+    /// <summary>
+    /// The sidebar at its width for the text size in use, and the footer's
+    /// three buttons placed under it - in a row across the open sidebar, and
+    /// in a column down the rail, which has nowhere to put a row.
     /// </summary>
     private void PlaceSidebar()
     {
-        var width = SidebarWidth;
+        var width = SidebarWidthNow;
 
         if (pnlSidebar.Width != width)
         {
             pnlSidebar.Width = width;
         }
 
-        var shift = (width - UiLayout.AtDpi(220)) / 2;
+        var footerHeight = _navIconsOnly ? PlaceRailFooter(width) : PlaceWideFooter(width);
 
-        btnManageNav.Left = UiLayout.AtDpi(12) + shift;
-        btnMuteToggle.Left = UiLayout.AtDpi(80) + shift;
-        btnUndo.Left = UiLayout.AtDpi(148) + shift;
+        if (pnlSidebarFooter.Height != footerHeight)
+        {
+            pnlSidebarFooter.Height = footerHeight;
+        }
     }
+
+    /// <summary>
+    /// The footer's row of three, as the designer builds it: 12 + 60 + 8 +
+    /// 60 + 8 + 60 + 12 across, which is 220 - the sidebar's width at the
+    /// normal text size - and kept in the middle when it is wider than that.
+    /// Hands back the height the row needs.
+    /// </summary>
+    private int PlaceWideFooter(int width)
+    {
+        var shift = (width - UiLayout.AtDpi(220)) / 2;
+        var size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
+        var top = UiLayout.AtDpi(14);
+
+        btnManageNav.Size = size;
+        btnMuteToggle.Size = size;
+        btnUndo.Size = size;
+
+        btnManageNav.Location = new Point(UiLayout.AtDpi(12) + shift, top);
+        btnMuteToggle.Location = new Point(UiLayout.AtDpi(80) + shift, top);
+        btnUndo.Location = new Point(UiLayout.AtDpi(148) + shift, top);
+
+        return UiLayout.AtDpi(70);
+    }
+
+    /// <summary>
+    /// The same three buttons stacked down the rail, centred in it, in the
+    /// order they are in across the open sidebar. Hands back the height the
+    /// column needs, which is the footer's - about 130 against the row's 70,
+    /// and the list above it scrolls as it already does when the pages
+    /// outgrow it.
+    /// </summary>
+    private int PlaceRailFooter(int width)
+    {
+        var buttonWidth = UiLayout.AtDpi(RailFooterButtonWidth);
+        var buttonHeight = UiLayout.AtDpi(RailFooterButtonHeight);
+        var gap = UiLayout.AtDpi(RailFooterGap);
+        var left = Math.Max(0, (width - buttonWidth) / 2);
+        var top = gap;
+
+        foreach (var button in new[] { btnManageNav, btnMuteToggle, btnUndo })
+        {
+            button.Size = new Size(buttonWidth, buttonHeight);
+            button.Location = new Point(left, top);
+            top += buttonHeight + gap;
+        }
+
+        return top;
+    }
+
+    /// <summary>
+    /// Narrows the sidebar to a rail of icons, or opens it again.
+    ///
+    /// What goes is the page names, the group headings, the page search and
+    /// the app title; what is left is one column of icons, with each page's
+    /// name on hover (SidebarNavList.IconsOnly). Everything that moves is a
+    /// size or a visibility - no page is hidden, no order changes, and the
+    /// page on screen stays on screen - so this is safe at any moment, a
+    /// race included.
+    ///
+    /// It is NOT an undo step. It is a view, like the text size and like
+    /// Race Mode, and putting it on the undo stack would mean a Ctrl+Z after
+    /// narrowing the sidebar took back the club's last real change instead.
+    ///
+    /// save is false at startup, where the value has just been read out of
+    /// the settings file: writing it straight back would be a disk write per
+    /// launch that changes nothing.
+    /// </summary>
+    private void SetNavIconsOnly(bool iconsOnly, bool save = true)
+    {
+        _navIconsOnly = iconsOnly;
+
+        SuspendLayout();
+
+        try
+        {
+            lstNav.IconsOnly = iconsOnly;
+            lblAppTitle.Compact = iconsOnly;
+
+            // A query typed into the page search is cleared on the way in:
+            // the box goes with the names, and a rail showing a filtered
+            // list with nothing on screen to say why is a sidebar that has
+            // lost pages. Ctrl+F opens the sidebar again rather than putting
+            // the focus in a box nobody can see - see ProcessCmdKey.
+            if (iconsOnly && txtNavSearch.Text.Length > 0)
+            {
+                txtNavSearch.Clear();
+            }
+
+            txtNavSearch.Visible = !iconsOnly;
+
+            // The header's height, whether it draws its scene, and whether
+            // that scene is animated all follow this - and RefreshHeaderLogo
+            // settles all three.
+            RefreshHeaderLogo();
+
+            // The width first, then what sits inside it: FitNavSearchHeight
+            // places the chevron from the search row's own width, which is
+            // the sidebar's, so doing it the other way round put the chevron
+            // where the sidebar used to end. The layout pass on the way out
+            // of here reaches it again through pnlNavSearch's Resize, but
+            // only once the hooks are wired - and this also runs at startup,
+            // before they are.
+            PlaceSidebar();
+            FitNavSearchHeight();
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+
+        // The chevron points the way the next press goes, and its tooltip
+        // says so in words, so both are set again here.
+        SetUpCollapseButton();
+        btnCollapseNav.Invalidate();
+
+        if (!save)
+        {
+            return;
+        }
+
+        if (_settings.NavIconsOnly != iconsOnly)
+        {
+            _settings.NavIconsOnly = iconsOnly;
+            _settings.Save();
+        }
+
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [view] Sidebar {(iconsOnly ? "narrowed to its icons" : "showing the page names")} (Ctrl+B).");
+    }
+
+    /// <summary>Ctrl+B, and the chevron at the top of the sidebar.</summary>
+    private void ToggleNavIconsOnly() => SetNavIconsOnly(!_navIconsOnly);
 
     /// <summary>
     /// Pushes the current scale through the whole window.
@@ -282,13 +452,27 @@ public partial class MainForm
     private const int NavSearchRadius = 8;
 
     /// <summary>
+    /// The chevron's square size in the page-search row, and the gap between
+    /// it and the search box.
+    ///
+    /// Small on purpose: it shares the row the search box is already in
+    /// rather than having a strip of its own, so narrowing the sidebar costs
+    /// the nav list no height at all - and what it takes across, the search
+    /// box gives up.
+    /// </summary>
+    internal const int NavChevronSize = 24;
+
+    internal const int NavChevronGap = 6;
+
+    /// <summary>
     /// Where the page search's rounded box sits in its strip: the strip's
-    /// padding on every side.
+    /// padding on every side, less the chevron's room on the right.
     /// </summary>
     private Rectangle NavSearchBox() => new(
         pnlNavSearch.Padding.Left,
         pnlNavSearch.Padding.Top,
-        Math.Max(20, pnlNavSearch.ClientSize.Width - pnlNavSearch.Padding.Horizontal),
+        Math.Max(20, pnlNavSearch.ClientSize.Width - pnlNavSearch.Padding.Horizontal
+            - UiLayout.AtDpi(NavChevronSize) - UiLayout.AtDpi(NavChevronGap)),
         Math.Max(10, pnlNavSearch.ClientSize.Height - pnlNavSearch.Padding.Vertical));
 
     /// <summary>
@@ -320,12 +504,32 @@ public partial class MainForm
             Math.Max(20, box.Width - inset * 2),
             textHeight);
 
+        // The chevron beside the box: on the right of the row while the page
+        // names are showing, and in the middle of the rail when they are not,
+        // where the box beside it is hidden and the whole row is its.
+        var chevron = UiLayout.AtDpi(NavChevronSize);
+
+        btnCollapseNav.Size = new Size(chevron, chevron);
+        btnCollapseNav.Location = new Point(
+            _navIconsOnly
+                ? Math.Max(0, (pnlNavSearch.ClientSize.Width - chevron) / 2)
+                : Math.Max(0, pnlNavSearch.ClientSize.Width - pnlNavSearch.Padding.Right - chevron),
+            Math.Max(0, (pnlNavSearch.ClientSize.Height - chevron) / 2));
+
         pnlNavSearch.Invalidate();
     }
 
     /// <summary>The page search's rounded box, filled and edged like the sidebar's buttons; the accent edge while typing.</summary>
     private void PaintNavSearchBox(object? sender, PaintEventArgs e)
     {
+        // Nothing to draw in the rail: the box inside it is hidden, and an
+        // empty rounded field with no box in it reads as a field that has
+        // lost its text rather than as a row with only a chevron in it.
+        if (_navIconsOnly)
+        {
+            return;
+        }
+
         var g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
@@ -405,7 +609,92 @@ public partial class MainForm
         SetUpFooterButton(btnMuteToggle, DrawMuteIcon);
 
         SetUpFooterButton(btnUndo, DrawUndoIcon, () => _undo.Count);
+
+        SetUpCollapseButton();
     }
+
+    /// <summary>Set once the chevron's Paint handler is wired, so a restyle does not add a second one - the reason FooterPainted exists.</summary>
+    private bool _collapseButtonPainted;
+
+    /// <summary>
+    /// The chevron that narrows the sidebar to its icons and opens it again.
+    ///
+    /// Styled like the footer's icon buttons but without their plate: it sits
+    /// in the page-search row, where a filled button beside the search field
+    /// read as a second field. It draws its own icon rather than going
+    /// through SetUpFooterButton, whose fixed 10px inset either side is most
+    /// of a button this small.
+    ///
+    /// Runs again on every theme and text-size change (RestyleSidebarChrome),
+    /// because the generic theme pass paints it in the content area's colours
+    /// like every other button in the window.
+    /// </summary>
+    private void SetUpCollapseButton()
+    {
+        btnCollapseNav.Text = string.Empty;
+        btnCollapseNav.FlatStyle = FlatStyle.Flat;
+        btnCollapseNav.FlatAppearance.BorderSize = 0;
+        btnCollapseNav.FlatAppearance.MouseOverBackColor = AppTheme.SidebarHover;
+        btnCollapseNav.FlatAppearance.MouseDownBackColor = AppTheme.SidebarHover;
+        btnCollapseNav.BackColor = AppTheme.SidebarBackground;
+        btnCollapseNav.ForeColor = AppTheme.SidebarTextMuted;
+        btnCollapseNav.TabStop = false;
+        btnCollapseNav.Cursor = Cursors.Hand;
+
+        _footerTooltip.SetToolTip(btnCollapseNav, _navIconsOnly
+            ? "Show the page names (Ctrl+B)"
+            : "Just the icons (Ctrl+B)");
+
+        if (!_collapseButtonPainted)
+        {
+            _collapseButtonPainted = true;
+
+            btnCollapseNav.Paint += (_, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                // A sixth of the button either side, rather than the footer
+                // row's fixed ten: this button is 24px, where ten either side
+                // would leave four pixels of icon.
+                var inset = Math.Max(1, btnCollapseNav.Height / 6);
+                var size = Math.Max(4, Math.Min(btnCollapseNav.Width, btnCollapseNav.Height) - inset * 2);
+
+                var bounds = new Rectangle(
+                    (btnCollapseNav.Width - size) / 2,
+                    (btnCollapseNav.Height - size) / 2,
+                    size,
+                    size);
+
+                DrawNavRailIcon(e.Graphics, bounds, AppTheme.SidebarTextMuted);
+            };
+        }
+    }
+
+    /// <summary>
+    /// The sidebar's chevrons: pointing left while the page names are
+    /// showing (a press narrows it) and right while it is a rail (a press
+    /// opens it again). The glyph says what the next press does, as the mute
+    /// button's does - which is why this reads state and so cannot be a
+    /// static method like the other icons.
+    ///
+    /// Two chevrons rather than one, so it reads as a panel folding away
+    /// rather than as a Back button.
+    /// </summary>
+    private void DrawNavRailIcon(Graphics g, Rectangle b, Color color) => DrawOnIconGrid(g, b, grid =>
+    {
+        using var pen = IconPen(color);
+
+        if (_navIconsOnly)
+        {
+            grid.DrawLines(pen, new[] { new PointF(8f, 6f), new PointF(14f, 12f), new PointF(8f, 18f) });
+            grid.DrawLines(pen, new[] { new PointF(14f, 6f), new PointF(20f, 12f), new PointF(14f, 18f) });
+        }
+        else
+        {
+            grid.DrawLines(pen, new[] { new PointF(16f, 6f), new PointF(10f, 12f), new PointF(16f, 18f) });
+            grid.DrawLines(pen, new[] { new PointF(10f, 6f), new PointF(4f, 12f), new PointF(10f, 18f) });
+        }
+    });
 
     /// <summary>
     /// Footer buttons whose Paint handler has already been wired.
@@ -502,7 +791,13 @@ public partial class MainForm
         // Never while the club logo is showing: the header draws the logo
         // instead of the scene, so the timer would only be repainting a
         // still picture twenty times a second.
-        var shouldRun = AppTheme.CurrentMode == AppTheme.Mode.Synthwave && _settings.AnimateHeader && !lblAppTitle.HasLogo;
+        // Never in the rail either: the header is sixty pixels across there
+        // and draws the app's initials instead of the scene, so the timer
+        // would be repainting two letters twenty times a second.
+        var shouldRun = AppTheme.CurrentMode == AppTheme.Mode.Synthwave
+            && _settings.AnimateHeader
+            && !lblAppTitle.HasLogo
+            && !_navIconsOnly;
 
         // The stars read the animation phase, which only moves while the
         // timer is running - so the header is told whether it is being
@@ -550,8 +845,12 @@ public partial class MainForm
         }
 
         // At the screen's DPI, as the designer's first height is (132 or 64
-        // while the app runs DPI-unaware, the default).
-        var height = UiLayout.AtDpi(lblAppTitle.HasLogo || AppTheme.CurrentMode == AppTheme.Mode.Synthwave ? 132 : 64);
+        // while the app runs DPI-unaware, the default). Never the tall one in
+        // the rail: 132 high by 60 across is a letterbox on its end, and the
+        // tall height is there to give a logo and the Synthwave scene room
+        // across, which the rail has not got.
+        var height = UiLayout.AtDpi(
+            !_navIconsOnly && (lblAppTitle.HasLogo || AppTheme.CurrentMode == AppTheme.Mode.Synthwave) ? 132 : 64);
 
         if (lblAppTitle.Height != height)
         {

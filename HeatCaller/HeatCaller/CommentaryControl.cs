@@ -103,6 +103,28 @@ public sealed class CommentaryControl : UserControl
     private readonly Label _lblBedFile = new();
     private readonly Label _lblShowResult = new();
 
+    // --- The sting (10 Oct 2026) ---
+    //
+    // The third piece, and the only one that is not music to listen to: it
+    // is the mark BETWEEN two items of a block - see ShowBlock. Beside the
+    // opener and the bed because it is chosen the same way and lives in the
+    // same folder, and below them because it is the one a club can leave
+    // out without losing anything: with no sting a swell of the bed does
+    // the same job, and the line beside the row says so.
+    private readonly Button _btnStingPick = new();
+    private readonly Button _btnStingClear = new();
+    private readonly Label _lblStingFile = new();
+
+    // --- The running order (10 Oct 2026) ---
+    //
+    // A show is no longer the same show every time: the first of the night
+    // plays the opener whole and the ones after it come in on its ring-out
+    // - see ShowRunningOrder. Where a later show comes in is MEASURED off
+    // the club's own file, so the line under the box says what their file
+    // is going to do, the way the two Describe lines above it do.
+    private readonly CheckBox _chkShowRejoin = new ThemedCheckBox();
+    private readonly Label _lblRunningOrder = new();
+
     /// <summary>The boxes for which segments get the music, by segment - see ShowSegments.Candidates.</summary>
     private readonly Dictionary<SegmentKind, CheckBox> _showBoxes = new();
 
@@ -146,7 +168,7 @@ public sealed class CommentaryControl : UserControl
     private bool _loadingVoices;
 
     /// <summary>A voice the mechanic can be given - what is saved for it, and what the list shows.</summary>
-    /// <param name="Id">The ElevenLabs voice id, the HeatCaller voice's id, or the Windows voice's name. Empty for the announcer's own voice.</param>
+    /// <param name="Id">The ElevenLabs voice id, the HeatCaller voice's id, or Kokoro's name for the voice. Empty for the announcer's own voice.</param>
     /// <param name="Rev">The HeatCaller catalogue's fingerprint for the voice; empty for the other engines.</param>
     public sealed record VoiceChoice(string Id, string Name, string Rev, string Display)
     {
@@ -1029,18 +1051,24 @@ public sealed class CommentaryControl : UserControl
         };
 
         _btnOpenerPick.Text = "Choose...";
-        _btnOpenerPick.Click += (_, _) => PickShowMusic(opener: true);
+        _btnOpenerPick.Click += (_, _) => PickShowMusic(ShowPart.Opener);
 
         _btnOpenerClear.Text = "Remove";
-        _btnOpenerClear.Click += (_, _) => ClearShowMusic(opener: true);
+        _btnOpenerClear.Click += (_, _) => ClearShowMusic(ShowPart.Opener);
 
         _btnBedPick.Text = "Choose...";
-        _btnBedPick.Click += (_, _) => PickShowMusic(opener: false);
+        _btnBedPick.Click += (_, _) => PickShowMusic(ShowPart.Bed);
 
         _btnBedClear.Text = "Remove";
-        _btnBedClear.Click += (_, _) => ClearShowMusic(opener: false);
+        _btnBedClear.Click += (_, _) => ClearShowMusic(ShowPart.Bed);
 
-        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblShowResult })
+        _btnStingPick.Text = "Choose...";
+        _btnStingPick.Click += (_, _) => PickShowMusic(ShowPart.Sting);
+
+        _btnStingClear.Text = "Remove";
+        _btnStingClear.Click += (_, _) => ClearShowMusic(ShowPart.Sting);
+
+        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblStingFile, _lblShowResult })
         {
             label.AutoSize = true;
             label.ForeColor = AppTheme.TextMuted;
@@ -1086,6 +1114,15 @@ public sealed class CommentaryControl : UserControl
             _settings.Save();
         };
 
+        Check(_chkShowRejoin, "Shorten the opener on later shows");
+        _chkShowRejoin.Checked = _settings.ShowRejoinEnabled;
+        _chkShowRejoin.CheckedChanged += (_, _) =>
+        {
+            _settings.ShowRejoinEnabled = _chkShowRejoin.Checked;
+            _settings.Save();
+            RefreshShowMusic();
+        };
+
         _btnTestShow.Text = TestShowCaption;
         _btnTestShow.Click += async (_, _) => await TestShowMusicAsync();
 
@@ -1093,15 +1130,29 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(showMusicGrid.AddRow("Opener:", Line(_btnOpenerPick, _btnOpenerClear, _lblOpenerFile)));
         Stepped(showMusicGrid.AddRow("Music bed:", Line(_btnBedPick, _btnBedClear, _lblBedFile)));
+        Stepped(showMusicGrid.AddRow("Sting:", Line(_btnStingPick, _btnStingClear, _lblStingFile)));
         showMusicGrid.AddHint(
             "Your own files, copied into the club's data so a backup carries them to the next laptop. The bed is "
             + "looped for as long as the show runs and then finishes on its own fade, so anything from half a minute "
-            + "up works - it does not have to be long.");
+            + "up works - it does not have to be long. The sting is the short mark between one part of the show and "
+            + "the next, a second or two at most; leave it out and the bed swells instead, which does the same job.");
 
         Stepped(showMusicGrid.AddRow("Opener level:", Line(_numOpenerLevel, Suffix("%", muted: false))));
         Stepped(showMusicGrid.AddRow("Bed level:", Line(_numBedLevel, Suffix("% - a bed sits well under the voice, so this is low on purpose"))));
         Stepped(showMusicGrid.AddRow("and drops to:", Line(_numBedDuck, Suffix("% of that while the announcer is actually speaking"))));
         Stepped(showMusicGrid.AddRow("Voice comes in:", Line(_numVoiceEnters, Suffix("ms into the opener - 0 finds it, where the opener stops hitting and starts ringing out"))));
+
+        // The running order. In the field column with no caption of its
+        // own, because it belongs to the four rows above it rather than
+        // naming a field - FieldGrid.AddField.
+        showMusicGrid.AddField(_chkShowRejoin);
+        showMusicGrid.AddHint(
+            "No broadcast plays its full theme every quarter of an hour. The first show of the night plays your "
+            + "opener whole; the ones after it come in on its ring-out, which is the same music in a fraction of "
+            + "the time, and the sign-off is played out on the bed. Untick this and the opener is played whole "
+            + "every time - the rest of the running order still varies.");
+        showMusicGrid.AddHint(_lblRunningOrder);
+
         Stepped(showMusicGrid.AddRow("Hear it:", Line(Steady(_btnTestShow, TestShowCaption), _lblShowResult)));
 
         // ------------------------------------------------------------------
@@ -1119,7 +1170,9 @@ public sealed class CommentaryControl : UserControl
             "A piece of music in front of the voice and another underneath it, for the segments that open and close "
             + "the evening. The opener lands, the bed comes up under it, and the first words arrive over the opener's "
             + "tail rather than after it - so it sounds like a broadcast coming on air rather than a clip followed by "
-            + "an announcement. The club's own playlist goes quiet while it runs and comes back after."));
+            + "an announcement. When the talking stops the bed comes up for a beat and then plays its own ending. "
+            + "No two shows in an evening are the same shape: see the running order below. The club's own playlist "
+            + "goes quiet while it runs and comes back after."));
         show.Add(_chkShowMusic, stretch: false, gapBelow: UiLayout.HintGap);
         show.Add(showMusicGrid);
 
@@ -1128,10 +1181,19 @@ public sealed class CommentaryControl : UserControl
             () => AppTheme.BoldFont);
 
         show.Add(musicHeading, stretch: false, gapBelow: 0);
+
+        // The two that sit beside a race ARE on this list, and have been
+        // since each got its own handling - the intro's bed cut short when
+        // the countdown starts, the recap's opener in the gap after the
+        // teaser. This hint still said they were not, which was true of the
+        // list as it first shipped and has been wrong since; see
+        // ShowSegments.Candidates for what is actually offered and why.
         show.Add(Hint(
-            "The set pieces between races, where filling time is the point. Race intros and recaps are not on the "
-            + "list: those land in the middle of the start sequence and the flag calls, where an opener would be "
-            + "talking over the race rather than introducing it."),
+            "The set pieces, where filling time is the point. The cold open and the sign-off come ticked. Race "
+            + "intros and recaps are here too: the recap's music lands in the gap after the teaser, and an intro's "
+            + "bed is taken away the moment the countdown starts rather than playing over the horn. Nothing that "
+            + "fires during a race is on the list - a battle call is a remark over a race in progress, not a set "
+            + "piece."),
             gapBelow: UiLayout.HintGap);
 
         for (var i = 0; i < ShowSegments.Candidates.Count; i++)
@@ -1304,7 +1366,6 @@ public sealed class CommentaryControl : UserControl
 
     private static string EngineLabel(VoiceEngine engine) => engine switch
     {
-        VoiceEngine.Windows => "Windows",
         VoiceEngine.HeatCaller => "HeatCaller",
         VoiceEngine.Kokoro => "Kokoro",
         _ => "ElevenLabs",
@@ -1321,8 +1382,8 @@ public sealed class CommentaryControl : UserControl
     /// picker shows it.
     ///
     /// Shared between the mechanic and the co-host rather than written
-    /// twice: they are the same seven settings in a different prefix, and
-    /// two copies would drift the first time an engine was added.
+    /// twice: they are the same settings in a different prefix, and two
+    /// copies would drift the first time an engine was added or retired.
     /// </summary>
     private static VoiceChoice SavedSecondVoice(SecondVoice voice, VoiceEngine engine)
     {
@@ -1330,10 +1391,6 @@ public sealed class CommentaryControl : UserControl
 
         return engine switch
         {
-            VoiceEngine.Windows => string.IsNullOrWhiteSpace(voice.WindowsVoiceName)
-                ? AnnouncersVoice
-                : new VoiceChoice(voice.WindowsVoiceName, voice.WindowsVoiceName, string.Empty, voice.WindowsVoiceName),
-
             VoiceEngine.Kokoro => string.IsNullOrWhiteSpace(voice.KokoroVoiceName)
                 ? AnnouncersVoice
                 : new VoiceChoice(voice.KokoroVoiceName, voice.KokoroVoiceName, string.Empty, KokoroSpeech.Describe(voice.KokoroVoiceName)),
@@ -1481,9 +1538,9 @@ public sealed class CommentaryControl : UserControl
     /// it is copied, so a piece that is no use as a loop is turned away
     /// here rather than on a race night - see ShowMusic.Install.
     /// </summary>
-    private void PickShowMusic(bool opener)
+    private void PickShowMusic(ShowPart part)
     {
-        var what = opener ? "opener" : "music bed";
+        var what = WhatItIs(part);
 
         using var dialog = new OpenFileDialog
         {
@@ -1502,7 +1559,7 @@ public sealed class CommentaryControl : UserControl
             return;
         }
 
-        if (!_showMusic.Install(dialog.FileName, opener, out var problem))
+        if (!_showMusic.Install(dialog.FileName, part, out var problem))
         {
             AppDialog.Show(
                 this,
@@ -1520,14 +1577,21 @@ public sealed class CommentaryControl : UserControl
         RefreshShowMusic();
     }
 
-    /// <summary>Takes the opener or the bed away, so that part of the show is read without it.</summary>
-    private void ClearShowMusic(bool opener)
+    /// <summary>Takes one of the three pieces away, so the show runs without it.</summary>
+    private void ClearShowMusic(ShowPart part)
     {
-        var what = opener ? "opener" : "music bed";
+        var what = WhatItIs(part);
+
+        // The sting is the one whose absence is not a loss - a swell of the
+        // bed marks the breaks instead - so it is not offered the same
+        // warning as the two pieces that really do go quiet.
+        var warning = part == ShowPart.Sting
+            ? $"Remove the {what}? The breaks in the show will be marked by the bed swelling instead."
+            : $"Remove the {what}? The show will be read without it until you choose another.";
 
         if (AppDialog.Show(
                 this,
-                $"Remove the {what}? The show will be read without it until you choose another.",
+                warning,
                 $"Remove the {what}",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question) != DialogResult.Yes)
@@ -1535,23 +1599,41 @@ public sealed class CommentaryControl : UserControl
             return;
         }
 
-        _showMusic.Remove(opener);
+        _showMusic.Remove(part);
         _lblShowResult.Text = string.Empty;
 
         ShowMusicChanged?.Invoke();
         RefreshShowMusic();
     }
 
+    /// <summary>What a piece is called in front of a club - the pickers, the warnings and the titles all use this one.</summary>
+    private static string WhatItIs(ShowPart part) => part switch
+    {
+        ShowPart.Bed => "music bed",
+        ShowPart.Sting => "sting",
+        _ => "opener",
+    };
+
     /// <summary>
-    /// What the two files are, and what the measurement made of them -
+    /// What the three files are, and what the measurement made of them -
     /// how much of the bed loops and whether it has an ending of its own.
     /// Measured rather than set, so this is the only way a club can see
     /// what their file is going to do.
     /// </summary>
     private void RefreshShowMusic()
     {
-        _lblOpenerFile.Text = _showMusic.Describe(opener: true);
-        _lblBedFile.Text = _showMusic.Describe(opener: false);
+        _lblOpenerFile.Text = _showMusic.Describe(ShowPart.Opener);
+        _lblBedFile.Text = _showMusic.Describe(ShowPart.Bed);
+        _lblStingFile.Text = _showMusic.Describe(ShowPart.Sting);
+
+        // And what the running order is going to do with their opener,
+        // which is measured off the file in the same way and so is just as
+        // impossible to guess from the outside. Only worth saying while
+        // the shortening is on: unticked, every show plays it whole and
+        // there is nothing to report.
+        _lblRunningOrder.Text = _chkShowRejoin.Checked
+            ? _showMusic.DescribeRunningOrder()
+            : "every show plays the opener whole.";
 
         UpdateEnabledState();
     }
@@ -1584,7 +1666,11 @@ public sealed class CommentaryControl : UserControl
                 return;
             }
 
-            _lblShowResult.Text = problem ?? "That is how it will sound.";
+            // The press itself counts as a show of the evening, so a
+            // second one is a rejoin and sounds different on purpose -
+            // said here, because otherwise it reads as the test having
+            // half failed the second time.
+            _lblShowResult.Text = problem ?? "That is how it will sound. Press it again to hear a later show in the night.";
             _lblShowResult.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
         }
         catch (Exception ex)
@@ -1611,10 +1697,6 @@ public sealed class CommentaryControl : UserControl
 
         switch (_voiceListEngine)
         {
-            case VoiceEngine.Windows:
-                _settings.CoHostWindowsVoiceName = choice.Id;
-                break;
-
             case VoiceEngine.Kokoro:
                 _settings.CoHostKokoroVoiceName = choice.Id;
                 break;
@@ -1644,10 +1726,6 @@ public sealed class CommentaryControl : UserControl
 
         switch (_voiceListEngine)
         {
-            case VoiceEngine.Windows:
-                _settings.MechanicWindowsVoiceName = choice.Id;
-                break;
-
             case VoiceEngine.Kokoro:
                 _settings.MechanicKokoroVoiceName = choice.Id;
                 break;
@@ -1840,10 +1918,16 @@ public sealed class CommentaryControl : UserControl
         _btnOpenerClear.Enabled = musicOn && _showMusic.OpenerPath is not null;
         _btnBedPick.Enabled = musicOn;
         _btnBedClear.Enabled = musicOn && _showMusic.BedPath is not null;
+        _btnStingPick.Enabled = musicOn;
+        _btnStingClear.Enabled = musicOn && _showMusic.StingPath is not null;
         _numOpenerLevel.Enabled = musicOn;
         _numBedLevel.Enabled = musicOn;
         _numBedDuck.Enabled = musicOn;
         _numVoiceEnters.Enabled = musicOn;
+
+        // The running order shortens the OPENER, so it has nothing to do
+        // for a club who have only ever put a bed in.
+        _chkShowRejoin.Enabled = musicOn && _showMusic.OpenerPath is not null;
 
         // Nothing to play: a Test button that does nothing reads as the
         // feature being broken rather than as a club with no files in yet.

@@ -119,7 +119,10 @@ public sealed class PublishLayoutTests
         var folder = Path.Combine(AppContext.BaseDirectory, "Assets", "Music");
 
         Assert.True(Directory.Exists(folder), folder + " is missing - no built-in tracks would be installed");
-        Assert.NotEmpty(Directory.GetFiles(folder).Where(IsAudio));
+        // Assert.Contains with the predicate, not NotEmpty over a Where:
+        // xUnit2030, and the failure message names the folder's contents
+        // rather than just saying a sequence was empty.
+        Assert.Contains(Directory.GetFiles(folder), IsAudio);
     }
 
     [Fact]

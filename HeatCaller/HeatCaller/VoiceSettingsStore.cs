@@ -195,23 +195,39 @@ public sealed class VoiceSettingsStore
     }
 
     /// <summary>
-    /// Gives a file written before the free Windows voice existed a choice
-    /// of engine, once. True when it had none (or one this version doesn't
-    /// know), so the caller saves it and this never runs for it again.
+    /// Gives a file written before there was more than one voice a choice of
+    /// engine, once - and moves a file that chose the retired Windows voice
+    /// onto Kokoro. True when it changed anything, so the caller saves it
+    /// and this never runs for that file again.
     ///
     /// A club with an ElevenLabs key - even one sealed on another PC and
     /// not yet recovered - keeps ElevenLabs; a file with no key at all was
-    /// an announcer that could not speak, and now speaks with Windows.
+    /// an announcer that could not speak, and now speaks with Kokoro.
     /// </summary>
     private static bool ChooseEngineForOlderFile(VoiceProfile loaded)
     {
         // Every engine this version knows, including the HeatCaller voice:
         // a choice this test did not list would be "inferred" back to
-        // ElevenLabs or Windows on every single load, and the club would
+        // ElevenLabs or Kokoro on every single load, and the club would
         // find its voice changed each time the app started.
-        if (loaded.Engine is VoiceEngine.ElevenLabs or VoiceEngine.Windows or VoiceEngine.HeatCaller or VoiceEngine.Kokoro)
+        if (loaded.Engine is VoiceEngine.ElevenLabs or VoiceEngine.HeatCaller or VoiceEngine.Kokoro)
         {
             return false;
+        }
+
+        // A file that chose the free Windows voice. By NUMBER, because no
+        // enum member answers to 1 any more and System.Text.Json hands back
+        // the integer as it found it - see VoiceEngines.RetiredWindows.
+        //
+        // Named here rather than left to InferEngine below, which would
+        // have handed a club that had BOTH a key and the Windows voice
+        // chosen back to ElevenLabs - a voice it had deliberately turned
+        // off, and one it pays for by the character. Kokoro is the free
+        // voice now, so "the free voice" is what it was and what it gets.
+        if ((int?)loaded.Engine == VoiceEngines.RetiredWindows)
+        {
+            loaded.Engine = VoiceEngine.Kokoro;
+            return true;
         }
 
         loaded.Engine = loaded.InferEngine();

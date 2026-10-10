@@ -332,9 +332,14 @@
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
     </ItemGroup>
-    <!-- Loud rather than silent: a publish with no voices beside the exe is
-         a published app whose Kokoro voice cannot speak. -->
-    <Warning Condition="'@(_KokoroVoiceFile)' == ''" Text="No Kokoro voice files found in $(OutputPath)voices - the published app will not be able to speak in the Kokoro voice. Build before publishing, and check KokoroSharp's CopyContent target still copies them." />
+    <!-- An ERROR since 10 Oct 2026, when the Windows voice was retired and
+         Kokoro became the only free voice AND the fallback for every other
+         one. A publish with no voices beside the exe is now an installer
+         that cannot say a word, and a warning in the middle of a publish
+         log is not enough to stop that reaching a club. Publish-only
+         target (BeforeTargets=ComputeResolvedFilesToPublishList), so an
+         ordinary build and check.cmd never see it. -->
+    <Error Condition="'@(_KokoroVoiceFile)' == ''" Text="No Kokoro voice files found in $(OutputPath)voices - the published app will not be able to speak in the Kokoro voice, which since 10 Oct 2026 is the only voice that always works. Build before publishing, and check KokoroSharp's CopyContent target still copies them." />
   </Target>
 
   <!-- The Kokoro model itself (~310 MB), shipped beside the exe so a club at
@@ -362,11 +367,18 @@
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
     </ItemGroup>
-    <!-- A warning, not an error: a publish without the model is still a
-         working app - KokoroSpeech falls back to the download, exactly as it
-         did before this was bundled - it is just not the installer we mean to
-         ship to a club. -->
-    <Warning Condition="'@(_KokoroModelFile)' == ''" Text="Assets\Kokoro\kokoro.onnx is not there, so the Kokoro voice is NOT in this publish - a club installing it would have to download 310 MB from Voice Settings before the natural voice could speak. Run fetch-kokoro.cmd and publish again." />
+    <!-- An ERROR since 10 Oct 2026. It was a warning, and the argument for
+         that was written down here: "a publish without the model is still a
+         working app - KokoroSpeech falls back to the download". That was
+         true while the Windows voice sat underneath everything. The Windows
+         voice is gone, Kokoro is the only free voice and the fallback for
+         every other one, so a publish without the model is now an installer
+         that CANNOT SPEAK AT ALL until somebody downloads 310 MB over the
+         club's Wi-Fi - which is exactly the night this was bundled to
+         avoid. Publish-only target, so an ordinary build and check.cmd
+         never see it; fetch-kokoro.cmd is the one-line fix and the message
+         says so. -->
+    <Error Condition="'@(_KokoroModelFile)' == ''" Text="Assets\Kokoro\kokoro.onnx is not there, so the Kokoro voice would NOT be in this publish - and since the Windows voice was retired Kokoro is the only voice that always works, so that installer could not speak at all until a club downloaded 310 MB. Run fetch-kokoro.cmd and publish again." />
   </Target>
 
 </Project>

@@ -180,6 +180,17 @@ public sealed class MusicStore
                         .ToList();
                     store.Current = loaded;
                 }
+                else
+                {
+                    // Present, parsed, and not the shape this store writes.
+                    // Not a new install either, so the same rule applies. A
+                    // file holding the literal "null" parses to nothing
+                    // without throwing: it used to leave the flag false, so
+                    // the start-up sync below wrote the bundled tracks alone
+                    // over the club's own library before anyone had seen a
+                    // word about it.
+                    unreadable = true;
+                }
             }
         }
         catch (Exception ex)

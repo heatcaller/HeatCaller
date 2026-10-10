@@ -259,7 +259,16 @@ Click **Test Connection**. A good result says `Connected as Acme RC.` (your club
 
 The relay can also speak. With an ElevenLabs key of your own on the relay, the clubs you switch on get natural announcer voices with no account, no key and no bill of their own; the laptop sends the words and the name of a voice, and gets audio back. The clubs' side of it is in [Voice announcements](../announcer/voice.md#the-heatcaller-voice).
 
-This is optional, and the relay works exactly as it did without it. Leave the key out and the relay starts, says so in the log, and every club carries on with its own key or the free Windows voice.
+This is optional, and the relay works exactly as it did without it. Leave the key out and the relay starts, says so in the log, and every club carries on with its own key or the free Kokoro voice.
+
+!!! warning "Deploy again before Hear It and Preview do anything"
+    The two buttons that let a club listen to a voice before choosing it — **Hear It** and **Preview**, beside the voice list on **Voice → Voice Settings** — are answered by routes a relay only has once it has been deployed again:
+
+    ```
+    fly deploy --ha=false
+    ```
+
+    Until you do, the app is told `This relay doesn't offer voice samples yet.`, **Hear It** disappears from the page and a preview is refused. Nothing else about the voice is affected, and a club that has already chosen a voice keeps hearing it. See [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it).
 
 ### The catalog
 
@@ -329,6 +338,42 @@ Without the secret the relay starts and simply does not offer the voice, whateve
 [relay] HeatCaller voice: a catalogue is configured but RELAY_VOICE_KEY is not set, so it is switched off
 ```
 
+### Hearing a voice before choosing it
+
+The catalog can only ever tell a club a voice's name and one short phrase, so a club used to pick the voice its members would hear all season by reading about it. Three routes answer that, and they are the only ones in the relay that sit outside `/api/v1/c/<club>/`:
+
+| Route | Token | What it answers |
+|---|---|---|
+| `GET /voice/samples` | None | Every catalog voice there is a sample of, each as an `id`, a `name` and a `url`. A relay with no `"voice"` block answers an empty list rather than a 404, so the app can say "there is nothing" instead of "something went wrong". |
+| `GET /voice/sample/<id>` | None | That one voice's sample, as MP3 audio. |
+| `POST /voice/preview` | The club's publish token | One line of the club's own words, in one catalog voice, as MP3 audio. |
+
+**The first two are open to the internet on purpose.** A club has to be able to hear a voice before it has signed up for anything, so neither takes a token and neither names a club; a laptop with nothing but your relay's address on its **Club Website** page can listen to every voice you offer.
+
+What makes that safe is that nothing a caller sends decides what gets rendered. The words are one fixed, neutral line built into the relay — the same sentence in every voice, so two of them can actually be compared — and the voice has to be one your catalog names. The first visitor to ask for a voice nobody has asked for yet pays for one render of that line on your ElevenLabs account; it is kept in `dataDir/.voice/samples/` and everybody after that is served from there. The ceiling on the whole feature is one short line per catalog voice, ever, so it is a few hundred characters all told. Both routes are held to 60 requests a minute per address. Re-tuning a voice's model or settings changes its fingerprint, so that voice's sample is rendered once more.
+
+A relay whose `RELAY_VOICE_KEY` has been taken away still lists and serves the samples already on its volume: that audio is paid for and still worth hearing.
+
+**Preview carries the club's token, and the token is the club.** There is no club id in its address to check the token against, which is exactly what makes it safe: nothing in the address could name a different club, so there is no mismatch to get wrong, and the only thing the route writes is the preview count of the club its own token names.
+
+Previews are charged to a small **daily** allowance of their own and never to the club's month. A club must not be able to arrive on a race night and find it spent its voice on Tuesday afternoon deciding which one to use. The day is UTC, and each club's is counted in `dataDir/.voice/preview/<club>.json`. Past it the relay answers 429 and says so in words — "That is this club's previews for today - 3,000 characters a day of trying voices out. Its race-night voice allowance has not been touched, and previews start again tomorrow." Nothing falls through to the month. **Hear It** keeps working, because it costs nothing.
+
+Both numbers live in the `"voice"` block beside the catalog:
+
+```json
+"voice": {
+  "monthlyChars": 100000,
+  "maxChars": 600,
+  "previewDailyChars": 3000,
+  "previewMaxChars": 200,
+  "voices": [ ... ]
+}
+```
+
+`previewDailyChars` is what one club may spend auditioning in a day — by default 3,000 characters, which is about fifteen to thirty previews. Set it to `0` to switch previews off and leave the samples working. `previewMaxChars` is the longest a single preview may be, 200 by default; the relay uses whichever of it and `maxChars` is smaller, so a relay set to speak short lines never promises a longer preview than it will speak. A club that pastes in more than that is refused and told the number.
+
+A preview goes through the same six-renders-at-once cap and the same 300-requests-a-minute-per-club budget as a spoken line, and a club asking for the same sentence in the same voice again is served from `dataDir/.voice/clubs/<club>/` for nothing, like any other cache hit.
+
 ### What it costs you
 
 Only a render that isn't already on disk is charged to ElevenLabs and counted against a club's month. Everything else is free:
@@ -344,7 +389,7 @@ Renders are capped at six at once across the whole relay, and a club may ask 300
 
 ### What a club sees when it goes wrong
 
-Every refusal has the same effect on the night: the free Windows voice says that line, so a flag call is never silent. The app names the reason in its console and on **Sounds → Mixer**. The ones you can fix from here are "the HeatCaller voice isn't included for this club" (no `"enabled": true`), "the HeatCaller voice isn't switched on for this relay" (no `RELAY_VOICE_KEY`), "that HeatCaller voice isn't available any more" (a voice taken out of the catalog that a club had chosen) and "the relay didn't accept this club's token" (a token replaced but not yet pasted into the club's **Club Website** page).
+Every refusal has the same effect on the night: the free Kokoro voice says that line, on the club's own laptop, so a flag call is never silent. The app names the reason in its console and on **Sounds → Mixer**. The ones you can fix from here are "the HeatCaller voice isn't included for this club" (no `"enabled": true`), "the HeatCaller voice isn't switched on for this relay" (no `RELAY_VOICE_KEY`), "that HeatCaller voice isn't available any more" (a voice taken out of the catalog that a club had chosen) and "the relay didn't accept this club's token" (a token replaced but not yet pasted into the club's **Club Website** page).
 
 ## Day to day
 
@@ -387,7 +432,7 @@ fly deploy --ha=false
 The volume, and every published result on it, survives the deploy. If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
 
 !!! note "HeatCaller 0.59.0: redeploy the relay first"
-    Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
+    Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. It also adds the two open voice-sample routes and the **Preview** button's own daily allowance, so **Hear It** and **Preview** on **Voice → Voice Settings** do nothing until it is deployed — see [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it). A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
 
 !!! note "HeatCaller 0.52.0: redeploy the relay"
     The 0.52.0 relay adds the HeatCaller voice: a voice catalog in the config, a per-club allowance, and two endpoints the laptop uses to list voices and have a line spoken. Clubs start with it switched off, and a relay with no `RELAY_VOICE_KEY` secret starts and simply doesn't offer it, so redeploying changes nothing until you set one up. See [The HeatCaller voice](#the-heatcaller-voice). From the relay folder, run `npm test`, then `fly deploy --ha=false`.
@@ -526,6 +571,8 @@ To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-
 | `voice.voices[]` | The announcer voices on offer. Each needs an `id` (lower-case letters, digits and hyphens, up to 24 characters) and a `voiceId`; `name`, `what`, `modelId`, `stability`, `similarity`, `style`, `speakerBoost`, `speed` and `outputFormat` are optional. | none |
 | `voice.monthlyChars` | The default allowance per club, a calendar month. 0 to 100,000,000. | `100000` |
 | `voice.maxChars` | Longest line the relay will speak at once. 40 to 5,000. | `600` |
+| `voice.previewDailyChars` | Characters one club may spend on **Preview** in a day (UTC), kept apart from its month. 0 to 1,000,000; `0` switches previews off and leaves the samples working. | `3000` |
+| `voice.previewMaxChars` | Longest one preview may be. 40 to 600. The relay uses this or `maxChars`, whichever is smaller. | `200` |
 
 Leave `maxBodyBytes` at its default unless you have a reason. HeatCaller sends documents of up to 900 KB; a lower limit makes the relay refuse some of them.
 
@@ -565,6 +612,7 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | `Voice "..." is listed twice in ...` | Remove the duplicate catalog entry. |
 | `Club "..." in ... names a voice "..." that the catalogue does not have.` | Correct that club's `voice.voices`, or add the voice to the catalogue. |
 | `"voice" in ... must be an object.` / `"voice.voices" in ... must be a list.` / the same for a club | Correct the shape of the block. A club's `voice.voices` is a list of ids, not of objects. |
+| `"voice.previewDailyChars" in ... must be a whole number from 0 to 1000000` / `"voice.previewMaxChars" in ... must be a whole number from 40 to 600` | Correct or remove that number. |
 
 ## Limits
 
@@ -580,10 +628,13 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | Race-day manager answers waiting | 300, or 4 MB in all | The oldest answers are forgotten. Answers older than 10 minutes are dropped. |
 | Check-in request body | 4 KB | Refused. |
 | Results listing | 8 MB | The listing holds the newest results that fit, and says how many older ones were left out (`omitted`). Each is still readable on its own. Old results are only forgotten after a new one has been saved. |
-| A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Windows voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |
-| One spoken line | `voice.maxChars` (600 by default) | Refused. The app has a 600-character limit of its own, measured on the spoken words, and the Windows voice says that line. |
-| Renders at once | 6, across the whole relay | Refused as busy; the Windows voice says that line and the next is asked for as normal. |
-| Voice requests from one club | 300 a minute | Refused as busy. Enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines. |
+| A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Kokoro voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |
+| One spoken line | `voice.maxChars` (600 by default) | Refused. The app has a 600-character limit of its own, measured on the spoken words, and the Kokoro voice says that line. |
+| Renders at once | 6, across the whole relay | Refused as busy; the Kokoro voice says that line and the next is asked for as normal. |
+| Voice requests from one club | 300 a minute | Refused as busy. Previews are counted in the same budget. Enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines. |
+| A club's preview allowance | `voice.previewDailyChars` (3,000 by default) a day (UTC) | Refused with 429, in words the app shows. The club's monthly voice allowance is untouched, and **Hear It** still works. |
+| One preview | `voice.previewMaxChars` (200 by default), or `voice.maxChars` if that is smaller | Refused, with the limit in the message. |
+| The open voice-sample routes | 60 requests a minute per address | Refused with 429. No token is involved, so the address is all the relay knows about the caller. |
 | Rendered audio kept | 200 MB shared, 25 MB per club | The least recently used are swept. None of it counts against a club's 50 MB. |
 
 Rate limits on PINs and check-in are covered in [Security and privacy](security-and-privacy.md#pins-and-rate-limits).

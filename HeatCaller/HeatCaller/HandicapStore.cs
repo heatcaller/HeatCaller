@@ -287,6 +287,15 @@ public sealed class HandicapStore
                         return new HandicapStore(file.Handicaps ?? new List<DriverHandicap>(), file.ClassModes);
                     }
                 }
+
+                // Present, parsed, and neither shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" parses to nothing without
+                // throwing - in either branch above - and used to fall
+                // straight through to the empty store below with the flag
+                // left false, so the first handicap set tonight replaced
+                // every driver's credits and every class mode.
+                unreadable = true;
             }
         }
         catch (Exception ex)

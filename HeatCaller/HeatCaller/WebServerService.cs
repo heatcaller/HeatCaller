@@ -1502,6 +1502,11 @@ public sealed partial class WebServerService
                 break;
             case "/api/state":
                 // The published copy, never a fresh build. See PublishState.
+                //
+                // No PIN and no gate, by design: it is the spectator board.
+                // So nothing in it may be worth a PIN - every id in it is
+                // the roster's own opaque one rather than a transponder,
+                // for the reason AddFollowing gives.
                 WriteJson(context, _publishedState);
                 break;
             case "/api/look":
@@ -1829,7 +1834,10 @@ public sealed partial class WebServerService
         // is unwrapped here rather than in the page, which keeps one
         // definition of what a badge is: the same one the USB scanner on
         // the Entries page uses. A bare transponder number is no longer
-        // accepted; nothing this server serves sends one any more.
+        // accepted; no page this server serves is given one as an id any
+        // more. That claim was wrong for a while: /api/state, which needs
+        // no PIN, keyed its rows, its map cars and its follow list by
+        // transponder until 9 Oct 2026 - see AddFollowing.
         // Set once this request has used up a write slot, so a badge that
         // turns out to be a real change is not charged twice.
         var reserved = false;
@@ -2795,14 +2803,20 @@ public sealed partial class WebServerService
         var node = JsonSerializer.SerializeToNode(document)!.AsObject();
         node["race"] = race;
 
-        // Following a driver (PhoneFollow): each row's transponder, so the
+        // The key the ids below are made with, read once for the whole
+        // document. The board, the map and the follow list all have to call
+        // one driver by one id or the page cannot match them up, and a Start
+        // between two reads of the key would key them differently.
+        var rosterKey = _rosterKey;
+
+        // Following a driver (PhoneFollow): each row's opaque id, so the
         // page can pick out the one being followed; their card - position,
         // laps, last lap, the gaps either side; when each driver's next race
         // is; and who can be followed. Guarded like the heading above: the
         // board must not go stale for the sake of the extras.
         try
         {
-            AddFollowing(node, ordered);
+            AddFollowing(node, ordered, rosterKey);
         }
         catch
         {
@@ -2811,7 +2825,7 @@ public sealed partial class WebServerService
 
         try
         {
-            AddTrackMap(node);
+            AddTrackMap(node, rosterKey);
         }
         catch
         {
@@ -2836,8 +2850,11 @@ public sealed partial class WebServerService
     /// loops are, and each car's place on it with its pace, so the page can
     /// move the dots smoothly between its once-a-second polls. Null when the
     /// layout being raced on has no plan to draw. See TrackPositions.
+    ///
+    /// Each car is named by the roster's opaque id rather than by its
+    /// transponder, for the reason AddFollowing gives.
     /// </summary>
-    private void AddTrackMap(System.Text.Json.Nodes.JsonObject node)
+    private void AddTrackMap(System.Text.Json.Nodes.JsonObject node, byte[] rosterKey)
     {
         var (line, cars) = TrackMap?.Invoke() ?? (null, Array.Empty<TrackPositions.Car>());
 
@@ -2860,7 +2877,7 @@ public sealed partial class WebServerService
         var placed = new System.Text.Json.Nodes.JsonArray(cars
             .Select(c => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
             {
-                ["id"] = c.Transponder,
+                ["id"] = RosterId(rosterKey, c.Transponder),
                 ["pos"] = c.Position,
                 ["f"] = Round(c.Fraction),
                 ["rate"] = Math.Round(c.Rate, 5),
@@ -2918,8 +2935,19 @@ public sealed partial class WebServerService
     /// live state: an id on each row, a card per car on the board, the
     /// call-ups for the races still to run, and everyone who can be
     /// followed, by name. See PhoneFollow.
+    ///
+    /// Every id here is the roster's own opaque id (RosterId), not the
+    /// driver's transponder. It was the transponder until 9 Oct 2026, and
+    /// because /api/state is served to any phone on the club Wi-Fi with no
+    /// PIN and no gate, the people list below handed out a transponder next
+    /// to a full name, for everyone on the board and everyone gridded in
+    /// every race still to come - the exact mapping /api/roster spends the
+    /// check-in PIN and these same ids to keep off the wire (see RosterView
+    /// for why that mapping matters). The pages only ever match one id in a
+    /// document against another in the same document, so which id it is
+    /// makes no difference to them.
     /// </summary>
-    private void AddFollowing(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<RacerStanding> ordered)
+    private void AddFollowing(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey)
     {
         if (node["standings"] is System.Text.Json.Nodes.JsonArray rows)
         {
@@ -2927,7 +2955,19 @@ public sealed partial class WebServerService
             {
                 if (rows[i] is System.Text.Json.Nodes.JsonObject row)
                 {
-                    row["id"] = ordered[i].TransponderId;
+                    row["id"] = RosterId(rosterKey, ordered[i].TransponderId);
+
+                    // Said outright, because the broadcast page used to tell
+                    // a ghost from a real car by the GHOST- on its id and an
+                    // opaque id has no prefix to read. Without it a Quick
+                    // Rival's lap takes the fastest-lap graphic on the
+                    // stream, which is the one thing a ghost's lap must
+                    // never do. Only on a ghost's row: nearly every row is
+                    // a real car.
+                    if (Ghosts.IsGhost(ordered[i].TransponderId))
+                    {
+                        row["ghost"] = true;
+                    }
                 }
             }
         }
@@ -2945,7 +2985,9 @@ public sealed partial class WebServerService
 
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
         {
-            cards[id] = new System.Text.Json.Nodes.JsonObject
+            // Under the opaque id, like the rows. bestOf stays keyed by
+            // transponder: it is read here and never leaves this method.
+            cards[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
             {
                 ["pos"] = card.Position,
                 ["laps"] = card.Laps,
@@ -2973,7 +3015,7 @@ public sealed partial class WebServerService
 
         foreach (var (id, callUp) in PhoneFollow.CallUps(upcoming))
         {
-            callUps[id] = new System.Text.Json.Nodes.JsonObject
+            callUps[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
             {
                 ["race"] = callUp.Race,
                 ["away"] = callUp.Away,
@@ -2991,7 +3033,7 @@ public sealed partial class WebServerService
             .Concat(upcoming.SelectMany(r => r.Grid))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(id => (Id: id, Name: DisplayNameFor(id, false)))
+            .Select(id => (Id: RosterId(rosterKey, id), Name: DisplayNameFor(id, false)))
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["id"] = p.Id, ["name"] = p.Name })
             .ToArray();

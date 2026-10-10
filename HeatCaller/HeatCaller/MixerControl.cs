@@ -293,15 +293,18 @@ public sealed class MixerControl : UserControl
                 _voiceLevelUnsaved = true;
                 QueueLevelSave();
             },
-            // Which voice is speaking, since there are two now - and whether
-            // the Windows one is only standing in for ElevenLabs.
+            // Which voice is speaking, and whether it is only standing in
+            // for the one the club chose. The stand-in is Kokoro since the
+            // Windows voice was retired on 10 Oct 2026 - and because Kokoro
+            // is now the bottom of the ladder, "can't speak" is a real state
+            // rather than a theoretical one, which is why DescribeVoiceBlocker
+            // is asked first.
             () => _announcer.DescribeVoiceBlocker() is { } blocked
                 ? $"Can't speak - {blocked}"
                 : _announcer.DescribeStandIn() is not null
-                    ? "Ready - Windows voice standing in"
+                    ? "Ready - Kokoro voice standing in"
                     : _voiceStore.Current.EffectiveEngine switch
                     {
-                        VoiceEngine.Windows => "Ready - Windows voice",
                         VoiceEngine.HeatCaller => "Ready - HeatCaller voice",
                         VoiceEngine.Kokoro => "Ready - Kokoro voice",
                         _ => "Ready",

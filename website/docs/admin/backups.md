@@ -1,6 +1,6 @@
 # Backups
 
-A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, soundscapes and their recorded voice lines, your own looks, the club logo and all your settings. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
+A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, soundscapes and their recorded voice lines, your own looks, the club logo, all your settings, and the Big Screen's own ON AIR switch. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
 
 <!-- screenshot: Backup & Restore page, its five cards -->
 
@@ -10,7 +10,17 @@ A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, w
 
 Music tracks inside the data folder's music library are remembered by their place in that folder, so the library still works after a restore onto another PC or another Windows account.
 
+The Big Screen's own <kbd>O</kbd> switch travels too. Whether the **ON AIR** band shows is the one setting in `big-screen.json`, which sits in the data folder like any other file there, so a backup carries it and a restore puts it back. Restoring a backup made before that file existed turns the band back on instead: a restore sets aside any store file the backup has no copy of, and with nothing to read the Big Screen starts from its default, which is on. Press <kbd>O</kbd> on the Big Screen once to turn it off again. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air).
+
 Keys, tokens and PINs are a special case. In the data folder they're encrypted so that only your Windows account on this PC can open them (see [Security and privacy](security-and-privacy.md#secrets-on-the-laptop)). A backup restored on the same PC gets them back as they were. For a backup to bring them to a **different** PC, you need a backup password: then each backup also carries a copy of them, encrypted with that password. See [The backup password](#the-backup-password).
+
+### Race audio isn't in a backup
+
+HeatCaller saves every race as an mp3, with a clip for each driver, in `Documents\HeatCaller Race Audio`. None of it is in a backup, and that's deliberate: one evening's recordings are larger than everything else the club saves put together, and HeatCaller keeps several backups at a time. It's left out for exactly the reason the finish camera's pictures are.
+
+If you want the recordings kept, copy that folder yourself, to the same external drive or cloud folder you keep backups on. Nothing in HeatCaller clears it out, so it grows for as long as the club races. Restoring a backup doesn't touch it either, and recordings on an old laptop don't come across to a new one.
+
+See [Race recordings](../announcer/sounds-and-music.md#race-recordings) for what's in the files, and for how to switch recording off if you'd rather it didn't happen.
 
 ### Backup file names
 
@@ -261,5 +271,6 @@ More in [Troubleshooting](troubleshooting.md#backups-and-restore).
 ## Related pages
 
 - [Data files](data-files.md)
+- [Sounds and music](../announcer/sounds-and-music.md#race-recordings) - the race recordings a backup leaves out
 - [Security and privacy](security-and-privacy.md)
 - [Installing HeatCaller](../getting-started/install.md)

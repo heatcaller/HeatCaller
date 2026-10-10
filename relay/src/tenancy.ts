@@ -46,7 +46,7 @@ export interface Tenant {
    *
    * Absent means not included, which is the right default for a club that
    * was set up before the voice existed: it keeps speaking with its own
-   * key or the free Windows voice, and nothing is spent on its behalf.
+   * key or the free Kokoro voice, and nothing is spent on its behalf.
    */
   readonly voice?: VoicePlan;
   /**

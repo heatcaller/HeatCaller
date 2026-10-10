@@ -42,6 +42,12 @@ public static class RcpTrackPainter
     private static readonly Color LoopEdge = ColorTranslator.FromHtml("#1B6FA0");
 
     private static readonly Color RailShadow = Color.FromArgb(90, 0, 0, 0);
+
+    /// <summary>The walls of the room, when the club has said how big it is.</summary>
+    private static readonly Color RoomLine = ColorTranslator.FromHtml("#6B7A8F");
+
+    /// <summary>The same, when what is drawn does not go in it.</summary>
+    private static readonly Color RoomTooSmall = ColorTranslator.FromHtml("#C2524C");
     private static readonly Color InfieldFill = ColorTranslator.FromHtml("#1E1E20");
 
     /// <summary>Chequer on this track is grey and white, not black and white.</summary>
@@ -76,6 +82,10 @@ public static class RcpTrackPainter
         {
             DrawBackdrop(g, design, backdrop, scale, origin);
         }
+
+        // Behind everything, because it is the thing everything has to fit
+        // inside rather than a part of the track.
+        DrawRoom(g, design, scale, origin);
 
         foreach (var tile in design.Tiles)
         {
@@ -296,6 +306,66 @@ public static class RcpTrackPainter
         g.DrawString(tile.Label, AppTheme.SmallFont, brush, box, format);
     }
 
+    /// <summary>
+    /// The room the track has to go in, as a dashed outline round it.
+    ///
+    /// ANCHORED AT THE FLOOR'S TOP-LEFT, not centred on it. A club lays a
+    /// track into the corner of a hall and works outwards, so the spare
+    /// space wants to be shown where it really is - along two sides - and
+    /// not split into a decorative margin all round. It also means the
+    /// outline stops moving about as the plan is drawn: the corner it is
+    /// pinned to is the corner the first tile went down in.
+    ///
+    /// Drawn in the warning colour when the layout does not fit, so the
+    /// answer is the same whether somebody reads the side panel or just
+    /// looks at the picture.
+    /// </summary>
+    private static void DrawRoom(Graphics g, RcpTrackDesign design, float scale, PointF origin)
+    {
+        if (!design.HasRoom || design.TileSizeMm <= 0)
+        {
+            return;
+        }
+
+        var floor = design.BoundsInTiles(includeRoute: false);
+
+        if (floor.Width <= 0 || floor.Height <= 0)
+        {
+            return;
+        }
+
+        // The room in tiles, which is the unit everything here is drawn in.
+        var wide = (float)(design.RoomWidthMm / design.TileSizeMm);
+        var deep = (float)(design.RoomDepthMm / design.TileSizeMm);
+
+        // Asked of RoomFit, so the picture and the side panel cannot
+        // disagree. This used to test the straight-on orientation only,
+        // while RoomFit counts a quarter turn as a fit - so a layout that
+        // went in the hall turned was outlined in the "won't fit" red while
+        // the panel beside it said it fitted turned, and a club reading the
+        // picture concluded it did not go in at all.
+        var fits = RoomFit.Check(
+            floor.Width * design.TileSizeMm,
+            floor.Height * design.TileSizeMm,
+            design.RoomWidthMm,
+            design.RoomDepthMm).Fits;
+
+        var room = new RectangleF(
+            origin.X + floor.X * scale,
+            origin.Y + floor.Y * scale,
+            wide * scale,
+            deep * scale);
+
+        // DashPattern alone: setting it puts the pen into Custom anyway,
+        // so naming a DashStyle beside it only reads as if it did something.
+        using var pen = new Pen(fits ? RoomLine : RoomTooSmall, Math.Max(1.5f, scale * 0.035f))
+        {
+            DashPattern = new[] { 6f, 4f },
+        };
+
+        g.DrawRectangle(pen, room.X, room.Y, room.Width, room.Height);
+    }
+
     // --- Rails ---------------------------------------------------------------
 
     /// <summary>
@@ -356,11 +426,37 @@ public static class RcpTrackPainter
         DrawScrews(g, from, to, vertical, offset, thickness, scale);
     }
 
-    /// <summary>The slot screws that hold a rail down - small, but they are what makes it read as a real part.</summary>
+    /// <summary>
+    /// How far apart the bolts sit along a rail, in tiles. A straight gets
+    /// one every third of a tile; an arc is given more room, because the
+    /// real curved rails carry three across a quarter turn where that
+    /// spacing would draw five.
+    /// </summary>
+    private const float BoltSpacing = 0.34f;
+
+    /// <inheritdoc cref="BoltSpacing"/>
+    private const float BoltSpacingOnArc = 0.5f;
+
+    /// <summary>
+    /// One bolt head: a grey plastic disc with a slot across it.
+    ///
+    /// These are not decoration. A rail does not stand on the floor of its
+    /// own accord - it is BOLTED THROUGH the tile it runs along, and on a
+    /// real tile the heads are the most obvious thing about it. Drawing
+    /// them is what stops a plan reading as lines on a grid and starts it
+    /// reading as the parts in the box.
+    /// </summary>
+    private static void DrawBolt(Graphics g, Brush head, Pen slot, PointF at, float size)
+    {
+        g.FillEllipse(head, at.X - size / 2f, at.Y - size / 2f, size, size);
+        g.DrawLine(slot, at.X - size * 0.3f, at.Y - size * 0.2f, at.X + size * 0.3f, at.Y + size * 0.2f);
+    }
+
+    /// <summary>The bolts that hold a straight rail down - see DrawBolt.</summary>
     private static void DrawScrews(Graphics g, PointF from, PointF to, bool vertical, float offset, float thickness, float scale)
     {
         var length = vertical ? to.Y - from.Y : to.X - from.X;
-        var count = Math.Max(2, (int)Math.Round(Math.Abs(length) / (scale * 0.34f)));
+        var count = Math.Max(2, (int)Math.Round(Math.Abs(length) / (scale * BoltSpacing)));
 
         var head = thickness * 0.52f;
 
@@ -375,8 +471,41 @@ public static class RcpTrackPainter
                 ? new PointF(from.X + offset, from.Y + length * t)
                 : new PointF(from.X + length * t, from.Y + offset);
 
-            g.FillEllipse(brush, centre.X - head / 2f, centre.Y - head / 2f, head, head);
-            g.DrawLine(slot, centre.X - head * 0.3f, centre.Y - head * 0.2f, centre.X + head * 0.3f, centre.Y + head * 0.2f);
+            DrawBolt(g, brush, slot, centre, head);
+        }
+    }
+
+    /// <summary>
+    /// The bolts along a turn rail, spaced round the arc.
+    ///
+    /// The same heads as a straight's, because they are the same bolts
+    /// through the same kind of tile. They used to be plain white dots at
+    /// four fixed angles, which read as nothing in particular and did not
+    /// follow the rail when a turn was doubled.
+    /// </summary>
+    private static void DrawArcBolts(Graphics g, PointF centre, float radius, float start, float thickness, float scale)
+    {
+        // A quarter turn, so the arc is a quarter of the circumference.
+        var along = radius * MathF.PI / 2f;
+        var count = Math.Max(2, (int)Math.Round(along / (scale * BoltSpacingOnArc)));
+
+        var head = thickness * 0.52f;
+
+        using var brush = new SolidBrush(RailScrew);
+        using var slot = new Pen(Color.FromArgb(150, 0, 0, 0), Math.Max(1f, head * 0.18f));
+
+        for (var i = 0; i < count; i++)
+        {
+            // Inset by half a step at each end, as the straights are, so no
+            // bolt sits on the join where one rail meets the next.
+            var angle = (start + 90f * (i + 0.5f) / count) * MathF.PI / 180f;
+
+            DrawBolt(
+                g,
+                brush,
+                slot,
+                new PointF(centre.X + MathF.Cos(angle) * radius, centre.Y + MathF.Sin(angle) * radius),
+                head);
         }
     }
 
@@ -444,20 +573,19 @@ public static class RcpTrackPainter
             return;
         }
 
-        // Screws round the arc, same as the straights.
-        var head = thickness * 0.52f;
-
-        using var brush = new SolidBrush(Color.FromArgb(200, Color.White));
-
-        for (var i = 0; i < 4; i++)
+        // Bolts round the arc, the same ones the straights get - and on
+        // the rails themselves, so a doubled turn shows the bolts of both
+        // rather than a row down the gap between them.
+        if (curve.Double)
         {
-            var angle = (start + 11f + i * 23f) * MathF.PI / 180f;
+            var boltOffset = (thickness + scale * DividerGap) / 2f;
 
-            var at = new PointF(
-                centre.X + MathF.Cos(angle) * radius,
-                centre.Y + MathF.Sin(angle) * radius);
-
-            g.FillEllipse(brush, at.X - head / 2f, at.Y - head / 2f, head, head);
+            DrawArcBolts(g, centre, radius - boltOffset, start, thickness, scale);
+            DrawArcBolts(g, centre, radius + boltOffset, start, thickness, scale);
+        }
+        else
+        {
+            DrawArcBolts(g, centre, radius, start, thickness, scale);
         }
     }
 

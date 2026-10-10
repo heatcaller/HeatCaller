@@ -4,7 +4,7 @@ namespace HeatCaller;
 
 /// <summary>
 /// Turning a line of text into audio: the synthesis gate, ElevenLabs with
-/// its rest and probe, the Windows stand-in, and the reasons given when a
+/// its rest and probe, the Kokoro stand-in, and the reasons given when a
 /// voice can't speak.
 ///
 /// Moved here unchanged from AnnouncementService.cs on 26 Sep 2026, when the
@@ -15,8 +15,8 @@ public sealed partial class AnnouncementService
     /// <summary>
     /// Every ElevenLabs request in this class goes through here, so the
     /// concurrency limit is enforced in ONE place rather than depending on
-    /// each caller being well behaved. (The Windows voice has a gate of its
-    /// own - see WindowsVoice - and never waits on this one.)
+    /// each caller being well behaved. (Kokoro has a gate of its own - see
+    /// KokoroSpeech - and never waits on this one.)
     ///
     /// Bounded by <see cref="SynthesisTimeout"/> - covering the wait for a
     /// gate slot AND the request itself. Without it, one hung request held a
@@ -93,10 +93,12 @@ public sealed partial class AnnouncementService
         /// <summary>The HeatCaller voice, through the club's relay.</summary>
         HeatCaller,
 
-        /// <summary>The Windows voice, because it is the voice chosen on Voice Settings.</summary>
-        Windows,
-
-        /// <summary>The Windows voice standing in for ElevenLabs, which couldn't speak the line.</summary>
+        /// <summary>
+        /// Kokoro standing in for ElevenLabs or the HeatCaller voice, which
+        /// couldn't speak the line. Kept apart from <see cref="Kokoro"/>
+        /// below because a stand-in take only counts while the voice it
+        /// stood in for still can't speak - see PreparedTakeMatches.
+        /// </summary>
         StandIn,
 
         /// <summary>The Kokoro voice, on this PC, because it is the voice chosen on Voice Settings.</summary>
@@ -212,7 +214,7 @@ public sealed partial class AnnouncementService
     //
     // Every race and announcer line gets its audio from RenderLineAsync. The
     // Voice Settings Test buttons don't - they must show ElevenLabs' own
-    // error, so they call SynthesizeThroughGateAsync (or the Windows voice)
+    // error, so they call SynthesizeThroughGateAsync (or Kokoro itself)
     // themselves - and nor does Prepare Lines, which fills the saved-voice
     // library with ElevenLabs lines and nothing else.
 
@@ -220,21 +222,25 @@ public sealed partial class AnnouncementService
     /// The audio for one race or announcer line, from whichever voice should
     /// say it:
     ///
-    ///  - Windows voice chosen: the Windows voice, always. No ElevenLabs
-    ///    request is made, and the saved-voice library is neither read nor
-    ///    written - it is keyed by the ElevenLabs settings, and a Windows take
-    ///    saved there would later play as though it were the ElevenLabs line.
-    ///  - ElevenLabs chosen, stand-in off (or no Windows voice on this PC):
+    ///  - Kokoro chosen: Kokoro, always. No ElevenLabs request is made, and
+    ///    the saved-voice library is neither read nor written - it is keyed
+    ///    by the ElevenLabs settings, and a Kokoro take saved there would
+    ///    later play as though it were the ElevenLabs line.
+    ///  - ElevenLabs chosen, stand-in off (or no Kokoro model on this PC):
     ///    ElevenLabs exactly as it always was - the saved line, otherwise a
     ///    request - and a failure is thrown to the caller as before.
     ///  - ElevenLabs chosen, stand-in on: a saved line plays from disk
     ///    whatever state ElevenLabs is in. With no key or voice to ask with,
-    ///    or while ElevenLabs rests after a lost connection, the Windows voice
-    ///    says it straight away. Otherwise ElevenLabs is asked, and when it
-    ///    can't - quota, connection, any refusal - the Windows voice says the
-    ///    same line, so a flag call is never silent.
+    ///    or while ElevenLabs rests after a lost connection, Kokoro says it
+    ///    straight away. Otherwise ElevenLabs is asked, and when it can't -
+    ///    quota, connection, any refusal - Kokoro says the same line, so a
+    ///    flag call is never silent.
     ///
-    /// Throws only when no voice could say it.
+    /// Throws only when no voice could say it - which, since the Windows
+    /// voice went, means a PC with no Kokoro model and nothing else able to
+    /// speak either. CanSpeak is what stops a line reaching here in that
+    /// state and says so in the console; this throws rather than hand back
+    /// silence, so nothing can swallow it.
     /// </summary>
     /// <param name="fresh">
     /// ElevenLabs only: pass over the saved-voice library and ask for a new
@@ -250,11 +256,6 @@ public sealed partial class AnnouncementService
         if (StingerLibrary.Shared.TryLoad(text) is { } recorded)
         {
             return new SynthesisResult(recorded, LineSource.Library);
-        }
-
-        if (profile.EffectiveEngine == VoiceEngine.Windows)
-        {
-            return await RenderWithWindowsAsync(profile, text, LineSource.Windows);
         }
 
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
@@ -279,8 +280,8 @@ public sealed partial class AnnouncementService
 
         if (!ElevenLabsReady(profile))
         {
-            LogStandInOnce("setup", $"[voice] {Capitalised(NotConfiguredReason(profile))} - the free Windows voice is speaking instead.");
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            LogStandInOnce("setup", $"[voice] {Capitalised(NotConfiguredReason(profile))} - the free Kokoro voice is speaking instead.");
+            return await RenderWithStandInAsync(profile, text);
         }
 
         // Resting after a lost connection, or a key ElevenLabs turned down:
@@ -294,7 +295,7 @@ public sealed partial class AnnouncementService
                 StartElevenLabsProbe(profile, text);
             }
 
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
 
         try
@@ -305,68 +306,100 @@ public sealed partial class AnnouncementService
         catch (Exception ex) when (IsConnectionFailure(ex))
         {
             BeginElevenLabsRest(ex);
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
         catch (Exception ex) when (IsQuotaExceeded(ex))
         {
             // ElevenLabs is still asked first on every line - the refusal is
             // quick - so the quota coming back is noticed straight away.
             NoteQuotaExceeded(standingIn: true);
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
         catch (Exception ex) when (IsKeyRefusal(ex))
         {
             // The key turned down: every line would be turned down the same
             // way, so ElevenLabs rests - lines, flags included, go straight
-            // to the Windows voice, rather than each waiting for the same
-            // refusal first - until a background try gets through, or the
+            // to Kokoro, rather than each waiting for the same refusal
+            // first - until a background try gets through, or the
             // key is changed on Voice Settings.
             BeginElevenLabsRest(ex, refusedKey: profile.ApiKey);
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
         catch (Exception ex)
         {
-            // A bad key, too many requests, a server error: the Windows voice
-            // takes this line, and the reason is said once, not every line.
+            // A bad key, too many requests, a server error: Kokoro takes
+            // this line, and the reason is said once, not every line.
             LogStandInOnce(ReasonKey(ex), StandInRefusalMessage(ex));
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            return await RenderWithStandInAsync(profile, text);
         }
     }
 
-    private static async Task<SynthesisResult> RenderWithWindowsAsync(VoiceProfile profile, string text, LineSource source) =>
-        new SynthesisResult(await WindowsVoice.RenderAsync(profile, text), source);
+    /// <summary>
+    /// Kokoro standing in for a voice that couldn't speak this line -
+    /// ElevenLabs, or the HeatCaller relay. Always marked
+    /// <see cref="LineSource.StandIn"/>, never Kokoro: the take is only good
+    /// while the voice it stood in for still can't speak (see
+    /// PreparedTakeMatches), and that is the whole difference between the two.
+    ///
+    /// Callers check <see cref="StandInAllowed"/> first; this throws rather
+    /// than hand back silence if Kokoro cannot speak after all.
+    /// </summary>
+    private static async Task<SynthesisResult> RenderWithStandInAsync(VoiceProfile profile, string text) =>
+        new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text), LineSource.StandIn);
 
     /// <summary>
-    /// A line in the Kokoro voice, on this PC. When Kokoro can't say it - not
-    /// downloaded yet, the model wouldn't load, a render that stuck - the
-    /// Windows voice says it instead, as it does for ElevenLabs and the
-    /// HeatCaller voice, so a flag call is never silent. The reason is said
-    /// once, not every line. Throws only when neither can speak.
+    /// A line in the Kokoro voice, on this PC, because it is the voice
+    /// chosen on Voice Settings.
+    ///
+    /// Nothing stands in for it. It IS the stand-in now - the free Windows
+    /// voice that used to cover for it went on 10 Oct 2026 - so when Kokoro
+    /// can't say a line (the model isn't on this PC, it wouldn't load, a
+    /// render that stuck) this throws, loudly, naming the one button that
+    /// fixes it. The alternative was an announcer that went quiet on a
+    /// Saturday and said nothing about why, which is the failure this whole
+    /// class is written to avoid.
     /// </summary>
     private async Task<SynthesisResult> RenderWithKokoroAsync(VoiceProfile profile, string text)
     {
         if (KokoroSpeech.UnavailableReason is { } unavailable)
         {
-            if (!WindowsVoice.IsAvailable)
-            {
-                throw new InvalidOperationException($"The Kokoro voice can't speak - {unavailable}.");
-            }
-
-            LogStandInOnce("kokoro-setup", $"[voice] {Capitalised(unavailable)} - the free Windows voice is speaking instead.");
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+            LogStandInOnce("kokoro-setup", NoVoiceAtAllMessage(unavailable));
+            throw new InvalidOperationException($"The Kokoro voice can't speak - {unavailable}. {GetKokoroAdvice}");
         }
 
         try
         {
             return new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text), LineSource.Kokoro);
         }
-        catch (Exception ex) when (WindowsVoice.IsAvailable)
+        // Not a cancel: a line dropped because a flag interrupted it is the
+        // queue working as designed, and reporting that as "Kokoro couldn't
+        // speak" would put a fault in the console where there isn't one.
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogStandInOnce("kokoro:" + ex.Message,
-                $"[voice] Kokoro couldn't speak a line ({ex.Message}) - the free Windows voice said it. Said once for this reason, not for every line.");
-            return await RenderWithWindowsAsync(profile, text, LineSource.StandIn);
+                $"[voice] Kokoro couldn't speak a line ({ex.Message}) - and nothing else on this PC can, so the line was lost. "
+                + "Said once for this reason, not for every line.");
+            throw;
         }
     }
+
+    /// <summary>
+    /// What to press when nothing can speak. One sentence, in one place, so
+    /// the console, the Mixer and Voice Settings all send a club to the same
+    /// button instead of each guessing at one.
+    /// </summary>
+    internal const string GetKokoroAdvice =
+        "Open Voice Settings and press Download beside the Kokoro voice ("
+        + KokoroSpeech.DownloadSizeText + ", once) - until then the announcer can't say anything at all.";
+
+    /// <summary>
+    /// The console line for an announcer that cannot speak with any voice.
+    /// Deliberately loud: this is the one state where the app has nothing to
+    /// say and no way to say it, and the person reading the console is the
+    /// only one who can fix it.
+    /// </summary>
+    internal static string NoVoiceAtAllMessage(string reason) =>
+        $"[voice] NO VOICE - {Capitalised(reason)}. {GetKokoroAdvice}";
 
     /// <summary>
     /// Whether this exact line is one of the announcer's fixed lines - a
@@ -471,46 +504,56 @@ public sealed partial class AnnouncementService
         !string.IsNullOrWhiteSpace(profile.ApiKey) && !string.IsNullOrWhiteSpace(profile.VoiceId);
 
     /// <summary>
-    /// With ElevenLabs chosen: whether the Windows voice may say what
-    /// ElevenLabs can't - switched on in Voice Settings, and a Windows voice
+    /// With ElevenLabs chosen: whether the free Kokoro voice may say what
+    /// ElevenLabs can't - switched on in Voice Settings, and a Kokoro model
     /// on this PC to do it with.
     /// </summary>
     /// <remarks>
-    /// With the HeatCaller voice it is not a choice: the Windows voice
-    /// always stands in. A club on that voice has no key of its own to fall
-    /// back on, so the alternative to standing in is silence - and the
-    /// allowance running out on a Saturday must not take the flag calls
-    /// with it.
+    /// With the HeatCaller voice it is not a choice: Kokoro always stands
+    /// in. A club on that voice has no key of its own to fall back on, so
+    /// the alternative to standing in is silence - and the allowance running
+    /// out on a Saturday must not take the flag calls with it.
+    ///
+    /// With Kokoro itself chosen the answer is NO, and that is not an
+    /// oversight: there is nothing underneath it to stand in. It used to
+    /// answer yes, because the free Windows voice covered for Kokoro while
+    /// the model was still being downloaded - and because of that the Mixer
+    /// showed "a voice is standing in" rather than the red NO VOICE banner.
+    /// Now a Kokoro that can't speak IS an announcer that can't speak, and
+    /// both say so.
     /// </remarks>
     private static bool StandInAllowed(VoiceProfile profile) =>
         profile.EffectiveEngine switch
         {
-            VoiceEngine.HeatCaller => WindowsVoice.IsAvailable,
-            VoiceEngine.ElevenLabs => profile.WindowsVoiceStandsIn && WindowsVoice.IsAvailable,
-
-            // Like the HeatCaller voice, not a choice: a club on Kokoro with
-            // the model not yet downloaded would otherwise hear nothing.
-            VoiceEngine.Kokoro => WindowsVoice.IsAvailable,
+            VoiceEngine.HeatCaller => KokoroSpeech.IsAvailable,
+            VoiceEngine.ElevenLabs => profile.KokoroStandsIn && KokoroSpeech.IsAvailable,
             _ => false,
         };
 
     /// <summary>
-    /// Whether this profile can say anything at all: the Windows voice chosen
-    /// and able to speak, or ElevenLabs set up, or the stand-in ready to cover
-    /// for it. The early checks that skip a line used to test for a key and a
-    /// voice only - with the Windows voice chosen, that would have skipped
-    /// every line.
+    /// Whether this profile can say anything at all: Kokoro chosen and able
+    /// to speak, or ElevenLabs set up, or the stand-in ready to cover for
+    /// it. The early checks that skip a line used to test for a key and a
+    /// voice only - with a free voice chosen, that would have skipped every
+    /// line.
     /// </summary>
+    /// <remarks>
+    /// This is the gate that makes a missing Kokoro model LOUD rather than
+    /// silent. Every path that speaks asks it first, and the answer being
+    /// false is said in the console in words that name the button which
+    /// fixes it - see SynthesizeAndPlayAsync's skipped line, and
+    /// DescribeVoiceBlocker, which is what the Mixer's NO VOICE banner reads.
+    /// </remarks>
     private static bool CanSpeak(VoiceProfile profile) =>
         profile.EffectiveEngine switch
         {
-            VoiceEngine.Windows => WindowsVoice.IsAvailable,
-            VoiceEngine.Kokoro => KokoroSpeech.IsAvailable || WindowsVoice.IsAvailable,
+            VoiceEngine.Kokoro => KokoroSpeech.IsAvailable,
 
             // The relay may still refuse - the allowance, the club's plan -
-            // but the Windows voice covers every one of those, so a club on
-            // the HeatCaller voice can always say something.
-            VoiceEngine.HeatCaller => profile.HeatCallerReady || WindowsVoice.IsAvailable,
+            // but Kokoro covers every one of those, so a club on the
+            // HeatCaller voice can say something as long as the model is
+            // there.
+            VoiceEngine.HeatCaller => profile.HeatCallerReady || KokoroSpeech.IsAvailable,
             _ => ElevenLabsReady(profile) || StandInAllowed(profile),
         };
 
@@ -528,7 +571,7 @@ public sealed partial class AnnouncementService
     /// <summary>Guards the quota flag, the rest, and what has been said about them - lines on several threads update these at once.</summary>
     private readonly object _voiceHealthLock = new();
 
-    /// <summary>True from a lost connection until ElevenLabs answers again. Lines then go straight to the Windows voice.</summary>
+    /// <summary>True from a lost connection until ElevenLabs answers again. Lines then go straight to Kokoro.</summary>
     private bool _elevenLabsResting;
 
     /// <summary>
@@ -554,7 +597,7 @@ public sealed partial class AnnouncementService
     private static readonly TimeSpan ElevenLabsRestPeriod = TimeSpan.FromMinutes(1);
 
     private const string ReachableAgainMessage =
-        "[voice] ElevenLabs is reachable again - it speaks from the next line, and the Windows voice stands down.";
+        "[voice] ElevenLabs is reachable again - it speaks from the next line, and the Kokoro voice stands down.";
 
     /// <summary>
     /// ElevenLabs answered a request, so it is working whatever the quota
@@ -606,7 +649,7 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke(standingIn
-            ? "[voice] ElevenLabs quota exceeded - the free Windows voice is standing in until it's back. "
+            ? "[voice] ElevenLabs quota exceeded - the free Kokoro voice is standing in until it's back. "
               + "Lines already saved still play in your ElevenLabs voice, and ElevenLabs is still asked first each time, "
               + "so it takes over again by itself the moment a request succeeds. Top up your ElevenLabs account or wait for your monthly reset."
             : "[voice] ElevenLabs quota exceeded - voice announcements are paused for now. " +
@@ -649,7 +692,7 @@ public sealed partial class AnnouncementService
         if (began && refusedKey is null)
         {
             StatusMessage?.Invoke(
-                $"[voice] Can't reach ElevenLabs ({ShortReason(ex)}) - the free Windows voice is standing in. "
+                $"[voice] Can't reach ElevenLabs ({ShortReason(ex)}) - the free Kokoro voice is standing in. "
                 + "Lines already saved still play in your ElevenLabs voice, and ElevenLabs is tried again in the background about once a minute.");
         }
         else if (began || nowOverTheKey)
@@ -659,7 +702,7 @@ public sealed partial class AnnouncementService
     }
 
     private static string KeyTurnedDownMessage(Exception ex) =>
-        $"[voice] ElevenLabs turned the API key down ({ShortReason(ex)}) - the free Windows voice is standing in. "
+        $"[voice] ElevenLabs turned the API key down ({ShortReason(ex)}) - the free Kokoro voice is standing in. "
         + "Lines already saved still play in your ElevenLabs voice. Check the key on Voice Settings: ElevenLabs is tried again "
         + "in the background about once a minute, and straight away once the key is changed.";
 
@@ -667,7 +710,7 @@ public sealed partial class AnnouncementService
     /// A rest ended without "reachable again" being said - by a try that got
     /// through only to be refused, or by the key being changed - which is
     /// then said the next time ElevenLabs does speak a line. Nothing used to
-    /// say it at all, and the console's last word was that the Windows voice
+    /// say it at all, and the console's last word was that the free voice
     /// was standing in, long after ElevenLabs had taken over again.
     /// </summary>
     private bool _reachableAgainOwed;
@@ -675,7 +718,7 @@ public sealed partial class AnnouncementService
     /// <summary>
     /// ElevenLabs can be reached after all. Ends the rest, and says so if
     /// there was one - unless <paramref name="announce"/> is false, for a
-    /// try that got through only to be refused, where "the Windows voice
+    /// try that got through only to be refused, where "the Kokoro voice
     /// stands down" would be followed straight away by why it hasn't. That
     /// is then said the next time a line gets through (see
     /// _reachableAgainOwed).
@@ -775,8 +818,8 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Tries one line through ElevenLabs in the background while it rests.
-    /// The line itself has already gone to the Windows voice; this is to
-    /// find out whether ElevenLabs is back - and if it is, the take is saved
+    /// The line itself has already gone to Kokoro; this is to find out
+    /// whether ElevenLabs is back - and if it is, the take is saved
     /// like any other, so that line plays in the ElevenLabs voice next time.
     /// </summary>
     private void StartElevenLabsProbe(VoiceProfile profile, string text)
@@ -786,9 +829,9 @@ public sealed partial class AnnouncementService
             try
             {
                 // Only while the club's own ElevenLabs key is the voice:
-                // the Windows voice makes no requests at all, and with the
-                // HeatCaller voice a request on the club's key is one it
-                // never asked for.
+                // Kokoro makes no requests at all, and with the HeatCaller
+                // voice a request on the club's key is one it never asked
+                // for.
                 if (_voiceStore.Current.EffectiveEngine != VoiceEngine.ElevenLabs)
                 {
                     return;
@@ -840,7 +883,7 @@ public sealed partial class AnnouncementService
             {
                 // It answered - so it can be reached - but said no. The rest is
                 // over; lines from here ask it first and are stood in for like
-                // any other refusal. Quietly: saying "the Windows voice stands
+                // any other refusal. Quietly: saying "the Kokoro voice stands
                 // down" and then why it hasn't would contradict itself.
                 EndElevenLabsRest(announce: false);
 
@@ -880,7 +923,7 @@ public sealed partial class AnnouncementService
     }
 
     private static string StandInRefusalMessage(Exception ex) =>
-        $"[voice] ElevenLabs couldn't speak a line ({ShortReason(ex)}) - the free Windows voice is saying the lines it can't. "
+        $"[voice] ElevenLabs couldn't speak a line ({ShortReason(ex)}) - the free Kokoro voice is saying the lines it can't. "
         + "Said once for this reason, not for every line.";
 
     /// <summary>
@@ -947,29 +990,24 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
-    /// Why the Windows voice is standing in for this profile right now, or
-    /// null when it isn't: ElevenLabs chosen with the stand-in on, and
+    /// Why the free Kokoro voice is standing in for this profile right now,
+    /// or null when it isn't: ElevenLabs chosen with the stand-in on, and
     /// ElevenLabs unable to speak - not set up, over quota, or resting after
     /// a lost connection. A refusal of one line (a bad key, a server error)
     /// is not a state, so it doesn't count here.
     /// </summary>
+    /// <remarks>
+    /// Kokoro chosen is always null, because StandInAllowed says no for it:
+    /// Kokoro is what stands in, so it cannot stand in for itself. A Kokoro
+    /// that can't speak is reported as a BLOCKER instead - see
+    /// DescribeVoiceBlocker - which is what puts the Mixer's red NO VOICE
+    /// banner up rather than a mild notice that a voice is covering.
+    /// </remarks>
     private string? StandInReasonFor(VoiceProfile profile)
     {
         if (!StandInAllowed(profile))
         {
             return null;
-        }
-
-        // Kokoro stands aside for the Windows voice while it can't speak at
-        // all on this PC - not downloaded, or a model that wouldn't load. A
-        // single line that failed is not a state, as for ElevenLabs. The load
-        // failure is the one kept until a load works: UnavailableReason lets
-        // it go between tries, which had the Mixer say "Ready - Kokoro voice"
-        // while the Windows voice said every line (as for the HeatCaller
-        // voice below).
-        if (profile.EffectiveEngine == VoiceEngine.Kokoro)
-        {
-            return KokoroSpeech.UnavailableReason ?? KokoroSpeech.LoadFailure;
         }
 
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
@@ -984,7 +1022,7 @@ public sealed partial class AnnouncementService
                 // The reason IS the rest. The clock beside it only says when
                 // the next background try may go, and it runs out every rest
                 // period by design - reading that instead had the Mixer say
-                // "Ready" between tries while every line went to the Windows
+                // "Ready" between tries while every line went to the free
                 // voice, and had every prepared stand-in take stop matching
                 // and be rendered again on each flag.
                 return _heatCallerReason;
@@ -1018,18 +1056,18 @@ public sealed partial class AnnouncementService
     /// Whether a take rendered earlier is still the one to play.
     ///
     /// The voice and settings must match (the signature, which includes the
-    /// engine and the Windows voice). And a take the Windows voice made while
-    /// standing in counts only while it is STILL standing in: once ElevenLabs
-    /// can speak again the take is passed over, the line is spoken live in
-    /// ElevenLabs, and it is prepared again in ElevenLabs the next time lines
-    /// are primed - rather than that flag staying in the Windows voice for the
-    /// rest of the night.
+    /// engine and the Kokoro voice). And a take Kokoro made while standing
+    /// in counts only while it is STILL standing in: once ElevenLabs can
+    /// speak again the take is passed over, the line is spoken live in
+    /// ElevenLabs, and it is prepared again in ElevenLabs the next time
+    /// lines are primed - rather than that flag staying in the free voice
+    /// for the rest of the night.
     ///
     /// The other way round for the HeatCaller voice's spent allowance: a take
     /// in the HeatCaller voice - rendered by the relay, or read from the
     /// saved lines - stops counting once the month's characters are gone, so
     /// a flag or release call prepared earlier in the evening is not the one
-    /// line in the HeatCaller voice on a night the rest is in the Windows
+    /// line in the HeatCaller voice on a night the rest is in the Kokoro
     /// voice. See HeatCallerSavedLinesPassedOver.
     /// </summary>
     private bool PreparedTakeMatches(string takeSignature, LineSource takeSource, string signature, VoiceProfile profile) =>

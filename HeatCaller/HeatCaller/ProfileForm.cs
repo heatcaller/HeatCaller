@@ -56,6 +56,19 @@ public sealed class ProfileForm : Form
 
     /// <summary>The main transponder of the profile being edited, or null when adding - it may "clash" with itself.</summary>
     private readonly string? _editingTransponder;
+
+    /// <summary>
+    /// Reads a line out in the club's own announcer voice - wired to
+    /// AnnouncementService.SpeakTest by whoever opened this dialog, so the
+    /// engine, the voice and the speed are the ones the club has set rather
+    /// than this dialog's idea of them.
+    ///
+    /// Null leaves Hear It off the dialog altogether. A button that cannot
+    /// do anything is worse than no button: it reads as the feature being
+    /// broken, which is how several things in this app got reported.
+    /// </summary>
+    private readonly Action<string>? _speakName;
+
     private readonly TextBox _txtTransponder = new();
     private readonly TextBox _txtDriverName = new();
     private readonly ComboBox _cmbCars = new();
@@ -122,11 +135,17 @@ public sealed class ProfileForm : Form
     /// transponder that already belongs to another driver, naming them,
     /// instead of letting the caller overwrite that driver's profile.
     /// </param>
-    public ProfileForm(DriverProfile? existing, RaceClassStore classStore, string? fixedTransponder = null, UndoService? undo = null, ProfileStore? profiles = null)
+    /// <param name="speakName">
+    /// Reads a name out in the club's announcer voice, for the Hear It
+    /// beside the Announcer name box - wire it to
+    /// AnnouncementService.SpeakTest. Null leaves that button off.
+    /// </param>
+    public ProfileForm(DriverProfile? existing, RaceClassStore classStore, string? fixedTransponder = null, UndoService? undo = null, ProfileStore? profiles = null, Action<string>? speakName = null)
     {
         _classStore = classStore;
         _undo = undo;
         _profiles = profiles;
+        _speakName = speakName;
         _editingTransponder = existing?.Transponder;
         Result = existing ?? new DriverProfile { Transponder = fixedTransponder ?? string.Empty };
         _otherClasses = (Result.Classes ?? new List<string>())
@@ -157,8 +176,46 @@ public sealed class ProfileForm : Form
         // What the announcer says, when it differs. A nickname the crowd
         // knows, or a spelling the voice actually pronounces correctly -
         // this is wired into the announcer, so it takes effect immediately.
+        //
+        // The box has always done both of those jobs and only the first was
+        // ever obvious, so the hint under it now names the second, with
+        // examples: a club cannot use a feature it has not been told is
+        // there. And the respelling half was unusable anyway - a club could
+        // type a guess, but nothing would say whether the guess worked
+        // until the name went out over the PA in front of the room - so
+        // Hear It reads whatever is in the box, now, through the same name
+        // resolution the race calls use (NameAsAnnounced).
         captions.Add(AddLabeledTextBox(fields, "Announcer name:", _txtAnnouncerName, Result.AnnouncerName));
-        _txtAnnouncerName.PlaceholderText = "optional - blank uses the driver name";
+        _txtAnnouncerName.PlaceholderText = "optional - a nickname, or how the name sounds";
+
+        // Not built at all when there is no voice to read through - see
+        // _speakName. Hidden would do as much for the eye and leave a dead
+        // button in the dialog for anything that walks it.
+        Button? btnHearName = null;
+
+        if (_speakName is not null)
+        {
+            btnHearName = new Button { Text = "Hear It" };
+            btnHearName.Click += (_, _) => HearAnnouncerName();
+
+            // In the fields' column under the box, not beside it: the box
+            // runs to the column's right-hand edge like every other one
+            // here, and narrowing it to make room for a button would single
+            // this field out for no reason a club would understand.
+            fields.AddField(new ButtonBar().With(btnHearName));
+        }
+
+        var announcerHint =
+            "What the announcer reads instead of their real name. Two uses: a nickname the crowd knows, or the "
+            + "name spelled the way it SOUNDS, which is how you fix one the voice gets wrong - \"Jacques\" typed as "
+            + "\"Zhock\", \"Siobhan\" as \"Shiv-awn\". They keep their real name everywhere else.";
+
+        if (btnHearName is not null)
+        {
+            announcerHint += " Hear It reads it out exactly as the announcer will.";
+        }
+
+        fields.AddHint(announcerHint);
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -464,6 +521,13 @@ public sealed class ProfileForm : Form
             classWidth + UiLayout.TightButtonGap,
             _chkRental.GetPreferredSize(Size.Empty).Width,
             _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
+
+            // Hear It, measured as the bar it sits in measures it, and zero
+            // when there is none. It is narrower than the boxes at every
+            // text size, but the column is worked out from everything in it
+            // rather than from the parts somebody remembered - which is how
+            // a caption ends up cut off at 200% and nothing notices.
+            btnHearName is null ? 0 : UiLayout.ButtonSizeFor(btnHearName).Width,
         }.Max();
 
         // The caption column as the grid works it out: its widest caption
@@ -903,6 +967,50 @@ public sealed class ProfileForm : Form
     {
         box.Text = initialValue;
         return fields.AddRow(label, box, stretch: true);
+    }
+
+    /// <summary>
+    /// The name as the announcer would read it NOW - from the boxes as they
+    /// stand, not from the saved profile, because the whole point is to try
+    /// a spelling before committing it.
+    ///
+    /// Built as a DriverProfile and read back through its SpokenName rather
+    /// than picking the first non-blank box here. SpokenName is what the
+    /// voice queue reads when it fills {driver}
+    /// (AnnouncementService.VoiceQueue.cs), so going through it is the only
+    /// thing that guarantees this says what race night will say. The same
+    /// three-step ladder written out a second time is a second thing to keep
+    /// in step, and it would be the wrong one the week somebody changed the
+    /// first.
+    /// </summary>
+    internal string NameAsAnnounced() => new DriverProfile
+    {
+        Transponder = _txtTransponder.Text.Trim(),
+        DriverName = _txtDriverName.Text.Trim(),
+        AnnouncerName = _txtAnnouncerName.Text.Trim(),
+    }.SpokenName;
+
+    /// <summary>
+    /// Reads the announcer name out loud, exactly as the announcer will.
+    ///
+    /// Through SpeakTest, which speaks even while the announcer is muted and
+    /// jumps the drop-while-speaking rule - a test that silently does
+    /// nothing because a race call happened to be going out reads as the
+    /// button being broken.
+    /// </summary>
+    private void HearAnnouncerName()
+    {
+        var name = NameAsAnnounced();
+
+        if (name.Length == 0)
+        {
+            AppDialog.Show(this,
+                "Fill in a driver name or an announcer name first, and this reads it out exactly as the announcer will.",
+                "Nothing to read", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _speakName?.Invoke(name);
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

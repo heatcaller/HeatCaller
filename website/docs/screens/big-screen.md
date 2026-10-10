@@ -12,7 +12,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window. The banner, the clocks, the leaderboard and the ON DECK bar grow and shrink with the window, so full screen on a TV the writing fills the screen. It doesn't follow the text size you set for the laptop with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd>.
 5. Press <kbd>Esc</kbd> to close it.
 
-A small reminder of the keys, "F11: toggle fullscreen     M: track map     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
+A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
 
 <!-- screenshot: Big Screen during a race, full screen, showing the banner, clock, countdown, leaderboard and ON DECK bar -->
 
@@ -22,10 +22,12 @@ From top to bottom:
 
 - **Race state and flag**, for example "RACING — GREEN FLAG" or "RACING — YELLOW FLAG".
 - **Announcement banner.** Each line the announcer picks is shown here for about six seconds. The line appears even when the announcer can't speak or is muted, as long as the announcement is switched on. The rest of the time the banner describes the race: "RACE IN PROGRESS", "YELLOW FLAG — CAUTION", "RED FLAG — RACE STOPPED", "STAGING — GET READY", "COUNTDOWN — STAND BY", "RACE COMPLETE", or "Waiting for the race to start..." when nothing is running.
+- **Banner across the screen**, under the announcement banner, for eight seconds when race control warns a driver or somebody sets the quickest sector of the session. Nothing is there the rest of the time. See [The banner across the screen](#the-banner-across-the-screen).
 - **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
 - **Countdown** on the right, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit.
-- **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news, such as the quickest lap of the session, is highlighted in color. Warnings aren't shown on the Big Screen, so it stays readable from across the room.
+- **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news, such as the quickest lap of the session, is highlighted in color. A driver's warnings are never picked out in color on the leaderboard rows, where Race Control shows them in red, so the board stays readable from across the room. A warning gets a banner of its own instead. See [The banner across the screen](#the-banner-across-the-screen).
 - **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable). During a race that counts towards a championship, the bar shows the championship instead. See [If it ended now](#if-it-ended-now).
+- **ON AIR band** across the very foot of the window, under the ON DECK bar, while the announcer's show is on air. See [When the show is on air](#when-the-show-is-on-air).
 - **Track map**, down the right-hand side, when the layout you're racing on has a plan. See [Track map](#track-map).
 
 Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call). Between races, it gives way to the [between-races cards](#between-races).
@@ -37,6 +39,57 @@ If you've set a club logo, it sits in the top-left corner. Untick **Show the log
 The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on the **Themes** page, in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
 
 A change of look or logo shows on an open Big Screen straight away; you don't need to reopen it. For the dark Big Screen of earlier versions, choose **Race Wall**. See [Looks and the club logo](looks-and-logo.md).
+
+## The banner across the screen
+
+Two things stop the board for a few seconds and say so across the whole width of the screen: race control warning a driver, and somebody setting the quickest sector of the session. They share one strip, which sits under the announcement banner and above the race clock, and is empty the rest of the time.
+
+<!-- screenshot: Big Screen with the yellow WARNING banner across it, the leaderboard below -->
+
+### A warning
+
+When you warn a driver from the **Race Control** leaderboard, the banner reads the warning out in capitals: the mark, the driver's warning number, their name, the reason you picked, and what that warning cost them.
+
+```text
+⚠ WARNING 2 — SAM — BLOCKING  (+5s)
+```
+
+The `(+5s)` is only there when that warning's rung on the class's ladder is a time penalty, and it shows whatever the penalty was (`(+10s)`). The reason is only there when one was given. A driver with no name on their transponder is shown by its ID instead.
+
+A warning whose rung is a black flag gets the other mark, and no cost:
+
+```text
+⚑ BLACK FLAG — SAM — ROUGH DRIVING
+```
+
+A warning is yellow with black type; a black flag is black with white type. Those are the flag colors a driver already knows, so they're the same whatever look the screen is wearing — they don't follow the crowd-screen look the way the rest of the screen does.
+
+### A fastest sector
+
+With a split loop on the layout's plan, a lap that goes through a sector quicker than anyone has gone through it this session puts the same strip up in the crowd-screen look's accent color, with white type:
+
+```text
+◆ FASTEST SECTOR 1 — MAYA  12.31
+```
+
+The sector is numbered as the columns are, and the time is in seconds. The session's very first sector times don't get a banner, since they're the quickest by default, and a ghost car never gets one. A warning already on screen is never covered by a fastest sector: the warning keeps the strip for its full eight seconds, and that sector goes uncalled.
+
+### How long it stays, and what it covers
+
+Either banner stays for **8 seconds** and then goes by itself. The screen checks twice a second, so it can be there up to half a second longer.
+
+It covers nothing. Like the [ON AIR band](#when-the-show-is-on-air) at the foot of the window, it takes a band of its own: the flag line, the announcement banner and the club logo stay where they are, the race clock and the countdown move down, and the leaderboard area is one band shorter while it's up. Anything else in that area — the [grid roll call](#grid-roll-call), a sponsor slide, the [between-races cards](#between-races), the [track map](#track-map) — is one band shorter with it. A banner and the ON AIR band can be up together, at opposite ends of the window, and neither delays the other.
+
+Every open Big Screen shows it, including one opened from the **Practice** page, because every Big Screen watches the same session. Unlike the roll call and the cards, there's nothing to turn it off with: a warning is worth the room.
+
+### Warnings on the leaderboard itself
+
+A warned driver is also marked on the board for the rest of the race, which outlasts the banner:
+
+- The **Driver** column puts the mark after their name: `⚠2` for two warnings, or `⚑ BLACK FLAG` once they've had one.
+- The **Warnings** column, if you've chosen it, shows the count on its own.
+
+Neither is in red on the Big Screen, which is the point: only the good highlights are colored here, so one warned driver doesn't turn the board into a wall of red from across the room. Race Control's own leaderboard does show both in red.
 
 ## Grid roll call
 
@@ -91,6 +144,44 @@ Each driver has their points with this race counted at their current place, and 
 <!-- screenshot: Big Screen during a race with the IF IT ENDED NOW bar at the bottom -->
 
 It only shows for a championship whose rule takes the race: its class, **Mains only** and race days, on the **Championship** page. A race only ticked into a championship by hand doesn't show it, since it can't be ticked until it's saved. It doesn't show in practice, Demo Mode or a warm-up. When the race ends, the bar goes back to **ON DECK:**.
+
+## When the show is on air
+
+The announcer can score its set pieces: your club's own opener plays, a bed runs under the voice, and the piece plays out at the end, so a cold open or a race recap sounds like a broadcast coming on air. While that music is playing, the Big Screen says so.
+
+A band runs across the very foot of the window: a steady broadcast-red **ON AIR** block, and beside it the name of what's on, on a plate in the crowd-screen look with the look's accent underlining it. It wipes on from the left and then sits still. Nothing blinks or pulses, because anything that moves on a crowd screen reads as a notification.
+
+<!-- screenshot: Big Screen with the leaderboard up and the ON AIR band reading RACE RECAP across the foot of the window -->
+
+The band covers nothing and delays nothing. It takes a band of its own at the foot of the window, under the ON DECK bar. The race state and flag, the announcement banner, the elapsed time, the countdown, the grid roll call, a sponsor slide and the track map all keep their full height; the leaderboard is one band shorter for as long as the show runs. A show and the grid roll call are up together on purpose: a race intro is about the race being staged.
+
+### What the band says
+
+The caption is the crowd's name for the segment, in capitals. Which segments get the music is up to you:
+
+| Ticked on **Voice → Commentary** | The band says |
+|---|---|
+| **Cold open** | COLD OPEN |
+| **Race intros** | ROUND INTRO |
+| **Race recaps** | RACE RECAP |
+| **Sign-off numbers** | SIGN-OFF |
+| **Halfway standings** | STANDINGS SO FAR |
+| **Championship check** | CHAMPIONSHIP CHECK |
+| **Milestones** | CLUB HONOURS |
+| **Qualifying report** | QUALIFYING REPORT |
+| **Form guide** | FORM GUIDE |
+| **Grid history** | THE GRID |
+| **This day at the club** | THIS DAY AT THE TRACK |
+
+See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
+
+### Turning it off
+
+Press <kbd>O</kbd> on the Big Screen to turn the band off, and <kbd>O</kbd> again to bring it back. It starts on, and unlike the track map's <kbd>M</kbd> the choice is remembered between sessions, so a club that doesn't want it presses the key once and not every race night. A club that never runs a show never sees the band at all.
+
+The band is only up while the show's own music is playing, so it needs **Play an opener and a music bed under the show** ticked on **Voice → Commentary**, with an opener or a bed chosen. See [The show's music](../announcer/commentary.md#the-shows-music).
+
+It works in every look, including a club's own, and with or without a club logo. Every open Big Screen shows it. If a show ends early or stops partway, the band comes down by itself within half a second, because the Big Screen keeps asking whether a show is on rather than waiting to be told.
 
 ## Track map
 
@@ -181,6 +272,7 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **Led** | Laps completed while leading on the road. |
 | **PBs** | How many times this driver has beaten their own best this session. |
 | **Penalty** | Manually applied time penalties. |
+| **Warnings** | Warnings from race control this race, and a black flag once the class's ladder reaches one. See [Warnings on the leaderboard itself](#warnings-on-the-leaderboard-itself). |
 | **Total Time** | Elapsed race time for this driver. |
 
 The Streak column is highlighted from the same streak threshold the announcer uses (set on **Sounds → Effects**). Best Streak and PBs start again for each new race. Gaps are measured at the line, the way timing systems do it.
@@ -190,7 +282,7 @@ The Streak column is highlighted from the same streak threshold the announcer us
 
 ## Sponsors
 
-The **Sponsors** page shows sponsor or promo images and videos on the Big Screen in rotation with the leaderboard. It's meant for a shop or club venue with sponsors to display. Leave it off for a home setup.
+The **Sponsors** page shows sponsor or promo images and videos on the Big Screen in rotation with the leaderboard, and holds the sponsors you've sold airtime to along with the words the announcer reads for them. It's meant for a shop or club venue with sponsors to display. Leave it off for a home setup.
 
 ### Add slides
 
@@ -240,6 +332,68 @@ The Big Screen alternates: leaderboard, one slide, leaderboard, the next slide, 
 
 Leave **Never interrupt the leaderboard while a race is actually running (recommended)** on unless you have a good reason: mid-race is exactly when people want the live standings.
 
+### Sponsor reads
+
+A sponsor can also have a read: a few sentences somebody paid to have spoken aloud. The announcer reads them exactly as typed. Nothing rewords them, shortens them or adds to them, so a read costs nothing to run and comes out the same every time. Reads are separate from the slides, and you can have either without the other.
+
+These are on the **Sponsor reads** card, at the foot of the page.
+
+1. Press **Add Sponsor**. A sponsor called "New sponsor" is added and the cursor goes to the name box.
+2. Fill in the fields below for them.
+3. Choose where their reads are heard, with the two tick boxes at the top of the card.
+4. Repeat for each sponsor, and put them in order with **Move Up** and **Move Down**.
+
+| Field | What it's for |
+|---|---|
+| **Name, as it's said:** | The name as the voice should say it, which isn't always what's on their banner: "and co" rather than the ampersand. |
+| **One-line tagline:** | One short line, heard once on their first read of the night. Leave it empty if they only bought the full read. |
+| **Their read:** | The sentences to read out, up to 600 characters. Leave it empty and the sponsor gets a one-line mention instead. |
+| **Share of the reads:** | 1 to 10. Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share. |
+| **In tonight's rotation** | Untick to take a sponsor out of tonight's reads and keep everything you've typed, for a sponsor whose season has finished. |
+
+Under **Their read:**, HeatCaller says how long the copy takes to say and over how many gaps, for example "About 37 seconds to read, read over 2 gaps. 550 of 600 characters used." It's worth a look, because it's the one thing about a read you can't judge by looking at it: four lines of text is nearly a minute out loud.
+
+The list shows each sponsor's name, with "read" where they have copy, "share" and the number where their share is more than one, and "off tonight" where they're out of the rotation. **Remove** asks first, says that their slides and videos stay where they are, and can be undone.
+
+#### Where reads are heard
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Read at the end of an ad break, once the sponsor's video has finished** | A read goes out on the tail of an ad break, once the sponsor's own video has stopped and before the screen goes back to the standings. Never over the video. | On |
+| **Read in the gap between races, when the commentary has nothing to say** | A read goes out in the gap between races, where the commentary segments live. | On |
+
+Untick both and nothing is read out. The slides and videos carry on as before.
+
+#### How long a read runs
+
+| Limit | Value |
+|---|---|
+| Most copy one sponsor can have | 600 characters, around a hundred words, about forty seconds aloud |
+| Reading speed HeatCaller reckons on | 150 words a minute |
+| Most that goes out in one read | 25 seconds, whatever room there is |
+| Shortest gap worth a read | 6 seconds |
+| Quiet between one paid read and the next | 90 seconds |
+
+Copy too long for one read is split **at the end of a sentence**, never mid-sentence: as much as fits goes out now, and the rest is read the next time that sponsor's turn comes round, with "More from" and their name in front of it. A long read is delivered whole over the evening rather than cut short in it. If you edit the copy between one gap and the next, the next read starts again from the top, since where it had got to no longer means anything.
+
+The 25 seconds is the limit that matters. A read is handed to the announcer as one line, and a flag call can jump in front of whatever of it hasn't been spoken yet but not into the middle of it, so keeping any one read short is what keeps an advert from sitting across a race call.
+
+#### Whose turn it is
+
+The rotation picks whichever sponsor in tonight's rotation is furthest behind the share they bought, so a club that sells four slots can tell each of them how many reads they got. Ties go to whoever has waited longest, and then to the order you listed them in. The counts are kept for the night and survive closing the app; a new race day starts them again.
+
+Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, and only then is it worked out what to say for them. A sponsor whose turn comes up in a gap too short for a sentence of their copy gets their one-line mention now and their copy at the next proper gap.
+
+#### What a read waits for
+
+- **A race call always comes first.** A read is only asked for once the commentary has nothing to say, so a recap or a "coming up next" always goes ahead of an advert.
+- Nothing is read while a race is on track, while the announcer is held, or while a line is being written.
+- An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break's read is dropped instead of saved up.
+- A read goes on the announcement banner as well as over the PA, like the commentary segments.
+
+!!! note
+    Reads go out from the same check that offers the commentary segments, so they need **Commentary** turned on and set up on this PC, and a race day set up for tonight. Sponsor slides and videos need neither. See [Commentary](../announcer/commentary.md).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -252,6 +406,13 @@ Leave **Never interrupt the leaderboard while a race is actually running (recomm
 | A video slide is skipped, pictures are fine | VLC couldn't open that particular file. | Re-export it as an MP4 (H.264) from whatever made it, and add that. |
 | The music keeps playing over a sponsor video | **Play a sponsor video's own sound** is off, so there's nothing to silence, or **Silence the music and the crowd while it plays** is off. | Check both on the **Sponsors** page. |
 | A sponsor video is silent on a phone but has sound on the Big Screen | Deliberate. Phone browsers won't autoplay sound. | Nothing to fix. |
+| A sponsor is never read out | No copy in **Their read:**, both **Read at the end of an ad break...** and **Read in the gap between races...** unticked, **In tonight's rotation** unticked, or **Commentary** isn't on. | Check the **Sponsor reads** card on the **Sponsors** page, and see [Commentary](../announcer/commentary.md). |
+| A read stops partway and finishes later | One read runs for at most 25 seconds, and longer copy is split at the end of a sentence. | Nothing to fix. Shorten the copy if you want it in one go. |
+| No **FASTEST SECTOR** banner, however quick the lap | It only calls a sector quicker than anyone has gone through that one this session, never the session's first sector times, and sectors need a split loop on the layout's plan. | Nothing to fix. See [A fastest sector](#a-fastest-sector). |
+| A fastest sector was set but the banner showed a warning | A warning on screen is never covered by a fastest sector. | Nothing to fix. |
+| A warned driver's name isn't red on the Big Screen | Deliberate: only the good highlights are colored on this screen. The mark after the name is still there. | Nothing to fix. Add the **Warnings** column if you want the count in a column of its own. |
+| The ON AIR band never appears | The show has no opener or bed chosen, no segment is ticked for the music, or the band is turned off on the Big Screen. | Set the music up on **Voice → Commentary**; press <kbd>O</kbd> on the Big Screen. |
+| The ON AIR band says "THE SHOW" | The show didn't name itself. **Play It** on **Voice → Commentary** always does this. | Nothing to fix. |
 | ON DECK bar is empty | Everything on the timetable is done, or there's nothing on it. | Build tonight's program on **Race Day → Next Steps** (the timetable fills itself from it), or add lines in the **Timetable** window. |
 | Countdown is blank | The race has no lap or time limit. | Set a limit on **Race Control**. See [Running a race](../race-control/running-a-race.md). |
 | Qual column shows dashes | The current session isn't a qualifier. | Nothing to fix. |

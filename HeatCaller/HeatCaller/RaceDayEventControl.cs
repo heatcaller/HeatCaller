@@ -1690,6 +1690,33 @@ public sealed class RaceDayEventControl : UserControl
     }
 
 
+    /// <summary>
+    /// What a volunteer is asked before a day is closed.
+    ///
+    /// It says what closing does rather than asking whether they are sure,
+    /// because what it does is not obvious from the button and not obvious
+    /// from the hint under it either: a closed day is no longer current, so
+    /// finished races file against no round, check-in and the run sheet drop
+    /// onto the legacy day, and the standings and Seed Mains stop seeing
+    /// tonight's heats. The count of rounds still to run is in it because
+    /// that is the number that says "this is not the end of the night".
+    ///
+    /// Pure, so the wording can be tested without the page.
+    /// </summary>
+    internal static string CloseDayQuestion(string dayName, int roundsLeftToRun)
+    {
+        var left = roundsLeftToRun == 0
+            ? string.Empty
+            : $"{Plural.Of(roundsLeftToRun, "round")} on the program {(roundsLeftToRun == 1 ? "has" : "have")} not been run yet.\r\n\r\n";
+
+        return $"Close \"{dayName}\"?\r\n\r\n"
+            + left
+            + "Nothing new joins a closed day: races run after this file against no round, check-in and the run "
+            + "sheet drop onto the legacy day, and tonight's heats stop counting towards the standings and Seed "
+            + "Mains. Recorded results stay exactly where they are.\r\n\r\n"
+            + "Reopen Day puts it back.";
+    }
+
     private void CloseOrReopen()
     {
         if (Selected is not { IsLegacy: false } raceEvent)
@@ -1702,6 +1729,45 @@ public sealed class RaceDayEventControl : UserControl
 
         if (raceEvent.IsOpen)
         {
+            // Closing used to go straight from the Click handler into
+            // RaceEventStore.Close - no question and no look at the track,
+            // from a button that sits beside Delete Day, which refuses
+            // outright while a round is on track for a strictly smaller
+            // consequence. One press at 7pm and automatic round picking
+            // stopped for the night, every later check-in landed on the
+            // legacy day, and tonight's heats dropped out of the standings
+            // and out of Seed Mains.
+            //
+            // The same guard the delete uses, through the pure half of it, so
+            // the two cannot disagree about what "on track" means - see
+            // RaceDayDeleter.DayWithRoundOnTrack. Refused rather than asked,
+            // for its reason: there is no answer that makes it safe, and the
+            // day can close as soon as that race has been saved.
+            if (RaceDayDeleter.DayWithRoundOnTrack(new[] { raceEvent }, RaceDayDeleter.RoundOnTrackId?.Invoke()) is { } busy)
+            {
+                AppDialog.Show(this,
+                    $"\"{busy.DisplayName}\" has a round on track - its result would have nothing to be saved against. "
+                    + "Close the day when that race has finished and been saved.",
+                    "Round on track", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Rounds on the day that have not been run, counted the same way
+            // the status line counts them - see RefreshStatus.
+            var leftToRun = raceEvent.RoundIds.Count(id => _rounds.Get(id) is { IsRecorded: false });
+
+            // No is the default: a stray Enter on this page must not end the
+            // night. See CloseDayQuestion for what it says and why.
+            if (AppDialog.Show(this,
+                    CloseDayQuestion(raceEvent.DisplayName, leftToRun),
+                    "Close race day",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                return;
+            }
+
             // Closing the current day leaves none current; the undo makes
             // it current again only if nothing else has been since.
             var wasActive = string.Equals(events.Active?.Id, dayId, StringComparison.Ordinal);

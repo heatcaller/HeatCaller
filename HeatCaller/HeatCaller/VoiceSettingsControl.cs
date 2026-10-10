@@ -39,20 +39,66 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Button _btnHeatCallerRefresh = new();
     private readonly Label _lblHeatCallerStatus = new();
 
+    // --- Hear it before you buy it ------------------------------------------
+    //
+    // Two buttons that are deliberately NOT part of the HeatCaller lock
+    // (ApplyHeatCallerLock), because neither spends the club's money or
+    // HeatCaller's race-night characters:
+    //
+    //   Hear It plays the relay's own fixed recording of the voice. Free,
+    //   unauthenticated, and it works before a club has signed up at all -
+    //   which is the point. Nobody should be asked to choose a voice they
+    //   have never heard, and nobody should have to sign up to hear one.
+    //
+    //   Preview speaks the club's OWN words in that voice, on a small
+    //   separate daily allowance the relay keeps apart from the night's. The
+    //   club's own wording is what settles it - "does it say our class names
+    //   properly" is not a question a stock sample can answer.
+    private readonly Button _btnHearVoice = new();
+    private readonly TextBox _txtHeatCallerPreviewLine = new();
+    private readonly Button _btnHeatCallerPreview = new();
+    private readonly Label _lblHeatCallerPreviewStatus = new();
+
+    /// <summary>While a sample or a preview is being fetched and played, so a second press can't start another.</summary>
+    private bool _heatCallerHearingRunning;
+
+    /// <summary>The free samples the relay offers, as it last listed them. Empty until it has answered - or if it offers none.</summary>
+    private IReadOnlyList<HeatCallerVoiceSample> _heatCallerSamples = Array.Empty<HeatCallerVoiceSample>();
+
+    /// <summary>
+    /// True while the voice picker is showing the FREE SAMPLE list rather
+    /// than the club's catalogue - a club that hasn't signed up, or whose
+    /// relay wouldn't answer with a token.
+    ///
+    /// The page still lets the voices be heard in that state, and says so.
+    /// What it must not do is let one be SAVED as the club's choice from a
+    /// list the relay never said the club may use: see FillHeatCallerVoices
+    /// and BuildProfileFromControls.
+    /// </summary>
+    private bool _heatCallerListIsSamples;
+
+    /// <summary>A line of the club's own to preview, when nobody has typed one. Theirs, not a stock sample, is the whole point - this is only a starting place.</summary>
+    private const string PreviewStarterLine = "Green flag, green flag! Sam leads the A-Main from Bill and Frank.";
+
     // A relay for the voice alone (advanced) - see the Voice relay row in
     // BuildEngineCard. Blank in every ordinary club.
     private readonly TextBox _txtVoiceRelayUrl = new();
     private readonly TextBox _txtVoiceRelayClub = new();
     private readonly TextBox _txtVoiceRelayToken = new();
     private readonly RadioButton _rdoElevenLabs = new ThemedRadioButton();
-    private readonly RadioButton _rdoWindows = new ThemedRadioButton();
-    private readonly CheckBox _chkWindowsStandsIn = new ThemedCheckBox();
-    private readonly ComboBox _cmbWindowsVoice = new();
-    private readonly Button _btnTestWindowsVoice = new();
-    private readonly Label _lblWindowsVoiceStatus = new();
+    private readonly CheckBox _chkKokoroStandsIn = new ThemedCheckBox();
 
-    /// <summary>While the Windows voice test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
-    private bool _windowsTestRunning;
+    /// <summary>
+    /// Which voice this page is set to speak with, and what stands by for a
+    /// line it can't say - the whole card in one line, under the choices.
+    ///
+    /// This was the Windows voice's own status line; the Windows voice went
+    /// on 10 Oct 2026 and the line was worth keeping, because nothing else
+    /// on the page answers "so which one actually speaks tonight?" - and it
+    /// is where the page says, loudly, that a PC with no Kokoro model cannot
+    /// speak at all.
+    /// </summary>
+    private readonly Label _lblSpeakingStatus = new();
 
     // --- Kokoro: free and natural, on this PC (see KokoroSpeech) ---
     private readonly RadioButton _rdoKokoro = new ThemedRadioButton();
@@ -61,7 +107,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Button _btnDownloadKokoro = new();
     private readonly Label _lblKokoroStatus = new();
 
-    /// <summary>While the Kokoro test is speaking - as _windowsTestRunning.</summary>
+    /// <summary>While the Kokoro test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
     private bool _kokoroTestRunning;
 
     /// <summary>The model download this page is showing, while it runs. KokoroSpeech holds it; its button cancels it.</summary>
@@ -70,8 +116,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>How this page hears the download's progress - taken off KokoroSpeech when the page goes.</summary>
     private Action<double>? _kokoroProgress;
 
-    /// <summary>What the Prepare row says while a voice on this PC is chosen - and how the page knows it said it.</summary>
-    private const string PrepareNotNeededText = "Not needed with the Windows or Kokoro voice - they speak each line on this PC as it's wanted.";
+    /// <summary>What the Prepare row says while the voice on this PC is chosen - and how the page knows it said it.</summary>
+    private const string PrepareNotNeededText = "Not needed with the Kokoro voice - it speaks each line on this PC as it's wanted.";
 
     private readonly TextBox _txtApiKey = new();
     private readonly CheckBox _chkShowApiKey = new ThemedCheckBox();
@@ -194,7 +240,6 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten when their lists are refilled (RefitPickers).</summary>
     private (Font Font, int Count, int Width)? _heatCallerVoiceWidth;
-    private (Font Font, int Count, int Width)? _windowsVoiceWidth;
     private (Font Font, int Count, int Width)? _kokoroVoiceWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _modelWidth;
@@ -202,7 +247,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     private (Font Font, int Count, int Width)? _savedLinesWidth;
 
     /// <summary>
-    /// The widest the three voice pickers get, at the normal text size. A
+    /// The widest a voice picker gets, at the normal text size. A
     /// picker is as wide as its longest voice up to this, so a voice with a
     /// long description can't push its row past the card at 1280x720 or at
     /// the largest text size; its open list is as wide as the longest voice
@@ -280,6 +325,13 @@ public sealed partial class VoiceSettingsControl : UserControl
         _autoSaveWired.Add(_txtVoiceRelayClub);
         _autoSaveWired.Add(_txtVoiceRelayToken);
 
+        // Nor the preview line. It is not a setting at all - it is a sentence
+        // somebody types to hear a voice say it, and it is never saved
+        // anywhere. Left to the walk below it would have saved the whole
+        // voice profile on every keystroke and stamped "Saved automatically"
+        // over the page for a box that changes nothing.
+        _autoSaveWired.Add(_txtHeatCallerPreviewLine);
+
         // Nor the ElevenLabs boxes typed into - the API key, model, language
         // and output format. Saving makes the profile current at once, and
         // every live race line reads it, so saved per keystroke a lap or flag
@@ -328,10 +380,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         UpdateEngineControls();
 
         // The Speak With status line mentions an ElevenLabs set up below
-        // while the Windows voice is chosen - kept in step as it is typed.
-        // Only when that answer actually changes: the same line shows the
-        // last Windows voice test's result ("Done - that was Microsoft
-        // Zira"), and rewriting it on every keystroke wiped it.
+        // while Kokoro is chosen - kept in step as it is typed. Only when
+        // that answer actually changes: the same line also carries what the
+        // page last said about which voice speaks, and rewriting it on every
+        // keystroke wiped it.
         _txtApiKey.TextChanged += (_, _) => ElevenLabsSetUpChanged();
         _cmbVoice.SelectedIndexChanged += (_, _) => ElevenLabsSetUpChanged();
         _loadingSettings = false;
@@ -366,11 +418,12 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// a strip that says what the last change did.
     ///
     ///   Speak with - the three voices, each with what belongs to it
-    ///     indented under it: the HeatCaller voice (Announcer voice: and
-    ///     Refresh, its status, the voice relay's three boxes and their
-    ///     hint), ElevenLabs (the Windows voice standing in), the Windows
-    ///     voice (Windows voice: and its Test, its status), then the hint.
-    ///     The fields of all three share one caption column (LineUp).
+    ///     indented under it: the HeatCaller voice (Announcer voice: with
+    ///     Refresh and Hear It, Preview text: with Preview, its status, the
+    ///     voice relay's three boxes and their hint), ElevenLabs (the Kokoro
+    ///     voice standing in), Kokoro (Kokoro voice: with its Test and
+    ///     Download, its status), then which voice speaks and the hint. The
+    ///     fields of all three share one caption column (LineUp).
     ///   ElevenLabs connection - API Key:, Voice:, Model:, and the hints.
     ///   Voice parameters - the ElevenLabs tuning in one caption column,
     ///     playback (volume, the most per lap) in another, then Test Voice
@@ -451,7 +504,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         // past that for more - they wrap now, where they used to be cut off
         // at the edge of a box of fixed height.
         _textSize.ReserveLines(_lblHeatCallerStatus, 2);
-        _textSize.ReserveLines(_lblWindowsVoiceStatus, 2);
+        _textSize.ReserveLines(_lblHeatCallerPreviewStatus, 2);
+        _textSize.ReserveLines(_lblSpeakingStatus, 2);
         _textSize.ReserveLines(_lblLibraryStatus, 1);
         _textSize.ReserveLines(_lblTestStatus, 1);
 
@@ -486,7 +540,6 @@ public sealed partial class VoiceSettingsControl : UserControl
         var most = UiLayout.AtTextSize(PickerMostWidth);
 
         FitVoicePicker(_cmbHeatCallerVoice, ref _heatCallerVoiceWidth);
-        FitVoicePicker(_cmbWindowsVoice, ref _windowsVoiceWidth);
         FitVoicePicker(_cmbKokoroVoice, ref _kokoroVoiceWidth);
         FitVoicePicker(_cmbVoice, ref _voiceWidth);
 
@@ -496,6 +549,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         Fit(_txtVoiceRelayUrl, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
         Fit(_txtVoiceRelayClub, UiLayout.AtTextSize(RelayClubWidth));
         Fit(_txtVoiceRelayToken, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
+        Fit(_txtHeatCallerPreviewLine, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
         Fit(_txtApiKey, field);
         Fit(_txtLanguageCode, UiLayout.AtTextSize(LanguageBoxWidth));
         Fit(_txtOutputFormat, UiLayout.AtTextSize(OutputFormatBoxWidth));
@@ -545,7 +599,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private void RefitPickers()
     {
-        _heatCallerVoiceWidth = _windowsVoiceWidth = _kokoroVoiceWidth = _voiceWidth = _savedLinesWidth = null;
+        _heatCallerVoiceWidth = _kokoroVoiceWidth = _voiceWidth = _savedLinesWidth = null;
         SizeFields();
     }
 
@@ -618,15 +672,14 @@ public sealed partial class VoiceSettingsControl : UserControl
     private static string Describe(VoiceProfile profile) =>
         $"speaking with {profile.EffectiveEngine switch
         {
-            VoiceEngine.Windows => "the Windows voice",
             VoiceEngine.Kokoro => $"the Kokoro voice ({KokoroSpeech.Describe(string.IsNullOrWhiteSpace(profile.KokoroVoiceName) ? KokoroSpeech.DefaultVoice : profile.KokoroVoiceName)})",
             VoiceEngine.HeatCaller => $"the HeatCaller voice ({(profile.HeatCallerReady ? profile.HeatCallerVoice : "none chosen")})",
             _ => "ElevenLabs",
         }}"
         + (profile.EffectiveEngine == VoiceEngine.ElevenLabs
-            ? $" (Windows voice stands in: {(profile.WindowsVoiceStandsIn ? "yes" : "no")})"
+            ? $" (Kokoro stands in: {(profile.KokoroStandsIn ? "yes" : "no")})"
             : string.Empty)
-        + $", Windows voice {(string.IsNullOrWhiteSpace(profile.WindowsVoiceName) ? "Windows default" : profile.WindowsVoiceName)}, "
+        + $", Kokoro voice {(string.IsNullOrWhiteSpace(profile.KokoroVoiceName) ? KokoroSpeech.DefaultVoice : profile.KokoroVoiceName)}, "
         + $"API key {(string.IsNullOrWhiteSpace(profile.ApiKey) ? "MISSING" : "set")}, "
         + $"voice {(string.IsNullOrWhiteSpace(profile.VoiceId) ? "NONE" : profile.VoiceName + " (" + profile.VoiceId + ")")}, "
         + $"model {profile.ModelId}, "
@@ -769,9 +822,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     }
 
     /// <summary>
-    /// Speak With: the HeatCaller voice, ElevenLabs or the free Windows
-    /// voice, which voice of each, and whether the Windows voice stands in
-    /// when ElevenLabs can't speak a line - each choice with what belongs to
+    /// Speak With: the HeatCaller voice, ElevenLabs or the free Kokoro
+    /// voice, which voice of each, and whether Kokoro stands in when
+    /// ElevenLabs can't speak a line - each choice with what belongs to
     /// it indented under it. Returns the card, and the three caption-and-field
     /// grids in it, which BuildLayout lines up once they wear the page's face.
     ///
@@ -781,12 +834,6 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private (Section Card, FieldGrid[] Grids) BuildEngineCard(VoiceProfile current)
     {
-        // The list as it stands, with a fresh read asked for in the
-        // background - so a voice installed since the app started is offered
-        // the next time this page is built, and building it never waits on
-        // Windows speech.
-        var voices = WindowsVoice.InstalledVoices(refresh: true);
-
         // --- The HeatCaller voice: included, and nothing to set up ---
         //
         // First because it is the one most clubs want: a natural voice with
@@ -794,20 +841,51 @@ public sealed partial class VoiceSettingsControl : UserControl
         // is fixed while it is chosen - the wording, the voice's settings,
         // the Test buttons - because the account behind it is HeatCaller's,
         // not the club's. A club that wants its own words uses its own key
-        // or the free Windows voice, where both are theirs to spend.
+        // or the free Kokoro voice, where both are theirs to spend.
         _rdoHeatCaller.Text = "HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill";
         _rdoHeatCaller.AutoSize = true;
 
         _cmbHeatCallerVoice.DropDownStyle = ComboBoxStyle.DropDownList;
 
         _btnHeatCallerRefresh.Text = "Refresh";
-        _btnHeatCallerRefresh.Click += async (_, _) => await LoadHeatCallerCatalogueAsync(byHand: true);
+        _btnHeatCallerRefresh.Click += async (_, _) =>
+        {
+            // The samples too: a club that has just filled in its relay
+            // wants both answers, and the samples are the one that works
+            // before the token does.
+            _ = LoadHeatCallerSamplesAsync();
+            await LoadHeatCallerCatalogueAsync(byHand: true);
+        };
+
+        // Which voice is picked decides what Hear It and Preview would play,
+        // so both are kept in step with it. Saving is wired separately by
+        // WireAutoSave; this only enables and disables.
+        _cmbHeatCallerVoice.SelectedIndexChanged += (_, _) => UpdateEngineControls();
+
+        // Hear It: the relay's free recording of the voice in the picker.
+        // Beside the picker rather than under the Preview row, because it
+        // answers the question the picker asks - "which of these?" - and
+        // because it is the one button on this card that works with nothing
+        // set up at all.
+        _btnHearVoice.Text = "Hear It";
+        _btnHearVoice.Click += BtnHearVoice_Click;
+
+        // Preview: the club's own words, on the relay's separate daily
+        // preview allowance. A starting line is put in the box rather than a
+        // placeholder, so the button does something the first time it is
+        // pressed - a club that has to think of a sentence before it can
+        // hear anything usually doesn't.
+        _txtHeatCallerPreviewLine.Text = PreviewStarterLine;
+
+        _btnHeatCallerPreview.Text = "Preview";
+        _btnHeatCallerPreview.Click += BtnHeatCallerPreview_Click;
 
         // The picker and Refresh side by side, Refresh under it when the row
         // is too narrow for both.
         var heatCaller = new FieldGrid();
 
-        heatCaller.AddRow("Announcer voice:", FieldGrid.Inline(_cmbHeatCallerVoice, _btnHeatCallerRefresh));
+        heatCaller.AddRow("Announcer voice:", FieldGrid.Inline(_cmbHeatCallerVoice, _btnHeatCallerRefresh, _btnHearVoice));
+        heatCaller.AddRow("Your own words:", FieldGrid.Inline(_txtHeatCallerPreviewLine, _btnHeatCallerPreview));
 
         // The allowance, and why it can't be used when it can't - which can
         // run to a few lines, so the label wraps to the card rather than
@@ -815,6 +893,17 @@ public sealed partial class VoiceSettingsControl : UserControl
         _lblHeatCallerStatus.AutoSize = true;
         _lblHeatCallerStatus.ForeColor = AppTheme.TextMuted;
         _lblHeatCallerStatus.Text = "Checking with the relay...";
+
+        // What the last Hear It or Preview did, on a line of its own: the
+        // status line above belongs to the relay and the allowance, and a
+        // preview's answer wiping it took the club's only sight of why its
+        // voice wasn't included.
+        _lblHeatCallerPreviewStatus.AutoSize = true;
+        _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
+        _lblHeatCallerPreviewStatus.Text =
+            "Hear It plays a short sample - free, and it works before you have signed up for anything. "
+            + "Preview says your own words in that voice, on a small daily preview allowance that is kept "
+            + "separate from your race-night voice.";
 
         // --- A relay of your own, for the voice only (advanced) ---
         //
@@ -879,34 +968,18 @@ public sealed partial class VoiceSettingsControl : UserControl
         // One line, like every check box: a check box is as wide as its
         // caption and never wraps it. The card is wide enough for it on one
         // line at the largest text size.
-        _chkWindowsStandsIn.Text = "If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the Windows voice says it instead";
-        _chkWindowsStandsIn.AutoSize = true;
-        _chkWindowsStandsIn.Checked = current.WindowsVoiceStandsIn;
-
-        // --- Windows, and which of its voices ---
-        _rdoWindows.Text = "Windows voice - free, built into Windows, no account or internet needed";
-        _rdoWindows.AutoSize = true;
-
-        _cmbWindowsVoice.DropDownStyle = ComboBoxStyle.DropDownList;
-
-        _btnTestWindowsVoice.Text = "Test Windows Voice";
-        _btnTestWindowsVoice.Click += BtnTestWindowsVoice_Click;
-
-        // Wide enough for "Microsoft Zira Desktop (English (United States),
-        // female)" - see SizeFields - with the Test button beside it, or
-        // under it when the row is too narrow for both.
-        FillWindowsVoices(voices, current.WindowsVoiceName);
-
-        var windows = new FieldGrid();
-
-        windows.AddRow("Windows voice:", FieldGrid.Inline(_cmbWindowsVoice, _btnTestWindowsVoice));
+        _chkKokoroStandsIn.Text = "If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the free Kokoro voice says it instead";
+        _chkKokoroStandsIn.AutoSize = true;
+        _chkKokoroStandsIn.Checked = current.KokoroStandsIn;
 
         // --- Kokoro: free and natural, on this PC ---
         //
-        // Between ElevenLabs and Windows on purpose: it sounds far closer to
-        // the first and costs what the second does - nothing. The one catch
-        // is a download, once, which the button beside the voice does.
-        _rdoKokoro.Text = "Kokoro voice - free, natural-sounding, runs on this PC. One download, then no account or internet needed";
+        // Last of the three, and the one everything else falls back on. It
+        // used to sit above the free Windows voice; that one has gone, so
+        // this is now both a choice and the voice that speaks when no other
+        // can. The model ships in the installer, and the button beside the
+        // voice fetches it if an install somehow has none.
+        _rdoKokoro.Text = "Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed";
         _rdoKokoro.AutoSize = true;
 
         _cmbKokoroVoice.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -925,22 +998,22 @@ public sealed partial class VoiceSettingsControl : UserControl
         _lblKokoroStatus.AutoSize = true;
         _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
 
-        // What the Windows voice can do on this PC, and the last test. A
-        // reason or a test failure can run long, so it wraps to the card;
-        // two lines are kept for it (BuildLayout) so a longer one does not
-        // move the hint under it.
-        _lblWindowsVoiceStatus.AutoSize = true;
-        _lblWindowsVoiceStatus.ForeColor = AppTheme.TextMuted;
+        // Which voice actually speaks, and what stands by for a line it
+        // can't say. A reason can run long, so it wraps to the card; two
+        // lines are kept for it (BuildLayout) so a longer one does not move
+        // the hint under it.
+        _lblSpeakingStatus.AutoSize = true;
+        _lblSpeakingStatus.ForeColor = AppTheme.TextMuted;
 
         var lblHint = _textSize.Wear(
             new Label
             {
-                Text = "The Windows and Kokoro voices use the Speed and Playback volume below, and each announcement's own speed. "
-                     + "Audio tags like [excited] are left out for them, and what they say is never kept with the saved ElevenLabs lines. "
-                     + "While Kokoro isn't downloaded, or can't say a line, the Windows voice says it. "
+                Text = "The Kokoro voice uses the Speed and Playback volume below, and each announcement's own speed. "
+                     + "Audio tags like [excited] are left out for it, and what it says is never kept with the saved ElevenLabs lines. "
+                     + "Kokoro is also what speaks whenever the voice you chose can't - no key, no internet, a used-up quota or allowance - "
+                     + "so a flag call is never silent. "
                      + "The ElevenLabs settings below are kept whichever voice is chosen. "
-                     + "With the HeatCaller voice the wording and the voice settings are fixed, and the free Windows voice says anything it can't - "
-                     + "a flag call is never silent.",
+                     + "With the HeatCaller voice the wording and the voice settings are fixed.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -950,14 +1023,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // put in the card: with no parent yet, none switches the others off.
         _rdoHeatCaller.Checked = current.EffectiveEngine == VoiceEngine.HeatCaller;
         _rdoElevenLabs.Checked = current.EffectiveEngine == VoiceEngine.ElevenLabs;
-        _rdoWindows.Checked = current.EffectiveEngine == VoiceEngine.Windows;
         _rdoKokoro.Checked = current.EffectiveEngine == VoiceEngine.Kokoro;
 
         // Saving is wired by WireAutoSave, with everything else on the page.
         // These only keep the rest of the page in step with the choice.
         _rdoElevenLabs.CheckedChanged += (_, _) => UpdateEngineControls();
-        _rdoWindows.CheckedChanged += (_, _) => UpdateEngineControls();
-        _chkWindowsStandsIn.CheckedChanged += (_, _) => UpdateEngineControls();
+        _chkKokoroStandsIn.CheckedChanged += (_, _) => UpdateEngineControls();
 
         // Kokoro chosen by hand: the model is loaded now, in the background,
         // so the first line of the night doesn't wait for it.
@@ -991,59 +1062,19 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(heatCaller));
         card.Add(_lblHeatCallerStatus);
+        card.Add(_lblHeatCallerPreviewStatus);
         Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
-        Indented(card.Add(_chkWindowsStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
+        Indented(card.Add(_chkKokoroStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoKokoro, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(kokoro));
-        card.Add(_lblKokoroStatus, gapBelow: UiLayout.SectionGap);
-
-        card.Add(_rdoWindows, stretch: false, gapBelow: UiLayout.HintGap);
-        Indented(card.Add(windows));
-        card.Add(_lblWindowsVoiceStatus, gapBelow: UiLayout.HintGap);
+        card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
+        card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblHint, gapBelow: 0);
 
-        return (card, new[] { heatCaller, relay, kokoro, windows });
-    }
-
-    /// <summary>
-    /// The Windows voice list: Windows' default first, then every voice that
-    /// can speak here. A saved voice this PC doesn't have - a settings file
-    /// from another laptop - stays in the list, and chosen, rather than being
-    /// quietly replaced by the default the next time anything on the page is
-    /// saved. Windows' default speaks for it meanwhile.
-    /// </summary>
-    private void FillWindowsVoices(IReadOnlyList<WindowsVoiceChoice> voices, string? savedName)
-    {
-        var saved = savedName?.Trim() ?? string.Empty;
-
-        _cmbWindowsVoice.Items.Clear();
-        _cmbWindowsVoice.Items.Add(new WindowsVoiceChoice(string.Empty, "(Windows default)"));
-
-        var selected = 0;
-
-        foreach (var voice in voices)
-        {
-            var index = _cmbWindowsVoice.Items.Add(voice);
-
-            if (string.Equals(voice.Name, saved, StringComparison.OrdinalIgnoreCase))
-            {
-                selected = index;
-            }
-        }
-
-        if (saved.Length > 0 && selected == 0)
-        {
-            selected = _cmbWindowsVoice.Items.Add(new WindowsVoiceChoice(saved, $"{saved} (not on this PC - Windows' default speaks instead)"));
-        }
-
-        _cmbWindowsVoice.SelectedIndex = selected;
-
-        // The picker and its open list are sized to the voices in it
-        // (SizeFields), measured afresh the next time the fields are sized.
-        _windowsVoiceWidth = null;
+        return (card, new[] { heatCaller, relay, kokoro });
     }
 
     // --- The Kokoro voice ---------------------------------------------------
@@ -1051,8 +1082,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>
     /// The Kokoro voice list: every English voice KokoroSharp ships, with the
     /// saved one chosen - or the default announcer voice when none is. A saved
-    /// voice this PC doesn't have stays in the list, and chosen, like the
-    /// Windows list; the default speaks for it meanwhile.
+    /// voice this PC doesn't have stays in the list, and chosen, rather than
+    /// being quietly swapped; the default speaks for it meanwhile.
     /// </summary>
     private void FillKokoroVoices(string? savedName)
     {
@@ -1120,14 +1151,14 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (!available)
         {
             _lblKokoroStatus.Text = kokoroChosen
-                ? $"Kokoro isn't downloaded on this PC yet - press Download ({KokoroSpeech.DownloadSizeText}, once). Until then the Windows voice speaks."
-                : $"Needs a one-off download ({KokoroSpeech.DownloadSizeText}). After that it works with no internet at all.";
-            _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Warning : AppTheme.TextMuted;
+                ? $"Kokoro isn't on this PC - press Download ({KokoroSpeech.DownloadSizeText}, once). Until then the announcer can't say anything at all."
+                : $"Not on this PC - press Download ({KokoroSpeech.DownloadSizeText}, once). Kokoro is also what speaks when the voice above can't, so without it a line it can't say is simply lost.";
+            _lblKokoroStatus.ForeColor = AppTheme.Danger;
         }
         else if (KokoroSpeech.LoadFailure is { } reason)
         {
-            _lblKokoroStatus.Text = $"Kokoro can't speak - {reason}.";
-            _lblKokoroStatus.ForeColor = kokoroChosen ? AppTheme.Danger : AppTheme.Warning;
+            _lblKokoroStatus.Text = $"Kokoro can't speak - {reason}. {AnnouncementService.GetKokoroAdvice}";
+            _lblKokoroStatus.ForeColor = AppTheme.Danger;
         }
         else
         {
@@ -1136,7 +1167,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             // invites a club to go looking for a download it never made.
             _lblKokoroStatus.Text = kokoroChosen
                 ? "Speaking with Kokoro - ready on this PC. Nothing is billed, however much the announcer talks."
-                : "Ready on this PC.";
+                : "Ready on this PC - and standing by for any line the voice above can't say.";
             _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
         }
     }
@@ -1263,7 +1294,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>
     /// Speaks a sample in the Kokoro voice picked above, at the Speed and
     /// Playback volume on screen - saved or not, like every test here. Kokoro
-    /// itself, never the Windows stand-in: a test shows what Kokoro says, or
+    /// itself, never a stand-in - there is none: a test shows what Kokoro says, or
     /// why it can't.
     /// </summary>
     private async void BtnTestKokoroVoice_Click(object? sender, EventArgs e)
@@ -1438,6 +1469,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // put it right. The same as a new ElevenLabs key ending a rest.
         Announcer?.ResetHeatCallerVoiceState("the voice relay was changed on Voice Settings");
 
+        _ = LoadHeatCallerSamplesAsync();
         _ = LoadHeatCallerCatalogueAsync(byHand: true);
     }
 
@@ -1464,6 +1496,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             RestoredSettings.Confirm(RestoredSettings.Part.VoiceRelay);
             Announcer?.ResetHeatCallerVoiceState("the voice relay from a restored backup was checked on Voice Settings");
+            _ = LoadHeatCallerSamplesAsync();
             _ = LoadHeatCallerCatalogueAsync(byHand: true);
             return;
         }
@@ -1579,12 +1612,33 @@ public sealed partial class VoiceSettingsControl : UserControl
             _heatCallerEnabled = catalogue.Enabled;
             _heatCallerVoices = catalogue.Voices;
 
-            var missing = FillHeatCallerVoices(_store.Current.HeatCallerVoice);
+            var savedVoice = _store.Current.HeatCallerVoice?.Trim() ?? string.Empty;
+
+            // The catalogue wins the picker whenever it has anything to put
+            // there: its own voices, which are the only ones the relay says
+            // this club may use and so the only ones that may be SAVED as
+            // its choice - or a "not offered any more" entry for the voice
+            // the club has saved, which is the one way a club is ever told
+            // its voice has gone. Only with nothing at all to show does the
+            // free sample list take the picker over, so a club that has
+            // never signed up still has voices to listen to.
+            var missing = false;
+
+            if (catalogue.Voices.Count > 0 || savedVoice.Length > 0)
+            {
+                missing = FillHeatCallerVoices(savedVoice);
+                _heatCallerListIsSamples = false;
+            }
+            else
+            {
+                ShowSamplesInPickerIfNoCatalogue();
+            }
 
             if (!catalogue.Enabled)
             {
                 HeatCallerStatus(
-                    "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Windows voice both work as normal.",
+                    "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. "
+                    + "The samples above are still free to listen to.",
                     AppTheme.Warning);
             }
             else if (catalogue.Voices.Count == 0)
@@ -1597,7 +1651,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // and the voice still will not speak, and nothing else on
                 // the page says why.
                 HeatCallerStatus(
-                    $"This relay doesn't offer \"{_store.Current.HeatCallerVoice}\", the voice chosen here, so the free Windows voice "
+                    $"This relay doesn't offer \"{_store.Current.HeatCallerVoice}\", the voice chosen here, so the free Kokoro voice "
                     + "would speak every line. Pick one from the list above.",
                     AppTheme.Warning);
             }
@@ -1605,7 +1659,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 HeatCallerStatus(
                     $"Included - {catalogue.Allowance.Describe()} Saved lines cost nothing. "
-                    + "When the allowance is gone the free Windows voice speaks every line until it starts again, and your saved lines are kept.",
+                    + "When the allowance is gone the free Kokoro voice speaks every line until it starts again, and your saved lines are kept.",
                     catalogue.Allowance.Spent ? AppTheme.Warning : AppTheme.TextMuted);
             }
 
@@ -1626,6 +1680,13 @@ public sealed partial class VoiceSettingsControl : UserControl
             // still what the announcer will ask for, and a relay that is
             // asleep for a moment must not look like a setting that is gone.
             HeatCallerStatus($"Couldn't ask the relay: {ex.Message}", AppTheme.Warning);
+
+            // The samples need no token, so they very often answer when this
+            // did not - a club that has not signed up, or whose token is
+            // wrong. Letting them fill the picker is the difference between
+            // a page that says "no" and a page that lets somebody hear what
+            // they would be signing up for.
+            ShowSamplesInPickerIfNoCatalogue();
 
             if (byHand)
             {
@@ -1672,6 +1733,169 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
     }
 
+    /// <summary>True while the free sample list is being read, so two asks don't race. Its own flag - the catalogue's read is a different question.</summary>
+    private bool _heatCallerSamplesLoading;
+
+    /// <summary>
+    /// Reads the relay's free sample list - no token, no club, nothing
+    /// charged - and lets the Hear It button work.
+    ///
+    /// Deliberately separate from the catalogue read, and deliberately
+    /// quiet. This is the first-run path: a laptop with a relay address and
+    /// nothing else gets a list of voices it can listen to, and the only way
+    /// that happens is by asking a question that needs no credentials. A
+    /// failure here is not worth a warning of its own - the catalogue's
+    /// status line already says where the club stands - so it only takes the
+    /// Hear It button away and says why on the preview line.
+    /// </summary>
+    private async Task LoadHeatCallerSamplesAsync()
+    {
+        if (_heatCallerSamplesLoading)
+        {
+            return;
+        }
+
+        if (HeatCallerVoice is not { } client || !client.SamplesReachable)
+        {
+            _heatCallerSamples = Array.Empty<HeatCallerVoiceSample>();
+
+            if (!Gone)
+            {
+                UpdateEngineControls();
+            }
+
+            return;
+        }
+
+        _heatCallerSamplesLoading = true;
+
+        try
+        {
+            var samples = await client.SamplesAsync();
+
+            if (Gone)
+            {
+                return;
+            }
+
+            _heatCallerSamples = samples;
+
+            if (samples.Count == 0)
+            {
+                // A relay with none recorded yet. Said on the preview line
+                // rather than left as a button that does nothing when
+                // pressed: a dead button reads as a broken app.
+                _lblHeatCallerPreviewStatus.Text =
+                    "This relay has no voice samples to play yet. Preview still works once your club's voice is set up.";
+                _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
+            }
+
+            ShowSamplesInPickerIfNoCatalogue();
+        }
+        catch (HeatCallerVoiceException ex)
+        {
+            _heatCallerSamples = Array.Empty<HeatCallerVoiceSample>();
+
+            if (!Gone)
+            {
+                _lblHeatCallerPreviewStatus.Text = $"Couldn't fetch the voice samples: {ex.Message}";
+                _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Started with a discarded task, so anything escaping here is
+            // unobserved - and on the UI thread that is a crash, not a
+            // failed fetch.
+            _heatCallerSamples = Array.Empty<HeatCallerVoiceSample>();
+            Status($"Voice samples: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _heatCallerSamplesLoading = false;
+
+            if (!Gone)
+            {
+                UpdateEngineControls();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts the free samples in the voice picker when the club's catalogue
+    /// has nothing to put there - a club that has not signed up, a plan
+    /// without the voice, a relay that would not answer with a token.
+    ///
+    /// This is the sales tool. Without it the picker is empty for exactly
+    /// the club that is deciding whether to sign up, and "hear it before you
+    /// buy it" is a promise the page cannot keep. What it must NOT do is let
+    /// one of these be saved as the club's voice: a sample is a
+    /// HeatCallerVoiceSample and not a HeatCallerVoiceChoice, and
+    /// BuildProfileFromControls only ever reads the latter - so a sample
+    /// selection leaves the saved voice exactly as it was. The Preview
+    /// button is off in this state too (UpdateEngineControls): previewing
+    /// asks the relay for a voice this club may not have.
+    ///
+    /// Does nothing while the catalogue read is still in flight, or once it
+    /// has given voices of its own - those are the ones that count.
+    /// </summary>
+    private void ShowSamplesInPickerIfNoCatalogue()
+    {
+        if (Gone || _heatCallerLoading || _heatCallerVoices.Count > 0 || _heatCallerSamples.Count == 0)
+        {
+            return;
+        }
+
+        // Nor over a picker that is already showing something the catalogue
+        // put there - the club's saved voice marked "not offered any more",
+        // typically. That entry is how a club finds out its voice has gone,
+        // and a list of samples on top of it would hide the one thing the
+        // page had to say.
+        if (_cmbHeatCallerVoice.Items.Count > 0 && !_heatCallerListIsSamples)
+        {
+            return;
+        }
+
+        var reloading = _loadingSettings;
+
+        // Filling a combo box raises SelectedIndexChanged, and this page
+        // saves on that - so the guard goes up first, as FillHeatCallerVoices
+        // does. Without it, opening the page on a club that has not signed up
+        // would save the voice profile for no reason anybody asked for.
+        _loadingSettings = true;
+
+        try
+        {
+            _cmbHeatCallerVoice.Items.Clear();
+
+            foreach (var sample in _heatCallerSamples)
+            {
+                _cmbHeatCallerVoice.Items.Add(sample);
+            }
+
+            _cmbHeatCallerVoice.SelectedIndex = 0;
+            _heatCallerListIsSamples = true;
+        }
+        finally
+        {
+            _loadingSettings = reloading;
+        }
+
+        // Said plainly, because a picker full of voices that cannot be saved
+        // would otherwise look like a setting that will not stick.
+        if (!_heatCallerHearingRunning)
+        {
+            _lblHeatCallerPreviewStatus.Text =
+                $"Listening only for now - these are HeatCaller's own {Plural.Of(_heatCallerSamples.Count, "voice")}, free to play. "
+                + "Press Hear It to try one. Preview, which says your own words, needs your club set up on the relay first.";
+            _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
+        }
+
+        // The longest voice has changed - see SizeFields.
+        RefitPickers();
+        UpdateEngineControls();
+    }
+
     /// <summary>
     /// Fills the HeatCaller voice list, keeping the club's saved choice
     /// selected. A saved voice the relay no longer offers stays in the list,
@@ -1708,7 +1932,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // the drop-down, this reads as "Included - 0 of 20,000
                 // characters" on a page that will not speak a word: the
                 // announcer asks for a voice this relay has never heard of
-                // and the Windows voice says everything. The likeliest way
+                // and the Kokoro voice says everything. The likeliest way
                 // to get here is a voice chosen while a test relay was set,
                 // kept after the boxes were emptied.
                 missing = true;
@@ -1802,7 +2026,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     ///
     /// Asked rather than done quietly because the club may have spent an
     /// evening on those lines: the way to keep them is to use an ElevenLabs
-    /// key of their own, or the free Windows voice, and the question says so.
+    /// key of their own, or the free Kokoro voice, and the question says so.
     /// </summary>
     private void HeatCallerChosen()
     {
@@ -1815,7 +2039,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var answer = AppDialog.Show(this,
             "The HeatCaller voice speaks the standard announcer lines, so the wording on this page will go back to them.\n\n"
-            + "Your own wording is kept if you use your own ElevenLabs key, or the free Windows voice, instead.\n\n"
+            + "Your own wording is kept if you use your own ElevenLabs key, or the free Kokoro voice, instead.\n\n"
             + "Use the HeatCaller voice and the standard lines?",
             "HeatCaller voice", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
 
@@ -1823,16 +2047,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             // Back to whatever was in use before. Setting another radio is
             // what unchecks this one - and a club that was already ON this
-            // voice stays on it, rather than being moved to Windows by a
+            // voice stays on it, rather than being moved to another by a
             // question it only reached because a save failed.
             switch (_store.Current.EffectiveEngine)
             {
                 case VoiceEngine.ElevenLabs:
                     _rdoElevenLabs.Checked = true;
-                    break;
-
-                case VoiceEngine.Windows:
-                    _rdoWindows.Checked = true;
                     break;
 
                 case VoiceEngine.Kokoro:
@@ -1920,14 +2140,12 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>
     /// Refreshes the Speak With status line when the key or voice below
-    /// changes what it would say - and only then, so a Windows voice test's
-    /// result stays on screen through a key being pasted in. (A key filled in
-    /// while a test is speaking leaves the line as it is - the test owns it -
-    /// and it catches up at the next change.)
+    /// changes what it would say - and only then, so the line keeps whatever
+    /// it last said through a key being pasted in.
     /// </summary>
     private void ElevenLabsSetUpChanged()
     {
-        if (_rdoWindows.Checked && ElevenLabsSetUpOnPage() != _elevenLabsSetUpShown)
+        if (_rdoKokoro.Checked && ElevenLabsSetUpOnPage() != _elevenLabsSetUpShown)
         {
             UpdateEngineControls();
         }
@@ -1936,81 +2154,102 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>
     /// Keeps the page in step with the voice chosen at the top: the stand-in
     /// box only means something with ElevenLabs chosen (disabled, not hidden,
-    /// so it can be seen and set beforehand), the Windows controls need a
-    /// Windows voice to exist, and Prepare Lines is for ElevenLabs only.
-    /// Changes nothing that is saved.
+    /// so it can be seen and set beforehand), the Hear It and Preview
+    /// buttons need a relay to ask, and Prepare Lines is for ElevenLabs and
+    /// the HeatCaller voice only. Changes nothing that is saved.
     /// </summary>
     private void UpdateEngineControls()
     {
-        var windowsChosen = _rdoWindows.Checked;
         var heatCallerChosen = _rdoHeatCaller.Checked;
         var kokoroChosen = _rdoKokoro.Checked;
-        var reason = WindowsVoice.UnavailableReason;
-        var available = reason is null;
 
-        // Can't be picked with no Windows voice to speak - unless it already
-        // is, so the choice can still be seen and changed.
-        _rdoWindows.Enabled = available || windowsChosen;
-        _chkWindowsStandsIn.Enabled = available && !windowsChosen && !heatCallerChosen && !kokoroChosen;
+        _chkKokoroStandsIn.Enabled = !heatCallerChosen && !kokoroChosen;
 
         UpdateKokoroControls(kokoroChosen);
-        _cmbWindowsVoice.Enabled = available;
-        _btnTestWindowsVoice.Enabled = available && !_windowsTestRunning;
 
         // The HeatCaller voice can be chosen once the relay says the club
         // has it - and stays choosable while it already is, so a club is
         // never stuck in a mode the page won't let it leave or re-enter.
         _rdoHeatCaller.Enabled = _heatCallerEnabled || heatCallerChosen;
-        _cmbHeatCallerVoice.Enabled = _heatCallerEnabled && heatCallerChosen && !_heatCallerLoading;
+
+        // The picker is usable whenever there is a list in it - including
+        // the free sample list a club sees before it has signed up, which is
+        // there to be listened to rather than saved. It used to need the
+        // voice to be CHOSEN as well, which meant a club deciding whether to
+        // sign up could not so much as scroll the voices it was deciding
+        // between.
+        _cmbHeatCallerVoice.Enabled = _cmbHeatCallerVoice.Items.Count > 0 && !_heatCallerLoading;
+
+        // Hear It needs a sample and a relay to fetch it from, and nothing
+        // else - no token, no plan, no chosen engine. Preview needs the
+        // relay to accept the club's token, which is what RelayConfigured
+        // asks, and a voice the relay has actually offered: previewing from
+        // the free sample list would ask for a voice this club may not use.
+        var hearable = !_heatCallerHearingRunning
+                       && HeatCallerVoice?.SamplesReachable == true
+                       && _heatCallerSamples.Count > 0;
+
+        _btnHearVoice.Enabled = hearable && PickedHeatCallerVoiceId().Length > 0;
+        _btnHearVoice.Visible = HeatCallerVoice?.SamplesReachable == true;
+
+        _btnHeatCallerPreview.Enabled = !_heatCallerHearingRunning
+                                        && HeatCallerVoice?.RelayConfigured == true
+                                        && !_heatCallerListIsSamples
+                                        && PickedHeatCallerVoiceId().Length > 0;
 
         ApplyHeatCallerLock(heatCallerChosen);
 
-        if (!_windowsTestRunning)
+        if (!_kokoroTestRunning)
         {
-            if (!available)
-            {
-                // With the Windows voice chosen nothing can speak, so the way
-                // out is what the line says - not that ElevenLabs is fine.
-                _lblWindowsVoiceStatus.Text = windowsChosen
-                    ? $"No Windows voice can speak on this PC - {reason}. Choose ElevenLabs above to speak with it instead."
-                    : kokoroChosen
-                        ? $"No Windows voice can speak on this PC - {reason}. Kokoro works as normal, but nothing can stand in for a line it can't say."
-                        : $"No Windows voice can speak on this PC - {reason}. ElevenLabs works as normal.";
+            // A key and a voice entered below don't switch over by
+            // themselves - the choice above does - so the line says so
+            // rather than leave somebody wondering why it isn't ElevenLabs.
+            var elevenLabsSetUp = ElevenLabsSetUpOnPage();
+            _elevenLabsSetUpShown = elevenLabsSetUp;
 
-                // Red only when nothing can speak because of it.
-                _lblWindowsVoiceStatus.ForeColor = windowsChosen ? AppTheme.Danger : AppTheme.Warning;
+            var kokoroReady = KokoroSpeech.IsAvailable;
+            var kokoroWhy = KokoroSpeech.UnavailableReason ?? KokoroSpeech.LoadFailure ?? "the Kokoro voice can't speak on this PC";
+
+            if (kokoroChosen)
+            {
+                // Kokoro chosen and unable to speak is the one state where
+                // this app cannot say a word. Nothing stands under it since
+                // the Windows voice went, so the line is red and says what
+                // to press rather than which other voice is fine.
+                _lblSpeakingStatus.Text = kokoroReady
+                    ? elevenLabsSetUp
+                        ? "Speaking with Kokoro, on this PC. ElevenLabs is set up below too: choose it above to use it."
+                        : "Speaking with Kokoro, on this PC. Nothing is billed, however much the announcer talks."
+                    : $"NOTHING CAN SPEAK - {kokoroWhy}. {AnnouncementService.GetKokoroAdvice}";
+
+                _lblSpeakingStatus.ForeColor = kokoroReady ? AppTheme.TextMuted : AppTheme.Danger;
             }
             else
             {
-                var count = Plural.Of(WindowsVoice.InstalledVoices().Count, "Windows voice");
+                var chosen = heatCallerChosen ? "the HeatCaller voice" : "ElevenLabs";
 
-                // A key and a voice entered below don't switch over by
-                // themselves - the choice above does - so the line says so
-                // rather than leave somebody wondering why it isn't ElevenLabs.
-                var elevenLabsSetUp = ElevenLabsSetUpOnPage();
-                _elevenLabsSetUpShown = elevenLabsSetUp;
+                // With the HeatCaller voice, standing in is not a choice -
+                // the club has no key of its own to fall back on - so the
+                // tick box is only part of the answer for ElevenLabs.
+                var standsBy = heatCallerChosen || _chkKokoroStandsIn.Checked;
 
-                _lblWindowsVoiceStatus.Text = windowsChosen
-                    ? elevenLabsSetUp
-                        ? $"Speaking with the Windows voice - {count} on this PC. ElevenLabs is set up below too: choose it above to use it."
-                        : $"Speaking with the Windows voice - {count} on this PC."
-                    : kokoroChosen
-                        ? $"Speaking with Kokoro, with the Windows voice standing by for any line it can't say - {count} on this PC."
-                    : _chkWindowsStandsIn.Checked
-                        ? $"Speaking with ElevenLabs, with the Windows voice standing by - {count} on this PC."
-                        : $"Speaking with ElevenLabs. A line it can't speak is skipped - {count} on this PC.";
+                _lblSpeakingStatus.Text = standsBy
+                    ? kokoroReady
+                        ? $"Speaking with {chosen}, with the free Kokoro voice standing by for any line it can't say."
+                        : $"Speaking with {chosen} - but {kokoroWhy}, so nothing can stand in and a line it can't say is lost. "
+                          + AnnouncementService.GetKokoroAdvice
+                    : $"Speaking with {chosen}. A line it can't speak is skipped - tick the box above to have the free Kokoro voice say it instead.";
 
-                _lblWindowsVoiceStatus.ForeColor = AppTheme.TextMuted;
+                _lblSpeakingStatus.ForeColor = standsBy && !kokoroReady ? AppTheme.Warning : AppTheme.TextMuted;
             }
         }
 
         // Prepare Lines renders through whichever voice is chosen - it is
         // the cheapest thing a club on the HeatCaller voice can do, because
         // the relay keeps one copy of every fixed line for every club - so
-        // only the Windows and Kokoro voices have nothing for it to do. Left
-        // alone while a run is going: that run stops itself before its next
-        // line.
-        if (windowsChosen || kokoroChosen)
+        // only Kokoro has nothing for it to do. Left alone while a run is
+        // going: that run stops itself before its next line.
+        if (kokoroChosen)
         {
             if (_prepareCancel is null)
             {
@@ -2033,7 +2272,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// buttons, Load Voices, the model, the voice settings, the per-line
     /// Test buttons, and the lines themselves. A club on the HeatCaller
     /// voice is not the one paying, so it gets the announcer exactly as it
-    /// was designed - and its own key or the free Windows voice the moment
+    /// was designed - and its own key or the free Kokoro voice the moment
     /// it wants to change any of that.
     ///
     /// Disabled and read-only rather than hidden: a club can still see what
@@ -2085,12 +2324,12 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>
     /// Puts Prepare Lines back after a run or a cancelled question - but not
-    /// while the Windows voice is chosen: it used to be re-enabled
-    /// unconditionally, and the voice can be switched while it waits.
+    /// while Kokoro is chosen: it used to be re-enabled unconditionally, and
+    /// the voice can be switched while it waits.
     /// </summary>
     private void RestorePrepareButton()
     {
-        if (_rdoWindows.Checked || _rdoKokoro.Checked)
+        if (_rdoKokoro.Checked)
         {
             _btnPrepareLines.Enabled = false;
             _lblPrepareProgress.Text = PrepareNotNeededText;
@@ -2101,53 +2340,180 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
     }
 
-    /// <summary>
-    /// Speaks a sample in the Windows voice picked above, at the Speed and
-    /// Playback volume on screen - saved or not, like every test here. No
-    /// ElevenLabs request, no key needed, nothing saved.
-    /// </summary>
-    private async void BtnTestWindowsVoice_Click(object? sender, EventArgs e)
-    {
-        var profile = BuildProfileFromControls();
-        var voice = _cmbWindowsVoice.SelectedItem as WindowsVoiceChoice;
+    // --- Hear it before you buy it ------------------------------------------
 
-        _windowsTestRunning = true;
-        _btnTestWindowsVoice.Enabled = false;
-        _lblWindowsVoiceStatus.Text = "Speaking a sample with the Windows voice...";
-        _lblWindowsVoiceStatus.ForeColor = AppTheme.TextMuted;
+    /// <summary>
+    /// The voice id the picker is showing, whether the list came from the
+    /// club's catalogue or from the free samples. Empty when nothing is in
+    /// it.
+    /// </summary>
+    private string PickedHeatCallerVoiceId() => _cmbHeatCallerVoice.SelectedItem switch
+    {
+        HeatCallerVoiceChoice choice => choice.Id ?? string.Empty,
+        HeatCallerVoiceSample sample => sample.Id,
+        _ => string.Empty,
+    };
+
+    /// <summary>What the picker is showing, for a sentence about it. Empty when nothing is in it.</summary>
+    private string PickedHeatCallerVoiceName() => _cmbHeatCallerVoice.SelectedItem switch
+    {
+        HeatCallerVoiceChoice choice => string.IsNullOrWhiteSpace(choice.Name) ? choice.Id ?? string.Empty : choice.Name,
+        HeatCallerVoiceSample sample => string.IsNullOrWhiteSpace(sample.Name) ? sample.Id : sample.Name,
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// Plays the relay's own short recording of the voice in the picker.
+    ///
+    /// Free, and asked for without a token - so this works on a laptop that
+    /// has never been signed up, which is exactly the laptop deciding
+    /// whether to. Nothing is charged to anybody and nothing is saved.
+    /// </summary>
+    private async void BtnHearVoice_Click(object? sender, EventArgs e) =>
+        await HearAsync(
+            // "picked", not "name": the last argument's lambda names its own
+            // parameter "name", and a pattern variable here would be in the
+            // same enclosing scope as that lambda.
+            PickedHeatCallerVoiceName() is { Length: > 0 } picked ? $"Playing a sample of {picked}..." : "Playing a sample...",
+            async (client, voiceId) => await client.SampleAsync(SampleUrlFor(voiceId)),
+            name => $"That was {name} - the relay's own sample. Press Preview to hear your own words in it.");
+
+    /// <summary>
+    /// Speaks the club's own words in the voice in the picker, through the
+    /// relay's separate daily PREVIEW allowance.
+    ///
+    /// Never the race-night voice budget, and never a fall-back to it: when
+    /// the preview allowance is gone the club is told so in words, and the
+    /// button stops. A page where pressing Preview quietly spent the night's
+    /// characters would be a page a club could not afford to explore, which
+    /// would defeat the whole point of having it.
+    /// </summary>
+    private async void BtnHeatCallerPreview_Click(object? sender, EventArgs e)
+    {
+        var line = _txtHeatCallerPreviewLine.Text.Trim();
+
+        if (line.Length == 0)
+        {
+            _lblHeatCallerPreviewStatus.Text = "Type the words you want to hear first - your own class names and driver names are the real test.";
+            _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Danger;
+            return;
+        }
+
+        await HearAsync(
+            "Asking the relay to say your line...",
+            async (client, voiceId) => await client.PreviewAsync(voiceId, line),
+            name => $"That was your line in {name}. Previews come out of a small daily allowance of their own - your race-night voice is untouched.");
+    }
+
+    /// <summary>
+    /// The shape both Hear It and Preview share: fetch some audio from the
+    /// relay for the voice in the picker, play it through the announcer's own
+    /// output, and say what happened on the preview status line.
+    ///
+    /// Played through PlayTestAudioAsync like every other Test button on this
+    /// page, which means through the announcer's output lock and the one warm
+    /// shared output (AudioBus). A preview therefore WAITS for a race call
+    /// rather than talking over it, and never opens a second output device -
+    /// doing that mid-race stalls every other sound in the building, which is
+    /// why AudioBus exists at all.
+    /// </summary>
+    private async Task HearAsync(
+        string working,
+        Func<HeatCallerVoiceClient, string, Task<byte[]>> fetch,
+        Func<string, string> done)
+    {
+        if (_heatCallerHearingRunning)
+        {
+            return;
+        }
+
+        if (HeatCallerVoice is not { } client)
+        {
+            _lblHeatCallerPreviewStatus.Text = "The relay isn't available in this window.";
+            _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
+            return;
+        }
+
+        var voiceId = PickedHeatCallerVoiceId();
+
+        if (voiceId.Length == 0)
+        {
+            _lblHeatCallerPreviewStatus.Text = "Pick a voice above first.";
+            _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Danger;
+            return;
+        }
+
+        var name = PickedHeatCallerVoiceName() is { Length: > 0 } picked ? picked : voiceId;
+
+        _heatCallerHearingRunning = true;
+        UpdateEngineControls();
+
+        _lblHeatCallerPreviewStatus.Text = working;
+        _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
 
         try
         {
-            var audio = await WindowsVoice.RenderAsync(profile, "This is HeatCaller, testing the Windows voice.");
+            var audio = await fetch(client, voiceId);
             if (Gone) { return; }
 
-            await PlayTestAudioAsync(audio, profile.Volume);
+            // The volume on screen, saved or not, as every test here does -
+            // so a club trying the announcer level hears the voice at it.
+            await PlayTestAudioAsync(audio, (double)(_numVolumePercent.Value / 100m));
             if (Gone) { return; }
 
-            _lblWindowsVoiceStatus.Text = $"Done - that was {(voice is null || voice.Name.Length == 0 ? "Windows' default voice" : voice.Name)}.";
-            _lblWindowsVoiceStatus.ForeColor = AppTheme.Success;
+            _lblHeatCallerPreviewStatus.Text = done(name);
+            _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Success;
         }
-        catch (Exception ex)
+        catch (HeatCallerVoiceException ex)
         {
-            // An async void handler: anything escaping it takes the app down.
-            Status($"Windows voice test failed - {ex.GetType().Name}: {ex.Message}");
+            Status($"Voice preview: {ex.Message}");
 
             if (!Gone)
             {
-                _lblWindowsVoiceStatus.Text = $"Test failed: {ex.Message}";
-                _lblWindowsVoiceStatus.ForeColor = AppTheme.Danger;
+                // A spent preview allowance is not a fault and not a thing to
+                // retry all evening, so it reads as the plain fact it is.
+                // Nothing falls through to the race-night voice here - see
+                // HeatCallerVoiceClient.PreviewAsync.
+                _lblHeatCallerPreviewStatus.Text = HeatCallerVoiceClient.IsPreviewAllowanceSpent(ex)
+                    ? $"{ex.Message} Hear It still works - it plays a stock sample and costs nothing."
+                    : ex.Message;
+
+                _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Warning;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Reached from an async void handler, so anything escaping takes
+            // the app down with it.
+            Status($"Voice preview failed - {ex.GetType().Name}: {ex.Message}");
+
+            if (!Gone)
+            {
+                _lblHeatCallerPreviewStatus.Text = $"Couldn't play that: {ex.Message}";
+                _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Danger;
             }
         }
         finally
         {
-            _windowsTestRunning = false;
+            _heatCallerHearingRunning = false;
 
             if (!Gone)
             {
-                _btnTestWindowsVoice.Enabled = WindowsVoice.IsAvailable;
+                UpdateEngineControls();
             }
         }
     }
+
+    /// <summary>
+    /// The sample address for a voice: the one the relay gave in its list
+    /// where there is one, otherwise the id for the client to build a path
+    /// from. The relay owns these addresses, so its own answer always wins.
+    /// </summary>
+    private string SampleUrlFor(string voiceId) =>
+        _heatCallerSamples.FirstOrDefault(sample => string.Equals(sample.Id, voiceId, StringComparison.OrdinalIgnoreCase))
+            is { Url.Length: > 0 } found
+            ? found.Url
+            : voiceId;
 
     /// <summary>
     /// ElevenLabs connection: when it is used, then API Key: with Show,
@@ -2574,6 +2940,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // controls after an await (see Gone).
         _ = LoadHeatCallerCatalogueAsync(byHand: false);
 
+        // And the free samples, which are a separate question with a
+        // separate answer: they need no token, so they arrive for a club
+        // that has never signed up and whose catalogue read will fail. On a
+        // task of its own, so neither waits for the other.
+        _ = LoadHeatCallerSamplesAsync();
+
         // A Kokoro download started on the page this one replaced.
         if (KokoroSpeech.RunningDownload is { } download)
         {
@@ -2624,13 +2996,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // match. This page saves every change as it is made.
         var saved = _store.Current;
 
-        // The button is disabled with the Windows voice chosen; this is for
-        // the moment between choosing it and the page catching up.
-        if (saved.EffectiveEngine is VoiceEngine.Windows or VoiceEngine.Kokoro)
+        // The button is disabled with Kokoro chosen; this is for the moment
+        // between choosing it and the page catching up.
+        if (saved.EffectiveEngine == VoiceEngine.Kokoro)
         {
             AppDialog.Show(this,
-                "Prepare Lines renders lines in your ElevenLabs voice. With the "
-                + (saved.EffectiveEngine == VoiceEngine.Kokoro ? "Kokoro" : "Windows") + " voice chosen at the top of the page, "
+                "Prepare Lines renders lines in your ElevenLabs voice. With the Kokoro voice chosen at the top of the page, "
                 + "every line is spoken as it's needed, so there is nothing to prepare.",
                 "Not needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
@@ -2812,7 +3183,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (!Gone)
             {
-                // Not back on if the Windows voice was chosen during the run
+                // Not back on if the Kokoro voice was chosen during the run
                 // (which is what stopped it) - the summary went to the log.
                 RestorePrepareButton();
                 _btnStopPreparing.Enabled = false;
@@ -3116,12 +3487,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             // The Speak With card. Built field by field like everything
             // here, so leaving one out would reset it on the next save.
             Engine = _rdoHeatCaller.Checked ? VoiceEngine.HeatCaller
-                : _rdoWindows.Checked ? VoiceEngine.Windows
                 : _rdoKokoro.Checked ? VoiceEngine.Kokoro
                 : VoiceEngine.ElevenLabs,
-            WindowsVoiceName = (_cmbWindowsVoice.SelectedItem as WindowsVoiceChoice)?.Name ?? _original.WindowsVoiceName,
             KokoroVoiceName = (_cmbKokoroVoice.SelectedItem as KokoroVoiceChoice)?.Name ?? _original.KokoroVoiceName,
-            WindowsVoiceStandsIn = _chkWindowsStandsIn.Checked,
+            KokoroStandsIn = _chkKokoroStandsIn.Checked,
 
             // The HeatCaller voice: the club's choice, and the relay's
             // fingerprint for it as the catalogue last gave it. Both are
@@ -3253,27 +3622,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Built from the controls, so unsaved edits are what gets spoken -
         // the voice chosen at the top of the page included.
         var profile = BuildProfileFromControls();
-        var kokoro = profile.EffectiveEngine == VoiceEngine.Kokoro;
 
-        // "On this PC" for everything below that isn't ElevenLabs: Kokoro's
-        // test is Kokoro itself, never the stand-in, so a test shows what
-        // Kokoro says - or why it can't.
-        var windows = profile.EffectiveEngine == VoiceEngine.Windows || kokoro;
+        // Kokoro's test is Kokoro itself, never a stand-in - there is none
+        // for it to use - so a test shows what Kokoro says, or why it can't.
+        var kokoro = profile.EffectiveEngine == VoiceEngine.Kokoro;
 
         if (kokoro)
         {
             if (KokoroSpeech.UnavailableReason is { } unavailable)
             {
-                _lblTestStatus.Text = $"Kokoro can't speak yet - {unavailable}.";
-                _lblTestStatus.ForeColor = AppTheme.Danger;
-                return;
-            }
-        }
-        else if (windows)
-        {
-            if (WindowsVoice.UnavailableReason is { } unavailable)
-            {
-                _lblTestStatus.Text = $"No Windows voice can speak on this PC - {unavailable}.";
+                _lblTestStatus.Text = $"Kokoro can't speak yet - {unavailable}. {AnnouncementService.GetKokoroAdvice}";
                 _lblTestStatus.ForeColor = AppTheme.Danger;
                 return;
             }
@@ -3339,16 +3697,10 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (kokoro)
             {
-                // Kokoro, as a race would use it - and, like the Windows
-                // voice, nothing saved and nothing held for the race let go.
-                audio = await KokoroSpeech.RenderAsync(testProfile, spoken);
-            }
-            else if (windows)
-            {
-                // The Windows voice, as a race would use it. Nothing is saved
-                // and nothing held for the race is let go - there is no
+                // Kokoro, as a race would use it. Nothing is saved and
+                // nothing held for the race is let go - there is no
                 // ElevenLabs take involved.
-                audio = await WindowsVoice.RenderAsync(testProfile, spoken);
+                audio = await KokoroSpeech.RenderAsync(testProfile, spoken);
             }
             else
             {
@@ -3381,7 +3733,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             // Either way the fix is the model box, not a button.
             // The model only matters to ElevenLabs.
             var savedModel = _store.Current.ModelId;
-            var unsaved = !windows && !string.Equals(savedModel, testProfile.ModelId, StringComparison.OrdinalIgnoreCase);
+            var unsaved = !kokoro && !string.Equals(savedModel, testProfile.ModelId, StringComparison.OrdinalIgnoreCase);
 
             // Kept short on the label, which wraps into the section below if
             // it runs long; the full explanation goes to the log.

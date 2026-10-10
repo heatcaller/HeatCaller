@@ -440,6 +440,13 @@ internal static class LayoutAudit
         // Choose... beside "Also races" on a driver's profile (4 Oct):
         // DialogFit from the start, and on the list from the start.
         "Other Classes",
+
+        // Hearing how a driver's name comes out before it is read to a room
+        // (NameCheckForm, from Driver Hub's Check Names...): the drivers
+        // taking the height, the line saying what is being read under them,
+        // and the tick box and the count beside Say It, Say the Next One and
+        // Close (10 Oct).
+        "Check How Names Are Read",
     };
 
     /// <summary>

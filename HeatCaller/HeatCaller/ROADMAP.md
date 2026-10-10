@@ -30,6 +30,13 @@ What follows from that:
   tested and as recoverable as the results store.
 - **Correct results beat new features.** Qualifying, mains, corrections and
   saving are covered by tests; anything that changes them needs a test.
+- **Kokoro is the floor, and it is 310 MB.** The Windows voice was retired on
+  10 Oct 2026, so Kokoro is both the free voice and the fallback for every
+  other one - there is nothing underneath it. A publish without
+  `Assets\Kokoro\kokoro.onnx` is therefore an installer that cannot speak at
+  all, and `HeatCaller.csproj` now **fails the publish** rather than warning
+  (both Kokoro targets are publish-only, so an ordinary build and `check.cmd`
+  never see it). Run `fetch-kokoro.cmd` before any publish.
 - **Next Level Timing is history.** Leftover mentions in code comments
   (for example `RoundModels.cs`, the class notes on `RaceControlControl` and
   `AnnouncementService`) describe how things used to be and should be
@@ -41,8 +48,8 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: 1,410 tests (8 Oct), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
-| Relay | TypeScript on Fly.io (`relay\`), 34 test files, 461 tests. **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix |
+| Tests | `HeatCaller.Tests`: about 1,735 tests (10 Oct - counted from the new test files, not measured; the next `check.cmd` run settles it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
+| Relay | TypeScript on Fly.io (`relay\`), 36 test files, 507 tests (measured 10 Oct). **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes, and the refusal messages renamed off the retired Windows voice - `Hear It` and `Preview` in the app do nothing until `fly deploy --ha=false` has run |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -52,9 +59,10 @@ What follows from that:
 ## The feature freeze - lifted 27 Sep 2026
 
 **Lifted on 27 Sep 2026, after rehearsal 3 ran smoothly** - Asher's call.
-That was one clean rehearsal after the fixes, not the two asked for below,
-and rehearsal 2's freeze is still unexplained (see the table below), so
-two things carry on:
+That was one clean rehearsal after the fixes, not the two asked for below.
+Rehearsal 2's freeze has a named cause since 9 Oct 2026 and the cause is
+fixed (see the table below), but two things carry on anyway, because the
+fix is reasoned from the code rather than reproduced on the bench:
 
 - **The freeze catcher stays in** (`SessionLog`, `HangWatchdog`). If the
   app freezes again, the `Logs` folder holds the console up to the freeze
@@ -94,7 +102,7 @@ and that night does not count.
 | Rehearsal | Date | Clean? | What went wrong |
 |---|---|---|---|
 | 1 | 27 Sep 2026 | No | The countdown played twice: the start went on to the countdown while the AI round intro was still being written. A recap called a win by 0.004s a tie. Both fixed. |
-| 2 | 27 Sep 2026 | No | Froze mid-race in heat 2, with no message; force-closed. Cause unknown - the console only lived in the window. Added the session log file and the freeze catcher (`SessionLog`, `HangWatchdog`) to catch it next time. |
+| 2 | 27 Sep 2026 | No | Froze mid-race in heat 2, with no message; force-closed. Cause unknown at the time - the console only lived in the window. Added the session log file and the freeze catcher (`SessionLog`, `HangWatchdog`) to catch it next time. **Explained on 9 Oct 2026** by the fifth bug hunt: `MainForm`'s 3-second auto-connect tick called `DirectDecoderClient.Connect` / `ILapClient.Connect` on the UI thread, and neither had a timeout anywhere in `HidStream.Dispose`, `GetHidDevices`, `TryOpen`, the two `SetFeature` IOCTLs or the serial open. The telling asymmetry: the decoder *reads* had been moved to `Task.Run` with a 1s `ReadTimeout`; the *connects* were left on the UI thread. The I-Lap's raw capture was the other half - a `StreamWriter` with `AutoFlush` on, written under `_lineLock`, with the UI thread waiting on that same lock inside `Disconnect` and the lap event raised while holding it. Both are fixed; `BugHunt5FreezeTests` pins what can be pinned without a decoder on the bench. **Not reproduced**, so it is the leading explanation and not a proven one - the check if it happens again is whether the last `UI`-tagged line before `HangWatchdog`'s `FROZEN` entry is `[auto-connect] Retrying...` |
 | 3 | 27 Sep 2026 | Called clean - freeze lifted | Nothing lost, froze or needed fixing by hand. Its log showed four things, fixed after: the A-Main started from the Next Up bar ran as freeform (no intro, "No round selected"; saved to the right round only by the fallback); the round intro was shouted, 80 words, and called Q3 Heat 1 "Heat 3"; cars parked on the loop were called as jump starts ("Frank jumped the start!"); and the "too soon" log line printed the wrong figure. The intro and the jump-start call are wrong calls by the announcer, which strictly fails the list above. |
 | 4 | 4-5 Oct 2026 | Called clean - small things fixed after | Nothing lost, nothing hand-fixed, no freeze. A few things from the log were fixed afterwards, as after rehearsal 3. **The row is short on detail: what they were is in another chat and has not been written down here.** The I-Lap ran on real hardware for the first time in the same stretch - see "Next, in order", 7. |
 
@@ -666,19 +674,56 @@ second project. Not WiX/MSI: too heavy.
       the voice cache and the rehearsal folder stay - tested, not assumed.
 
 **Signing**
-- [ ] **Azure Artifact Signing** (formerly Trusted Signing), about $9.99 a
-      month; open to individuals in the USA and Canada, identity checked
-      against a government ID. Sign the app's exe and `Setup.exe`. OV
-      certificates ($150-300/yr) are the fallback; EV ($400+) is not worth
-      it - since 2024 it no longer skips SmartScreen.
+- [x] **Azure Artifact Signing** (formerly Trusted Signing) - **the
+      identity is checked, the certificate profile exists, and a real
+      release is packed and signed as of 10 Oct 2026.** About $9.99 a
+      month, open to individuals in the USA and Canada, identity checked
+      against a government ID. The fallbacks are now moot and recorded only
+      for the next person: OV certificates ($150-300/yr), and EV ($400+),
+      which since 2024 no longer skips SmartScreen.
+
+      How it is wired, because none of it is obvious:
+      - `pack.cmd` signs as it packs, with
+        `--azureTrustedSignFile signing-metadata.json`. That file names the
+        Azure endpoint, the signing account (`heatcallersigning`) and the
+        certificate profile (`heatcallerprofile`), and it holds **no
+        secret** - which is exactly why it is safe to commit.
+      - The token comes from the **Azure CLI's cached login**, so `az login`
+        has to have been run on the packing machine. Nothing is stored in
+        the repo.
+      - That account needs the **"Artifact Signing Certificate Profile
+        Signer"** role on the signing account. **Owner is not enough** -
+        signing is a data-plane operation with its own role, and without it
+        every sign fails 403 Forbidden. This is the one that wastes an
+        evening.
+      - The **.NET 8 runtime** has to be installed. Velopack's bundled
+        signtool and dlib are built against it and the .NET 10 SDK this app
+        builds with does not supply it.
+      - `pack.cmd --test` signs against `heatcallertestprofile`, which
+        chains to a test root no normal Windows trusts. `NotTrusted` on a
+        `--test` pack is the correct answer. It proves the whole path - the
+        Azure login, the role, the dlib, signtool, Velopack - without
+        spending a real signing operation or putting a half-tested release
+        in front of a club. Run it first on any machine that has not
+        signed before.
+      - `pack.cmd --unsigned` is still there for a throwaway build.
 - [ ] **Expect SmartScreen anyway at first.** Reputation builds as signed
       releases are downloaded under the same identity. The first-night
       guide shows the "More info - Run anyway" screen.
 
 **Updates - never mid-meeting**
-- [ ] **Feed**: a small **public** releases repo on GitHub, or a folder
-      on heatcaller.com. Not the source repo while it is private - reading
-      it would need a token shipped inside the app.
+- [ ] **Feed** - decided and in the code, **not yet proved against a real
+      one.** `AppUpdates.FeedUrl` is
+      `https://github.com/asherizm/HeatCaller-releases` and
+      `AppUpdates.Channel` is `beta`, read through Velopack's
+      `GithubSource` with `prerelease: false`. A small **public** releases
+      repo, not the source repo while that is private - reading a private
+      one would need a token shipped inside the app. **What is left: the
+      repo has to exist and the signed assets have to be uploaded to a
+      release on it** (`vpk upload github`, or by hand), and then an update
+      has to be taken end to end on a second machine. `-c beta` in
+      `pack.cmd` has to keep matching `AppUpdates.Channel`, or a club on
+      beta is told there is nothing new for ever.
 - [x] **When** - **written 6 Oct 2026** (`AppUpdates`, wired in
       `MainForm.WireUpdates`), **not yet run against a real feed.** First
       check two minutes after startup so it is never part of why the app was
@@ -1263,6 +1308,50 @@ from. Ranked by what decides whether a club switches, and stays.
     results, standings as CSV - makes HeatCaller an easier yes for a club
     afraid of being locked in.
 
+11. **The Track Designer as a piece of software in its own right**
+    (Asher's ask, 8 Oct: "let's make this editor as good as a stand alone
+    piece of software"). It is the one page a club will spend an evening
+    in rather than a minute, and the Big Screen's live track map, the
+    sector speeds and the kit check all read what it produces.
+
+    **Done.** Rails are bolted to the floor rather than standing on it -
+    the grey plastic bolt heads are drawn, and the plan reports a rail
+    with no tile under it (`RcpTrackPainter`, `RcpPlan.RailsWithNoFloor`).
+    All eight of RCP's sets are in `RcpKit`, with
+    `BreakdownPublished` saying which of them RCP actually print a parts
+    list for - the rest are checked on tiles alone rather than against an
+    invented rail count. `RcpStockLayout` opens any of seven of them as a
+    starting plan, `RcpTrackCanvas.LoadStock` in one undo step; each is
+    held to its kit's published tile AND rail counts by
+    `RcpStockLayoutTests`, which is what caught every one of them being
+    over budget when they were first reconstructed off RCP's photographs.
+    `RoomFit` takes the hall's size and says whether the layout fits it,
+    turned either way. And `RcpSelection` picks part of a plan up: a
+    marquee, drag to move, nudge, quarter turns, both mirrors, copy,
+    paste, duplicate and delete, with the transform geometry held by
+    `RcpSelectionTests` - a tile fills a cell, a rail lies along a seam
+    and a turn rail sweeps a quadrant of a grid point, so a quarter turn
+    has three different mappings to get right and getting one wrong
+    leaves rails half a tile off the floor they bolt to, which looks
+    nearly right.
+
+    **Left, roughly in order of what a club would miss first:**
+
+    - **A designer page of its own in the docs.** It is documented as one
+      section of **Drivers, classes and equipment** (`Draw the layout in
+      the Track Designer`) plus a shortcut table, which is now the
+      longest section on a page about something else.
+    - **Printing.** A plan at a known scale on paper, to lay the track out
+      from. Today's only export is a PNG at the window's own zoom.
+    - **The inventory as a build list.** The counts are shown; what is
+      missing is "here is the pile of pieces, in the order you lay them".
+    - **Tile labels.** `RcpTile.Label` exists, is drawn and is saved, and
+      nothing in the editor can set one.
+    - **The small things that make a tool feel finished:** a zoom readout,
+      a PNG at a chosen scale rather than the window's, and the marquee's
+      bounding-box hit test growing handles so a selection can be sized
+      rather than only moved.
+
 Deliberately not on this list: more race formats, more statistics, more
 sound or visual features. There is plenty of breadth already; what decides
 whether a club stays is 1, 2 and 5.
@@ -1305,6 +1394,35 @@ than after it, and the club's playlist silenced for the duration
 (`ShowAudio`, `ShowTreatment`, `ShowOnAir`). The bed is looped and its own
 fade kept back as the show's ending - both found by measuring the file, so
 any club's music works rather than only the two it was built against.
+
+A show is a **block**, not a run of separate announcements (10 Oct 2026):
+`ShowBlock` costs the parts, fits them, and puts a mark between two of
+them - the club's sting between unrelated parts, a 1.1 s bed swell where
+one thought leads into the next, a 0.7 s dry beat where the words carry
+the change - with nothing in front of the first part and no mark between
+every pair. `ShowBlock.LongestBlock` is 90 s, bridges are dropped before
+race calls, and any race state change abandons the block mid-sentence
+(`AbandonBlock`, wired in `RaceControlControl.RaceEvents.cs` before the UI
+marshal). `ShowRunningOrder` plays the opener whole for the first show and
+comes in on its ring-out afterwards, re-establishing the theme after a
+20-minute quiet spell. `CommentaryContinuity` writes the lines that join
+the parts - look-backs, still-to-come, first-up, that-is-the-lot - on the
+laptop, out of a shuffled bag, with no model and no allowance, so they
+survive a dead Ollama. `CommentaryExchange` gives a change of voice a
+450 ms beat and nudges the bed 1.15x. The Big Screen carries an **ON AIR**
+band with the segment's caption (`OnAirTreatment`, `ShowBlock.CaptionFor`
+- one table, after two disagreed on seven of eleven segments), toggled
+with <kbd>O</kbd> and kept in `big-screen.json`. Sponsors have read copy
+as well as slides and videos (`SponsorCopy`: 600 characters, 150 wpm, a
+25 s ceiling, a 6 s floor, 90 s of quiet between paid reads), shared out
+by the share each sponsor bought. Driver names can be spelled the way they
+sound, with **Hear It** on the profile form and `NameCheckForm` reading
+the whole roster. And every race is recorded to
+`Documents\HeatCaller Race Audio` as an mp3, with a per-driver highlight
+clip cut from the marks already saved with the result (`RaceAudioRecorder`,
+`RaceHighlights`, `RaceAudioStore`; `MediaFoundationEncoder` out of NAudio,
+so no new package). `MusicPlayer` and `AmbienceService` keep their own
+output and are **not** in the recording; the show's opener and bed are.
 
 **Online:** the relay publishes live timing, the schedule, results with
 share cards, standings, badges and tracks; check-in with staff and personal
@@ -1403,16 +1521,78 @@ fits.
 
 ## Known open issues
 
-From `website\KNOWN-ISSUES.md`, where the full wording lives:
+From `website\KNOWN-ISSUES.md`, where the full wording lives. Rewritten
+10 Oct 2026, after five writers went through the code for the show round,
+the voice round, the name check and race audio.
 
 - No installer yet (see "Beta readiness", section 3).
-- The Windows voice gets the classic SAPI voices only.
 - Low: a move-driver or bump-up undo on the Program tab restores the whole
   heat roster, even onto a heat that has since been run.
-- The HeatCaller voice: no way to hear a voice before choosing it; a bad
-  take can't be re-rolled; "shorten published names" doesn't reach spoken
-  lines; the allowance figure goes stale on an open page; no per-line cost
-  breakdown; no stand-in on a PC with no Windows voice.
+- The HeatCaller voice: a bad take still can't be re-rolled (**Preview** is
+  a listen, not a replacement); "shorten published names" doesn't reach
+  spoken lines; the allowance figure goes stale on an open page; no
+  per-line cost breakdown. **Hearing a voice before choosing it is fixed**
+  (`Hear It` and `Preview`), and the Windows-voice items are gone with the
+  voice.
+- **Nothing ever tells a show how long it has.** `director.Upcoming` is
+  wired with `inAbout: null` in `MainForm.Commentary.cs`, because the app
+  has no "minutes to the next race" to give, so `ContinuityShow.Block`
+  always asks for `ShowBlock.NoLimit`. Most of `ShowBlock.Fit` is
+  therefore unreachable in this build (only the 90 s cap and the
+  race-state abandon bound a block), `CommentaryContinuity.Soons` can
+  never be said, and **`ContinuityShow.Tail`'s "Back in a moment." branch
+  is dead code** - so a club running a freeform race, or with no program
+  entered, gets no bridge at all. That is the club the hand-over was
+  written for, so this is the first thing to fix in the show round.
+- **The hand-over block ignores the segment tick list.**
+  `SegmentKind.ComingUpNext` isn't in `ShowSegments.Candidates`, and
+  `HandOverIfItIsTimeAsync` calls `RunBlockAsync` without asking
+  `treatment.Treats`, so a hand-over gets music whatever is ticked.
+- **No control for `AppSettings.ShowStingLevel`** (default 80) on any page.
+- **Race recording has no switch.** It is on, and turning it off means
+  creating `%AppData%\HeatCaller\race-audio.json` by hand, because nothing
+  calls a `RaceAudioStore` setter and so the file never gets written.
+  Nothing prunes the folder either.
+- **Two stale user-facing strings naming the retired Windows voice**:
+  `RivalriesControl.cs:216` and `SoundscapeEditorForm.cs:401`. Both offer a
+  club a voice that no longer exists as the way to write its own lines. Two
+  one-line changes, and two doc workarounds come out with them.
+- **The app's preview cap (300) is bigger than the relay's (200)**, so a
+  250-character preview costs a round trip and comes back refused.
+- ~~Nine docs pages and `website\STYLE.md`'s site map still name the
+  Windows voice~~ - **done 10 Oct 2026.** Every page on the site now reads
+  Kokoro, and the only remaining mentions are the three deliberate ones:
+  the two migration sections, and `voice.md`'s quote of the stale Rivalries
+  string above. `screens\big-screen.md`'s false claim that warnings aren't
+  shown is fixed too, and the warning / black-flag / fastest-sector banner
+  is documented for the first time.
+- **Driver warnings themselves are undocumented**, which the Big Screen's
+  new banner section had nothing to link to: no page covers the Race
+  Control warning menu, the preset reasons, taking the last warning back,
+  the per-class ladder (`WarningLadderForm`) or the black flag marking a
+  saved result DQ, and `race-control\running-a-race.md` is missing the
+  **Warnings** column. The one feature-sized hole left in the docs.
+- **The relay's three new voice routes name no club**, which is the first
+  exception to "no request reads or writes anything without naming a
+  club". Deliberate, and the security page now states the exception
+  precisely, but worth deciding whether it stays an exception.
+- **The fastest-sector banner paints white on the look's accent**
+  (`BigScreenForm.cs:1389-1390`), so it disappears in a light look. The
+  warning banner beside it is deliberately look-independent for contrast.
+
+### Built but not reachable (10 Oct 2026)
+
+Written, tested and shipped with no way for a club to get at it. Either
+wire it up or delete it; it is deliberately left out of the docs, because
+a page describing something a club can't reach is worse than no page.
+
+| What | Where | What's missing |
+|---|---|---|
+| The club's voice ID / station ident | `ShowIdent`, `ShowRunningOrder.IdentDue` (40-minute floor), `AppSettings.ShowIdentLine`, `ShowTreatment.IdentItem` | No block builder calls `IdentItem`, and no page has the text box. One field on **Voice - Commentary** |
+| The drama-shaped show | `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s), `LongerLift` (0.35 s) | `ShowTreatment.NextShowDrama` is never set, so every show is `ShowDrama.None` |
+| The ad-break bumper | `ShowTreatment.PunctuateAsync` | Nothing calls it |
+| The sting level | `AppSettings.ShowStingLevel` | No control (above) |
+| Turning race recording off | `RaceAudioStore` | No control (above) |
 
 ## Parked
 

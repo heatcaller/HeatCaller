@@ -9,7 +9,7 @@ internal static partial class WindowCatalog
     /// line, the widest the sounds' lines get - its own playlist, every name
     /// long and more lines than the lines box shows, on a PC that speaks with
     /// the HeatCaller voice, so the note about that shows too; a club's copy
-    /// of a built-in with its pack's music, as the Windows voice sees it; and
+    /// of a built-in with its pack's music, as the Kokoro voice sees it; and
     /// a built-in being customized, which opens as a new soundscape with no
     /// Delete. And Ambience's layer editor (AmbienceLayerForm, from Add
     /// Layer... and Edit...): a new layer, and one with a long name and a
@@ -41,7 +41,7 @@ internal static partial class WindowCatalog
     /// The editor as the Soundscapes page opens it, over the soundscapes in
     /// the test's data folder - with a preview that plays nothing and a stop
     /// that stops nothing, and the voice this PC speaks with: the HeatCaller
-    /// voice, or a new install's Windows voice.
+    /// voice, or a new install's Kokoro voice.
     /// </summary>
     private static SoundscapeEditorForm SoundscapeEditor(Theme working, bool isNew, bool heatCallerVoice, IReadOnlyList<string> library) =>
         new(

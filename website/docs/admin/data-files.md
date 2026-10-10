@@ -20,6 +20,7 @@ HeatCaller also uses two folders in your **Documents** folder:
 |---|---|
 | `Documents\HeatCaller Backups` | Backups, unless you choose another folder on the **Backup & Restore** page. Includes a `Pre-Restore Safety Backups` subfolder. See [Backups](backups.md). |
 | `Documents\HeatCaller Results` | The shareable results card image HeatCaller saves automatically each time a race from the **Race Control** page is saved to **Race History**. |
+| `Documents\HeatCaller Race Audio` | An mp3 of each race, in a folder per night, with a clip for each driver in a `Highlights` subfolder. Not part of backups. The `Folder` setting in `race-audio.json` can point it somewhere else. See [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
 And one outside both, for saved voice lines:
 
@@ -27,9 +28,17 @@ And one outside both, for saved voice lines:
 %LocalAppData%\HeatCaller\VoiceLibrary
 ```
 
-This is where HeatCaller keeps every announcer line the HeatCaller voice or your own ElevenLabs account has spoken, so it can play it again without paying for it again. Nothing the free Windows voice says is ever kept here, not even when it's standing in. Lines from the two paid voices are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has everything it has already paid for. See [Saved voice lines](../announcer/voice.md#saved-voice-lines). It's a cache: everything in it can be made again, so it isn't part of backups, and it isn't copied to a new laptop. On a typical laptop it's `C:\Users\<your name>\AppData\Local\HeatCaller\VoiceLibrary`. Each line is an `.mp3` or `.wav` file named by a long code, with a `.json` file beside it holding the words. It's kept to about 500 MB: past that, the lines played least recently are cleared.
+This is where HeatCaller keeps every announcer line the HeatCaller voice or your own ElevenLabs account has spoken, so it can play it again without paying for it again. Nothing the free Kokoro voice says is ever kept here, not even when it's standing in: Kokoro runs on this PC, so a line costs nothing to say again, and a Kokoro take kept here would later play in place of the line you paid for. Lines from the two paid voices are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has everything it has already paid for. See [Saved voice lines](../announcer/voice.md#saved-voice-lines). It's a cache: everything in it can be made again, so it isn't part of backups, and it isn't copied to a new laptop. On a typical laptop it's `C:\Users\<your name>\AppData\Local\HeatCaller\VoiceLibrary`. Each line is an `.mp3` or `.wav` file named by a long code, with a `.json` file beside it holding the words. It's kept to about 500 MB: past that, the lines played least recently are cleared.
 
-Beside it, the console logs:
+Beside it, the free Kokoro voice's model:
+
+```text
+%LocalAppData%\HeatCaller\Kokoro
+```
+
+`kokoro.onnx` (about 310 MB) goes here when you download it from **Voice → Voice Settings**. The installer ships a copy beside `HeatCaller.exe` as well, and that one is used when it's there, so on a normal install this folder is empty or absent. Like the saved voice lines, it's this PC's own: it isn't part of backups and isn't copied to a new laptop, because it can be downloaded again. See [What the Kokoro voice uses](../announcer/voice.md#what-the-kokoro-voice-uses).
+
+And the console logs:
 
 ```text
 %LocalAppData%\HeatCaller\Logs
@@ -81,7 +90,7 @@ All data files are plain JSON text, except where noted.
 
 | File or folder | What it holds |
 |---|---|
-| `voice-settings.json` | Announcer voice settings (**Voice → Voice Settings** and **Voice → Announcements**): which voice speaks (the HeatCaller voice, ElevenLabs or the Windows voice, and which announcer or Windows voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. |
+| `voice-settings.json` | Announcer voice settings (**Voice → Voice Settings** and **Voice → Announcements**): which voice speaks (the HeatCaller voice, ElevenLabs or the free Kokoro voice, and which announcer, ElevenLabs voice or Kokoro voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. Two keys are older than they look: see [After the Windows voice was retired](#after-the-windows-voice-was-retired). |
 | `sound-effects.json` | Sound effect settings (**Sounds → Effects**). |
 | `ambience.json` | Ambience settings (**Sounds → Ambience**). |
 | `music.json` | Music settings and the track list (**Sounds → Music**). |
@@ -98,11 +107,23 @@ All data files are plain JSON text, except where noted.
 | `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Not part of backups, so they don't come across to a new laptop. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
 | `club-logo-*.png` | The club logo (**Themes** page), used in the app, on the Big Screen, the Wi-Fi pages and the online pages. Only a logo file HeatCaller made itself is used. |
 
+#### After the Windows voice was retired
+
+The free Windows voice went on 10 Oct 2026, and a `voice-settings.json` written before then still carries its traces. Nothing needs editing by hand:
+
+- Which voice speaks is saved as a number. The retired Windows voice's number is read as the free **Kokoro** voice, which is the free voice now, and HeatCaller writes that choice back the first time it loads the file.
+- `WindowsVoiceName`, which of Windows' own voices to speak with, is ignored: nothing reads it, and it disappears from the file at that first save.
+- `WindowsVoiceStandsIn` is still the stand-in setting, kept under its old name so a club that had deliberately turned it off doesn't find it back on. It now means whether the Kokoro voice says a line ElevenLabs can't — no key, no internet, the quota used up. On unless you turned it off.
+
+There is nothing underneath Kokoro: it is both the free voice a club can choose and the voice that stands in for every other one. Because it runs on the club's own PC, a line it speaks needs no account and no internet, and nothing about it leaves the laptop. See [After the Windows voice was retired](../announcer/voice.md#after-the-windows-voice-was-retired) and [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
+
 ### Settings, logs and recovery files
 
 | File | What it holds |
 |---|---|
 | `settings.json` | App settings: connection, race defaults, web server, online relay, email, backup schedule, leaderboard columns and more. All secrets in it are sealed. See [Secrets](#secrets). |
+| `big-screen.json` | The Big Screen's own switch, held apart from the rest of the settings because the key that sets it is on the screen itself: one setting, `OnAir`, for whether the **ON AIR** band shows while the announcer's show is on air (<kbd>O</kbd> on the Big Screen). Safe to delete, and safe to be missing: the band is on, as it is on a fresh install. A damaged one is written over rather than kept as an `.unreadable-` copy — there's one setting in it, so there's nothing of yours to lose. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
+| `race-audio.json` | Whether races are recorded as mp3s, where the recordings go, and the limits that keep a recording off a full disk. No page writes it, so it's only there if you made it yourself. Safe to delete: the defaults come back, and recording is on by default. See [Turning it off](../announcer/sounds-and-music.md#turning-it-off). |
 | `crash.log` | Details of any unexpected errors. When it passes 5 MB it's renamed to `crash.old.log` and a new one is started. |
 | `crash.old.log` | The previous crash log. |
 | `heatcaller-migrated.txt` | Marks that saved paths and settings from before the rename to HeatCaller have been brought up to date. Safe to delete: HeatCaller checks again on the next start. |
@@ -172,7 +193,7 @@ Use **Backup & Restore**, not a manual copy:
 3. Install HeatCaller on the new laptop and restore the backup.
 4. When HeatCaller restarts, enter the backup password to bring the keys, tokens and PINs across.
 
-A backup is a zip of the entire data folder, plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. Photo-finish pictures don't: they're left out of backups. See [Backups](backups.md) for the full steps.
+A backup is a zip of the entire data folder, plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. Photo-finish pictures and race recordings don't: both are left out of backups, and the recordings aren't in the data folder at all. See [Backups](backups.md) for the full steps.
 
 ## What's safe to delete
 
@@ -187,6 +208,7 @@ Close HeatCaller first. Then you can delete:
 | `race-in-progress-discarded.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
 | `*.tmp` | Left over from an interrupted save. |
 | `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
+| `Documents\HeatCaller Race Audio` | Recordings of past races. Nothing clears them out by itself, so this is where a season's space goes. Delete whole night folders you don't want to keep. |
 | `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** on the **Saved voice lines** card of **Voice → Voice Settings** does the same without closing HeatCaller. |
 
 Don't delete or edit anything else by hand. In particular:

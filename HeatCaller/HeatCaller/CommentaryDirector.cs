@@ -72,6 +72,15 @@ public sealed class CommentaryDirector
         Pace = new PaceWatch();
         Said = new SaidTonight();
         Sponsors = new SponsorRotation();
+        Continuity = new ContinuityVoice();
+
+        // Whatever ad breaks have already run tonight are not this
+        // director's to read for. One is built the first time the
+        // announcer screen's tick asks for it, which can be well after the
+        // Big Screen has started its rotation - and a director born owing
+        // four sponsors a read would fire four of them into the first gap
+        // it saw. See NextAdBreakRead.
+        _adBreaksSeen = AdBreak.BreaksEnded;
     }
 
     /// <summary>What may be spent and when. The club's switches are applied from settings in NewMeeting.</summary>
@@ -88,6 +97,18 @@ public sealed class CommentaryDirector
 
     /// <summary>Whose turn it is for a sponsor read. Not on the budget's ladder - see SponsorRotation.</summary>
     public SponsorRotation Sponsors { get; }
+
+    /// <summary>
+    /// Whose turn each phrasing of a continuity line is, and what the room
+    /// has already heard tonight - see ContinuityVoice.
+    ///
+    /// Not on the budget's ladder either, and for a stronger reason than a
+    /// sponsor read: a bridge is built by concatenating facts this laptop
+    /// already holds, so no model is asked and nothing is reserved. It is
+    /// the one part of the broadcast that is still there when the month's
+    /// allowance has gone, which is the whole argument for templating it.
+    /// </summary>
+    public ContinuityVoice Continuity { get; }
 
     /// <summary>Console lines - every refusal says why, or a quiet night is unexplainable.</summary>
     public event Action<string>? Status;
@@ -129,11 +150,60 @@ public sealed class CommentaryDirector
     /// <summary>A transponder or driver id to the name to say. Needed by everything in a race.</summary>
     public Func<string, string?>? NameFor { get; set; }
 
-    /// <summary>The next few rounds on tonight's programme, and roughly how long until the next one.</summary>
+    /// <summary>
+    /// The next few rounds on tonight's programme, and roughly how long
+    /// until the next one. Wire this to CommentaryReaders.Upcoming.
+    ///
+    /// It feeds two different things now, and the second one is the reason
+    /// it matters more than it did. The "coming up next" segment reads the
+    /// rounds out; the continuity bridges name the first of them, and the
+    /// InAbout is what a show BLOCK is fitted to - it is the gap, so
+    /// without it a running order between two heats is reckoned against
+    /// ShowBlock.NoLimit and leans on the race-state watcher to cut it
+    /// short. See ContinuityShow.
+    /// </summary>
     public Func<(IReadOnlyList<UpcomingRound> Rounds, TimeSpan? InAbout)>? Upcoming { get; set; }
 
-    /// <summary>The club's sponsors and the share each bought.</summary>
+    /// <summary>
+    /// The round whose race has just been run, for the look-back half of a
+    /// continuity line - "That was the B-main for Stock". Wire this to
+    /// CommentaryReaders.JustRan.
+    ///
+    /// Its own reader and not worked out from <see cref="Upcoming"/>,
+    /// because the two are different questions: what is left on the
+    /// programme is the programme's business, and what has just happened is
+    /// the filed history's. A club runs races out of order all evening, so
+    /// "the one before the next one" is not an answer.
+    ///
+    /// Null until wired, and then the look-back is simply not said - every
+    /// running order that would have used it is one item shorter. That is
+    /// the house rule: a fact the app does not hold is not said.
+    /// </summary>
+    public Func<RoundJustRun?>? JustRan { get; set; }
+
+    /// <summary>
+    /// The club's sponsors and the share each bought - the older reader,
+    /// which says nothing about where a read is allowed. Still what
+    /// <see cref="NextSponsorRead"/> asks, and what the paid reads fall
+    /// back to when <see cref="SponsorReads"/> is not set.
+    /// </summary>
     public Func<IReadOnlyList<SponsorSlot>>? SponsorList { get; set; }
+
+    /// <summary>
+    /// Who is sold, their paid copy, and where the club lets a read be
+    /// heard - wire this to SponsorStore.ReadPlan.
+    ///
+    /// One reader for all of it rather than three, because all of it can
+    /// change in the middle of an evening: a sponsor sold at the sign-up
+    /// desk, copy corrected after the first read of it, a tick box turned
+    /// off because the club decided the gaps were getting crowded. Read
+    /// fresh every time a read is considered; it is a list the store
+    /// already holds, so it costs nothing to ask.
+    ///
+    /// Null means the club has not been asked, and then the paid reads fall
+    /// back to <see cref="SponsorList"/> and are allowed everywhere.
+    /// </summary>
+    public Func<SponsorReadPlan>? SponsorReads { get; set; }
 
     /// <summary>The evening's shape, for the cold open.</summary>
     public Func<NightAhead>? NightAhead { get; set; }
@@ -183,14 +253,56 @@ public sealed class CommentaryDirector
         Said.NewMeeting(dayId);
         Sponsors.NewMeeting(dayId);
 
+        // Guards itself on the day actually changing, like the two above
+        // and for the reason the comment below spells out - this method
+        // runs on a half-second tick, and a rotation reset twice a second
+        // is a rotation that always hands out whatever a fresh shuffle
+        // happens to start with.
+        Continuity.NewMeeting(dayId);
+
+        // The paid reads' own state, guarded on the day ACTUALLY changing.
+        //
+        // This method is called from the host's half-second tick rather
+        // than once a night (see AnnouncerControl.FeedTheDirector), so
+        // anything cleared here unguarded is cleared twice a second. The
+        // pieces above each make this guard for themselves; these three
+        // are fields of this class, so it is made here.
+        if (!string.Equals(_dayKey, dayId ?? string.Empty, StringComparison.Ordinal))
+        {
+            _lastSalesRead = DateTime.MinValue;
+            _adBreakOwed = false;
+            _adBreaksSeen = AdBreak.BreaksEnded;
+
+            // Inside the guard, and this is a FIX, not a tidy-up.
+            //
+            // These two were unconditional here, and this method runs on the
+            // host's half-second tick (AnnouncerControl.FeedTheDirector,
+            // whose comment believes this "returns at once for the day it is
+            // already on" - the pieces above guard themselves, these did
+            // not). So the two detectors were cleared twice a second:
+            // BattleWatch needs about thirty seconds of a gap holding before
+            // it will call a fight, and PaceWatch holds a record lap until
+            // there is room to say it. Neither could ever reach that in the
+            // running app - only in the tests, which call NewMeeting once.
+            // Close battle and record-pace calls were therefore dead in the
+            // field while passing their own tests.
+            //
+            // A race is still the right granularity for both: RaceStarted
+            // resets them per race, which is what "a battle in a heat is a
+            // fresh story in the main" means. This call only has to cover a
+            // new night.
+            Battles.Reset();
+            Pace.Reset();
+        }
+
         _dayKey = dayId ?? string.Empty;
 
-        Battles.Reset();
-        Pace.Reset();
-
         // Asked before anything is paid for: a segment whose every fact
-        // has already been used tonight is dropped for free.
-        Budget.NothingNewToSay = (kind, cls) => Said.NothingLeftIn(Candidates(kind, cls));
+        // has already been used tonight is dropped for free. Answered from
+        // the pass's own facts where there is a pass, so this question
+        // does not walk the stores again from a thread they do not belong
+        // to - see NextAsync.
+        Budget.NothingNewToSay = (kind, cls) => Said.NothingLeftIn(CandidatesForPass(kind, cls));
     }
 
     /// <summary>How much of tonight's programme has run. Called whenever the programme is refreshed.</summary>
@@ -310,22 +422,196 @@ public sealed class CommentaryDirector
 
         ReadNightProgress();
 
-        foreach (var kind in Order())
+        var order = Order();
+
+        // Every segment's facts are worked out here, before anything is
+        // awaited, because this is the last point in the pass that is
+        // certainly still on the thread the host called from. Every store
+        // the readers walk belongs to the UI thread (RaceDayService says
+        // so), and the loop below awaits - so from the second segment
+        // onwards this was asking the session history for tonight's
+        // qualifying on a thread-pool thread.
+        //
+        // It costs nothing in the usual case: a pass where nothing turns
+        // out to be worth saying asked every one of these anyway.
+        var pass = new Dictionary<SegmentKind, IReadOnlyList<FactBlock>>();
+
+        foreach (var kind in order)
         {
-            var said = await TryAsync(kind, ct).ConfigureAwait(false);
+            pass[kind] = Gather(kind);
+        }
 
-            if (said is not null)
-            {
-                return said;
-            }
+        _pass = pass;
 
-            if (ct.IsCancellationRequested)
+        // Where the night's spend is written, for the same reason - see
+        // SaveOn.
+        var ui = SynchronizationContext.Current;
+
+        try
+        {
+            foreach (var kind in order)
             {
-                return null;
+                var said = await TryAsync(kind, ui, ct).ConfigureAwait(false);
+
+                if (said is not null)
+                {
+                    return said;
+                }
+
+                if (ct.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                // The hold went on while that one was being written.
+                // Nothing further is written until it comes off; TryAsync
+                // has already given the line and its facts back.
+                if (Held)
+                {
+                    return null;
+                }
             }
+        }
+        finally
+        {
+            _pass = null;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The facts this pass is working from, gathered before the first
+    /// await. Null between passes.
+    /// </summary>
+    private Dictionary<SegmentKind, IReadOnlyList<FactBlock>>? _pass;
+
+    /// <summary>
+    /// A segment's candidate facts, with a reader that throws treated as
+    /// nothing to say.
+    ///
+    /// The rule ReadNightProgress already follows, and it matters more
+    /// here: now that the whole pass's facts are gathered together, one
+    /// reader catching a store mid-save would otherwise silence every
+    /// other segment in the pass as well.
+    /// </summary>
+    private IReadOnlyList<FactBlock> Gather(SegmentKind kind)
+    {
+        try
+        {
+            return Candidates(kind, _className);
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't work out what to say about {CommentaryBudget.Spec(kind).Title.ToLowerInvariant()}: {ex.Message}");
+
+            return Array.Empty<FactBlock>();
+        }
+    }
+
+    /// <summary>
+    /// This pass's facts for a segment, or freshly worked-out ones when
+    /// there is no pass in hand - which is the budget asking its own
+    /// question from somewhere outside NextAsync.
+    /// </summary>
+    private IReadOnlyList<FactBlock> CandidatesForPass(SegmentKind kind, string? className)
+    {
+        if (_pass is { } pass
+            && string.Equals(className, _className, StringComparison.Ordinal)
+            && pass.TryGetValue(kind, out var gathered))
+        {
+            return gathered;
+        }
+
+        return Candidates(kind, className);
+    }
+
+    /// <summary>
+    /// Writes the night's spend on the thread the pass started on.
+    ///
+    /// AppSettings belongs to the UI thread like every other store here,
+    /// and from the second segment of a pass onwards this code is on a
+    /// thread-pool thread - where the write was a race against whatever
+    /// else was saving settings, and the spend it was recording could be
+    /// lost without a word. No context (a test, or a host that has none)
+    /// means there is nowhere to post to, so it is written here.
+    /// </summary>
+    private void SaveOn(SynchronizationContext? ui)
+    {
+        if (ui is null || ui == SynchronizationContext.Current)
+        {
+            Save();
+            return;
+        }
+
+        ui.Post(_ => Save(), null);
+    }
+
+    // ------------------------------------------------------------------
+    // Continuity
+    //
+    // WHY THE FACTS ARE GATHERED HERE AND NOT WHERE THE BLOCK IS BUILT
+    //
+    // Both readers walk a store that belongs to the UI thread, both can be
+    // null, and either can throw if it catches a store mid-save. That is
+    // exactly the shape Gather and ReadNightProgress already deal with in
+    // this class, and the rule they follow - a reader that throws is
+    // treated as nothing to say - is one worth having in ONE place rather
+    // than copied onto the announcer screen. Costs nothing: it is
+    // arithmetic over stores this laptop already has open.
+    //
+    // NOTHING HERE IS WRITTEN, RESERVED OR SPENT. No model is asked and no
+    // ticket is taken, because a continuity line is built by concatenating
+    // facts and that is the entire point of it - see CommentaryContinuity.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// What the night around a block looks like right now: what has just
+    /// run, what is still to come, and roughly how long until it.
+    ///
+    /// Asked on the host's own thread, before anything is awaited, and
+    /// handed to the running order - see ContinuityFacts. An unwired
+    /// reader, or one that throws, comes back as "nothing known", and then
+    /// the bridges that would have used it are not said.
+    /// </summary>
+    internal ContinuityFacts ContinuityNow()
+    {
+        RoundJustRun? ran = null;
+        IReadOnlyList<UpcomingRound> rounds = Array.Empty<UpcomingRound>();
+        TimeSpan? inAbout = null;
+
+        try
+        {
+            ran = JustRan?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't work out what has just run: {ex.Message}");
+        }
+
+        try
+        {
+            if (Upcoming?.Invoke() is { } next)
+            {
+                inAbout = next.InAbout;
+
+                // A property pattern rather than a null check, so a host
+                // that hands back no list at all - or an empty one - is a
+                // programme with nothing on it rather than a throw over
+                // the PA. The tuple says the list cannot be null; a Func
+                // set by somebody else is not bound by that.
+                if (next.Rounds is { Count: > 0 })
+                {
+                    rounds = next.Rounds;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't read what is still to come: {ex.Message}");
+        }
+
+        return new ContinuityFacts(ran, rounds, inAbout);
     }
 
     /// <summary>
@@ -338,6 +624,202 @@ public sealed class CommentaryDirector
         var sponsors = SponsorList?.Invoke();
 
         return sponsors is null or { Count: 0 } ? null : Sponsors.Next(sponsors, moment);
+    }
+
+    // ------------------------------------------------------------------
+    // The paid reads
+    //
+    // WHERE A SALES READ GOES, AND WHY THERE
+    //
+    // A sales read is a few sentences a sponsor paid to have spoken. It is
+    // the single most interruptible thing in the app: a sponsor would far
+    // rather be read at the next gap than over the top of a flag call, and
+    // unlike a battle call it does not go off - the copy is just as true in
+    // ten minutes.
+    //
+    // So there are exactly two places it is offered, and both are places
+    // where nothing else wants the air:
+    //
+    //   1. THE TAIL OF AN AD BREAK. The sponsor's own video has just
+    //      stopped and the screen is going back to the standings. Reading
+    //      over the video would be two voices at once - its voiceover and
+    //      ours - which is the one thing the ad break was built to prevent
+    //      (see AdBreak). Reading before it starts means talking over the
+    //      opening seconds of what the club was paid for. The tail is the
+    //      only part of a break with nothing in it, and "that was Clarke
+    //      and Sons" is the one moment of the evening the crowd has
+    //      already got the name in front of them.
+    //
+    //   2. THE BETWEEN-RACES GAP, AFTER THE SEGMENT LADDER HAS DECLINED.
+    //      NextAsync is asked first and these second, so a paid read never
+    //      pushes a race recap or a what's-coming-next out of the way - it
+    //      fills the quiet those leave. That is also why it does not need
+    //      to be on the budget's ladder at all: by the time it is asked,
+    //      the ladder has already had its turn and said no.
+    //
+    // NOTHING HERE WRITES ANYTHING. No model is asked, no budget is
+    // reserved, nothing is settled or released. The copy was written by a
+    // person and is read as typed, so all of this works with the AI layer
+    // switched off entirely - which is deliberate, because a club that
+    // sold a read has to get it whatever the month's allowance is doing.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// How long after a paid read before another one may go out.
+    ///
+    /// Not a budget - it is airtime. A club with one sponsor has a gap
+    /// between every race and would otherwise hear the same advert in all
+    /// of them, which is the fastest way to make a crowd stop hearing it.
+    /// Ninety seconds is longer than the longest read and shorter than a
+    /// heat, so a sponsor gets one bite per gap.
+    /// </summary>
+    private static readonly TimeSpan QuietAfterRead = TimeSpan.FromSeconds(90);
+
+    /// <summary>Breaks this director has already noticed ending - see NextAdBreakRead.</summary>
+    private int _adBreaksSeen;
+
+    /// <summary>True when a break has ended and its read has not gone out yet.</summary>
+    private bool _adBreakOwed;
+
+    /// <summary>When the last paid read went out. See QuietAfterRead.</summary>
+    private DateTime _lastSalesRead = DateTime.MinValue;
+
+    /// <summary>
+    /// The paid read an ad break has just earned, or null - which is almost
+    /// always.
+    ///
+    /// Asked once a tick. The break is noticed by comparing AdBreak's count
+    /// of finished breaks rather than by subscribing to it, for the reasons
+    /// given there.
+    ///
+    /// A break that ends while a race is running does NOT lose its read:
+    /// the debt is kept and paid at the next real gap. That is the whole
+    /// point of a sales read - it is the one thing in here worth deferring
+    /// rather than dropping. Anything else that stops it - the club does
+    /// not want ad-break reads, nobody is sold, no copy would fit - settles
+    /// the debt, so a club that switches the reads on an hour later does
+    /// not suddenly hear one for a break that ran before tea.
+    /// </summary>
+    public SponsorRead? NextAdBreakRead(TimeSpan gap)
+    {
+        var ended = AdBreak.BreaksEnded;
+
+        if (ended != _adBreaksSeen)
+        {
+            _adBreaksSeen = ended;
+            _adBreakOwed = true;
+        }
+
+        if (!_adBreakOwed)
+        {
+            return null;
+        }
+
+        // A race call always wins, and a line being written is about to be
+        // one. The read waits.
+        if (_racing || Held || Writing)
+        {
+            return null;
+        }
+
+        _adBreakOwed = false;
+
+        return SalesRead(SponsorPlacement.AdBreaks, SponsorMoment.AfterTheAdvert, gap);
+    }
+
+    /// <summary>
+    /// The paid read this between-races gap has room for, or null.
+    ///
+    /// Asked AFTER NextAsync has come back with nothing, which is what
+    /// makes this the quiet the segments left rather than something
+    /// competing with them.
+    /// </summary>
+    public SponsorRead? NextSegmentRead(TimeSpan gap)
+    {
+        if (_racing || Held || Writing)
+        {
+            return null;
+        }
+
+        return SalesRead(SponsorPlacement.Segments, SponsorMoment.BetweenRaces, gap);
+    }
+
+    /// <summary>
+    /// A paid read has actually been spoken.
+    ///
+    /// Must be called after the line has gone to the announcer and never
+    /// before, for the reason SponsorRotation gives: the count is what the
+    /// club shows the sponsor at the end of the night, and where a long
+    /// copy got to is only known from the read that really went out.
+    /// </summary>
+    public void SalesReadSaid(SponsorRead? read)
+    {
+        if (read is null)
+        {
+            return;
+        }
+
+        Sponsors.Said(read);
+
+        _lastSalesRead = _clock();
+
+        Say(read.MoreToCome
+            ? $"[sponsor] Read for {read.SponsorId} - more of their copy to come in the next gap."
+            : $"[sponsor] Read for {read.SponsorId}.");
+    }
+
+    /// <summary>
+    /// Whose turn it is and what to say, where the club allows a read at
+    /// all and the night is not still ringing with the last one.
+    /// </summary>
+    private SponsorRead? SalesRead(SponsorPlacement where, SponsorMoment moment, TimeSpan gap)
+    {
+        if (Plan() is not { } plan || (plan.Placement & where) == 0)
+        {
+            return null;
+        }
+
+        if (_clock() - _lastSalesRead < QuietAfterRead)
+        {
+            return null;
+        }
+
+        return Sponsors.Next(plan.Sponsors, moment, gap);
+    }
+
+    /// <summary>
+    /// The club's sponsors and where they may be heard, or null when
+    /// nobody is sold.
+    ///
+    /// A reader that throws is treated as nobody sold, the rule
+    /// ReadNightProgress and Gather already follow: a store caught
+    /// mid-save must not take the announcer down, and it certainly must
+    /// not do it over a paid read.
+    /// </summary>
+    private SponsorReadPlan? Plan()
+    {
+        try
+        {
+            if (SponsorReads?.Invoke() is { } plan)
+            {
+                return plan.Sponsors.Count == 0 ? null : plan;
+            }
+
+            var list = SponsorList?.Invoke();
+
+            // The older reader says nothing about placement, so a host that
+            // only wired that one gets reads wherever they fit - which is
+            // what it meant before there was anywhere to choose.
+            return list is null or { Count: 0 }
+                ? null
+                : new SponsorReadPlan(list, SponsorPlacement.Everywhere);
+        }
+        catch (Exception ex)
+        {
+            Say($"[sponsor] Couldn't read the club's sponsors: {ex.Message}");
+
+            return null;
+        }
     }
 
     /// <summary>
@@ -363,10 +845,10 @@ public sealed class CommentaryDirector
     private static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote;
 
-    private async Task<SpokenSegment?> TryAsync(SegmentKind kind, CancellationToken ct)
+    private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
     {
         var spec = CommentaryBudget.Spec(kind);
-        var blocks = Candidates(kind, _className);
+        var blocks = CandidatesForPass(kind, _className);
 
         if (blocks.Count == 0)
         {
@@ -413,10 +895,22 @@ public sealed class CommentaryDirector
                 return null;
             }
 
+            // Held while it was being written. Nothing is lost by
+            // holding, which is what Held promises: the line is dropped,
+            // the budget goes back, and the facts are NOT marked - before
+            // this they were, so a hold turned on mid-write took that
+            // fight, or the cold open, off the night for good.
+            if (Held)
+            {
+                Budget.Release(verdict.Ticket);
+                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - the segments were held while it was being written.");
+                return null;
+            }
+
             Budget.Settle(verdict.Ticket);
             Said.Mark(pack.Keys);
             Spent(kind);
-            Save();
+            SaveOn(ui);
 
             LastSaid = written;
 
@@ -483,7 +977,15 @@ public sealed class CommentaryDirector
         {
             case SegmentKind.BattleWatch:
             {
-                return Battles.Pick() is { } battle
+                // Kept, because Spent has to cool THIS fight. It used to
+                // ask Pick() again afterwards, and with two fights live
+                // the second answer can be the other one - so the
+                // cooldown landed on a fight nobody had mentioned while
+                // the one that was just called stayed free to be called
+                // again.
+                _calling = Battles.Pick();
+
+                return _calling is { } battle
                     ? new[] { CommentaryFacts.Battle(battle, names, _raceKey) }
                     : Array.Empty<FactBlock>();
             }
@@ -571,6 +1073,9 @@ public sealed class CommentaryDirector
         }
     }
 
+    /// <summary>The fight this pass's battle facts were built from. See Candidates.</summary>
+    private Battle? _calling;
+
     /// <summary>What a segment has to do once its line has actually been said.</summary>
     private void Spent(SegmentKind kind)
     {
@@ -579,8 +1084,10 @@ public sealed class CommentaryDirector
             case SegmentKind.BattleWatch:
             {
                 // Left alone for the cooldown, so two cars nose to tail
-                // for a whole heat are one story and not twenty.
-                if (Battles.Pick() is { } battle)
+                // for a whole heat are one story and not twenty. The one
+                // that was actually announced, not whatever Pick would
+                // answer now.
+                if (_calling is { } battle)
                 {
                     Battles.Said(battle);
                 }

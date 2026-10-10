@@ -175,6 +175,17 @@ public sealed class DriverProfile
     /// Nicknames are what a crowd responds to, and some names the voice
     /// simply mispronounces - this is the fix for both without renaming
     /// the driver everywhere else.
+    ///
+    /// It takes a SPELLING as readily as a nickname, and that was the half
+    /// of it nobody knew was here: the voice reads what is written, so
+    /// "Jacques" typed in here as "Zhock" comes out right while the driver
+    /// stays Jacques on every heat sheet, badge and result. Nothing checks
+    /// that what is in here is a real name, because a respelling is not one.
+    ///
+    /// Nothing used to be able to TRY a respelling either - a club typed a
+    /// guess and found out whether it worked when the name went out over
+    /// the PA. NameCheckForm reads these out on demand, and the Announcer
+    /// name box on a driver's profile reads whatever is in it right now.
     /// </summary>
     public string AnnouncerName { get; set; } = string.Empty;
 
@@ -396,6 +407,14 @@ public sealed class DriverProfile
     /// <summary>
     /// The name the announcer should use: the announcer name when set,
     /// otherwise the driver name, otherwise the transponder.
+    ///
+    /// This one property is the whole of that decision, deliberately: it is
+    /// what the voice queue reads when it fills {driver}
+    /// (AnnouncementService.VoiceQueue.cs), and it is what the two places
+    /// that LET A CLUB HEAR a name read as well - the Hear It beside the
+    /// Announcer name box and NameCheckForm's roster. A check that worked
+    /// out the name its own way would be a check that agrees with itself
+    /// and disagrees with the PA.
     /// </summary>
     public string SpokenName =>
         !string.IsNullOrWhiteSpace(AnnouncerName) ? AnnouncerName

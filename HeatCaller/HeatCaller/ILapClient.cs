@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Ports;
 using System.Text;
 
@@ -32,10 +33,33 @@ public sealed class ILapClient : IDisposable
     // passes are mapped onto (DecoderClockMap), so an I-Lap split loop and
     // an EasyLap line can be placed against each other.
     private readonly Dictionary<string, long> _lastPassMs = new(StringComparer.Ordinal);
-    private StreamWriter? _rawCapture;
+
+    /// <summary>
+    /// Capture lines waiting for the writer thread, or null when nothing is
+    /// being captured. Replaced on every connect.
+    ///
+    /// Bounded, as SessionLog's is, so a writer that has stopped (a full or
+    /// failed disk) can never grow memory without limit; past it, lines are
+    /// dropped rather than the reader made to wait on the disk.
+    /// </summary>
+    private volatile BlockingCollection<string>? _capturePending;
+
+    /// <summary>The thread writing them. Guarded, with the queue, by _captureLock.</summary>
+    private Thread? _captureThread;
+
     private readonly object _captureLock = new();
-    private long _captureBytes; // guarded by _captureLock
     private readonly string _captureFolder;
+
+    /// <summary>1 while a connect is in flight on a thread of its own - see Connect.</summary>
+    private int _connecting;
+
+    /// <summary>
+    /// Bumped by every Connect and every Disconnect. A connect that comes
+    /// back out of the serial stack to find this number moved on is working
+    /// for a connection nobody wants any more: it closes the port it opened
+    /// rather than publishing it over what happened in the meantime.
+    /// </summary>
+    private int _generation;
 
     /// <summary>
     /// A decoder that streams garbage (wrong baud rate, a noisy line) would
@@ -55,6 +79,15 @@ public sealed class ILapClient : IDisposable
     /// </summary>
     private const int MaxLineLength = 512;
 
+    /// <summary>How many capture lines may wait for the writer before they start being dropped. As SessionLog's.</summary>
+    private const int CaptureQueueLimit = 50_000;
+
+    /// <summary>
+    /// How long a disconnect waits for the capture writer to flush and close
+    /// the file. Short and bounded - see StopCapture.
+    /// </summary>
+    private static readonly TimeSpan CaptureCloseWait = TimeSpan.FromMilliseconds(250);
+
     /// <summary>
     /// Serialises everything that touches the line buffer and the
     /// duplicate-suppression table.
@@ -68,7 +101,9 @@ public sealed class ILapClient : IDisposable
     /// is when losing a lap matters most. The Dictionary is not safe for a
     /// concurrent write either.
     ///
-    /// Re-entrant, so DrainPort holding it while it calls FeedLine is fine.
+    /// Re-entrant, so DrainPort holding it while it calls FeedLineLocked is
+    /// fine. What it must NOT hold it across is the lap event, which ends in
+    /// the whole race pipeline - see DrainPort.
     /// </summary>
     private readonly object _lineLock = new();
 
@@ -132,118 +167,206 @@ public sealed class ILapClient : IDisposable
         _captureFolder,
         $"ilap-raw-{DateTime.Now:yyyy-MM-dd}.log");
 
+    /// <summary>
+    /// Starts connecting to the decoder on <paramref name="portName"/>, and
+    /// hands back as soon as that is under way - with <see cref="State"/>
+    /// already Connecting.
+    ///
+    /// Opening and closing the port used to happen on the caller's thread,
+    /// and the caller is the UI thread: the Connect button, and the
+    /// auto-connect timer's tick every three seconds. Both calls can block
+    /// for a very long time with nothing to cut them short.
+    /// SerialPort.Open() on a Bluetooth SPP port routinely takes ten to
+    /// thirty seconds while the stack pairs - and the COM port list is full
+    /// of them, see MainForm.Connection - and SerialPort.Dispose() on a USB
+    /// adapter that has been unplugged is a long-standing unbounded hang in
+    /// .NET. Either one froze the window with nothing said and almost no
+    /// CPU, which is what rehearsal 2 saw and what HangWatchdog was shipped
+    /// to catch. Only the state and the status event are left on the
+    /// caller's thread now.
+    ///
+    /// What callers see is unchanged: they set the buttons around this and
+    /// then read State, and State is Connecting the instant this returns.
+    /// That is also what keeps the three-second tick from asking again while
+    /// one is still in flight - it acts only on Disconnected or Error.
+    /// </summary>
     public void Connect(string portName, int baudRate)
     {
-        Disconnect();
-
+        // Before anything is taken down, since there is nothing to take it
+        // down for.
         if (string.IsNullOrWhiteSpace(portName))
         {
             SetState(DecoderConnectionState.Error, "Pick the decoder's COM port first.");
             return;
         }
 
-        SetState(DecoderConnectionState.Connecting, $"Opening {portName} at {baudRate} baud...");
-
-        try
+        if (Interlocked.Exchange(ref _connecting, 1) == 1)
         {
-            _port = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One)
-            {
-                ReadTimeout = 1000,
-                NewLine = "\n",
-                // Asserted, as a terminal program does. Off by default in
-                // .NET, and a USB serial device commonly stays silent until
-                // the host raises DTR - on 3 Oct 2026 the I-Lap sent nothing
-                // at all to a port opened without it, though the same
-                // decoder had streamed passes the night before.
-                DtrEnable = true,
-                RtsEnable = true,
-                Encoding = Encoding.ASCII,
-            };
-            _port.Open();
-        }
-        catch (Exception ex)
-        {
-            _port?.Dispose();
-            _port = null;
-            SetState(DecoderConnectionState.Error,
-                $"Couldn't open {portName}: {ex.Message} If another timing program has the port, close it first.");
+            // One at a time. Two would open two ports and start two reader
+            // threads on one decoder. Nothing is said about it: the
+            // three-second tick would fill the console with it.
             return;
         }
 
-        DeleteOldCaptures();
+        var generation = Interlocked.Increment(ref _generation);
 
-        lock (_captureLock)
+        SetState(DecoderConnectionState.Connecting, $"Opening {portName} at {baudRate} baud...");
+
+        new Thread(() => ConnectCore(portName, baudRate, generation))
         {
+            IsBackground = true,
+            Name = "I-Lap connect",
+        }.Start();
+    }
+
+    /// <summary>
+    /// The connect itself, on a thread of its own: close the old port, open
+    /// the new one, start the capture and the reader. Everything in here is
+    /// allowed to block for as long as the serial stack likes.
+    /// </summary>
+    /// <param name="generation">
+    /// This attempt's number - see <see cref="_generation"/>. Once it has
+    /// moved on, this attempt says nothing and keeps nothing.
+    /// </param>
+    private void ConnectCore(string portName, int baudRate, int generation)
+    {
+        void Report(DecoderConnectionState state, string message)
+        {
+            // Nothing is published on behalf of an attempt that has been
+            // overtaken: the Disconnect that overtook it has had the last
+            // word, and an Error landing after it would turn the status
+            // light red for a decoder nobody is trying to open.
+            if (Volatile.Read(ref _generation) == generation)
+            {
+                SetState(state, message);
+            }
+        }
+
+        try
+        {
+            // The old connection goes first, off the UI thread with the rest
+            // of it. State is deliberately left alone here - Connecting has
+            // already been published and this is still the same attempt, not
+            // a disconnection.
+            Teardown();
+
+            SerialPort port;
+
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(CapturePath)!);
+                port = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One)
+                {
+                    ReadTimeout = 1000,
+                    NewLine = "\n",
+                    // Asserted, as a terminal program does. Off by default in
+                    // .NET, and a USB serial device commonly stays silent until
+                    // the host raises DTR - on 3 Oct 2026 the I-Lap sent nothing
+                    // at all to a port opened without it, though the same
+                    // decoder had streamed passes the night before.
+                    DtrEnable = true,
+                    RtsEnable = true,
+                    Encoding = Encoding.ASCII,
+                };
+                port.Open();
+            }
+            catch (Exception ex)
+            {
+                Report(DecoderConnectionState.Error,
+                    $"Couldn't open {portName}: {ex.Message} If another timing program has the port, close it first.");
+                return;
+            }
 
-                // Opened sharing read, write AND delete. StreamWriter's own
-                // (path, append) constructor shares read only, which held
-                // today's file locked for as long as the decoder was
-                // connected - and a backup restore trying to put the
-                // backup's copy in its place stopped partway through on it.
-                // (The host also closes it before a restore - see
-                // BackupRestoreControl.ReleaseFilesForRestore.) Appending,
-                // and UTF-8 without a byte order mark, exactly as that
-                // constructor did.
-                var stream = new FileStream(CapturePath, FileMode.Append, FileAccess.Write,
-                    FileShare.ReadWrite | FileShare.Delete);
-                _rawCapture = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)) { AutoFlush = true };
-                _captureBytes = _rawCapture.BaseStream.Length;
-                if (_captureBytes >= MaxCaptureBytesPerDay)
-                {
-                    _rawCapture.Dispose();
-                    _rawCapture = null;
-                    Log($"[ilap] Today's raw capture is already {_captureBytes / (1024 * 1024)} MB - not capturing more today.");
-                }
-                else
-                {
-                    WriteCaptureLocked($"--- connected {DateTime.Now:yyyy-MM-dd HH:mm:ss} on {portName} @ {baudRate} ---");
-                }
+            // Opened for nobody: a Disconnect - or a later Connect - while
+            // the serial stack had us. Closed again rather than published
+            // over whatever is there now, which is how two reader threads on
+            // one decoder would otherwise start.
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                CloseQuietly(port);
+                return;
+            }
+
+            DeleteOldCaptures();
+            StartCapture(portName, baudRate);
+
+            // Only per-connection state is reset here - the clock (TimingClock) never restarts.
+            lock (_lineLock)
+            {
+                _lastPassMs.Clear();
+                _lineBuffer.Clear();
+                _sawClockTick = false;
+            }
+
+            // Read on a thread of our own, polling as a terminal does, rather
+            // than waiting on SerialPort.DataReceived. On 3 Oct 2026 the I-Lap
+            // streamed to a PowerShell loop calling ReadExisting on this very
+            // port while HeatCaller, waiting on the event, captured nothing at
+            // all from it. Polling every 20ms is well inside one character's
+            // worth of club-racing precision and does not depend on the USB
+            // serial driver raising the event.
+            //
+            // Connected is said BEFORE the reader starts, as DirectDecoderClient
+            // does. The other way round, a read that failed in the moment
+            // between the two found the state still Connecting, said nothing,
+            // and the reader ended - then Connected was published over it: a
+            // green light with nothing reading the port.
+            _port = port;
+            _reading = true;
+
+            // Looked at once more now the port IS the live one: a Disconnect
+            // landing between the look above and this assignment would have
+            // found nothing to close, and the reader would have started on a
+            // port nobody wanted.
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                Teardown();
+                return;
+            }
+
+            SetState(DecoderConnectionState.Connected,
+                $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
+
+            new Thread(() => ReadLoop(port, portName))
+            {
+                IsBackground = true,
+                Name = "I-Lap reader",
+            }.Start();
+        }
+        catch (Exception ex)
+        {
+            // Nobody waits on this thread, so anything escaping here would
+            // be an unhandled exception and the end of the app.
+            try
+            {
+                Report(DecoderConnectionState.Error, $"Connecting to {portName} failed: {ex.Message}");
             }
             catch
             {
-                // A capture that can't be written is a loss, not a failure -
-                // the connection still works and RawMessage still logs.
-                _rawCapture?.Dispose();
-                _rawCapture = null;
+                // A subscriber threw while reporting the failure - nothing more we can do here.
             }
         }
-
-        // Only per-connection state is reset here - the clock (TimingClock) never restarts.
-        lock (_lineLock)
+        finally
         {
-            _lastPassMs.Clear();
-            _lineBuffer.Clear();
+            // Cleared last, so the next tick may try again. A serial call
+            // that NEVER returns leaves this set and no further connect is
+            // attempted - which is the right answer: the window is free
+            // either way, and asking a wedged port again only wedges another
+            // thread behind the first.
+            Volatile.Write(ref _connecting, 0);
         }
+    }
 
-        _sawClockTick = false;
-
-        // Read on a thread of our own, polling as a terminal does, rather
-        // than waiting on SerialPort.DataReceived. On 3 Oct 2026 the I-Lap
-        // streamed to a PowerShell loop calling ReadExisting on this very
-        // port while HeatCaller, waiting on the event, captured nothing at
-        // all from it. Polling every 20ms is well inside one character's
-        // worth of club-racing precision and does not depend on the USB
-        // serial driver raising the event.
-        //
-        // Connected is said BEFORE the reader starts, as DirectDecoderClient
-        // does. The other way round, a read that failed in the moment
-        // between the two found the state still Connecting, said nothing,
-        // and the reader ended - then Connected was published over it: a
-        // green light with nothing reading the port.
-        var port = _port;
-        _reading = true;
-
-        SetState(DecoderConnectionState.Connected,
-            $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
-
-        new Thread(() => ReadLoop(port, portName))
+    /// <summary>Closes a port a connect opened and is not going to use. Never throws.</summary>
+    private static void CloseQuietly(SerialPort port)
+    {
+        try
         {
-            IsBackground = true,
-            Name = "I-Lap reader",
-        }.Start();
+            port.Dispose();
+        }
+        catch
+        {
+            // ignore - nothing is reading it
+        }
     }
 
     /// <summary>
@@ -305,6 +428,15 @@ public sealed class ILapClient : IDisposable
     /// </summary>
     private bool DrainPort(SerialPort port)
     {
+        // The passes this chunk turned out to hold. Collected under the lock
+        // and raised below it: LapEventReceived ends in MainForm.OnILapPass
+        // and from there in the whole race pipeline, so raising it from in
+        // here meant every subscriber's work - and anything any of them
+        // waited on - was done holding the lock that Disconnect() waits for
+        // on the UI thread.
+        List<DirectLapEvent>? passes = null;
+        var ok = true;
+
         try
         {
             lock (_lineLock)
@@ -319,7 +451,11 @@ public sealed class ILapClient : IDisposable
                         {
                             var line = _lineBuffer.ToString();
                             _lineBuffer.Clear();
-                            FeedLine(line);
+
+                            if (FeedLineLocked(line) is { } pass)
+                            {
+                                (passes ??= new List<DirectLapEvent>()).Add(pass);
+                            }
                         }
                     }
                     else if (_lineBuffer.Length >= MaxLineLength)
@@ -342,10 +478,21 @@ public sealed class ILapClient : IDisposable
                 SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
             }
 
-            return false;
+            ok = false;
         }
 
-        return true;
+        // Raised even when the read then failed: a pass already assembled
+        // from the bytes that did arrive is a lap a driver really did, and
+        // it is not thrown away because the port went afterwards.
+        if (passes is not null)
+        {
+            foreach (var pass in passes)
+            {
+                RaisePass(pass);
+            }
+        }
+
+        return ok;
     }
 
     /// <summary>
@@ -355,13 +502,22 @@ public sealed class ILapClient : IDisposable
     /// </summary>
     public void FeedLine(string line)
     {
+        DirectLapEvent? pass;
+
         lock (_lineLock)
         {
-            FeedLineLocked(line);
+            pass = FeedLineLocked(line);
         }
+
+        RaisePass(pass);
     }
 
-    private void FeedLineLocked(string line)
+    /// <summary>
+    /// Reads one line and hands back the pass it carried, or null. Raising
+    /// it is the caller's job, once _lineLock is free - see DrainPort.
+    /// Caller holds _lineLock.
+    /// </summary>
+    private DirectLapEvent? FeedLineLocked(string line)
     {
         Capture(line);
 
@@ -377,7 +533,7 @@ public sealed class ILapClient : IDisposable
                 Log($"[ilap] The decoder is talking - its clock reads {line.Trim().TrimStart('\u0001')}. Waiting for cars.");
             }
 
-            return;
+            return null;
         }
 
         Log($"[ilap raw] {line}");
@@ -389,13 +545,26 @@ public sealed class ILapClient : IDisposable
             if (_lastPassMs.TryGetValue(lap.TransponderId, out var last) && now - last < DuplicateWindowMs)
             {
                 Log($"[ilap] Suppressed repeat of {lap.TransponderId} ({now - last}ms after the last).");
-                return;
+                return null;
             }
 
             _lastPassMs[lap.TransponderId] = now;
             Log($"[LAP EVENT] transponder={lap.TransponderId}  device_time={lap.DeviceTimeMs}ms");
-            LapEventReceived?.Invoke(lap.Stamped(DecoderConnection.ILap, now, TimingPoint.Line));
+            return lap.Stamped(DecoderConnection.ILap, now, TimingPoint.Line);
         }
+
+        return null;
+    }
+
+    /// <summary>Raises LapEventReceived for a pass, with _lineLock free. Does nothing for null.</summary>
+    private void RaisePass(DirectLapEvent? pass)
+    {
+        if (pass is null)
+        {
+            return;
+        }
+
+        LapEventReceived?.Invoke(pass);
     }
 
     /// <summary>
@@ -533,48 +702,215 @@ public sealed class ILapClient : IDisposable
         return trimmed.Length == 9 && trimmed[0] == '@' && trimmed.Skip(1).All(char.IsAsciiDigit);
     }
 
+    /// <summary>
+    /// Hands one line to the capture writer. Never waits on the disk, never
+    /// throws.
+    ///
+    /// This used to write the line itself, to a StreamWriter with AutoFlush
+    /// on - one synchronous flush to disk per decoder line, and the I-Lap
+    /// sends its clock every second on top of every pass. It runs under
+    /// _lineLock, and Disconnect() waits on that same lock from the UI
+    /// thread, so on a slow or failing volume the window stalled for as long
+    /// as the disk took, with nothing to bound it. See StartCapture.
+    /// </summary>
     private void Capture(string line)
+    {
+        var pending = _capturePending;
+
+        if (pending is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Dropped rather than waited for when the queue is full: a
+            // writer that has stopped must not stop the reader with it.
+            pending.TryAdd($"{DateTime.Now:HH:mm:ss.fff}  {line}");
+        }
+        catch
+        {
+            // The queue was completed by a disconnect in the same moment.
+            // Best-effort record; never let logging break timing.
+        }
+    }
+
+    /// <summary>
+    /// Opens today's raw capture file and starts the thread that writes it.
+    /// On the connect thread, before the reader starts.
+    ///
+    /// Written on a thread of its own, never the one that read the line -
+    /// the same shape, and for the same reason, as SessionLog: the UI thread
+    /// must not wait on the disk, and nor must the thread assembling laps.
+    /// </summary>
+    private void StartCapture(string portName, int baudRate)
     {
         lock (_captureLock)
         {
+            // Outside the try so the catch can close it: a file left open
+            // because starting the thread failed would hold today's capture
+            // locked for the rest of the run.
+            StreamWriter? writer = null;
+
             try
             {
-                WriteCaptureLocked($"{DateTime.Now:HH:mm:ss.fff}  {line}");
+                Directory.CreateDirectory(Path.GetDirectoryName(CapturePath)!);
+
+                // Opened sharing read, write AND delete. StreamWriter's own
+                // (path, append) constructor shares read only, which held
+                // today's file locked for as long as the decoder was
+                // connected - and a backup restore trying to put the
+                // backup's copy in its place stopped partway through on it.
+                // (The host also closes it before a restore - see
+                // BackupRestoreControl.ReleaseFilesForRestore.) Appending,
+                // and UTF-8 without a byte order mark, exactly as that
+                // constructor did.
+                var stream = new FileStream(CapturePath, FileMode.Append, FileAccess.Write,
+                    FileShare.ReadWrite | FileShare.Delete);
+                writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                var already = stream.Length;
+
+                if (already >= MaxCaptureBytesPerDay)
+                {
+                    writer.Dispose();
+                    Log($"[ilap] Today's raw capture is already {already / (1024 * 1024)} MB - not capturing more today.");
+                    return;
+                }
+
+                var pending = new BlockingCollection<string>(boundedCapacity: CaptureQueueLimit);
+                pending.Add($"--- connected {DateTime.Now:yyyy-MM-dd HH:mm:ss} on {portName} @ {baudRate} ---");
+
+                var started = writer;
+
+                var thread = new Thread(() => CaptureLoop(started, pending, already))
+                {
+                    IsBackground = true,
+                    Name = "I-Lap capture writer",
+                };
+
+                _capturePending = pending;
+                _captureThread = thread;
+
+                thread.Start();
+
+                // Handed over: the writer thread owns it from here and the
+                // catch below must not close it.
+                writer = null;
             }
             catch
             {
-                // Best-effort record; never let logging break timing.
+                // A capture that can't be written is a loss, not a failure -
+                // the connection still works and RawMessage still logs.
+                _capturePending = null;
+                _captureThread = null;
+
+                try
+                {
+                    writer?.Dispose();
+                }
+                catch
+                {
+                }
             }
         }
     }
 
-    /// <summary>Writes one capture line, stopping the capture once the day's file reaches its cap. Caller holds _captureLock.</summary>
-    private void WriteCaptureLocked(string text)
+    /// <summary>
+    /// The capture writer thread: one per connection, ending when that
+    /// connection's queue is completed (see StopCapture) or when the day's
+    /// file reaches its cap. Never throws out of here.
+    /// </summary>
+    private void CaptureLoop(StreamWriter writer, BlockingCollection<string> pending, long startBytes)
     {
-        if (_rawCapture is null)
+        var written = startBytes;
+
+        try
         {
-            return;
+            using (writer)
+            {
+                foreach (var text in pending.GetConsumingEnumerable())
+                {
+                    // StreamWriter's default encoding is UTF-8 (no BOM); +2 covers the newline.
+                    var bytes = Encoding.UTF8.GetByteCount(text) + 2;
+
+                    if (written + bytes > MaxCaptureBytesPerDay)
+                    {
+                        writer.WriteLine($"--- capture stopped: file reached {MaxCaptureBytesPerDay / (1024 * 1024)} MB ---");
+                        Log($"[ilap] Raw capture file reached {MaxCaptureBytesPerDay / (1024 * 1024)} MB - capture stopped; timing is unaffected.");
+                        return;
+                    }
+
+                    writer.WriteLine(text);
+                    written += bytes;
+
+                    // Flushed whenever the queue runs dry, which during a
+                    // race is after almost every line - the same bargain
+                    // SessionLog makes, and what AutoFlush used to do on the
+                    // reader's thread under the line lock.
+                    if (pending.Count == 0)
+                    {
+                        writer.Flush();
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // The disk went away or filled up. Stop quietly; the bounded
+            // queue drops what follows rather than growing.
+        }
+        finally
+        {
+            // Nothing more is captured on this connection, so Capture stops
+            // queueing lines no thread will ever write. Only if the queue is
+            // still this connection's - a later connect has its own.
+            lock (_captureLock)
+            {
+                if (ReferenceEquals(_capturePending, pending))
+                {
+                    _capturePending = null;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ends the capture: the writer is told nothing more is coming and given
+    /// a moment to flush and close the file.
+    ///
+    /// The wait is short and bounded ON PURPOSE. A backup restore closes the
+    /// capture by disconnecting (see MainForm's ReleaseFilesForRestore) and
+    /// expects the file to be free afterwards, which is worth a moment - but
+    /// this can be the UI thread, and the whole point of moving the writing
+    /// off it was that a failing disk must never stall the window. Past the
+    /// wait the writer is left to close the file in its own time, and the
+    /// file is shared for delete in any case.
+    /// </summary>
+    private void StopCapture()
+    {
+        BlockingCollection<string>? pending;
+        Thread? writer;
+
+        // The references are taken under the lock and the waiting done
+        // outside it: the writer takes the same lock on its way out.
+        lock (_captureLock)
+        {
+            pending = _capturePending;
+            writer = _captureThread;
+            _capturePending = null;
+            _captureThread = null;
         }
 
-        // StreamWriter's default encoding is UTF-8 (no BOM); +2 covers the newline.
-        var bytes = Encoding.UTF8.GetByteCount(text) + 2;
-        if (_captureBytes + bytes > MaxCaptureBytesPerDay)
+        try
         {
-            try
-            {
-                _rawCapture.WriteLine($"--- capture stopped: file reached {MaxCaptureBytesPerDay / (1024 * 1024)} MB ---");
-            }
-            finally
-            {
-                _rawCapture.Dispose();
-                _rawCapture = null;
-            }
-            Log($"[ilap] Raw capture file reached {MaxCaptureBytesPerDay / (1024 * 1024)} MB - capture stopped; timing is unaffected.");
-            return;
+            pending?.CompleteAdding();
+        }
+        catch
+        {
+            // Already completed - nothing to end.
         }
 
-        _rawCapture.WriteLine(text);
-        _captureBytes += bytes;
+        writer?.Join(CaptureCloseWait);
     }
 
     /// <summary>Best-effort removal of raw capture files past their retention.</summary>
@@ -612,6 +948,26 @@ public sealed class ILapClient : IDisposable
 
     public void Disconnect()
     {
+        // Any connect still waiting on the serial stack is now working for a
+        // connection nobody wants - see ConnectCore.
+        Interlocked.Increment(ref _generation);
+
+        Teardown();
+
+        if (State != DecoderConnectionState.Disconnected)
+        {
+            SetState(DecoderConnectionState.Disconnected, "Disconnected.");
+        }
+    }
+
+    /// <summary>
+    /// Stops the reader, lets the port go and ends the capture, without
+    /// touching <see cref="State"/>. Its own method because a connect does
+    /// this too, on its own thread, and must not publish Disconnected in the
+    /// middle of connecting.
+    /// </summary>
+    private void Teardown()
+    {
         // First, so the reader thread stops before the port goes away
         // under it and does not report that as a read failure.
         _reading = false;
@@ -630,20 +986,11 @@ public sealed class ILapClient : IDisposable
             _port = null;
         }
 
-        lock (_captureLock)
-        {
-            _rawCapture?.Dispose();
-            _rawCapture = null;
-        }
+        StopCapture();
 
         lock (_lineLock)
         {
             _lineBuffer.Clear();
-        }
-
-        if (State != DecoderConnectionState.Disconnected)
-        {
-            SetState(DecoderConnectionState.Disconnected, "Disconnected.");
         }
     }
 

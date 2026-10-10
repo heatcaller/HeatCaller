@@ -13,7 +13,7 @@ The title bar shows the app name and version, for example **HeatCaller - BETA 0.
 The sidebar is always dark, whatever look you use. From top to bottom it has:
 
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
-2. The **Search pages...** box.
+2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
 4. Three icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below.
 
@@ -26,6 +26,19 @@ The pages are in two groups, each under a small heading. **ESSENTIALS** are what
 While a race day is open, a third group, **TONIGHT**, sits at the top with the three pages a race night is run from: **Race Day**, **Race Control** and **Championship**, in that order. When the day is closed they go back to their own groups, in the order you had them. You can turn this off in **Manage Navigation** (see below).
 
 You can reorder pages within a group, or hide them (see [Reordering and hiding pages](#reordering-and-hiding-pages)), but a page stays in its own group.
+
+### Just the icons
+
+On a laptop at the track, the sidebar's 220 pixels is a column of the leaderboard. Click the chevron beside the **Search pages...** box, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, and the sidebar narrows to a rail of its icons - about a quarter of the width, with the rest going to the page beside it. Click the chevron again, or press <kbd>Ctrl</kbd>+<kbd>B</kbd> again, to open it.
+
+Nothing is hidden by this. Every page is still there, in the same order and in the same groups, and the page you were on stays on screen. What goes is the words: the page names, the group headings, the **Search pages...** box and the **HEATCALLER** header, which becomes **HC** (your club logo, if you've set one, is still drawn). Hover over an icon to see its page's name, and its count if it has one - the **Rentals** count, for example, becomes a dot in the corner of the icon with the number in the tooltip.
+
+The three buttons at the bottom stack into a column instead of sitting in a row. Dragging a page up or down still reorders it, and <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> still open pages by position. <kbd>Ctrl</kbd>+<kbd>F</kbd> opens the sidebar and puts the cursor in the search box, since the box isn't there to type in.
+
+How you leave it is remembered, so a club that prefers the rail gets it at every start.
+
+!!! tip
+    This is the everyday version of Race Mode (<kbd>F11</kbd>), which hides the sidebar altogether and shows only **Race Control**. Race Mode is for the moment cars stage; the rail is for the rest of the night.
 
 #### Essentials
 

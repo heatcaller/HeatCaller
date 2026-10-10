@@ -23,8 +23,45 @@ namespace HeatCaller;
 /// </summary>
 internal static class ShowOnAir
 {
+    /// <summary>
+    /// Serialises the count and the event together.
+    ///
+    /// The event used to be raised OUTSIDE this, which let a Begin on one
+    /// thread and an End on another be counted in one order and reported in
+    /// the other - leaving MainForm holding the wrong final value. When the
+    /// wrong value is "playing", the club's music stays silenced for the
+    /// rest of the evening, which is the worst thing that can happen here.
+    /// The same bug AnnouncementService's _speakingLock was written for;
+    /// this had not copied it.
+    ///
+    /// So the handler now runs while this is held: it must not block, and
+    /// it must not wait on anything that ends a show. What is on it today
+    /// only sets a flag under the music player's own lock, and nothing
+    /// under that lock ever calls back in here. Calling Begin or End
+    /// straight back in is safe - a lock is re-entrant on the same thread -
+    /// though the nested change is then reported before the outer one.
+    /// </summary>
     private static readonly object Gate = new();
+
     private static int _running;
+
+    /// <summary>
+    /// What is on air, in words a crowd can read - "Race Recap", "Cold
+    /// Open". Null when nothing is on.
+    ///
+    /// Here rather than threaded down to the Big Screen for the same reason
+    /// the count is here: the show is run by the announcer screen's
+    /// director and the Big Screen is a separate window several levels
+    /// away, so the show says what is happening and whoever is interested
+    /// reads it. The Big Screen's on-air treatment is the only thing that
+    /// reads it today.
+    ///
+    /// The OUTERMOST show's caption wins, not the newest. Nothing runs two
+    /// shows at once, but if a second began while the first was winding up,
+    /// the first is the one the room is still hearing - and a caption that
+    /// changed under a crowd mid-show would read as a fault.
+    /// </summary>
+    private static string? _caption;
 
     /// <summary>Whether the show's music is playing right now.</summary>
     internal static bool Playing
@@ -41,23 +78,47 @@ internal static class ShowOnAir
     /// <summary>
     /// Raised when the answer to <see cref="Playing"/> changes, with the
     /// new value. Raised on whatever thread started or ended the show, so a
-    /// handler that touches a form marshals for itself.
+    /// handler that touches a form marshals for itself - and with the count
+    /// held, so it must not block. See <see cref="Gate"/>.
     /// </summary>
     internal static event Action<bool>? PlayingChanged;
 
-    /// <summary>The show's music has started. Pair every call with <see cref="End"/>.</summary>
-    internal static void Begin()
+    /// <summary>
+    /// What is on air right now, or null when nothing is - see
+    /// <see cref="_caption"/>. Read it when <see cref="PlayingChanged"/>
+    /// says true; it is already set by then, because both are settled
+    /// inside <see cref="Gate"/> before the handler runs.
+    /// </summary>
+    internal static string? Caption
     {
-        bool changed;
+        get
+        {
+            lock (Gate)
+            {
+                return _running > 0 ? _caption : null;
+            }
+        }
+    }
 
+    /// <summary>
+    /// The show's music has started. Pair every call with <see cref="End"/>.
+    ///
+    /// caption is what the Big Screen puts on the crowd's screen while this
+    /// show is on. Optional, because the count is what this class is for and
+    /// a show with nothing to call itself is still a show.
+    /// </summary>
+    internal static void Begin(string? caption = null)
+    {
         lock (Gate)
         {
-            changed = _running++ == 0;
-        }
+            if (_running++ == 0)
+            {
+                // Set before Raise, so a handler reading Caption on the way
+                // in sees this show's own name rather than the last one's.
+                _caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
 
-        if (changed)
-        {
-            PlayingChanged?.Invoke(true);
+                Raise(true);
+            }
         }
     }
 
@@ -69,8 +130,6 @@ internal static class ShowOnAir
     /// </summary>
     internal static void End()
     {
-        bool changed;
-
         lock (Gate)
         {
             if (_running == 0)
@@ -78,12 +137,36 @@ internal static class ShowOnAir
                 return;
             }
 
-            changed = --_running == 0;
-        }
+            if (--_running == 0)
+            {
+                // Cleared before Raise, for the mirror of Begin's reason: a
+                // handler asking what is on air while being told nothing is
+                // must not be handed the show that has just ended.
+                _caption = null;
 
-        if (changed)
+                Raise(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tells the handler, inside <see cref="Gate"/> - see the note there. A
+    /// subscriber that throws is swallowed, exactly as AnnouncementService
+    /// swallows its own: it must not take down whatever was starting or
+    /// ending the show, and it must certainly not leave the count and what
+    /// the handler was told disagreeing.
+    /// </summary>
+    private static void Raise(bool playing)
+    {
+        try
         {
-            PlayingChanged?.Invoke(false);
+            PlayingChanged?.Invoke(playing);
+        }
+        catch
+        {
+            // Nothing useful to do here, and leaving the club's music
+            // silenced because a handler failed is the worst outcome in
+            // this area.
         }
     }
 
@@ -97,6 +180,7 @@ internal static class ShowOnAir
         lock (Gate)
         {
             _running = 0;
+            _caption = null;
         }
     }
 }

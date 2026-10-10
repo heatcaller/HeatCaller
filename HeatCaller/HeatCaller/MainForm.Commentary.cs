@@ -70,6 +70,12 @@ public partial class MainForm
             return;
         }
 
+        // The sponsors who have been sold a read, and where the club wants
+        // them read. Read fresh every time it is asked rather than captured,
+        // so a sponsor sold at the sign-up desk is in the rotation by the
+        // next gap - see SponsorStore.ReadPlan.
+        director.SponsorReads = () => _sponsors.ReadPlan();
+
         // Who is on track, and the class their record should be counted
         // over. Taken from the session rather than the programme: it is
         // the drivers actually staged, which is what the intro is about.
@@ -88,7 +94,16 @@ public partial class MainForm
             _rounds,
             _sessionHistory,
             _profiles,
-            ClassOnTrack());
+            ClassOnTrack(),
+            // Tonight's rounds and no others, exactly as the programme tab
+            // does it (RaceProgramControl.QualifyingRoundFilter). Left off,
+            // the calculator's roundFilter is null - which to it means
+            // "count every recorded round" - so the report ranked tonight's
+            // drivers against every heat the class had ever run and put a
+            // driver who set a quick one in August, and is not even here,
+            // on provisional pole. The 25 Sep audit closed that everywhere
+            // else and missed this call.
+            _raceEvents.QualifyingScope());
 
         // How far through tonight's programme we are, which is what the
         // budget releases the night's allotment against. Counted from the
@@ -107,6 +122,36 @@ public partial class MainForm
 
             return (tonight.Count(r => r.IsRecorded), tonight.Count);
         };
+
+        // What is left on tonight's programme, and what has just run. These
+        // two are what the show's continuity is built from - "that was the
+        // B-main; still to come, the A-main" - and they were the reason none
+        // of it could speak: CommentaryContinuity, ComingUpNext, the cold
+        // open and the sign-off all read them, and nothing had ever wired
+        // them up, so every one of those was silent in the field.
+        //
+        // The same scope as NightProgress above, for its reasons.
+        director.Upcoming = () => CommentaryReaders.Upcoming(
+            _rounds,
+            _raceEvents.ActiveRoundScope(),
+
+            // No estimate yet: there is no "minutes until the next race" in
+            // this app to hand over, and CommentaryFacts.ComingUpNext's rule
+            // is that the estimate is given, never worked out here. The
+            // lines simply drop their "about four minutes away" tail, and a
+            // block fits against no limit rather than a wrong one.
+            inAbout: null,
+
+            // The round in hand, once its race has finished, is skipped:
+            // between the flag and the result being filed it is still
+            // "unrecorded", and "still to come, Heat 2" about the heat the
+            // room has just watched is the worst thing continuity can say.
+            skipRoundId: _race.State == RaceState.Finished ? _activeRound?.Id : null);
+
+        director.JustRan = () => CommentaryReaders.JustRan(
+            _rounds,
+            _sessionHistory,
+            _raceEvents.ActiveRoundScope());
 
         director.Championship = () => CommentaryReaders.Championship(
             ChampionshipLive.Compute(
@@ -198,21 +243,6 @@ public partial class MainForm
     {
         switch (engine)
         {
-            case VoiceEngine.Windows:
-            {
-                // SAPI's list, off the UI thread - the first read of it can take a moment.
-                var installed = await Task.Run(() => WindowsVoice.InstalledVoices(refresh: true));
-
-                if (installed.Count == 0)
-                {
-                    throw new InvalidOperationException(WindowsVoice.UnavailableReason ?? "no Windows voice is installed on this PC");
-                }
-
-                return installed
-                    .Select(v => new CommentaryControl.VoiceChoice(v.Name, v.Name, string.Empty, v.Display))
-                    .ToList();
-            }
-
             case VoiceEngine.Kokoro:
             {
                 // Read from the names of the files beside the exe - nothing

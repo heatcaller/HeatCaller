@@ -33,6 +33,14 @@ import { isValidClubId } from "./tenancy.js";
  * that, free. Lines carrying a driver's name are kept per club and never
  * shared, because they are personal data and some of the drivers are
  * children.
+ *
+ * HEARING A VOICE BEFORE CHOOSING IT. Two more things, both open to
+ * people rather than only to laptops: a SAMPLE of each voice reading one
+ * fixed neutral line, served to anyone with no token at all, and a
+ * PREVIEW of a club's own words charged to a small daily allowance of its
+ * own. See "Hearing a voice before choosing it" below. The club's month
+ * is never touched by either, which is the whole reason the second one
+ * has an allowance of its own.
  */
 
 /** One voice HeatCaller offers, as the config describes it. The voiceId and the key never leave this process. */
@@ -69,10 +77,50 @@ export interface VoiceConfig {
   readonly voices: readonly CatalogueVoice[];
   readonly monthlyChars: number;
   readonly maxChars: number;
+  /**
+   * Characters a club may spend AUDITIONING voices in a day (UTC) - its
+   * own small allowance, nothing to do with the month's.
+   *
+   * Optional here, and resolved to the default in the service, because
+   * readVoiceConfig always fills it and a VoiceConfig written by hand
+   * (the tests, mostly) should not have to know about previews to say
+   * what a catalogue is. Zero switches previews off and leaves the
+   * samples working.
+   */
+  readonly previewDailyChars?: number;
+  /** The hardest cap on one preview. A preview is a sentence, not a recap. Optional for the same reason as above. */
+  readonly previewMaxChars?: number;
 }
 
 export const VOICE_DEFAULT_MONTHLY_CHARS = 100_000;
 export const VOICE_DEFAULT_MAX_CHARS = 600;
+
+/**
+ * A day of auditioning, by default: about fifteen to thirty previews.
+ *
+ * Small on purpose and separate on purpose. The whole reason previews have
+ * an allowance of their own is that a club must never arrive on a race
+ * night to find it spent its voice on Tuesday choosing one, so this number
+ * is sized for somebody sitting at Voice Settings making up their mind -
+ * not for a club, and not for a day's racing.
+ */
+export const VOICE_DEFAULT_PREVIEW_DAILY_CHARS = 3_000;
+
+/** One preview, at most. Shorter than a flag call, let alone a recap. */
+export const VOICE_DEFAULT_PREVIEW_MAX_CHARS = 200;
+
+/**
+ * The one line every sample speaks, in every voice.
+ *
+ * The same words in each, so two samples can actually be compared - a
+ * voice that sounded better reading a different sentence tells a club
+ * nothing. Neutral: no club name, no driver's name, no flag call, so it
+ * is nobody's personal data and it is not a recording of a race. About
+ * eight seconds of speech, which is long enough to hear a voice's warmth
+ * and short enough that nobody closes the page first.
+ */
+export const VOICE_SAMPLE_LINE =
+  "Drivers, this is your two minute call for the next heat. Make your way to the rostrum and check your transponder.";
 
 /** A club's standing with the voice, as the app shows it: "34,120 of 100,000 characters this month". */
 export interface VoiceUsage {
@@ -122,6 +170,34 @@ export interface SpeakNo {
 }
 
 export type SpeakResult = SpeakOk | SpeakNo;
+
+/**
+ * One voice's sample, served to anyone at all.
+ *
+ * No usage in it, either way: a sample is not charged to a club - there is
+ * no club, nobody is signed in - and what it costs HeatCaller is one
+ * render per voice in the catalogue, ever. See VoiceService.sample.
+ */
+export interface SampleOk {
+  readonly ok: true;
+  readonly audio: Buffer;
+  /** True when it was already to hand, so nothing was rendered. Every ask but the first. */
+  readonly cached: boolean;
+}
+
+export interface SampleNo {
+  readonly ok: false;
+  readonly status: number;
+  readonly message: string;
+}
+
+export type SampleResult = SampleOk | SampleNo;
+
+/** One voice there is a sample of, as the public list names it. The ElevenLabs voice id is not in it, as everywhere else. */
+export interface SampleListing {
+  readonly id: string;
+  readonly name: string;
+}
 
 /** What actually calls ElevenLabs. Swapped in tests, and absent when no key is configured. */
 export type RenderFn = (voice: CatalogueVoice, text: string) => Promise<Buffer>;
@@ -174,7 +250,7 @@ const DEFAULT_MAX_WAITING = 40;
  * else's rehearsal. Two at once is what the laptop itself sends; ten
  * waiting is a burst and a half behind them. Past either, the answer is
  * "busy", the same answer the whole relay being full gives, and the
- * laptop's Windows voice says the line.
+ * laptop's Kokoro voice says the line.
  */
 const DEFAULT_MAX_IN_FLIGHT_PER_CLUB = 2;
 const DEFAULT_MAX_WAITING_PER_CLUB = 10;
@@ -194,6 +270,49 @@ export const VOICE_DIR = ".voice";
 
 /** Where VOICE_DIR used to be. */
 const OLD_VOICE_DIR = "voice";
+
+/**
+ * Where the samples anyone at all can hear are kept, under VOICE_DIR.
+ *
+ * A folder of their own rather than the shared cache, which is swept
+ * oldest-used-first when it goes over its size: a swept sample would be
+ * paid for again by the next visitor, and the point of a sample is that it
+ * is paid for once. There are only ever as many as there are voices in the
+ * catalogue, so there is nothing here to sweep.
+ */
+const SAMPLES_DIR = "samples";
+
+/**
+ * Where each club's day of previews is counted, under VOICE_DIR.
+ *
+ * Its own folder, so a day's preview count can never be read as a month's
+ * character count or written over one. That confusion is the one thing
+ * this feature must not be able to cause: the month's file holds three
+ * years of what a club is billed by.
+ */
+const PREVIEW_DIR = "preview";
+
+/**
+ * The slots a sample render takes, under a name no club can have.
+ *
+ * A club id may never start with a dot (isValidClubId), so this can never
+ * collide with a real club - the same reason VOICE_DIR has one. It means a
+ * crawler walking the sample list is held to one club's share of the
+ * relay's renders and cannot take a race night's with it.
+ */
+const SAMPLE_SLOT_HOLDER = ".samples";
+
+/**
+ * How long a sample ElevenLabs would not speak is left alone.
+ *
+ * Without this, ElevenLabs being down while anything at all walks the
+ * sample list is an unbounded run of failed requests on HeatCaller's
+ * account: the render never lands, so nothing is ever cached, so every
+ * visitor tries again. A minute makes that one attempt a minute per voice,
+ * and is short enough that nobody waiting for the key to come back
+ * notices.
+ */
+const SAMPLE_RETRY_AFTER_MS = 60 * 1000;
 
 /** Lines with no names in them, kept for every club. Small files; a whole announcer style is a few megabytes. */
 const DEFAULT_SHARED_CACHE_BYTES = 200 * 1024 * 1024;
@@ -218,6 +337,8 @@ export class VoiceService {
   private readonly maxWaiting: number;
   private readonly sharedCacheBytes: number;
   private readonly clubCacheBytes: number;
+  private readonly previewDailyChars: number;
+  private readonly previewMaxChars: number;
 
   private readonly byId = new Map<string, CatalogueVoice>();
   private readonly revs = new Map<string, string>();
@@ -228,6 +349,23 @@ export class VoiceService {
 
   /** Each club's top-up file, as last read, by its modification time - see topUpFor. */
   private readonly topUpCache = new Map<string, { mtimeMs: number; months: Readonly<Record<string, number>> }>();
+
+  /** Preview counts, one club at a time, as usageLocks does - and in a map of its own, so an audition never waits behind a flag call. */
+  private readonly previewLocks = new Map<string, Promise<void>>();
+  private readonly previewCache = new Map<string, { day: string; used: number }>();
+
+  /** Each sample, once it has been rendered or read off the volume. A handful of voices at a couple of hundred kilobytes each. */
+  private readonly sampleAudio = new Map<string, Buffer>();
+
+  /**
+   * Samples being rendered right now, by voice id, so two first visitors
+   * arriving together are one render and not two. Every one of them waits
+   * on the same promise and they all get the same bytes.
+   */
+  private readonly samplesInFlight = new Map<string, Promise<Buffer | undefined>>();
+
+  /** When a sample render last failed, by voice id - see SAMPLE_RETRY_AFTER_MS. */
+  private readonly sampleFailedAt = new Map<string, number>();
 
   private readonly maxInFlightPerClub: number;
   private readonly maxWaitingPerClub: number;
@@ -256,6 +394,8 @@ export class VoiceService {
     this.root = join(this.dataDir, VOICE_DIR);
     this.sharedCacheBytes = options.sharedCacheBytes ?? DEFAULT_SHARED_CACHE_BYTES;
     this.clubCacheBytes = options.clubCacheBytes ?? DEFAULT_CLUB_CACHE_BYTES;
+    this.previewDailyChars = this.config.previewDailyChars ?? VOICE_DEFAULT_PREVIEW_DAILY_CHARS;
+    this.previewMaxChars = this.config.previewMaxChars ?? VOICE_DEFAULT_PREVIEW_MAX_CHARS;
 
     for (const voice of this.config.voices) {
       this.byId.set(voice.id, voice);
@@ -320,7 +460,7 @@ export class VoiceService {
         ok: false,
         refusal: "off",
         status: 503,
-        message: "The HeatCaller voice isn't switched on. Use your own ElevenLabs key or the free Windows voice for now.",
+        message: "The HeatCaller voice isn't switched on. Use your own ElevenLabs key or the free Kokoro voice for now.",
       };
     }
 
@@ -329,7 +469,7 @@ export class VoiceService {
         ok: false,
         refusal: "not-included",
         status: 403,
-        message: "The HeatCaller voice isn't included for this club. Use your own ElevenLabs key or the free Windows voice.",
+        message: "The HeatCaller voice isn't included for this club. Use your own ElevenLabs key or the free Kokoro voice.",
       };
     }
 
@@ -383,7 +523,7 @@ export class VoiceService {
         ok: false,
         refusal: "busy",
         status: 503,
-        message: "The HeatCaller voice can't check this club's allowance just now. The free Windows voice speaks this one.",
+        message: "The HeatCaller voice can't check this club's allowance just now. The free Kokoro voice speaks this one.",
         usage: reserved.usage,
       };
     }
@@ -395,7 +535,7 @@ export class VoiceService {
         status: 402,
         message:
           "This club has used its HeatCaller voice allowance for the month. " +
-          "The free Windows voice speaks until it resets, and every line already saved is kept.",
+          "The free Kokoro voice speaks until it resets, and every line already saved is kept.",
         usage: reserved.usage,
       };
     }
@@ -410,7 +550,7 @@ export class VoiceService {
         ok: false,
         refusal: "busy",
         status: 503,
-        message: "The HeatCaller voice is busy. The free Windows voice speaks this one.",
+        message: "The HeatCaller voice is busy. The free Kokoro voice speaks this one.",
         usage: await this.usageFor(club, plan),
       };
     }
@@ -431,7 +571,7 @@ export class VoiceService {
         ok: false,
         refusal: "upstream",
         status: 502,
-        message: "The HeatCaller voice couldn't speak that line. The free Windows voice says it instead.",
+        message: "The HeatCaller voice couldn't speak that line. The free Kokoro voice says it instead.",
         usage: await this.usageFor(club, plan),
       };
     } finally {
@@ -449,7 +589,7 @@ export class VoiceService {
         ok: false,
         refusal: "upstream",
         status: 502,
-        message: "The HeatCaller voice couldn't speak that line. The free Windows voice says it instead.",
+        message: "The HeatCaller voice couldn't speak that line. The free Kokoro voice says it instead.",
         usage: await this.usageFor(club, plan),
       };
     }
@@ -459,6 +599,468 @@ export class VoiceService {
     await this.writeCache(club, shared, key, audio);
 
     return { ok: true, audio, cached: false, usage };
+  }
+
+  // --- Hearing a voice before choosing it ---------------------------------
+  //
+  // Two things, and they are not the same thing. A SAMPLE is one fixed
+  // neutral line, the same words in every voice, served to anyone at all
+  // with no token and no club - it is what somebody who has never run
+  // HeatCaller hears, and what a club compares voices by. A PREVIEW is a
+  // club's own words in a voice it may use, for the Preview button on
+  // Voice Settings, charged to a small daily allowance that has nothing to
+  // do with the month's.
+  //
+  // Both exist because the catalogue could only ever give a club a name
+  // and a line of description, so a club chose its announcer's voice by
+  // reading about it.
+
+  /**
+   * The voices there is a sample of, in catalogue order.
+   *
+   * "Is a sample of" rather than "has a file for": a voice this relay can
+   * render is listed before anybody has asked for it, because the first
+   * ask is what renders it and a fresh relay with an empty list would
+   * defeat the whole point. A relay whose key has since been taken away
+   * lists only what it already has on the volume - that audio is paid for
+   * and still worth hearing.
+   */
+  async samples(): Promise<readonly SampleListing[]> {
+    const listed: SampleListing[] = [];
+
+    for (const voice of this.config.voices) {
+      if (await this.hasSample(voice)) {
+        listed.push({ id: voice.id, name: voice.name });
+      }
+    }
+
+    return listed;
+  }
+
+  private async hasSample(voice: CatalogueVoice): Promise<boolean> {
+    if (this.sampleAudio.has(voice.id)) {
+      return true;
+    }
+
+    if (this.render !== undefined) {
+      return true;
+    }
+
+    const info = await stat(this.samplePath(voice)).catch(() => undefined);
+
+    return info !== undefined && info.isFile() && info.size > 0;
+  }
+
+  /**
+   * One voice's sample.
+   *
+   * WHAT THIS CAN COST. The first visitor to ask for a voice nobody has
+   * asked for yet pays for one render of VOICE_SAMPLE_LINE on HeatCaller's
+   * account; it is kept in memory and on the volume, and every visitor
+   * after that is free. The whole feature's ceiling is therefore one short
+   * line per voice in the catalogue, ever - a few hundred characters all
+   * told - which is why these two routes can be open to the internet at
+   * all. Nothing a caller sends shapes what is rendered: the words are a
+   * constant in this file and the voice must be one the catalogue names.
+   */
+  async sample(voiceId: string): Promise<SampleResult> {
+    const voice = this.byId.get(voiceId);
+
+    if (voice === undefined) {
+      return { ok: false, status: 404, message: "There is no sample of that voice." };
+    }
+
+    const held = this.sampleAudio.get(voice.id);
+
+    if (held !== undefined) {
+      return { ok: true, audio: held, cached: true };
+    }
+
+    const onVolume = await readFile(this.samplePath(voice)).catch(() => undefined);
+
+    if (onVolume !== undefined && onVolume.length > 0) {
+      this.sampleAudio.set(voice.id, onVolume);
+      return { ok: true, audio: onVolume, cached: true };
+    }
+
+    if (this.render === undefined) {
+      return { ok: false, status: 404, message: "There is no sample of that voice." };
+    }
+
+    const failedAt = this.sampleFailedAt.get(voice.id);
+
+    if (failedAt !== undefined && this.now().getTime() - failedAt < SAMPLE_RETRY_AFTER_MS) {
+      return { ok: false, status: 503, message: "That sample can't be made just now. Try again in a minute." };
+    }
+
+    // One render however many ask at once, and taken out of the map when
+    // it settles, so the next ask after a failure starts a new one rather
+    // than waiting on a promise that is already done.
+    let making = this.samplesInFlight.get(voice.id);
+
+    if (making === undefined) {
+      making = this.renderSample(voice);
+      this.samplesInFlight.set(voice.id, making);
+
+      // Cleared from here, through then(), rather than in a finally inside
+      // renderSample: a renderSample that ever returned without awaiting
+      // anything would run that finally BEFORE the set above and leave a
+      // finished promise in the map for ever, so every later visitor
+      // would be answered 503 by a render that had long since given up.
+      // then() cannot run before this turn of the loop is over.
+      const forget = (): void => {
+        this.samplesInFlight.delete(voice.id);
+      };
+
+      void making.then(forget, forget);
+    }
+
+    const audio = await making;
+
+    if (audio === undefined) {
+      return { ok: false, status: 503, message: "That sample can't be made just now. Try again in a minute." };
+    }
+
+    return { ok: true, audio, cached: false };
+  }
+
+  /**
+   * Renders one sample and keeps it. Never throws and never rejects - a
+   * sample that cannot be made is a 503 the next visitor may well not see,
+   * not a fault, and sample() awaits this promise on behalf of however
+   * many callers are waiting on the same voice.
+   */
+  private async renderSample(voice: CatalogueVoice): Promise<Buffer | undefined> {
+    const render = this.render;
+
+    // Checked by sample() before this is ever reached. Read into a local
+    // so it cannot be read twice either side of an await.
+    if (render === undefined) {
+      return undefined;
+    }
+
+    const slot = await this.takeSlot(SAMPLE_SLOT_HOLDER);
+
+    if (!slot) {
+      // Not remembered as a failure: nothing was asked of ElevenLabs, the
+      // relay was simply full, and the next visitor should try.
+      return undefined;
+    }
+
+    let audio: Buffer;
+
+    try {
+      audio = await render(voice, VOICE_SAMPLE_LINE);
+    } catch (error) {
+      const status = error instanceof VoiceUpstreamError ? error.status : 0;
+
+      this.log(`[voice] ElevenLabs did not speak the sample of "${voice.id}" (${status === 0 ? String(error) : status}).`);
+      this.sampleFailedAt.set(voice.id, this.now().getTime());
+      return undefined;
+    } finally {
+      this.releaseSlot(SAMPLE_SLOT_HOLDER);
+    }
+
+    if (audio.length === 0 || audio.length > MAX_AUDIO_BYTES) {
+      this.log(`[voice] ElevenLabs answered the sample of "${voice.id}" with ${audio.length} bytes, which is not a line.`);
+      this.sampleFailedAt.set(voice.id, this.now().getTime());
+      return undefined;
+    }
+
+    this.sampleAudio.set(voice.id, audio);
+    this.sampleFailedAt.delete(voice.id);
+
+    try {
+      await mkdir(join(this.root, SAMPLES_DIR), { recursive: true, mode: 0o700 });
+      await writeFileAtomically(this.samplePath(voice), audio);
+    } catch (error) {
+      // Kept in memory even so, so this relay serves it free until it
+      // restarts. The audio is already paid for; only a deploy would pay
+      // again.
+      this.log(`[voice] Could not keep the sample of "${voice.id}" (${String(error)}).`);
+    }
+
+    return audio;
+  }
+
+  /**
+   * The sample file for one voice, named with the voice's revision as well
+   * as its id.
+   *
+   * So that changing a voice's model or its settings renders the sample
+   * again rather than serving one that no longer sounds like the voice a
+   * club would get - the same reason the laptop keeps the revision with
+   * every line it has saved. The old file is simply left; there are only
+   * ever a handful, and nothing walks that folder.
+   */
+  private samplePath(voice: CatalogueVoice): string {
+    return join(this.root, SAMPLES_DIR, `${voice.id}-${this.revs.get(voice.id) ?? revisionOf(voice)}.mp3`);
+  }
+
+  /**
+   * A club's own words, in one voice, for the Preview button.
+   *
+   * Charged against the club's small DAILY preview allowance and never
+   * against the month's characters. That separation is the whole point: a
+   * club must not be able to arrive on a race night and find it spent its
+   * voice on Tuesday deciding which one to use. Over the day's allowance
+   * the answer is 429 - come back tomorrow - rather than the month's 402,
+   * because nothing a club is billed for has been spent.
+   *
+   * The audio is kept with the club's own lines and never shared, however
+   * innocent the words look: a preview is whatever somebody typed into the
+   * box, which may well be a driver's name.
+   */
+  async preview(club: string, plan: VoicePlan, voiceId: string, text: string): Promise<SpeakResult> {
+    if (!isValidClubId(club)) {
+      return { ok: false, refusal: "unknown-voice", status: 404, message: "No such club." };
+    }
+
+    if (this.render === undefined || this.config.voices.length === 0) {
+      return {
+        ok: false,
+        refusal: "off",
+        status: 503,
+        message: "The HeatCaller voice isn't switched on here, so there is nothing to preview.",
+      };
+    }
+
+    if (!plan.enabled) {
+      return {
+        ok: false,
+        refusal: "not-included",
+        status: 403,
+        message: "The HeatCaller voice isn't included for this club, so there is nothing to preview.",
+      };
+    }
+
+    const voice = this.byId.get(voiceId);
+
+    if (voice === undefined || !this.voicesFor(plan).includes(voice)) {
+      return {
+        ok: false,
+        refusal: "unknown-voice",
+        status: 400,
+        message: "That voice isn't one this club can use. Pick one from the list on Voice Settings.",
+      };
+    }
+
+    const spoken = voice.modelId.toLowerCase().includes("v3") ? text.trim() : stripAudioTags(text);
+
+    if (spoken.length === 0) {
+      return { ok: false, refusal: "text", status: 400, message: "There was nothing to preview." };
+    }
+
+    // The shorter of the two caps, so a relay configured with a maxChars
+    // below the preview cap does not speak past what it says it speaks.
+    const cap = Math.min(this.previewMaxChars, this.config.maxChars);
+
+    if (spoken.length > cap) {
+      return {
+        ok: false,
+        refusal: "text",
+        status: 400,
+        message: `A preview is at most ${cap} characters - a sentence, to hear the voice. Shorten it and try again.`,
+      };
+    }
+
+    const key = cacheKey(voice, spoken);
+    const cached = await this.readCache(club, false, key);
+
+    if (cached !== undefined) {
+      // Free, like any other cache hit: a club listening to the same
+      // sentence twice while it makes up its mind pays once.
+      return { ok: true, audio: cached, cached: true, usage: await this.previewUsage(club) };
+    }
+
+    // Taken before the render and given back if it fails, exactly as
+    // speak's are and for the same reason - see reserve.
+    const reserved = await this.previewReserve(club, spoken.length);
+
+    if (!reserved.ok) {
+      return {
+        ok: false,
+        refusal: "allowance",
+        status: 429,
+        message:
+          `That is this club's previews for today - ${reserved.usage.allowance} characters a day of trying voices out. ` +
+          "Its race-night voice allowance has not been touched, and previews start again tomorrow.",
+        usage: reserved.usage,
+      };
+    }
+
+    // The club's own share of the relay's renders, not a share of its own:
+    // a preview is an ElevenLabs render like any other, and somebody
+    // pressing Preview over and over should be held exactly where a
+    // laptop rendering lines is held.
+    const slot = await this.takeSlot(club);
+
+    if (!slot) {
+      await this.previewRefund(club, spoken.length, reserved.day);
+
+      return {
+        ok: false,
+        refusal: "busy",
+        status: 503,
+        message: "The HeatCaller voice is busy. Try the preview again in a moment.",
+        usage: await this.previewUsage(club),
+      };
+    }
+
+    let audio: Buffer;
+
+    try {
+      audio = await this.render(voice, spoken);
+    } catch (error) {
+      const status = error instanceof VoiceUpstreamError ? error.status : 0;
+
+      this.log(`[voice] "${club}": ElevenLabs did not speak a preview (${status === 0 ? String(error) : status}).`);
+
+      await this.previewRefund(club, spoken.length, reserved.day);
+
+      return {
+        ok: false,
+        refusal: "upstream",
+        status: 502,
+        message: "The HeatCaller voice couldn't speak that preview. Try again in a moment.",
+        usage: await this.previewUsage(club),
+      };
+    } finally {
+      this.releaseSlot(club);
+    }
+
+    if (audio.length === 0 || audio.length > MAX_AUDIO_BYTES) {
+      this.log(`[voice] "${club}": ElevenLabs answered a preview with ${audio.length} bytes, which is not a line.`);
+
+      await this.previewRefund(club, spoken.length, reserved.day);
+
+      return {
+        ok: false,
+        refusal: "upstream",
+        status: 502,
+        message: "The HeatCaller voice couldn't speak that preview. Try again in a moment.",
+        usage: await this.previewUsage(club),
+      };
+    }
+
+    await this.writeCache(club, false, key, audio);
+
+    return { ok: true, audio, cached: false, usage: reserved.usage };
+  }
+
+  // --- The preview allowance ----------------------------------------------
+  //
+  // Per club, per day, UTC, in a file of its own under PREVIEW_DIR.
+  //
+  // Deliberately simpler than the month's count above, because it is worth
+  // far less: a preview file that cannot be read is taken as a fresh day,
+  // where the month's file being taken that way would write an empty
+  // history over three years of what a club is billed by. The most a
+  // mangled preview file can cost is one club one day of auditioning, and
+  // it is mended by the next write.
+
+  /** Where this club's day of previews is counted. */
+  private previewPath(club: string): string {
+    return voicePreviewPath(this.dataDir, club);
+  }
+
+  /** Where this club's previews stand in <day> - today, unless the caller has already decided which (previewReserve has). */
+  private async previewUsage(club: string, day: string = dayOf(this.now())): Promise<VoiceUsage> {
+    const allowance = this.previewDailyChars;
+    const cached = this.previewCache.get(club);
+
+    if (cached !== undefined && cached.day === day) {
+      return { used: cached.used, allowance, resetsAt: dayResetOf(this.now()) };
+    }
+
+    const read = await this.readPreviewFile(club, day);
+
+    // Read outside the lock when a cache hit asks, so a preview may have
+    // been counted while the file was being read - see usageState, which
+    // has the same shape for the same reason.
+    const meanwhile = this.previewCache.get(club);
+
+    if (meanwhile !== undefined && meanwhile.day === day) {
+      return { used: meanwhile.used, allowance, resetsAt: dayResetOf(this.now()) };
+    }
+
+    this.previewCache.set(club, { day, used: read });
+
+    return { used: read, allowance, resetsAt: dayResetOf(this.now()) };
+  }
+
+  /** What this club has spent on previews in <day>: nothing when the file is missing, from another day, or unreadable. */
+  private async readPreviewFile(club: string, day: string): Promise<number> {
+    let raw: unknown;
+
+    try {
+      raw = JSON.parse(await readFile(this.previewPath(club), "utf8")) as unknown;
+    } catch {
+      return 0;
+    }
+
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      return 0;
+    }
+
+    const record = raw as Record<string, unknown>;
+
+    return record["day"] === day ? count(record["used"]) : 0;
+  }
+
+  /** Takes characters out of today's preview allowance, or refuses. Read and write under one lock, as reserve is. */
+  private async previewReserve(club: string, characters: number): Promise<{ ok: boolean; usage: VoiceUsage; day: string }> {
+    let outcome: { ok: boolean; usage: VoiceUsage; day: string } = {
+      ok: false,
+      usage: { used: 0, allowance: this.previewDailyChars, resetsAt: dayResetOf(this.now()) },
+      day: dayOf(this.now()),
+    };
+
+    await this.withLock(this.previewLocks, club, async () => {
+      // The day, read once, is the day these characters come out of - and
+      // the one previewRefund must give them back to.
+      const day = dayOf(this.now());
+      const current = await this.previewUsage(club, day);
+
+      if (current.used + characters > current.allowance) {
+        outcome = { ok: false, usage: current, day };
+        return;
+      }
+
+      const used = current.used + characters;
+      await this.storePreviewUsage(club, used, day);
+
+      outcome = { ok: true, usage: { used, allowance: current.allowance, resetsAt: current.resetsAt }, day };
+    });
+
+    return outcome;
+  }
+
+  /** Gives back characters a preview never spent, to the day they came out of and only that one - see refund. */
+  private async previewRefund(club: string, characters: number, reservedOn: string): Promise<void> {
+    await this.withLock(this.previewLocks, club, async () => {
+      const day = dayOf(this.now());
+      const current = this.previewCache.get(club);
+
+      if (day !== reservedOn || current === undefined || current.day !== day) {
+        return;
+      }
+
+      await this.storePreviewUsage(club, Math.max(0, current.used - characters), day);
+    });
+  }
+
+  private async storePreviewUsage(club: string, used: number, day: string): Promise<void> {
+    this.previewCache.set(club, { day, used });
+
+    try {
+      await mkdir(join(this.root, PREVIEW_DIR), { recursive: true, mode: 0o700 });
+      await writeFileAtomically(this.previewPath(club), Buffer.from(JSON.stringify({ day, used }), "utf8"));
+    } catch (error) {
+      // The count in memory still stands, so the day's allowance holds
+      // for as long as this relay is up.
+      this.log(`[voice] "${club}": could not write today's preview count (${String(error)}).`);
+    }
   }
 
   // --- The allowance ------------------------------------------------------
@@ -642,7 +1244,7 @@ export class VoiceService {
         // The usage file is there but could not be read. Spending now
         // would mean writing a count - and an empty history - over the
         // one on disk, so the line is refused as busy instead: the laptop
-        // says it in the free Windows voice and asks again with the next
+        // says it in the free Kokoro voice and asks again with the next
         // line, by which time a passing fault (EMFILE, EIO) has usually
         // cleared. Lines already in the cache are still served.
         outcome = { ok: false, unreadable: true, usage: current, month };
@@ -724,7 +1326,16 @@ export class VoiceService {
   }
 
   private async withUsageLock(club: string, work: () => Promise<void>): Promise<void> {
-    const before = this.usageLocks.get(club) ?? Promise.resolve();
+    await this.withLock(this.usageLocks, club, work);
+  }
+
+  /**
+   * One piece of work at a time per key, in whichever map of locks the
+   * caller names - the month's counts, or the day's previews, which are
+   * kept apart so an audition never waits behind a flag call.
+   */
+  private async withLock(locks: Map<string, Promise<void>>, key: string, work: () => Promise<void>): Promise<void> {
+    const before = locks.get(key) ?? Promise.resolve();
     let release: () => void = () => {};
     const mine = new Promise<void>((resolve) => {
       release = resolve;
@@ -735,7 +1346,7 @@ export class VoiceService {
     // club's entry was never let go.
     const tail = before.then(() => mine);
 
-    this.usageLocks.set(club, tail);
+    locks.set(key, tail);
 
     await before;
 
@@ -744,8 +1355,8 @@ export class VoiceService {
     } finally {
       release();
 
-      if (this.usageLocks.get(club) === tail) {
-        this.usageLocks.delete(club);
+      if (locks.get(key) === tail) {
+        locks.delete(key);
       }
     }
   }
@@ -824,7 +1435,11 @@ export class VoiceService {
    * The shared lines stay too. They have no names in them and are
    * nobody's. A line still being rendered when this runs can land after
    * it; it is one line, and goes the next time the club is deleted or its
-   * folder is swept.
+   * folder is swept. So do the samples, which are nobody's either.
+   *
+   * The day's preview count stays for the same reason the month's does: a
+   * club that could wipe it could have a fresh day of auditioning for
+   * every delete.
    */
   async forget(club: string): Promise<void> {
     if (!isValidClubId(club)) {
@@ -1112,7 +1727,13 @@ export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000): RenderFn
 /** Reads the voice block of the config. Absent means no catalogue, which is a relay with the voice switched off. */
 export function readVoiceConfig(value: unknown, source: string): VoiceConfig {
   if (value === undefined || value === null) {
-    return { voices: [], monthlyChars: VOICE_DEFAULT_MONTHLY_CHARS, maxChars: VOICE_DEFAULT_MAX_CHARS };
+    return {
+      voices: [],
+      monthlyChars: VOICE_DEFAULT_MONTHLY_CHARS,
+      maxChars: VOICE_DEFAULT_MAX_CHARS,
+      previewDailyChars: VOICE_DEFAULT_PREVIEW_DAILY_CHARS,
+      previewMaxChars: VOICE_DEFAULT_PREVIEW_MAX_CHARS,
+    };
   }
 
   if (typeof value !== "object" || Array.isArray(value)) {
@@ -1169,6 +1790,19 @@ export function readVoiceConfig(value: unknown, source: string): VoiceConfig {
     voices,
     monthlyChars: whole(raw["monthlyChars"], VOICE_DEFAULT_MONTHLY_CHARS, 0, 100_000_000, "voice.monthlyChars", source),
     maxChars: whole(raw["maxChars"], VOICE_DEFAULT_MAX_CHARS, 40, 5_000, "voice.maxChars", source),
+    // Zero is allowed and means something: previews off, samples still
+    // served. Capped far below the month's allowance because this one is
+    // not metered per club or billed - it is there so somebody can make
+    // their mind up, and a day of it should never be worth stealing.
+    previewDailyChars: whole(
+      raw["previewDailyChars"],
+      VOICE_DEFAULT_PREVIEW_DAILY_CHARS,
+      0,
+      1_000_000,
+      "voice.previewDailyChars",
+      source,
+    ),
+    previewMaxChars: whole(raw["previewMaxChars"], VOICE_DEFAULT_PREVIEW_MAX_CHARS, 40, 600, "voice.previewMaxChars", source),
   };
 }
 
@@ -1250,7 +1884,7 @@ function cacheKey(voice: CatalogueVoice, text: string): string {
 export function stripAudioTags(value: string): string {
   // Character for character what VoiceProfile.StripAudioTags does on the
   // laptop - a tag is replaced with nothing, then doubled spaces collapse.
-  // The two have to agree: the Windows voice says the stripped line when it
+  // The two have to agree: the Kokoro voice says the stripped line when it
   // stands in, and a club would otherwise hear two slightly different
   // sentences for the same announcement.
   return value
@@ -1267,6 +1901,11 @@ export function voiceUsagePath(dataDir: string, club: string): string {
 /** Where the characters given to a club on top of its plan are kept, by month - see voiceadmin.ts. */
 export function voiceTopUpPath(dataDir: string, club: string): string {
   return join(dataDir, VOICE_DIR, "topups", `${club}.json`);
+}
+
+/** Where a club's day of previews is counted. Never the same file as the month's count - see PREVIEW_DIR. */
+export function voicePreviewPath(dataDir: string, club: string): string {
+  return join(dataDir, VOICE_DIR, PREVIEW_DIR, `${club}.json`);
 }
 
 /** How many months of a club's counts are kept: three years, which is as far back as anyone bills or ElevenLabs audits. */
@@ -1355,6 +1994,16 @@ export function monthOf(when: Date): string {
 
 export function resetOf(when: Date): string {
   return new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth() + 1, 1)).toISOString();
+}
+
+/** The day a preview is charged to: "2026-09-20", UTC like everything else here. */
+export function dayOf(when: Date): string {
+  return `${monthOf(when)}-${String(when.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** When a day's previews come back: the first moment of tomorrow, UTC, ISO 8601. */
+export function dayResetOf(when: Date): string {
+  return new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), when.getUTCDate() + 1)).toISOString();
 }
 
 function text(value: unknown): string {

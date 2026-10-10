@@ -139,8 +139,13 @@ public static class CommentaryShowFacts
 
         if (night.FastestLapSeconds > 0 && fastest.Length > 0)
         {
+            // Every time and margin below goes in with a decimal POINT
+            // whatever the PC's region. On a comma-decimal laptop this was
+            // written "12,345s", the model repeated it, and the PA read out
+            // "twelve thousand three hundred forty-five seconds". See
+            // CommentaryFacts.Invariant.
             found.Add(new FactBlock($"signoff:{dayKey}:fastest",
-                $"The fastest lap of the night went to {fastest}: {night.FastestLapSeconds:0.000}s."));
+                $"The fastest lap of the night went to {fastest}: {CommentaryFacts.Invariant(night.FastestLapSeconds, "0.000")}s."));
         }
 
         // Only when it was actually close. "The closest finish of the
@@ -153,7 +158,7 @@ public static class CommentaryShowFacts
             && closest.Length > 0)
         {
             found.Add(new FactBlock($"signoff:{dayKey}:closest",
-                $"The closest finish all night was {closest}'s, by {night.ClosestFinishSeconds:0.00}s."));
+                $"The closest finish all night was {closest}'s, by {CommentaryFacts.Invariant(night.ClosestFinishSeconds, "0.00")}s."));
         }
 
         if (night.Debutants is { } debuts && debuts > 0)

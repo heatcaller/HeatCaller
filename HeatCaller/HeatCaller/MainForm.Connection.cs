@@ -37,6 +37,18 @@ public partial class MainForm
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnDecoderStatusChanged(state, message)); return; }
 
+        // ConnectLine's own go at the EasyLap has finished, one way or the
+        // other. Read before it is cleared: this status IS the end of that
+        // connect, and it is the one status that must not connect the split
+        // loop a second time. Cleared whatever role the EasyLap now has, so
+        // a decoder swap partway through a connect cannot leave it set.
+        var connectLinesOwn = _connectingLine;
+
+        if (state is not DecoderConnectionState.Connecting)
+        {
+            _connectingLine = false;
+        }
+
         // The line's light for the line; the split loop's own for the split.
         switch (RoleOf(DecoderConnection.EasyLap))
         {
@@ -47,7 +59,7 @@ public partial class MainForm
                 // auto-connect - the split loop joins it. ConnectLine
                 // connects it itself, with the port picked - see
                 // _connectingLine.
-                if (state == DecoderConnectionState.Connected && !_connectingLine)
+                if (state == DecoderConnectionState.Connected && !connectLinesOwn)
                 {
                     ConnectSplitLoop();
                 }
@@ -582,26 +594,24 @@ public partial class MainForm
         btnConnect.Enabled = false;
         btnDisconnect.Enabled = true;
         _connectingLine = true;
-
-        try
-        {
-            _decoderClient.Connect();
-        }
-        finally
-        {
-            _connectingLine = false;
-        }
-
+        _decoderClient.Connect();
         ConnectSplitLoop(userChose);
     }
 
     /// <summary>
-    /// True while ConnectLine is connecting the EasyLap, which then connects
-    /// the split loop itself. The EasyLap says it is connected before Connect
-    /// returns, and OnDecoderStatusChanged used to connect an I-Lap split
-    /// loop there and then on the REMEMBERED port - so the port picked for
-    /// it was never read, and a wrong remembered port could not be put right
-    /// with Connect.
+    /// True from ConnectLine starting the EasyLap until that connect has
+    /// finished, because ConnectLine connects the split loop itself, with
+    /// the port picked. OnDecoderStatusChanged used to connect an I-Lap
+    /// split loop on the REMEMBERED port the moment the line went green -
+    /// so the port picked for it was never read, and a wrong remembered port
+    /// could not be put right with Connect.
+    ///
+    /// It used to be cleared in a finally around Connect, which was enough
+    /// while the EasyLap said it was connected before Connect returned.
+    /// Connect is asynchronous now (see DirectDecoderClient.Connect) and
+    /// hands back at Connecting, with Connected published from the decoder's
+    /// own thread afterwards - so it is cleared when that status arrives
+    /// instead, which is the moment it was always really about.
     /// </summary>
     private bool _connectingLine;
 

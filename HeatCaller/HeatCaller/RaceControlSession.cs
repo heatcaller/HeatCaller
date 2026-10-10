@@ -2960,6 +2960,11 @@ public sealed partial class RaceControlSession
     /// restart. A race on its last lap keeps its checkered; the wait for
     /// stragglers starts again at that green (see EndRedFlagPeriod).
     ///
+    /// The decoder's own clock, and every reading taken on it, moves
+    /// forward by the same gap - see the comment where it is done. Left
+    /// behind, each driver's next crossing was booked as a lap as long as
+    /// the time the race was gone.
+    ///
     /// Anything but a running race - finished, idle, staging - has no clock
     /// running, and is put back exactly as it was.
     /// </summary>
@@ -2998,14 +3003,67 @@ public sealed partial class RaceControlSession
             }
         }
 
+        // The DECODER clock has to move with the race clock, and it did
+        // not.
+        //
+        // The start moves forward by the gap below, but the decoder
+        // reference and every driver's stored readings were left on the
+        // clock they were taken on - and the decoder went on counting
+        // throughout. So the next crossing after the green was measured
+        // from a reference the whole gap behind where the race now starts:
+        // on the 5:00 heat reset at 4:10 and undone a minute later, a car
+        // crossing five seconds after the green was booked a 67-second lap
+        // and its ElapsedMs read 1:25 while the race clock read 0:25. Both
+        // are saved - RaceFiling copies ElapsedMs into the result and
+        // RaceJournal into the journal - and nothing marked that lap as one
+        // run through a stoppage, so it sat in the pace chart as a real lap,
+        // broke the streak and could become the streak baseline.
+        //
+        // Nothing else caught it. The start-reference check in
+        // RaceControlSession.Laps.cs fires once per green and had already
+        // fired in the race being put back, and the first-crossing-after-
+        // recovery path needs a reading of zero, which the snapshot
+        // restores non-zero.
+        //
+        // RaceJournal.Restore clears the per-driver readings instead,
+        // because a crash may have taken the decoder with it and its clock
+        // is then anybody's guess. Here the decoder has been running the
+        // whole time and the gap is known exactly, so the readings are
+        // moved by it rather than thrown away - which leaves the undo
+        // behaving as a red flag out for the same time would: the lap
+        // through the stoppage is long, and every lap since the green still
+        // adds up to the driver's elapsed time.
+        var gapMs = (long)gap.TotalMilliseconds;
+
         RestoreSnapshot(snapshot with
         {
             Flag = FlagState.Red,
             RaceStartUtc = start + gap,
+            RaceStartDeviceTimeMs = snapshot.RaceStartDeviceTimeMs is { } reference ? reference + gapMs : null,
             AccumulatedRedTime = snapshot.AccumulatedRedTime + redBeforeSnapshot,
             RedFlagStartedUtc = now,
             FinishingSinceUtc = snapshot.FinishingSinceUtc is { } finishingSince ? finishingSince + gap : null,
         });
+
+        // The live rows rather than the snapshot's, so this moves the one
+        // row RestoreSnapshot kept where an old journal held two for the
+        // same transponder - see KeepOneOfCaseVariants.
+        //
+        // A zero is left alone in both: it means "never seen" and "no
+        // counted lap yet", and moving it would turn this driver's first
+        // crossing into a lap as long as the gap.
+        foreach (var standing in _standings.Values)
+        {
+            if (standing.LastLapDeviceTimeMs > 0)
+            {
+                standing.LastLapDeviceTimeMs += gapMs;
+            }
+
+            if (standing.LastSeenDeviceTimeMs > 0)
+            {
+                standing.LastSeenDeviceTimeMs += gapMs;
+            }
+        }
 
         Log("Race put back under a red flag - laps count again from the green.");
         return true;

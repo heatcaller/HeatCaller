@@ -107,9 +107,14 @@ public sealed class InstallerTests
         Assert.Contains("<RelativePath>kokoro.onnx</RelativePath>", AppProject, StringComparison.Ordinal);
 
         // Globbed by Exists() rather than named outright, so a clone with no
-        // model still builds and publishes - and says what it is missing.
+        // model still builds - the target is publish-only.
         Assert.Contains("Condition=\"Exists('Assets\\Kokoro\\kokoro.onnx')\"", AppProject, StringComparison.Ordinal);
-        Assert.Contains("<Warning Condition=\"'@(_KokoroModelFile)' == ''\"", AppProject, StringComparison.Ordinal);
+
+        // An Error, not a Warning, since 10 Oct 2026: Kokoro is the only
+        // voice that always works now the Windows voice is retired, so a
+        // publish without the model is an installer that cannot speak at
+        // all. A warning in a long publish log is a warning nobody reads.
+        Assert.Contains("<Error Condition=\"'@(_KokoroModelFile)' == ''\"", AppProject, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -278,7 +283,7 @@ public sealed class InstallerTests
         // that changes nothing at the end of them.
         Assert.Equal(new[] { "Update now", "After tonight", "Not now" }, AppUpdates.AnswerLabels);
         Assert.Equal("Not now", AppUpdates.AnswerLabels[(int)AppUpdates.Answer.NotNow]);
-        Assert.Equal(AppUpdates.AnswerLabels.Length - 1, (int)AppUpdates.Answer.NotNow);
+        Assert.Equal((int)AppUpdates.Answer.NotNow, AppUpdates.AnswerLabels.Length - 1);
 
         // And the order of the words has to match the order of the answers,
         // or a volunteer pressing "Not now" would install an update.

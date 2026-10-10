@@ -56,6 +56,40 @@ public sealed class SidebarHeader : Control
     /// <summary>When true, draws the full animated scene; otherwise just the title text.</summary>
     public bool SynthwaveMode { get; init; }
 
+    /// <summary>Narrowed with the sidebar - see Compact.</summary>
+    private bool _compact;
+
+    /// <summary>
+    /// The sidebar narrowed to a rail of icons (MainForm.SetNavIconsOnly).
+    ///
+    /// The header then has about sixty pixels across to work with, so the
+    /// title becomes its initials and the Synthwave scene is left out
+    /// altogether: a sun, a mountain range and a horizon grid in a strip
+    /// that narrow is a smear rather than a scene. A club's logo is still
+    /// drawn, because DrawLogo fits it to whatever room there is and a badge
+    /// at rail width still reads as that club's badge.
+    /// </summary>
+    public bool Compact
+    {
+        get => _compact;
+        set
+        {
+            if (_compact == value)
+            {
+                return;
+            }
+
+            _compact = value;
+
+            // The cached scene layers are bitmaps the size of the control,
+            // and a compact header never draws them - so they are let go
+            // here as well as on a resize, rather than being kept at the old
+            // width for as long as the rail is up.
+            DropCache();
+            Invalidate();
+        }
+    }
+
     /// <summary>
     /// Whether the header is actually being repainted on a timer.
     ///
@@ -318,7 +352,9 @@ public sealed class SidebarHeader : Control
             return;
         }
 
-        if (!SynthwaveMode)
+        // Compact as well as plain looks: the scene needs width it has not
+        // got on the rail - see Compact.
+        if (!SynthwaveMode || _compact)
         {
             DrawPlainTitle(e.Graphics);
             return;
@@ -538,6 +574,20 @@ public sealed class SidebarHeader : Control
             g.FillRectangle(back, ClientRectangle);
         }
 
+        // On the rail the name has nowhere to go, so it becomes its initials
+        // in the middle: "HEATCALLER" given the rail's width came out as two
+        // letters and an ellipsis, which reads as something broken rather
+        // than as a sidebar somebody narrowed on purpose.
+        if (_compact)
+        {
+            using var markFont = new Font(AppTheme.NavFont.FontFamily, 13.5F, FontStyle.Bold);
+
+            TextRenderer.DrawText(g, Initials(), markFont, ClientRectangle, AppTheme.SidebarText,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+
+            return;
+        }
+
         using var font = new Font(AppTheme.NavFont.FontFamily, 12.5F, FontStyle.Bold);
         var textRect = new Rectangle(16, 0, Math.Max(10, Width - 20), Height);
 
@@ -546,6 +596,31 @@ public sealed class SidebarHeader : Control
         // titles never looked like the same app.
         TextRenderer.DrawText(g, $"{_titleLine1} {_titleLine2}".Trim(), font, textRect,
             AppTheme.SidebarText, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+    }
+
+    /// <summary>
+    /// The mark drawn in place of the title on the rail: one letter from each
+    /// of the first two words of the title, or the first two letters when the
+    /// title is a single word - "HEATCALLER" is one word, and the app's own
+    /// mark is "HC", not "H".
+    /// </summary>
+    private string Initials()
+    {
+        var words = $"{_titleLine1} {_titleLine2}".Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (words.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        if (words.Length == 1)
+        {
+            var only = words[0];
+
+            return (only.Length >= 2 ? only[..2] : only).ToUpperInvariant();
+        }
+
+        return $"{words[0][0]}{words[1][0]}".ToUpperInvariant();
     }
 
     protected override void Dispose(bool disposing)

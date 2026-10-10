@@ -29,6 +29,12 @@ namespace HeatCaller;
 ///
 /// One dump per run, at most two kept, and none when there is under 3 GB
 /// free: a dump of this app runs to a few hundred MB.
+///
+/// A dump is a copy of the app's memory, so it holds the club's keys and
+/// PINs and every driver's details in cleartext - see DumpHoldsSecrets,
+/// which is said every time one is offered. The dump itself is left exactly
+/// as it was: without the managed heap it cannot show what the stuck thread
+/// was doing, and finding the freeze is what it is for.
 /// </summary>
 internal static class HangWatchdog
 {
@@ -47,6 +53,28 @@ internal static class HangWatchdog
 
     /// <summary>The switch that makes HeatCaller.exe the dump helper instead of the app.</summary>
     private const string DumpHelperSwitch = "--write-freeze-dump";
+
+    /// <summary>
+    /// Said in the log beside the dump's path, every time the dump is
+    /// offered.
+    ///
+    /// The dump is the whole managed heap (see NativeMethods.HeapDump), so
+    /// everything the app had unsealed into memory is in it in cleartext:
+    /// the relay token, the manager, check-in and racer PINs, the SMTP and
+    /// backup passwords, the ElevenLabs key, the badge key behind every
+    /// printed check-in QR code, and every driver's name, email and contact.
+    /// settings.json is sealed to this Windows account and a support bundle
+    /// is redacted first (see Redactor); the dump is neither, and is fully
+    /// usable on any PC it is copied to.
+    ///
+    /// The log used to say only "please keep it: it shows exactly where the
+    /// app is stuck", so an operator mailing it on to whoever asked for it
+    /// had no way of knowing any of that.
+    /// </summary>
+    private const string DumpHoldsSecrets =
+        "It is a copy of HeatCaller's memory, so it holds the club's keys and PINs and every driver's "
+        + "name and contact details in clear - unlike settings.json, which is locked to this PC. Send it "
+        + "only to someone trusted with those, and delete it once the freeze has been looked at.";
 
     private static int _started;
 
@@ -288,7 +316,7 @@ internal static class HangWatchdog
                 return;
             }
 
-            Say(log, $"[watchdog] Saving a dump of the frozen app to {path}. It takes a few seconds and runs to a few hundred MB - please keep it: it shows exactly where the app is stuck.");
+            Say(log, $"[watchdog] Saving a dump of the frozen app to {path}. It takes a few seconds and runs to a few hundred MB - please keep it: it shows exactly where the app is stuck. {DumpHoldsSecrets}");
 
             var timer = Stopwatch.StartNew();
             using var helper = Process.Start(start);
@@ -301,14 +329,14 @@ internal static class HangWatchdog
 
             if (!helper.WaitForExit((int)DumpTimeout.TotalMilliseconds))
             {
-                Say(log, $"[watchdog] The dump helper is still going after {DumpTimeout.TotalSeconds:0}s - left to finish on its own. Check {path} later.");
+                Say(log, $"[watchdog] The dump helper is still going after {DumpTimeout.TotalSeconds:0}s - left to finish on its own. Check {path} later. {DumpHoldsSecrets}");
                 return;
             }
 
             if (helper.ExitCode == 0 && File.Exists(path))
             {
                 var mb = new FileInfo(path).Length / 1024.0 / 1024.0;
-                Say(log, $"[watchdog] Dump saved in {timer.Elapsed.TotalSeconds:0.0}s ({mb:0} MB): {path}");
+                Say(log, $"[watchdog] Dump saved in {timer.Elapsed.TotalSeconds:0.0}s ({mb:0} MB): {path}. {DumpHoldsSecrets}");
             }
             else
             {
@@ -403,6 +431,14 @@ internal static class HangWatchdog
         // The "heap" dump the .NET tools make: every thread's stack plus the
         // managed heap, which is what Visual Studio needs to show the .NET
         // call stacks - without the loaded program files a full dump adds.
+        //
+        // The managed heap is also every secret the app has unsealed and
+        // every driver's details, in cleartext. Left as it is anyway: a dump
+        // without the heap shows thread stacks with no .NET frames and
+        // cannot say what the stuck thread was doing, which is the whole
+        // reason for taking one. What changed is that the log now says what
+        // is in it (DumpHoldsSecrets) instead of only asking for it to be
+        // kept.
         private const uint MiniDumpWithDataSegs = 0x00000001;
         private const uint MiniDumpWithHandleData = 0x00000004;
         private const uint MiniDumpWithUnloadedModules = 0x00000020;

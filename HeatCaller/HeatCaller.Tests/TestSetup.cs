@@ -29,7 +29,7 @@ internal static class TestSetup
     /// No sound out of the test run.
     ///
     /// Several tests drive the announcer far enough that it really plays:
-    /// the warning buzzer and its spoken line, in the Windows voice on a
+    /// the warning buzzer and its spoken line, in the Kokoro voice on a
     /// default install, two calls over each other. A test run is not a
     /// race night and must not sound like one - and a test whose timing
     /// depends on an audio device is a test that fails on a machine with
@@ -37,6 +37,22 @@ internal static class TestSetup
     /// </summary>
     [ModuleInitializer]
     internal static void SilenceAudio() => AudioBus.Silent = true;
+
+    /// <summary>
+    /// No race recordings out of the test run either.
+    ///
+    /// Race audio goes to Documents on purpose - so that a backup can never
+    /// zip a night of mp3s - and RedirectAppData above does not reach
+    /// Documents (AppPaths says so itself). Without this, every test that
+    /// drives a race to the green writes a real wav into the real
+    /// Documents\HeatCaller Race Audio folder of whoever ran the suite, and
+    /// RaceNightTests plays a whole race night through. RaceAudioTests is the
+    /// one class that needs it on, because it is the class that tests it: it
+    /// turns the flag off in its constructor and back on in Dispose, having
+    /// pointed the store at its own temp folder first.
+    /// </summary>
+    [ModuleInitializer]
+    internal static void NoRaceRecordings() => RaceAudioStore.OffForTests = true;
 
     /// <summary>
     /// Windows set up the way the app sets them up (ApplicationConfiguration

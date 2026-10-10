@@ -311,6 +311,52 @@ public sealed class ShowAudioTests : IDisposable
     }
 
     [Fact]
+    public void Cutting_a_show_short_skips_the_piece_s_own_ending()
+    {
+        // A race intro's bed has to be gone when the countdown starts,
+        // and the piece's own fade would play over the beeps and the horn.
+        var clip = Clip("bed.wav", Join(Music(8), FadeOut(Music(2))));
+        var bed = new ShowBed(clip);
+
+        var ending = clip.Frames - clip.Shape.LoopEnd;
+
+        Read(bed, 2 * Rate);
+
+        bed.CutShort();
+
+        var played = ReadToEnd(bed, longest: 20 * Rate);
+
+        Assert.True(bed.Finished);
+        Assert.True(
+            played < ending,
+            $"cut short played {Seconds(played):0.0}s - longer than the {Seconds(ending):0.0}s ending it was supposed to skip");
+
+        Assert.InRange(Seconds(played), ShowBed.CutShortSeconds - 0.3, ShowBed.CutShortSeconds + 0.3);
+    }
+
+    [Fact]
+    public void Cutting_short_after_an_ending_has_begun_lets_it_finish()
+    {
+        // It is a second or two from done by then, and cutting across it
+        // would sound worse than letting it play.
+        var clip = Clip("bed.wav", Join(Music(8), FadeOut(Music(2))));
+        var bed = new ShowBed(clip);
+
+        Read(bed, 2 * Rate);
+
+        bed.WindUp();
+        Read(bed, Rate / 2);
+
+        bed.CutShort();
+
+        var rest = ReadToEnd(bed, longest: 20 * Rate);
+        var ending = clip.Frames - clip.Shape.LoopEnd;
+
+        Assert.True(bed.Finished);
+        Assert.InRange(Seconds(rest + Rate / 2), Seconds(ending) - 0.5, Seconds(ending) + 0.5);
+    }
+
+    [Fact]
     public void Winding_up_twice_is_harmless()
     {
         var bed = new ShowBed(Clip("bed.wav", Join(Music(8), FadeOut(Music(2)))));
@@ -406,19 +452,17 @@ public sealed class ShowAudioTests : IDisposable
     }
 
     [Fact]
-    public void The_recap_can_be_scored_and_the_race_intro_cannot()
+    public void The_two_that_sit_beside_a_race_can_both_be_scored()
     {
-        // The recap runs in the quiet after the flag, which is the one
-        // moment of the evening a broadcast would certainly score, and it
-        // is a whole sequence rather than a line. The intro fires into the
-        // start sequence, among the staging call and the countdown, where
-        // an opener would play over the start of a race.
+        // The intro over staging, the recap in the quiet after the flag.
+        Assert.Contains(SegmentKind.RaceIntro, ShowSegments.Candidates);
         Assert.Contains(SegmentKind.RaceRecap, ShowSegments.Candidates);
-        Assert.DoesNotContain(SegmentKind.RaceIntro, ShowSegments.Candidates);
 
-        // Nor anything that fires DURING a race.
+        // But nothing that fires DURING a race: a battle call or a record
+        // lap is a remark over a race in progress, not a set piece.
         Assert.DoesNotContain(SegmentKind.BattleWatch, ShowSegments.Candidates);
         Assert.DoesNotContain(SegmentKind.PaceNote, ShowSegments.Candidates);
+        Assert.DoesNotContain(SegmentKind.ComingUpNext, ShowSegments.Candidates);
     }
 
     [Fact]

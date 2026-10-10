@@ -4,6 +4,8 @@ Besides the spoken announcer, HeatCaller can play short sound effects for laps a
 
 None of these sounds use the internet. They play on the laptop, through whatever speaker it's connected to.
 
+HeatCaller also records each race as it goes out and saves it as an mp3, with a clip for each driver. That has no tab of its own; see [Race recordings](#race-recordings).
+
 ## Effects
 
 **Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Classic tones** (tones HeatCaller generates itself) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Synthwave** or **Pit Lane**. You can point any of them at your own audio file instead, and your file wins over both.
@@ -202,7 +204,7 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 
 - **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, the streak thresholds and **Max sounds per lap (good / invalid / fast / streak / leader change):**. Not the **Sound effects volume (%):**.
 - **The announcer's words.** Everything on **Voice → Announcements**: the lines, the **Race** and **Practice** ticks, the weights, speeds and **Caution** ticks, and the extra settings on some rows.
-- **The announcer's delivery.** The tuning on **Voice → Voice Settings**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:** and **Max spoken announcements per lap:**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Windows voice uses **Speed:**, and every voice uses **Max spoken announcements per lap:**.
+- **The announcer's delivery.** The tuning on **Voice → Voice Settings**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:** and **Max spoken announcements per lap:**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:** and **Playback volume (%):**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
 - **What plays underneath**, if it has any: a crowd for **Ambience** and theme music for **Music**. See [Soundscape crowd and music](#soundscape-crowd-and-music).
 - **An ElevenLabs voice, model and language**, only for a soundscape of your own that was saved with them. The built-in soundscapes carry none of these.
 
@@ -257,14 +259,14 @@ The card is marked **LAST APPLIED**, the line above the cards says "Applied "*na
 - **The ElevenLabs voice.** A built-in soundscape keeps your current ElevenLabs voice and model, so the announcer carries on in the voice you chose. A soundscape of your own saved with an ElevenLabs voice switches to that voice and the model it was saved with.
 - **The language.** Kept, unless the soundscape sets one of its own. The built-in soundscapes don't.
 - **What plays underneath.** The soundscape's crowd goes into **Ambience**, and its music becomes what **Theme music** plays. Whether music plays at all stays as you have it. See [Soundscape crowd and music](#soundscape-crowd-and-music).
-- **This PC's setup is left as it is:** the voice and sound effects volumes, the **Output format:**, and the **Speak with** choice: which of the three voices speaks, which Windows voice, which HeatCaller announcer voice, and the stand-in box.
+- **This PC's setup is left as it is:** the voice and sound effects volumes, the **Output format:**, and the **Speak with** choice: which of the three voices speaks, which Kokoro voice, which HeatCaller announcer voice, and the stand-in box.
 - **On the HeatCaller voice, a soundscape's lines aren't applied**, and neither is anything else on **Voice → Announcements** (the ticks, weights and speeds stay as you have them). Its sounds are. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
 
-The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Windows voice."
+The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Kokoro voice."
 
 With the HeatCaller voice chosen it adds a paragraph, so you know before you press **Yes** rather than after:
 
-> The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Windows voice on Voice Settings.
+> The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Kokoro voice on Voice Settings.
 
 A venue's **Preferred soundscape:**, on the **Venues** page, is applied the same way when you press **Apply This Venue**, and one **Undo** puts it back with the rest of the venue. See [Venues](../race-day/drivers-and-classes.md#venues).
 
@@ -311,7 +313,8 @@ Tick **Don't ask about the sound again**, under the drop-down, and neither wizar
 
 The race moments are **Race staging**, **Countdown**, **Race start**, **Jump start**, **Personal best**, **Fastest lap**, **Track record**, **Leader change**, **Streak**, **Yellow flag**, **Red flag**, **Green (restart)**, **Last lap** and **Checkered flag**. **Last lap** here is the **Race time over** announcement (the last-lap call when the time runs out) and **Checkered flag** is **Race completed**. The soundscape's other announcements are kept as they are.
 
-With the HeatCaller voice chosen, a note under the cards says: "This PC speaks with the HeatCaller voice, which always uses the standard lines - these lines are saved, and apply once you use your own ElevenLabs key or the Windows voice."
+With the HeatCaller voice chosen, a note under the cards says that this PC always speaks the standard lines while that voice is in use: the lines in the editor are saved, and apply once you use your own ElevenLabs key or the free Kokoro voice instead.
+<!-- TODO: confirm the wording once SoundscapeEditorForm's note is updated - the string in the code still offers the retired Windows voice, so it is described here rather than quoted. -->
 
 Along the foot of the window:
 
@@ -329,7 +332,7 @@ It's the way to keep a setup you built by hand on those tabs, for example with y
 
 ### Voice lines
 
-Voice lines are a soundscape's fixed race calls (staging, the countdown, the start, the flags, the last lap and the checkered flag), recorded once in the soundscape's delivery with your own ElevenLabs key or the HeatCaller voice. After that they play from the laptop whenever the announcer says those words, whichever voice is chosen: even the free Windows voice, even with no internet. Only lines with nothing filled in at race time can be recorded, and only for the moments that are switched on. Lines with a driver's name or a time in them are always spoken live.
+Voice lines are a soundscape's fixed race calls (staging, the countdown, the start, the flags, the last lap and the checkered flag), recorded once in the soundscape's delivery with your own ElevenLabs key or the HeatCaller voice. After that they play from the laptop whenever the announcer says those words, whichever voice is chosen: even the free Kokoro voice, even with no internet. Only lines with nothing filled in at race time can be recorded, and only for the moments that are switched on. Lines with a driver's name or a time in them are always spoken live.
 
 **Voice Lines** on a card opens a menu:
 
@@ -340,13 +343,13 @@ Voice lines are a soundscape's fixed race calls (staging, the countdown, the sta
 | **Delete the *n* recorded lines** | Deletes the recordings, after asking. Those lines go back to being spoken live. Only there once some are recorded. |
 | **What are voice lines?** | Explains them. |
 
-1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice Settings**. With the Windows voice chosen, HeatCaller says the lines are recorded with ElevenLabs and records nothing. You can switch back to the Windows voice afterwards: the recordings keep playing.
+1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice Settings**. With the Kokoro voice chosen, HeatCaller records nothing and says why: "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. This PC speaks with the Kokoro voice, which already says these lines for free. Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing."
 2. Press **Voice Lines** on the card and choose **Record *n* voice lines (about *x* characters)...**.
 3. HeatCaller asks how many lines it will record and about how many characters that is, for example "Record *n* lines for "Podium" with Rachel? That's about *x* characters, once." Click **Yes**.
 
 The line above the cards shows the progress, then "Recorded *n* voice lines for "Podium"." If some couldn't be rendered, it says how many were recorded and to check **Voice Settings** and record the missing ones.
 
-With the HeatCaller voice chosen, the question adds that the announcer says the standard lines while that voice is in use, so the recordings play once you switch to your own key or the Windows voice.
+With the HeatCaller voice chosen, the question adds that the announcer says the standard lines while that voice is in use, so the recordings play once you switch to your own key or the Kokoro voice.
 
 Deleting and re-recording can be undone with **Undo** in the sidebar, which puts the old takes back. The characters a re-record used aren't given back.
 
@@ -425,13 +428,18 @@ The **Announcements** status also says which voice is speaking:
 |---|---|
 | "Ready" | ElevenLabs, on your own account, is chosen and can speak. |
 | "Ready - HeatCaller voice" | The HeatCaller voice is chosen and the relay is answering. See [The HeatCaller voice](voice.md#the-heatcaller-voice). |
-| "Ready - Windows voice" | The Windows voice is chosen. |
-| "Ready - Windows voice standing in" | ElevenLabs or the HeatCaller voice is chosen but can't speak just now, and the Windows voice is saying the lines. See [When ElevenLabs can't speak a line](voice.md#when-elevenlabs-cant-speak-a-line) and [When the HeatCaller voice can't speak a line](voice.md#when-the-heatcaller-voice-cant-speak-a-line). |
+| "Ready - Kokoro voice" | The free Kokoro voice is chosen and its voice file is on this PC. See [Use the Kokoro voice](voice.md#use-the-kokoro-voice). |
+| "Ready - Kokoro voice standing in" | ElevenLabs or the HeatCaller voice is chosen but can't speak just now, and the Kokoro voice is saying the lines. See [When ElevenLabs can't speak a line](voice.md#when-elevenlabs-cant-speak-a-line) and [When the HeatCaller voice can't speak a line](voice.md#when-the-heatcaller-voice-cant-speak-a-line). |
 | "Can't speak -" and the reason | The announcer is muted, or no voice can speak the announcements. |
 
-If the announcer can't speak, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example that no ElevenLabs API key is set, the quota is used up, "NO VOICE:  no Windows voice is installed on this PC." or, while Windows speech is stuck on a line, "NO VOICE:  Windows speech stopped answering on this PC." While the Windows voice is standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Windows voice is standing in - the ElevenLabs quota is used up."
+If the announcer can't speak at all, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example "NO VOICE:  the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)." Where the reason is about a quota, the notice adds "Sound effects, music and ambience are unaffected." While the Kokoro voice is only standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up."
 
-The endings for your own ElevenLabs account are "- ElevenLabs can't be reached", "- ElevenLabs turned the API key down", "- no ElevenLabs API key is set", "- no ElevenLabs voice is selected" and "- the ElevenLabs key is locked to the PC it was saved on". For the HeatCaller voice they are "- this month's HeatCaller voice allowance is used up", "- the HeatCaller relay can't be reached", "- no HeatCaller voice is chosen", "- the HeatCaller voice isn't included for this club", "- the HeatCaller voice isn't switched on for this relay", "- the relay didn't accept this club's token", "- that HeatCaller voice isn't available any more" and "- the HeatCaller voice is busy".
+The reason after the colon says which voice can't speak and why:
+
+- **Your own ElevenLabs account:** "- no ElevenLabs API key is set" (a key locked to the PC it was saved on counts as none), "- no voice is selected" or "- the ElevenLabs quota is exhausted". These only go red with the stand-in box unticked; with it ticked the notice is the amber stand-in one.
+- **The HeatCaller voice:** "- no HeatCaller voice is chosen", "- this month's HeatCaller voice allowance is used up", "- the HeatCaller relay can't be reached", "- the HeatCaller voice isn't included for this club", "- the HeatCaller voice isn't switched on for this relay", "- the relay didn't accept this club's token", "- that HeatCaller voice isn't available any more" or "- the HeatCaller voice is busy". Apart from the first, these only go red on a PC that hasn't got Kokoro's voice file; anywhere else Kokoro stands in and the notice is amber.
+- **The Kokoro voice:** "- the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)", or "- the Kokoro model wouldn't load" and the reason it gave. Nothing stands in under Kokoro, so this is the one state in which nothing at all can be spoken. See [When nothing can speak](voice.md#when-nothing-can-speak).
+- **Muted:** "- the announcer is muted".
 
 The **Test** button on the **Announcements** channel speaks a level-check line in whichever voice is chosen, the HeatCaller voice included. On that voice it's the quickest way to hear how an announcer voice sounds on your PA, and it spends a few characters of the club's allowance.
 
@@ -480,3 +488,121 @@ There are eight cues: High blip, Low blip, Double high, Double low, Rising, Fall
 The list on the **Drivers** card shows **Driver**, **Transponder**, **Class** and **Cue**. **Turn On / Off** switches the selected driver's cue, and **Clear All** removes every cue (after asking). All of these can be undone.
 
 Lap beeps play the instant the car crosses, ahead of any spoken line, at the **Sound effects volume (%):** level. The sidebar mute silences them.
+
+## Race recordings
+
+HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called.
+
+This has no tab of its own on the **Sounds** page. See [Turning it off](#turning-it-off) if you don't want it.
+
+### What's in the recording
+
+The recording is the show as the room heard it, taken from the single sound output every spoken line and cue plays through:
+
+- the announcer's lines, in whichever voice is speaking
+- the lap chimes, race cues and [lap beeps](#lap-beeps)
+- recorded stingers and the sponsor reads
+- the show treatment's calls, and its opener and music bed if your club has set them
+
+Your between-race soundtrack and the crowd are **not** in it. The [music player](#music) and the [ambience](#ambience) each use a sound output of their own, so neither one ever passes through the part being recorded. That's what makes a driver's clip the call on its own, with nothing playing under it.
+
+It's also most of the answer to "can we post this": no track from the club's music library is in the file. The one thing to check before you put a recording somewhere public is the show treatment's opener and music bed, which do play through the recorded output - so whatever you pointed those at is in there.
+
+### Where the files go
+
+| What | Where |
+|---|---|
+| The folder | `Documents\HeatCaller Race Audio` |
+| A folder per night, named for the date | `2026-10-10` |
+| The race | `2026-10-10 1942 - A Main - 2wd Stock.mp3` |
+| Each driver's clip, in a `Highlights` subfolder | `2026-10-10 1942 - A Main - 2wd Stock - P1 Dave Smith.mp3` |
+
+The date and the time of day come first in every name, so a night's folder sorts in the order it ran and a file dragged out on its own still says when it's from without being opened. The race's name is the one it was finally filed under in **Race History**. A character Windows won't have in a file name - the slash in a class called `2wd/4wd`, for instance - becomes `_`. If two races share a name and a minute, the second gets ` (2)` on the end rather than writing over the first.
+
+Nothing ever clears this folder out, so it grows for as long as the club races. Delete old nights when you want the space back.
+
+### What's in a driver's clip
+
+HeatCaller works out which seconds of the recording belong to each driver from the lap times it already saved with the result, and cuts those stretches together into one mp3. The moments it looks for are:
+
+- their fastest lap of the race
+- a lap on which they took the lead from somebody else
+- a lap on which they moved up the order
+- a warning or a penalty, at the moment race control gave it
+- for the top three, the first minute from the flag - the finish call, the result and the interview
+
+Each stretch starts 7 seconds before the moment and runs 11 seconds past it, which is enough for the call and the line after it; the top three's stretch starts at the flag itself. Two stretches less than 2 seconds apart become one, so the ear doesn't hear a seam; stretches further apart get a half-second breath between them. At most 8 moments and 2 minutes 30 seconds of audio go into one clip, and when a driver has more than that the weaker moments are dropped whole rather than cut in half - a podium is never dropped, a warning is the first to go. A clip that would come to less than 2.5 seconds isn't written at all.
+
+Nothing extra is recorded or saved to make these clips: the lap times are the ones already in the result, so a race recovered after a crash gives exactly the same clips as one that finished cleanly. Penalties don't shift a driver's moments, because the lap times they're worked out from are penalty-free. A staggered or qualifying start is allowed for, so a driver let go a minute after the green still has their moments in the right place.
+
+Clips are only cut for a race that was saved to **Race History**: they're named after the drivers' finishing positions, so a race with no saved result still gets its own mp3 but no clips.
+
+### What isn't recorded
+
+- **Demo Mode** races, **Practice** sessions and the rehearsal copy are never recorded.
+- Recording starts at the green flag, not at staging - a grid can sit at staging for ten minutes while it's sorted out, and that would be ten minutes of an empty room.
+- It stops when the broadcast ends: after the race recap, or after the finish call where there's no recap. Not at the checkered flag, because the winner's call, the result and the interview all come after it, and that's the part a driver actually wants.
+- If the next race is staged and greened before the last one's broadcast was finished, the old recording is closed off and the new race gets a file of its own.
+
+### It can't spoil a race night
+
+Recording is the one thing on the night nobody would miss, and it's built to give way:
+
+- One recording runs for **40 minutes** at most and then stops itself. A heat is five to ten, so this is only for the night a race is left running and never finished.
+- It won't start, and it gives up part way through, if the drive holding the folder has less than **750 MB** free. The race's own files - the crash journal and the race history - need that space far more than a recording does.
+- It never goes near the laps or the results. The clips are read out of the saved result afterwards, on a background thread, once the broadcast has ended.
+- While a race is running the audio goes down as a plain `.wav` file, rewritten as a complete, playable file every couple of seconds. If the PC is closed, loses power or crashes mid-race, that file is still there and still plays up to a few seconds before it went down. It's named `.recording.wav` while it's unfinished, and the next race that gets recorded turns any left behind into an mp3. One of those has no driver clips: its race was never filed, so there are no names or lap times to cut against.
+- Audio is stored as mono, about 5 MB a minute while the race is on. The finished mp3 is far smaller - roughly 7 MB for a ten-minute heat.
+- If less than 5 seconds of audio landed in a race's recording there's nothing worth keeping in it, and the file is removed.
+- On a PC where Windows can't make an mp3, the recording is kept as a `.wav` instead and plays as it is.
+
+### What the race log says
+
+Every recording says once, in the race log, where it's writing to:
+
+```text
+[audio] Recording this race to C:\Users\...\Documents\HeatCaller Race Audio\2026-10-10\2026-10-10 1942 - A Main - 2wd Stock.recording.wav - it becomes an mp3, with a clip for each driver, once the broadcast ends.
+```
+
+and once, after the broadcast, what it saved:
+
+```text
+[audio] Saved C:\Users\...\2026-10-10 1942 - A Main - 2wd Stock.mp3 (9m41s).
+[audio] 7 driver clips saved in C:\Users\...\2026-10-10\Highlights.
+```
+
+Other lines you may see:
+
+| Line | What it means |
+|---|---|
+| `[audio] This race is NOT being recorded: less than 750MB free where the recordings go` | The drive is nearly full. The race itself is unaffected; clear some space before the next one. |
+| `[audio] The recording of this race stopped early:` and the reason | The length cap was reached, the drive ran out of room, or writing stopped. What was recorded up to that point is still kept and still becomes an mp3. |
+| `[audio] The recording of ... has gaps in it:` and a number of buffers | Something else on the PC was hammering the drive - a backup or a sync tool - and some audio couldn't be written in time. |
+| `[audio] Nothing worth keeping was recorded for ...` | Under 5 seconds of audio. If it says no sound came out of HeatCaller at all, check the speakers and the [Mixer](#mixer). |
+| `[audio] Could not make an mp3 of ...` | Windows couldn't encode it. The recording is kept as a `.wav` and plays as it is. |
+
+### Turning it off
+
+There's no tick box for this yet. To change it, close HeatCaller and edit `race-audio.json` in the data folder, `%AppData%\HeatCaller`. No page in HeatCaller writes that file, so on most installs it isn't there and you create it yourself. To switch recording off altogether, this is the whole file:
+
+```json
+{
+  "Enabled": false
+}
+```
+
+The settings it holds:
+
+| Setting | What it does | Default |
+|---|---|---|
+| `Enabled` | Whether races are recorded at all. `false` stops the next race being recorded; a recording already running is still finished off and written out, because half a race on disk with no mp3 beside it is worse than one more file. | `true` |
+| `DriverHighlights` | Whether a clip is cut for each driver as well as the race's own mp3. | `true` |
+| `Folder` | Where the recordings go. Blank means `Documents\HeatCaller Race Audio`. It must be a full path on this PC: a network path such as `\\server\share`, or a path relative to anything, is ignored and the default used instead. | blank |
+| `MaxMinutes` | The longest one recording may run before it stops itself. Held between 1 and 180, whatever the file says. | `40` |
+| `MinFreeMb` | How much free space the drive must have for a recording to start, and to carry on. Never less than 100, whatever the file says. | `750` |
+
+HeatCaller reads this file once per run, so close and reopen it for a change to take effect. If the file is there but can't be read, HeatCaller carries on with the defaults for that run and doesn't write over it.
+
+### Keeping the recordings
+
+Race audio is deliberately **not** part of your backups: an evening of it is far bigger than everything else the club saves put together, and backups are kept in multiples. If you want the recordings kept, copy `Documents\HeatCaller Race Audio` yourself, the same way you would the finish camera's pictures. See [Backups](../admin/backups.md#race-audio-isnt-in-a-backup).

@@ -5,6 +5,11 @@ namespace HeatCaller.Tests;
 /// between the two voices (CommentaryService.ParseInterview), a race named
 /// as a heat or a main (DescribeKind), and the mechanic's voice standing in
 /// for the announcer's for a line (VoiceProfile.CloneWithVoice).
+///
+/// The mechanic used to have a Windows voice among its per-engine voices.
+/// That voice was retired on 10 Oct 2026, so what is checked here is the
+/// same rule over the voices that are left: only what was picked for the
+/// mechanic replaces the announcer's, and everything else is kept.
 /// </summary>
 public sealed class RecapBroadcastTests
 {
@@ -138,20 +143,25 @@ public sealed class RecapBroadcastTests
             ApiKey = "key",
             VoiceId = "announcer-id",
             VoiceName = "Adam",
-            WindowsVoiceName = "Microsoft David Desktop",
+            KokoroVoiceName = "am_michael",
+            KokoroStandsIn = false,
             Stability = 0.3,
             Style = 0.4,
         };
 
-        var mechanic = new SecondVoice("mechanic-id", "Bill", string.Empty, string.Empty, string.Empty, string.Empty);
+        // Only an ElevenLabs voice picked for the mechanic: no HeatCaller
+        // voice, no Kokoro voice.
+        var mechanic = new SecondVoice("mechanic-id", "Bill", string.Empty, string.Empty, string.Empty);
 
         var copy = announcer.CloneWithVoice(mechanic);
 
         Assert.Equal("mechanic-id", copy.VoiceId);
         Assert.Equal("Bill", copy.VoiceName);
 
-        // Not picked, so the announcer's: the stand-in, the key, the delivery.
-        Assert.Equal("Microsoft David Desktop", copy.WindowsVoiceName);
+        // Not picked, so the announcer's: the Kokoro voice, the stand-in
+        // choice, the key, the delivery.
+        Assert.Equal("am_michael", copy.KokoroVoiceName);
+        Assert.False(copy.KokoroStandsIn);
         Assert.Equal("key", copy.ApiKey);
         Assert.Equal(0.3, copy.Stability);
         Assert.Equal(0.4, copy.Style);
@@ -161,16 +171,38 @@ public sealed class RecapBroadcastTests
         Assert.Equal("announcer-id", announcer.VoiceId);
 
         Assert.True(mechanic.IsSetFor(VoiceEngine.ElevenLabs));
-        Assert.False(mechanic.IsSetFor(VoiceEngine.Windows));
+        Assert.False(mechanic.IsSetFor(VoiceEngine.Kokoro));
         Assert.False(mechanic.IsSetFor(VoiceEngine.HeatCaller));
+    }
+
+    [Fact]
+    public void A_kokoro_voice_picked_for_the_mechanic_replaces_the_announcers()
+    {
+        var announcer = new VoiceProfile
+        {
+            Engine = VoiceEngine.Kokoro,
+            KokoroVoiceName = "am_michael",
+        };
+
+        var mechanic = new SecondVoice(
+            string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, "bf_emma");
+
+        var copy = announcer.CloneWithVoice(mechanic);
+
+        Assert.Equal("bf_emma", copy.KokoroVoiceName);
+        Assert.Equal(VoiceEngine.Kokoro, copy.EffectiveEngine);
+
+        // The announcer still speaks as itself.
+        Assert.Equal("am_michael", announcer.KokoroVoiceName);
+        Assert.True(mechanic.IsSetFor(VoiceEngine.Kokoro));
     }
 
     [Fact]
     public void A_mechanics_voice_left_null_by_a_hand_edited_settings_file_reads_as_none()
     {
-        var settings = new AppSettings { MechanicElevenLabsVoiceId = null!, MechanicWindowsVoiceName = "Microsoft Zira Desktop" };
+        var settings = new AppSettings { MechanicElevenLabsVoiceId = null!, MechanicKokoroVoiceName = "af_heart" };
 
         Assert.False(settings.MechanicVoice.IsSetFor(VoiceEngine.ElevenLabs));
-        Assert.True(settings.MechanicVoice.IsSetFor(VoiceEngine.Windows));
+        Assert.True(settings.MechanicVoice.IsSetFor(VoiceEngine.Kokoro));
     }
 }

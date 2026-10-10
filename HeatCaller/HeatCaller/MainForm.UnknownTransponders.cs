@@ -198,7 +198,18 @@ public partial class MainForm
     /// <summary>New Driver: the profile form, on this transponder.</summary>
     private void AddDriverOnTransponder(string transponder)
     {
-        using var form = new ProfileForm(null, _raceClasses, fixedTransponder: transponder, undo: _undo, profiles: _profiles);
+        // speakName: so Hear It is there when a driver is named from Race
+        // Control too. This is where the names that catch a club out get
+        // typed - a transponder nobody recognised, at seven o'clock, by
+        // whoever is on the laptop - so it is the one place a respelling is
+        // most likely to be guessed at and most worth hearing first.
+        using var form = new ProfileForm(
+            null,
+            _raceClasses,
+            fixedTransponder: transponder,
+            undo: _undo,
+            profiles: _profiles,
+            speakName: text => _announcer.SpeakTest(text, _voiceStore.Current.Speed));
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {

@@ -58,6 +58,34 @@ public sealed class MusicPlayer : IDisposable
     private bool _retryPending;
 
     /// <summary>
+    /// True while a track's file and sound device are being opened, which
+    /// now happens with the lock let go (see AdvanceTrack). Nothing is
+    /// loaded in between, exactly as for _retryPending, but the playlist is
+    /// on: IsPlaying says so, which is what lets Stop, Pause, the mute and
+    /// the end of the broadcast reach it - and the open, finding what it was
+    /// set going under has moved on, lets go of everything it built instead
+    /// of starting it.
+    /// </summary>
+    private bool _opening;
+
+    /// <summary>
+    /// Bumped by each move that commits to opening a track. The file and the
+    /// device are opened with the lock let go, so two moves can be opening a
+    /// device at the same time; only the one still holding this number when
+    /// it finishes puts its output in the fields, and the other stops and
+    /// disposes what it built. Without it both could publish, and the club
+    /// would hear two tracks at once for the rest of the evening.
+    ///
+    /// Separate from _generation, which is about intent: a move can still be
+    /// the current intent and yet have been overtaken by a later move of the
+    /// same generation - two PlaybackStopped events for one device, say, or
+    /// one of them alongside the hand-off at the end of AdvanceTrack for a
+    /// device that had already stopped. The generation check alone lets both
+    /// of those through.
+    /// </summary>
+    private int _loadToken;
+
+    /// <summary>
     /// Paused in that gap, when there was no track loaded to pause. The
     /// retry has been called off; Resume moves on to the next track.
     /// </summary>
@@ -105,14 +133,18 @@ public sealed class MusicPlayer : IDisposable
     /// when nothing is loaded. It used to read false there, so Stop, the
     /// mute and "Music after the recap" all found nothing playing and did
     /// nothing, and the retry then started the next track regardless.
+    ///
+    /// True while a track's file and device are being opened too (see
+    /// _opening). That is now a moment with nothing loaded as well, and the
+    /// same callers have to be able to reach it.
     /// </summary>
     public bool IsPlaying
     {
         get { lock (_lock) { return IsOnLocked; } }
     }
 
-    /// <summary>Whether the playlist is on - playing, paused, or between two tracks. Read under the lock.</summary>
-    private bool IsOnLocked => _running || _retryPending || _pausedBetweenTracks;
+    /// <summary>Whether the playlist is on - playing, paused, opening a track, or between two tracks. Read under the lock.</summary>
+    private bool IsOnLocked => _running || _opening || _retryPending || _pausedBetweenTracks;
 
     public MusicTrack? NowPlaying { get; private set; }
 
@@ -363,7 +395,7 @@ public sealed class MusicPlayer : IDisposable
                     _pausedBetweenTracks = true;
                 }
             }
-            else if (_retryPending || (_running && _output?.PlaybackState == PlaybackState.Stopped))
+            else if (_retryPending || _opening || (_running && _output?.PlaybackState == PlaybackState.Stopped))
             {
                 // Between two tracks, with nothing playing to pause: a track
                 // that would not play and its retry, or one that has just
@@ -371,8 +403,15 @@ public sealed class MusicPlayer : IDisposable
                 // That move is called off - it used to start the next track
                 // straight after the pause, or after the mute, which pauses
                 // the music - and Resume moves on to the next track instead.
+                //
+                // A track whose file and device are being opened counts as
+                // between two tracks too. That open happens with the lock
+                // let go (see _opening), so it is a moment a pause can land
+                // in, and moving the generation on is what stops the track
+                // coming up underneath the pause a fraction later.
                 _generation++;
                 _retryPending = false;
+                _opening = false;
                 _pausedBetweenTracks = true;
             }
         }
@@ -746,6 +785,17 @@ public sealed class MusicPlayer : IDisposable
         // Pause button, with nothing playing.
         string? endedBecause = null;
 
+        // The track being let go of, this move's claim on the player, and the
+        // levels the new track starts at: all settled under the lock below
+        // and then used with it released. The file and the sound device used
+        // to be opened under the lock - see where they are opened now for
+        // what that cost.
+        IWavePlayer? retiredOutput = null;
+        AudioFileReader? retiredReader = null;
+        var load = 0;
+        var startVolume = 0f;
+        var startDuck = 1f;
+
         lock (_lock)
         {
             if (generation != _generation)
@@ -778,63 +828,41 @@ public sealed class MusicPlayer : IDisposable
                     return;
                 }
 
-                DisposePlaybackLocked();
+                TakePlaybackLocked(out retiredOutput, out retiredReader);
                 NowPlaying = null;
                 endedBecause ??= "no enabled track has a readable file";
             }
             else
             {
+                // Still set, though stopping the old device has moved out of
+                // the lock along with the rest of the teardown: _running and
+                // _output now go in the same instant, under this lock, so
+                // OnPlaybackStopped's own two guards already cover the swap.
                 _advancing = true;
-                DisposePlaybackLocked();
+                TakePlaybackLocked(out retiredOutput, out retiredReader);
                 _advancing = false;
 
-                try
-                {
-                    _reader = new AudioFileReader(track.FilePath);
-                    _volume = new VolumeSampleProvider(_reader);
-                    _duckGain = new SmoothGainSampleProvider(_volume, DuckFactorLocked());
-                    ApplyVolumeLocked();
+                // This move's claim on the player, and the playlist still
+                // reading as on while the open runs - see _loadToken and
+                // _opening.
+                load = ++_loadToken;
+                _opening = true;
 
-                    // A deep buffer. The music only needs to keep flowing -
-                    // nothing about it has to be quick - and at 200ms (two
-                    // 100ms buffers) it ran dry whenever the announcer
-                    // opened its own output to speak, which on some sound
-                    // drivers stalls the others for a moment. It then
-                    // stuttered like a scratched CD for as long as the line
-                    // lasted. Four buffers ride that out.
-                    _output = new WaveOutEvent { DesiredLatency = BedLatencyMs, NumberOfBuffers = BedBuffers };
-                    _output.Init(_duckGain);
-                    _output.PlaybackStopped += OnPlaybackStopped;
-                    _output.Play();
-                    _running = true;
-                    _trackStartedMs = Environment.TickCount64;
-
-                    // Under the lock, so a Stop straight after cannot be
-                    // followed by this track's name going back up.
-                    NowPlaying = track;
-                }
-                catch (Exception ex)
-                {
-                    StatusMessage?.Invoke($"[music] Couldn't play \"{track.DisplayName}\": {ex.Message}");
-                    DisposePlaybackLocked();
-
-                    // Skip a bad file rather than stalling the whole playlist,
-                    // but only if there's something else to try. The retry
-                    // belongs to this move's generation, so anything pressed
-                    // before it runs calls it off (see the parameter above).
-                    if (DropFailedTrackLocked(track))
-                    {
-                        _retryPending = true;
-                        _ = Task.Run(() => AdvanceTrack(generation));
-                        return;
-                    }
-
-                    NowPlaying = null;
-                    endedBecause = "none of the tracks in the playlist would play";
-                    track = null;
-                }
+                // Read here, where the volume and the duck's flags are under
+                // the lock, and applied to the new stages before the device
+                // is started: it must not play one whole buffer at full
+                // volume first. ApplyVolumeLocked runs again once the output
+                // is published, to pick up anything that changed meanwhile.
+                startVolume = Math.Clamp(Settings.Volume, 0f, 1f);
+                startDuck = DuckFactorLocked();
             }
         }
+
+        // With the lock let go. waveOutReset and waveOutClose take as long as
+        // the device makes them take, and the UI thread reads IsPlaying
+        // several times a second - from the Music page and from the end of
+        // every broadcast. See TakePlaybackLocked.
+        DisposeRetired(retiredOutput, retiredReader);
 
         if (track is null)
         {
@@ -843,8 +871,154 @@ public sealed class MusicPlayer : IDisposable
             return;
         }
 
+        // All four stay local until they are published under the lock at the
+        // end, so no other thread can reach a half-built track.
+        AudioFileReader? reader = null;
+        VolumeSampleProvider? volume = null;
+        SmoothGainSampleProvider? duckGain = null;
+        IWavePlayer? output = null;
+
+        try
+        {
+            // Opened with the lock let go, which is the point of all of this.
+            // AudioFileReader reads a file header; Init is waveOutOpen, and
+            // that is the slow one - the sound system reconfigures itself for
+            // the new stream, and a Bluetooth speaker may have to be woken
+            // first. AudioBus exists because of how long that takes. Under
+            // the lock, every IsPlaying on the UI thread waited for all of
+            // it, which is a frozen window on the night it happens.
+            reader = new AudioFileReader(track.FilePath);
+            volume = new VolumeSampleProvider(reader) { Volume = startVolume };
+            duckGain = new SmoothGainSampleProvider(volume, startDuck);
+
+            // A deep buffer. The music only needs to keep flowing -
+            // nothing about it has to be quick - and at 200ms (two
+            // 100ms buffers) it ran dry whenever the announcer
+            // opened its own output to speak, which on some sound
+            // drivers stalls the others for a moment. It then
+            // stuttered like a scratched CD for as long as the line
+            // lasted. Four buffers ride that out.
+            output = new WaveOutEvent { DesiredLatency = BedLatencyMs, NumberOfBuffers = BedBuffers };
+            output.Init(duckGain);
+            output.PlaybackStopped += OnPlaybackStopped;
+            output.Play();
+        }
+        catch (Exception ex)
+        {
+            // None of this was ever reachable from another thread, so it is
+            // let go of before the lock is taken again.
+            DisposeRetired(output, reader);
+
+            lock (_lock)
+            {
+                if (!StillOursLocked(generation, load))
+                {
+                    ReleaseOpeningLocked(load);
+                    return;
+                }
+
+                _opening = false;
+                StatusMessage?.Invoke($"[music] Couldn't play \"{track.DisplayName}\": {ex.Message}");
+
+                // Skip a bad file rather than stalling the whole playlist,
+                // but only if there's something else to try. The retry
+                // belongs to this move's generation, so anything pressed
+                // before it runs calls it off (see the parameter above).
+                if (DropFailedTrackLocked(track))
+                {
+                    _retryPending = true;
+                    _ = Task.Run(() => AdvanceTrack(generation));
+                    return;
+                }
+
+                NowPlaying = null;
+                endedBecause = "none of the tracks in the playlist would play";
+            }
+
+            NowPlayingChanged?.Invoke(null);
+            StatusMessage?.Invoke($"[music] Stopped - {endedBecause}.");
+            return;
+        }
+
+        bool published;
+
+        lock (_lock)
+        {
+            published = StillOursLocked(generation, load);
+
+            if (published)
+            {
+                _reader = reader;
+                _volume = volume;
+                _duckGain = duckGain;
+                _output = output;
+                _running = true;
+                _opening = false;
+                _trackStartedMs = Environment.TickCount64;
+
+                // Again now the output is in the fields, so anything that
+                // moved while the device was opening is applied to it: the
+                // Music fader, a duck, an ad break, the show's own bed.
+                ApplyVolumeLocked();
+
+                // Under the lock, so a Stop straight after cannot be
+                // followed by this track's name going back up.
+                NowPlaying = track;
+            }
+            else
+            {
+                ReleaseOpeningLocked(load);
+            }
+        }
+
+        if (!published)
+        {
+            // A Stop, a Pause, Next or a new Play landed while the device was
+            // opening, or a later move claimed the player. This track is not
+            // what the player is doing any more, so it is stopped and let go
+            // of rather than left playing out of an output nothing points at:
+            // that is how two tracks at once would start.
+            DisposeRetired(output, reader);
+            return;
+        }
+
         NowPlayingChanged?.Invoke(track);
         StatusMessage?.Invoke($"[music] Now playing: {track.DisplayName}");
+
+        // A device that stopped between Play and the publish above - a file
+        // with no sound in it ends inside the first buffer - raised its event
+        // while the fields were still empty, and OnPlaybackStopped put it
+        // down as a stranger's. So the move to the next track is handed to it
+        // here instead of being waited for for ever. Harmless if the real
+        // event turns up as well: both moves carry this generation, and the
+        // claim (_loadToken) is what keeps the second one from publishing a
+        // second output.
+        if (output is { PlaybackState: PlaybackState.Stopped })
+        {
+            OnPlaybackStopped(output, new StoppedEventArgs());
+        }
+    }
+
+    /// <summary>
+    /// Whether a move that has just opened a track is still the one the
+    /// player is doing: nothing has been pressed since (_generation), and no
+    /// later move has claimed the player (_loadToken). Read under the lock.
+    /// </summary>
+    private bool StillOursLocked(int generation, int load) =>
+        generation == _generation && load == _loadToken;
+
+    /// <summary>
+    /// Puts the "opening a track" flag down for a move that has given up,
+    /// but only if nothing newer has claimed the player - a later move owns
+    /// the flag then, and will put it down itself. Clearing it regardless
+    /// would have IsPlaying read false with a track on its way up.
+    /// </summary>
+    private void ReleaseOpeningLocked(int load)
+    {
+        if (load == _loadToken)
+        {
+            _opening = false;
+        }
     }
 
     /// <summary>
@@ -996,18 +1170,54 @@ public sealed class MusicPlayer : IDisposable
         _ = Task.Run(() => AdvanceTrack(generation, stoppedEarly));
     }
 
-    private void DisposePlaybackLocked()
+    /// <summary>
+    /// Takes the loaded track out of the fields and hands back the two parts
+    /// that have to be let go of, for the caller to pass to DisposeRetired
+    /// with the lock released.
+    ///
+    /// The device used to be stopped and disposed here, under the lock:
+    /// waveOutReset and waveOutClose, which take as long as the sound system
+    /// makes them take - a Bluetooth speaker reconfigures itself, and one
+    /// that has wandered off takes seconds. The UI thread reads IsPlaying
+    /// several times a second and so waited for every bit of that, on a
+    /// thread pool move it had nothing to do with.
+    ///
+    /// Nothing can reach the output once this has returned: it is out of the
+    /// field, and OnPlaybackStopped ignores an event whose sender is not the
+    /// current _output and ignores anything at all while _running is false.
+    /// Both of those go in this one locked step, so letting the device go
+    /// outside the lock is safe.
+    /// </summary>
+    private void TakePlaybackLocked(out IWavePlayer? output, out AudioFileReader? reader)
+    {
+        output = _output;
+        reader = _reader;
+
+        _output = null;
+        _reader = null;
+        _volume = null;
+        _duckGain = null;
+        _running = false;
+        _opening = false;
+    }
+
+    /// <summary>
+    /// Stops and lets go of a track taken out by TakePlaybackLocked, or of
+    /// one this move opened and then found it was no longer the move being
+    /// played. Call it with the lock released.
+    /// </summary>
+    private void DisposeRetired(IWavePlayer? output, AudioFileReader? reader)
     {
         // Each in its own guard. They were in one, so a Stop that threw on a
         // device already gone skipped both Disposes - the track's file stayed
         // open until the next garbage collection, long enough to stop it
         // being moved on the Music page or a backup being restored over it.
-        if (_output is not null)
+        if (output is not null)
         {
             try
             {
-                _output.PlaybackStopped -= OnPlaybackStopped;
-                _output.Stop();
+                output.PlaybackStopped -= OnPlaybackStopped;
+                output.Stop();
             }
             catch
             {
@@ -1016,7 +1226,7 @@ public sealed class MusicPlayer : IDisposable
 
             try
             {
-                _output.Dispose();
+                output.Dispose();
             }
             catch
             {
@@ -1026,18 +1236,29 @@ public sealed class MusicPlayer : IDisposable
 
         try
         {
-            _reader?.Dispose();
+            reader?.Dispose();
         }
         catch
         {
             // The file is let go of either way.
         }
+    }
 
-        _output = null;
-        _reader = null;
-        _volume = null;
-        _duckGain = null;
-        _running = false;
+    /// <summary>
+    /// Takes the track out and lets it go in one step, with the lock held.
+    ///
+    /// Left as it was for Stop, Pause and Resume, which are all on the UI
+    /// thread: the thread doing the disposing there is the one that would
+    /// have been waiting anyway, so splitting it buys nothing - and keeping
+    /// it in one step means a Stop is finished with the old device before it
+    /// returns, so a Play straight after it cannot open the next one while
+    /// the last is still closing. AdvanceTrack, which runs on the thread
+    /// pool, is the one that had to be split.
+    /// </summary>
+    private void DisposePlaybackLocked()
+    {
+        TakePlaybackLocked(out var output, out var reader);
+        DisposeRetired(output, reader);
     }
 
     public void Dispose() => Stop();

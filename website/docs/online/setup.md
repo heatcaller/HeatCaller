@@ -118,10 +118,11 @@ There's nothing to set up here for it. Choose it under **Speak with** on **Voice
 
 A few things follow from sharing the relay:
 
-- **A new token stops the voice too**, until you paste the new one in here. The announcer falls back to the free Windows voice meanwhile, and says so in the console.
+- **A new token stops the voice too**, until you paste the new one in here. The announcer falls back to the free Kokoro voice meanwhile, and says so in the console.
 - **Your club has to be switched on for the voice on the relay.** It isn't automatic, and publishing works perfectly well without it. Ask whoever runs your relay; see [The HeatCaller voice](../admin/relay-hosting.md#the-heatcaller-voice).
 - **Spoken lines don't count against your 50 MB.** The relay keeps rendered audio in a store of its own, and a line with no driver's name in it is kept once for every club.
 - **You don't have to tick Publish to the relay** to use the voice. The three boxes and a clean test are enough.
+- **Listening to a voice needs no token at all.** With only the address filled in, **Hear It** on **Voice → Voice Settings** still plays a sample of every HeatCaller voice, free, so you can choose one before your club is switched on. **Preview**, which says your own words, needs the club and token. Both need the relay redeployed; see [Hearing a voice before choosing it](../admin/relay-hosting.md#hearing-a-voice-before-choosing-it).
 
 ## Online check-in, Personal PINs and Email
 

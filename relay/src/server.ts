@@ -346,6 +346,20 @@ const ITEMS_BY_ID_QUEUE_MAX = 200;
 const COLLECTION_READS_PER_ADDRESS = 600;
 
 /**
+ * The two open voice-sample routes, from one address in a minute.
+ *
+ * These are the only routes in the relay that can spend money for
+ * somebody with no token at all, so they are the only ones where the
+ * address is the whole of what is known about the caller. Somebody making
+ * their mind up fetches the list and then one sample per voice - call it a
+ * dozen requests - and listens for a while; nothing honest comes near
+ * sixty. What stops the money is not this but the samples themselves:
+ * there is one fixed line per voice and it is rendered once, ever (see
+ * VoiceService.sample). This stops the bandwidth and the file reads.
+ */
+const VOICE_SAMPLES_PER_ADDRESS = 60;
+
+/**
  * Collection listings kept ready to send. A results page polls the whole
  * list, and reading and re-serialising three hundred files for each poll
  * of each phone is most of what the relay would otherwise spend its time
@@ -682,7 +696,7 @@ export interface RelayOptions {
   readonly redirectOrigin?: string | undefined;
   /**
    * The HeatCaller voice. Absent means this relay does not offer it at all:
-   * every club speaks with its own ElevenLabs key or the free Windows
+   * every club speaks with its own ElevenLabs key or the free Kokoro
    * voice, exactly as before this existed.
    */
   readonly voice?: VoiceService | undefined;
@@ -729,6 +743,8 @@ export class Relay {
   private readonly signupTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
+  /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
+  private readonly voiceSamples: Limiter;
   private readonly voice: VoiceService | undefined;
   private readonly brain: BrainService | undefined;
   private readonly listings = new Map<string, Buffer>();
@@ -891,6 +907,12 @@ export class Relay {
     // wall for anything running flat out: the allowance, not this, is what
     // limits what a club can spend.
     this.voiceTraffic = new Limiter(300, 60 * 1000, () => this.now().getTime());
+
+    // The samples, which anyone at all can fetch. Its own limiter rather
+    // than the one above, keyed by address alone: there is no club and no
+    // token to key it by, and a visitor hearing voices must never be able
+    // to use up the budget a club's laptop renders its lines from.
+    this.voiceSamples = new Limiter(VOICE_SAMPLES_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     // Drawing cards. Two limits rather than one because they are for two
     // different things: the per-address one keeps a single client from
@@ -1669,10 +1691,33 @@ export class Relay {
       }
     }
 
+    // Hear it before you buy it. The one group of routes outside /api/v1
+    // that is not a page: a pre-rendered sample of every HeatCaller voice,
+    // the list of them, and the Preview button's own render. The first two
+    // take no token at all - they are what somebody who has never run
+    // HeatCaller tries first, and what a club choosing an announcer's
+    // voice compares by - so both are limited per address. See voice.ts.
+    if (method === "GET" && segments.length === 2 && segments[0] === "voice" && segments[1] === "samples") {
+      await this.voiceSampleList(request, response);
+      return;
+    }
+
+    if (method === "GET" && segments.length === 3 && segments[0] === "voice" && segments[1] === "sample") {
+      await this.voiceSample(request, response, segments[2] as string);
+      return;
+    }
+
+    if (method === "POST" && segments.length === 2 && segments[0] === "voice" && segments[1] === "preview") {
+      await this.voicePreview(request, response);
+      return;
+    }
+
     // Everything else lives under a club. There is no route in this relay
     // that reads or writes anything without naming one, which is what
     // makes "could this have touched another club's data" answerable by
-    // looking at the URL.
+    // looking at the URL. The three above are the exception, and the only
+    // one of them that writes anything writes the preview count of the
+    // club its own token names - see voicePreview.
     if (segments[0] !== "api" || segments[1] !== "v1" || segments[2] !== "c") {
       noRoute(response, method);
       return;
@@ -2956,7 +3001,7 @@ export class Relay {
    * One line, spoken in the club's chosen HeatCaller voice.
    *
    * Answers audio/mpeg, or JSON saying why not - and the app treats every
-   * refusal the same way: the free Windows voice says that line instead.
+   * refusal the same way: the free Kokoro voice says that line instead.
    * Nothing here is ever allowed to leave a flag call silent.
    */
   private async voiceSpeak(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
@@ -2996,7 +3041,7 @@ export class Relay {
       sendJson(response, 503, {
         ok: false,
         refusal: "off",
-        error: "The HeatCaller voice isn't switched on. Use your own ElevenLabs key or the free Windows voice for now.",
+        error: "The HeatCaller voice isn't switched on. Use your own ElevenLabs key or the free Kokoro voice for now.",
       });
       return;
     }
@@ -3029,6 +3074,178 @@ export class Relay {
       "x-voice-allowance": String(result.usage.allowance),
       "x-voice-resets": result.usage.resetsAt,
     });
+  }
+
+  /**
+   * Every HeatCaller voice there is a sample of. No token, no club.
+   *
+   * The catalogue in the app could only ever give a club a name and a line
+   * of description, so a club chose the voice its members would hear all
+   * season by reading about it. This and the route below are the answer to
+   * that, and they are also the first thing anybody looking at HeatCaller
+   * can try.
+   *
+   * Answers an empty list rather than a 404 when this relay has no voice
+   * configured, for the same reason voiceCatalogue answers enabled:false:
+   * "we know what you are asking and there is nothing" is something a page
+   * can put on screen.
+   */
+  private async voiceSampleList(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const who = clientAddress(request);
+
+    if (this.voiceSamples.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.voiceSamples.hit(who);
+
+    if (this.voice === undefined) {
+      sendPublicJson(response, 200, { samples: [] });
+      return;
+    }
+
+    sendPublicJson(response, 200, {
+      samples: (await this.voice.samples()).map((sample) => ({
+        id: sample.id,
+        name: sample.name,
+        url: `/voice/sample/${encodeURIComponent(sample.id)}`,
+      })),
+    });
+  }
+
+  /**
+   * One voice's sample: the same fixed, neutral line in every voice, so
+   * two of them can actually be compared.
+   *
+   * WHY THIS CAN BE OPEN TO THE INTERNET. Nothing a caller sends decides
+   * what is rendered - the words are a constant in voice.ts and the voice
+   * must be one the catalogue names - so the most this route can ever cost
+   * is one short line per voice in the catalogue, once, for all time. The
+   * first visitor to ask for a voice pays for it; it is kept on the volume
+   * and everyone after that is served from there. See VoiceService.sample.
+   */
+  private async voiceSample(request: IncomingMessage, response: ServerResponse, voiceId: string): Promise<void> {
+    const who = clientAddress(request);
+
+    if (this.voiceSamples.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.voiceSamples.hit(who);
+
+    if (this.voice === undefined) {
+      sendJson(response, 404, { ok: false, error: "There is no sample of that voice." });
+      return;
+    }
+
+    const result = await this.voice.sample(voiceId);
+
+    if (!result.ok) {
+      sendJson(response, result.status, { ok: false, error: result.message });
+      return;
+    }
+
+    sendSampleAudio(response, result.audio, { "x-voice-cache": result.cached ? "hit" : "miss" });
+  }
+
+  /**
+   * One line of a club's own words, in one voice, for the Preview button
+   * on Voice Settings.
+   *
+   * THE ONE ROUTE WITH NO CLUB IN ITS PATH, and the only one that cannot
+   * have one: the app has a token and a voice id and nothing else to go
+   * on. It is safe for the very reason that rule exists - "could this have
+   * touched another club's data" is answerable - because here the token IS
+   * the club. There is nothing in the URL that could name a different one,
+   * so there is no mismatch to check and nothing to get wrong; the only
+   * thing this route writes is the preview count of the club its own token
+   * names.
+   *
+   * Charged against that club's small DAILY preview allowance and never
+   * against its month: a club must not be able to arrive on a race night
+   * and find it spent its voice on Tuesday deciding which one to use. Over
+   * the day's allowance the answer is 429 and says so in words.
+   */
+  private async voicePreview(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const who = this.tokenHolder(request);
+
+    if (who === undefined) {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    const whoFrom = `${who.club}|${clientAddress(request)}`;
+
+    if (this.voiceTraffic.blocked(whoFrom)) {
+      sendJson(response, 429, { ok: false, error: "Too many lines at once. Wait a moment and try again." });
+      return;
+    }
+
+    this.voiceTraffic.hit(whoFrom);
+
+    // The same 8 KiB a line to speak gets: a preview is one sentence, and
+    // the service caps it far shorter than this again.
+    const body = await readBody(request, response, 8 * 1024);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    if (this.voice === undefined) {
+      sendJson(response, 503, {
+        ok: false,
+        refusal: "off",
+        error: "The HeatCaller voice isn't switched on here, so there is nothing to preview.",
+      });
+      return;
+    }
+
+    // "voiceId" here where speak takes "voice": a preview is its own
+    // request with its own shape, and the app sends the two separately.
+    const voiceId = typeof body["voiceId"] === "string" ? body["voiceId"].trim() : "";
+    const text = typeof body["text"] === "string" ? body["text"] : "";
+
+    const result = await this.voice.preview(who.club, who.voice ?? VOICE_PLAN_OFF, voiceId, text);
+
+    if (!result.ok) {
+      sendJson(response, result.status, {
+        ok: false,
+        refusal: result.refusal,
+        error: result.message,
+        ...(result.usage === undefined
+          ? {}
+          : { used: result.usage.used, allowance: result.usage.allowance, resetsAt: result.usage.resetsAt }),
+      });
+      return;
+    }
+
+    // Named apart from speak's x-voice-used on purpose: a laptop reading
+    // these must never mistake a day of auditioning for the month's
+    // characters and put the wrong number on Voice Settings.
+    sendAudio(response, result.audio, {
+      "x-voice-cache": result.cached ? "hit" : "miss",
+      "x-voice-preview-used": String(result.usage.used),
+      "x-voice-preview-allowance": String(result.usage.allowance),
+      "x-voice-preview-resets": result.usage.resetsAt,
+    });
+  }
+
+  /**
+   * The club a bearer token names, whatever club the path asked for -
+   * which is what voicePreview needs, being the one route with no club in
+   * its path.
+   *
+   * Must stay in step with authorise, which answers the same question for
+   * every other route and then checks the club as well.
+   */
+  private tokenHolder(request: IncomingMessage): Tenant | undefined {
+    const header = request.headers.authorization ?? "";
+    const match = /^Bearer (.+)$/.exec(header.trim());
+
+    return match === null ? undefined : this.tenants.resolveToken(match[1] as string);
   }
 
   /**
@@ -5899,6 +6116,37 @@ function sendAudio(response: ServerResponse, bytes: Buffer, headers: Readonly<Re
     "content-type": "audio/mpeg",
     "content-length": bytes.length,
     "cache-control": "no-store",
+  });
+
+  response.end(bytes);
+}
+
+/**
+ * One voice's sample, for anyone at all.
+ *
+ * Cached hard, which sendAudio above deliberately is not: a sample is one
+ * fixed neutral line with nobody's name in it, and it is the same audio
+ * for that voice for as long as the voice's settings do not change - so a
+ * browser or a proxy holding a copy is exactly what should happen. Every
+ * copy held somewhere else is a request this relay does not serve and a
+ * sample a small machine does not read off its volume. Public, so the
+ * HeatCaller website can play these from its own pages.
+ *
+ * The trade-off is named rather than hidden: the address carries no
+ * revision (the app-side contract fixes it as /voice/sample/<voiceId>),
+ * so changing a voice's settings does not reach a listener who already
+ * has a copy until theirs expires. The relay itself renders the new one
+ * at once - the file it keeps is named by the revision - and no `immutable`
+ * is sent, so a reload picks it up.
+ */
+function sendSampleAudio(response: ServerResponse, bytes: Buffer, headers: Readonly<Record<string, string>>): void {
+  response.writeHead(200, {
+    ...BASE_HEADERS,
+    ...headers,
+    "content-type": "audio/mpeg",
+    "content-length": bytes.length,
+    "cache-control": "public, max-age=31536000",
+    "access-control-allow-origin": "*",
   });
 
   response.end(bytes);

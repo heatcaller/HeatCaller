@@ -122,6 +122,14 @@ public sealed class ProfileStore
                     }
                     return new ProfileStore(profiles);
                 }
+
+                // Present, parsed, and not the shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" parses to nothing without
+                // throwing: it used to fall straight through to the empty
+                // store below with the flag left false, so the next driver
+                // added or edited replaced the club's whole roster.
+                unreadable = true;
             }
         }
         catch (Exception ex)

@@ -3526,6 +3526,47 @@ public sealed class RaceProgramControl : UserControl
         return true;
     }
 
+    /// <summary>
+    /// The rounds in a selection that have already been run, in the order
+    /// they were given. Pure, so the question asked about them can be tested
+    /// without the page - see RecordedDeleteQuestion.
+    /// </summary>
+    internal static List<RoundDefinition> RecordedAmong(IEnumerable<RoundDefinition> rounds) =>
+        rounds.Where(r => r.IsRecorded).ToList();
+
+    /// <summary>
+    /// What a volunteer is asked before a delete takes rounds that have
+    /// already been run off the programme.
+    ///
+    /// Delete used to say only "This does not delete any recorded session
+    /// history" - true of the history file and the opposite of what it reads
+    /// as. A SessionRecord points at its round by id and carries no event
+    /// id, so once the round is gone its result is in nothing: it drops out
+    /// of the day's recorded count and out of the championship table, and
+    /// the standings move. Taking a round that has run off the programme is
+    /// a thing clubs legitimately do - PlanSeedMains sends them here to do
+    /// it - so it is still allowed. It is only no longer done unknowingly.
+    ///
+    /// The same shape as the question StartRound asks about a recorded
+    /// round: what has already happened, what this will do to it, and then
+    /// the choice.
+    /// </summary>
+    internal static string RecordedDeleteQuestion(IReadOnlyList<RoundDefinition> recorded)
+    {
+        if (recorded.Count == 1)
+        {
+            return $"\"{recorded[0].RoundLabel}\" has already been run. Its result stays in the session history, "
+                + "but it stops counting towards this race day and towards the championship - the day's recorded "
+                + "count drops by one and the standings move. Delete it anyway?";
+        }
+
+        return $"These {recorded.Count} rounds have already been run:\r\n\r\n"
+            + string.Join("\r\n", recorded.Select(r => $"   {r.RoundLabel}  ({r.ClassName})"))
+            + "\r\n\r\nTheir results stay in the session history, but they stop counting towards this race day and "
+            + "towards the championship - the day's recorded count drops by that many and the standings move. "
+            + "Delete them anyway?";
+    }
+
     private void DeleteSelectedRounds()
     {
         var removed = _grid.SelectedRows
@@ -3554,12 +3595,38 @@ public sealed class RaceProgramControl : UserControl
             return;
         }
 
+        // Asked first, and only when it applies: a round that has run is
+        // the one case where this delete moves a championship. See
+        // RecordedDeleteQuestion. No is the default - a stray Enter on a
+        // page somebody is clicking through at 7pm must not take a result
+        // out of the standings.
+        var recorded = RecordedAmong(removed);
+
+        if (recorded.Count > 0
+            && AppDialog.Show(this,
+                RecordedDeleteQuestion(recorded),
+                recorded.Count == 1 ? "Round already run" : "Rounds already run",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
         var what = removed.Count == 1
             ? $"Delete round \"{removed[0].RoundLabel}\" from the program?"
             : $"Delete these {removed.Count} rounds from the program?\r\n\r\n"
               + string.Join("\r\n", removed.Select(r => $"   {r.RoundLabel}  ({r.ClassName})"));
 
-        if (AppDialog.Show(this, $"{what}\r\n\r\nThis does not delete any recorded session history.",
+        // "This does not delete any recorded session history" is true, and on
+        // its own it reads as "nothing is lost" - which is wrong for a round
+        // that has run. The sessions do stay; what goes is everything that
+        // points at them.
+        var note = recorded.Count == 0
+            ? "This does not delete any recorded session history."
+            : "The recorded sessions stay in the history. What goes is the link from the race day and the championship to them.";
+
+        if (AppDialog.Show(this, $"{what}\r\n\r\n{note}",
                 "Delete round", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
