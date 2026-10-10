@@ -1339,8 +1339,19 @@ internal sealed class ShowTreatment
     /// Returns false when the block was abandoned inside the beat. The nudge
     /// is taken off in a finally either way: it is small, but a bed left a
     /// shade up is a bed at the wrong level for whatever comes next.
+    ///
+    /// INTERNAL, for the one sequence that is not a block. The recap is
+    /// staged by Race Control line by line rather than handed over as a
+    /// running order (see the note on StartAsync), and its honours segment
+    /// hands over from the announcer to a third voice twice - so it needs
+    /// this beat, and it must be THIS beat. A hand-over that sounded
+    /// different in the recap from the way it sounds inside a block would be
+    /// two answers to one question, which is the mistake that left the Big
+    /// Screen with two tables of captions disagreeing on seven of eleven
+    /// segments. The same reason PunctuateAsync is reachable for a thing
+    /// that is not a show.
     /// </summary>
-    private async Task<bool> HandOverAsync(ShowRun? run, CancellationToken ct)
+    internal async Task<bool> HandOverAsync(ShowRun? run, CancellationToken ct)
     {
         var nudged = run?.Nudge() ?? false;
 
@@ -1528,7 +1539,7 @@ internal sealed class ShowTreatment
 
         LastBillingForTests = billing;
 
-        Status?.Invoke($"[show] {Reading(billing, opener)}");
+        Status?.Invoke($"[show] {Reading(billing, opener, bed)}");
 
         // WITH THE CAPTION, so the Big Screen can put what is on air in
         // front of the crowd - see ShowOnAir.Caption. Settled inside that
@@ -1768,8 +1779,16 @@ internal sealed class ShowTreatment
     /// in this file's console lines does - nothing here is ever spoken, so
     /// a comma decimal is a cosmetic matter and not the "twelve thousand
     /// three hundred" bug (see CommentaryFacts.Invariant).
+    ///
+    /// AND IT SAYS WHETHER THERE IS A BED UNDER IT. It used to describe the
+    /// opener alone, so "I expected a music bed under the voice and did not
+    /// hear one" - rehearsal 5, 10 Oct 2026 - could not be answered from a
+    /// night's log at all: there was no way to tell a club who had not set
+    /// a bed from a bed that failed to play from a bed that was there and
+    /// too quiet to notice. Play already reports a bed that throws; this
+    /// reports the one that was never there to throw.
     /// </summary>
-    private static string Reading(ShowBilling billing, ShowClip? opener)
+    private static string Reading(ShowBilling billing, ShowClip? opener, ShowClip? bed)
     {
         var cue = billing.Cue switch
         {
@@ -1784,17 +1803,23 @@ internal sealed class ShowTreatment
             return $"{cue} - the bed only, up for {billing.BedAloneSeconds:0.0}s before the voice.";
         }
 
+        // Said the same way round whatever the opener turns out to be, so a
+        // club reading the log can find it in the same place every time.
+        var under = bed is null
+            ? ", no bed set"
+            : $", bed {bed.Length.TotalSeconds:0.0}s looping under it";
+
         var from = billing.OpenerFrom(opener);
         var length = opener.Length.TotalSeconds;
 
         if (from <= 0)
         {
-            return $"{cue} - the opener in full, {length:0.0}s.";
+            return $"{cue} - the opener in full, {length:0.0}s{under}.";
         }
 
         var at = (double)from / opener.SampleRate;
 
-        return $"{cue} - the opener from {at:0.0}s, its last {length - at:0.0}s.";
+        return $"{cue} - the opener from {at:0.0}s, its last {length - at:0.0}s{under}.";
     }
 
     /// <summary>
@@ -2234,6 +2259,18 @@ internal static class ShowSegments
     /// The show cannot hold a start up, because the staging chain waits on
     /// the announcer's own audio and the bed is not that.
     ///
+    /// THE HONOURS are here for a reason worth writing down, because what
+    /// their tick does is not quite what the others' does. They are a
+    /// SEGMENT OF the recap's show - the announcer throws to a third voice
+    /// who reads out the badges, inside the bed the recap is already
+    /// running under - so on an ordinary night the recap's own tick is what
+    /// decides whether there is music under them. Ticked here, they also
+    /// get a show of their OWN on a night where there is no recap for them
+    /// to be part of: the AI switched off at the wall, the allowance spent,
+    /// or the model with nothing to say. Which is the night this segment
+    /// most has to still sound like a programme, and the whole reason it is
+    /// written by HeatCaller rather than by a model - see RaceHonours.
+    ///
     /// Nothing that fires DURING a race is here: a battle call or a record
     /// lap is a remark over a race in progress, not a set piece.
     /// </summary>
@@ -2242,6 +2279,7 @@ internal static class ShowSegments
         SegmentKind.ColdOpen,
         SegmentKind.RaceIntro,
         SegmentKind.RaceRecap,
+        SegmentKind.BadgesEarned,
         SegmentKind.SignOffNumbers,
         SegmentKind.MidMeetingStandings,
         SegmentKind.ChampionshipCheck,

@@ -986,6 +986,14 @@ public sealed partial class VoiceSettingsControl
             _numPositionDepth.Maximum = 10;
             _numPositionDepth.Value = Math.Clamp(config.PositionReportDepth, 2, 10);
 
+            // The placeholder is named in the caption, as the fast-lap
+            // tick box names {time}: a tick that quietly needs a word
+            // typed into the box above it reads as a tick that does
+            // nothing.
+            _chkPositionGaps.Text = "Say the gaps between them (put {gaps} in the line)";
+            _chkPositionGaps.AutoSize = true;
+            _chkPositionGaps.Checked = config.PositionReportSayGaps;
+
             var lblEvery = new Label { Text = "Read every", AutoSize = true };
             var lblSuffix = new Label { Text = "lap(s) of the LEADER,", AutoSize = true };
             var lblDepth = new Label { Text = "down to P", AutoSize = true };
@@ -995,6 +1003,7 @@ public sealed partial class VoiceSettingsControl
             rows.Controls.Add(lblSuffix);
             rows.Controls.Add(lblDepth);
             rows.Controls.Add(_numPositionDepth);
+            rows.Controls.Add(_chkPositionGaps);
 
             lines.Add(Line(
                 UiLayout.RowGap,
@@ -1003,6 +1012,8 @@ public sealed partial class VoiceSettingsControl
                 (lblSuffix, UiLayout.HintGap),
                 (lblDepth, apart),
                 (_numPositionDepth, caption)));
+
+            lines.Add(Line(UiLayout.RowGap, (_chkPositionGaps, 0)));
         }
 
         return lines;
@@ -1372,7 +1383,7 @@ public sealed partial class VoiceSettingsControl
                      _chkSayLapTimeLabel, _chkIncludeDriverNameInLapTime,
                      _numStreakEveryN, _numStreakEveryNPractice,
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
-                     _numPositionEveryLaps, _numPositionDepth, _numLapTimeEveryN,
+                     _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN,
                  })
         {
             shared.Parent?.Controls.Remove(shared);

@@ -338,7 +338,25 @@ public sealed partial class AnnouncementService
                 : s.DisplayName;
         }
 
+        // The line is picked BEFORE the order is worded, because what the
+        // club asked for changes how the list reads. Still one line per
+        // report - only the order of these two steps moved.
+        var template = config.Templates[TemplatePicker.Next(config.Templates.Count)];
+
+        // The gaps are said only if the club switched them on AND left
+        // somewhere for them to go. Reading the tick box alone would let a
+        // club tick it, have no {gaps} in the line they wrote, and get a
+        // report that said LESS than before - because the gap comes out of
+        // the running order below when {gaps} is carrying it.
+        var sayGaps = config.PositionReportSayGaps
+            && template.Contains("{gaps}", StringComparison.OrdinalIgnoreCase);
+
         var parts = new List<string>();
+
+        // Each car read out with how far back it is, leader first - what
+        // {gaps} is worded from. See AnnouncementText.SpokenGaps, which
+        // drops the leader and anything that could not be measured.
+        var order = new List<(string Name, RaceGap Gap)>();
 
         for (var i = 0; i < named.Count; i++)
         {
@@ -346,7 +364,12 @@ public sealed partial class AnnouncementService
 
             if (i == 0)
             {
+                // Nobody is in front of the leader, so there is no gap to
+                // give for them. Measured against themselves it is zero,
+                // and a voice reading "nought point nought" over the car
+                // winning the race sounds like a dead heat.
                 parts.Add($"{name} leads");
+                order.Add((name, new RaceGap(0, null)));
                 continue;
             }
 
@@ -356,6 +379,26 @@ public sealed partial class AnnouncementService
             // counts called nearly the whole field "a lap down", and said
             // "a lap" whatever the real difference was.
             var vsLeader = GapBetween(named[i], named[0]);
+
+            // Down a lap, that IS the whole answer: the seconds between the
+            // two cars' last crossings are an accident of where each
+            // happens to be on track, and reading them out would tell a
+            // spectator a lapped car was four seconds off the lead. On the
+            // lead lap: the gap to the car directly ahead, measured when
+            // each of them crossed the same lap.
+            var gap = vsLeader.LapsDown > 0 ? vsLeader : GapBetween(named[i], named[i - 1]);
+
+            order.Add((name, gap));
+
+            if (sayGaps)
+            {
+                // Everything about how far back this car is goes into
+                // {gaps}, so the order itself reads as places. Said in
+                // both, the announcer gave every interval twice in one
+                // breath, and "a lap down" twice for a lapped car.
+                parts.Add($"{name} {Ordinal(i + 1)}");
+                continue;
+            }
 
             if (vsLeader.LapsDown == 1)
             {
@@ -369,9 +412,7 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
-            // On the lead lap: the gap to the car directly ahead, measured
-            // when each crossed the same lap.
-            var gapMs = GapBetween(named[i], named[i - 1]).GapMs;
+            var gapMs = gap.GapMs;
 
             if (gapMs is > 0 and < 1500)
             {
@@ -391,9 +432,17 @@ public sealed partial class AnnouncementService
         }
 
         var positions = string.Join(", ", parts);
+        var gaps = sayGaps ? AnnouncementText.SpokenGaps(order) : string.Empty;
 
-        var template = config.Templates[TemplatePicker.Next(config.Templates.Count)];
-        var text = template.Replace("{positions}", positions, StringComparison.OrdinalIgnoreCase).Trim();
+        // TidyTemplate rather than the plain .Trim() this used to end with:
+        // with the gaps off, or with nothing measurable to say, {gaps}
+        // leaves a marker behind and the clause the club wrote around it
+        // has to go with it. That is the same tidy every other announcement
+        // line gets, and the reason it replaced .Trim() everywhere else.
+        var text = template
+            .Replace("{positions}", positions, StringComparison.OrdinalIgnoreCase)
+            .WithPositionGaps(gaps)
+            .TidyTemplate();
 
         if (text.Length == 0)
         {

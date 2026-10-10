@@ -99,9 +99,12 @@ internal static class OnAirTreatment
     /// Here rather than in the show's own file because this is the only place
     /// that knows these words go on a wall: they are what a spectator reads,
     /// not what the console logs, so they are the club's name for the
-    /// segment rather than the enum's. The eleven are ShowSegments
-    /// .Candidates - the only kinds that ever get the music - and anything
-    /// else falls back rather than putting an enum name on the screen.
+    /// segment rather than the enum's. They are ShowSegments.Candidates -
+    /// the only kinds that ever get the music - and anything else falls
+    /// back rather than putting an enum name on the screen. Counted here as
+    /// "the eleven" until the honours joined them on 10 Oct 2026; a number
+    /// in a comment goes stale the first time the list grows, so it says
+    /// which list instead.
     ///
     /// ShowTreatment still calls Begin() with no caption, so the band reads
     /// THE SHOW until it passes one. That was not worth waiting for: the

@@ -618,6 +618,15 @@ internal sealed class ShowBlock
         SegmentKind.ColdOpen => "Cold Open",
         SegmentKind.RaceIntro => "Round Intro",
         SegmentKind.RaceRecap => "Race Recap",
+
+        // Not "Honours" on its own, and not "Club Honours" either - that is
+        // SegmentKind.Honours below, which is the milestones segment and a
+        // different thing entirely. A crowd reading "Club Honours" on the
+        // band while a voice reads out tonight's badges would be told the
+        // name of the other segment, so this one is named after what is
+        // actually on the screen behind it: the badges.
+        SegmentKind.BadgesEarned => "Badges Earned",
+
         SegmentKind.SignOffNumbers => "Sign-Off",
         SegmentKind.MidMeetingStandings => "Standings So Far",
         SegmentKind.ChampionshipCheck => "Championship Check",

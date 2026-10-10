@@ -11,6 +11,17 @@ public partial class MainForm
     /// <summary>A line for the Test Voice button beside the mechanic's voice - the kind of thing the mechanic says.</summary>
     private const string MechanicTestLine = "Thanks! We went up a tooth on the pinion before the main, and you could see it down the straight.";
 
+    /// <summary>
+    /// And one for the honours reader's button - the kind of thing THEY
+    /// say, which is a different job.
+    ///
+    /// Its own line and not the mechanic's: a club is listening for whether
+    /// this voice sounds right reading out names and badges, and a voice
+    /// tested on a sentence about pinion gears tells them nothing about
+    /// that. See RaceHonours for where the real wording comes from.
+    /// </summary>
+    private const string HonoursTestLine = "Billy Bob picks up Nail-Biter. Jane Doe takes Personal Best and Hat-Trick.";
+
     /// <summary>Hooks the recap's broadcast up to Race Control and the Commentary page. Called once, when both exist.</summary>
     private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary)
     {
@@ -21,6 +32,7 @@ public partial class MainForm
 
         // Heard even while the announcer is muted - it was asked for by hand.
         commentary.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
+        commentary.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
     }
 
     /// <summary>

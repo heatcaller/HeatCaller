@@ -671,6 +671,55 @@ public sealed class AppSettings
         MechanicHeatCallerVoiceName ?? string.Empty,
         MechanicHeatCallerRev ?? string.Empty,
         MechanicKokoroVoiceName ?? string.Empty);
+
+    // --- The honours (10 Oct 2026) ---------------------------------------
+    //
+    // The badges a race unlocked, read out as a segment of the recap rather
+    // than announced one at a time at the flag: the announcer throws to a
+    // third voice, that voice goes over who got what, and the announcer
+    // takes the programme back. See RaceHonours.
+    //
+    // Off by default, like every other part of the broadcast - a club that
+    // never opens the Commentary page hears the badge calls they always
+    // have. Switching it ON is what moves them: the two cannot both happen,
+    // or the room hears every badge twice, and the one place that knows is
+    // RaceControlControl.AwardAchievements.
+
+    /// <summary>
+    /// After a race, a third voice reads out the badges it unlocked, as a
+    /// segment of the recap. Replaces the individual "Billy Bob has earned
+    /// Nail-Biter" calls for that race - see
+    /// RaceControlControl.HonoursSegmentRuns.
+    /// </summary>
+    public bool RecapBadgeHonours { get; set; }
+
+    /// <summary>What the announcer calls the honours reader. Blank: they are thrown to but never named, and no name is made up.</summary>
+    public string RecapHonoursName { get; set; } = string.Empty;
+
+    // The honours reader's voice, one per engine - held exactly as the
+    // mechanic's and the co-host's are, because the club can switch engine
+    // on Voice Settings at any time and a voice id means nothing to the
+    // others. Blank for an engine means the announcer's own voice reads the
+    // honours too, which is said on the page and in the console: it is the
+    // mechanic's own answer to the same question, and a segment in one
+    // voice is still the badges read out.
+    public string HonoursElevenLabsVoiceId { get; set; } = string.Empty;
+    public string HonoursElevenLabsVoiceName { get; set; } = string.Empty;
+    public string HonoursHeatCallerVoice { get; set; } = string.Empty;
+    public string HonoursHeatCallerVoiceName { get; set; } = string.Empty;
+    public string HonoursHeatCallerRev { get; set; } = string.Empty;
+    public string HonoursKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>The honours reader's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
+    [JsonIgnore]
+    public SecondVoice HonoursVoice => new(
+        HonoursElevenLabsVoiceId ?? string.Empty,
+        HonoursElevenLabsVoiceName ?? string.Empty,
+        HonoursHeatCallerVoice ?? string.Empty,
+        HonoursHeatCallerVoiceName ?? string.Empty,
+        HonoursHeatCallerRev ?? string.Empty,
+        HonoursKokoroVoiceName ?? string.Empty);
+
     /// <summary>Whether reaching a lap or time limit puts the checkered out rather than stopping the race on the spot.</summary>
     public bool RaceFinishOnNextCrossing { get; set; } = true;
 

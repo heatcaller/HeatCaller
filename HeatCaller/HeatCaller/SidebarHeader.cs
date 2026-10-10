@@ -3,7 +3,9 @@ namespace HeatCaller;
 /// <summary>
 /// The sidebar's header: the club's logo when one is set (see SetLogo),
 /// otherwise either the animated synthwave scene or plain app title text,
-/// depending on the look's family.
+/// depending on the look's family. On the rail (Compact) it is none of
+/// those three but the app's initials, because sixty pixels across is not
+/// a smaller header but a differently shaped one.
 ///
 /// A custom Control rather than a Label with a Paint handler, because the
 /// animation repaints roughly twenty times a second and a Label isn't
@@ -62,12 +64,23 @@ public sealed class SidebarHeader : Control
     /// <summary>
     /// The sidebar narrowed to a rail of icons (MainForm.SetNavIconsOnly).
     ///
-    /// The header then has about sixty pixels across to work with, so the
-    /// title becomes its initials and the Synthwave scene is left out
-    /// altogether: a sun, a mountain range and a horizon grid in a strip
-    /// that narrow is a smear rather than a scene. A club's logo is still
-    /// drawn, because DrawLogo fits it to whatever room there is and a badge
-    /// at rail width still reads as that club's badge.
+    /// The header then has about sixty pixels across to work with, which is
+    /// about a quarter of the open sidebar's, so what is left of it is the
+    /// app's initials in the middle - "HC" - in place of the wordmark, the
+    /// club's logo and the Synthwave scene alike.
+    ///
+    /// The scene goes because a sun, a mountain range and a horizon grid in
+    /// a strip that narrow is a smear rather than a scene. The logo used to
+    /// be kept, on the reasoning that DrawLogo fits it to whatever room
+    /// there is and a badge at rail width still reads as that club's badge -
+    /// and that was wrong, because a quarter of the width is not a smaller
+    /// header but a differently shaped one: a wide logo squashes to mush in
+    /// it and a tall one fills the whole rail, and the club that reported it
+    /// (Asher, 10 Oct) leaves the rail up all evening, so what they were
+    /// looking at all evening was the worse of the two.
+    ///
+    /// Neither is merely painted smaller, and neither is painted at all -
+    /// see ShowingLogo and ShowingScene, which is what OnPaint asks.
     /// </summary>
     public bool Compact
     {
@@ -100,8 +113,43 @@ public sealed class SidebarHeader : Control
     /// </summary>
     public bool Animated { get; set; }
 
-    /// <summary>True when a club logo is showing in place of the title or the scene.</summary>
+    /// <summary>
+    /// True when a club logo has been SET on the header - which is not the
+    /// same as its being drawn: on the rail it is not (see ShowingLogo).
+    /// MainForm reads this to pick the header's height and to decide
+    /// whether the animation is worth running, and both of those already
+    /// treat the rail as its own case.
+    /// </summary>
     public bool HasLogo => _logo is not null;
+
+    /// <summary>
+    /// Whether the club's logo is what the next paint will draw.
+    ///
+    /// A property rather than a line inside OnPaint because of the bug it
+    /// is here to make hard to write again. The logo used to win the paint
+    /// outright: its test was the FIRST thing OnPaint did and it returned
+    /// there and then, so narrowing the sidebar hid the Synthwave scene -
+    /// whose test came after it and does look at Compact - and left the
+    /// logo being squeezed into a sixty-pixel rail. Written out here, the
+    /// rail is part of the answer rather than something a later branch
+    /// happens to remember, and a test can ask the same question OnPaint
+    /// asks without having to read pixels off a screenshot.
+    /// </summary>
+    public bool ShowingLogo => _logo is not null && !_compact;
+
+    /// <summary>
+    /// Whether the animated Synthwave scene is what the next paint will
+    /// draw: the Synthwave family, no club logo in front of it, and the
+    /// sidebar not narrowed to its rail.
+    ///
+    /// MainForm also stops the animation timer on the way into the rail
+    /// (StartOrStopHeaderAnimation), so the frames are not merely thrown
+    /// away unseen - they are never drawn. The rail is the state a club
+    /// leaves the sidebar in for a whole race night, and twenty frames a
+    /// second of a scene nobody can see is a cost a laptop at a track pays
+    /// for nothing.
+    /// </summary>
+    public bool ShowingScene => SynthwaveMode && !_compact && _logo is null;
 
     /// <summary>
     /// Shows the club logo in place of the title (or the Synthwave scene),
@@ -344,17 +392,20 @@ public sealed class SidebarHeader : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        // The logo wins whatever the family: a club that has set one wants
-        // to see it, Synthwave or not.
-        if (_logo is not null)
+        // Both of these are false on the rail whatever is set, so the rail
+        // falls through to DrawPlainTitle and its initials - see Compact.
+        // Between the two of them the logo wins whatever the family: a club
+        // that has set one wants to see it, Synthwave or not.
+        if (ShowingLogo)
         {
             DrawLogo(e.Graphics);
             return;
         }
 
-        // Compact as well as plain looks: the scene needs width it has not
-        // got on the rail - see Compact.
-        if (!SynthwaveMode || _compact)
+        // The plain looks and the rail both land here. Asking ShowingScene
+        // rather than repeating its terms is the point: a later reader
+        // cannot add a case to one and forget the other.
+        if (!ShowingScene)
         {
             DrawPlainTitle(e.Graphics);
             return;

@@ -152,6 +152,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly CheckBox _chkMentionStreakChaser = new ThemedCheckBox();
     private readonly NumericUpDown _numPositionEveryLaps = new();
     private readonly NumericUpDown _numPositionDepth = new();
+    private readonly CheckBox _chkPositionGaps = new ThemedCheckBox();
     private readonly NumericUpDown _numLapTimeEveryN = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventWeights = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventSpeeds = new();
@@ -3541,6 +3542,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 LapTimeEveryNLaps = type == AnnouncementEventType.LapTime ? (int)_numLapTimeEveryN.Value : 1,
                 PositionReportEveryLaps = type == AnnouncementEventType.PositionReport ? (int)_numPositionEveryLaps.Value : 5,
                 PositionReportDepth = type == AnnouncementEventType.PositionReport ? (int)_numPositionDepth.Value : 3,
+                PositionReportSayGaps = type == AnnouncementEventType.PositionReport && _chkPositionGaps.Checked,
                 Weight = _eventWeights.TryGetValue(type, out var numWeight) ? (int)numWeight.Value : WeightWithoutBox(type),
             };
         }
@@ -3654,6 +3656,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{laptime}", "6.92 seconds", StringComparison.OrdinalIgnoreCase)
             .Replace("{gate}", "1", StringComparison.OrdinalIgnoreCase)
             .Replace("{positions}", "P1 Sam, P2 Bill, P3 Frank", StringComparison.OrdinalIgnoreCase)
+            .Replace("{gaps}", "Bill 1.5 back and Frank 2.3 back", StringComparison.OrdinalIgnoreCase)
             .Replace("{round}", "Heat 2", StringComparison.OrdinalIgnoreCase)
             .Replace("{class}", "Stock Buggy", StringComparison.OrdinalIgnoreCase)
             .Replace("{marshals}", "Sam, Bill and Frank", StringComparison.OrdinalIgnoreCase)

@@ -829,11 +829,22 @@ public partial class MainForm
     /// image loaded here is disposed straight after. With a logo the header
     /// is the tall Synthwave height whatever the look, so the logo has room
     /// to be seen; without one it goes back to what the look gives it.
+    ///
+    /// On the rail there is no logo at all - see below.
     /// </summary>
     public void RefreshHeaderLogo()
     {
         var file = _settings.RelayLogoFile;
-        var logo = _settings.ShowLogoInApp ? ClubLogo.Load(file) : null;
+
+        // Nothing is loaded while the sidebar is a rail. The header would
+        // not draw it there anyway (SidebarHeader.ShowingLogo), so reading
+        // the file off disk, walking every one of a 384px image's pixels to
+        // trim its clear border, and then keeping both that copy and a
+        // scaled one as GDI handles for the whole evening would all be work
+        // for a picture nobody can see. Opening the sidebar comes back
+        // through here (SetNavIconsOnly calls this on both edges), which is
+        // what puts the logo back, so nothing is lost by not holding it.
+        var logo = _settings.ShowLogoInApp && !_navIconsOnly ? ClubLogo.Load(file) : null;
 
         try
         {

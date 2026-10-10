@@ -48,7 +48,7 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: about 1,735 tests (10 Oct - counted from the new test files, not measured; the next `check.cmd` run settles it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
+| Tests | `HeatCaller.Tests`: **1,921 tests, measured** (`check.cmd`, 10 Oct 2026 - 1,921 passed, 0 failed, 27.9 minutes; the relay's 505 are counted separately below), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
 | Relay | TypeScript on Fly.io (`relay\`), 36 test files, 507 tests (measured 10 Oct). **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes, and the refusal messages renamed off the retired Windows voice - `Hear It` and `Preview` in the app do nothing until `fly deploy --ha=false` has run |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
@@ -136,6 +136,26 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 "brought back" means copying that folder.
 
 ---
+
+## Asked for, not started
+
+Written down here the moment it is asked for, because a request held only
+in a chat is a request that is lost when the chat is.
+
+- **A photo with a sponsor's read, on the Big Screen while the read goes
+  out** (asked 10 Oct 2026). The **Sponsors** page already takes slides,
+  videos and the read copy (`SponsorCopy`, `SponsorsControl`), and a read
+  already puts its text on the Big Screen's announcement banner
+  (`SpeakReminder(paid.Text, showOnScreens: true)`). What is wanted is a
+  picture of that sponsor up on the crowd screen for the length of the
+  read - the read is the only part of the rotation that currently has
+  nothing to look at. Worth settling first: whether it is a slide the club
+  has already uploaded, picked per sponsor, or a picture of its own; and
+  what the screen shows when a read has no picture.
+- **A spoken option for the split times** (asked 10 Oct 2026). The split
+  CALLS exist already - **Fastest sector**, **Up at the split**, **Record
+  pace at the split** on **Voice - Announcements** - so this is something
+  else, and what exactly is still to be settled with the club.
 
 ## Next, in order
 

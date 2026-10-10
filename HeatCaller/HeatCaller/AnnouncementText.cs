@@ -195,6 +195,161 @@ internal static class AnnouncementText
     }
 
     /// <summary>
+    /// How far one car is behind the one in front of it, said rather than
+    /// shown.
+    ///
+    /// TENTHS, not the hundredths the leaderboard shows
+    /// (RaceGaps.Format). A figure on the board is read at a glance and a
+    /// hundredth can decide a qualifying order, so the board keeps them. A
+    /// figure in the ear has to be spoken through: "two point three five"
+    /// takes half again as long to say as "two point three", and the
+    /// position report is already the longest line the announcer reads -
+    /// over as many places as the club asked for, that difference is
+    /// whether the report still fits between two laps.
+    ///
+    /// Under a tenth is said as "under a tenth" rather than rounded. At
+    /// tenths that gap formats as "0.0", which a voice reads as "nought
+    /// point nought" - a listener hears nothing between the two cars, which
+    /// is a dead heat, and a dead heat that isn't one sounds like a broken
+    /// timing system.
+    ///
+    /// A car down a lap is NEVER given in seconds. It is not "four point
+    /// two seconds behind"; it is a lap behind, and the seconds between
+    /// their last two crossings are an accident of where on track each of
+    /// them happens to be. Same distinction, and the same answer, as the
+    /// leaderboard's "+1L".
+    ///
+    /// Empty when there is nothing honest to say: no crossing recorded for
+    /// the car ahead at this car's lap (a lap added by hand has no crossing
+    /// time), or a gap that came out negative. The caller leaves the car
+    /// out rather than invent a figure for it.
+    /// </summary>
+    internal static string SpokenGap(RaceGap gap)
+    {
+        if (gap.LapsDown == 1)
+        {
+            return "a lap down";
+        }
+
+        if (gap.LapsDown > 1)
+        {
+            return $"{gap.LapsDown} laps down";
+        }
+
+        if (gap.GapMs is not { } ms)
+        {
+            return string.Empty;
+        }
+
+        // RaceGaps.Compute withholds a gap that came out negative rather
+        // than pass it on, and nothing here may invent one in its place.
+        if (ms < 0)
+        {
+            return string.Empty;
+        }
+
+        if (ms < 100)
+        {
+            return "under a tenth";
+        }
+
+        // InvariantCulture: on a comma-decimal PC the gap was written
+        // "1,5", which the voice reads as "one, five".
+        return (ms / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " back";
+    }
+
+    /// <summary>
+    /// The gaps down the order as the report says them - "Bill 1.5 back,
+    /// Frank 2.3 back and Dana a lap down".
+    ///
+    /// <paramref name="order"/> runs from the LEADER down, and the leader is
+    /// left out of what comes back. Nobody is in front of them, so they have
+    /// no gap: measured against themselves it is zero, and a voice reading
+    /// "nought point nought" over the car that is winning the race is how a
+    /// report starts sounding like a dead heat.
+    ///
+    /// A car whose gap could not be measured is left out too, rather than
+    /// given a made-up one - see <see cref="SpokenGap"/>. With nobody left
+    /// to name the result is empty, and the clause the club wrote around
+    /// {gaps} goes with it (see <see cref="WithPositionGaps"/>).
+    /// </summary>
+    internal static string SpokenGaps(IReadOnlyList<(string Name, RaceGap Gap)> order)
+    {
+        var said = new List<string>();
+
+        for (var i = 1; i < order.Count; i++)
+        {
+            var words = SpokenGap(order[i].Gap);
+
+            if (words.Length == 0)
+            {
+                continue;
+            }
+
+            said.Add($"{order[i].Name} {words}");
+        }
+
+        return SpokenList(said);
+    }
+
+    /// <summary>
+    /// The words a club would put in front of the gaps on a position report
+    /// - "Gaps: {gaps}", "and the gaps - {gaps}", "with {gaps}" - or the
+    /// bare placeholder. With the gaps switched off, or with nothing
+    /// measurable to say, the whole phrase goes, along with a full stop
+    /// straight after it, so "The order - {positions}. Gaps: {gaps}."
+    /// becomes "The order - ..." rather than "... Gaps.".
+    ///
+    /// Scoped to {gaps} for the same reason the team, sponsor and marshal
+    /// patterns are: none of these words may start eating the lead-ins of
+    /// placeholders that already read correctly. Widening the general
+    /// <see cref="LeadIn"/> with "gaps" would be harmless, but widening it
+    /// with the "with" and "and" in front of them would reach every other
+    /// placeholder in the app.
+    ///
+    /// A dash is matched as well as a comma because every built-in line in
+    /// this app separates its clauses with " - ", so that is what a club
+    /// copying one of them will type.
+    /// </summary>
+    private const string GapsPhrase =
+        @"(?:\b(?:and|with)\s+)?(?:the\s+)?"
+        + @"(?:(?:gaps?|intervals?|margins?)(?:\s+between\s+them)?(?:\s+(?:are|is))?\s*[-:]?\s*)?"
+        + @"\{gaps\}";
+
+    // A closing bracket counts as the end of a sentence here, which the
+    // marshal pattern has no need of: every built-in position-report line
+    // opens with an audio tag, so a club writing "Gaps: {gaps}." as its own
+    // sentence has "[excited]" and not a full stop in front of it, and the
+    // full stop at the end of the phrase was left stranded against the tag.
+    private static readonly Regex GapsLeadIn = new(
+        @"(?:^|(?<=[.!?])|(?<=\]))\s*" + GapsPhrase + @"(?:\s*[.!?])?"
+        + @"|[,;]?\s*(?:-\s*)?" + GapsPhrase,
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Fills {gaps} on a position report. Chained in before
+    /// <see cref="TidyTemplate"/>, like <see cref="WithMarshals"/>.
+    /// </summary>
+    internal static string WithPositionGaps(this string text, string? gaps)
+    {
+        if (text.IndexOf('{') < 0)
+        {
+            return text;
+        }
+
+        var value = gaps?.Trim() ?? string.Empty;
+
+        if (value.Length == 0)
+        {
+            text = GapsLeadIn.Replace(text, string.Empty);
+        }
+
+        // Anything the pattern above did not recognise falls through to the
+        // general tidy, same as every other empty placeholder.
+        return text.Replace("{gaps}", OrMissing(value), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Trims, and repairs whatever an empty placeholder left behind.
     ///
     /// Replaces the plain .Trim() every template fill used to end with, so

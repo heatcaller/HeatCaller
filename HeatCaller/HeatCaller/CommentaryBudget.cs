@@ -35,6 +35,7 @@ public enum SegmentKind
 {
     RaceIntro,
     RaceRecap,
+    BadgesEarned,
 
     BattleWatch,
     PaceNote,
@@ -216,6 +217,49 @@ public sealed class CommentaryBudget
             // --- Essential: the thing itself ---
             new(SegmentKind.RaceIntro,  SegmentTier.Essential, 1, true,  TimeSpan.FromSeconds(45), TimeSpan.Zero,              int.MaxValue, int.MaxValue, "Race intros", "Introduces each race as it goes to the grid."),
             new(SegmentKind.RaceRecap,  SegmentTier.Essential, 1, true,  TimeSpan.FromSeconds(60), TimeSpan.Zero,              int.MaxValue, int.MaxValue, "Race recaps", "Calls the result once the flag is out."),
+
+            // The honours - the badges a race unlocked, read out by a third
+            // voice as a segment of the recap's broadcast. See RaceHonours.
+            //
+            // ESSENTIAL, AND NOT BECAUSE IT IS IMPORTANT. The tier decides
+            // three things and this row needs all three of the Essential
+            // answers for reasons that have nothing to do with how good the
+            // segment is:
+            //
+            //   1. NO SECOND SWITCH. Everything below Essential gets a tick
+            //      box on the Commentary page built out of this table, and
+            //      this segment already has one of its own in the Broadcast
+            //      card beside the mechanic's - it needs to be there,
+            //      because the reader's name and voice are set on the same
+            //      two rows. Two switches for the same thing in different
+            //      places, saying different things, is how a settings page
+            //      starts lying to people; SetOff says so at length and
+            //      refuses an Essential for exactly this reason.
+            //
+            //   2. NOTHING ASKS THE BRAIN FOR IT. CommentaryDirector.Order
+            //      skips the Essentials, which is right: this one is written
+            //      by HeatCaller out of the badges themselves and would only
+            //      be tried, found to have no reader, and dropped. Its Lines
+            //      is 1 because the table insists every row cost something,
+            //      and it is never spent - nothing reserves against this
+            //      kind, the same way ContinuityShow.HandOver bills itself
+            //      as ComingUpNext without taking a line off the night.
+            //
+            //   3. NEVER SILENCED BY THE BUDGET, which here is simply true:
+            //      a quiet month cannot take away a segment that costs
+            //      nothing to write.
+            //
+            // Its deadline is the recap's, because it follows the recap: an
+            // honours read a minute after the room has stopped thinking
+            // about that race is a segment arriving at the wrong race. No
+            // minimum gap - it is one part of a sequence that paces itself
+            // (RaceControlControl.SpeakHonoursAsync waits for each line to
+            // have been heard), and a gap here would be a second opinion
+            // about that. Not an exchange in CanBeExchange's sense: it is
+            // two voices, but the second is the honours reader rather than
+            // the co-host, and nothing about it is written in one request
+            // and split.
+            new(SegmentKind.BadgesEarned, SegmentTier.Essential, 1, true, TimeSpan.FromSeconds(60), TimeSpan.Zero, int.MaxValue, int.MaxValue, "Badges earned", "After a race, a third voice reads out the badges it unlocked."),
 
             // --- Core: the live feel ---
             // The battle watch is the shortest-lived thing here: a line

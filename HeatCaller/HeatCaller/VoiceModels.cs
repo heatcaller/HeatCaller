@@ -143,6 +143,26 @@ public sealed class AnnouncementEventConfig
     public int PositionReportDepth { get; set; } = 3;
 
     /// <summary>
+    /// For PositionReport: whether the report says how much time there is
+    /// between the places it reads out, wherever the club put {gaps} in its
+    /// phrasing.
+    ///
+    /// OFF by default - which is also what every settings file saved before
+    /// this one deserialises to, so no club's report changes wording until
+    /// somebody turns it on. A running order is already the longest line the
+    /// announcer reads, and a figure after every name is another second or
+    /// two of talking per place; on a short indoor lap that is the next lap
+    /// gone.
+    ///
+    /// Turning it on moves the gap OUT of the running order and into
+    /// {gaps}: the order then reads as places, and the times are said once,
+    /// in the club's own words. Said in both, the announcer gave every
+    /// interval twice in one breath. See
+    /// AnnouncementService.MaybeAnnouncePositions, where both are worded.
+    /// </summary>
+    public bool PositionReportSayGaps { get; set; }
+
+    /// <summary>
     /// Speaking-rate multiplier for THIS announcement, relative to the
     /// profile's Speed. 1.0 leaves it alone.
     ///
@@ -1508,7 +1528,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.PassedByGhost => ("Passed by a ghost", "A virtual opponent got past you - the one that actually stings. Placeholders: {driver} for you, {rival} for the ghost."),
         AnnouncementEventType.CloseBattle => ("Close battle", "Two drivers on the same lap running within a second of each other. Fires once per race by default - a long scrap would otherwise trigger this every lap. Placeholders: {driver} {car} {team} {sponsors} for the car in front, {rival} for the one chasing."),
         AnnouncementEventType.Lapped => ("Car gets lapped", "The leader puts a full lap on another driver. Placeholders: {driver} {car} {team} {sponsors} for the leader, {rival} for the car being lapped."),
-        AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"P1 Sam, P2 Bill, P3 Frank\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes."),
+        AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"P1 Sam, P2 Bill, P3 Frank\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes. Tick \"Say the gaps between them\" and put {gaps} where the times should go - \"Bill 1.5 back and Frank 2.3 back\", and \"a lap down\" for anyone who is."),
         AnnouncementEventType.YellowFlag => ("Yellow flag", "A yellow/caution flag was called during the race."),
         AnnouncementEventType.RedFlag => ("Red flag", "A red flag was called - racing is stopped."),
         AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),

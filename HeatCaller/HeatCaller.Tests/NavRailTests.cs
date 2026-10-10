@@ -20,6 +20,12 @@ namespace HeatCaller.Tests;
 /// better than none. What IS driven for real is the list itself: a
 /// SidebarNavList at the rail's width, with its groups, painted at every text
 /// size in both states, which is where the arithmetic is.
+///
+/// The header above the list is driven for real as well, with a club logo
+/// set and without. What the rail has to take away is not only the words
+/// but the club's logo and the animated scene, and which of those three a
+/// header draws is decided by the order of the tests inside one OnPaint -
+/// which is exactly the kind of thing reading the source cannot check.
 /// </summary>
 public sealed class NavRailTests : IDisposable
 {
@@ -284,6 +290,253 @@ public sealed class NavRailTests : IDisposable
         using var bitmap = new Bitmap(Math.Max(1, list.Width), Math.Max(1, list.Height));
 
         list.DrawToBitmap(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+    }
+
+    // --- The header above the list -------------------------------------------
+
+    [Fact]
+    public void The_rail_draws_neither_the_club_logo_nor_the_animated_scene() => AtTextSize(1f, () =>
+    {
+        // A real header, really painted, in both states and back - not read
+        // off the source, because what went wrong was the ORDER of the
+        // tests inside one OnPaint and no amount of source reading would
+        // have caught that. The pictures are compared with each other
+        // rather than against colours named here, so nothing in this test
+        // has to know what a sidebar or a scene looks like.
+        using var host = HeaderHost(out var header);
+        using var logo = SolidLogo();
+
+        // Synthwave with no club logo, in the open sidebar: the scene.
+        Assert.True(header.ShowingScene, "A Synthwave header in the open sidebar is not drawing its scene.");
+        Assert.False(header.ShowingLogo, "No logo has been set, so nothing should say one is being drawn.");
+
+        using var sceneOpen = Snapshot(header, "the scene in the open sidebar");
+
+        // The rail with nothing set: background and "HC", and this is the
+        // picture the rail has to show whatever else is going on.
+        Narrow(header, true);
+
+        Assert.False(header.ShowingScene,
+            "The Synthwave scene is still drawn on the rail, where a sun, a mountain range and a horizon "
+            + "grid have sixty pixels across to fit into.");
+
+        using var rail = Snapshot(header, "the rail with nothing set");
+
+        // Opened again, the scene is back exactly as it was.
+        Narrow(header, false);
+
+        Assert.True(header.ShowingScene, "The scene did not come back when the sidebar was opened again.");
+
+        using var sceneAgain = Snapshot(header, "the scene again");
+
+        Assert.True(Same(sceneOpen, sceneAgain),
+            "The scene came back different from how it was before the rail - the cached layers it is "
+            + "built from were dropped on the way in and not rebuilt the same way on the way out.");
+
+        // And now the half that was wrong. The logo used to win OnPaint
+        // outright, its test being the first thing in there and returning
+        // then and there, so narrowing the sidebar squeezed it into the
+        // rail instead of taking it away.
+        header.SetLogo(logo, Color.White);
+
+        Assert.True(header.HasLogo, "The header did not accept this test's own logo, so this is testing nothing.");
+        Assert.True(header.ShowingLogo, "A club logo in the open sidebar is not being drawn.");
+        Assert.False(header.ShowingScene, "The logo is drawn in front of the scene, so the scene is not drawn behind it.");
+
+        using var logoOpen = Snapshot(header, "the logo in the open sidebar");
+
+        // Without this the comparison below would pass on a header that
+        // never draws the logo anywhere.
+        Assert.False(Same(sceneOpen, logoOpen),
+            "The open sidebar paints the same with a club logo set as without, so the logo is not being "
+            + "drawn at all and the rest of this test proves nothing.");
+
+        // The one that failed before the fix: the rail with a logo set has
+        // to paint EXACTLY the rail without one.
+        Narrow(header, true);
+
+        Assert.False(header.ShowingLogo,
+            "The club's logo is still drawn on the rail, squeezed into a quarter of the sidebar's width.");
+        Assert.False(header.ShowingScene, "Nor is the scene, with a logo set and the rail up.");
+
+        using var railWithLogo = Snapshot(header, "the rail with a logo set");
+
+        Assert.True(Same(rail, railWithLogo),
+            "The rail paints differently once a club logo is set, so the logo is being drawn in it - "
+            + "sixty pixels across, which squashes a wide logo to mush and overflows a tall one.");
+
+        // And back, exactly as it was before the rail went up.
+        Narrow(header, false);
+
+        Assert.True(header.ShowingLogo, "The logo did not come back when the sidebar was opened again.");
+        Assert.True(header.HasLogo, "Opening the sidebar lost the logo rather than showing it again.");
+
+        using var logoAgain = Snapshot(header, "the logo again");
+
+        Assert.True(Same(logoOpen, logoAgain), "The logo came back different from how it was before the rail.");
+    });
+
+    [Fact]
+    public void The_rail_does_not_even_load_the_club_logo()
+    {
+        // The header would not draw it (SidebarHeader.ShowingLogo), so
+        // reading the file off disk, walking every pixel of a 384px image to
+        // trim its clear border and then holding two GDI bitmaps for as long
+        // as the rail is up would all be work for a picture nobody can see.
+        // Read off the source because the load happens inside a window.
+        var chrome = AppSource("MainForm.Chrome.cs");
+        var start = chrome.IndexOf("public void RefreshHeaderLogo", StringComparison.Ordinal);
+
+        Assert.True(start > 0, "MainForm.RefreshHeaderLogo has been renamed - this test reads its body.");
+
+        var load = chrome.IndexOf("ClubLogo.Load(", start, StringComparison.Ordinal);
+
+        Assert.True(load > start, "RefreshHeaderLogo no longer loads the logo the way this test reads it.");
+
+        var line = chrome[(chrome.LastIndexOf('\n', load) + 1)..chrome.IndexOf('\n', load)];
+
+        Assert.Contains("!_navIconsOnly", line);
+    }
+
+    [Fact]
+    public void The_header_animation_stops_while_the_rail_is_up()
+    {
+        // Otherwise it is twenty frames a second of a scene that is not
+        // drawn, for as long as the club leaves the rail up - which is all
+        // evening - on the same laptop that is timing the racing.
+        var chrome = AppSource("MainForm.Chrome.cs");
+        var start = chrome.IndexOf("private void StartOrStopHeaderAnimation", StringComparison.Ordinal);
+
+        Assert.True(start > 0, "MainForm.StartOrStopHeaderAnimation has been renamed - this test reads its body.");
+
+        var starts = chrome.IndexOf("_headerAnimationTimer.Start()", start, StringComparison.Ordinal);
+
+        Assert.True(starts > start, "StartOrStopHeaderAnimation no longer starts the timer.");
+
+        Assert.Contains("!_navIconsOnly", chrome[start..starts]);
+    }
+
+    /// <summary>
+    /// The sidebar's header in a window of its own, Synthwave so the scene
+    /// is in play, at the open sidebar's width to begin with - see Narrow.
+    ///
+    /// Shown, and sized outright rather than docked, for both of the reasons
+    /// Host gives above: a control's painting only really runs once it is in
+    /// a window that has been shown, and Windows will not make a window as
+    /// narrow as the rail.
+    /// </summary>
+    private static Form HeaderHost(out SidebarHeader header)
+    {
+        var tall = UiLayout.AtDpi(132);
+
+        header = new SidebarHeader("HEATCALLER", string.Empty)
+        {
+            SynthwaveMode = true,
+            Location = Point.Empty,
+            Width = MainForm.SidebarWidth,
+            Height = tall,
+        };
+
+        var host = new Form
+        {
+            FormBorderStyle = FormBorderStyle.None,
+            ShowInTaskbar = false,
+            StartPosition = FormStartPosition.Manual,
+            Location = new Point(-20000, -20000),
+            ClientSize = new Size(Math.Max(MainForm.SidebarWidth, 400), tall),
+        };
+
+        host.Controls.Add(header);
+        host.Show();
+        StaThread.Settle();
+
+        return host;
+    }
+
+    /// <summary>
+    /// The header as the rail leaves it, or as the open sidebar does.
+    ///
+    /// The size goes with the flag because that is what MainForm does
+    /// (PlaceSidebar and RefreshHeaderLogo): 60 by 64 on the rail against
+    /// 220 by 132 open. A header told it is compact while still 220 across
+    /// is not the state any of this is about, and the narrow one is where a
+    /// rectangle can come out negative.
+    /// </summary>
+    private static void Narrow(SidebarHeader header, bool railed)
+    {
+        header.Compact = railed;
+        header.Width = railed ? MainForm.SidebarNarrowWidth : MainForm.SidebarWidth;
+        header.Height = UiLayout.AtDpi(railed ? 64 : 132);
+    }
+
+    /// <summary>
+    /// A logo for the header to be given: solid, so SidebarHeader's trim
+    /// keeps all of it, and well over twice as wide as it is tall, which is
+    /// the shape a rail squashes worst.
+    /// </summary>
+    private static Bitmap SolidLogo()
+    {
+        var logo = new Bitmap(256, 96);
+
+        using (var g = Graphics.FromImage(logo))
+        using (var fill = new SolidBrush(Color.FromArgb(255, 20, 140, 220)))
+        {
+            g.FillRectangle(fill, 0, 0, logo.Width, logo.Height);
+        }
+
+        return logo;
+    }
+
+    /// <summary>
+    /// What the header paints right now, as a bitmap the caller owns.
+    ///
+    /// This is the real check, and the reason the test does not simply read
+    /// ShowingLogo and ShowingScene back: those are the header's own answer,
+    /// and a header could go back to drawing a logo on the rail without
+    /// either of them changing. What is compared is what came out of
+    /// OnPaint.
+    /// </summary>
+    private Bitmap Snapshot(SidebarHeader header, string what)
+    {
+        _now = "painting " + what;
+
+        header.Refresh();
+        StaThread.Settle();
+
+        var bitmap = new Bitmap(Math.Max(1, header.Width), Math.Max(1, header.Height));
+
+        header.DrawToBitmap(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Whether two snapshots are the same picture, pixel for pixel.
+    ///
+    /// GetPixel a pixel at a time, which the app itself avoids for being a
+    /// separate trip into GDI+ each time (SidebarHeader.AlphaOf) - at a
+    /// header's 29,000 pixels that is a few tens of milliseconds, which
+    /// matters on the UI thread and does not matter here.
+    /// </summary>
+    private static bool Same(Bitmap first, Bitmap second)
+    {
+        if (first.Width != second.Width || first.Height != second.Height)
+        {
+            return false;
+        }
+
+        for (var y = 0; y < first.Height; y++)
+        {
+            for (var x = 0; x < first.Width; x++)
+            {
+                if (first.GetPixel(x, y) != second.GetPixel(x, y))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     // --- The setting ---------------------------------------------------------

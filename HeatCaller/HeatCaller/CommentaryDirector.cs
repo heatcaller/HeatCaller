@@ -61,6 +61,26 @@ public sealed class CommentaryDirector
     private string? _className;
     private bool _racing;
 
+    /// <summary>
+    /// The last reason each segment was refused, so the refusal is said
+    /// once instead of twice a second.
+    ///
+    /// TryAsync runs on the host's half-second tick for every segment that
+    /// has anything to say, and a segment that is out of budget is refused
+    /// on every one of them. It used to log every refusal: rehearsal 5
+    /// (10 Oct 2026) produced four hundred copies of "Skipped grid history
+    /// - 6 lines in the last ten minutes already." in twelve minutes, which
+    /// buried the race's own log so thoroughly that the audio fault the
+    /// night was recorded to find had to be dug out of it line by line. A
+    /// log nobody can read is a log that is not there.
+    ///
+    /// Keyed on the reason, not just the segment, so a refusal that changes
+    /// - the count going up, the night's budget running out on top of the
+    /// ten-minute rule - is still said. The same reason twice in a row is
+    /// the only thing held back.
+    /// </summary>
+    private readonly Dictionary<SegmentKind, string> _refusalSaid = new();
+
     public CommentaryDirector(CommentaryService commentary, AppSettings settings, Func<DateTime>? clock = null)
     {
         _commentary = commentary;
@@ -272,6 +292,7 @@ public sealed class CommentaryDirector
             _lastSalesRead = DateTime.MinValue;
             _adBreakOwed = false;
             _adBreaksSeen = AdBreak.BreaksEnded;
+            _refusalSaid.Clear();
 
             // Inside the guard, and this is a FIX, not a tidy-up.
             //
@@ -866,7 +887,14 @@ public sealed class CommentaryDirector
 
         if (!verdict.Allowed)
         {
-            Say($"[brain] Skipped {spec.Title.ToLowerInvariant()} - {verdict.Reason}.");
+            // Once per reason - see _refusalSaid.
+            if (!_refusalSaid.TryGetValue(kind, out var saidBefore)
+                || !string.Equals(saidBefore, verdict.Reason, StringComparison.Ordinal))
+            {
+                _refusalSaid[kind] = verdict.Reason;
+                Say($"[brain] Skipped {spec.Title.ToLowerInvariant()} - {verdict.Reason}.");
+            }
+
             return null;
         }
 

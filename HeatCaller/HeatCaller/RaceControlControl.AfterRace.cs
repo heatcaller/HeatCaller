@@ -125,6 +125,14 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void AwardAchievements(SessionRecord record)
     {
+        // Cleared FIRST, before any of the ways out below. A plan left over
+        // from the last race is a recap that reads out somebody else's
+        // badges, and the ways out are the quiet ones: an unreadable store,
+        // a race that unlocked nothing, a fault in the evaluator. Taken
+        // again by SpeakRaceSummary, so this is the second of two guards
+        // rather than the only one.
+        _honours = null;
+
         try
         {
             // Loaded per race rather than held: this is the only place in
@@ -177,6 +185,42 @@ public sealed partial class RaceControlControl
 
             AchievementsUnlocked?.Invoke(unlocks);
 
+            // THE BADGES ARE SAID ONCE, AND THIS IS THE PLACE THAT DECIDES.
+            //
+            // There are two ways a club can hear them now: these calls, one
+            // per badge, right behind the finish call - and the honours
+            // segment in the recap, where the announcer throws to a third
+            // voice who goes over who got what. Both, and the room hears
+            // every badge twice four minutes apart, which is the single most
+            // noticeable thing an announcer can do wrong.
+            //
+            // So it is one or the other, decided here where the unlocks are
+            // in hand, and decided by BUILDING the segment rather than by
+            // asking whether it is switched on. That distinction is the
+            // whole safety of this: a plan in hand is a segment that is
+            // going to be spoken, where "the box is ticked" is not. The
+            // rotation can have nothing left to say tonight, the page can be
+            // running without an announcer screen, a badge can have no name
+            // that could be read out - and on any of those the badges would
+            // have been suppressed here and then never read at all.
+            // PlanHonours answers null for every one of them, says so in the
+            // console, and the individual calls go out as they always did.
+            //
+            // The club's own switch for these calls is on Voice Settings ->
+            // Announcements and is NOT touched. A second switch for the same
+            // thing, in another place, silently rewritten from here, is
+            // worse than either arrangement on its own.
+            _honours = PlanHonours(unlocks);
+
+            if (_honours is not null)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [badge] {Plural.Of(unlocks.Count, "badge")} held back for the recap's honours segment "
+                    + "rather than called out one at a time.");
+
+                return;
+            }
+
             foreach (var unlock in unlocks.Take(MaxSpokenAchievements))
             {
                 _announcer.NotifyAchievement(unlock.Transponder, unlock.Badge.Name);
@@ -216,6 +260,21 @@ public sealed partial class RaceControlControl
     private List<AchievementUnlock> _lastUnlocks = new();
 
     /// <summary>
+    /// The honours segment for the race just filed - or null when the
+    /// badges went out as individual calls instead, which is every race at
+    /// a club that has not switched the segment on.
+    ///
+    /// Held for ONE HOP between two methods that always run one after the
+    /// other on the UI thread (see the save path in
+    /// SaveCompletedSessionToHistory: AwardAchievements, then
+    /// SpeakRaceSummary). TAKEN and not read, and cleared at the top of
+    /// AwardAchievements as well - a plan left lying about is the next
+    /// race's recap reading out this race's badges, the same stale-state
+    /// fault <see cref="_lastUnlocks"/> is cleared at each green to avoid.
+    /// </summary>
+    private HonoursPlan? _honours;
+
+    /// <summary>
     /// Speaks an LLM-written wrap-up line for a finished race.
     ///
     /// Deliberately fire-and-forget and deliberately AFTER the save: the
@@ -246,7 +305,22 @@ public sealed partial class RaceControlControl
                                   && _commentary.IsAvailable
                                   && _settings.CommentaryRaceSummaries;
 
-        if (!wantsTeaser && !commentaryAvailable)
+        // The honours, built by AwardAchievements a moment ago on this same
+        // thread - TAKEN, so nothing of this race's badges can be read out
+        // after the next one. Null when the race unlocked nothing, when the
+        // segment is switched off, or when the badges went out as individual
+        // calls instead. See _honours and PlanHonours.
+        var honours = _honours;
+        _honours = null;
+
+        // The honours ALONE are reason enough to run the sequence, which is
+        // the one addition to this condition. They need no model and no
+        // teaser - the words were written before any of this - and this
+        // return is the one that would otherwise lose them: the badges were
+        // held back from the individual calls on the strength of the segment
+        // running, so a club with the AI off and the teaser switched off
+        // would have heard nothing about them at all.
+        if (!wantsTeaser && !commentaryAvailable && honours is null)
         {
             // Nothing more to say - but the broadcast is only over once the
             // finish call has been spoken. Returning without the signal left
@@ -490,6 +564,60 @@ public sealed partial class RaceControlControl
                     ? WriteClosingAsync(interviewTask is not null ? (Task)interviewTask : generation, generation, record, plan, delivery, followOnWork.Token)
                     : null;
 
+                // The honours' three lines, rendered while the teaser and
+                // the recap play - three round trips paid for during a wait
+                // that is happening anyway, exactly as the teaser's own
+                // render is. Started here with the rest rather than when the
+                // segment is reached, and it does NOT queue behind the model
+                // the way the interview and the sign-off do: nothing in it
+                // asks the model at all.
+                var honoursRender = honours is null
+                    ? null
+                    : RenderHonoursAsync(honours, delivery, followOnWork.Token);
+
+                // The honours with no recap for them to be a segment OF -
+                // the AI switched off at the wall, the allowance spent, or
+                // the model with nothing to say. They get a show of their
+                // own here and only here: on an ordinary night the recap's
+                // show is already open under them, and a second bed over
+                // the top of the first is two pieces of music at once.
+                //
+                // A local function rather than a copy at each of the two
+                // ways out below, and it sets the sequence's own `show` so
+                // that the finally gives the club's music back however this
+                // ends - the one thing in here that must not be got wrong.
+                // Nothing holds `opening`, because there is no way out
+                // between starting it and taking hold of it: it is awaited
+                // on the next line, inside a try.
+                async Task HonoursOnTheirOwnAsync()
+                {
+                    // Taken into locals, so what is passed below is plainly
+                    // not null rather than narrowed by flow analysis across
+                    // a closure - which is a thing the compiler is entitled
+                    // to give up on and a reader certainly is.
+                    if (honours is not { } segment || honoursRender is not { } rendering)
+                    {
+                        return;
+                    }
+
+                    if (ShowMusic?.Invoke() is { } onTheirOwn && onTheirOwn.Treats(SegmentKind.BadgesEarned))
+                    {
+                        try
+                        {
+                            show = await onTheirOwn.StartAsync(SegmentKind.BadgesEarned, nextRace.Token);
+                        }
+                        catch
+                        {
+                            // StartAsync gives the club's music back itself
+                            // when it fails before handing anything over.
+                            // The honours still go out, dry - which is the
+                            // whole point of a segment that needs nothing.
+                        }
+                    }
+
+                    await SpeakHonoursAsync(segment, rendering, show, nextRace.Token);
+                }
+
                 var generationStarted = DateTime.UtcNow;
 
                 // 1. Let the finish call and the cheering actually FINISH.
@@ -580,6 +708,11 @@ public sealed partial class RaceControlControl
                 {
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No recap - the local model isn't reachable.");
 
+                    // The honours do not need one. This is the evening the
+                    // segment is written the way it is for - see
+                    // RaceHonours.
+                    await HonoursOnTheirOwnAsync();
+
                     // The end is signalled in the finally below, once the
                     // teaser has actually been spoken.
                     await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
@@ -602,35 +735,6 @@ public sealed partial class RaceControlControl
                     ? Task.Delay(TimeSpan.FromSeconds(teaserGap))
                     : Task.CompletedTask;
 
-                // 4b. On air - the opener goes HERE, in the gap, and not
-                // before the teaser.
-                //
-                // The teaser is the line before the break ("stand by for
-                // the recap"); the recap is the one coming back from it,
-                // and it says so - "AND WE'RE BACK LIVE HERE AT THE RC
-                // TRACK". A sting in front of the teaser is three lines
-                // early and lands on nothing. In the gap it is the return
-                // from the break, which is what a sting is for.
-                //
-                // Started here rather than awaited here, so the opener
-                // plays ACROSS the gap instead of being added to it: the
-                // wait below is for whichever of the two is longer.
-                //
-                // This also puts the opener after the finish call and the
-                // race's badges with nothing special needed - they are
-                // queued ahead of the teaser, and the teaser has been
-                // heard by the time this runs. An opener landing on top
-                // of "Billy Bob has earned Nail-Biter" was the earlier
-                // arrangement's own doing.
-                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
-                {
-                    // SegmentKind.RaceRecap, so the show's running order
-                    // knows which shape of show this is - the recap gets a
-                    // rejoin on a busy night rather than the full opener for
-                    // the eleventh time. See ShowRunningOrder.
-                    opening = treatment.StartAsync(SegmentKind.RaceRecap, nextRace.Token);
-                }
-
                 var recap = await recapTask!;
                 var tookSeconds = (DateTime.UtcNow - generationStarted).TotalSeconds;
 
@@ -644,6 +748,11 @@ public sealed partial class RaceControlControl
                         : $"{AppTime.LogStampNow()}  [commentary] No recap after {tookSeconds:0.0}s - the model returned nothing. "
                           + "Any [llm] line above says whether it timed out, refused, or wasn't reachable.");
 
+                    // The honours did not need the model either, so a race
+                    // the model had nothing to say about still hands out
+                    // what it earned.
+                    await HonoursOnTheirOwnAsync();
+
                     // The end is signalled in the finally below, once the
                     // teaser has actually been spoken.
                     await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
@@ -651,6 +760,52 @@ public sealed partial class RaceControlControl
                 }
 
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Recap written and rendered in {tookSeconds:0.0}s.");
+
+                // 4b. On air - the opener goes HERE: after the recap is
+                // written and rendered, in what is left of the gap, and
+                // never before the teaser.
+                //
+                // The teaser is the line before the break ("stand by for
+                // the recap"); the recap is the one coming back from it,
+                // and it says so - "AND WE'RE BACK LIVE HERE AT THE RC
+                // TRACK". A sting in front of the teaser is three lines
+                // early and lands on nothing. Coming back from the break
+                // it is the return, which is what a sting is for.
+                //
+                // AFTER THE MODEL, and this is the whole point of the
+                // position. It used to start before `await recapTask`, on
+                // the reasoning that the opener would play ACROSS the gap
+                // rather than being added to it and the wait would be for
+                // whichever was longer. That reasoning assumed the recap
+                // arrives at about the same time as the gap ends. It does
+                // not: rehearsal 5 (10 Oct 2026) had the model take 41.6s
+                // and 37.5s to write and render a recap against a 6s gap,
+                // so the club heard the opener land, ring out, and then
+                // eighteen seconds of bed with nobody talking over it
+                // before the recap arrived - twice in twelve minutes. A
+                // show is an announcement with music under it, so there is
+                // no show to open until there is a line to open for.
+                //
+                // Nothing else moves. Started rather than awaited, so what
+                // is left of the gap and the opener's own run-up still
+                // overlap; and it is still after the finish call and the
+                // race's badges with nothing special needed, since those
+                // are queued ahead of the teaser and the teaser has been
+                // heard by the time this runs. An opener landing on top of
+                // "Billy Bob has earned Nail-Biter" was an earlier
+                // arrangement's own doing.
+                //
+                // It also means the "no recap" return above opens no show
+                // at all, rather than opening one and relying on the
+                // finally to take the club's music back off the air.
+                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
+                {
+                    // SegmentKind.RaceRecap, so the show's running order
+                    // knows which shape of show this is - the recap gets a
+                    // rejoin on a busy night rather than the full opener for
+                    // the eleventh time. See ShowRunningOrder.
+                    opening = treatment.StartAsync(SegmentKind.RaceRecap, nextRace.Token);
+                }
 
                 await gap;
 
@@ -713,6 +868,32 @@ public sealed partial class RaceControlControl
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
                     + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : "already rendered")}).");
+
+                // 4c. The honours, as a segment OF the show the recap has
+                // just opened: the announcer throws to a third voice, that
+                // voice goes over who got what, and the announcer takes the
+                // programme back. No second bed and no second opener - it is
+                // part of this show, which is what makes it a segment rather
+                // than an announcement with music behind it.
+                //
+                // HERE, IN FRONT OF THE INTERVIEW, which is the one ordering
+                // decision in this method that is not obvious. The interview
+                // and the sign-off are written by the model and may never
+                // arrive - SpeakInterviewAsync can answer Late, and then the
+                // sign-off is skipped too. The honours were written before
+                // the sequence started and always will arrive, and the
+                // badges were held back from the individual calls on the
+                // strength of this running. Behind a part that can be late
+                // they would be lost on exactly the nights the model is
+                // slow; in front of it they go out whenever the recap did.
+                //
+                // It also reads in the right order: the recap talks about
+                // the race, the honours hand out what the race earned, and
+                // then the pit lane and the sign-off close the programme.
+                if (honours is { } honoursSegment && honoursRender is { } honoursLines)
+                {
+                    await SpeakHonoursAsync(honoursSegment, honoursLines, show, nextRace.Token);
+                }
 
                 // 5. After a main, the word with the mechanic; then the
                 // sign-off, when it has been kept back to come last. Each
@@ -932,6 +1113,132 @@ public sealed partial class RaceControlControl
         _ => "ElevenLabs",
     };
 
+    // ==================== The honours ====================
+
+    /// <summary>
+    /// The honours as the recap's sequence will speak them.
+    /// </summary>
+    /// <param name="Turns">
+    /// The announcer's throw, the reader's read, the announcer's hand-back
+    /// - see RaceHonours.Segment. Never empty: a plan that exists is a
+    /// segment that is going to be said.
+    /// </param>
+    /// <param name="Voice">The honours reader's voice, or null for the announcer's own - which is said in the console.</param>
+    private sealed record HonoursPlan(IReadOnlyList<ExchangeTurn> Turns, SecondVoice? Voice);
+
+    /// <summary>
+    /// Builds the honours segment for a race's badges - the throw, the read
+    /// and the hand-back - or answers null when there is not going to be
+    /// one.
+    ///
+    /// ON THE UI THREAD, AND THAT IS NOT A DETAIL. The phrasings come out of
+    /// the director's rotation (ContinuityVoice), which is deliberately not
+    /// locked and is touched from the announcer screen's own tick - and the
+    /// sequence that speaks the honours runs on a thread-pool thread. So the
+    /// picking happens here, on the save path, where every other fact the
+    /// recap needs is gathered for the same reason.
+    ///
+    /// WHICH IS ALSO WHY THE LINES ARE MARKED AS HEARD HERE, at the pick
+    /// rather than at the queue - the one place in the app that does not
+    /// follow ContinuityVoice.Pick's own rule. That rule exists so a bridge
+    /// the gap had no room for does not burn a phrasing, and it is right;
+    /// the cost of breaking it here is one phrasing of sixteen, on a race
+    /// whose honours were then dropped because the next race was called.
+    /// The alternative is a HashSet written from whichever thread the
+    /// sequence is on and read from the UI tick, which is a torn read over
+    /// a PA.
+    ///
+    /// Null for every reason there might be no segment, and each of them is
+    /// said in the console - because the badges were either read out here or
+    /// called out one at a time, and "neither" must never be something a
+    /// club has to work out for themselves.
+    /// </summary>
+    private HonoursPlan? PlanHonours(IReadOnlyList<AchievementUnlock> unlocks)
+    {
+        // Nothing said and nothing logged when the club has not asked for
+        // the segment: that is not a club missing out on something, it is
+        // the badge calls working exactly as they always have.
+        if (!_settings.RecapBadgeHonours)
+        {
+            return null;
+        }
+
+        try
+        {
+            // The DIRECTOR's rotation, not one of this page's own, so that
+            // "nothing twice in one night" counts the whole night. Built on
+            // first use by the announcer screen; null only on a page put
+            // together without a commentary service, which is a preview
+            // pass and not a race night.
+            if (Commentary?.Invoke()?.Continuity is not { } rotation)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [badge] No honours segment - there is no announcer screen to take the phrasings "
+                    + "from. The badges are called out one at a time instead.");
+
+                return null;
+            }
+
+            var turns = RaceHonours.Segment(unlocks, _settings.RecapHonoursName, rotation);
+
+            if (turns.Count == 0)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [badge] No honours segment for this race - either every way of throwing to the "
+                    + "honours and coming back from them has been heard tonight, or no badge had both a driver and a name that "
+                    + "could be read out. The badges are called out one at a time instead.");
+
+                return null;
+            }
+
+            // Marked as heard NOW - see the remarks. Only the announcer's
+            // own turns: the read in the middle is built from the badges and
+            // is different every race, so there is no phrasing to rotate and
+            // nothing worth remembering about it.
+            foreach (var turn in turns)
+            {
+                if (!turn.FromCoHost)
+                {
+                    rotation.Said(turn.Line);
+                }
+            }
+
+            // The reader's voice for the engine in use. With none picked the
+            // announcer's own voice reads the honours as well - the
+            // mechanic's own answer to the same question - and that is said,
+            // because a hand-over that comes back in the same voice sounds
+            // like a fault rather than like a setting nobody filled in.
+            var engine = _announcer.VoiceEngineInUse;
+            var voices = _settings.HonoursVoice;
+            var voice = voices.IsSetFor(engine) ? voices : null;
+
+            var who = CommentaryService.Field(_settings.RecapHonoursName) is { Length: > 0 } named
+                ? named
+                : "the honours";
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [badge] In the recap: over to {who}"
+                + (voice is not null
+                    ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
+                    : $" in the announcer's own voice - no honours voice is picked for {EngineName(engine)} on the Commentary page")
+                + $" - \"{turns[1].Line}\"");
+
+            return new HonoursPlan(turns, voice);
+        }
+        catch (Exception ex)
+        {
+            // Decoration on the save path, exactly as the standings and the
+            // recap's own plan are: a fault here must never be the reason a
+            // result goes unsaved. The badges then go out as individual
+            // calls, which is the arrangement that has always worked.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [badge] No honours segment - it could not be set up: {ex.Message}. "
+                + "The badges are called out one at a time instead.");
+
+            return null;
+        }
+    }
+
     /// <summary>
     /// What is next on the program after the race just run - "A-Main
     /// (Stock Buggy)" - for the sign-off to tee up. The first round not yet
@@ -1111,6 +1418,160 @@ public sealed partial class RaceControlControl
         }
 
         return FollowOn.Spoken;
+    }
+
+    /// <summary>
+    /// Renders the honours segment's lines while the teaser and the recap
+    /// play, each in the voice that says it: the throw and the hand-back in
+    /// the announcer's with the recap's delivery, the read in the honours
+    /// reader's.
+    ///
+    /// Rendered AHEAD and not as each line is spoken, for the reason
+    /// PrepareReminderAsync exists at all: a hand-over is three lines and
+    /// so three network round trips, and three round trips in the middle of
+    /// a broadcast are three silences nobody asked for. Nothing in here
+    /// asks the model - the words were written before the sequence started
+    /// - so this is the one part of the sequence that is ready whatever the
+    /// model is doing.
+    ///
+    /// Index for index with the plan's turns, which is what lets
+    /// SpeakHonoursAsync put the hand-over beat in the right two places.
+    /// Null when it was called off or the rendering failed, and then the
+    /// segment is skipped rather than half said.
+    /// </summary>
+    private async Task<List<SpokenLine>?> RenderHonoursAsync(
+        HonoursPlan plan, (double Stability, double Style)? delivery, CancellationToken cancel)
+    {
+        try
+        {
+            var lines = new List<SpokenLine>(plan.Turns.Count);
+
+            foreach (var turn in plan.Turns)
+            {
+                if (cancel.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                // The reader talks the way their voice does, like the
+                // mechanic: the recap's punchier delivery is the
+                // announcer's own setting, and handing it to a second
+                // speaker would make both of them sound like the recap.
+                var voice = turn.FromCoHost ? plan.Voice : null;
+                var say = turn.FromCoHost ? null : delivery;
+
+                lines.Add(new SpokenLine(
+                    turn.Line, voice, say, await _announcer.PrepareReminderAsync(turn.Line, say, voice)));
+            }
+
+            return lines;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [badge] No honours segment - its lines could not be rendered: {ex.Message}. "
+                + "The badges are on the drivers' records.");
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Speaks the honours: the announcer's throw, the read in the third
+    /// voice, and the announcer's hand-back - a line at a time, each queued
+    /// once the one before it has been heard, with the hand-over beat and
+    /// the nudge of the bed wherever the voice changes hands.
+    ///
+    /// WHY THE BEAT IS THE SEGMENT. The turns were always going to be said
+    /// in two voices, and queued back to back they come out concatenated,
+    /// because the announcer's queue speaks what it is given with no gap at
+    /// all. Two people in a booth do not do that: the one about to answer
+    /// waits for the other to finish the thought, and that wait is what
+    /// tells a room there are two of them rather than one voice with a
+    /// setting changed halfway through. So it is ShowTreatment's own
+    /// HandOverAsync and not a copy of it - the same beat, the same nudge,
+    /// the same numbers a two-hander inside a block gets
+    /// (CommentaryExchange.HandoffBeat and HandoffNudge). With no bed under
+    /// it the nudge does nothing and the beat is still there, which is
+    /// exactly right.
+    ///
+    /// With no treatment wired at all there is no beat, which is a page
+    /// built without an announcer screen rather than a race night.
+    ///
+    /// Stops between lines when the next race is called to the grid, as the
+    /// interview does, rather than leaving a third voice reading out badges
+    /// over a staging call.
+    /// </summary>
+    /// <param name="plan">The segment, as PlanHonours built it.</param>
+    /// <param name="rendered">Its lines, rendered while the teaser and the recap played.</param>
+    /// <param name="show">The show the honours are a segment of, for the bed's nudge. Null when there is no music.</param>
+    /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
+    private async Task SpeakHonoursAsync(
+        HonoursPlan plan, Task<List<SpokenLine>?> rendered, ShowRun? show, CancellationToken nextRace)
+    {
+        const string stopped = "Honours stopped - the next race was called to the grid. The badges are on the drivers' records.";
+
+        if (!await HeardOutAsync(nextRace))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+            return;
+        }
+
+        var (timedOut, lines) = await WithinAsync(rendered, FollowOnWait, nextRace);
+
+        if (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+            return;
+        }
+
+        if (lines is null)
+        {
+            // Said either way, and said as a [badge] line rather than a
+            // [commentary] one: the badges were held back from the
+            // individual calls on the strength of this segment running, so
+            // a club whose room heard nothing at all about them has to be
+            // able to find out why from the console. They are still on
+            // every driver's record, on the results card, and in the
+            // [badge] lines above.
+            StatusMessage?.Invoke(timedOut
+                ? $"{AppTime.LogStampNow()}  [badge] Honours skipped - they were not rendered within "
+                  + $"{FollowOnWait.TotalSeconds:0}s of the recap ending. The badges are on the drivers' records."
+                : $"{AppTime.LogStampNow()}  [badge] Honours skipped - their lines could not be rendered. "
+                  + "The badges are on the drivers' records.");
+
+            return;
+        }
+
+        // Where the voice changes hands, worked out by the file whose
+        // business that is rather than by comparing turns here - see
+        // CommentaryExchange.Handoffs, whose own note is that a caller
+        // comparing FromCoHost for itself is a caller that will get it
+        // wrong the day a three-way exchange exists. This is that day.
+        var handoffs = CommentaryExchange.Handoffs(plan.Turns).ToHashSet();
+        var treatment = ShowMusic?.Invoke();
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i > 0)
+            {
+                if (!await HeardOutAsync(nextRace))
+                {
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+                    return;
+                }
+
+                if (handoffs.Contains(i) && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
+                {
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+                    return;
+                }
+            }
+
+            Say(lines[i]);
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Honours spoken: \"{plan.Turns[1].Line}\"");
     }
 
     /// <summary>Speaks the sign-off kept back for the end, once everything before it has been heard.</summary>
@@ -2125,8 +2586,12 @@ public sealed partial class RaceControlControl
                 if (record.IsDemo)
                 {
                     // Cleared rather than left over from the last real race, so the
-                    // results card never shows somebody else's badges.
+                    // results card never shows somebody else's badges. The honours
+                    // segment too, for the same reason and in the same breath: this
+                    // branch does not call AwardAchievements, so its own clearing of
+                    // the plan never runs.
                     _lastUnlocks = new List<AchievementUnlock>();
+                    _honours = null;
 
                     StatusMessage?.Invoke(
                         "[session] Demo race - kept in Race History marked [DEMO] only. It is not linked to a heat and "

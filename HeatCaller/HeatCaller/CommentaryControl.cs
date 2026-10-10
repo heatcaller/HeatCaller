@@ -80,6 +80,19 @@ public sealed class CommentaryControl : UserControl
     private readonly Button _btnLoadVoices = new();
     private readonly Button _btnTestMechanic = new();
 
+    // --- The honours (10 Oct 2026) ---
+    //
+    // The badges a race unlocked, read out as a segment of the recap by a
+    // THIRD voice: the announcer throws to them, they go over who got
+    // what, and the announcer takes the programme back. Beside the
+    // mechanic's rows because it is the same two questions - what do we
+    // call them, and which voice are they - answered the same way, and
+    // because both belong to the recap's broadcast. See RaceHonours.
+    private readonly CheckBox _chkBadgeHonours = new ThemedCheckBox();
+    private readonly TextBox _txtHonoursName = new();
+    private readonly ComboBox _cmbHonoursVoice = new();
+    private readonly Button _btnTestHonours = new();
+
     /// <summary>Which engine's voices the mechanic's list holds - see FillMechanicVoices.</summary>
     private readonly Label _lblVoiceSource = new();
 
@@ -142,6 +155,7 @@ public sealed class CommentaryControl : UserControl
     private (Font Font, int Count, int Width)? _toneWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _coHostVoiceWidth;
+    private (Font Font, int Count, int Width)? _honoursVoiceWidth;
 
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
     private const string TestCaption = "Test Connection";
@@ -185,6 +199,17 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>Says a test line in the mechanic's voice, even while the announcer is muted. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsMechanic { get; set; }
+
+    /// <summary>
+    /// The same for the honours reader, with a line of the kind they
+    /// actually say.
+    ///
+    /// Its own hook and not the mechanic's reused: the hook carries the
+    /// test LINE as well as the voice, and hearing a prospective honours
+    /// reader say "we went up a tooth on the pinion" tells a club nothing
+    /// about whether they sound right reading out badges.
+    /// </summary>
+    internal Action<SecondVoice>? SpeakAsHonours { get; set; }
 
     /// <summary>
     /// Plays a show open with a test line over it, as a real segment
@@ -899,6 +924,29 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
 
+        Check(_chkBadgeHonours, "After a race, a third voice reads out the badges it unlocked");
+        _chkBadgeHonours.Checked = _settings.RecapBadgeHonours;
+        _chkBadgeHonours.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapBadgeHonours = _chkBadgeHonours.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
+        _txtHonoursName.MaxLength = 40;
+        _txtHonoursName.Text = _settings.RecapHonoursName ?? string.Empty;
+        _txtHonoursName.TextChanged += (_, _) =>
+        {
+            _settings.RecapHonoursName = _txtHonoursName.Text.Trim();
+            _settings.Save();
+        };
+
+        _cmbHonoursVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbHonoursVoice.SelectedIndexChanged += (_, _) => SaveHonoursVoice();
+
+        _btnTestHonours.Text = "Test Voice";
+        _btnTestHonours.Click += (_, _) => SpeakAsHonours?.Invoke(_settings.HonoursVoice);
+
         var mechanicGrid = new FieldGrid();
 
         Stepped(mechanicGrid.AddRow("Mechanic's name:", Line(_txtMechanicName, Suffix("blank for \"the team's mechanic\" - the model never makes a name up"))));
@@ -907,12 +955,21 @@ public sealed class CommentaryControl : UserControl
             "The list is the voice engine chosen on Voice Settings. A voice is kept for each engine, so switching engine "
             + "there needs one picked here for the new engine too - with none picked, the announcer's own voice answers.");
 
+        var honoursGrid = new FieldGrid();
+
+        Stepped(honoursGrid.AddRow("Honours reader:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
+        Stepped(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
+        honoursGrid.AddHint(
+            "Filled from the same engine as the mechanic's, beside Load Voices above, and kept per engine the same way - "
+            + "with none picked, the announcer's own voice reads the honours too, which still hands them out and is better "
+            + "than nothing.");
+
         var broadcast = new Section("Broadcast");
 
         broadcast.Add(Hint(
-            "recap  ->  interview (after a main)  ->  sign-off.   Dresses the recap up as a TV broadcast. The model writes "
-            + "every part from the race's facts, like the recap itself, and the recap and intros say whether a race was a "
-            + "heat or a main."));
+            "recap  ->  honours  ->  interview (after a main)  ->  sign-off.   Dresses the recap up as a TV broadcast. The "
+            + "model writes every part from the race's facts, like the recap itself - except the honours, which are built "
+            + "from the badges and need no model at all. The recap and intros say whether a race was a heat or a main."));
         broadcast.Add(_chkOpening, stretch: false);
         broadcast.Add(_chkClosing, stretch: false);
         broadcast.Add(showGrid);
@@ -921,7 +978,16 @@ public sealed class CommentaryControl : UserControl
             "The announcer asks, the mechanic answers, twice. The mechanic talks about the race and about the setup changes "
             + "logged for the winning car in the Garage on the day - and says nothing about the car's settings when none "
             + "are logged. Heats don't get one."));
-        broadcast.Add(mechanicGrid, gapBelow: 0);
+        broadcast.Add(mechanicGrid);
+        broadcast.Add(_chkBadgeHonours, stretch: false, gapBelow: UiLayout.HintGap);
+        broadcast.Add(Hint(
+            "The badges the race just unlocked, read out as a segment rather than called out one at a time at the flag: "
+            + "the announcer throws to the reader, they go over who got what, and it comes back. This one needs no model "
+            + "at all - the words are built from the badges themselves - so it is there on an evening the AI is switched "
+            + "off. Ticking it MOVES the badge calls into the recap instead of adding to them, so nobody hears a badge "
+            + "twice; untick it and the individual calls at the flag come back, exactly as they are set up on Voice "
+            + "Settings -> Announcements."));
+        broadcast.Add(honoursGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // Which segments to run
@@ -1191,9 +1257,11 @@ public sealed class CommentaryControl : UserControl
         show.Add(Hint(
             "The set pieces, where filling time is the point. The cold open and the sign-off come ticked. Race "
             + "intros and recaps are here too: the recap's music lands in the gap after the teaser, and an intro's "
-            + "bed is taken away the moment the countdown starts rather than playing over the horn. Nothing that "
-            + "fires during a race is on the list - a battle call is a remark over a race in progress, not a set "
-            + "piece."),
+            + "bed is taken away the moment the countdown starts rather than playing over the horn. The honours are "
+            + "a segment OF the recap, so on an ordinary night they play under the recap's own music - tick them "
+            + "here and they also get a show of their own on a night with no recap, which is the night they are the "
+            + "whole programme. Nothing that fires during a race is on the list - a battle call is a remark over a "
+            + "race in progress, not a set piece."),
             gapBelow: UiLayout.HintGap);
 
         for (var i = 0; i < ShowSegments.Candidates.Count; i++)
@@ -1244,7 +1312,7 @@ public sealed class CommentaryControl : UserControl
         _textSize.Keep(() => FieldGrid.LineUp(new[]
         {
             connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
-            pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, coHostGrid,
+            pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, honoursGrid, coHostGrid,
             showMusicGrid,
         }));
 
@@ -1307,11 +1375,13 @@ public sealed class CommentaryControl : UserControl
         Fit(_txtShowName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_txtMechanicName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtCoHostName, UiLayout.AtTextSize(MechanicNameWidth));
+        Fit(_txtHonoursName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtTeaser, UiLayout.AtTextSize(TeaserWidth), Pieces.LineHeight(_txtTeaser.Font) * TeaserLines + UiLayout.HintGap * 2);
 
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
         Fit(_cmbMechanicVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbMechanicVoice, ref _voiceWidth)));
         Fit(_cmbCoHostVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
+        Fit(_cmbHonoursVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
 
         foreach (var number in new[]
                  {
@@ -1377,6 +1447,9 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The same reading, for the co-host - held exactly as the mechanic's is, one voice per engine.</summary>
     private VoiceChoice SavedCoHostVoice(VoiceEngine engine) => SavedSecondVoice(_settings.CoHostVoice, engine);
 
+    /// <summary>And for the honours reader, the third voice. Same shape again - see SavedSecondVoice.</summary>
+    private VoiceChoice SavedHonoursVoice(VoiceEngine engine) => SavedSecondVoice(_settings.HonoursVoice, engine);
+
     /// <summary>
     /// Which voice a second speaker has saved for an engine, as the
     /// picker shows it.
@@ -1411,6 +1484,12 @@ public sealed class CommentaryControl : UserControl
     /// voice it offers. The saved one stays on the list even when the engine
     /// no longer offers it: it is what is set, and the page shouldn't show
     /// otherwise.
+    ///
+    /// And the co-host's list, and the honours reader's, in the SAME pass -
+    /// they are the same voices off the same engine, so one Load Voices
+    /// fills all three and there is no way for two of the lists to be
+    /// showing different engines. The name is the mechanic's because the
+    /// mechanic came first and the Load Voices button sits on their row.
     /// </summary>
     /// <param name="engine">The engine to show; null for the one in use.</param>
     /// <param name="loaded">The engine's voices, or null before they have been loaded.</param>
@@ -1442,30 +1521,40 @@ public sealed class CommentaryControl : UserControl
             var index = saved.Id.Length == 0 ? 0 : choices.FindIndex(c => string.Equals(c.Id, saved.Id, StringComparison.Ordinal)) + 1;
             _cmbMechanicVoice.SelectedIndex = Math.Max(0, index);
 
-            // The co-host picks from the same engine's voices, and is
-            // filled in the same pass: one Load Voices for both, and no
-            // way for the two lists to be showing different engines.
-            var coHostSaved = SavedCoHostVoice(shown);
-            var coHostChoices = choices.ToList();
-
-            if (coHostSaved.Id.Length > 0 && !coHostChoices.Any(c => string.Equals(c.Id, coHostSaved.Id, StringComparison.Ordinal)))
+            // The other two speakers pick from the same engine's voices
+            // and are filled here, in the same pass - see the remarks.
+            //
+            // Through ONE local function rather than a block each. The
+            // co-host's was a copy of the mechanic's, and a third copy for
+            // the honours reader is how three lists start disagreeing about
+            // which entry means the announcer's own voice and where the
+            // saved-but-no-longer-offered one goes.
+            void FillSecondVoice(ComboBox picker, VoiceChoice savedForThem)
             {
-                coHostChoices.Insert(0, coHostSaved);
+                var theirs = choices.ToList();
+
+                if (savedForThem.Id.Length > 0 && !theirs.Any(c => string.Equals(c.Id, savedForThem.Id, StringComparison.Ordinal)))
+                {
+                    theirs.Insert(0, savedForThem);
+                }
+
+                picker.Items.Clear();
+                picker.Items.Add(AnnouncersVoice);
+
+                foreach (var choice in theirs)
+                {
+                    picker.Items.Add(choice);
+                }
+
+                var at = savedForThem.Id.Length == 0
+                    ? 0
+                    : theirs.FindIndex(c => string.Equals(c.Id, savedForThem.Id, StringComparison.Ordinal)) + 1;
+
+                picker.SelectedIndex = Math.Max(0, at);
             }
 
-            _cmbCoHostVoice.Items.Clear();
-            _cmbCoHostVoice.Items.Add(AnnouncersVoice);
-
-            foreach (var choice in coHostChoices)
-            {
-                _cmbCoHostVoice.Items.Add(choice);
-            }
-
-            var coHostIndex = coHostSaved.Id.Length == 0
-                ? 0
-                : coHostChoices.FindIndex(c => string.Equals(c.Id, coHostSaved.Id, StringComparison.Ordinal)) + 1;
-
-            _cmbCoHostVoice.SelectedIndex = Math.Max(0, coHostIndex);
+            FillSecondVoice(_cmbCoHostVoice, SavedCoHostVoice(shown));
+            FillSecondVoice(_cmbHonoursVoice, SavedHonoursVoice(shown));
         }
         finally
         {
@@ -1479,6 +1568,7 @@ public sealed class CommentaryControl : UserControl
         // The longest voice may have come or gone: the pickers measured again.
         _voiceWidth = null;
         _coHostVoiceWidth = null;
+        _honoursVoiceWidth = null;
         SizeFields();
     }
 
@@ -1716,6 +1806,39 @@ public sealed class CommentaryControl : UserControl
         _settings.Save();
     }
 
+    /// <summary>
+    /// Saves the honours reader's picked voice against the engine the list
+    /// is showing - per engine, exactly as the mechanic's and the co-host's
+    /// are, because a voice id from one engine means nothing to another.
+    /// </summary>
+    private void SaveHonoursVoice()
+    {
+        if (_fillingVoices || _cmbHonoursVoice.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        switch (_voiceListEngine)
+        {
+            case VoiceEngine.Kokoro:
+                _settings.HonoursKokoroVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.HeatCaller:
+                _settings.HonoursHeatCallerVoice = choice.Id;
+                _settings.HonoursHeatCallerVoiceName = choice.Name;
+                _settings.HonoursHeatCallerRev = choice.Rev;
+                break;
+
+            default:
+                _settings.HonoursElevenLabsVoiceId = choice.Id;
+                _settings.HonoursElevenLabsVoiceName = choice.Name;
+                break;
+        }
+
+        _settings.Save();
+    }
+
     /// <summary>Saves the picked voice against the engine the list is showing.</summary>
     private void SaveMechanicVoice()
     {
@@ -1870,8 +1993,24 @@ public sealed class CommentaryControl : UserControl
         var interviewOn = summariesOn && _chkInterview.Checked;
         _txtMechanicName.Enabled = interviewOn;
         _cmbMechanicVoice.Enabled = interviewOn;
-        _btnLoadVoices.Enabled = interviewOn;
         _btnTestMechanic.Enabled = interviewOn;
+
+        // The honours ride on the recap, so they go dark with recaps like
+        // the rest of the broadcast - but their reader's rows stay live
+        // when only the interview is off, because the two are separate
+        // speakers with separate switches.
+        _chkBadgeHonours.Enabled = summariesOn;
+
+        var honoursOn = summariesOn && _chkBadgeHonours.Checked;
+        _txtHonoursName.Enabled = honoursOn;
+        _cmbHonoursVoice.Enabled = honoursOn;
+        _btnTestHonours.Enabled = honoursOn;
+
+        // Load Voices fills all three lists in one pass
+        // (FillMechanicVoices), so it is live while ANY of the three
+        // speakers is set up. Dark only when none of them is, which is when
+        // there is nothing for a voice list to be for.
+        _btnLoadVoices.Enabled = interviewOn || honoursOn || (on && _chkCoHost.Checked);
 
         var talkingOn = on && _chkTalkingPoints.Checked;
         _numInterval.Enabled = talkingOn;

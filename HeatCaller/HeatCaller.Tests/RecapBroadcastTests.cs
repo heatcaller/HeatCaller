@@ -205,4 +205,67 @@ public sealed class RecapBroadcastTests
         Assert.False(settings.MechanicVoice.IsSetFor(VoiceEngine.ElevenLabs));
         Assert.True(settings.MechanicVoice.IsSetFor(VoiceEngine.Kokoro));
     }
+
+    // --- Where the show's music goes ----------------------------------------------------
+
+    /// <summary>
+    /// The repo, found by walking up from the test binary to check.cmd -
+    /// the same trick NavRailTests and InstallerTests use.
+    /// </summary>
+    private static string RepoRoot
+    {
+        get
+        {
+            var folder = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (folder is not null)
+            {
+                if (File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+                {
+                    return folder.FullName;
+                }
+
+                folder = folder.Parent;
+            }
+
+            throw new DirectoryNotFoundException("No folder with check.cmd in it above " + AppContext.BaseDirectory);
+        }
+    }
+
+    [Fact]
+    public void The_recaps_show_is_not_opened_until_the_recap_has_been_written()
+    {
+        // REHEARSAL 5, 10 OCT 2026. The opener and bed were started before
+        // `await recapTask`, so that the opener would play across the gap
+        // after the teaser rather than being added to it. That assumed the
+        // model answers in about the length of the gap. It does not: the
+        // night's log has the recap taking 41.6s and 37.5s to write and
+        // render against a 6s gap, and the club heard the opener land, ring
+        // out, and then eighteen seconds of bed with nobody talking over it.
+        //
+        // Pinned by reading the source rather than by driving the sequence,
+        // which needs a model, a session and a sound device. What is being
+        // held is an ORDER of two lines in one method, which is exactly what
+        // reading the file can see and what a behavioural test of this would
+        // have to fake its way around.
+        var source = File.ReadAllText(
+            Path.Combine(RepoRoot, "HeatCaller", "HeatCaller", "RaceControlControl.AfterRace.cs"));
+
+        var recapAwaited = source.IndexOf("var recap = await recapTask!;", StringComparison.Ordinal);
+        var showOpened = source.IndexOf("opening = treatment.StartAsync(SegmentKind.RaceRecap", StringComparison.Ordinal);
+
+        Assert.True(recapAwaited > 0, "RaceControlControl.AfterRace.cs no longer awaits the recap the way this test reads it.");
+        Assert.True(showOpened > 0, "RaceControlControl.AfterRace.cs no longer opens the recap's show the way this test reads it.");
+
+        Assert.True(
+            showOpened > recapAwaited,
+            "The recap's show is opened before the recap is awaited, so the club hears the opener and then however "
+            + "long the model takes with nothing over the music. Open the show once the recap is in hand.");
+
+        // And still before the gap is waited out, so what is left of the
+        // gap and the opener's own run-up overlap rather than queueing up.
+        var gapAwaited = source.IndexOf("await gap;", showOpened, StringComparison.Ordinal);
+
+        Assert.True(gapAwaited > showOpened, "The teaser gap is no longer waited out after the show opens.");
+    }
 }
