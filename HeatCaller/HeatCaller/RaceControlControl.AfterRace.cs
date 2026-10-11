@@ -361,6 +361,53 @@ public sealed partial class RaceControlControl
                 + string.Join(", ", championship.Moves.Select(m => $"P{m.Position} {m.DriverName}")));
         }
 
+        // The drivers' own records at this club, as they stood BEFORE this
+        // race (10 Oct 2026) - the recap's half of the depth, and the one
+        // thing the longest segment of the night has never had. Here, on
+        // the UI thread, beside the standings and for the same reason: it
+        // walks the session history, the programme and the profiles.
+        //
+        // WITH THIS RACE LEFT OUT, WHICH IS THE WHOLE CARE OF IT. This
+        // runs from RaceFiling's afterSaved callback, so the result is
+        // already in the history; counted in, a driver's fourth win here
+        // would be announced as their fifth and a first win as no first at
+        // all. See CommentaryReaders.GridHistory's remarks.
+        //
+        // Guarded like the standings above: a fault here used to skip the
+        // round being linked and the crash journal being cleared.
+        RaceForm? raceHistory = null;
+
+        if (commentaryAvailable && _rounds is not null)
+        {
+            try
+            {
+                var (grid, rivalries) = CommentaryReaders.GridHistory(
+                    record.Results.Select(r => r.Transponder).ToList(),
+                    round?.ClassName,
+                    _profiles,
+                    _sessionHistory,
+                    _rounds,
+                    exceptSessionId: record.Id);
+
+                // The race day goes with it, so the one fact in the
+                // recap's history that is true for the whole evening - the
+                // winner's career before tonight - is spent once a night
+                // rather than once a race. See RaceForm.NightKey.
+                raceHistory = new RaceForm(grid, rivalries, round?.ClassName, _events?.Active?.Id);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Recap goes without the drivers' records - they could not be worked out: {ex.Message}");
+            }
+        }
+
+        if (raceHistory is { Grid.Count: > 0 })
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Recap has the club's history for {Plural.Of(raceHistory.Grid.Count, "finisher")}.");
+        }
+
         // Heat or main, the opening and sign-off, the mechanic - from the
         // settings, the program and the Garage, so worked out here on the
         // UI thread for the same reason as the standings, and guarded the
@@ -528,8 +575,24 @@ public sealed partial class RaceControlControl
                 // model being slow. Nothing cancels followOnWork until the
                 // recap has been awaited, except the next race or the
                 // sequence giving up.
+                // Which of the club's own history facts the recap's prompt
+                // ended up carrying, so they can be marked as spent once
+                // the recap has actually been SPOKEN.
+                //
+                // Held here and marked far below rather than inside the
+                // service, and that is the whole care of it: FactPack's
+                // discipline is "written AND spoken", a recap gets written
+                // and then dropped often enough to have its own method for
+                // it (ForgetRaceSummary, just below), and marking on
+                // written would burn the club's best fact of the night on a
+                // request nobody heard. Every way out between here and the
+                // queueing leaves this unmarked, which is correct.
+                PackedFacts? recapHistory = null;
+
                 var generation = commentaryAvailable
-                    ? _commentary!.BuildRaceSummaryAsync(record, championship, plan?.Context, followOnWork.Token)
+                    ? _commentary!.BuildRaceSummaryAsync(
+                        record, championship, plan?.Context, raceHistory, followOnWork.Token,
+                        historyPacked: packed => recapHistory = packed)
                     : null;
 
                 // A recap that was written but never spoken is not "the last
@@ -735,6 +798,27 @@ public sealed partial class RaceControlControl
                     ? Task.Delay(TimeSpan.FromSeconds(teaserGap))
                     : Task.CompletedTask;
 
+                // 4a. THE COMMERCIAL BREAK - the sponsors, over the wait for
+                // the model. The club owner's words: "I want the sponsors to
+                // play as a commercial break after the race and before the
+                // race show recap. This way we can fill the time it takes to
+                // generate the content."
+                //
+                // HERE, and nowhere else. The teaser has been heard - that
+                // is the line into the break - and the recap has not been
+                // awaited yet, so what this holds is exactly the time the
+                // model is taking. See HoldTheCommercialBreakAsync for what
+                // ends it, and for the floor and the ceiling.
+                //
+                // The GAP is started above and awaited below, unchanged. It
+                // is the beat between the teaser and the recap, and the
+                // break covers the same wait, so the two overlap rather than
+                // stacking - a six-second beat does not become six seconds
+                // of silence in front of forty seconds of adverts. On a
+                // night with no break this method returns at once and the
+                // timing of everything here is exactly what it was.
+                await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token);
+
                 var recap = await recapTask!;
                 var tookSeconds = (DateTime.UtcNow - generationStarted).TotalSeconds;
 
@@ -868,6 +952,15 @@ public sealed partial class RaceControlControl
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
                     + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : "already rendered")}).");
+
+                // SPENT HERE, and nowhere earlier. The recap is queued to
+                // the announcer, which is the same bar the teaser above is
+                // held to - from this line on the room hears it. Marking
+                // the facts here is what stops the next recap of the same
+                // drivers reading out the same records, and leaving it
+                // until here is what stops a dropped recap taking them off
+                // the night for nothing. See CommentaryService.HistorySaid.
+                _commentary!.HistorySpoken(recapHistory);
 
                 // 4c. The honours, as a segment OF the show the recap has
                 // just opened: the announcer throws to a third voice, that
@@ -1733,6 +1826,170 @@ public sealed partial class RaceControlControl
         return await queued.Task;
     }
 
+    // ==================== The commercial break ====================
+    //
+    // The club owner's ask, in his words: "I want the sponsors to play as a
+    // commercial break after the race and before the race show recap. This
+    // way we can fill the time it takes to generate the content." And: "big
+    // screen should align with that."
+    //
+    // WHAT A BREAK IS is in CommercialBreak - the count the Big Screen
+    // follows, the floor, the ceiling, and the one pure function that says
+    // whether a break is over and why. WHEN one runs is here, because that
+    // is a step of this sequence and nothing else in the app has any
+    // business starting one.
+
+    /// <summary>
+    /// Holds a commercial break over the wait for the recap: the Big Screen
+    /// runs the club's sponsors one slide straight into the next, the paid
+    /// sales reads ride the video tails exactly as they already did, and the
+    /// on-air band says COMMERCIAL BREAK. Returns when the break is over,
+    /// whether or not one ran.
+    ///
+    /// WHERE IT SITS, AND WHY. After the teaser has been HEARD and before
+    /// `await recapTask`. The teaser is the line INTO the break - "give us a
+    /// second and we'll tell you how that one unfolded" is a station going
+    /// to the adverts - and the recap is the one coming back from it, which
+    /// is what it already says ("and we're back live here at the RC track").
+    /// The recap's own opener still waits for the model, where rehearsal 5
+    /// moved it, and nothing about that order changes: see step 4b.
+    ///
+    /// THE TEASER PLAYS EITHER WAY. It is not conditional on there being a
+    /// break: it is the lead-in, it is the one part of this sequence that
+    /// needs no model at all, and a club with no sponsors still wants to be
+    /// told to stand by.
+    ///
+    /// WHAT ENDS IT, and in what order, is CommercialBreak.Over - read the
+    /// note there, because the order of the four is the design and the floor
+    /// is the condition on two of them.
+    ///
+    /// HOW THE SCREEN IS ALWAYS GIVEN BACK. One Begin, on the line before
+    /// the try, with nothing between the two that can throw; one End, in the
+    /// finally. There is no path out of this method - a return, the token, a
+    /// failure nobody expected - that does not run it, and
+    /// CommercialBreak.End is idempotent and never counts below zero on top
+    /// of that. The shape EndShowAsync and ShowLifetime use for the show's
+    /// music, and the one BigScreenForm uses for AdBreak.
+    /// </summary>
+    /// <param name="recapReady">The recap being written AND rendered - see BuildRecapAsync.</param>
+    /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
+    private async Task HoldTheCommercialBreakAsync(Task recapReady, CancellationToken nextRace)
+    {
+        // Off by default, like every other part of the broadcast: a club
+        // that never opens the Commentary page hears the recap it always
+        // has. See AppSettings.RecapAdBreak.
+        if (!_settings.RecapAdBreak)
+        {
+            return;
+        }
+
+        // Already called to the grid - the finish call and the teaser took
+        // longer than the turnaround. Nothing of this race's sequence is
+        // wanted now, and the break would be the first thing in the way.
+        if (nextRace.IsCancellationRequested)
+        {
+            return;
+        }
+
+        // THE GATE THAT KEEPS THIS ADDITIVE - see
+        // CommercialBreak.SponsorScreenUp. A club with no sponsor slides,
+        // with them switched off, or with no Big Screen open has nothing to
+        // put in a break, and a break with nothing in it is silence added in
+        // front of the recap. That is a regression and not a feature, so
+        // those clubs hear tonight exactly what they heard last week:
+        // teaser, wait, recap.
+        //
+        // Asked here rather than at the flag with the standings and the
+        // recap's plan, which is where this method's siblings are worked
+        // out, because this one answer can change during the finish call: a
+        // volunteer who opens the Big Screen while the winner is being
+        // called should get their adverts.
+        if (!CommercialBreak.SponsorScreenUp)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No commercial break - no Big Screen is up with the club's sponsor slides switched on.");
+
+            return;
+        }
+
+        var started = DateTime.UtcNow;
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsors have the crowd's screen until the recap is ready.");
+
+        CommercialBreak.Begin();
+
+        try
+        {
+            while (true)
+            {
+                var on = DateTime.UtcNow - started;
+
+                // IsCompleted and not awaited: a recap that failed or was
+                // called off is just as much a reason to stop the adverts,
+                // and what it came back with is the business of the line
+                // after this method returns.
+                var ending = CommercialBreak.Over(
+                    on,
+                    recapReady.IsCompleted,
+                    CommercialBreak.ShownEverything,
+                    nextRace.IsCancellationRequested);
+
+                if (ending != BreakEnding.Running)
+                {
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [commentary] Commercial break ran {on.TotalSeconds:0.0}s - {WhyTheBreakEnded(ending)}");
+
+                    return;
+                }
+
+                try
+                {
+                    await Task.Delay(CommercialBreak.Look, nextRace);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The next race, which the top of the loop says in
+                    // words - so there is one place that reports an
+                    // abandoned break rather than two that could come to
+                    // disagree about how long it ran.
+                }
+            }
+        }
+        finally
+        {
+            // Exactly once, however the loop above ended: the recap ready,
+            // the ceiling, the sponsors spent, the next race called to the
+            // grid, or a failure nobody expected. Until this runs the Big
+            // Screen keeps the sponsors over the standings and the band
+            // keeps saying COMMERCIAL BREAK - and on a club with video
+            // sponsors the rotation keeps starting another one, which is how
+            // a break left open ends up muting the club's music for the
+            // evening by the back door. See the note on CommercialBreak.
+            CommercialBreak.End();
+        }
+    }
+
+    /// <summary>
+    /// Why the break ended, in the words the console says. A break that went
+    /// wrong is otherwise impossible to account for after the night: the
+    /// four endings look identical from the room and only one of them is a
+    /// problem.
+    /// </summary>
+    private static string WhyTheBreakEnded(BreakEnding ending) => ending switch
+    {
+        BreakEnding.NextRaceCalled => "abandoned, the next race was called to the grid.",
+        BreakEnding.Ceiling => "its ceiling, and the recap is still being written. The standings go back up and it goes out when it arrives.",
+        BreakEnding.RecapReady => "the recap is written and rendered.",
+        BreakEnding.EverySponsorShown => "it has been round every sponsor, so it ends rather than playing them again.",
+
+        // Running, which the caller does not report, and anything a later
+        // hand adds without coming back here. A default rather than an
+        // exhaustive switch because a missing word must never be the thing
+        // that takes a recap down.
+        _ => "over.",
+    };
+
     /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
     private void Say(SpokenLine line, AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal)
     {
@@ -2133,6 +2390,63 @@ public sealed partial class RaceControlControl
         // On a club night a race is just a race - it isn't called a heat.
         var clubNight = _events?.EventForRound(round.Id)?.IsClubNight == true;
 
+        // The club's own records for this grid, and what the race decides
+        // in the championship (10 Oct 2026) - the two things that make two
+        // races with the same ten entries sound different.
+        //
+        // Worked out HERE and handed over, not read inside the job below:
+        // both walk the session history, the programme, the seasons and the
+        // event stores, and from the Task.Run onwards this is on a pool
+        // thread - the rule BugHunt5CommentaryTests pins for the director's
+        // own readers.
+        //
+        // Before the pending-audio handle is taken, so a fault cannot leave
+        // the staging chain waiting on an intro that is never asked for.
+        RaceForm? form = null;
+        ChampionshipAtStake? stake = null;
+
+        try
+        {
+            if (_rounds is not null)
+            {
+                var (grid, rivalries) = CommentaryReaders.GridHistory(
+                    round.AssignedTransponders,
+                    round.ClassName,
+                    _profiles,
+                    _sessionHistory,
+                    _rounds);
+
+                // The race day goes with it, and for the intro this is the
+                // fix rather than a refinement: these facts are true for
+                // the whole evening, an intro runs before every race, and
+                // without a night key a club running six heats with the
+                // same ten entries heard the same debut announced six
+                // times. See RaceForm.NightKey and ForIntro's remarks.
+                form = new RaceForm(grid, rivalries, round.ClassName, _events?.Active?.Id);
+            }
+
+            stake = CommentaryReaders.ChampionshipBefore(
+                round,
+                round.AssignedTransponders,
+                _seasons,
+                _rounds,
+                _events,
+                _sessionHistory,
+                _profiles);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the history and the standings - they could not be worked out: {ex.Message}");
+        }
+
+        if (stake is not null)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has what this race is worth in {stake.SeasonName}: "
+                + string.Join(", ", stake.OnThisGrid.Select(r => $"P{r.PositionNow} {r.Name}")));
+        }
+
         // Released however this ends - spoken, dropped, failed - and in any
         // case after the budget plus a margin, or when a countdown starts.
         var writing = _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10));
@@ -2177,6 +2491,14 @@ public sealed partial class RaceControlControl
         _ = Task.Run(async () =>
         {
             string line;
+
+            // Which of the club's own history facts this intro's prompt
+            // carried, marked as spent only once the line has been queued
+            // to the announcer - see the recap's own copy of this above,
+            // and CommentaryService.HistorySaid. An intro that arrives
+            // after the race has left staging is dropped a few lines
+            // below, and a dropped intro must cost the night nothing.
+            PackedFacts? introHistory = null;
 
             try
             {
@@ -2232,7 +2554,10 @@ public sealed partial class RaceControlControl
                         tidied = true;
                         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}");
                     },
-                    clubNight: clubNight);
+                    clubNight: clubNight,
+                    form: form,
+                    stake: stake,
+                    historyPacked: packed => introHistory = packed);
 
                 if (string.IsNullOrWhiteSpace(answer))
                 {
@@ -2287,6 +2612,13 @@ public sealed partial class RaceControlControl
                         }
 
                         _announcer.SpeakReminder(line);
+
+                        // Spent only now: the line is queued and the room
+                        // is about to hear it. The return just above - the
+                        // race having moved on from staging - leaves the
+                        // facts unmarked, so the next intro for these
+                        // drivers still has them.
+                        _commentary?.HistorySpoken(introHistory);
                     }
                     finally
                     {

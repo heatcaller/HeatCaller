@@ -18,6 +18,30 @@ public readonly record struct QualifyingLine(
     bool MadeTheCut = true);
 
 /// <summary>
+/// Where a class stands partway through its heats - the halfway
+/// standings, which had a tick box, a title and a budget and could never
+/// say a word until 10 Oct 2026.
+///
+/// WHY THE ORDER IS THE QUALIFYING CALCULATOR'S AND NOT A COUNT OF WINS
+///
+/// "Where things stand partway through the heats" is a provisional
+/// qualifying order, and the club chooses how that is worked out - best
+/// single heat, a consecutive-lap window, points. A second implementation
+/// that disagreed with the grid sheet by a place would be worse than no
+/// segment, so the reader hands over the calculator's own answer and this
+/// phrases it. Nothing in here ranks anybody.
+/// </summary>
+/// <param name="ClassName">Whose heats.</param>
+/// <param name="RoundsRun">How many of the class's rounds tonight have been recorded.</param>
+/// <param name="RoundsTotal">How many it has altogether tonight.</param>
+/// <param name="Order">The provisional order as the club's own qualifying method has it, best first.</param>
+public sealed record MeetingSoFar(
+    string ClassName,
+    int RoundsRun,
+    int RoundsTotal,
+    IReadOnlyList<QualifyingLine> Order);
+
+/// <summary>
 /// Where one driver stands in a championship, before and after tonight's
 /// race.
 ///
@@ -64,6 +88,36 @@ public static class CommentaryReportFacts
 
     /// <summary>A gap this far inside a second makes pole a statement rather than a result.</summary>
     public const double DominantPoleSeconds = 0.4;
+
+    /// <summary>
+    /// How many names the halfway standings read out.
+    ///
+    /// Three. The top of a provisional order is the news; a whole class
+    /// read out in position order is the grid sheet, which is on the wall
+    /// and on the Big Screen already. It is also as many near-identical
+    /// rows of name-and-number as a local llama3.2:3b will keep attached
+    /// to the right names - the limit Championship.MaxMoves exists for.
+    /// </summary>
+    public const int MidMeetingNames = 3;
+
+    /// <summary>
+    /// The fewest rounds a class must have run before "where things stand"
+    /// stands anywhere.
+    ///
+    /// Two. After one heat the provisional order IS that heat's result,
+    /// which the recap has just read out - so the segment would be the
+    /// same information, in the same gap, in different words. That is the
+    /// exact complaint this work answers.
+    /// </summary>
+    public const int MidMeetingLeast = 2;
+
+    /// <summary>
+    /// How many facts the halfway standings carry: how far through, the
+    /// order, and the leader's quickest lap. Three is all it builds - the
+    /// cap is here so a caller can ask for fewer without this file having
+    /// to know why.
+    /// </summary>
+    public const int MidMeetingFacts = 3;
 
     /// <summary>
     /// What qualifying decided, for the gap before the mains.
@@ -141,7 +195,8 @@ public static class CommentaryReportFacts
                 var places = mover.SeasonAveragePosition!.Value - mover.Position;
 
                 found.Add(new FactBlock($"mover:{raceKey}:{mover.DriverId}",
-                    $"{moverName} qualified {CommentaryFacts.Ordinal(mover.Position)}, about {CommentaryFacts.Invariant(places, "0")} places better than they usually manage in {cls}."));
+                    $"{moverName} qualified {CommentaryFacts.Ordinal(mover.Position)}, about {CommentaryFacts.Invariant(places, "0")} places better than they usually manage in {cls}.",
+                    FactTheme.Driver(mover.DriverId)));
             }
         }
 
@@ -161,11 +216,108 @@ public static class CommentaryReportFacts
             if (missedBy > 0 && missedBy <= NarrowMissSeconds && missedName.Length > 0)
             {
                 found.Add(new FactBlock($"missed:{raceKey}:{firstOut.DriverId}",
-                    $"{missedName} missed the top main by {CommentaryFacts.Invariant(missedBy, "0.00")}s."));
+                    $"{missedName} missed the top main by {CommentaryFacts.Invariant(missedBy, "0.00")}s.",
+                    FactTheme.Driver(firstOut.DriverId)));
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Where a class stands partway through its heats.
+    ///
+    /// Three facts at most, and the first two carry no theme because they
+    /// ARE the segment - see FactBlock.Theme. The progress line goes first
+    /// on purpose: without it "Sam heads the order" sounds like a result,
+    /// and it is not one.
+    ///
+    /// Nothing is said when the heats are done. A finished block of
+    /// qualifying is the qualifying report's subject, with its own segment,
+    /// its own budget and a better line to say about it - and two segments
+    /// reading out one order in one gap is the fault, not the fix.
+    /// </summary>
+    /// <param name="soFar">The class, its progress and the provisional order - see <see cref="MeetingSoFar"/>.</param>
+    /// <param name="raceKey">Which point in the night, so the next class and the next check get their own.</param>
+    /// <param name="most">How many facts at most.</param>
+    public static IReadOnlyList<FactBlock> MidMeetingStandings(
+        MeetingSoFar soFar,
+        string raceKey,
+        int most = MidMeetingFacts)
+    {
+        var found = new List<FactBlock>();
+
+        if (soFar.Order.Count == 0
+            || soFar.RoundsRun < MidMeetingLeast
+            || soFar.RoundsTotal <= soFar.RoundsRun)
+        {
+            return found;
+        }
+
+        var cls = CommentaryFacts.Clean(soFar.ClassName);
+        var ranked = soFar.Order.OrderBy(q => q.Position).ToList();
+
+        // "Partway through", never "halfway": the spec's own title says
+        // halfway because that is what a club ticks, and the LINE must not,
+        // because three of six is halfway and two of seven is not. A number
+        // said wrong is the one thing this layer cannot afford, and the
+        // guard above has already made sure the figures are a real fraction.
+        found.Add(new FactBlock(
+            $"midmeeting:{raceKey}:progress",
+            cls.Length > 0
+                ? $"Partway through the {cls} heats: {soFar.RoundsRun} of {Plural.Of(soFar.RoundsTotal, "round")} run."
+                : $"Partway through the heats: {soFar.RoundsRun} of {Plural.Of(soFar.RoundsTotal, "round")} run."));
+
+        // The order as the club's own method has it, said as PROVISIONAL.
+        // Every word of that matters: it is not a result, nobody has
+        // qualified yet, and a line that sounded like a result would be
+        // the timing system announcing something that has not happened.
+        var names = new List<string>();
+
+        foreach (var line in ranked.Take(Math.Max(1, MidMeetingNames)))
+        {
+            var who = CommentaryFacts.Clean(line.Name);
+
+            if (who.Length > 0)
+            {
+                names.Add($"{CommentaryFacts.Ordinal(line.Position)} {who}");
+            }
+        }
+
+        if (names.Count > 0)
+        {
+            found.Add(new FactBlock(
+                $"midmeeting:{raceKey}:order",
+                cls.Length > 0
+                    ? $"Provisional {cls} order as it stands, on the club's own qualifying method: {string.Join(", ", names)}."
+                    : $"Provisional order as it stands, on the club's own qualifying method: {string.Join(", ", names)}."));
+        }
+
+        // The leader's quickest lap of the heats - a number nobody in the
+        // room has, which is the whole argument for this layer. Themed, so
+        // a night that has just talked about them reaches for the order
+        // line alone instead.
+        //
+        // Said as their best lap and NOT as the reason they are top: the
+        // club may rank on total laps or on a lap window, and "quickest,
+        // therefore ahead" would be this builder inferring a rule it was
+        // not given.
+        var leader = ranked[0];
+        var leaderName = CommentaryFacts.Clean(leader.Name);
+
+        if (leader.BestLapSeconds > 0 && leaderName.Length > 0)
+        {
+            found.Add(new FactBlock(
+                $"midmeeting:{raceKey}:pace:{leader.DriverId}",
+                // A decimal POINT whatever the PC's region - on a
+                // comma-decimal laptop "11,482s" was read out over the PA
+                // as "eleven, four hundred eighty two". See
+                // CommentaryFacts.Invariant.
+                $"{leaderName}'s quickest lap of the heats so far: {CommentaryFacts.Invariant(leader.BestLapSeconds, "0.000")}s.",
+                FactTheme.Driver(leader.DriverId)));
+        }
+
+        return found.Count <= most ? found : found.Take(Math.Max(1, most)).ToList();
     }
 
     /// <summary>
@@ -254,7 +406,8 @@ public static class CommentaryReportFacts
             if (climberName.Length > 0)
             {
                 found.Add(new FactBlock($"champclimb:{raceKey}:{climber.DriverId}",
-                    $"{climberName} is up from {CommentaryFacts.Ordinal(climber.PositionBefore)} to {CommentaryFacts.Ordinal(climber.PositionNow)} in {cls}."));
+                    $"{climberName} is up from {CommentaryFacts.Ordinal(climber.PositionBefore)} to {CommentaryFacts.Ordinal(climber.PositionNow)} in {cls}.",
+                    FactTheme.Driver(climber.DriverId)));
             }
         }
 

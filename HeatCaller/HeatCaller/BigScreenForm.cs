@@ -89,6 +89,33 @@ public sealed class BigScreenForm : Form
     private bool _adBreakHeld;
 
     /// <summary>
+    /// Whether this window is carrying the after-race commercial break: the
+    /// sponsors running one slide straight into the next, rather than taking
+    /// a turn each with the standings.
+    ///
+    /// Set and cleared only by <see cref="UpdateCommercialBreak"/>, which
+    /// asks CommercialBreak on every tick rather than being told - so there
+    /// is nothing remembered in here that can go stale, which is the whole
+    /// of the argument for how the screen is always given back. See the note
+    /// on that method.
+    /// </summary>
+    private bool _breakHasTheScreen;
+
+    /// <summary>
+    /// How many sponsor slots this window has started since the break took
+    /// the screen. Once it reaches the club's slide count the rotation has
+    /// been round once, which is what tells Race Control that the break has
+    /// nothing left to show and should end rather than play them again - see
+    /// CommercialBreak.EverySponsorShown.
+    ///
+    /// Slots STARTED, not slides seen: a missing file or an unreadable
+    /// picture is skipped (see ShowNextSponsorSlide) and still counts, so a
+    /// club whose slides have all gone walkabout gets one pass and an ending
+    /// rather than a rotation going round for ever finding nothing.
+    /// </summary>
+    private int _breakSlidesShown;
+
+    /// <summary>
     /// The longest a video slide may hold the screen before the rotation
     /// takes it back, whatever the file says. A video that stalls part way,
     /// or one whose container lies about its length, would otherwise keep
@@ -911,7 +938,7 @@ public sealed class BigScreenForm : Form
 
         if (_showingSponsor)
         {
-            ShowLeaderboardAgain();
+            SponsorSlotEnded();
             return;
         }
 
@@ -1089,7 +1116,11 @@ public sealed class BigScreenForm : Form
             // the rotation has already moved past.
             if (_showingSponsor && _video is not null && _video.View.Visible)
             {
-                ShowLeaderboardAgain();
+                // Through the same decision the rotation's own tick makes,
+                // because during a commercial break the answer is not "the
+                // standings come back" - it is "the next sponsor follows
+                // this one". See SponsorSlotEnded.
+                SponsorSlotEnded();
             }
         });
 
@@ -1140,6 +1171,183 @@ public sealed class BigScreenForm : Form
     /// which the timer throws on - taking the Big Screen down as it opened.
     /// </summary>
     private static int SponsorIntervalMs(int seconds) => Math.Clamp(seconds, 1, 3600) * 1000;
+
+    /// <summary>
+    /// A sponsor's slot has ended - the rotation's timer running out, or a
+    /// video playing itself out. What follows depends on whether the
+    /// after-race commercial break is on: during a break the next sponsor
+    /// follows straight on, and otherwise the standings come back for their
+    /// turn exactly as they always have.
+    ///
+    /// ONE METHOD rather than the same decision written twice, in the
+    /// timer's tick and in the video's own Finished. That is precisely where
+    /// this file went wrong before: the roll call put the picture away
+    /// without stopping the video, so neither of those two routes could
+    /// reach StopSponsorVideo - the only caller of AdBreak.End in the app -
+    /// and the club's music stayed muted for a whole heat. A second copy of
+    /// a rule about what takes this screen is how that happens again.
+    /// </summary>
+    private void SponsorSlotEnded()
+    {
+        if (_sponsors is null)
+        {
+            return;
+        }
+
+        // No break, or nothing this window can put in one: the standings,
+        // which is what this has always done.
+        if (!_breakHasTheScreen
+            || !_sponsors.Current.Enabled
+            || _sponsors.SlideFileNames.Count == 0
+            || _rollCallSinceUtc is not null)
+        {
+            ShowLeaderboardAgain();
+            return;
+        }
+
+        if (_breakSlidesShown >= _sponsors.SlideFileNames.Count)
+        {
+            // Been round every sponsor the club has. The rotation does NOT
+            // start again: looping would sell a sponsor impressions nobody
+            // bought, and Race Control's break ends on this instead - see
+            // CommercialBreak.EverySponsorShown.
+            CommercialBreak.EverySponsorShown();
+
+            // And the slide that is up HOLDS the screen until the break is
+            // ended, which is the next tick or two. A station holds on its
+            // last caption; it does not flash back to a spreadsheet for two
+            // seconds and then go to the recap.
+            //
+            // A video has nothing left to hold - what is on screen at the
+            // end of one is whatever its last frame happened to be, or
+            // black - so for that the standings come back now.
+            if (_picSponsor.Visible)
+            {
+                _sponsorTimer.Interval = SponsorIntervalMs(_sponsors.Current.SlideSeconds);
+                return;
+            }
+
+            ShowLeaderboardAgain();
+            return;
+        }
+
+        // Counted BEFORE the slide is shown, because a slot that is skipped
+        // for a missing file still had its turn - see _breakSlidesShown.
+        _breakSlidesShown++;
+
+        ShowNextSponsorSlide();
+    }
+
+    /// <summary>
+    /// Keeps the crowd's screen in step with the after-race commercial
+    /// break: the sponsors take the screen when one starts, and the
+    /// standings come back when it ends.
+    ///
+    /// ASKED ON THE TICK, which is the whole safety argument and the same
+    /// one UpdateOnAir makes. Furniture with exactly one route off this
+    /// screen stays on the moment that route is missed - the sponsor video
+    /// played over the start of a heat because StopSponsorVideo was its only
+    /// way off, and the roll call went round it. Here there is no route at
+    /// all: twice a second this asks CommercialBreak whether a break is on
+    /// and makes the screen agree, so a break that ends, one abandoned
+    /// because the next race was called, one whose Race Control page has
+    /// gone away, and one that started while this window was being built all
+    /// come to the same place within half a second. Nothing is remembered
+    /// between calls except which side of that answer the screen is already
+    /// on, so there is nothing that can go stale.
+    ///
+    /// It also REPORTS this window back, which is how Race Control knows
+    /// whether there is any point having a break at all: a break with no
+    /// screen behind it is silence added in front of the recap. Reported on
+    /// the tick rather than counted up when the window opens and down when
+    /// it closes - the way AdBreak counts a video - because a count can be
+    /// got wrong in the direction that costs something, and a report that
+    /// stops arriving cannot. See CommercialBreak.SponsorScreenUp.
+    /// </summary>
+    private void UpdateCommercialBreak()
+    {
+        if (IsDisposed || Disposing || _sponsors is null)
+        {
+            return;
+        }
+
+        var canCarryOne = false;
+        bool onBreak;
+
+        try
+        {
+            // Everything a break needs of this window: the club's slides
+            // switched on, at least one of them, and no roll call holding
+            // the screen for whose car has not been heard yet.
+            canCarryOne = _sponsors.Current.Enabled
+                          && _sponsors.SlideFileNames.Count > 0
+                          && _rollCallSinceUtc is null;
+
+            if (canCarryOne)
+            {
+                CommercialBreak.SponsorScreenReady();
+            }
+
+            onBreak = CommercialBreak.Running;
+        }
+        catch
+        {
+            // No break rather than no Big Screen - the bargain UpdateOnAir,
+            // UpdateAttract, UpdateTicker and UpdateRollCall all make. The
+            // sponsors file is saved from the Sponsors page while this window
+            // is up, and a store caught mid-save must not take the crowd's
+            // screen down with it.
+            onBreak = false;
+        }
+
+        if (!onBreak || !canCarryOne)
+        {
+            if (!_breakHasTheScreen)
+            {
+                return;
+            }
+
+            _breakHasTheScreen = false;
+
+            // Handed back NOW rather than when the slot this window happens
+            // to be in runs out: the recap's opener is seconds away, and a
+            // sponsor slide still up underneath it is a broadcast talking
+            // over its own advert.
+            //
+            // A VIDEO keeps its slot, which is the one exception. Cutting an
+            // advert off part way is worse for the sponsor than letting it
+            // run under the recap's first line - the rule ShowSponsorVideo
+            // already states - and the video's own Finished brings the
+            // screen back within seconds anyway.
+            if (_showingSponsor && !(_video is not null && _video.View.Visible))
+            {
+                ShowLeaderboardAgain();
+            }
+
+            return;
+        }
+
+        if (_breakHasTheScreen)
+        {
+            return;
+        }
+
+        // The break has just started. The sponsors take the screen NOW
+        // rather than when whatever is left of LeaderboardSeconds runs out:
+        // that is up to a minute by default, which would be the whole of the
+        // wait this break exists to fill, spent on the standings.
+        _breakHasTheScreen = true;
+
+        // One either way: a slide already up when the break began has had
+        // its slot, so the break still ends after one pass round the club's
+        // sponsors rather than one pass and a slide.
+        _breakSlidesShown = 1;
+
+        if (!_showingSponsor)
+        {
+            ShowNextSponsorSlide();
+        }
+    }
 
     private void OnRaceEvent(RacerStanding standing, bool isValid, bool isFastestLap) => SafeInvoke(RefreshAll);
 
@@ -1413,6 +1621,11 @@ public sealed class BigScreenForm : Form
         UpdateTrackMap();
         UpdateTicker();
         UpdateOnAir();
+
+        // Last, so everything above has had its turn at the screen before
+        // the break takes it or gives it back. Asked here for the reason
+        // UpdateOnAir is - see the note on it.
+        UpdateCommercialBreak();
 
         // Also refresh the banner here, not just on lap events - otherwise
         // it goes stale between laps, and never recovers once a displayed
@@ -1730,6 +1943,25 @@ public sealed class BigScreenForm : Form
             {
                 caption = OnAirTreatment.Caption(ShowOnAir.Caption);
             }
+            else if (OnAirTreatment.Wanted && CommercialBreak.Running)
+            {
+                // The commercial break is not a show - no opener, no bed and
+                // nobody talking over it - but it IS what is on air, and a
+                // band that went dark for the forty seconds of adverts
+                // between the teaser and the recap would read as the
+                // broadcast having stopped rather than gone to a break. It
+                // is the same band, the same club switch and the same one
+                // line of words; it is simply not a segment, which is why it
+                // has a caption of its own rather than a SegmentKind. See
+                // CommercialBreak.OnAirCaption.
+                //
+                // The SHOW wins where both are somehow on. A show is what
+                // the room is actually hearing, and the two cannot overlap
+                // in the sequence as written - the break ends before the
+                // recap's opener is started.
+                show = true;
+                caption = OnAirTreatment.Caption(CommercialBreak.OnAirCaption);
+            }
         }
         catch
         {
@@ -1764,6 +1996,18 @@ public sealed class BigScreenForm : Form
 
     /// <summary>Whether the leaderboard is still up - the same test's proof that the band covers nothing.</summary>
     internal bool BoardUpForTests => _grid.Visible;
+
+    /// <summary>
+    /// Whether the commercial break has the screen - for the test that
+    /// drives a real break past a real Big Screen (CommercialBreakTests).
+    /// Nothing in the app reads it: the alternative was that test reaching
+    /// in by reflection, which would go quietly wrong the day a field is
+    /// renamed.
+    /// </summary>
+    internal bool BreakHasTheScreenForTests => _breakHasTheScreen;
+
+    /// <summary>Whether a sponsor slide or video is on the screen - the same test's proof that the break actually took it.</summary>
+    internal bool SponsorUpForTests => _showingSponsor;
 
     /// <summary>The roll call in the look's colours - called as it opens, and whenever the look changes.</summary>
     private void ColourRollCall()

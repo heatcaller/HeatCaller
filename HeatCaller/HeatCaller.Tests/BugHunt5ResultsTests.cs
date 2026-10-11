@@ -224,7 +224,17 @@ public sealed class BugHunt5ResultsTests : IDisposable
 
         race.Reset();
 
-        Assert.True(race.RestoreSnapshotAfterGap(snapshot, takenUtc));
+        // A MINUTE EXACTLY, handed over rather than measured.
+        //
+        // The gap is wall-clock time and the restore moves the decoder's
+        // reference by it, so measuring it to DateTime.UtcNow made every
+        // lap assertion below depend on how long this method took to run.
+        // It passed on one machine for a day and then failed on another by
+        // 20ms - "expected 10000, actual 9980" - which is not a race-timing
+        // fault at all, it is this test timing itself. The assertions here
+        // are exact on purpose (the laps have to add up to the elapsed
+        // time), so the gap is what gets pinned.
+        Assert.True(race.RestoreSnapshotAfterGap(snapshot, takenUtc, takenUtc + TimeSpan.FromSeconds(60)));
         Assert.Equal(FlagState.Red, race.Flag);
     }
 

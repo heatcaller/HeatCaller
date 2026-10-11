@@ -105,6 +105,30 @@ public partial class AnnouncerControl
             _director.NameFor = NameFor;
             _director.Status += line => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
 
+            // THE NIGHT'S LEDGER, HANDED TO THE TWO PROMPT BUILDERS THAT DO
+            // NOT COME THROUGH THE DIRECTOR (10 Oct 2026).
+            //
+            // The race intro and the race recap have prompt builders of
+            // their own in CommentaryService, and both now carry the club's
+            // own history. They carried it with no idea what the night had
+            // already said, because SaidTonight lives on the director - so
+            // a club running six heats with the same ten entries heard
+            // "Billy is making their first ever Box Stock start" in all six
+            // intros, which is a sharper version of the very complaint the
+            // history was added to answer.
+            //
+            // FILTER ONLY from the service's side: it reads this to leave
+            // out what has been said and never marks it. Marking happens
+            // where the line is actually queued to the announcer, because a
+            // recap written and then dropped must cost the night nothing -
+            // see CommentaryService.HistorySaid for the whole argument.
+            //
+            // Here because this is the one place in the app that holds both
+            // the service and the director, and here rather than in
+            // MainForm's wiring because the director is built on first use
+            // and may not exist when anything else is hooked up.
+            _commentary.HistorySaid = _director.Said;
+
             return _director;
         }
     }

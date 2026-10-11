@@ -91,6 +91,15 @@ public partial class MainForm
         // Who is on track, and the class their record should be counted
         // over. Taken from the session rather than the programme: it is
         // the drivers actually staged, which is what the intro is about.
+        //
+        // TWO SEGMENTS READ THIS ONE: the grid history and, since 10 Oct
+        // 2026, the form guide. A form guide is "how the drivers in a main
+        // have been going lately", which is the recent finishes this
+        // already counts for this grid in this class - so a reader of its
+        // own would walk the same history on the same tick for the same
+        // numbers, and the two could disagree after a result was corrected
+        // mid-evening. What differs is what each SAYS; see
+        // CommentaryDirector's FormGuide case.
         director.GridHistory = () => CommentaryReaders.GridHistory(
             _race.GetOrderedStandings().Select(s => s.TransponderId).ToList(),
             _activeRound?.ClassName,
@@ -116,6 +125,36 @@ public partial class MainForm
             // on provisional pole. The 25 Sep audit closed that everywhere
             // else and missed this call.
             _raceEvents.QualifyingScope());
+
+        // Where the class on track stands partway through its heats.
+        //
+        // The halfway standings had a title, a tier, a budget and a tick
+        // box on the Commentary page and no reader at all, so a club that
+        // ticked it got silence for ever and nothing said why. Same scope
+        // and same round filter as the qualifying report above, for the
+        // same two reasons: tonight's rounds and no others (see the
+        // August-pole note there), and the club's own qualifying method
+        // rather than the calculator's default - a provisional order that
+        // disagreed with the grid sheet by a place would be worse than no
+        // segment at all.
+        director.MidMeeting = () => CommentaryReaders.MidMeeting(
+            _activeRound?.ClassName,
+            _rounds,
+            _sessionHistory,
+            _profiles,
+            _raceEvents.ActiveRoundScope(),
+            ClassOnTrack(),
+            _raceEvents.QualifyingScope());
+
+        // What the club did on this date in other years - the third
+        // segment that had a tick box and no reader.
+        //
+        // Deliberately NOT scoped to tonight's rounds: the whole point of
+        // it is the other years. Read fresh like the rest of these, which
+        // costs one walk of a history this laptop already has open, and
+        // comes back empty for a club in its first year - which is most
+        // clubs that have just installed this, and is the right answer.
+        director.OnThisDay = () => CommentaryReaders.OnThisDay(_sessionHistory);
 
         // How far through tonight's programme we are, which is what the
         // budget releases the night's allotment against. Counted from the

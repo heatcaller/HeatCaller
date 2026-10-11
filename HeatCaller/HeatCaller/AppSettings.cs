@@ -720,6 +720,47 @@ public sealed class AppSettings
         HonoursHeatCallerRev ?? string.Empty,
         HonoursKokoroVoiceName ?? string.Empty);
 
+    // --- The commercial break (10 Oct 2026) ------------------------------
+    //
+    // The club's sponsor slides, played as a real commercial break on the
+    // Big Screen after the race and BEFORE the recap - so the forty-odd
+    // seconds the model takes to write the recap is advert time rather than
+    // a teaser and then silence. The club owner's ask, in his words: "I
+    // want the sponsors to play as a commercial break after the race and
+    // before the race show recap. This way we can fill the time it takes to
+    // generate the content."
+    //
+    // Off by default, like every other part of the broadcast above: a club
+    // that never opens the Commentary page hears the recap it always has.
+    //
+    // ONE SWITCH AND NO TIMINGS. How long the break runs is not a club's
+    // decision to make - it is however long the model took, which is the
+    // whole point of it. The floor and the ceiling that bound that are
+    // constants in the sequence (RaceControlControl.ShortestCommercialBreak
+    // and LongestCommercialBreak), because a club asked to pick them would
+    // be picking numbers about a model's speed that they have no way to
+    // know and that would be wrong the day they change machine.
+    //
+    // HERE rather than on the Sponsors page, which is the tempting home for
+    // anything with "sponsor" in it. What this switches is a step of the
+    // after-race sequence, between the teaser and the recap, and every other
+    // step of that sequence is on the Commentary page - a second place to
+    // switch a part of the recap on is how a settings page starts lying.
+    // The Sponsors page still owns the slides themselves, the rotation and
+    // who gets a paid read.
+
+    /// <summary>
+    /// After a race, the club's sponsor slides play as a commercial break
+    /// between the teaser and the recap, for as long as the recap takes to
+    /// write and render.
+    ///
+    /// Does nothing at all without a Big Screen open and the club's sponsor
+    /// slides switched on - see CommercialBreak.SponsorScreenUp. A break
+    /// with nothing to put in it would be silence added in front of the
+    /// recap, which is a regression and not a feature.
+    /// </summary>
+    public bool RecapAdBreak { get; set; }
+
     /// <summary>Whether reaching a lap or time limit puts the checkered out rather than stopping the race on the spot.</summary>
     public bool RaceFinishOnNextCrossing { get; set; } = true;
 

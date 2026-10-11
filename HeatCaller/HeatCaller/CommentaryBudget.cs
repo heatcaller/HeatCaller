@@ -277,7 +277,39 @@ public sealed class CommentaryBudget
             new(SegmentKind.QualifyingReport,  SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(30), 6, 1, "Qualifying report", "What qualifying decided, before the mains go out.", true),
             new(SegmentKind.Honours,           SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(2),  TimeSpan.FromSeconds(45), 5, 3, "Milestones", "A hundredth race, a first podium, a club record."),
             new(SegmentKind.MechanicInterview, SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(15), 6, 2, "Mechanic's interview", "The announcer asks the winning car's mechanic two questions.", true),
-            new(SegmentKind.GridHistory,       SegmentTier.Colour, 1, true, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(30), 8, 4, "Grid history", "A debut, a rivalry or a run of form, worked into the intro.", true),
+            // THE GRID HISTORY, RETUNED 10 Oct 2026 - from 8 a meeting and
+            // 4 a class down to 3 and 1, with its gap trebled.
+            //
+            // It was built when it was the ONLY route to any driver
+            // history: CommentaryHistoryFacts.ForIntro had exactly one
+            // caller, this case, and a debut, a rivalry, a drought and a
+            // run of form could all be heard only through it. Eight a
+            // night was generous for that job and still not enough - on
+            // rehearsal 5 (10 Oct 2026) the log carried "Skipped grid
+            // history - 6 lines in the last ten minutes already" roughly
+            // four hundred times, so the one segment carrying every piece
+            // of driver history was refused all evening after the first
+            // few, and nothing else had any history to give.
+            //
+            // The race intro now carries that same history itself, capped
+            // at four facts, costing no allowance at all because it rides
+            // inside a request the intro was making anyway - and keyed on
+            // the race DAY, so SaidTonight treats a fact the intro has
+            // spent as spent here too. That leaves this segment a genuine
+            // but much smaller job: the history the intro did not get to
+            // (it takes four facts and only for the drivers its own facts
+            // name), said in a gap of its own.
+            //
+            // So it is a top-up and is budgeted as one. Three a night and
+            // one per class, with ninety seconds' clearance rather than
+            // thirty - the old gap could put a history line in the air
+            // seconds after the intro's own history, which is the
+            // repetition this whole change is about. Retuned rather than
+            // retired: the member is on the Commentary page as a tick box,
+            // in ShowBlock's captions and in ShowTreatment's list, and a
+            // segment that still has something true and unsaid to offer is
+            // not worth breaking three other files to remove.
+            new(SegmentKind.GridHistory,       SegmentTier.Colour, 1, true, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(90), 3, 1, "Grid history", "A debut or a rivalry the race intro did not get to.", true),
 
             // --- Flourish: the furniture ---
             new(SegmentKind.ColdOpen,            SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.Zero,             1, 1, "Cold open", "Sets the evening out before the first race.", true),

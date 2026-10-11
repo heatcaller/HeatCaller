@@ -559,7 +559,33 @@ public sealed class CommentaryService
     /// </summary>
     /// <param name="log">Told what TidyIntro had to put right, if anything. Called on whatever thread the answer arrives on.</param>
     /// <param name="clubNight">The round is on a club night, where a race is just a race - see DescribeKind.</param>
-    public async Task<string?> BuildRoundIntroAsync(RoundDefinition round, CancellationToken ct = default, Action<string>? log = null, bool clubNight = false)
+    /// <param name="form">
+    /// The grid as the club's history knows them, from
+    /// CommentaryReaders.GridHistory - read on the UI thread by the caller,
+    /// like the recap's championship, because it walks stores that belong
+    /// to that thread. Null is a perfectly good answer and the intro reads
+    /// exactly as it did before there was any of this.
+    /// </param>
+    /// <param name="stake">
+    /// What the race decides, from CommentaryReaders.ChampionshipBefore -
+    /// read on the UI thread for the same reason. Null at every club that
+    /// never set a season up.
+    /// </param>
+    /// <param name="historyPacked">
+    /// Told which history facts this intro's prompt is carrying, so the
+    /// caller can mark them as spent once the line has actually been
+    /// spoken - see <see cref="HistorySaid"/>. Not called when the intro
+    /// carries no history. Called before the model is asked, on the
+    /// calling thread.
+    /// </param>
+    public async Task<string?> BuildRoundIntroAsync(
+        RoundDefinition round,
+        CancellationToken ct = default,
+        Action<string>? log = null,
+        bool clubNight = false,
+        RaceForm? form = null,
+        ChampionshipAtStake? stake = null,
+        Action<PackedFacts>? historyPacked = null)
     {
         if (Client is null)
         {
@@ -591,6 +617,44 @@ public sealed class CommentaryService
         // whatever the club typed.
         var kind = DescribeKind(round, clubNight);
 
+        // The club's own history for the drivers the facts actually name
+        // (10 Oct 2026). Only those: the history is read for everyone
+        // assigned to the round and the facts name the first eight, and a
+        // line about a ninth driver is a line about somebody who, as far
+        // as this prompt is concerned, is not in the race.
+        //
+        // Renamed to the announcer's names for them before any of it is
+        // worded - see AsSpoken for the invented-finisher this avoids.
+        var staged = new HashSet<string>(onTrack, StringComparer.OrdinalIgnoreCase);
+
+        var historyGrid = AsSpoken((form?.Grid ?? Array.Empty<DriverForm>())
+            .Where(d => staged.Contains(d.DriverId))
+            .ToList());
+
+        // Capped at four by ForIntro, which is already more than one
+        // sentence can carry - and the order it returns them in is the
+        // order that survives the character cap below.
+        //
+        // KEYED ON THE RACE DAY where the caller knows it (RaceForm.NightKey).
+        // Every one of these facts is true for the whole evening, and an
+        // intro runs before every race - so a race-scoped key had the same
+        // debut announced in all six of a club's heats. See ForIntro's own
+        // remarks for the whole argument. Null falls back to the round,
+        // which is what it always was.
+        var historyLines = HistoryLines(HistoryPack(
+            CommentaryHistoryFacts.ForIntro(
+                historyGrid,
+                form?.Rivalries ?? Array.Empty<HeadToHead>(),
+                round.Id,
+                form?.Scope,
+                nightKey: form?.NightKey),
+            historyPacked));
+
+        // And what the race decides. Both of these are absent cleanly: a
+        // club in its first week has neither, and every line below that
+        // would have used them simply is not written.
+        var stakes = stake is null ? new List<string>() : StakesLines(stake);
+
         var facts =
             FactsOpen + "\n" +
             $"Round: {Field(round.RoundLabel)}\n" +
@@ -600,6 +664,10 @@ public sealed class CommentaryService
             (string.IsNullOrWhiteSpace(round.TrackLayoutName) ? "" : $"Track: {Field(round.TrackLayoutName)}\n") +
             (rivalries.Count > 0 ? string.Join("\n", rivalries) + "\n" : string.Empty) +
             (details.Count > 0 ? "Driver details:\n" + string.Join("\n", details) + "\n" : string.Empty) +
+            (historyLines.Count > 0
+                ? "History, worked out from the club's own results:\n" + string.Join("\n", historyLines) + "\n"
+                : string.Empty) +
+            (stakes.Count > 0 ? string.Join("\n", stakes) + "\n" : string.Empty) +
             FactsClose + "\n" +
             // Length comes from the system prompt - saying "one sentence"
             // here too would override whatever the user set.
@@ -618,6 +686,28 @@ public sealed class CommentaryService
                 ? " A driver's team or sponsors from the details can be worked in where it fits - one or two, not a "
                   + "roll call. Use them exactly as written, only for the driver they are listed against, and never "
                   + "give a team or sponsor to a driver who has none listed."
+                : string.Empty)
+            // THE HISTORY IS EXACT AND THE MODEL MAY NOT ADD TO IT.
+            //
+            // The club owner's own line about the colour is that it "can be
+            // made up things" - and a record cannot. "Billy has never won
+            // here" said about a driver who won last week does not sound
+            // alive, it sounds broken, and it is the timing system telling
+            // the room something untrue in front of forty people. These
+            // lines land BECAUSE the room believes them, so the same
+            // discipline the result lines have carried since they were
+            // written is stated here for the history as well.
+            + (historyLines.Count > 0
+                ? " The history lines are exact, worked out from the club's own saved results. Work one or two of "
+                  + "them in where they fit, for the driver each one is listed against and for no other driver. Do "
+                  + "not state a win, a podium, a start, a run of results or a first that is not listed, and do not "
+                  + "turn one of these lines into a bigger claim than it already makes."
+                : string.Empty)
+            + (stakes.Count > 0
+                ? " The championship lines are the standings as they stand BEFORE this race, which has not been run. "
+                  + "Use those positions, point totals and gaps exactly as written, as what is at stake. Do not say "
+                  + "what the result will do to them, do not predict a winner or a champion, and do not invent a "
+                  + "position, a points total, a gap or a round count that is not listed."
                 : string.Empty);
 
         var answer = await Client.GenerateAsync(
@@ -636,6 +726,13 @@ public sealed class CommentaryService
                 .Append(Field(round.RoundLabel))
                 .Append(Field(round.TrackLayoutName))
                 .Concat(TeamAndSponsorNamesFor(onTrack))
+                // The history's and the championship's names too, for the
+                // reason the teams and sponsors are here: a name the model
+                // was given and this list was not is lower-cased for good
+                // by CalmShouting, and a season called "WINTER SERIES" went
+                // out over the PA as "winter series".
+                .Concat(historyGrid.Select(d => d.Name))
+                .Concat(StakeNames(stake))
                 .ToList();
 
             var notes = new List<string>();
@@ -998,6 +1095,143 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// How much of a prompt the worked-out history may be.
+    ///
+    /// A hard cap on top of the count, because the count does not bound
+    /// the length: every one of these lines is built round a name
+    /// somebody typed into a profile, and the recap's prompt already
+    /// carries a finishing order, a closeness, a fastest lap, the
+    /// rivalry outcomes and a championship table for a local
+    /// llama3.2:3b to hold at once. Smaller than FactPack.MaxFactChars
+    /// by an order of magnitude on purpose: that figure is the whole
+    /// prompt's budget for a segment that carries nothing else.
+    /// </summary>
+    private const int MaxHistoryChars = 600;
+
+    /// <summary>
+    /// What has already been said tonight, so the recap and the intro do
+    /// not say it again - FILTER ONLY. Nothing in this class ever marks it.
+    ///
+    /// WHY IT IS HERE AT ALL, AND WHY MARKING IS SOMEBODY ELSE'S JOB
+    ///
+    /// SaidTonight belongs to CommentaryDirector, and the recap and the
+    /// intro do not go through the director - they have prompt builders of
+    /// their own. So when they started carrying the club's history (10 Oct
+    /// 2026) they carried it with no ledger: a club running six heats with
+    /// the same ten entries heard "Billy is making their first ever Box
+    /// Stock start" in all six intros. Half the fix is the keys being
+    /// night-scoped (see CommentaryHistoryFacts.ForIntro); the other half
+    /// is this reference, so a fact spent by one intro is filtered out of
+    /// the next.
+    ///
+    /// MARKING IS NOT DONE HERE, and that is the discipline FactPack sets
+    /// out: a fact is spent when a line has been written AND SPOKEN. A
+    /// recap is regularly written and then dropped - the next race gets
+    /// called to the grid, the model comes back after the moment has gone,
+    /// RaceControlControl.ForgetRaceSummary exists for precisely this - and
+    /// marking on written would burn the club's best fact of the night on a
+    /// request nobody heard. So these builders hand the pack they used to
+    /// their caller, the caller holds it until the line is actually queued
+    /// to the announcer, and only then calls
+    /// <see cref="HistorySpoken"/>.
+    ///
+    /// Null until wired (AnnouncerControl's Director, the one place that
+    /// has both), and then this reads exactly as it did before: no filter,
+    /// and nothing marked.
+    /// </summary>
+    public SaidTonight? HistorySaid { get; set; }
+
+    /// <summary>
+    /// A history pack has actually been spoken. Call it at the point the
+    /// line is queued to the announcer and never before - see
+    /// <see cref="HistorySaid"/> for why that is the whole point.
+    ///
+    /// Takes the pack rather than its keys so the themes go with them: a
+    /// caller that marked one and not the other would lose either the
+    /// repetition guard or the variety rule, silently. See
+    /// SaidTonight.Mark(PackedFacts).
+    ///
+    /// Safe to call with null, with an empty pack, and twice - which
+    /// matters, because the paths that speak a recap have several ways out
+    /// and the one that got there should not have to know whether another
+    /// did first.
+    /// </summary>
+    public void HistorySpoken(PackedFacts? history) => HistorySaid?.Mark(history);
+
+    /// <summary>
+    /// Worked-out history packed for a prompt - capped, de-duplicated,
+    /// filtered against what the night has already said, and cleaned
+    /// through FactPack.
+    ///
+    /// Through FactPack rather than joined up here, and that matters: it is
+    /// the guard that takes a bracket out of a driver's name before it can
+    /// close the facts block or fake an audio tag, and two copies of a
+    /// guard are one guard and one liability (the rule
+    /// CommentaryFacts.Clean states for the same reason). It is also where
+    /// the theme cooldown lives, so the recap and the intro vary what they
+    /// are about for free.
+    /// </summary>
+    /// <param name="blocks">The candidate facts, best first - FactPack keeps the order it is given.</param>
+    /// <param name="report">
+    /// Told what went in, so the caller can mark it once the line has been
+    /// spoken. Called only when something did; never called for an empty
+    /// pack, so a caller holding one knows a null means nothing to mark.
+    /// </param>
+    private PackedFacts HistoryPack(IReadOnlyList<FactBlock> blocks, Action<PackedFacts>? report)
+    {
+        var packed = blocks.Count == 0
+            ? new PackedFacts(string.Empty, Array.Empty<string>(), 0)
+            : FactPack.Build(blocks, HistorySaid, MaxHistoryChars);
+
+        if (!packed.Empty)
+        {
+            report?.Invoke(packed);
+        }
+
+        return packed;
+    }
+
+    /// <summary>A packed history as the indented lines a prompt carries.</summary>
+    private static List<string> HistoryLines(PackedFacts packed) =>
+        packed.Empty
+            ? new List<string>()
+            : packed.Text
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => "  " + line)
+                .ToList();
+
+    /// <summary>
+    /// The history's drivers renamed to the names the rest of the brief
+    /// uses.
+    ///
+    /// CommentaryReaders.GridHistory counts a driver by their profile's
+    /// DriverName, which is NOT what the announcer calls them: a driver
+    /// with an announcer name set would have the result read out as "P1
+    /// Sammy" and the history line as "that is Samuel Jones's first win
+    /// here", and a model handed two names for one car writes about two
+    /// drivers - inventing a finisher in the one segment the whole club
+    /// listens to. The same fault the rivalry lines had before
+    /// SpokenNamesByDriverName, in a place where it would have been worse.
+    ///
+    /// NameFor falls back to the transponder, which is also what the
+    /// result lines fall back to, so the two still agree when a driver has
+    /// no profile at all.
+    /// </summary>
+    private IReadOnlyList<DriverForm> AsSpoken(IReadOnlyList<DriverForm> grid)
+    {
+        var spoken = new List<DriverForm>(grid.Count);
+
+        foreach (var driver in grid)
+        {
+            var name = PromptName(driver.DriverId);
+
+            spoken.Add(name.Length == 0 ? driver : driver with { Name = name });
+        }
+
+        return spoken;
+    }
+
+    /// <summary>
     /// The championship table as facts for the recap.
     ///
     /// Positions and movement first, points second. What a club wants at
@@ -1045,6 +1279,88 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// How many championship lines a race INTRO carries - the same four
+    /// Championship.MaxMoves gives the recap, for the reason stated there.
+    /// </summary>
+    private const int MostStakes = 4;
+
+    /// <summary>
+    /// What the race about to run has at stake, as facts for its intro.
+    ///
+    /// The positions, the totals and the gaps as they ARE, and nothing
+    /// about what the race will do to them - see ChampionshipAtStake for
+    /// why a predicted swing is not this app's to say. "He comes into this
+    /// one seven points off Alex, and Alex is right here on the grid" is
+    /// every word of it true, and it is the thing that makes two races
+    /// with the same ten entries sound different.
+    ///
+    /// Empty when nobody on this grid is in the table: a header on its own
+    /// is a fact the model would be tempted to fill in.
+    /// </summary>
+    private static List<string> StakesLines(ChampionshipAtStake stake)
+    {
+        var season = Field(stake.SeasonName, MaxFieldChars * 2);
+
+        var lines = new List<string>
+        {
+            $"Championship as it stands BEFORE this race: {season}, {Plural.Of(stake.RoundsCounted, "round")} counted so far",
+        };
+
+        foreach (var row in stake.OnThisGrid.Take(MostStakes))
+        {
+            var name = Field(row.Name);
+
+            if (name.Length == 0)
+            {
+                continue;
+            }
+
+            var gap = row.BehindLeader == 0
+                ? "leads the championship"
+                : $"{Plural.Of(row.BehindLeader, "point")} behind the leader";
+
+            lines.Add($"  P{row.PositionNow} {name}, in this race - {Plural.Of(row.Points, "point")}, {gap}");
+        }
+
+        if (lines.Count == 1)
+        {
+            return new List<string>();
+        }
+
+        // The leader is named even when they are not racing. A gap is only
+        // worth hearing if the driver at the other end of it has a name -
+        // the same reason ChampionshipLines names them for the recap.
+        if (!stake.LeaderInThisRace && Field(stake.LeaderName) is { Length: > 0 } leader)
+        {
+            lines.Add($"  Championship leader, who is NOT in this race: {leader}");
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// The names the championship lines put in front of the model, so
+    /// TidyIntro can give them back their own spelling. Nothing at all
+    /// when there is no championship, which CalmShouting takes in its
+    /// stride - it drops anything blank.
+    /// </summary>
+    private static IEnumerable<string> StakeNames(ChampionshipAtStake? stake)
+    {
+        if (stake is null)
+        {
+            yield break;
+        }
+
+        yield return Field(stake.SeasonName, MaxFieldChars * 2);
+        yield return Field(stake.LeaderName);
+
+        foreach (var row in stake.OnThisGrid)
+        {
+            yield return Field(row.Name);
+        }
+    }
+
+    /// <summary>
     /// What goes round the recap besides the result - worked out by Race
     /// Control on the UI thread, with the rest of what the recap reads.
     /// </summary>
@@ -1070,8 +1386,30 @@ public sealed class CommentaryService
     /// Called after the checkered flag, again with no latency pressure.
     /// </summary>
     /// <param name="context">Heat or main, and the broadcast opening and closing asked for on the Commentary page. Null for the plain recap.</param>
+    /// <param name="history">
+    /// The finishers as the club's history knew them BEFORE this race,
+    /// from CommentaryReaders.GridHistory with this session left out -
+    /// read on the UI thread by the caller, exactly like the championship
+    /// beside it, because it walks stores that belong to that thread.
+    ///
+    /// Null is a perfectly good answer: a club in its first week has no
+    /// history, and the recap then reads exactly as it did before there
+    /// was any of this.
+    /// </param>
+    /// <param name="historyPacked">
+    /// Told which history facts this recap's prompt is carrying, so the
+    /// caller can mark them as spent once the recap has actually been
+    /// spoken - and only then. A recap is regularly written and dropped,
+    /// which is what ForgetRaceSummary is for, and a dropped recap must
+    /// cost the night nothing. See <see cref="HistorySaid"/>.
+    /// </param>
     public async Task<string?> BuildRaceSummaryAsync(
-        SessionRecord session, ChampionshipSwing? championship = null, RecapContext? context = null, CancellationToken ct = default)
+        SessionRecord session,
+        ChampionshipSwing? championship = null,
+        RecapContext? context = null,
+        RaceForm? history = null,
+        CancellationToken ct = default,
+        Action<PackedFacts>? historyPacked = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -1136,6 +1474,35 @@ public sealed class CommentaryService
         // a sign-off into a list of names; the winner is who gets credited.
         var winnerDetails = DriverDetailLinesFor(new[] { winner.Transponder });
 
+        // THE HISTORY THE RECAP NEVER HAD (10 Oct 2026).
+        //
+        // CommentaryHistoryFacts.ResultInContext - "that is his first ever
+        // win here, at the twelfth attempt" - was written for this exact
+        // moment and had no caller anywhere in the app. So the longest and
+        // most-heard segment of the night went out with a finishing order
+        // and a note on how close it was, and two races with the same ten
+        // drivers read out the same way. That is what the club owner heard.
+        //
+        // Only the finishers the recap NAMES, which is the "Mention up to"
+        // setting: a history line about a driver the results list does not
+        // mention leaves the model holding a position it was not given.
+        var historyLines = history is null
+            ? new List<string>()
+            : HistoryLines(HistoryPack(
+                CommentaryHistoryFacts.ForRecap(
+                    AsSpoken(history.Grid),
+                    ordered.Select(r => (DriverId: r.Transponder, Position: r.Position)).ToList(),
+                    session.Id,
+                    history.Scope,
+                    // The winner's career before tonight is a once-a-night
+                    // fact and is keyed on the night where the caller knows
+                    // it; the RESULT lines keep the race's own key, because
+                    // "that is his first ever win here" is true of this race
+                    // and can honestly be said again about the next one he
+                    // wins. See ForRecap.
+                    nightKey: history.NightKey),
+                historyPacked));
+
         var spokenLabel = SpokenLabel(session);
 
         // The broadcast around it (27 Sep 2026). The show's name and what's
@@ -1170,6 +1537,10 @@ public sealed class CommentaryService
                   + $" at {(fastest.FastLapMs / 1000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)}s\n"
                 : string.Empty) +
             (rivalryOutcomes.Count > 0 ? string.Join("\n", rivalryOutcomes) + "\n" : string.Empty) +
+            (historyLines.Count > 0
+                ? "History before this race, worked out from the club's own results:\n"
+                  + string.Join("\n", historyLines) + "\n"
+                : string.Empty) +
             (championshipLines.Count > 0 ? string.Join("\n", championshipLines) + "\n" : string.Empty) +
             (upNext.Length > 0 ? $"Up next on the program: {upNext}\n" : string.Empty) +
             FactsClose + "\n" +
@@ -1202,6 +1573,25 @@ public sealed class CommentaryService
                   + "did to the standings, using those positions, point totals and movements exactly as written. "
                   + "Do not invent a gap, a position or a change that is not listed, and do not say a title is won "
                   + "or lost unless the lines say so."
+                : string.Empty)
+            // THE HISTORY IS EXACT AND THE MODEL MAY NOT ADD TO IT.
+            //
+            // The same discipline the line above states for the times,
+            // extended to the records - because a record is the one piece
+            // of colour that cannot be made up. "Billy has never won here"
+            // said about a driver who won last week does not sound alive,
+            // it sounds broken, and it is the timing system telling the
+            // room something untrue in front of forty people. These lines
+            // land BECAUSE the room believes them, so the model phrases
+            // them and never extends them: a run of two wins embroidered
+            // into a career is the same failure as a lap time credited to
+            // the wrong driver.
+            + (historyLines.Count > 0
+                ? " The history lines are the drivers' records as they stood BEFORE this race, worked out from the "
+                  + "club's own saved results, and every count in them is exact. Work one or two of them in where "
+                  + "they fit, for the driver each one is listed against and for no other driver. Do not state a "
+                  + "win, a podium, a start, a run of results or a first that is not listed, and do not turn one of "
+                  + "these lines into a bigger claim than it already makes."
                 : string.Empty)
             + (kind is not null ? " Say what kind of race it was, as the Type in the facts has it." : string.Empty)
             + (opening
@@ -1738,6 +2128,34 @@ public sealed class CommentaryService
         SegmentKind.ChampionshipCheck =>
             "Give the championship picture in one or two sentences, as a commentator would between races.",
 
+        // THE THREE THAT COULD NEVER SAY ANYTHING UNTIL 10 Oct 2026, and
+        // every one of their briefs states that the figures are exact and
+        // forbids adding to them - the same wording the recap and the
+        // intro carry, deliberately copied rather than reinvented. The
+        // club owner's line about the colour is that it "can be made up
+        // things", and a record cannot: "Billy has never won here" said
+        // about a driver who won last week does not sound alive, it sounds
+        // broken, and it is the timing system telling forty people
+        // something untrue.
+        SegmentKind.FormGuide =>
+            "Give a short form guide on one or two of these drivers, two sentences at most. "
+            + "The placings are exact, worked out from the club's own saved results, and they are listed "
+            + "most recent first. Read them for the driver each line is listed against and for no other "
+            + "driver. Do not state a result, a win, a podium or a run that is not listed, do not turn a "
+            + "line into a bigger claim than it already makes, and do not predict how the race will go.",
+
+        SegmentKind.MidMeetingStandings =>
+            "Say where the class stands partway through its heats, in one or two sentences. The order is "
+            + "PROVISIONAL and nobody has qualified for anything yet - say so, and do not call it a result. "
+            + "The positions, the counts and the lap time are exact: use them as written, and do not invent "
+            + "a position, a gap or a time, or predict who will make the top main.",
+
+        SegmentKind.ThisDayInHistory =>
+            "Look back on one of these past race days in one sentence, as a commentator would. The year, "
+            + "the number of races, the number of drivers and the winner are exact, worked out from the "
+            + "club's own saved results. Use only what is listed - do not add a race, a result, a name or "
+            + "anything else about that day, and do not say what the club was like then.",
+
         _ => "Write what a commentator could say about this right now, in one sentence.",
     };
 
@@ -1750,8 +2168,11 @@ public sealed class CommentaryService
         SegmentKind.PaceNote => "Pace",
         SegmentKind.ComingUpNext => "Coming up",
         SegmentKind.GridHistory => "Grid",
+        SegmentKind.FormGuide => "Form",
         SegmentKind.QualifyingReport => "Qualifying",
         SegmentKind.ChampionshipCheck => "Championship",
+        SegmentKind.MidMeetingStandings => "Standings",
+        SegmentKind.ThisDayInHistory => "This day",
         _ => kind.ToString(),
     };
 

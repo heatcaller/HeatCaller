@@ -93,6 +93,14 @@ public sealed class CommentaryControl : UserControl
     private readonly ComboBox _cmbHonoursVoice = new();
     private readonly Button _btnTestHonours = new();
 
+    // --- The commercial break (10 Oct 2026) ---
+    //
+    // One switch and no timings: how long the break runs is however long
+    // the model took, which is the whole point of it. See
+    // AppSettings.RecapAdBreak for why there is nothing else here and why
+    // it is not on the Sponsors page.
+    private readonly CheckBox _chkAdBreak = new ThemedCheckBox();
+
     /// <summary>Which engine's voices the mechanic's list holds - see FillMechanicVoices.</summary>
     private readonly Label _lblVoiceSource = new();
 
@@ -837,8 +845,10 @@ public sealed class CommentaryControl : UserControl
         var recap = new Section("Race recap");
 
         recap.Add(Hint(
-            "flag  ->  pause  ->  teaser  ->  wait  ->  recap.   Everything here is timing and sound; the recap's "
-            + "words come from Writing style above."));
+            "flag  ->  pause  ->  teaser  ->  wait  ->  commercial break  ->  recap.   Everything here is timing and "
+            + "sound; the recap's words come from Writing style above, and the commercial break is switched on under "
+            + "Broadcast below. The wait and the break cover the same pause rather than following one another, so "
+            + "turning the break on does not add to the time before the recap."));
         recap.Add(pauseGrid);
         recap.Add(_chkTeaser, stretch: false);
         recap.Add(teaserGrid);
@@ -924,6 +934,15 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
 
+        Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
+        _chkAdBreak.Checked = _settings.RecapAdBreak;
+        _chkAdBreak.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapAdBreak = _chkAdBreak.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
         Check(_chkBadgeHonours, "After a race, a third voice reads out the badges it unlocked");
         _chkBadgeHonours.Checked = _settings.RecapBadgeHonours;
         _chkBadgeHonours.CheckedChanged += (_, _) =>
@@ -966,10 +985,36 @@ public sealed class CommentaryControl : UserControl
 
         var broadcast = new Section("Broadcast");
 
+        // THE RUNNING ORDER HAS TO BE THE REAL ONE. This card used to say
+        // "recap -> honours -> interview -> sign-off", which was wrong three
+        // times over: it left out the TEASER, which is a spoken line with a
+        // wait setting of its own; it left out the BADGE CALLS, which still
+        // go out at the flag unless the honours box below is ticked; and it
+        // never mentioned the SPONSORS at all - so a club reading the
+        // Sponsors page would think that page owned the paid reads, when
+        // they are dispatched from here and go quiet with the Commentary
+        // switch at the top of this one. A running order on a settings page
+        // is the only map a volunteer has of what their club is about to
+        // hear, and a map that leaves three things out is worse than none.
         broadcast.Add(Hint(
-            "recap  ->  honours  ->  interview (after a main)  ->  sign-off.   Dresses the recap up as a TV broadcast. The "
-            + "model writes every part from the race's facts, like the recap itself - except the honours, which are built "
-            + "from the badges and need no model at all. The recap and intros say whether a race was a heat or a main."));
+            "finish call  ->  badge calls  ->  teaser  ->  commercial break  ->  recap  ->  honours  ->  interview (after "
+            + "a main)  ->  sign-off.   That is the whole of what a club hears after a flag. The badge calls go out at the "
+            + "flag as they always have, unless the honours box below is ticked - that MOVES them into the recap rather "
+            + "than adding to them. The teaser and the waits either side of it are set under Race recap above. The model "
+            + "writes every part from the race's facts, like the recap itself - except the honours, which are built from "
+            + "the badges and need no model at all. The recap and intros say whether a race was a heat or a main."));
+        broadcast.Add(_chkAdBreak, stretch: false, gapBelow: UiLayout.HintGap);
+        broadcast.Add(Hint(
+            "The club's sponsor slides play as a commercial break on the Big Screen, straight after the teaser and before "
+            + "the recap - so the half-minute or more the model takes to write the recap is advert time instead of silence. "
+            + "It runs until the recap is written and rendered, never less than 8 seconds and never more than 90, and it "
+            + "ends the moment the next race is called to the grid. It needs a Big Screen open with the sponsor slides "
+            + "switched on: without one, nothing changes and the recap goes out exactly as it does now."));
+        broadcast.Add(Hint(
+            "WHERE THE SPONSORS SIT. The slides, the rotation and who has bought a read are all on the Sponsors page. The "
+            + "paid reads themselves are SPOKEN from here, over the end of a sponsor video and in the gaps between races, "
+            + "so they need a race day open, the Commentary switch at the top of this page on, and the local model "
+            + "reachable - even though nothing writes them and the words are the ones you typed."));
         broadcast.Add(_chkOpening, stretch: false);
         broadcast.Add(_chkClosing, stretch: false);
         broadcast.Add(showGrid);
@@ -1999,6 +2044,11 @@ public sealed class CommentaryControl : UserControl
         // the rest of the broadcast - but their reader's rows stay live
         // when only the interview is off, because the two are separate
         // speakers with separate switches.
+        // The break fills the time the RECAP takes to write, so there is
+        // nothing for it to fill when recaps are off - it goes dark with
+        // the rest of the broadcast.
+        _chkAdBreak.Enabled = summariesOn;
+
         _chkBadgeHonours.Enabled = summariesOn;
 
         var honoursOn = summariesOn && _chkBadgeHonours.Checked;

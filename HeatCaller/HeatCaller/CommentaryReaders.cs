@@ -47,6 +47,23 @@ public static class CommentaryReaders
     private const int MostRivalries = 3;
 
     /// <summary>
+    /// How many past race days "this day at the club" is offered. Two -
+    /// the figure CommentaryHistoryFacts.ThisDayFacts states and the
+    /// reason it gives.
+    /// </summary>
+    private const int MostPastDays = CommentaryHistoryFacts.ThisDayFacts;
+
+    /// <summary>
+    /// How many championship lines a race intro is offered.
+    ///
+    /// Four, which is what Championship.MaxMoves gives the recap, for the
+    /// reason stated there: more near-identical rows of name-and-number is
+    /// how a small model starts reading one driver's points total against
+    /// another driver's name.
+    /// </summary>
+    private const int MostStakes = 4;
+
+    /// <summary>
     /// How many of tonight's remaining rounds are offered.
     ///
     /// Three, because that is what CommentaryFacts.ComingUpNext reads out
@@ -251,13 +268,29 @@ public static class CommentaryReaders
     /// <param name="history">Every session the club has filed.</param>
     /// <param name="rounds">Which round belongs to which class.</param>
     /// <param name="now">Today, for working out how long ago a win was.</param>
+    /// <param name="exceptSessionId">One saved race to leave out of the counting. See the remarks.</param>
+    /// <remarks>
+    /// WHY A RACE CAN BE LEFT OUT, AND WHY THE RECAP NEEDS IT
+    ///
+    /// The intro asks this before the race has run, so every saved race is
+    /// history and nothing has to be excluded. The RECAP asks it after the
+    /// result has been FILED - SpeakRaceSummary runs from RaceFiling's
+    /// afterSaved callback - so by then tonight's race is in the history
+    /// too. CommentaryHistoryFacts.ResultInContext states the caller's
+    /// promise plainly: the record must be the one from BEFORE this race,
+    /// "or every win is their first". A recap that counted tonight in
+    /// would announce a driver's fourth win here as their fifth, and a
+    /// first win as no first at all. So the recap passes the session it is
+    /// recapping and this leaves it out of the counting.
+    /// </remarks>
     public static (IReadOnlyList<DriverForm> Grid, IReadOnlyList<HeadToHead> Rivalries) GridHistory(
         IReadOnlyList<string> transponders,
         string? className,
         ProfileStore profiles,
         SessionHistoryStore history,
         RoundDefinitionStore rounds,
-        DateTime? now = null)
+        DateTime? now = null,
+        string? exceptSessionId = null)
     {
         var grid = new List<DriverForm>();
         var rivalries = new List<HeadToHead>();
@@ -272,7 +305,7 @@ public static class CommentaryReaders
             return (grid, rivalries);
         }
 
-        var races = RacesIn(className, history, rounds);
+        var races = RacesIn(className, history, rounds, exceptSessionId);
 
         if (races.Count == 0)
         {
@@ -348,8 +381,24 @@ public static class CommentaryReaders
     /// Practice is left out - a practice session has no result anybody
     /// would call a finish - and so is anything filed against a round of
     /// another class. With no class given, every race counts.
+    ///
+    /// SO IS A DEMO RACE (10 Oct 2026). Its lap times and its finishing
+    /// order are invented - SessionRecord.IsDemo says so and every other
+    /// reader of the history honours it (Championship, ChampionshipLive,
+    /// DriverStats, the relay's own index) - so a rehearsal with "Save demo
+    /// races to history" ticked was being counted as a start, a win and a
+    /// podium, and a driver's record read out over the PA included races
+    /// nobody drove. The one thing these lines cannot be is wrong.
+    ///
+    /// <paramref name="exceptSessionId"/> takes one more race out: the one
+    /// being recapped, which is already in the history by the time the
+    /// recap is written. See GridHistory's remarks.
     /// </summary>
-    private static List<SessionRecord> RacesIn(string? className, SessionHistoryStore history, RoundDefinitionStore rounds)
+    private static List<SessionRecord> RacesIn(
+        string? className,
+        SessionHistoryStore history,
+        RoundDefinitionStore rounds,
+        string? exceptSessionId = null)
     {
         var all = history.All;
         var wanted = (className ?? string.Empty).Trim();
@@ -371,6 +420,9 @@ public static class CommentaryReaders
 
         return all
             .Where(record => record.SessionType != RaceSessionType.Practice)
+            .Where(record => !record.IsDemoSession())
+            .Where(record => string.IsNullOrEmpty(exceptSessionId)
+                             || !string.Equals(record.Id, exceptSessionId, StringComparison.Ordinal))
             .Where(record => roundIds is null || (record.RoundId is { } id && roundIds.Contains(id)))
             .OrderByDescending(record => record.EndedAtUtc)
             .ToList();
@@ -567,6 +619,322 @@ public static class CommentaryReaders
         }
 
         return standings;
+    }
+
+    /// <summary>
+    /// The championship a race about to be run counts towards, as the
+    /// table stands BEFORE it - what the race has at stake, which is the
+    /// one thing that makes two races with identical entries sound
+    /// different.
+    ///
+    /// Null when the race counts towards no championship, which is most
+    /// practice nights and every club that never set a season up, and null
+    /// when nobody on this grid is in the table.
+    ///
+    /// WHY THIS IS NOT A SECOND SCORING IMPLEMENTATION
+    ///
+    /// Every number here comes out of SeasonStore.ComputeStandings over
+    /// the races ChampionshipLive.Candidates says the season counts - the
+    /// same two calls the Big Screen's "if it ended now" and the recap's
+    /// own swing are built from, so the drop rule and the season's own
+    /// rule about which races count are applied by the one place that
+    /// applies them. Nothing in here adds, subtracts or predicts.
+    ///
+    /// WHY ChampionshipLive.Compute IS NOT USED DIRECTLY
+    ///
+    /// It needs a result to score, and refuses a race where nobody has a
+    /// lap yet - which is every race at staging, when an intro is written.
+    /// The candidates and the standings behind it are exactly what is
+    /// wanted, so those are what this asks for.
+    ///
+    /// Call this on the UI thread, like everything else here: it reads the
+    /// history, the programme and the event stores.
+    /// </summary>
+    /// <param name="round">The round about to run. A season's rule takes a race by its round's class and kind, so a freeform race counts towards nothing.</param>
+    /// <param name="transponders">Who is on this grid.</param>
+    /// <param name="seasons">The club's seasons, or null where there are none.</param>
+    /// <param name="rounds">The programme, for the season's rule.</param>
+    /// <param name="events">The race days, for the season's rule.</param>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="profiles">For the driver behind a transponder.</param>
+    /// <param name="most">How many of this grid's drivers to offer. Four - see <see cref="MostStakes"/>.</param>
+    public static ChampionshipAtStake? ChampionshipBefore(
+        RoundDefinition? round,
+        IReadOnlyList<string> transponders,
+        SeasonStore? seasons,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events,
+        SessionHistoryStore history,
+        ProfileStore? profiles = null,
+        int most = MostStakes)
+    {
+        // The names the standings are keyed on. ComputeStandings keys on
+        // the driver's name, so that is what has to be matched - the same
+        // rule Championship.SwingFor follows, and the same limitation: a
+        // driver renamed since their results were saved silently stops
+        // matching, exactly as they do for a rivalry.
+        var onThisGrid = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var transponder in transponders)
+        {
+            if (string.IsNullOrWhiteSpace(transponder))
+            {
+                continue;
+            }
+
+            var name = Typed(profiles?.Get(transponder)?.DriverName);
+
+            if (name.Length > 0)
+            {
+                onThisGrid.Add(name);
+            }
+        }
+
+        if (onThisGrid.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var (season, counted) in ChampionshipLive.Candidates(round, seasons, rounds, events, history))
+        {
+            var before = SeasonStore.ComputeStandings(season, counted, profiles);
+
+            if (before.Count == 0)
+            {
+                continue;
+            }
+
+            var leaderPoints = before[0].TotalPoints;
+            var rows = new List<ChampionshipStanding>();
+
+            for (var i = 0; i < before.Count && rows.Count < Math.Max(1, most); i++)
+            {
+                if (!onThisGrid.Contains(before[i].DriverName))
+                {
+                    continue;
+                }
+
+                // PositionNow and PositionBefore are the same figure on
+                // purpose: the race has not been run, so nobody has moved.
+                // StillAlive is left at its default and nothing here reads
+                // it - whether a title is mathematically settled needs the
+                // rounds left and the points on offer, and neither is here
+                // (the same silence Championship above keeps).
+                rows.Add(new ChampionshipStanding(
+                    before[i].DriverName,
+                    before[i].DriverName,
+                    i + 1,
+                    i + 1,
+                    before[i].TotalPoints,
+                    Math.Max(0, leaderPoints - before[i].TotalPoints)));
+            }
+
+            // A table nobody in this race is in is not what this race is
+            // about. The next season might be.
+            if (rows.Count == 0)
+            {
+                continue;
+            }
+
+            return new ChampionshipAtStake(
+                Typed(season.Name),
+                counted.Count,
+                Typed(before[0].DriverName),
+                onThisGrid.Contains(before[0].DriverName),
+                rows);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Where a class stands partway through its heats - what the halfway
+    /// standings segment is, and what it had no reader for until 10 Oct
+    /// 2026.
+    ///
+    /// THE HEATS ONLY. RoundKind.Qualifier and nothing else: a class whose
+    /// heats are all run and whose mains are still to come is not
+    /// "partway through the heats", and counting the mains in would have
+    /// the segment fire over the top of the qualifying report - which is a
+    /// better line about the same order, with its own budget. Two segments
+    /// reading out one order in one gap is the complaint, not the fix.
+    ///
+    /// THE ORDER IS THE CALCULATOR'S, through <see cref="Qualifying"/>
+    /// above, so the club's own qualifying method decides it. A second
+    /// implementation that disagreed with the grid sheet by a place would
+    /// be worse than no segment at all.
+    ///
+    /// Null three ways, each of them the honest answer: no class on track,
+    /// fewer heats run than the segment needs, and every heat already run.
+    /// The bar is judged here as well as in the builder on purpose - the
+    /// builder keeps the promise for a table test, and this saves walking
+    /// the whole history through the calculator on a tick that was never
+    /// going to say anything.
+    ///
+    /// Call it on the UI thread, like everything else here.
+    /// </summary>
+    /// <param name="className">The class on track. Blank is no answer rather than every class.</param>
+    /// <param name="rounds">Tonight's programme, for the class's heats and whether each has been recorded.</param>
+    /// <param name="history">Every session the club has filed, for the calculator.</param>
+    /// <param name="profiles">For the driver behind a transponder.</param>
+    /// <param name="scope">The round ids belonging to the race day in hand, or null for the legacy holder - see <see cref="Upcoming"/>.</param>
+    /// <param name="raceClass">The class's own qualifying method, where the club set one.</param>
+    /// <param name="roundFilter">Tonight's rounds and no others, exactly as the programme tab does it - see MainForm's wiring for the August-pole bug this closes.</param>
+    public static MeetingSoFar? MidMeeting(
+        string? className,
+        RoundDefinitionStore rounds,
+        SessionHistoryStore history,
+        ProfileStore profiles,
+        IReadOnlySet<string>? scope = null,
+        RaceClass? raceClass = null,
+        IReadOnlyCollection<string>? roundFilter = null)
+    {
+        var wanted = Typed(className);
+
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
+
+        var heats = rounds.All
+            .Where(round => !string.IsNullOrWhiteSpace(round.Id))
+            .Where(round => round.Kind == RoundKind.Qualifier)
+            .Where(round => scope is null || scope.Contains(round.Id))
+            .Where(round => string.Equals(Typed(round.ClassName), wanted, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (heats.Count == 0)
+        {
+            return null;
+        }
+
+        var run = heats.Count(round => round.IsRecorded);
+
+        if (run < CommentaryReportFacts.MidMeetingLeast || run >= heats.Count)
+        {
+            return null;
+        }
+
+        var order = Qualifying(wanted, rounds, history, profiles, raceClass, roundFilter);
+
+        return order.Count == 0 ? null : new MeetingSoFar(wanted, run, heats.Count, order);
+    }
+
+    /// <summary>
+    /// What this club did on this date in other years - the third segment
+    /// that had a tick box and no reader.
+    ///
+    /// WHY THE DATE IS THE LOCAL ONE
+    ///
+    /// Records are stamped in UTC and every other reader here compares
+    /// them in UTC, which is right for "how long ago". It is wrong for
+    /// "this date": a club night that starts at eight in the evening in
+    /// New York is stamped the NEXT day in UTC, so a meeting on the 10th
+    /// would be looked up as the 11th and a club would be told about a
+    /// race day that was not the anniversary of anything. Both sides are
+    /// converted, so both shift together or neither does.
+    ///
+    /// WHY THE WINNER'S NAME IS THE SAVED ONE
+    ///
+    /// The result holds the name as it was on the night. A transponder
+    /// changes hands between seasons - TransponderTransfer exists for
+    /// exactly that - so looking the profile up now can put tonight's
+    /// owner's name on a race somebody else won two years ago. The saved
+    /// name is who actually won it.
+    ///
+    /// Practice and demo races are left out for the reasons RacesIn gives:
+    /// a practice session has no finish anybody would call a result, and a
+    /// demo race's finishing order is invented.
+    ///
+    /// Empty for a club in its first year, which is most clubs that have
+    /// just installed this - and empty is the right answer.
+    /// </summary>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="now">Today, in local time. Defaults to now.</param>
+    /// <param name="most">How many past days to offer. Two - see <see cref="MostPastDays"/>.</param>
+    public static IReadOnlyList<ClubRaceDay> OnThisDay(
+        SessionHistoryStore history,
+        DateTime? now = null,
+        int most = MostPastDays)
+    {
+        var today = (now ?? DateTime.Now).Date;
+        var byDay = new Dictionary<DateTime, List<SessionRecord>>();
+
+        foreach (var record in history.All)
+        {
+            if (record.SessionType == RaceSessionType.Practice
+                || record.IsDemoSession()
+                || record.Results.Count == 0)
+            {
+                continue;
+            }
+
+            var when = record.EndedAtUtc.ToLocalTime().Date;
+
+            // Other years, so this year is out - which takes tonight's own
+            // races with it, and a night that reminisced about itself an
+            // hour ago is the one thing this segment must not do.
+            if (when.Year >= today.Year || when.Month != today.Month || when.Day != today.Day)
+            {
+                continue;
+            }
+
+            if (!byDay.TryGetValue(when, out var sessions))
+            {
+                sessions = new List<SessionRecord>();
+                byDay[when] = sessions;
+            }
+
+            sessions.Add(record);
+        }
+
+        var found = new List<ClubRaceDay>();
+
+        foreach (var day in byDay.OrderByDescending(entry => entry.Key))
+        {
+            var sessions = day.Value;
+            var drivers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var session in sessions)
+            {
+                foreach (var entry in session.Results)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.Transponder))
+                    {
+                        drivers.Add(entry.Transponder);
+                    }
+                }
+            }
+
+            // The day's biggest race, and the latest of those - a club
+            // runs its A-main last, and the biggest field is the race the
+            // night was about. Not the round's label, because a round
+            // three years old may have been deleted since; the session
+            // carries its own.
+            var headline = sessions
+                .OrderByDescending(record => record.Results.Count)
+                .ThenByDescending(record => record.EndedAtUtc)
+                .First();
+
+            var winner = headline.Results
+                .Where(entry => entry.Position == 1)
+                .Select(entry => Typed(entry.DriverName))
+                .FirstOrDefault(name => name.Length > 0);
+
+            found.Add(new ClubRaceDay(
+                Math.Max(1, today.Year - day.Key.Year),
+                sessions.Count,
+                drivers.Count,
+                Typed(headline.Label),
+                winner));
+
+            if (found.Count >= Math.Max(1, most))
+            {
+                break;
+            }
+        }
+
+        return found;
     }
 
     /// <summary>

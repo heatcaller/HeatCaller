@@ -2971,7 +2971,24 @@ public sealed partial class RaceControlSession
     /// <param name="snapshot">What CreateSnapshot took.</param>
     /// <param name="takenUtc">When it was taken - the moment of the reset or abandon.</param>
     /// <returns>True when a running race came back held under red.</returns>
-    public bool RestoreSnapshotAfterGap(SessionSnapshot snapshot, DateTime takenUtc)
+    /// <param name="nowUtc">
+    /// The moment to measure the gap to, for a test that needs the gap to
+    /// be exactly what it says. Left out on every real call, which measures
+    /// to now.
+    ///
+    /// It is here because the gap is wall-clock time and the arithmetic
+    /// below moves the decoder's reference by it, so a test that sets
+    /// takenUtc to "a minute ago" and then asserts a lap time to the
+    /// millisecond is really asserting how long the test itself took.
+    /// BugHunt5ResultsTests did exactly that and passed on one machine for
+    /// a day before failing on another by 20ms - the time that machine
+    /// spent between taking the snapshot and restoring it. A test that
+    /// depends on the speed of the PC it runs on is a test that will
+    /// eventually be ignored, so the gap is made exact instead of the
+    /// assertion made loose: what that test is for is that the laps still
+    /// add up to the elapsed time, and that is an exact claim.
+    /// </param>
+    public bool RestoreSnapshotAfterGap(SessionSnapshot snapshot, DateTime takenUtc, DateTime? nowUtc = null)
     {
         if (snapshot.State != RaceState.Racing || snapshot.RaceStartUtc is not { } start)
         {
@@ -2979,7 +2996,7 @@ public sealed partial class RaceControlSession
             return false;
         }
 
-        var now = DateTime.UtcNow;
+        var now = nowUtc ?? DateTime.UtcNow;
 
         // Floored at zero, for a clock that moved backwards in between - a
         // time sync, say. Shifting by a negative gap would wind the race

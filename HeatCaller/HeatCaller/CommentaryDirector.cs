@@ -46,10 +46,21 @@ public sealed record SpokenSegment(SegmentKind Kind, string Text, IReadOnlyList<
 ///
 /// Every fact source is a function the host sets, and one left null simply
 /// means that segment never fires. The three live ones and the show's own
-/// bookends need almost nothing; the history, qualifying and championship
-/// segments each need a real reader behind them, and until one is set they
-/// cost nothing and say nothing. That is deliberate - a half-fed segment
-/// that invents the other half is worse than one that stays quiet.
+/// bookends need almost nothing; the history, form, qualifying,
+/// championship, halfway-standings and this-day segments each need a real
+/// reader behind them, and until one is set they cost nothing and say
+/// nothing. That is deliberate - a half-fed segment that invents the other
+/// half is worse than one that stays quiet.
+///
+/// A SEGMENT WITH NO READER AT ALL IS A DIFFERENT FAULT, and three of them
+/// shipped that way until 10 Oct 2026: the form guide, the halfway
+/// standings and "this day at the club" each had a title, a description, a
+/// tier, a budget and a tick box on the Commentary page, and each fell
+/// through Candidates' default - so a club that ticked one got silence for
+/// the rest of its life and nothing ever said why. A box that does nothing
+/// is worse than no box. Every member of SegmentKind now either has a case
+/// below or is written somewhere else on purpose, and the default says
+/// which.
 /// </summary>
 public sealed class CommentaryDirector
 {
@@ -236,6 +247,28 @@ public sealed class CommentaryDirector
 
     /// <summary>A class's qualifying, once it is done.</summary>
     public Func<IReadOnlyList<QualifyingLine>>? Qualifying { get; set; }
+
+    /// <summary>
+    /// Where the class on track stands partway through its heats. Wire
+    /// this to CommentaryReaders.MidMeeting.
+    ///
+    /// Its own reader rather than something worked out from
+    /// <see cref="Qualifying"/>, although both end up asking the same
+    /// calculator: the halfway standings also need to know how many of the
+    /// class's heats have RUN, which is the programme's business and not
+    /// qualifying's, and the whole segment hangs on that figure. Null
+    /// until wired, and then the segment stays quiet - see the summary.
+    /// </summary>
+    public Func<MeetingSoFar?>? MidMeeting { get; set; }
+
+    /// <summary>
+    /// What this club did on this date in other years. Wire this to
+    /// CommentaryReaders.OnThisDay.
+    ///
+    /// Empty is the usual answer and the right one: a club in its first
+    /// year has no anniversary, and nothing here invents one.
+    /// </summary>
+    public Func<IReadOnlyList<ClubRaceDay>>? OnThisDay { get; set; }
 
     /// <summary>A class's championship, after its last main.</summary>
     public Func<IReadOnlyList<ChampionshipStanding>>? Championship { get; set; }
@@ -738,7 +771,23 @@ public sealed class CommentaryDirector
 
         // A race call always wins, and a line being written is about to be
         // one. The read waits.
-        if (_racing || Held || Writing)
+        //
+        // AND A SHOW WINS, which is the one added on 10 Oct 2026. The
+        // commercial break hands the crowd's screen back as it ends, and if
+        // its last item was a sponsor VIDEO that hand-back ticks
+        // AdBreak.BreaksEnded - so the very next half-second tick had a
+        // read owed at the exact moment the recap's opener was coming up
+        // under it, and the advert went out between the recap and the
+        // honours. A paid read over the top of the night's own programme is
+        // worth less to the sponsor than the same read in a real gap, and
+        // it is the programme the room is listening to.
+        //
+        // The debt is KEPT here, not settled - the same as for a race -
+        // because that is what this whole method is for: the read goes out
+        // in the next real quiet instead, which after a recap is the gap
+        // before the next race is called. Nothing is lost and nobody is
+        // billed for a read the room talked over.
+        if (_racing || Held || Writing || ShowOnAir.Playing)
         {
             return null;
         }
@@ -757,7 +806,11 @@ public sealed class CommentaryDirector
     /// </summary>
     public SponsorRead? NextSegmentRead(TimeSpan gap)
     {
-        if (_racing || Held || Writing)
+        // ShowOnAir for the same reason as in NextAdBreakRead: a gap with
+        // the night's own programme playing in it is not a gap. Nothing is
+        // deferred and nothing is lost - this is asked again on the next
+        // tick, and the quiet after the sign-off is a real one.
+        if (_racing || Held || Writing || ShowOnAir.Playing)
         {
             return null;
         }
@@ -936,7 +989,14 @@ public sealed class CommentaryDirector
             }
 
             Budget.Settle(verdict.Ticket);
-            Said.Mark(pack.Keys);
+
+            // The pack, not just its keys: the themes have to be marked
+            // with them or the variety rule never fires and nothing says
+            // so. See SaidTonight.Mark(PackedFacts) - and note that every
+            // path out above gives the ticket back and marks NOTHING, so a
+            // segment written and then dropped costs the night neither its
+            // facts nor its variety.
+            Said.Mark(pack);
             Spent(kind);
             SaveOn(ui);
 
@@ -1055,8 +1115,71 @@ public sealed class CommentaryDirector
             {
                 // The class goes with it: the reader counted these over
                 // one class's races, and the lines have to say which.
+                //
+                // AND THE NIGHT'S KEY, NOT JUST THE RACE'S (10 Oct 2026).
+                // Every fact ForIntro builds is true for the whole evening
+                // - a debut is made once, a seven-two record is seven-two
+                // all night - and since the race INTRO now carries this
+                // same history for every race, a race-scoped key let the
+                // same line go out from the intro and then again from here.
+                // Handing both the race day means SaidTonight sees them as
+                // one fact, which is what it is. See
+                // CommentaryHistoryFacts.ForIntro's remarks.
                 return GridHistory?.Invoke() is { } history
-                    ? CommentaryHistoryFacts.ForIntro(history.Grid, history.Rivalries, _raceKey, className)
+                    ? CommentaryHistoryFacts.ForIntro(
+                        history.Grid, history.Rivalries, _raceKey, className, nightKey: _dayKey)
+                    : Array.Empty<FactBlock>();
+            }
+
+            case SegmentKind.FormGuide:
+            {
+                // THE SAME READER AS THE GRID HISTORY, and that is the
+                // point rather than a shortcut. A form guide is "how the
+                // drivers in a main have been going lately", which is the
+                // recent finishes CommentaryReaders.GridHistory already
+                // counts for this grid in this class - so a second reader
+                // would walk the same history on the same tick to reach the
+                // same numbers, and the two could disagree after a result
+                // was corrected mid-evening.
+                //
+                // What makes the two segments different is what they SAY:
+                // the grid history picks the one superlative worth a
+                // sentence, and the form guide reads the placings out. The
+                // theme on each block is what stops them landing on the
+                // same driver inside their separate budgets - see
+                // FactBlock.Theme.
+                //
+                // The RACE's key and not the night's, unlike the grid
+                // history above: a heat gets filed between races, so the
+                // window these placings are read from really does change.
+                return GridHistory?.Invoke() is { } form
+                    ? CommentaryHistoryFacts.FormGuide(form.Grid, _raceKey, className)
+                    : Array.Empty<FactBlock>();
+            }
+
+            case SegmentKind.MidMeetingStandings:
+            {
+                if (MidMeeting?.Invoke() is not { } soFar)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                // The key carries how many heats have run, so a second
+                // check later in the block is a fresh fact rather than the
+                // same one refused - which is what the spec's two-a-class
+                // allowance is for. The class is in it too: two classes
+                // running alternate heats each get their own.
+                return CommentaryReportFacts.MidMeetingStandings(
+                    soFar,
+                    $"{_dayKey}:{soFar.ClassName}:{soFar.RoundsRun}");
+            }
+
+            case SegmentKind.ThisDayInHistory:
+            {
+                // Tonight's key, so the same anniversary is news again next
+                // year and never twice in one evening.
+                return OnThisDay?.Invoke() is { } days
+                    ? CommentaryHistoryFacts.ThisDayAtTheClub(days, _dayKey)
                     : Array.Empty<FactBlock>();
             }
 
@@ -1093,9 +1216,25 @@ public sealed class CommentaryDirector
                     : Array.Empty<FactBlock>();
             }
 
-            // Everything else is waiting on a reader of its own. Nothing
-            // to say is the honest answer until one is wired, and it
-            // costs nothing to give.
+            // What is left here is written somewhere other than by the
+            // model, and reaching this point for one of them is correct
+            // rather than a gap:
+            //
+            //   BadgesEarned and Honours are built by HeatCaller out of
+            //   the badges themselves - see RaceHonours. Order() skips the
+            //   Essentials, so BadgesEarned never arrives here at all.
+            //
+            //   MechanicInterview has a path of its own, written beside
+            //   the recap from the Garage's setup log.
+            //
+            //   RaceIntro and RaceRecap are Essentials with their own
+            //   prompt builders in CommentaryService, and are likewise
+            //   never asked for here.
+            //
+            // Anything ADDED to SegmentKind without a case lands here and
+            // is refused for ever in silence, which is the fault the three
+            // segments fixed on 10 Oct 2026 had. CommentaryDepthTests holds
+            // every member to having a case or being on that list.
             default:
                 return Array.Empty<FactBlock>();
         }
