@@ -606,6 +606,52 @@ public sealed class CommentaryBudget
     public BudgetVerdict Peek(SegmentKind kind, string? className = null) => Judge(kind, className, take: false);
 
     /// <summary>
+    /// Whether the asking is happening INSIDE a programme - the post-race
+    /// sequence, which is a run of segments back to back by design.
+    ///
+    /// Set for the length of one ask and cleared again; see
+    /// <see cref="InsideAProgramme"/> for the one gate it lifts and the
+    /// several it does not.
+    /// </summary>
+    private bool _insideAProgramme;
+
+    /// <summary>
+    /// Asks as part of a programme rather than as filler between races,
+    /// which lifts ONE gate: the minimum gap since the last spoken line.
+    ///
+    /// WHY THAT GATE IS WRONG INSIDE A PROGRAMME. It exists so the room is
+    /// not talked at continuously between races - a perfectly good rule for
+    /// filler, which is what the ladder normally feeds. A programme is the
+    /// opposite thing: the recap, the honours, the pit lane and the sign-off
+    /// are deliberately back to back, and the mark between them is the
+    /// pacing. Asked from inside one, the gap has by definition just been
+    /// closed by the programme's own previous line, so every colour segment
+    /// was refused with "only 2s since the last line" - and then became due
+    /// the moment the programme went quiet, which is precisely how they came
+    /// to play AFTER the sign-off as shows of their own.
+    ///
+    /// WHAT IS STILL ENFORCED, and this is the point of lifting one gate
+    /// rather than reaching for KeepEverythingRunning: switched off, already
+    /// said tonight, already said for this class, nothing new to say, the
+    /// ten-minute airtime cap, the relay being busy, and the whole of the
+    /// month's allowance. A programme gets to be a programme; it does not
+    /// get to be free.
+    /// </summary>
+    public BudgetVerdict ReserveForProgramme(SegmentKind kind, string? className = null)
+    {
+        _insideAProgramme = true;
+
+        try
+        {
+            return Judge(kind, className, take: true);
+        }
+        finally
+        {
+            _insideAProgramme = false;
+        }
+    }
+
+    /// <summary>
     /// May this segment be written right now - and if so, hold its share
     /// until it is settled or let go.
     ///
@@ -771,7 +817,10 @@ public sealed class CommentaryBudget
             return No("nothing new to say about it");
         }
 
-        if (spec.Speaks && _lastSpoken is { } last && now - last < spec.MinGap)
+        // NOT INSIDE A PROGRAMME, where back-to-back is the whole idea -
+        // see ReserveForProgramme, which explains why this one gate is
+        // lifted there and lists the ones that are not.
+        if (!_insideAProgramme && spec.Speaks && _lastSpoken is { } last && now - last < spec.MinGap)
         {
             return No($"only {(now - last).TotalSeconds:0}s since the last line");
         }

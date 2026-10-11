@@ -334,6 +334,11 @@ public sealed partial class RaceControlControl
             // the X, its own button - so the field must stop pointing at it
             // when it goes. Holding a closed window would mean the button did
             // nothing at all for the rest of the night.
+            // Its console lines, which today means the sponsor video path -
+            // see BigScreenForm.StatusMessage for why that one needed a
+            // sink of its own.
+            screen.StatusMessage += line => StatusMessage?.Invoke(line);
+
             screen.FormClosed += (_, _) => _bigScreen = null;
 
             _bigScreen = screen;
@@ -1117,6 +1122,20 @@ public sealed partial class RaceControlControl
                     + (held ? "Segments held by the race director." : "Segments released."));
             }
         };
+
+        // THE BROADCAST'S OWN CONTROLS (11 Oct 2026). Beside Hold, in the
+        // band, for the reason the Next Up bar's buttons are in theirs: a
+        // child always draws over its parent, so painting order is never a
+        // question, and the three of them read as one group - Hold stops
+        // the next thing, Skip stops the one in progress, Play again puts
+        // the last one back out.
+        //
+        // Fire-and-forget, because neither is anything the page waits on
+        // and the click arrives on the UI thread. Both report to the
+        // console with a [show] tag, since a line that goes out twice -
+        // or stops mid-sentence - needs to be accounted for afterwards.
+        _announcerStrip.ReplayWanted += () => _ = ReplayLastSegmentAsync();
+        _announcerStrip.SkipWanted += SkipWhatIsOnAir;
 
         _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);

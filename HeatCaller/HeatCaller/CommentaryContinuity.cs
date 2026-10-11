@@ -647,14 +647,19 @@ internal static class ContinuityShow
     /// <param name="facts">The night around it - see <see cref="ContinuityFacts"/>.</param>
     /// <param name="voice">Whose turn each phrasing is.</param>
     /// <param name="sayWhole">Queues a one-voice segment. Called once, and must set the caller's "it has been said" flag.</param>
-    /// <param name="sayTurn">Queues one turn of a two-hander, so the caller can pick the voice. Same flag.</param>
+    /// <param name="sayTurn">
+    /// Queues one turn of a two-hander, so the caller can pick the voice.
+    /// Same flag. Handed the turn's place in the run as well, so the caller
+    /// can trim the silence either side of one that has another hard
+    /// against it - see CommentaryExchange.ExchangeRun.
+    /// </param>
     /// <param name="sayLine">Queues a continuity line.</param>
     internal static ShowBlock? Around(
         SpokenSegment said,
         ContinuityFacts facts,
         ContinuityVoice voice,
         Action sayWhole,
-        Action<ExchangeTurn> sayTurn,
+        Action<ExchangeTurn, CommentaryExchange.ExchangeRun> sayTurn,
         Action<string> sayLine)
     {
         var items = new List<ShowItem>();

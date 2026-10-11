@@ -194,7 +194,7 @@ internal static class CommercialBreak
     /// <param name="recapReady">The recap has been written AND rendered - or has failed, which is just as much a reason to stop.</param>
     /// <param name="shownEverything">The rotation has been round every sponsor - see <see cref="ShownEverything"/>.</param>
     /// <param name="nextRaceCalled">The next race has been staged, counted down or started.</param>
-    internal static BreakEnding Over(TimeSpan on, bool recapReady, bool shownEverything, bool nextRaceCalled)
+    internal static BreakEnding Over(TimeSpan on, bool recapReady, bool shownEverything, bool nextRaceCalled, bool videoOnScreen = false)
     {
         if (nextRaceCalled)
         {
@@ -207,6 +207,15 @@ internal static class CommercialBreak
         }
 
         if (on < Shortest)
+        {
+            return BreakEnding.Running;
+        }
+
+        // AN ADVERT ON THE SCREEN KEEPS THE BREAK (11 Oct 2026). Above the
+        // ceiling check, so a stalled video still cannot hold the recap -
+        // and below the next-race check, because a grid forming beats a
+        // sponsor every time. See VideoOnScreen.
+        if (videoOnScreen)
         {
             return BreakEnding.Running;
         }
@@ -264,6 +273,9 @@ internal static class CommercialBreak
     /// Negative until one ever has.
     /// </summary>
     private static long _screenSaidAt = -1;
+
+    /// <summary>When a Big Screen last said a sponsor video was on its screen - see <see cref="VideoOnScreen"/>.</summary>
+    private static long _videoSaidAt = -1;
 
     /// <summary>Whether the club is in a commercial break right now.</summary>
     internal static bool Running
@@ -334,6 +346,49 @@ internal static class CommercialBreak
         lock (Gate)
         {
             _screenSaidAt = Environment.TickCount64;
+        }
+    }
+
+    /// <summary>
+    /// Whether a sponsor's VIDEO is on the crowd's screen right now.
+    ///
+    /// ADDED 11 Oct 2026, to stop a break ending underneath an advert. The
+    /// break's floor is eight seconds - one turn of the rotation - and it
+    /// ends at the next look once the recap is written. A video is almost
+    /// always longer than that, so a break that reached one would hand the
+    /// screen back part way through it and the room would get half an
+    /// advert, or none of it: the club sold a thirty-second spot and the
+    /// crowd saw eight seconds of it under a recap.
+    ///
+    /// Reported on the window's own tick rather than counted up and down,
+    /// for the reason <see cref="SponsorScreenUp"/> states: a report that
+    /// stops arriving is safe, where a count got wrong in the wrong
+    /// direction would hold the sponsors over the crowd's screen.
+    ///
+    /// NOT A WAY ROUND THE CEILING. <see cref="Longest"/> still ends the
+    /// break - a stalled video must not keep the recap off the air.
+    /// </summary>
+    internal static bool VideoOnScreen
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _videoSaidAt >= 0
+                       && Environment.TickCount64 - _videoSaidAt <= (long)ScreenReportGoodFor.TotalMilliseconds;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A Big Screen saying a sponsor's video is on its screen right now.
+    /// Called from the window's own half-second tick, on the UI thread.
+    /// </summary>
+    internal static void SponsorVideoOnScreen()
+    {
+        lock (Gate)
+        {
+            _videoSaidAt = Environment.TickCount64;
         }
     }
 
@@ -415,6 +470,7 @@ internal static class CommercialBreak
             _running = 0;
             _shownEverything = false;
             _screenSaidAt = -1;
+            _videoSaidAt = -1;
         }
     }
 }

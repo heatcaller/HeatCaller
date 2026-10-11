@@ -863,7 +863,7 @@ public sealed class ContinuityTests : IDisposable
     }
 
     /// <inheritdoc cref="Nothing"/>
-    private static void NothingTurn(ExchangeTurn turn)
+    private static void NothingTurn(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
     {
     }
 

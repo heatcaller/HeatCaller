@@ -72,7 +72,25 @@ public static class CommentaryExchange
     /// did - nothing is made worse by this, and the pacing arrives with the
     /// programme it belongs to.
     /// </summary>
-    public static readonly TimeSpan HandoffBeat = TimeSpan.FromMilliseconds(450);
+    /// <summary>
+    /// RETUNED 11 Oct 2026, from 450ms, and the reason is worth keeping
+    /// because the old number was not wrong when it was chosen - it was
+    /// never what the room heard.
+    ///
+    /// A beat sat between two turns that were each padded with silence of
+    /// their own: 0.9s behind the one before it and 0.15s in front of the
+    /// one after. So the gap a crowd actually heard at a change of voice
+    /// was about a second and a half, and the beat was a third of
+    /// something nobody had measured. With both pads now trimmed for a
+    /// line that follows another (see AnnouncementService.SpeechLead), this
+    /// is for the first time the whole of the gap - and at 450ms on its own
+    /// it would still have been a hole.
+    ///
+    /// 180ms is about where a person comes in on somebody else: long
+    /// enough to be a turn rather than a splice, short enough that the two
+    /// of them sound like they are in the same room.
+    /// </summary>
+    public static readonly TimeSpan HandoffBeat = TimeSpan.FromMilliseconds(180);
 
     /// <summary>
     /// How far the bed is nudged up across the hand-over, as a multiple of
@@ -90,6 +108,27 @@ public static class CommentaryExchange
     /// cannot have a hand-over push it past the show's own ceiling.
     /// </summary>
     public const float HandoffNudge = 1.15f;
+
+    /// <summary>
+    /// Where a turn sits in a run of turns spoken back to back - which is
+    /// what decides how much silence pads each end of it.
+    ///
+    /// A staging concept rather than an audio one, deliberately: the show
+    /// layer knows the running order, and whoever speaks a turn maps this
+    /// onto AnnouncementService's SpeechTail and SpeechLead. That keeps the
+    /// pads out of the staging and the running order out of the announcer.
+    /// </summary>
+    /// <param name="FollowsAnother">Another turn has just been spoken, so this one needs no lead-in pad.</param>
+    /// <param name="AnotherFollows">Another turn comes straight after, so this one's tail is trimmed.</param>
+    public readonly record struct ExchangeRun(bool FollowsAnother, bool AnotherFollows)
+    {
+        /// <summary>A line with nothing either side of it - padded as any other line is.</summary>
+        public static readonly ExchangeRun Alone = new(false, false);
+
+        /// <summary>Where the turn at <paramref name="index"/> of <paramref name="count"/> sits.</summary>
+        public static ExchangeRun At(int index, int count) =>
+            new(index > 0, index < count - 1);
+    }
 
     /// <summary>
     /// Which turns the voice changes hands in FRONT of - the positions a
@@ -143,7 +182,23 @@ public static class CommentaryExchange
         }
         else if (b.Length > 0)
         {
-            who = $" B is {b}, alongside the lead commentator.";
+            // AND SAY THAT THE LEAD HAS NO NAME (11 Oct 2026). Naming one
+            // of two people and leaving the other anonymous is an invitation
+            // the model takes: asked for dialogue, it gave the lead a name
+            // of its own and had the co-host use it on air. "They may be
+            // addressed, not named" is the sentence that closes it.
+            who = $" B is {b}, alongside the lead commentator. The lead commentator's name is not known - "
+                + "B may speak to them but must not call them by any name, and must not invent one.";
+        }
+        else if (a.Length > 0)
+        {
+            who = $" A is {a}, the lead commentator; B is alongside them and has no name - "
+                + "A may speak to them but must not call them by any name, and must not invent one.";
+        }
+        else
+        {
+            who = " Neither commentator has a name. They may speak to each other but must not use names, "
+                + "and must not invent any.";
         }
 
         return $"Write this as a short exchange between two commentators in the booth.{who} "

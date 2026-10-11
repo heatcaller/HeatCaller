@@ -81,6 +81,31 @@ public sealed class BigScreenForm : Form
     private SponsorVideoSurface? _video;
 
     /// <summary>
+    /// This window's console lines, for whoever opened it to pass on to the
+    /// developer console.
+    ///
+    /// ADDED 11 Oct 2026 for one reason: the sponsor VIDEO path had no
+    /// logging anywhere in it. SponsorVideo computes a careful English
+    /// reason for every way it can fail - LibVLC's files missing from
+    /// beside the exe, the player refusing to start, a file it cannot read
+    /// - and then threw all of them away, because nothing ever read
+    /// Problem. A club whose advert did not play could not tell "this PC
+    /// cannot play video at all" from "that file is broken" from "the
+    /// rotation never reached it", and neither could anyone helping them.
+    ///
+    /// Only the video path uses it so far. The rest of this window's
+    /// silence is deliberate: a slide that comes round every twenty
+    /// seconds does not want a line each time.
+    /// </summary>
+    internal event Action<string>? StatusMessage;
+
+    /// <summary>
+    /// Whether this window has already said that video cannot play on this
+    /// PC - see ShowSponsorVideo, which explains why it is said once.
+    /// </summary>
+    private bool _videoProblemSaid;
+
+    /// <summary>
     /// Whether this window currently holds an ad break open (AdBreak.Begin
     /// without its End). Kept so the release happens exactly once, from
     /// whichever comes first: the video ending, the rotation moving on, or
@@ -967,7 +992,12 @@ public sealed class BigScreenForm : Form
         ShowNextSponsorSlide();
     }
 
-    private void ShowNextSponsorSlide()
+    /// <param name="leadWithVideo">
+    /// Start on a video slide where the club has one, rather than on
+    /// whichever slide happens to be next - see the caller in
+    /// UpdateCommercialBreak, which is the only one that passes it.
+    /// </param>
+    private void ShowNextSponsorSlide(bool leadWithVideo = false)
     {
         if (_sponsors is null || _sponsors.SlideFileNames.Count == 0)
         {
@@ -975,7 +1005,47 @@ public sealed class BigScreenForm : Form
         }
 
         _sponsorIndex = (_sponsorIndex + 1) % _sponsors.SlideFileNames.Count;
+
+        if (leadWithVideo && NextVideoSlide() is { } video)
+        {
+            _sponsorIndex = video;
+        }
+
+        // A VIDEO ONLY PLAYS IN A COMMERCIAL BREAK (11 Oct 2026).
+        //
+        // The rotation used to play whatever came next, video or still, at
+        // whatever moment its timer happened to fire - and a video has its
+        // own soundtrack. On 11 Oct the club's advert played twice in one
+        // race: once in the gap before the break had even started, and
+        // again seven seconds into the recap, talking over the announcer
+        // reading the result. The second one is the serious half: it ducks
+        // the club's music by design (see AdBreak) and then speaks over the
+        // programme, which no amount of level setting can fix.
+        //
+        // A still slide is different and is NOT gated: it has no sound, it
+        // is what the board cycles between races anyway, and a sponsor's
+        // logo up during a recap is exactly what they paid for.
+        //
+        // So the rule is the one a broadcast already has - adverts run in
+        // the ad break - and outside a break the rotation steps over a
+        // video to the next still rather than showing nothing, so a club
+        // whose slides are mostly videos still gets a board.
+        if (!_breakHasTheScreen && NextStillSlide() is { } still)
+        {
+            _sponsorIndex = still;
+        }
+
         var fileName = _sponsors.SlideFileNames[_sponsorIndex];
+
+        // Every slide the club has is a video and no break is on. Nothing
+        // is shown rather than a video being played out of turn: the
+        // standings stay up, which is the right thing on the wall between
+        // races, and the adverts get the screen the moment a break starts.
+        if (!_breakHasTheScreen && SponsorMedia.IsVideoName(fileName))
+        {
+            return;
+        }
+
         var path = _sponsors.ResolvePath(fileName);
         if (path is null)
         {
@@ -1035,6 +1105,72 @@ public sealed class BigScreenForm : Form
     }
 
     /// <summary>
+    /// The index of the club's next video slide at or after the current
+    /// one, wrapping once - or null when the club has no video slides at
+    /// all, which is most clubs.
+    ///
+    /// Searched from where the rotation already is rather than from the
+    /// start, so a club with two videos does not get the same one at every
+    /// break all evening.
+    /// </summary>
+    private int? NextVideoSlide()
+    {
+        if (_sponsors is null)
+        {
+            return null;
+        }
+
+        var names = _sponsors.SlideFileNames;
+
+        for (var step = 0; step < names.Count; step++)
+        {
+            var at = (_sponsorIndex + step) % names.Count;
+
+            // The file has to be THERE as well as be a video: a path that
+            // no longer resolves is skipped by the rotation anyway, and
+            // leading a break with it would spend the break's first slot
+            // on nothing.
+            if (SponsorMedia.IsVideoName(names[at]) && _sponsors.ResolvePath(names[at]) is not null)
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The index of the next STILL slide at or after the current one,
+    /// wrapping once - or null when every slide the club has is a video.
+    ///
+    /// The mirror of NextVideoSlide, and used for the opposite reason: out
+    /// of a commercial break the rotation steps over a video to the next
+    /// still, because a video has sound and would play over whatever the
+    /// announcer is saying. See ShowNextSponsorSlide.
+    /// </summary>
+    private int? NextStillSlide()
+    {
+        if (_sponsors is null)
+        {
+            return null;
+        }
+
+        var names = _sponsors.SlideFileNames;
+
+        for (var step = 0; step < names.Count; step++)
+        {
+            var at = (_sponsorIndex + step) % names.Count;
+
+            if (!SponsorMedia.IsVideoName(names[at]) && _sponsors.ResolvePath(names[at]) is not null)
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Plays a video slide, full-screen in the leaderboard's area, with the
     /// music muted under it if that is how the club has it set.
     ///
@@ -1054,6 +1190,19 @@ public sealed class BigScreenForm : Form
 
         if (!_video.Available)
         {
+            // ONCE PER WINDOW, not once per slide. The surface's problem is
+            // settled when it is made and never changes, and a rotation
+            // that comes round every twenty seconds would otherwise fill
+            // the console with the same sentence all evening.
+            if (!_videoProblemSaid)
+            {
+                _videoProblemSaid = true;
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [sponsor] Video adverts can't play on this PC, so they are skipped: "
+                    + (_video.Problem ?? "the video player would not start."));
+            }
+
             return;
         }
 
@@ -1061,8 +1210,19 @@ public sealed class BigScreenForm : Form
 
         if (!_video.Play(path, sound))
         {
+            // Per FILE, because this one is about the file rather than the
+            // PC - a club with one bad advert and three good ones wants to
+            // know which.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [sponsor] The video player turned away \"{Path.GetFileName(path)}\" - it is skipped. "
+                + "Check the file plays in a normal video player.");
+
             return;
         }
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [sponsor] Playing the video \"{Path.GetFileName(path)}\" on the Big Screen"
+            + (sound ? " with its sound." : ", silent."));
 
         // Only while the video actually has sound to be talked over, and
         // only when the club wants it. A silent ad over the music is a
@@ -1288,6 +1448,15 @@ public sealed class BigScreenForm : Form
                 CommercialBreak.SponsorScreenReady();
             }
 
+            // And whether an advert is actually PLAYING, which is what
+            // keeps a break open past the recap being ready - see
+            // CommercialBreak.VideoOnScreen. Reported on the same tick and
+            // for the same reason the line above is.
+            if (_video is not null && _video.View.Visible)
+            {
+                CommercialBreak.SponsorVideoOnScreen();
+            }
+
             onBreak = CommercialBreak.Running;
         }
         catch
@@ -1343,9 +1512,16 @@ public sealed class BigScreenForm : Form
         // sponsors rather than one pass and a slide.
         _breakSlidesShown = 1;
 
+        // LEADING WITH A VIDEO (11 Oct 2026). A break is usually about one
+        // turn of the rotation long, so with the rotation taken in file
+        // order a club's one video advert came up on a break roughly never
+        // - the stills either side of it had the eight seconds and the
+        // screen went back to the standings. An advert is the thing a
+        // commercial break is FOR, so the break starts on one where there
+        // is one, and the stills fill the rest of it.
         if (!_showingSponsor)
         {
-            ShowNextSponsorSlide();
+            ShowNextSponsorSlide(leadWithVideo: true);
         }
     }
 

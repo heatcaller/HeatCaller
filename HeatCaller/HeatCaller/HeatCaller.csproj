@@ -156,6 +156,22 @@
          of each other. -->
     <None Include="Assets\SoundPacks\**\*.wav" Link="Assets\SoundPacks\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
+    <!-- The show music that ships with the app - Assets\ShowMusic\Beds\*
+         and Assets\ShowMusic\Openers\*. Played straight from beside the
+         exe, exactly as the sound packs above are and for the same reason
+         (see ShowMusicLibrary): nobody edits them, and an update replacing
+         them is what should happen. A club's OWN file still wins, and that
+         one is copied into %AppData%\HeatCaller\ShowMusic by
+         ShowMusic.Install.
+         The Link= is load-bearing here too. Without it MSBuild flattens
+         Beds\ and Openers\ into one folder beside the exe, and
+         ShowMusicLibrary.For - which lists <output>\Assets\ShowMusic\Beds
+         and ...\Openers - finds nothing and silently offers no music at
+         all. The same trap the music and the sound packs each carry a
+         comment about. -->
+    <None Include="Assets\ShowMusic\**\*.mp3" Link="Assets\ShowMusic\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\ShowMusic\**\*.wav" Link="Assets\ShowMusic\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
     <!-- Licence texts that have to travel with the app because the package
          they belong to does not carry one: MisakiSharp's NOTICE (Apache-2.0
          4(d) asks for it) and OpenTK's MIT notice. Kokoro's own LICENSE is

@@ -187,6 +187,70 @@ public sealed class HonoursSegmentTests
         Assert.Equal(RaceHonours.MostDrivers, Occurrences(turns[1].Line, "Driver "));
     }
 
+    [Fact]
+    public void One_badge_shared_by_two_drivers_is_one_honour_in_the_count()
+    {
+        // HEARD ON A CLUB NIGHT, 11 Oct 2026. The count was the number of
+        // AWARDS - driver-and-badge pairs - where a room counts the number
+        // of BADGES. The two differ whenever one badge goes to more than
+        // one driver, and the date-based badges do that constantly:
+        // Weekend Warrior and Back to Back fire for everybody who raced
+        // both days. So the announcer promised three and the room then
+        // heard two badge names, which is the one way this segment can be
+        // caught lying by anybody listening.
+        var read = RaceHonours.Read(new[]
+        {
+            Badge("Billy Bob", "Back to Back"),
+            Badge("Billy Bob", "Weekend Warrior"),
+            Badge("Asher", "Weekend Warrior"),
+        });
+
+        Assert.NotNull(read);
+
+        // Two: Back to Back and Weekend Warrior. Three awards, two honours.
+        Assert.Equal(2, read!.Value.Badges);
+
+        // And the read itself is unchanged - it is still per driver, so
+        // the shared badge is named against both of them. That is right:
+        // Asher did win it.
+        Assert.Contains("Billy Bob picks up Back to Back and Weekend Warrior.", read.Value.Said);
+        Assert.Contains("Asher takes Weekend Warrior.", read.Value.Said);
+        Assert.Equal(2, Occurrences(read.Value.Said, "Weekend Warrior"));
+
+        // The throw promises what the room is about to hear.
+        var turns = RaceHonours.Segment(
+            new[]
+            {
+                Badge("Billy Bob", "Back to Back"),
+                Badge("Billy Bob", "Weekend Warrior"),
+                Badge("Asher", "Weekend Warrior"),
+            },
+            "Eric",
+            Voice());
+
+        Assert.Equal(3, turns.Count);
+        Assert.DoesNotContain("3 to hand out", turns[0].Line);
+    }
+
+    [Fact]
+    public void The_same_badge_for_everybody_is_still_one_honour()
+    {
+        // The limit of the rule above: a date-based badge on a six-car
+        // grid is one honour, however many names it is read against.
+        var everybody = Enumerable.Range(0, 6)
+            .Select(i => Badge($"Driver {i}", "Weekend Warrior"))
+            .ToList();
+
+        var read = RaceHonours.Read(everybody);
+
+        Assert.NotNull(read);
+        Assert.Equal(1, read!.Value.Badges);
+
+        // Capped at MostDrivers names, as any read is - the badge is still
+        // on the others' records, it is just not read out.
+        Assert.Equal(RaceHonours.MostDrivers, Occurrences(read.Value.Said, "Driver "));
+    }
+
     // ------------------------------------------------------------------
     // The hand-over, which is the point
     // ------------------------------------------------------------------

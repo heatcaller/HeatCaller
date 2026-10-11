@@ -690,7 +690,7 @@ public sealed class CommercialBreakTests : IDisposable
         Assert.Contains("SponsorSlotEnded();", finished, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowLeaderboardAgain();", finished, StringComparison.Ordinal);
 
-        var tick = MethodBody(source, "private void SponsorTimer_Tick(object? sender, EventArgs e)", "private void ShowNextSponsorSlide()");
+        var tick = MethodBody(source, "private void SponsorTimer_Tick(object? sender, EventArgs e)", "private void ShowNextSponsorSlide(bool leadWithVideo = false)");
 
         Assert.Contains("SponsorSlotEnded();", tick, StringComparison.Ordinal);
     }

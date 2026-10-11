@@ -272,8 +272,8 @@ it.
 - **The venue** (Tier 1, 3). `CommentaryReaders.LayoutRecord` /
   `VenueRecord` and `CommentaryRaceFacts.LayoutRecord` - the layout's
   outright lap record, who holds it and when it was set.
-- **Tonight against tonight** - *part* of Tier 1, 7, and read the next
-  bullet before writing it down as that item. `CommentaryReaders.PaceTonight`
+- **Tonight against tonight** - *part* of Tier 1, 7; the other part is
+  **Practice against now** below, built 11 Oct 2026. `CommentaryReaders.PaceTonight`
   / `DriverTonight` and `CommentaryRaceFacts.Tonight` say what the evening
   has done to one driver's pace: their middle flying lap in their first race
   tonight against the same in their latest, through
@@ -300,6 +300,224 @@ it.
   sting.
 - **The championship conditional** - its own entry above, with the reasoning
   it was asked with.
+- **Practice against now** (Tier 1, 7), 11 Oct 2026 - *"He was a second off
+  this in practice."* The decision this item was blocked on was taken the
+  way the bullet above it asked for: practice is read through a helper of
+  its OWN, `TonightAtTheTrack.PracticeRuns`, and never goes near
+  `TonightAtTheTrack.Races`. So nothing else in the app has started counting
+  a practice run as a race - not the field strength, not the form guide, not
+  the championship, not "their first Open race here", and not a start in
+  anybody's career, which is precisely what a flag on `Races` would have
+  been one call site away from doing.
+  `TonightAtTheTrack.PracticeAgainstNow` compares a driver's middle flying
+  lap in their latest practice run tonight with the same in their latest
+  race; `CommentaryReaders.AgainstPractice` and
+  `CommentaryRaceFacts.AgainstPractice` read it out.
+  **The scope is "in practice tonight" and never a class**, because practice
+  has no round and so the app cannot know the driver practised the car they
+  are racing - stated on `DriverPracticeToNow` at length. It fills a real
+  gap rather than competing with the race-to-race figure: that one needs two
+  races and so says nothing before the third race of a class, where this one
+  needs one practice run and one race and so is the pace fact that exists at
+  the second.
+
+### The broadcast, from a night on the floor (11 Oct 2026)
+
+Six faults heard in one club night, all of them in the show rather than in
+what it said. Worth keeping together because five of the six were one fault
+wearing different clothes.
+
+- **Two shows at once.** `RaceControlControl`'s post-flag sequence and the
+  announcer screen's director both stage shows through the same
+  `ShowTreatment`, and nothing held them apart. The recap opened its show at
+  2:34:45 and the director opened the night's SIGN-OFF nine seconds later on
+  top of it: two openers, two beds, summed by `AudioBus`, which mixes
+  additively and has no opinion about it. `ShowOnAir` could not prevent it -
+  it is a reference COUNTER for silencing the club's music, and its own
+  comment *assumes* "nothing runs two shows at once" rather than enforcing
+  it. New `ShowFloor`: the sequence CLAIMS the floor for its whole length
+  and the filler stands down, with a six-minute ceiling so a claim that is
+  never released cannot leave a night with no filler and nobody able to tell
+  why. A claim rather than a lock because the two are not peers - a segment
+  not said is unspent, where an interrupted recap costs the club the race.
+- **The sign-off was not last.** `PlanRecap` asked only whether the MECHANIC
+  followed; the honours were invisible to it. So on every heat, and on every
+  main at a club with the interview off, the recap was told to sign the
+  programme off inline and the honours were then read out after it. Now
+  anything following the recap holds the sign-off back to its own line.
+- **The honours count was one out.** `HonoursRead.Badges` counted
+  driver-and-badge PAIRS where a listener counts badge NAMES, and the two
+  differ whenever one badge goes to several drivers - which the date-based
+  badges do constantly. Now distinct titles. The "held back" console line
+  also reports both figures when the read's cap bites.
+- **The main announcer could not be named.** Every other voice could - the
+  mechanic, the honours reader, the co-host - and the one carrying the whole
+  programme could not. `WriteAsync` passed `announcer: null` into
+  `CommentaryExchange.Brief` while naming the co-host, so the model was
+  writing dialogue between a named person and an anonymous one and did the
+  obvious thing: it named him itself and had the co-host address him on air.
+  "And Asher's still within striking distance, Laura." There is no Laura.
+  New `AppSettings.RecapAnnouncerName`, used by the cold open and the
+  recap's opening to introduce him, and `Brief` now says plainly when a
+  voice has no name and must not be given one.
+- **No operator control over the show.** `Hold` stops the NEXT thing and was
+  the only thing on Race Control that could do anything at all. New
+  `RaceControlControl.Broadcast.cs`: **Play again** (the line already in
+  `LastSaid`, so no model call, nothing spent, works with the AI off) and
+  **Skip** (`AbandonBlock`, which stops the show and lets the current
+  SENTENCE finish - cutting it would mean clearing the voice queue, and that
+  is where the flags and the release calls live). The strip now shows the
+  segment's NAME rather than ninety characters of the line in quotes.
+- **The sponsor video never played.** Not a video fault: the commercial
+  break returned at `if (!_settings.RecapAdBreak)`, which was the one way
+  out of that method with NO console line - and the likeliest one, since the
+  setting is off until a club turns it on. Three things changed. The skip is
+  now said. A break LEADS with a video where the club has one, because a
+  break is about one turn of the rotation long and a single video advert in
+  file order came up on one roughly never. And a video actually playing
+  holds the break open past the recap being ready
+  (`CommercialBreak.VideoOnScreen`), under the same 90s ceiling, so the club
+  does not sell a thirty-second spot and show eight seconds of it.
+  Separately: `SponsorVideo` had **no logging at all** - it computed a
+  careful English reason for every failure and threw all of them away,
+  because nothing ever read `Problem`. `BigScreenForm` now has a status sink
+  and says which video played, that video cannot play on this PC (once), or
+  which file the player turned away.
+
+### The gap at a change of voice (11 Oct 2026)
+
+Heard the same night, and the number nobody had measured. A two-hander had
+about **1.55s** of dead air at every change of voice:
+
+| | |
+|---|---|
+| `DefaultTrailingSilenceSeconds` on the turn before | 900ms |
+| `WaitForAudioAsync` poll granularity | up to 40ms |
+| `CommentaryExchange.HandoffBeat` | 450ms |
+| `WiredLeadingSilenceSeconds` on the turn after | 150ms |
+
+Only the beat was a decision. The pads exist to stop a line's first and last
+words being clipped by the device, and `SpeechTail.BackToBack` (250ms) had
+been sitting in the enum documented as *"Trimmed, because another line
+follows immediately"* and **was never used anywhere** - `SpeakHonoursAsync`
+took the `Normal` default and `AnnouncementService.VoiceQueue` hardcoded
+`DefaultTrailingSilenceSeconds` for every queued reminder. So the beat was a
+third of a gap nobody had ever put a number to, which is why it survived
+being listened to.
+
+- **Both ends now trim for a line that follows another.** New
+  `AnnouncementService.SpeechLead` is the other end of `SpeechTail`, and
+  both are plumbed through `SpeakPrepared`, `SpeakReminder` and
+  `SynthesizeAndPlayAsync`. `CommentaryExchange.ExchangeRun` carries a
+  turn's place in the run from the staging - `ShowItem.Exchange` captures
+  the index, which is known there and nowhere downstream - and whoever
+  speaks a turn maps it onto the two pads. That keeps the pads out of the
+  staging and the running order out of the announcer.
+- **The beat retuned to 180ms**, now that it is for the first time the whole
+  of the gap rather than a third of it.
+- **The interview gained the most.** It has no beat at all, so its entire
+  question-to-answer gap was the two pads; it is now about 250ms. Worth
+  listening to: if it reads as too tight for an interview, the answer is to
+  give it `HandOverAsync` like the honours have, which needs the show run
+  threaded into `SpeakInterviewAsync`.
+- **Not touched: an ordinary announcement.** A lap call on its own still
+  gets the full tail and the recap still gets `SpeechTail.Long`. The pads
+  are only trimmed where a line has another hard against it.
+
+Tier 3, not built and probably not needed: stitch an exchange into ONE clip.
+Every turn is already rendered to MP3 in advance and the pipeline already
+has `DecodeMp3` to PCM and `PlayPcmAsync`, so the turns could be
+concatenated with a chosen gap and played as a single clip - exact to the
+sample, no queue round trip, and `AudioBus` mixes additively so the second
+voice could genuinely overlap the tail of the first. The cost is that the
+bed nudge has to be driven from known clip offsets and a stitched clip
+cannot be cut turn by turn, so a race called mid-exchange drops all of it.
+Worth doing only if 0.43s still does not sing.
+
+### Show music that ships with the app (11 Oct 2026)
+
+`AppSettings`' own comment used to state the opposite stance - both pieces
+are the club's own files "so a club can brand the top of their own broadcast
+rather than every club in the sport sounding identical". The effect in the
+field was that almost nobody had a show at all: shaping a looping bed and
+dropping it into an AppData folder is a job, and the reward for not doing it
+was silence.
+
+- **`ShowMusicLibrary`** - seven beds and seven openers under
+  `Assets\ShowMusic\Beds` and `...\Openers`, played from beside the exe
+  exactly as `SoundPacks` is and for the reason `SoundPacks` gives. A FOLDER
+  LISTING rather than a table, unlike `SoundPacks`: a bed carries no
+  description and no per-effect volumes, and its shape is measured by
+  `ShowShape.Find` rather than declared, so its name is the whole of what
+  has to be written down. Adding a piece is dropping an mp3 in.
+- **Three tiers in `ShowMusic.Resolve`**, the same shape `SoundPacks` sets
+  out for an effect: the club's own path, then `opener.*`/`bed.*`/`sting.*`
+  in their folder, then the named shipped piece. A name that has gone
+  answers null and does NOT fall back to another piece.
+- **`ShowMusicStarted`, and why it has to exist.** Blank has to keep meaning
+  "none" - a club who turned the opener off must stay off - so the setting
+  cannot simply default to a name, and blank cannot be read as "not asked
+  yet" either. The flag is the only thing that can tell those two apart,
+  and `ShowMusic.StartFromTheLibraryOnce` spends it once, from
+  `MainForm.Pages` on the way up. A club who already had their own files is
+  marked as asked and left alone.
+  **This is also why no test needed changing**: the default is written at
+  startup rather than being a settings default, so a fresh `AppSettings` in
+  a test still resolves to nothing and the four tests that assert "no music
+  with an empty folder" (`BugHunt5ShowAudioTests`, `ShowBlockTests`) hold.
+- **Levelled to -16 LUFS on the way in**, which is the number
+  `ShowTreatment`'s own note names as what the 90/22/55/80 defaults were
+  calibrated against. Measured first: the beds arrived at -9.3 to -13.6
+  LUFS, i.e. up to 6.7 dB HOTTER than the calibration, so dropped in as-is
+  they would have sat on top of the announcer. Nothing in this app
+  normalises anything, so the files are the only place to fix that. The
+  openers were already about right (-16.1 to -17.1).
+- **The menu** is the Sounds page's shape - a drop-down of what ships
+  beside a Choose... for the club's own, with the club's own winning and
+  the drop-down greying out to say so. `Remove` now means "back to the
+  shipped piece" rather than "back to silence", which is the honest reading
+  of it once there is something to go back to.
+
+Not done: nothing shipped is short enough to be a STING. The openers are
+six to ten seconds, which is a piece of music and not a mark, so the sting
+starts at none and the bed-swell keeps doing that job. A proper one-second
+mark is worth adding to the library.
+
+### The colour that played after the sign-off (11 Oct 2026)
+
+The form guide and the grid history arrived AFTER the programme had
+finished, each opening a show of its own with its own opener and bed. Three
+things had to be true at once, and the first two were red herrings that each
+cost a round of testing:
+
+- **Where it was spoken.** The post-race sequence never asked for colour at
+  all; the announcer screen's director picked the segment up on its own tick
+  once the floor was free. Fixed by the sequence asking and speaking it
+  inside its own show - `WriteColourAsync` / `SpeakColourAsync`, started
+  with the interview and the sign-off so it writes while the recap plays.
+- **The ladder's minimum gap.** Lifted inside a programme via
+  `CommentaryDirector.ForTheProgrammeAsync` and
+  `CommentaryBudget.ReserveForProgramme`. NOTE, because the first diagnosis
+  of this was wrong: `_lastSpoken` is set only in `Budget.Settle`, which
+  only ladder segments reach - the recap, honours and interview never move
+  it. So the gap was usually open anyway and this was NOT why the colour
+  landed outside. It is still needed and still correct, because the pass
+  asks twice and the first segment settles and closes the gap on the
+  second.
+- **`_racing`, which is the one that actually did it.**
+  `CommentaryDirector.RaceFinished()` is called only from the announcer
+  screen's half-second tick, on the state transition. The post-race
+  sequence starts within a second of the flag, on its own thread. Ask
+  before that tick has run and `_racing` is still true - and `Order()`
+  filters `InRace(spec.Kind) == _racing`, so the only candidates are
+  BattleWatch and PaceNote. **The form guide was never offered.**
+  `ForTheProgrammeAsync` now calls `RaceFinished()` itself: a programme
+  only runs after the flag, so it can say so rather than wait to be told.
+
+The lesson worth keeping is the fourth change: `WriteColourAsync` logged
+only on success, so "the pass found nothing" and "the pass never ran" looked
+identical in a race-night log. It now says either way. Two of the three
+rounds of testing above would have been one.
 
 **Not done, and these are the ones to be accurate about:**
 
@@ -313,16 +531,6 @@ it.
   `CountBestRounds` is the drop cap, not the length. **Blocked on a planned
   round count on a season** - the same thing that keeps "nobody can catch him
   now" unsayable.
-- **Practice against now** (Tier 1, 7) - the item the plan actually wrote,
-  which is *"He was a second off this in practice."* That is NOT what was
-  built. `TonightAtTheTrack.Races` filters practice out by name
-  (`s.SessionType != RaceSessionType.Practice`), as does every reader in the
-  commentary layer, so the pace figure above compares a race with a race and
-  a club's practice times are never spoken about at all. Whoever picks this
-  up has a decision to make first rather than a reader to write: practice
-  has no result and no finishing order, which is why `RacesIn` excludes it
-  everywhere, and a pace fact that quietly starts counting it would also
-  make a practice session a race in whatever else reads the same helper.
 - **Season form beyond a streak** (Tier 1, 2). `FormLine` reads the last few
   placings in the class out in order, most recent first, which is the form
   GUIDE. The plan asked for the shape of the last month - "third podium in

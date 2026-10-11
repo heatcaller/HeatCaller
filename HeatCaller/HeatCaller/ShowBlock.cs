@@ -180,7 +180,7 @@ internal sealed class ShowItem
     /// </summary>
     internal static ShowItem Exchange(
         IReadOnlyList<ExchangeTurn> turns,
-        Action<ExchangeTurn> say,
+        Action<ExchangeTurn, CommentaryExchange.ExchangeRun> say,
         SegmentKind? kind = null,
         bool punctuateBefore = false,
         TimeSpan? estimate = null)
@@ -191,7 +191,18 @@ internal sealed class ShowItem
         // fitting from running it.
         var parts = turns.Count == 0
             ? new[] { new ShowUtterance(string.Empty, false, () => { }) }
-            : turns.Select(turn => new ShowUtterance(turn.Line, turn.FromCoHost, () => say(turn))).ToArray();
+            // WITH ITS PLACE IN THE RUN (11 Oct 2026). The index is known
+            // here and nowhere downstream - the block runner walks parts
+            // and calls each one's Say - so it is captured now, and the
+            // speaker uses it to trim the silence either side of a turn
+            // that has another hard against it. See
+            // CommentaryExchange.ExchangeRun.
+            : turns.Select((turn, at) =>
+                {
+                    var run = CommentaryExchange.ExchangeRun.At(at, turns.Count);
+
+                    return new ShowUtterance(turn.Line, turn.FromCoHost, () => say(turn, run));
+                }).ToArray();
 
         return new ShowItem(parts, kind, continuity: false, punctuateBefore, estimate);
     }

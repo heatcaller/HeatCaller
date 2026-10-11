@@ -306,6 +306,25 @@ public partial class AnnouncerControl
             return;
         }
 
+        // AND NOT WHILE THE PROGRAMME HAS THE FLOOR (11 Oct 2026).
+        //
+        // Race Control's post-flag sequence - teaser, recap, honours, the
+        // mechanic, the sign-off - runs for minutes as one fire-and-forget
+        // task, and a race being Finished is not "between races" while it
+        // is still going. The guard below is _segmentInFlight, which only
+        // ever knew about THIS chain, so the tick cheerfully started a
+        // second show over the top of the recap's: on 11 Oct it opened the
+        // night's sign-off nine seconds into the recap's bed, and the hall
+        // heard two openers and two beds at once.
+        //
+        // Nothing is lost by standing down. A segment not said is unspent,
+        // and the gap after a recap is long - see ShowFloor, which explains
+        // why this is a claim rather than a lock.
+        if (ShowFloor.Busy)
+        {
+            return;
+        }
+
         _ = SpeakNextSegmentAsync(director);
     }
 
@@ -506,6 +525,16 @@ public partial class AnnouncerControl
             return;
         }
 
+        // Nor over the programme - the same reason as FeedTheDirector's own
+        // check, which says it at length. BEFORE _handedOver is marked
+        // below: a hand-over refused because the recap is still running is
+        // one that should still happen when it finishes, where a hand-over
+        // whose gap was too short is not. See ShowFloor.
+        if (ShowFloor.Busy)
+        {
+            return;
+        }
+
         // Not over a race. Staging and the countdown are already turned
         // away before this is reached (FeedTheDirector, which explains at
         // length why), so a race on track is the one left - and "still to
@@ -635,10 +664,10 @@ public partial class AnnouncerControl
             SpeakPlainly(said);
         }
 
-        void SpeakTurn(ExchangeTurn turn)
+        void SpeakTurn(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
         {
             spoken = true;
-            SpeakTurnPlainly(turn);
+            SpeakTurnPlainly(turn, run);
         }
 
         // A race moved on and took the block with it. The segment is then
@@ -772,9 +801,9 @@ public partial class AnnouncerControl
             return;
         }
 
-        foreach (var turn in said.Turns)
+        for (var at = 0; at < said.Turns.Count; at++)
         {
-            SpeakTurnPlainly(turn);
+            SpeakTurnPlainly(said.Turns[at], CommentaryExchange.ExchangeRun.At(at, said.Turns.Count));
         }
     }
 
@@ -790,7 +819,13 @@ public partial class AnnouncerControl
     /// turns still go out back to back exactly as they always did, which is
     /// what the loop above does.
     /// </summary>
-    private void SpeakTurnPlainly(ExchangeTurn turn)
+    /// <param name="run">
+    /// Where this turn sits in the exchange, which is what trims the
+    /// silence either side of it - see CommentaryExchange.ExchangeRun and
+    /// AnnouncementService.SpeechLead for the second-and-a-half of dead air
+    /// this took out of a two-hander.
+    /// </param>
+    private void SpeakTurnPlainly(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
     {
         if (_settings is null)
         {
@@ -804,6 +839,12 @@ public partial class AnnouncerControl
             turn.Line,
             null,
             turn.FromCoHost ? _settings.CoHostVoice : null,
-            showOnScreens: true);
+            showOnScreens: true,
+            tail: run.AnotherFollows
+                ? AnnouncementService.SpeechTail.BackToBack
+                : AnnouncementService.SpeechTail.Normal,
+            lead: run.FollowsAnother
+                ? AnnouncementService.SpeechLead.FollowsOn
+                : AnnouncementService.SpeechLead.Normal);
     }
 }

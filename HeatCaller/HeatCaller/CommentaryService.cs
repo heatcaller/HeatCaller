@@ -696,7 +696,15 @@ public sealed class CommentaryService
                 scene?.Field,
                 sceneTonight,
                 round.Id,
-                nightKey: scene?.NightKey),
+                nightKey: scene?.NightKey,
+
+                // Filtered to the drivers the prompt names, exactly as the
+                // pace figure above is and for the same reason - a line
+                // about a driver the prompt never names is the
+                // invented-driver fault AsSpoken exists to avoid.
+                practice: AsSpoken((scene?.Practice ?? Array.Empty<DriverAgainstPractice>())
+                    .Where(d => staged.Contains(d.DriverId))
+                    .ToList())),
             MaxSceneChars);
 
         var sceneLines = HistoryLines(scenePack);
@@ -1674,6 +1682,33 @@ public sealed class CommentaryService
         return spoken;
     }
 
+    /// <summary>
+    /// The drivers' practice-against-now renamed the same way - see the
+    /// grid's overload above for the invented-driver this avoids.
+    ///
+    /// Null in, empty out, like the night's own overload: a club with no
+    /// programme has no races to measure practice against, and the line is
+    /// simply not written.
+    /// </summary>
+    private IReadOnlyList<DriverAgainstPractice> AsSpoken(IReadOnlyList<DriverAgainstPractice>? practice)
+    {
+        if (practice is null)
+        {
+            return Array.Empty<DriverAgainstPractice>();
+        }
+
+        var spoken = new List<DriverAgainstPractice>(practice.Count);
+
+        foreach (var driver in practice)
+        {
+            var name = PromptName(driver.DriverId);
+
+            spoken.Add(name.Length == 0 ? driver : driver with { Name = name });
+        }
+
+        return spoken;
+    }
+
     /// <summary>The finishers' cars renamed the same way - see the grid's overload above.</summary>
     private IReadOnlyList<RaceCar> AsSpoken(IReadOnlyList<RaceCar> cars)
     {
@@ -1937,7 +1972,23 @@ public sealed class CommentaryService
     /// <param name="ShowName">The show the opening and closing name, as typed on the Commentary page; empty for none.</param>
     /// <param name="UpNext">What is next on the program, for the sign-off to tee up - "A-Main (Stock Buggy)" - or null.</param>
     /// <param name="InterviewFollows">The mechanic's interview comes after the recap, so the recap wraps up without signing off.</param>
-    public sealed record RecapContext(string? Kind, bool Opening, bool Closing, string ShowName, string? UpNext, bool InterviewFollows = false);
+    /// <param name="AnnouncerName">
+    /// What the main announcer calls himself, as typed on the Commentary
+    /// page; empty for none, and then he is never named. Used by the
+    /// opening only - see AppSettings.RecapAnnouncerName for why a club
+    /// wants this, and what the model did in its absence.
+    /// </param>
+    /// <param name="MoreFollows">
+    /// Whether ANYTHING follows the recap in the programme - the honours,
+    /// the mechanic, or both - so the recap must not sign off.
+    ///
+    /// Separate from <paramref name="InterviewFollows"/>, which says which
+    /// part follows and is the one that reads as the pit lane, and from
+    /// <paramref name="Closing"/>, which is only about the show-name and
+    /// up-next DRESSING. Those three were one thing for a while and it cost
+    /// a club a confusing broadcast: see the note in the prompt.
+    /// </param>
+    public sealed record RecapContext(string? Kind, bool Opening, bool Closing, string ShowName, string? UpNext, bool InterviewFollows = false, string AnnouncerName = "", bool MoreFollows = false);
 
     /// <summary>The longest show name the prompts carry - as long as the Commentary page lets one be typed.</summary>
     internal const int MaxShowNameChars = 60;
@@ -2133,7 +2184,16 @@ public sealed class CommentaryService
         var opening = context?.Opening == true;
         var closing = context?.Closing == true;
         var showName = opening || closing ? Field(context?.ShowName, MaxShowNameChars) : string.Empty;
+
+        // The announcer's own name, for the opening to introduce himself
+        // with. Only when there IS an opening: a name dropped into the
+        // middle of a recap with no welcome around it reads as a mistake.
+        var announcer = opening ? Field(context?.AnnouncerName, MaxShowNameChars) : string.Empty;
         var interviewFollows = context?.InterviewFollows == true;
+
+        // Anything at all after the recap, which is what decides whether it
+        // signs off - see MoreFollows, and the note at the instruction.
+        var moreFollows = interviewFollows || context?.MoreFollows == true;
         var upNext = closing ? Field(context?.UpNext, MaxFieldChars * 2) : string.Empty;
 
         var extraWords = _settings.CommentarySummaryExtraWords
@@ -2143,6 +2203,7 @@ public sealed class CommentaryService
         var facts =
             FactsOpen + "\n" +
             (showName.Length > 0 ? $"Show: {showName}\n" : string.Empty) +
+            (announcer.Length > 0 ? $"Announcer (you): {announcer}\n" : string.Empty) +
             $"Race: {spokenLabel}\n" +
             (kind is not null ? $"Type: {kind}\n" : string.Empty) +
             "Final results:\n" + string.Join("\n", lines) + "\n" +
@@ -2175,13 +2236,24 @@ public sealed class CommentaryService
             // a conflicting instruction here just overrode it.
             "\nEvery name, time and position above is exact. Do not attribute a time to anyone other "
             + "than the driver it is listed against, and do not state a time that does not appear here. "
-            + (interviewFollows
-                // The interview's first question hands over to the pit lane,
-                // and the sign-off comes after it - a recap that signed off
-                // here would end the broadcast twice. Nor does it promise
-                // the interview, which can still be dropped.
+            // ANYTHING FOLLOWING STOPS THE SIGN-OFF, not just the interview
+            // (11 Oct 2026). This asked only about the interview, and the
+            // honours were invisible to it - so on a race with badges and no
+            // mechanic the model was told to "sign off the race", did so, and
+            // the host then threw to the honours reader straight afterwards.
+            // From the floor that is a programme ending and then carrying on,
+            // which is worse than either arrangement.
+            //
+            // The separate Closing flag had already been fixed to hold the
+            // show-name and up-next dressing back. This is the other half and
+            // the one that matters more: dressing is decoration, where "sign
+            // off the race" is an instruction the model follows.
+            //
+            // Nor does it promise what comes next, interview or honours -
+            // either can still be dropped.
+            + (moreFollows
                 ? $"\nWrap up the race for the broadcast audience, naming the winner {PromptName(winner.Transponder)} - "
-                  + "but don't sign off: end on the result."
+                  + "but don't sign off: end on the result, and don't hand over to anybody."
                 : $"\nSign off the race for the broadcast audience, naming the winner {PromptName(winner.Transponder)}.")
             + (anyCars
                 ? " Work in what they're driving where it fits naturally - the car in brackets after a driver's name. "
@@ -2247,6 +2319,27 @@ public sealed class CommentaryService
                     : " Start the commentary itself like a flashy TV sports broadcast coming back on air - big and "
                       + "polished - then go into the race. No show name is given, so don't make one up."
                 : string.Empty)
+            // THE ANNOUNCER INTRODUCES HIMSELF, AND NOBODY ELSE EXISTS
+            // (11 Oct 2026).
+            //
+            // Both halves matter and the second one is the fix. Told it was
+            // presenting a broadcast, the model reached for the furniture a
+            // broadcast has - and the piece it reached for was a colleague
+            // to address: "And Asher's still within striking distance,
+            // Laura". Nobody at the club is called Laura. Giving the host a
+            // real name of his own, and saying plainly that he is alone,
+            // takes away both the gap and the temptation.
+            //
+            // The mechanic and the honours reader are NOT a contradiction
+            // of this: they are separate segments in their own voices,
+            // thrown to by lines this prompt never writes.
+            + (announcer.Length > 0
+                ? " You are the announcer named in the facts. Introduce yourself by that name in the opening, once, "
+                  + "as a broadcaster would - and use no other presenter's or commentator's name anywhere."
+                : opening
+                    ? " You are the only announcer. Do not name, address or hand over to a co-host, a colleague or "
+                      + "any other commentator, and do not give yourself a name."
+                    : string.Empty)
             + (closing
                 ? " End on a flashy TV-broadcast sign-off"
                   + (showName.Length > 0 ? " for the Show named in the facts" : string.Empty)
@@ -2312,6 +2405,23 @@ public sealed class CommentaryService
     }
 
     // ==================== The mechanic's interview ====================
+
+    /// <summary>
+    /// How the announcer introduces the winner's mechanic.
+    ///
+    /// "The team's technical lead" rather than "the mechanic", asked for on
+    /// 11 Oct 2026. It is how a broadcast introduces the person who set the
+    /// car up, and it works whether or not the club has typed a name: with
+    /// one it is "Guiseppi, the team's technical lead", and without one it
+    /// is a handover that says what the person does instead of a bare "the
+    /// winner's mechanic".
+    ///
+    /// The setting and the page still call them the mechanic, deliberately
+    /// - that is what a club calls the person when they are typing a name
+    /// into a box, and renaming the setting would be a different change.
+    /// This is only how they are introduced ON AIR.
+    /// </summary>
+    private const string MechanicRole = "the team's technical lead";
 
     /// <summary>One exchange of the recap's pit-lane interview: the announcer asks, the mechanic answers.</summary>
     public sealed record InterviewExchange(string Question, string Answer);
@@ -2398,7 +2508,15 @@ public sealed class CommentaryService
             $"Winner's laps: {winner.Laps}\n" +
             $"How close it was: {DescribeMargin(ordered)}\n" +
             winnerFastest +
-            $"Mechanic: {(name.Length > 0 ? name : "the team's mechanic - no name is given, so never make one up")}\n" +
+            // THE TEAM'S TECHNICAL LEAD, asked for 11 Oct 2026. The role
+            // travels with the name rather than instead of it, so a club
+            // who has typed one gets "Guiseppi, the team's technical lead"
+            // and a club who has not gets the role on its own - which is a
+            // better anonymous handover than "the team's mechanic" was,
+            // because it says what the person does rather than only what
+            // they are called.
+            $"Mechanic: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
+            $"Mechanic's role, as the announcer introduces them: {MechanicRole}\n" +
             (setupLines.Count > 0
                 ? "The winner's car, from the Garage's setup log:\n" + string.Join("\n", setupLines) + "\n"
                 : "The winner's car: no setup is logged for it in the Garage.\n") +
@@ -2409,8 +2527,10 @@ public sealed class CommentaryService
             + " exchanges, every line starting with who says it, like this:\n"
             + "HOST: <question>\nMECHANIC: <answer>\nHOST: <question>\nMECHANIC: <answer>\n"
             + (name.Length > 0
-                ? "The first question hands over to the mechanic by the name in the facts and asks about the race; "
-                : "The first question hands over to the winner's mechanic and asks about the race; ")
+                ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
+                  + "once, the way a broadcast introduces a guest, and asks about the race; "
+                : "The first question introduces them by their role as the facts give it - no name is given, so do not "
+                  + "use one - and asks about the race; ")
             + "the second asks about the car. "
             + "The mechanic speaks for the team, in the first person (\"we\"), relaxed and proud, in plain spoken "
             + $"words - under {MaxAnswerWords - 10} words an answer, and the host's questions shorter still. "
@@ -2676,10 +2796,52 @@ public sealed class CommentaryService
             FactsOpen + "\n" +
             facts.Text + "\n" +
             FactsClose +
-            "\n\n" + InstructionFor(kind);
+            "\n\n" + InstructionFor(kind) + HostBrief(kind);
 
         return await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
             BuildSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
+    }
+
+    /// <summary>
+    /// The announcer introducing himself, for the segments that open and
+    /// close the night - and nothing at all for the rest of them.
+    ///
+    /// THE COLD OPEN IS WHERE A PRESENTER SAYS WHO HE IS (11 Oct 2026).
+    /// Asked for from the floor, and obviously right once said out loud: a
+    /// broadcast opens with a name, and this one opened with a number of
+    /// drivers. The recap's own opening does the same thing through
+    /// RecapContext.AnnouncerName, which has the longer note on why the
+    /// main voice could not be named at all before this.
+    ///
+    /// THE COLD OPEN ONLY, of the two bookends. The sign-off's "that's all
+    /// from me, goodnight" is a place a name CAN go, but by then the room
+    /// has heard him all evening and being told his name on the way out is
+    /// the wrong way round. Signing off by name reads as a introduction
+    /// three hours late.
+    ///
+    /// Empty when the club has typed no name, and then the instruction
+    /// says plainly that there is nobody else in the booth - the same
+    /// sentence the recap's prompt uses, and for the same reason: an
+    /// unnamed presenter is a gap a model fills.
+    /// </summary>
+    private string HostBrief(SegmentKind kind)
+    {
+        if (kind != SegmentKind.ColdOpen)
+        {
+            return string.Empty;
+        }
+
+        // Not for an exchange: BuildExchangeAsync appends
+        // CommentaryExchange.Brief, which names both people in the booth
+        // and would contradict this.
+        var host = Field(_settings.RecapAnnouncerName, MaxShowNameChars);
+
+        return host.Length > 0
+            ? $" You are {host}, the announcer. Open by welcoming the room and introducing yourself by that "
+              + "name, once, as a broadcaster would, before any of the numbers. Use no other presenter's or "
+              + "commentator's name."
+            : " You are the only announcer. Do not name, address or hand over to a co-host, a colleague or any "
+              + "other commentator, and do not give yourself a name.";
     }
 
     /// <summary>
@@ -2801,6 +2963,15 @@ public sealed class CommentaryService
             + "the number of races, the number of drivers and the winner are exact, worked out from the "
             + "club's own saved results. Use only what is listed - do not add a race, a result, a name or "
             + "anything else about that day, and do not say what the club was like then.",
+
+        // THE COLD OPEN had no case here and fell to the catch-all below,
+        // which asked for one sentence about "this right now" - at a moment
+        // when nothing has happened yet. See CommentaryShowFacts.ColdOpen
+        // for what it is handed and why those numbers are only news once.
+        SegmentKind.ColdOpen =>
+            "Open the night for the crowd in two or three sentences, as a broadcast would - a welcome, then what "
+            + "the evening holds. Every number above is exact: use them as written, and do not add a class, a "
+            + "driver count, a race or anything about who might win, because nothing has run yet.",
 
         _ => "Write what a commentator could say about this right now, in one sentence.",
     };

@@ -1416,6 +1416,12 @@ public partial class MainForm
         // screen plays them - see MainForm.Commentary.cs.
         WireShowMusic(announcer, commentary);
 
+        // And a club who has never been asked is put onto the show music
+        // that ships with the app - once, here, where the app is known to
+        // be starting rather than a page being previewed. See
+        // StartShowMusicFromTheLibrary.
+        StartShowMusicFromTheLibrary(_settings);
+
         // And the relay's count of the club's month, which the night's
         // budget paces against - see MainForm.Commentary.cs.
         WireCommentaryAllowance(announcer, commentary);

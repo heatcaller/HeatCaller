@@ -297,7 +297,9 @@ public sealed partial class AnnouncementService
         (double Stability, double Style)? deliveryOverride = null,
         double? speedOverride = null,
         bool honourMute = true,
-        SecondVoice? voice = null)
+        SecondVoice? voice = null,
+        SpeechTail tail = SpeechTail.Normal,
+        SpeechLead lead = SpeechLead.Normal)
     {
         var currentProfile = _voiceStore.Current;
 
@@ -441,7 +443,11 @@ public sealed partial class AnnouncementService
 
             try
             {
-                await PlayAsync(audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
+                // The pads the CALLER asked for, since 11 Oct 2026. This
+                // was the default 0.9s tail and the full lead whatever the
+                // line was, so two turns of one exchange paid both in full
+                // with the hand-over's beat on top - see SpeechLead.
+                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead));
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {

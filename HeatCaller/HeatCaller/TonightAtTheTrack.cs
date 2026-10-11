@@ -65,6 +65,53 @@ public sealed record DriverPaceTonight(
 }
 
 /// <summary>
+/// How one driver's RACE pace tonight compares with their PRACTICE pace
+/// tonight: their middle flying lap in their latest practice run against
+/// the same in their latest race.
+///
+/// WHY THIS IS NOT A DriverPaceTonight WITH A DIFFERENT FIRST RACE
+///
+/// Because practice is not a race, and the whole reason this took so long
+/// to build is that saying otherwise would have broken things a long way
+/// from here. A practice session has no finishing order, no result and no
+/// round - so no class - which is exactly why
+/// <see cref="TonightAtTheTrack.Races"/> filters it out and why every
+/// reader in the commentary layer does the same. A pace figure that
+/// quietly started counting practice would also have made a practice
+/// session a race in everything else reading the same helper: the field
+/// strength, the form guide, the championship, "their first Open race
+/// here".
+///
+/// So practice is read by a helper of its own
+/// (<see cref="TonightAtTheTrack.PracticeRuns"/>), compared in a type of
+/// its own, and never goes near Races.
+///
+/// WHAT THE SCOPE HONESTLY IS, which any line about this has to say.
+/// Practice has no class, so this is "in practice tonight" and nothing
+/// stronger. A driver who practised one car and is racing another is
+/// comparing two different cars, and nothing in the app can tell. That is
+/// a fair thing for a commentator to say out loud - it is what a
+/// commentator at a real meeting is doing too - but it is not a fair thing
+/// to dress up as a per-class figure, and the fact built from this says
+/// "in practice" rather than naming a class.
+/// </summary>
+/// <param name="Transponder">The driver.</param>
+/// <param name="PracticeMs">Their middle lap in their latest practice run tonight.</param>
+/// <param name="RaceMs">And in their latest race tonight.</param>
+/// <param name="Runs">How many of tonight's practice runs they had enough flying laps in to be measured at all.</param>
+/// <param name="RaceName">The race the comparison is counted TO, as the club labelled it - the scope a line has to say.</param>
+public sealed record DriverPracticeToNow(
+    string Transponder,
+    long PracticeMs,
+    long RaceMs,
+    int Runs,
+    string RaceName)
+{
+    /// <summary>Their middle lap racing against practising. Negative when they are quicker now - the same sign the other two records use.</summary>
+    public long DeltaMs => RaceMs - PracticeMs;
+}
+
+/// <summary>
 /// Tonight at the track, from the races already saved: how the track has
 /// changed for each class since its first race of the night (track
 /// evolution - the grip coming up as the rubber goes down, or going off as
@@ -286,6 +333,128 @@ public static class TonightAtTheTrack
             : Changes(races, roundOf)
                 .OrderByDescending(change => Math.Abs(change.DeltaMs))
                 .ToList();
+    }
+
+    /// <summary>
+    /// Tonight's saved PRACTICE runs, oldest first - not demos.
+    ///
+    /// NO ROUND AND NO CLASS, unlike <see cref="Races"/>, because a
+    /// practice session has neither: PracticeModeControl files it with a
+    /// label of "Practice" and no RoundId at all. So there is nothing to
+    /// scope it by and nothing is pretended - see
+    /// <see cref="DriverPracticeToNow"/>, which says what that costs.
+    ///
+    /// A helper of its own rather than a flag on Races, deliberately.
+    /// Races is read by the field strength, the form guide, the
+    /// championship and half the history readers, and every one of them
+    /// means "a race that had a result". A parameter that let practice in
+    /// would be one call site away from a practice run counting as a start
+    /// in somebody's career.
+    /// </summary>
+    internal static List<SessionRecord> PracticeRuns(IEnumerable<SessionRecord> history, DateTime nowLocal)
+    {
+        var tonight = NightOf(nowLocal);
+
+        return history
+            .Where(s => !s.IsDemoSession() && s.SessionType == RaceSessionType.Practice)
+            .Where(s => NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
+            .OrderBy(s => s.StartedAtUtc)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Each driver's race pace tonight against their practice pace
+    /// tonight, the biggest change first - "he was a second off this in
+    /// practice".
+    ///
+    /// THEIR LATEST PRACTICE RUN AND THEIR LATEST RACE, not their first of
+    /// either. A club practises, then races, then often practises again
+    /// between classes; the run that says something about how a driver has
+    /// come on is the last one before now, and the race that does is the
+    /// one they have just had. First-to-latest is what
+    /// <see cref="PaceTonight"/> measures, and it measures it over races,
+    /// where there is a running order to count along.
+    ///
+    /// Biggest first, for the reason PaceTonight gives: the driver who has
+    /// found or lost the most is the one that should survive a cap.
+    ///
+    /// Empty until a driver has both a practice run and a race tonight
+    /// with enough flying laps in each - which is most nights at most
+    /// clubs, and the right answer for them. A club that never practises
+    /// through HeatCaller hears nothing about practice, as before.
+    ///
+    /// Call it on the UI thread: it reads the session history and the
+    /// programme.
+    /// </summary>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="roundOf">A round by id - how a RACE gets its class and its label. Practice has neither.</param>
+    /// <param name="nowLocal">Now, in local time, for which night counts as tonight.</param>
+    /// <param name="className">The class whose races to measure, or blank for every class racing tonight. Practice is never scoped by it - see DriverPracticeToNow.</param>
+    public static IReadOnlyList<DriverPracticeToNow> PracticeAgainstNow(
+        IEnumerable<SessionRecord> history,
+        Func<string, RoundDefinition?> roundOf,
+        DateTime nowLocal,
+        string? className = null)
+    {
+        var filed = history as ICollection<SessionRecord> ?? history.ToList();
+
+        var practice = PracticeRuns(filed, nowLocal);
+
+        if (practice.Count == 0)
+        {
+            return Array.Empty<DriverPracticeToNow>();
+        }
+
+        var wanted = (className ?? string.Empty).Trim();
+
+        var races = Races(filed, roundOf, nowLocal)
+            .Where(r => wanted.Length == 0 || string.Equals(r.ClassName, wanted, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.Session)
+            .ToList();
+
+        if (races.Count == 0)
+        {
+            return Array.Empty<DriverPracticeToNow>();
+        }
+
+        var found = new List<DriverPracticeToNow>();
+
+        // The same exclusions the rest of this file makes: a ghost's laps
+        // are a recording and a blank transponder is not a driver.
+        static IEnumerable<(string Transponder, long Middle, SessionRecord Session)> Measured(List<SessionRecord> sessions) =>
+            sessions
+                .SelectMany(session => session.Results
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Transponder) && !GhostService.IsGhost(r.Transponder))
+                    .Select(r => (r.Transponder, Middle: MiddleLap(r), Session: session)))
+                .Where(x => x.Middle > 0);
+
+        var practised = Measured(practice)
+            .GroupBy(x => x.Transponder, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var driver in Measured(races).GroupBy(x => x.Transponder, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!practised.TryGetValue(driver.Key, out var runs))
+            {
+                continue;
+            }
+
+            // Both walked oldest first by the two helpers above, and
+            // GroupBy keeps what it was given - so the last of each is
+            // their latest.
+            var raced = driver.ToList();
+
+            found.Add(new DriverPracticeToNow(
+                driver.Key,
+                runs[^1].Middle,
+                raced[^1].Middle,
+                runs.Count,
+                NameOf(raced[^1].Session, roundOf)));
+        }
+
+        return found
+            .OrderByDescending(change => Math.Abs(change.DeltaMs))
+            .ToList();
     }
 
     /// <summary>The race's own label, or its round's when it has none.</summary>

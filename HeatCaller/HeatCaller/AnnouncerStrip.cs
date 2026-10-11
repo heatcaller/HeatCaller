@@ -27,12 +27,16 @@
 /// </summary>
 internal sealed class AnnouncerStrip : FlowLayoutPanel
 {
-    private const int MostOfALine = 90;
-
     private readonly Label _lamp = new();
     private readonly SteadyLabel _state = new();
     private readonly Label _said = new();
     private readonly Button _hold = new();
+
+    /// <summary>Plays the last segment again - see <see cref="ReplayWanted"/>.</summary>
+    private readonly Button _replay = new();
+
+    /// <summary>Stops whatever is on air now - see <see cref="SkipWanted"/>.</summary>
+    private readonly Button _skip = new();
 
     private bool _holding;
 
@@ -61,7 +65,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
 
         _hold.Text = HoldCaption;
         _hold.AutoSize = true;
-        _hold.Margin = new Padding(0, 0, 0, 0);
+        _hold.Margin = new Padding(0, 0, 6, 0);
         _hold.Click += (_, _) =>
         {
             _holding = !_holding;
@@ -69,10 +73,29 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             HoldChanged?.Invoke(_holding);
         };
 
+        _replay.Text = ReplayCaption;
+        _replay.AutoSize = true;
+        _replay.Margin = new Padding(0, 0, 6, 0);
+        _replay.Click += (_, _) => ReplayWanted?.Invoke();
+
+        _skip.Text = SkipCaption;
+        _skip.AutoSize = true;
+        _skip.Margin = new Padding(0, 0, 0, 0);
+        _skip.Click += (_, _) => SkipWanted?.Invoke();
+
+        // Focus off after a click, for the reason the flag buttons do it:
+        // a button that keeps focus keeps answering to Space and Enter, and
+        // on this row that means a stray keypress puts the last segment out
+        // over a live PA, or cuts off the one being spoken. Done here
+        // rather than by Race Control because the buttons are this class's.
+        AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip);
+
         Controls.Add(_lamp);
         Controls.Add(_state);
         Controls.Add(_said);
         Controls.Add(_hold);
+        Controls.Add(_replay);
+        Controls.Add(_skip);
     }
 
     private const string OffText = "Announcer: off";
@@ -83,9 +106,27 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
 
     private const string HoldCaption = "Hold";
     private const string ReleaseCaption = "Release";
+    private const string ReplayCaption = "Play again";
+    private const string SkipCaption = "Skip";
+
+    /// <summary>What the strip says when nothing has been said yet tonight.</summary>
+    private const string NothingYet = "Nothing yet";
 
     /// <summary>Raised when the race director holds the segments, or lets them go again.</summary>
     public event Action<bool>? HoldChanged;
+
+    /// <summary>
+    /// Raised when the race director wants the last segment played again -
+    /// a line talked over, a PA that cut out, a room that missed it.
+    /// </summary>
+    public event Action? ReplayWanted;
+
+    /// <summary>
+    /// Raised when the race director wants whatever is on air stopped
+    /// where it is. The counterpart to Hold: Hold stops the NEXT thing,
+    /// this stops the one in progress.
+    /// </summary>
+    public event Action? SkipWanted;
 
     /// <summary>
     /// Draws the strip for how things stand.
@@ -153,15 +194,34 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         }
 
         _said.Text = Lately(director);
+
+        // Both only mean anything once there is something to act on, and a
+        // button that does nothing reads as a fault rather than as a
+        // setting - the same rule the Commentary page's Test button goes by.
+        _replay.Enabled = director.LastSaid is not null;
+        _skip.Enabled = speaking || ShowOnAir.Playing;
     }
 
     /// <summary>
-    /// What to show beside the state: the last thing said while there is
-    /// one, and what the night has spent before that.
+    /// What to show beside the state: what the announcer last did, and
+    /// what the night has spent before there is one.
     ///
-    /// The last line matters more than the budget during a race - it is
-    /// how the director knows a moment was covered without having to have
-    /// heard it - so it wins the space once there is one.
+    /// THE SEGMENT'S NAME, NOT THE LINE ITSELF (11 Oct 2026, asked for
+    /// from the floor). This used to print the first ninety characters of
+    /// what had just been said, in quotes, and it was the wrong thing on
+    /// every count. A race director does not read a quote - they HEARD the
+    /// line, or they were busy, and a wall of text in a strip is not how
+    /// anybody catches up. It pushed the buttons about on the row as it
+    /// grew and shrank, it put a truncated half-sentence on the busiest
+    /// screen in the app, and for a two-hander it showed one flattened
+    /// line of two people talking.
+    ///
+    /// What is actually wanted is which part of the programme just went
+    /// out - "Race Recap", "Club Honours", "Cold Open" - because that is
+    /// what says where the show is up to, and whether Play again is worth
+    /// pressing. ShowBlock.CaptionFor is the app's one table of those
+    /// names, and CommentaryBudget's own title covers the in-race kinds it
+    /// has no show name for.
     /// </summary>
     private static string Lately(CommentaryDirector director)
     {
@@ -170,11 +230,16 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             return director.Describe();
         }
 
-        // One line: an exchange is two, and the strip is one row high.
-        var text = last.Text.Replace('\n', ' ').Replace("  ", " ").Trim();
+        var named = ShowBlock.CaptionFor(last.Kind)
+            ?? CommentaryBudget.Spec(last.Kind).Title;
 
-        return text.Length <= MostOfALine
-            ? $"“{text}”"
-            : $"“{text[..MostOfALine].TrimEnd()}…”";
+        if (string.IsNullOrWhiteSpace(named))
+        {
+            named = NothingYet;
+        }
+
+        // Said plainly that it was the two of them, since the strip no
+        // longer shows the words and so no longer shows the two voices.
+        return last.IsExchange ? $"Last: {named} (two voices)" : $"Last: {named}";
     }
 }

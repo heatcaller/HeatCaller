@@ -1737,6 +1737,90 @@ public static class CommentaryReaders
     }
 
     /// <summary>
+    /// What the drivers on this grid have found since practice tonight,
+    /// the biggest change first - "he was a second off this in practice".
+    ///
+    /// THE TIER 1 ITEM THE DEPTH PLAN ASKED FOR, built 11 Oct 2026. What
+    /// had been built instead was race-against-race
+    /// (<see cref="PaceTonight"/>), and the roadmap was explicit that this
+    /// was not the same thing and that whoever picked it up had a decision
+    /// to make first rather than a reader to write. The decision taken was
+    /// to read practice through a helper of its OWN
+    /// (TonightAtTheTrack.PracticeRuns) rather than letting it through
+    /// TonightAtTheTrack.Races, so that nothing else in the app starts
+    /// counting a practice run as a race - which is precisely what the
+    /// roadmap warned a quiet change here would do.
+    ///
+    /// THROUGH TonightAtTheTrack AND NOT ROUND IT, like PaceTonight, so
+    /// there is one implementation of a middle flying lap.
+    ///
+    /// Empty before anybody on this grid has both practised and raced
+    /// tonight - and empty all evening at a club that does not run its
+    /// practice through HeatCaller, which is the right answer for them.
+    ///
+    /// Call it on the UI thread, like everything else here.
+    /// </summary>
+    /// <param name="transponders">Who is in the race. Anyone else's practice is not this segment's business.</param>
+    /// <param name="className">The class whose RACES to measure. Practice is never scoped by it - see DriverAgainstPractice.</param>
+    /// <param name="profiles">For the driver behind a transponder.</param>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="rounds">Which round belongs to which class, and what each race is called.</param>
+    /// <param name="nowLocal">Now, in local time, for which night counts as tonight. Defaults to now.</param>
+    /// <param name="most">How many to offer. Two - see <see cref="MostNights"/>.</param>
+    public static IReadOnlyList<DriverAgainstPractice> AgainstPractice(
+        IReadOnlyList<string> transponders,
+        string? className,
+        ProfileStore profiles,
+        SessionHistoryStore history,
+        RoundDefinitionStore rounds,
+        DateTime? nowLocal = null,
+        int most = MostNights)
+    {
+        var racing = new HashSet<string>(
+            transponders.Where(t => !string.IsNullOrWhiteSpace(t)),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (racing.Count == 0)
+        {
+            return Array.Empty<DriverAgainstPractice>();
+        }
+
+        var found = new List<DriverAgainstPractice>();
+        var want = Math.Max(1, most);
+
+        foreach (var change in TonightAtTheTrack.PracticeAgainstNow(
+                     history.All, id => rounds.Get(id), nowLocal ?? DateTime.Now, className))
+        {
+            if (!racing.Contains(change.Transponder))
+            {
+                continue;
+            }
+
+            var name = Typed(profiles.Get(change.Transponder)?.DriverName);
+
+            // A driver with no profile has no name to say - the same
+            // answer PaceTonight and GridHistory give.
+            if (name.Length == 0)
+            {
+                continue;
+            }
+
+            found.Add(new DriverAgainstPractice(
+                change.Transponder,
+                name,
+                change.DeltaMs,
+                change.Runs));
+
+            if (found.Count >= want)
+            {
+                break;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// What the club's garage and its own results know about the cars in a
     /// race just run - the car the main voice has never mentioned.
     ///

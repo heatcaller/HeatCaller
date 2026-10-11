@@ -8,12 +8,21 @@ namespace HeatCaller;
 /// Personal Best and Hat-Trick." Never blank.
 /// </param>
 /// <param name="Badges">
-/// How many badges <paramref name="Said"/> names. NOT how many the race
-/// unlocked: the read is capped (see RaceHonours.MostDrivers and MostEach),
-/// and the throw says how many are "to hand out", so it has to be told the
-/// number the room is about to hear rather than the number in the store.
-/// Saying "four to hand out" and then reading three is the one way this
-/// segment could be caught lying by anybody listening.
+/// How many DISTINCT badges <paramref name="Said"/> names. NOT how many the
+/// race unlocked: the read is capped (see RaceHonours.MostDrivers and
+/// MostEach), and the throw says how many are "to hand out", so it has to
+/// be told the number the room is about to hear rather than the number in
+/// the store. Saying "four to hand out" and then reading three is the one
+/// way this segment could be caught lying by anybody listening.
+///
+/// DISTINCT, counted across the whole read, since 11 Oct 2026. This used to
+/// count driver-and-badge PAIRS, which is the number of awards rather than
+/// the number of honours, and the two differ whenever one badge goes to
+/// more than one driver. The date-based badges do that constantly - Weekend
+/// Warrior and Back to Back fire for everybody who raced both days - so on
+/// 11 Oct the throw promised "3 to hand out" and the room then heard two
+/// badge names: Back to Back and Weekend Warrior, the second of them twice,
+/// for two different drivers. A listener counts honours, not awards.
 /// </param>
 public readonly record struct HonoursRead(string Said, int Badges);
 
@@ -267,18 +276,27 @@ public static class RaceHonours
         }
 
         var said = new List<string>(order.Count);
-        var named = 0;
+
+        // DISTINCT BADGE NAMES, not driver-and-badge pairs - see
+        // HonoursRead.Badges, which carries the whole reason. The dedupe a
+        // few lines up is per driver, because that is the list being read
+        // out; this one is across the read, because that is what the throw
+        // is about to promise.
+        var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 0; i < order.Count; i++)
         {
             var badges = byDriver[order[i]];
 
-            named += badges.Count;
+            foreach (var badge in badges)
+            {
+                titles.Add(badge);
+            }
 
             said.Add($"{order[i]} {Verbs[i % Verbs.Length]} {AndList(badges)}.");
         }
 
-        return new HonoursRead(string.Join(" ", said), named);
+        return new HonoursRead(string.Join(" ", said), titles.Count);
     }
 
     /// <summary>

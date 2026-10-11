@@ -120,6 +120,43 @@ public sealed partial class AnnouncementService
     };
 
     /// <summary>
+    /// How much silence a line gets in FRONT of it.
+    ///
+    /// The other end of <see cref="SpeechTail"/>, added 11 Oct 2026 for the
+    /// same complaint: the gap when the second voice came in was killing a
+    /// two-hander. Both pads were being charged in full between two turns
+    /// of one exchange - 0.9s behind the first and 0.15s in front of the
+    /// second - and on top of them sat the deliberate beat at the change of
+    /// voice. A measured 1.5s of dead air inside what is meant to sound
+    /// like two people talking.
+    /// </summary>
+    public enum SpeechLead
+    {
+        /// <summary>The standard pad - enough to clear the output device's own startup.</summary>
+        Normal,
+
+        /// <summary>
+        /// None, because this line follows another immediately.
+        ///
+        /// The pad exists to cover the output device starting up, and
+        /// <see cref="LeadingSilenceFor"/> already records that every line
+        /// now goes through the shared output, which never stops between
+        /// sounds. A line queued straight behind another therefore has
+        /// nothing for it to cover: the device is already running and the
+        /// line before it has just finished through the same mixer.
+        /// </summary>
+        FollowsOn,
+    }
+
+    /// <summary>
+    /// How much lead silence a line gets. An instance member, unlike
+    /// <see cref="TailSecondsFor"/>, because the standard pad is read from
+    /// the saved profile - see <see cref="CurrentLeadingSilence"/>.
+    /// </summary>
+    private double LeadSecondsFor(SpeechLead lead) =>
+        lead == SpeechLead.FollowsOn ? 0.0 : CurrentLeadingSilence;
+
+    /// <summary>
     /// How much of the decoded start is thrown away, and therefore how far
     /// the decoded audio runs AHEAD of any timings the API reported for it.
     /// Anything cutting that audio by time has to allow for this.

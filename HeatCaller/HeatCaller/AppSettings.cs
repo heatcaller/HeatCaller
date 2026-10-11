@@ -287,11 +287,25 @@ public sealed class AppSettings
     // --- The show's own music (ShowTreatment) ---
     //
     // An opener in front of the voice and a bed underneath it, for the
-    // segments that open and close the evening. Both pieces are the
-    // club's own files, dropped into %AppData%\HeatCaller\ShowMusic as
-    // opener.* and bed.*, or chosen by path below - so a club can brand
-    // the top of their own broadcast rather than every club in the sport
-    // sounding identical.
+    // segments that open and close the evening.
+    //
+    // THE APP NOW SHIPS SOME (11 Oct 2026), which reverses what this
+    // comment used to say. It said both pieces were the club's own files
+    // so that a club could brand the top of their own broadcast "rather
+    // than every club in the sport sounding identical" - and the effect of
+    // that stance in the field was that almost nobody had a show at all,
+    // because dropping a correctly-shaped looping bed into an AppData
+    // folder is a job, and the reward for not doing it was silence.
+    //
+    // So there is a library of beds and openers beside the exe
+    // (ShowMusicLibrary) and a fresh install starts on one of each. The
+    // club's own file still wins wherever one is set, which is the part of
+    // the original stance worth keeping: a club who want their own sound
+    // get it, and a club who want a show get one without a file-management
+    // exercise first.
+    //
+    // THREE TIERS, per part: the club's own file, then the shipped piece
+    // this part is set to, then nothing. Same shape as SoundPacks.
 
     /// <summary>
     /// Whether the show segments get music at all. On, because a club that
@@ -300,7 +314,49 @@ public sealed class AppSettings
     /// </summary>
     public bool ShowThemeEnabled { get; set; } = true;
 
-    /// <summary>The opener, if one was chosen by path. Blank: opener.* in the show music folder.</summary>
+    /// <summary>
+    /// Which shipped opener this club is on - a ShowMusicLibrary name
+    /// ("Opening Hit"), or blank for none.
+    ///
+    /// BLANK IS "NONE" AND NOT "THE DEFAULT", which is the one subtlety in
+    /// these three. A club who chose to have no opener must keep having no
+    /// opener, so blank cannot mean "fall back to the first one" - and that
+    /// means a FRESH install cannot be blank either, or it would be
+    /// indistinguishable from a deliberate none. See
+    /// ShowMusicLibrary.DefaultFor and AppSettings.ShowMusicStarted, which
+    /// is the flag that tells the two apart exactly once.
+    /// </summary>
+    public string ShowOpenerBuiltIn { get; set; } = string.Empty;
+
+    /// <summary>Which shipped bed this club is on, or blank for none - see <see cref="ShowOpenerBuiltIn"/>.</summary>
+    public string ShowBedBuiltIn { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which shipped piece marks the breaks, or blank for none - see
+    /// <see cref="ShowOpenerBuiltIn"/>.
+    ///
+    /// Starts blank on a fresh install as well, unlike the other two:
+    /// nothing shipped is short enough to be a MARK, so the swell of the
+    /// bed keeps doing that job until a club picks something. See
+    /// ShowMusicLibrary.DefaultFor.
+    /// </summary>
+    public string ShowStingBuiltIn { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this settings file has ever had the shipped show music
+    /// chosen for it.
+    ///
+    /// Set once, the first time the three built-in settings are filled in
+    /// from the library, and never again - so a club who turns the opener
+    /// off keeps it off, and a club upgrading from before the library
+    /// existed is given one rather than staying silent. Without this flag
+    /// "blank" would have to mean both "none" and "not asked yet", and one
+    /// of those two clubs would be wrong every time. See
+    /// ShowMusic.StartFromTheLibraryOnce.
+    /// </summary>
+    public bool ShowMusicStarted { get; set; }
+
+    /// <summary>The opener, if one was chosen by path. Blank: opener.* in the show music folder, then the shipped piece.</summary>
     public string ShowOpenerPath { get; set; } = string.Empty;
 
     /// <summary>The bed, if one was chosen by path. Blank: bed.* in the show music folder.</summary>
@@ -640,6 +696,27 @@ public sealed class AppSettings
 
     /// <summary>The show the opening and closing name - "Friday Night Thunder". Blank for none; the model is told not to make one up.</summary>
     public string RecapShowName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What the main announcer calls himself - "Dave Marsh". Blank for
+    /// none, and then he is never named and no name is made up.
+    ///
+    /// ASKED FOR ON 11 OCT 2026, and the reason is worth keeping. Every
+    /// other voice in the broadcast could be named - the mechanic, the
+    /// honours reader, the co-host - and the one voice carrying the whole
+    /// programme could not. So the model, told it was presenting a show and
+    /// given a co-host to talk to, invented a name for whoever it was
+    /// talking to and used it on air: "And Asher's still within striking
+    /// distance, Laura". There was no Laura. A club that names the
+    /// announcer gets a host who introduces himself at the top of the show
+    /// and at the cold open, and the model has a real name to use instead
+    /// of reaching for one.
+    ///
+    /// Used by the cold open and the recap's opening only. It is NOT a
+    /// per-line prefix: a name on every call would be the thing a room
+    /// remembers about the evening.
+    /// </summary>
+    public string RecapAnnouncerName { get; set; } = string.Empty;
 
     /// <summary>
     /// After a main only: a short pit-lane interview with the winner's

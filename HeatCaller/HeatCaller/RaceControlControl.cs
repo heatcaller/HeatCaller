@@ -488,6 +488,13 @@ public sealed partial class RaceControlControl : UserControl
         _journal.StatusChanged += message =>
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {message}");
 
+        // The broadcast floor, which only ever has anything to say when a
+        // claim had to be broken - see ShowFloor. Here because this page is
+        // what claims it, and assigned rather than subscribed because the
+        // floor is static and this page is rebuilt with the window.
+        ShowFloor.Status = message =>
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {message}");
+
         // Any voice line, not just a segment: somebody about to pick up
         // the mic cares that the speakers are busy, not whose line it is.
         _announcer.SpeakingChanged += speaking => _speaking = speaking;

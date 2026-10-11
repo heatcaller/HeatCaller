@@ -74,6 +74,13 @@ public sealed class CommentaryControl : UserControl
     private readonly CheckBox _chkOpening = new ThemedCheckBox();
     private readonly CheckBox _chkClosing = new ThemedCheckBox();
     private readonly TextBox _txtShowName = new();
+
+    /// <summary>
+    /// What the main announcer calls himself. The one voice carrying the
+    /// whole programme, and until 11 Oct 2026 the only one on this page
+    /// that could not be named - see AppSettings.RecapAnnouncerName.
+    /// </summary>
+    private readonly TextBox _txtAnnouncerName = new();
     private readonly CheckBox _chkInterview = new ThemedCheckBox();
     private readonly TextBox _txtMechanicName = new();
     private readonly ComboBox _cmbMechanicVoice = new();
@@ -111,6 +118,15 @@ public sealed class CommentaryControl : UserControl
     // an ear rather than a number, so there is a Test button that runs a
     // real show rather than a preview of one.
     private readonly CheckBox _chkShowMusic = new ThemedCheckBox();
+
+    // The shipped library, one list per part (11 Oct 2026) - see
+    // ShowMusicLibrary. Modelled on the Sounds page's rows: a drop-down of
+    // what ships, beside a Choose... for the club's own file, and the
+    // club's own file wins wherever one is set.
+    private readonly ComboBox _cmbOpenerPiece = new();
+    private readonly ComboBox _cmbBedPiece = new();
+    private readonly ComboBox _cmbStingPiece = new();
+
     private readonly NumericUpDown _numOpenerLevel = new();
     private readonly NumericUpDown _numBedLevel = new();
     private readonly NumericUpDown _numBedDuck = new();
@@ -174,6 +190,9 @@ public sealed class CommentaryControl : UserControl
     private const int EndpointWidth = 300;
     private const int TonePickerWidth = 220;
     private const int ShowNameWidth = 280;
+
+    /// <summary>The library drop-downs. Wide enough for "Good Morning America 2" and "Opening Drive (132 BPM)" without cutting either off.</summary>
+    private const int ShowPieceWidth = 220;
     private const int MechanicNameWidth = 200;
     private const int VoicePickerWidth = 260;
     private const int TeaserWidth = 420;
@@ -897,6 +916,14 @@ public sealed class CommentaryControl : UserControl
             _settings.Save();
         };
 
+        _txtAnnouncerName.MaxLength = 60;
+        _txtAnnouncerName.Text = _settings.RecapAnnouncerName ?? string.Empty;
+        _txtAnnouncerName.TextChanged += (_, _) =>
+        {
+            _settings.RecapAnnouncerName = _txtAnnouncerName.Text.Trim();
+            _settings.Save();
+        };
+
         Check(_chkInterview, "After a main, a quick interview with the winner's mechanic");
         _chkInterview.Checked = _settings.RecapMechanicInterview;
         _chkInterview.CheckedChanged += (_, _) =>
@@ -933,6 +960,8 @@ public sealed class CommentaryControl : UserControl
         var showGrid = new FieldGrid();
 
         Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
+
+        Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("he introduces himself at the cold open and the top of the recap - blank and he is never named"))));
 
         Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
         _chkAdBreak.Checked = _settings.RecapAdBreak;
@@ -1161,6 +1190,15 @@ public sealed class CommentaryControl : UserControl
             UpdateEnabledState();
         };
 
+        // THE SHIPPED PIECES, one drop-down per part. Filled from the
+        // library rather than written down - adding an mp3 to
+        // Assets\ShowMusic adds a choice with no code change. Each one
+        // attaches its own handler after it is filled, so filling it does
+        // not read as the club choosing something - see FillLibrary.
+        FillLibrary(_cmbOpenerPiece, ShowPart.Opener);
+        FillLibrary(_cmbBedPiece, ShowPart.Bed);
+        FillLibrary(_cmbStingPiece, ShowPart.Sting);
+
         _btnOpenerPick.Text = "Choose...";
         _btnOpenerPick.Click += (_, _) => PickShowMusic(ShowPart.Opener);
 
@@ -1239,9 +1277,12 @@ public sealed class CommentaryControl : UserControl
 
         var showMusicGrid = new FieldGrid();
 
-        Stepped(showMusicGrid.AddRow("Opener:", Line(_btnOpenerPick, _btnOpenerClear, _lblOpenerFile)));
-        Stepped(showMusicGrid.AddRow("Music bed:", Line(_btnBedPick, _btnBedClear, _lblBedFile)));
-        Stepped(showMusicGrid.AddRow("Sting:", Line(_btnStingPick, _btnStingClear, _lblStingFile)));
+        // The drop-down FIRST on each row, because it is what most clubs
+        // will ever touch: the shipped piece is what they are already on,
+        // and Choose... is for the club with a piece of their own.
+        Stepped(showMusicGrid.AddRow("Opener:", Line(_cmbOpenerPiece, _btnOpenerPick, _btnOpenerClear, _lblOpenerFile)));
+        Stepped(showMusicGrid.AddRow("Music bed:", Line(_cmbBedPiece, _btnBedPick, _btnBedClear, _lblBedFile)));
+        Stepped(showMusicGrid.AddRow("Sting:", Line(_cmbStingPiece, _btnStingPick, _btnStingClear, _lblStingFile)));
         showMusicGrid.AddHint(
             "Your own files, copied into the club's data so a backup carries them to the next laptop. The bed is "
             + "looped for as long as the show runs and then finishes on its own fade, so anything from half a minute "
@@ -1418,6 +1459,10 @@ public sealed class CommentaryControl : UserControl
         Fit(_txtEndpoint, UiLayout.AtTextSize(EndpointWidth));
         Fit(_txtModel, UiLayout.AtTextSize(EndpointWidth));
         Fit(_txtShowName, UiLayout.AtTextSize(ShowNameWidth));
+        Fit(_txtAnnouncerName, UiLayout.AtTextSize(ShowNameWidth));
+        Fit(_cmbOpenerPiece, UiLayout.AtTextSize(ShowPieceWidth));
+        Fit(_cmbBedPiece, UiLayout.AtTextSize(ShowPieceWidth));
+        Fit(_cmbStingPiece, UiLayout.AtTextSize(ShowPieceWidth));
         Fit(_txtMechanicName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtCoHostName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtHonoursName, UiLayout.AtTextSize(MechanicNameWidth));
@@ -1755,6 +1800,83 @@ public sealed class CommentaryControl : UserControl
     /// Measured rather than set, so this is the only way a club can see
     /// what their file is going to do.
     /// </summary>
+    /// <summary>
+    /// What a part's drop-down says when the club is on nothing.
+    ///
+    /// Not blank, and not "Default": blank reads as a list that failed to
+    /// load, and "Default" is wrong because none IS a choice here - a club
+    /// who wants no opener picks this on purpose, and the page has to be
+    /// able to show them that is what they have.
+    /// </summary>
+    private const string NoPiece = "None";
+
+    /// <summary>
+    /// Fills one part's drop-down from the shipped library and selects
+    /// whatever the club is on.
+    ///
+    /// THE HANDLER GOES ON LAST, after the items and the selection. A
+    /// SelectedIndexChanged attached first fires while this is filling -
+    /// once as the first item lands and again as the selection is set -
+    /// and each of those would be written to the settings and counted as
+    /// the club having chosen, which is exactly what
+    /// AppSettings.ShowMusicStarted must not be told by accident.
+    ///
+    /// An empty library leaves the row with None in it and nothing else,
+    /// which is the honest state of a damaged install - the club's own
+    /// Choose... still works.
+    /// </summary>
+    private void FillLibrary(ComboBox box, ShowPart part)
+    {
+        box.DropDownStyle = ComboBoxStyle.DropDownList;
+        box.Items.Clear();
+        box.Items.Add(NoPiece);
+
+        var pieces = ShowMusicLibrary.For(part);
+
+        foreach (var piece in pieces)
+        {
+            box.Items.Add(piece.Name);
+        }
+
+        var on = (part switch
+        {
+            ShowPart.Bed => _settings.ShowBedBuiltIn,
+            ShowPart.Sting => _settings.ShowStingBuiltIn,
+            _ => _settings.ShowOpenerBuiltIn,
+        } ?? string.Empty).Trim();
+
+        // A name the library no longer has is ADDED to the list and
+        // selected, rather than silently falling back to None: the club
+        // chose it, the file has gone, and Describe says so beside the
+        // row. Dropping it from the list would make the page claim they
+        // had chosen nothing.
+        if (on.Length > 0 && !ShowMusicLibrary.Has(part, on))
+        {
+            box.Items.Add(on);
+        }
+
+        box.SelectedItem = on.Length > 0 ? on : NoPiece;
+
+        if (box.SelectedIndex < 0)
+        {
+            box.SelectedIndex = 0;
+        }
+
+        box.SelectedIndexChanged += (_, _) =>
+        {
+            var chosen = box.SelectedItem as string;
+
+            _showMusic.ChooseFromLibrary(part, string.Equals(chosen, NoPiece, StringComparison.Ordinal) ? null : chosen);
+
+            // Both, exactly as PickShowMusic and ClearShowMusic do: the
+            // announcer screen holds a ShowMusic of its own over the same
+            // static clip cache, and this page's labels are stale until
+            // they are redrawn.
+            ShowMusicChanged?.Invoke();
+            RefreshShowMusic();
+        };
+    }
+
     private void RefreshShowMusic()
     {
         _lblOpenerFile.Text = _showMusic.Describe(ShowPart.Opener);
@@ -2033,6 +2155,13 @@ public sealed class CommentaryControl : UserControl
         _chkOpening.Enabled = summariesOn;
         _chkClosing.Enabled = summariesOn;
         _txtShowName.Enabled = summariesOn && (_chkOpening.Checked || _chkClosing.Checked);
+
+        // NOT tied to the recap's opening the way the show name is. This
+        // name is also used by the COLD OPEN, which is a segment of its own
+        // with its own tick box further down the page, so a club running the
+        // cold open with the recap's broadcast dressing switched off still
+        // needs somewhere to type it.
+        _txtAnnouncerName.Enabled = on;
         _chkInterview.Enabled = summariesOn;
 
         var interviewOn = summariesOn && _chkInterview.Checked;
@@ -2109,6 +2238,14 @@ public sealed class CommentaryControl : UserControl
         _btnBedClear.Enabled = musicOn && _showMusic.BedPath is not null;
         _btnStingPick.Enabled = musicOn;
         _btnStingClear.Enabled = musicOn && _showMusic.StingPath is not null;
+
+        // The library lists go dark with the rest of the card, and also
+        // while the club is on a file of their OWN for that part: the
+        // shipped piece is not what is playing then, so a list that still
+        // looked live would be claiming otherwise. Remove puts them back.
+        _cmbOpenerPiece.Enabled = musicOn && !_showMusic.IsTheirOwn(ShowPart.Opener);
+        _cmbBedPiece.Enabled = musicOn && !_showMusic.IsTheirOwn(ShowPart.Bed);
+        _cmbStingPiece.Enabled = musicOn && !_showMusic.IsTheirOwn(ShowPart.Sting);
         _numOpenerLevel.Enabled = musicOn;
         _numBedLevel.Enabled = musicOn;
         _numBedDuck.Enabled = musicOn;

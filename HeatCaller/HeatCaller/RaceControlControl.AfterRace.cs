@@ -214,9 +214,18 @@ public sealed partial class RaceControlControl
 
             if (_honours is not null)
             {
+                // BOTH numbers when they differ. The read is capped - four
+                // drivers, three badges each - and one badge going to
+                // several drivers is named once in the count, so "held
+                // back" and "read out" are honestly different figures. With
+                // only the first of them logged, a club whose honours read
+                // shorter than the log promised had nothing to go on.
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [badge] {Plural.Of(unlocks.Count, "badge")} held back for the recap's honours segment "
-                    + "rather than called out one at a time.");
+                    + "rather than called out one at a time"
+                    + (_honours.Badges > 0 && _honours.Badges != unlocks.Count
+                        ? $" - the read names {Plural.Of(_honours.Badges, "badge")}."
+                        : "."));
 
                 return;
             }
@@ -455,7 +464,10 @@ public sealed partial class RaceControlControl
         {
             try
             {
-                plan = PlanRecap(record, round);
+                // The honours are taken above, so whether they are coming is
+                // already known here - and the sign-off's placement depends
+                // on it. See PlanRecap.
+                plan = PlanRecap(record, round, honours is not null);
             }
             catch (Exception ex)
             {
@@ -577,6 +589,24 @@ public sealed partial class RaceControlControl
                 }
             }
 
+            // THE BROADCAST FLOOR, CLAIMED FOR THE WHOLE SEQUENCE (11 Oct
+            // 2026). This is the programme - the race has just finished and
+            // the room is waiting to be told about it - and from here until
+            // the finally it is the only thing allowed to open a show.
+            //
+            // Without this the announcer screen's director, which asks for a
+            // segment twice a second, would open a second show over the top:
+            // on 11 Oct it opened the night's SIGN-OFF nine seconds into the
+            // recap's own bed, so the hall heard two openers and two beds
+            // summed together and the programme signed off before the
+            // honours had been read out. See ShowFloor for the whole story.
+            //
+            // Not conditional, and not failed on: nothing else can hold the
+            // floor at the moment a race finishes, and a sequence that
+            // somehow could not claim it is still the programme and still
+            // goes out. The claim is what makes the FILLER stand down.
+            ShowFloor.TryClaim(TheProgramme);
+
             try
             {
                 var sequenceStarted = DateTime.UtcNow;
@@ -672,6 +702,31 @@ public sealed partial class RaceControlControl
                 // segment is reached, and it does NOT queue behind the model
                 // the way the interview and the sign-off do: nothing in it
                 // asks the model at all.
+                // THE NIGHT'S COLOUR, WRITTEN INTO THIS PROGRAMME (11 Oct
+                // 2026) - the form guide, the grid history, whatever the
+                // ladder has due. These used to arrive AFTER the programme
+                // had signed off, each opening a show of its own: on 11 Oct
+                // the room heard the recap, the honours and "that's a wrap",
+                // and then two more mini-broadcasts with their own openers
+                // and their own beds. Three shows where there was one
+                // programme.
+                //
+                // Started HERE, with the interview and the sign-off, and for
+                // the same reason: the recap takes a minute and a half to
+                // speak, so these write during a wait that is happening
+                // anyway and are in hand by the time the honours are done.
+                // Cancelled with followOnWork like the rest, so a race
+                // called to the grid stops them being written at all.
+                //
+                // IN-RACE AND PRE-RACE SEGMENTS ARE NOT TOUCHED by any of
+                // this. The ladder is only asked once the flag is out and
+                // the programme is open; a battle call over a running race
+                // and a round intro before one are staged exactly where
+                // they always were.
+                var colourTask = commentaryAvailable
+                    ? WriteColourAsync(followOnWork.Token)
+                    : null;
+
                 var honoursRender = honours is null
                     ? null
                     : RenderHonoursAsync(honours, delivery, followOnWork.Token);
@@ -1026,7 +1081,25 @@ public sealed partial class RaceControlControl
                     await SpeakHonoursAsync(honoursSegment, honoursLines, show, nextRace.Token);
                 }
 
-                // 5. After a main, the word with the mechanic; then the
+                // 5. The night's colour, INSIDE this show and RIGHT AFTER
+                // THE HONOURS (asked for 11 Oct 2026, moved from after the
+                // interview). The programme reads result, honours, colour,
+                // pit lane, goodnight: the three things about the night
+                // together, and then the pit lane and the sign-off close
+                // it. Never after the sign-off, which is the whole point of
+                // it being in here at all. See WriteColourAsync.
+                //
+                // In front of the interview, which means a colour segment
+                // the model is slow with can hold the pit lane up - bounded
+                // at FollowOnWait, after which it is dropped and the
+                // interview carries on. The honours take the same risk in
+                // front of it for the same reason and it has been fine.
+                if (colourTask is not null)
+                {
+                    await SpeakColourAsync(colourTask, show, nextRace.Token);
+                }
+
+                // 6. After a main, the word with the mechanic; then the
                 // sign-off, when it has been kept back to come last. Each
                 // only once the line before it has been heard, and neither
                 // once the next race has been called to the grid.
@@ -1113,6 +1186,14 @@ public sealed partial class RaceControlControl
                 // ended.
                 await EndShowAsync();
 
+                // AFTER the show has ended, not before. Ending it rides the
+                // bed down over the quiet after the sign-off, and that fade
+                // is part of the programme: a filler segment started the
+                // instant the floor came free would play its own opener
+                // across it, which is the same two-pieces-of-music fault
+                // the claim was added to stop. See ShowFloor.
+                ShowFloor.Release(TheProgramme);
+
                 _race.StateChanged -= onNextRace;
 
                 // However the sequence ended, nothing it started carries on
@@ -1173,10 +1254,21 @@ public sealed partial class RaceControlControl
     private static readonly TimeSpan RecapLineLimit = TimeSpan.FromSeconds(90);
 
     /// <summary>
+    /// What this sequence calls itself while it holds the broadcast floor -
+    /// see <see cref="ShowFloor"/>. It reaches the developer console only
+    /// when a claim has to be broken, so it reads as a sentence fragment.
+    /// </summary>
+    private const string TheProgramme = "the race recap sequence";
+
+    /// <summary>
     /// Heat or main, the opening and sign-off, and the mechanic - what the
     /// Commentary page asks for, for this race.
     /// </summary>
-    private RecapPlan PlanRecap(SessionRecord record, RoundDefinition? round)
+    /// <param name="honoursFollow">
+    /// Whether the honours segment will be read out after the recap - see
+    /// the sign-off's own note below, which is what this is for.
+    /// </param>
+    private RecapPlan PlanRecap(SessionRecord record, RoundDefinition? round, bool honoursFollow)
     {
         var clubNight = round is not null && _events?.EventForRound(round.Id)?.IsClubNight == true;
         var kind = CommentaryService.DescribeKind(round, clubNight);
@@ -1186,22 +1278,54 @@ public sealed partial class RaceControlControl
         var interview = _settings.RecapMechanicInterview && round?.Kind == RoundKind.Main;
         var closing = _settings.RecapBroadcastClosing;
 
+        // ANYTHING AT ALL AFTER THE RECAP MAKES THE SIGN-OFF A LINE OF ITS
+        // OWN (11 Oct 2026).
+        //
+        // This used to ask only about the interview, and the honours were
+        // invisible to it. So on every heat - and on every main at a club
+        // with the interview switched off - the recap was told to sign the
+        // programme off itself, "and that's us, next up the A-Main,
+        // goodnight", and then the honours were read out afterwards. From
+        // the floor on 11 Oct that is exactly what it sounded like: the
+        // badges arriving after the show had ended, outside the programme.
+        //
+        // A sign-off is the last thing or it is not a sign-off.
+        var follows = interview || honoursFollow;
+
         var context = new CommentaryService.RecapContext(
             kind,
             _settings.RecapBroadcastOpening,
 
-            // After an interview the sign-off is a line of its own, spoken
-            // last, rather than the end of the recap before it.
-            closing && !interview,
+            // Inline only when the recap really is the end of it. Otherwise
+            // the sign-off is written separately and spoken last - see
+            // `follows` above.
+            closing && !follows,
             (_settings.RecapShowName ?? string.Empty).Trim(),
 
             // A demo leaves its round unrun, so that round is still next.
             closing ? UpNextAfter(record.IsDemo ? null : round) : null,
-            InterviewFollows: interview);
+            InterviewFollows: interview,
+
+            // The host's own name, for the opening to introduce himself
+            // with - see AppSettings.RecapAnnouncerName.
+            AnnouncerName: (_settings.RecapAnnouncerName ?? string.Empty).Trim(),
+
+            // Anything following the recap stops it signing off - the
+            // honours as much as the mechanic. See RecapContext.MoreFollows.
+            MoreFollows: follows);
 
         if (!interview)
         {
-            return new RecapPlan(context, false, false, string.Empty, Array.Empty<string>(), null);
+            // No mechanic, but the honours may still be coming - and when
+            // they are, the sign-off is held back to follow them rather
+            // than being baked into the recap above.
+            if (closing && honoursFollow)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] The sign-off is held back to come after the honours, so the programme ends on it.");
+            }
+
+            return new RecapPlan(context, false, closing && honoursFollow, string.Empty, Array.Empty<string>(), null);
         }
 
         var mechanicName = (_settings.RecapMechanicName ?? string.Empty).Trim();
@@ -1255,7 +1379,13 @@ public sealed partial class RaceControlControl
     /// segment that is going to be said.
     /// </param>
     /// <param name="Voice">The honours reader's voice, or null for the announcer's own - which is said in the console.</param>
-    private sealed record HonoursPlan(IReadOnlyList<ExchangeTurn> Turns, SecondVoice? Voice);
+    /// <param name="Badges">
+    /// How many distinct badges the read in the middle actually names -
+    /// see HonoursRead.Badges. Carried so the console can say when it
+    /// differs from the number held back, which is the only way a club
+    /// can tell a capped read from a short one.
+    /// </param>
+    private sealed record HonoursPlan(IReadOnlyList<ExchangeTurn> Turns, SecondVoice? Voice, int Badges);
 
     /// <summary>
     /// Builds the honours segment for a race's badges - the throw, the read
@@ -1354,7 +1484,7 @@ public sealed partial class RaceControlControl
                     : $" in the announcer's own voice - no honours voice is picked for {EngineName(engine)} on the Commentary page")
                 + $" - \"{turns[1].Line}\"");
 
-            return new HonoursPlan(turns, voice);
+            return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0);
         }
         catch (Exception ex)
         {
@@ -1545,7 +1675,22 @@ public sealed partial class RaceControlControl
                 return FollowOn.Stopped;
             }
 
-            Say(lines[i]);
+            // The same trim the honours got (11 Oct 2026), and the
+            // interview was paying more for it than they were: it has no
+            // hand-over beat of its own, so the whole gap between a
+            // question and its answer was the two pads - 0.9s behind the
+            // question and 0.15s in front of the answer - and every bit of
+            // it was silence nobody had chosen.
+            var run = CommentaryExchange.ExchangeRun.At(i, lines.Count);
+
+            Say(
+                lines[i],
+                run.AnotherFollows
+                    ? AnnouncementService.SpeechTail.BackToBack
+                    : AnnouncementService.SpeechTail.Normal,
+                run.FollowsAnother
+                    ? AnnouncementService.SpeechLead.FollowsOn
+                    : AnnouncementService.SpeechLead.Normal);
         }
 
         return FollowOn.Spoken;
@@ -1699,10 +1844,279 @@ public sealed partial class RaceControlControl
                 }
             }
 
-            Say(lines[i]);
+            // THE PADS, TRIMMED FOR A LINE WITH ANOTHER HARD AGAINST IT
+            // (11 Oct 2026). This took the default 0.9s tail and the full
+            // lead on every turn, and the hand-over's beat sat on top of
+            // both - so "over to Eric" and Eric starting were a second and
+            // a half apart, which is what killed the two-hander from the
+            // floor. SpeechTail.BackToBack has existed for exactly this
+            // since long before the honours did and had never been used.
+            //
+            // The run is worked out from the position rather than from
+            // handoffs: the pads are about one line following another at
+            // all, where the beat is about the VOICE changing, and the
+            // three honours turns happen to be the same either way only
+            // because the reader has the middle one to herself.
+            var run = CommentaryExchange.ExchangeRun.At(i, lines.Count);
+
+            Say(
+                lines[i],
+                run.AnotherFollows
+                    ? AnnouncementService.SpeechTail.BackToBack
+                    : AnnouncementService.SpeechTail.Normal,
+                run.FollowsAnother
+                    ? AnnouncementService.SpeechLead.FollowsOn
+                    : AnnouncementService.SpeechLead.Normal);
         }
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Honours spoken: \"{plan.Turns[1].Line}\"");
+    }
+
+    /// <summary>
+    /// How many of the night's colour segments one programme carries.
+    ///
+    /// Two. The ladder would happily give more and a club would hear them
+    /// all, which is how a four-minute recap becomes an eight-minute one:
+    /// past two, a programme about a race that lasted ninety seconds stops
+    /// being a programme and becomes the reason the next heat is late. Two
+    /// is also what the night of 11 Oct actually produced on its own, which
+    /// is a fair guide to what the ladder thinks is due after a race.
+    /// </summary>
+    private const int MostColourSegments = 2;
+
+    /// <summary>
+    /// The night's colour for this programme - the form guide, the grid
+    /// history, whatever the segment ladder has due - written while the
+    /// recap plays.
+    ///
+    /// ON THE UI THREAD, MARSHALLED. This is the one thing in here that
+    /// cannot simply be called: CommentaryDirector.NextAsync works out
+    /// every segment's facts BEFORE its first await, deliberately, because
+    /// that is the last point in the pass that is certainly still on the
+    /// thread the host called from - and every store those readers walk
+    /// belongs to the UI thread. This method runs on a pool thread inside
+    /// the post-race task, so it hands the START of each call back to the
+    /// UI thread and awaits the task that comes out. The awaits inside
+    /// NextAsync then land wherever they land, which is what it is built
+    /// for.
+    ///
+    /// Answers an empty list rather than null for every way of having
+    /// nothing: the AI off, the allowance spent, the ladder with nothing
+    /// due, a page with no director behind it. The programme then reads
+    /// exactly as it did before there was any of this.
+    /// </summary>
+    /// <returns>
+    /// The segments, or an empty list. Declared NULLABLE to match
+    /// WriteInterviewAsync and WriteClosingAsync, because WithinAsync takes
+    /// a Task&lt;T?&gt; and Task&lt;T&gt; is invariant - a non-nullable one
+    /// warns at the call rather than converting. It never actually answers
+    /// null; empty is how it says there was nothing.
+    /// </returns>
+    private async Task<List<SpokenSegment>?> WriteColourAsync(CancellationToken cancel)
+    {
+        var found = new List<SpokenSegment>();
+
+        for (var i = 0; i < MostColourSegments; i++)
+        {
+            if (cancel.IsCancellationRequested)
+            {
+                break;
+            }
+
+            SpokenSegment? said;
+
+            try
+            {
+                said = await NextColourAsync(cancel).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The programme goes without its colour: {ex.GetType().Name}: {ex.Message}");
+                break;
+            }
+
+            // Nothing due. Asking again would get the same answer - the
+            // ladder's cooldowns do not move while this loop runs - so it
+            // stops rather than spending two more round trips finding out.
+            if (said is null)
+            {
+                break;
+            }
+
+            found.Add(said);
+        }
+
+        // SAID EITHER WAY, which it was not at first and which cost a
+        // round of testing. With a line only on success, a night where the
+        // colour did not appear looked identical in the log to a night
+        // where this method never ran - and those have completely
+        // different causes. The ladder says why it refused on its own
+        // [brain] line; this says the pass happened at all.
+        StatusMessage?.Invoke(found.Count > 0
+            ? $"{AppTime.LogStampNow()}  [commentary] {Plural.Of(found.Count, "colour segment")} in this programme, after the honours: "
+              + string.Join(", ", found.Select(said => ShowBlock.CaptionFor(said.Kind) ?? CommentaryBudget.Spec(said.Kind).Title)) + "."
+            : $"{AppTime.LogStampNow()}  [commentary] No colour in this programme - the segment ladder had nothing due. "
+              + "Any [brain] line above says which segment it turned down and why.");
+
+        return found;
+    }
+
+    /// <summary>
+    /// One segment from the ladder, with the call STARTED on the UI thread
+    /// - see WriteColourAsync for why that matters.
+    /// </summary>
+    private Task<SpokenSegment?> NextColourAsync(CancellationToken cancel)
+    {
+        var done = new TaskCompletionSource<SpokenSegment?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            BeginInvoke(new Action(async () =>
+            {
+                try
+                {
+                    if (Commentary?.Invoke() is not { } director || IsDisposed)
+                    {
+                        done.TrySetResult(null);
+
+                        return;
+                    }
+
+                    // ForTheProgramme, not Next: this is a segment to speak
+                    // INSIDE the recap's show, and the ladder's
+                    // between-races gap must not refuse it for the
+                    // programme's own previous line. See
+                    // CommentaryDirector.ForTheProgrammeAsync.
+                    done.TrySetResult(await director.ForTheProgrammeAsync(cancel).ConfigureAwait(true));
+                }
+                catch (Exception ex)
+                {
+                    done.TrySetException(ex);
+                }
+            }));
+        }
+        catch (Exception)
+        {
+            // The window went away between the post-race task starting and
+            // this being posted - the club closed HeatCaller during a
+            // recap. No colour, and nothing worth reporting.
+            done.TrySetResult(null);
+        }
+
+        return done.Task;
+    }
+
+    /// <summary>
+    /// Speaks the night's colour inside the programme's own show: a mark
+    /// between each one, then the segment, in two voices where it came back
+    /// as two.
+    ///
+    /// NO SHOW OF ITS OWN, which is the entire point. The bed is already
+    /// running and the opener was heard four minutes ago; these are further
+    /// items in the same programme, so they get the same punctuation
+    /// between them that a block's items get and nothing else. See
+    /// ShowTreatment.PunctuateAsync.
+    /// </summary>
+    private async Task SpeakColourAsync(Task<List<SpokenSegment>?> written, ShowRun? show, CancellationToken nextRace)
+    {
+        const string stopped = "Colour dropped - the next race was called to the grid.";
+
+        var (timedOut, segments) = await WithinAsync(written, FollowOnWait, nextRace);
+
+        if (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+
+            return;
+        }
+
+        if (segments is null || segments.Count == 0)
+        {
+            if (timedOut)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] The programme's colour was not written within {FollowOnWait.TotalSeconds:0}s of the honours, so it is skipped.");
+            }
+
+            return;
+        }
+
+        var treatment = ShowMusic?.Invoke();
+
+        foreach (var said in segments)
+        {
+            if (!await HeardOutAsync(nextRace))
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+
+                return;
+            }
+
+            // The mark between two items of a programme - the same one a
+            // block puts between its own items, so a colour segment inside
+            // the recap is punctuated the way one inside a block is.
+            if (treatment is not null && !await treatment.PunctuateAsync(nextRace))
+            {
+                SayUnlessTheNextRaceStopped(stopped, nextRace);
+
+                return;
+            }
+
+            if (said.IsExchange)
+            {
+                for (var at = 0; at < said.Turns.Count; at++)
+                {
+                    if (at > 0 && !await HeardOutAsync(nextRace))
+                    {
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+
+                        return;
+                    }
+
+                    // The beat at a change of voice, and the pads trimmed
+                    // for a turn with another hard against it - exactly as
+                    // the honours do it. See CommentaryExchange.ExchangeRun.
+                    if (at > 0 && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
+                    {
+                        SayUnlessTheNextRaceStopped(stopped, nextRace);
+
+                        return;
+                    }
+
+                    var turn = said.Turns[at];
+                    var run = CommentaryExchange.ExchangeRun.At(at, said.Turns.Count);
+
+                    _announcer.SpeakReminder(
+                        turn.Line,
+                        null,
+                        turn.FromCoHost ? _settings.CoHostVoice : null,
+                        showOnScreens: true,
+                        tail: run.AnotherFollows
+                            ? AnnouncementService.SpeechTail.BackToBack
+                            : AnnouncementService.SpeechTail.Normal,
+                        lead: run.FollowsAnother
+                            ? AnnouncementService.SpeechLead.FollowsOn
+                            : AnnouncementService.SpeechLead.Normal);
+                }
+
+                continue;
+            }
+
+            _announcer.SpeakReminder(said.Text, showOnScreens: true);
+        }
+    }
+
+    /// <summary>Says a line unless the next race is what stopped things, which already has its own line.</summary>
+    private void SayUnlessTheNextRaceStopped(string line, CancellationToken nextRace)
+    {
+        if (!nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {line}");
+        }
     }
 
     /// <summary>Speaks the sign-off kept back for the end, once everything before it has been heard.</summary>
@@ -1749,7 +2163,19 @@ public sealed partial class RaceControlControl
 
         try
         {
-            await _announcer.WaitForAudioAsync(RecapLineLimit, nextRace);
+            // REPORTED, since 11 Oct 2026. This waits up to a minute and a
+            // half and then carries on regardless, which is the right
+            // behaviour - the honours and the sign-off must not be lost to
+            // a long recap - but it used to do it silently. A night where
+            // the recap overran and everything after it arrived bunched up
+            // behind looked, in the log, exactly like a night where each
+            // part was heard out properly.
+            if (!await _announcer.WaitForAudioAsync(RecapLineLimit, nextRace))
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Still speaking after {RecapLineLimit.TotalSeconds:0}s, so the next part "
+                    + "of the programme is queued behind it rather than waited for any longer.");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1918,6 +2344,17 @@ public sealed partial class RaceControlControl
         // has. See AppSettings.RecapAdBreak.
         if (!_settings.RecapAdBreak)
         {
+            // SAID, since 11 Oct 2026. This was the one way out of this
+            // method with no line in the console, and it is also the most
+            // likely one - the setting is off until a club turns it on. So
+            // a club asking "why didn't the sponsors' video play after that
+            // race?" had a log with nothing about a commercial break in it
+            // at all: no break, no refusal, no reason. Every other way out
+            // of here says what happened; this one now does too.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No commercial break - it is switched off on the Commentary page "
+                + "(\"Play the sponsors as a commercial break while the recap is being written\").");
+
             return;
         }
 
@@ -1971,7 +2408,12 @@ public sealed partial class RaceControlControl
                     on,
                     recapReady.IsCompleted,
                     CommercialBreak.ShownEverything,
-                    nextRace.IsCancellationRequested);
+                    nextRace.IsCancellationRequested,
+
+                    // An advert actually playing on the crowd's screen
+                    // keeps the break, up to the ceiling - see
+                    // CommercialBreak.VideoOnScreen.
+                    CommercialBreak.VideoOnScreen);
 
                 if (ending != BreakEnding.Running)
                 {
@@ -2029,15 +2471,23 @@ public sealed partial class RaceControlControl
     };
 
     /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
-    private void Say(SpokenLine line, AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal)
+    private void Say(
+        SpokenLine line,
+        AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal,
+        AnnouncementService.SpeechLead lead = AnnouncementService.SpeechLead.Normal)
     {
         if (line.Audio is not null)
         {
-            _announcer.SpeakPrepared(line.Audio, tail);
+            _announcer.SpeakPrepared(line.Audio, tail, lead);
         }
         else
         {
-            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice, showOnScreens: true);
+            // The pads reach the unprepared path too, since 11 Oct 2026.
+            // The honours render in advance and so always take the branch
+            // above, but a render that failed falls through to here and a
+            // hand-over that sounded different depending on whether the
+            // audio arrived early would be the worse bug of the two.
+            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice, showOnScreens: true, tail: tail, lead: lead);
         }
     }
 
@@ -2571,7 +3021,28 @@ public sealed partial class RaceControlControl
                     _rounds,
                     _events,
                     _sessionHistory,
-                    _profiles));
+                    _profiles),
+
+                // AND WHAT THE GRID HAS FOUND SINCE PRACTICE (11 Oct 2026):
+                // "he was a second off this in practice". The Tier 1 item
+                // the depth plan asked for and which the pace figure above
+                // is NOT - that one compares a race with a race. Read here
+                // with the rest of the setting for the same UI-thread
+                // reason, over the same history store.
+                //
+                // _rounds guard like the field and the pace: the RACES this
+                // is measured against are scoped by the class, and a club
+                // with no programme has no class to scope them by. The
+                // practice side needs no round and never gets one - see
+                // CommentaryReaders.AgainstPractice.
+                _rounds is null
+                    ? null
+                    : CommentaryReaders.AgainstPractice(
+                        round.AssignedTransponders,
+                        round.ClassName,
+                        _profiles,
+                        _sessionHistory,
+                        _rounds));
         }
         catch (Exception ex)
         {

@@ -274,7 +274,7 @@ public sealed class ShowOnScreenTests : IDisposable
         {
             ("private void UpdateRollCall()", "private void HideRollCall()"),
             ("private void HideRollCall()", "private void UpdateTrackMap()"),
-            ("private void ShowNextSponsorSlide()", "private void ShowSponsorVideo(string path)"),
+            ("private void ShowNextSponsorSlide(bool leadWithVideo = false)", "private void ShowSponsorVideo(string path)"),
             ("private void ShowSponsorVideo(string path)", "private SponsorVideoSurface MakeVideoSurface()"),
             ("private void StopSponsorVideo()", "private void ShowLeaderboardAgain()"),
             ("private void ShowLeaderboardAgain()", "private static int SponsorIntervalMs(int seconds)"),

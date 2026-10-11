@@ -55,6 +55,36 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Puts a club who has never been asked onto the show music that ships
+    /// with the app - once, on the way up.
+    ///
+    /// HERE rather than in ShowMusic's constructor, which is built twice
+    /// (the page's and the announcer's) and is also built by a preview
+    /// pass that has no business writing a club's settings. This runs once
+    /// per start, from the one place that knows the app is actually
+    /// starting. Everything about why it needs a flag is on
+    /// ShowMusic.StartFromTheLibraryOnce.
+    /// </summary>
+    private void StartShowMusicFromTheLibrary(AppSettings settings)
+    {
+        try
+        {
+            var music = new ShowMusic(settings);
+
+            music.Status += line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
+            music.StartFromTheLibraryOnce();
+        }
+        catch (Exception ex)
+        {
+            // Decoration on the way up. A club with no show music is a club
+            // whose shows have no music, which is exactly how every club
+            // ran before the library existed - not a reason to fail a
+            // start.
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [show] Couldn't set up the show music that ships with HeatCaller: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Hands the relay's own count of the club's month to the budget that
     /// paces the night against it.
     ///

@@ -235,7 +235,7 @@ public sealed class ShowBlockTests : IDisposable
         // (CommentaryExchange.Split returns nothing), and a block that ran
         // it would wait out its pacing for silence and then count it as a
         // segment the next one gets no room for.
-        var empty = ShowItem.Exchange(Array.Empty<ExchangeTurn>(), _ => { });
+        var empty = ShowItem.Exchange(Array.Empty<ExchangeTurn>(), (_, _) => { });
         var real = Item(4);
 
         var fit = ShowBlock.Fit(new[] { empty, real }, ShowBlock.NoLimit, ShowBlockCost.None);
@@ -336,7 +336,7 @@ public sealed class ShowBlockTests : IDisposable
             new ExchangeTurn(true, "And neither of them has put a wheel wrong."),
         };
 
-        var item = ShowItem.Exchange(turns, _ => { });
+        var item = ShowItem.Exchange(turns, (_, _) => { });
 
         var words = SponsorCopy.SpokenLength(turns[0].Line) + SponsorCopy.SpokenLength(turns[1].Line);
 
@@ -843,7 +843,7 @@ public sealed class ShowBlockTests : IDisposable
 
         var result = await treatment.RunBlockAsync(new ShowBlock(new[]
         {
-            ShowItem.Exchange(turns, turn => spoken.Add(turn.Line)),
+            ShowItem.Exchange(turns, (turn, _) => spoken.Add(turn.Line)),
         }));
 
         Assert.Equal(turns.Select(t => t.Line), spoken);

@@ -100,6 +100,32 @@ public sealed record DriverTonight(
     int Races);
 
 /// <summary>
+/// What a driver's race pace tonight is against their PRACTICE pace
+/// tonight - "he was a second off this in practice".
+///
+/// The same bargain <see cref="DriverTonight"/> strikes, for the same
+/// reason: TonightAtTheTrack.PracticeAgainstNow works the figure out and
+/// this only carries the answer, so there is one implementation of "how
+/// much quicker is he" and not two drifting apart.
+///
+/// WHY THERE IS NO CLASS IN HERE. Practice has no round and so no class.
+/// TonightAtTheTrack.DriverPracticeToNow says at length what that costs
+/// and why saying otherwise would have been worse; the short version is
+/// that a line built from this says "in practice" and never names a
+/// class, because the app cannot know the driver practised the car they
+/// are racing.
+/// </summary>
+/// <param name="DriverId">The transponder.</param>
+/// <param name="Name">As it should be said.</param>
+/// <param name="DeltaMs">Their middle lap racing against practising. Negative when they are quicker now.</param>
+/// <param name="Runs">How many of tonight's practice runs they had enough laps in to be measured.</param>
+public sealed record DriverAgainstPractice(
+    string DriverId,
+    string Name,
+    long DeltaMs,
+    int Runs);
+
+/// <summary>
 /// What the club's own garage and results know about the car a finisher
 /// raced.
 ///
@@ -211,13 +237,26 @@ public sealed record RaceCar(
 /// universal. The intro then reads exactly as it did before there was any
 /// of this.
 /// </param>
+/// <param name="Practice">
+/// What the grid has found since practice tonight, as
+/// CommentaryReaders.AgainstPractice worked it out - or null, which is the
+/// usual answer and every way of being null is correct: a club that does
+/// not run its practice through HeatCaller, a first race of the night,
+/// nobody on this grid having both practised and raced yet.
+///
+/// APPENDED LAST, for the reason the thread and the conditional both were
+/// and which this record states above: every "new RaceScene(...)" is
+/// positional, so a field inserted anywhere else would silently hand one
+/// record's value to another's parameter at every call site.
+/// </param>
 public sealed record RaceScene(
     VenueRecord? Venue = null,
     FieldStrength? Field = null,
     IReadOnlyList<DriverTonight>? Tonight = null,
     string? NightKey = null,
     NightThread? Thread = null,
-    RaceConditional? Conditional = null);
+    RaceConditional? Conditional = null,
+    IReadOnlyList<DriverAgainstPractice>? Practice = null);
 
 /// <summary>
 /// The finishers' cars in a race just run, for its recap, with the race
@@ -573,6 +612,57 @@ public static class CommentaryRaceFacts
     }
 
     /// <summary>
+    /// What a driver has found since practice - the Tier 1 item the depth
+    /// plan actually asked for, built 11 Oct 2026: "he was a second off
+    /// this in practice".
+    ///
+    /// THE SCOPE IS "IN PRACTICE" AND NOT A CLASS, and that is not
+    /// laziness. A practice session has no round, so no class, so the app
+    /// genuinely does not know whether the driver practised the car they
+    /// are racing - see TonightAtTheTrack.DriverPracticeToNow, which sets
+    /// out why reading practice through a helper of its own was the only
+    /// honest way to build this at all. The line says what is true.
+    ///
+    /// Keyed on the RACE, like <see cref="Tonight"/>: the figure moves
+    /// every time a race is filed, which is the point of it.
+    /// </summary>
+    /// <param name="driver">Their practice against their racing, as TonightAtTheTrack measured it.</param>
+    /// <param name="raceKey">The race, for the reason Tonight's own note gives.</param>
+    public static FactBlock? AgainstPractice(DriverAgainstPractice driver, string raceKey)
+    {
+        // One practice run is plenty - unlike the race-to-race figure,
+        // which needs two races because one race is not a change. Here the
+        // two sides are a practice run and a race, so one of each is a
+        // comparison.
+        if (driver.Runs < 1)
+        {
+            return null;
+        }
+
+        var by = Math.Abs(driver.DeltaMs) / 1000.0;
+
+        if (by < LeastChangeSeconds)
+        {
+            return null;
+        }
+
+        var name = CommentaryFacts.Clean(driver.Name);
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var way = driver.DeltaMs < 0 ? "quicker" : "slower";
+
+        return new FactBlock(
+            $"practice:{raceKey}:{driver.DriverId}",
+            $"{name}'s middle lap in their latest race tonight was {CommentaryFacts.Invariant(by, "0.00")}s {way} "
+            + "than their middle lap in practice tonight.",
+            FactTheme.Driver(driver.DriverId));
+    }
+
+    /// <summary>
     /// The one thing worth saying about the car a finisher raced.
     ///
     /// One line per driver and never two: the recap is the longest segment
@@ -680,7 +770,8 @@ public static class CommentaryRaceFacts
         IReadOnlyList<DriverTonight>? tonight,
         string raceKey,
         string? nightKey = null,
-        int most = SceneFacts)
+        int most = SceneFacts,
+        IReadOnlyList<DriverAgainstPractice>? practice = null)
     {
         // One decision for the two builders that are true for the night.
         // See the remarks.
@@ -711,6 +802,26 @@ public static class CommentaryRaceFacts
             if (Tonight(driver, raceKey) is { } pace)
             {
                 found.Add(pace);
+            }
+        }
+
+        // AFTER the race-to-race figure, so that where a club has both the
+        // one measured over races survives the cap. Race-to-race is the
+        // stronger claim: both sides are races of the same class, where
+        // practice has no class at all - see DriverAgainstPractice.
+        //
+        // AND THE TWO RARELY COMPETE, which is why this lands rather than
+        // being crowded out by the cap. Race-to-race needs a driver to have
+        // had TWO races tonight, so it says nothing before the third race
+        // of a class. Practice-to-now needs one practice run and one race,
+        // so it is the pace fact that EXISTS at the second race - the slot
+        // where the app previously had nothing to say about anybody's pace
+        // at all.
+        foreach (var driver in practice ?? Array.Empty<DriverAgainstPractice>())
+        {
+            if (AgainstPractice(driver, raceKey) is { } since)
+            {
+                found.Add(since);
             }
         }
 

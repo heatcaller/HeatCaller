@@ -87,7 +87,7 @@ internal sealed class ShowMusic
     /// &lt;name&gt;.&lt;anything&gt; in the show music folder. Null when
     /// there is nothing to play.
     /// </summary>
-    public string? PathOf(ShowPart part) => Resolve(SettingOf(part), NameOf(part));
+    public string? PathOf(ShowPart part) => Resolve(SettingOf(part), NameOf(part), part, BuiltInOf(part));
 
     /// <inheritdoc cref="PathOf"/>
     public string? OpenerPath => PathOf(ShowPart.Opener);
@@ -97,6 +97,37 @@ internal sealed class ShowMusic
 
     /// <inheritdoc cref="PathOf"/>
     public string? StingPath => PathOf(ShowPart.Sting);
+
+    /// <summary>
+    /// Whether this part is playing a file of the CLUB's rather than one
+    /// of the shipped pieces - a path they chose, or a file they dropped
+    /// into the show music folder by hand.
+    ///
+    /// For the page, which greys the library list out while this is true:
+    /// the shipped piece is not what is playing, and a list that still
+    /// looked live would be saying it was.
+    /// </summary>
+    public bool IsTheirOwn(ShowPart part)
+    {
+        if (!string.IsNullOrWhiteSpace(SettingOf(part)) && Trustworthy(SettingOf(part)))
+        {
+            return true;
+        }
+
+        var name = NameOf(part);
+
+        return Extensions.Any(e =>
+        {
+            try
+            {
+                return File.Exists(Path.Combine(Folder, name + e));
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
 
     /// <summary>What a piece is called in the show music folder, whatever its extension.</summary>
     private static string NameOf(ShowPart part) => part switch
@@ -118,7 +149,15 @@ internal sealed class ShowMusic
         _ => _settings.ShowOpenerPath,
     };
 
-    private static string? Resolve(string? setting, string wellKnown)
+    /// <summary>The shipped piece a club is on for a part - see ShowMusicLibrary.</summary>
+    private string BuiltInOf(ShowPart part) => part switch
+    {
+        ShowPart.Bed => _settings.ShowBedBuiltIn ?? string.Empty,
+        ShowPart.Sting => _settings.ShowStingBuiltIn ?? string.Empty,
+        _ => _settings.ShowOpenerBuiltIn ?? string.Empty,
+    };
+
+    private static string? Resolve(string? setting, string wellKnown, ShowPart part, string? builtIn)
     {
         if (!string.IsNullOrWhiteSpace(setting) && Trustworthy(setting))
         {
@@ -138,7 +177,15 @@ internal sealed class ShowMusic
             }
         }
 
-        return null;
+        // AND THEN THE SHIPPED LIBRARY (11 Oct 2026). Last of the three
+        // tiers, so a club's own file always wins and a club who has
+        // dropped one into the folder by hand is unaffected - see
+        // ShowMusicLibrary, and AppSettings' note on why this is a named
+        // piece rather than "whatever ships first".
+        //
+        // Null when the name has gone, which is deliberate and is NOT a
+        // fall-back to another piece: the club chose that one.
+        return ShowMusicLibrary.FileFor(part, builtIn);
     }
 
     /// <summary>
@@ -388,6 +435,109 @@ internal sealed class ShowMusic
         return gone;
     }
 
+    /// <summary>
+    /// Puts a part on one of the shipped pieces, or on nothing when
+    /// <paramref name="name"/> is blank - see ShowMusicLibrary.
+    ///
+    /// This does NOT touch the club's own file. The two live side by side
+    /// on purpose, exactly as SoundEffectConfig's CustomFilePath and
+    /// BuiltInSound do: a club who has their own bed and then tries a
+    /// shipped one has not thrown their own away, and Remove puts them
+    /// back on it rather than on silence.
+    /// </summary>
+    public void ChooseFromLibrary(ShowPart part, string? name)
+    {
+        var chosen = (name ?? string.Empty).Trim();
+
+        switch (part)
+        {
+            case ShowPart.Bed:
+                _settings.ShowBedBuiltIn = chosen;
+                break;
+
+            case ShowPart.Sting:
+                _settings.ShowStingBuiltIn = chosen;
+                break;
+
+            default:
+                _settings.ShowOpenerBuiltIn = chosen;
+                break;
+        }
+
+        // Marked as started whichever way it was set, INCLUDING to none: a
+        // club who has just turned the opener off has been asked, and must
+        // not be handed one again on the next start. See
+        // StartFromTheLibraryOnce.
+        _settings.ShowMusicStarted = true;
+        _settings.Save();
+        Reload();
+    }
+
+    /// <summary>
+    /// Puts a club on the shipped opener and bed, once, if they have never
+    /// been asked.
+    ///
+    /// WHY A FLAG AND NOT A DEFAULT ON THE SETTING. Blank has to keep
+    /// meaning "none", because a club who turned the opener off must stay
+    /// turned off - so a fresh install cannot simply default the setting to
+    /// a name, and "blank" cannot be read as "not asked yet" either.
+    /// ShowMusicStarted is the only thing that can tell those two apart,
+    /// and it can only do it once.
+    ///
+    /// Called from MainForm on the way up. Does nothing on every start
+    /// after the first, nothing when the club already has files of their
+    /// own in the folder, and nothing on a damaged install where the
+    /// library is empty - it writes no setting at all in that last case, so
+    /// a repaired install is still offered the music.
+    /// </summary>
+    public void StartFromTheLibraryOnce()
+    {
+        if (_settings.ShowMusicStarted)
+        {
+            return;
+        }
+
+        // A club who already dropped their own opener.* or bed.* in is a
+        // club who has set this up the hard way, before there was a
+        // library. They are left exactly as they are, and marked as asked.
+        var theirs = Extensions
+            .SelectMany(e => new[] { OpenerName, BedName, StingName }.Select(n => Path.Combine(Folder, n + e)))
+            .Any(File.Exists);
+
+        if (theirs)
+        {
+            _settings.ShowMusicStarted = true;
+            _settings.Save();
+
+            Status?.Invoke("[show] Keeping the show music this club already had - the pieces that ship with HeatCaller are on the Commentary page if you want them.");
+
+            return;
+        }
+
+        var opener = ShowMusicLibrary.DefaultFor(ShowPart.Opener);
+        var bed = ShowMusicLibrary.DefaultFor(ShowPart.Bed);
+
+        if (opener is null && bed is null)
+        {
+            // Nothing to start them on. No setting written and no flag, so
+            // an install whose Assets folder is repaired later is offered
+            // the music then rather than being silent for good.
+            Status?.Invoke("[show] No show music ships with this copy of HeatCaller - the Assets folder has none in it.");
+
+            return;
+        }
+
+        _settings.ShowOpenerBuiltIn = opener ?? string.Empty;
+        _settings.ShowBedBuiltIn = bed ?? string.Empty;
+        _settings.ShowMusicStarted = true;
+        _settings.Save();
+        Reload();
+
+        Status?.Invoke(
+            $"[show] The show starts on \"{opener ?? "no opener"}\" over \"{bed ?? "no bed"}\" - both change on the Commentary page, "
+            + "and your own files still win wherever you set one.");
+    }
+
     /// <summary>Clears the remembered path for one part and reloads - see Install.</summary>
     private void Forget(ShowPart part)
     {
@@ -449,7 +599,16 @@ internal sealed class ShowMusic
             return problem ?? "couldn't be read";
         }
 
-        var name = Path.GetFileName(path);
+        // A shipped piece is named the way the drop-down above names it -
+        // no extension - and the club's own file keeps its file name. A row
+        // reading "Opening Drive (132 BPM).mp3" beside a list offering
+        // "Opening Drive (132 BPM)" reads as two different things, and
+        // which of the two is playing is already said by the list: it is
+        // greyed out whenever the club is on a file of their own. See
+        // IsTheirOwn and CommentaryControl.FillLibrary.
+        var name = IsTheirOwn(part)
+            ? Path.GetFileName(path)
+            : Path.GetFileNameWithoutExtension(path);
 
         if (part == ShowPart.Opener)
         {

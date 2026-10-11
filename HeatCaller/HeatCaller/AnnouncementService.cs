@@ -490,7 +490,16 @@ public sealed partial class AnnouncementService
     /// The cap matters: a stuck or unusually long cue must never leave a
     /// race unable to start.
     /// </summary>
-    public async Task WaitForAudioAsync(TimeSpan timeout, CancellationToken token = default)
+    /// <returns>
+    /// True when the speakers actually went quiet, false when the wait
+    /// ran out with something still playing. Most callers are waiting
+    /// out a cue before a flag and have nothing useful to do with the
+    /// difference, so they discard it; the recap sequence does not -
+    /// see RaceControlControl.HeardOutAsync, which reports a recap
+    /// still speaking past its limit rather than letting the rest of
+    /// the programme queue up behind it unexplained.
+    /// </returns>
+    public async Task<bool> WaitForAudioAsync(TimeSpan timeout, CancellationToken token = default)
     {
         var started = DateTime.UtcNow;
         var deadline = started + timeout;
@@ -541,9 +550,13 @@ public sealed partial class AnnouncementService
             await Task.Delay(40, token);
         }
 
+        var timedOut = DateTime.UtcNow >= deadline;
+
         StatusMessage?.Invoke(
             $"[audio-wait] exit after {(DateTime.UtcNow - started).TotalMilliseconds:0}ms, "
-            + $"sawAudio={sawAudio}, timedOut={DateTime.UtcNow >= deadline}");
+            + $"sawAudio={sawAudio}, timedOut={timedOut}");
+
+        return !timedOut;
     }
 
     /// <summary>Fired with the clean, resolved spoken text every time a voice announcement is about to be queued - for displays (like Big Screen mode) that want to show "what was just said" without parsing debug log lines.</summary>
@@ -825,7 +838,16 @@ public sealed partial class AnnouncementService
     /// Big Screen or the Announcer page's feed. Off by default: the level
     /// check, the soundscape preview and the day's timers are not race calls.
     /// </param>
-    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false)
+    /// <param name="tail">
+    /// How much silence to leave behind the line - trimmed when another
+    /// follows immediately. See SpeechTail.
+    /// </param>
+    /// <param name="lead">
+    /// And how much in front of it - none when it follows another
+    /// immediately. See SpeechLead.
+    /// </param>
+    public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
+        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -834,7 +856,7 @@ public sealed partial class AnnouncementService
 
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice),
+            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead),
             displayText: showOnScreens ? text : null);
     }
 
@@ -974,7 +996,11 @@ public sealed partial class AnnouncementService
     /// line follows immediately, extended for a long one whose ending would
     /// otherwise clip.
     /// </param>
-    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal)
+    /// <param name="lead">
+    /// How much silence to leave in FRONT of the line - none when it
+    /// follows another immediately. See SpeechLead.
+    /// </param>
+    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal)
     {
         if (Muted)
         {
@@ -983,6 +1009,12 @@ public sealed partial class AnnouncementService
 
         var volume = AnnouncementGain(_voiceStore.Current.Volume);
         var trailing = TailSecondsFor(tail);
+
+        // Read here with the volume and the tail, on the calling thread,
+        // rather than inside the queued work: CurrentLeadingSilence reads
+        // the saved profile, and the profile can be written from the Voice
+        // page while this line waits its turn for the speaker.
+        var leading = LeadSecondsFor(lead);
 
         // The text goes up only if the line is accepted - see
         // EnqueueVoiceWork, which raises it once nothing will drop it.
@@ -1022,7 +1054,7 @@ public sealed partial class AnnouncementService
                     return;
                 }
 
-                await PlayAsync(prepared.Audio, volume, trailing, CurrentLeadingSilence);
+                await PlayAsync(prepared.Audio, volume, trailing, leading);
             }
             finally
             {

@@ -499,8 +499,14 @@ public sealed class PracticeModeControl : UserControl
                 // empty, as there is no projector to fill it.
                 var achievements = _achievements ?? ThrottledAchievementLoader();
 
-                new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings,
-                    _projector, achievements).Show();
+                var screen = new BigScreenForm(_race, _announcer, _profiles, _daySchedule, _sponsors, _settings,
+                    _projector, achievements);
+
+                // Its console lines - the sponsor video path, which has
+                // nowhere else to report. See BigScreenForm.StatusMessage.
+                screen.StatusMessage += line => StatusMessage?.Invoke(line);
+
+                screen.Show();
             }
         };
 

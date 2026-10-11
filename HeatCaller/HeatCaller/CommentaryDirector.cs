@@ -486,6 +486,62 @@ public sealed class CommentaryDirector
     /// staged, and whether anybody is listening, and none of that is this
     /// class's business.
     /// </summary>
+    /// <summary>
+    /// Whether this pass is being asked for by a PROGRAMME rather than as
+    /// filler between races - see ForTheProgrammeAsync, and
+    /// CommentaryBudget.ReserveForProgramme for the one gate it lifts.
+    /// </summary>
+    private bool _forTheProgramme;
+
+    /// <summary>
+    /// One segment for the post-race programme to speak INSIDE its own
+    /// show, rather than as filler between races.
+    ///
+    /// The same ladder, the same facts and the same budget as
+    /// <see cref="NextAsync"/> - the only difference is that the minimum
+    /// gap since the last spoken line does not apply, because a programme
+    /// is a run of segments back to back by design and its own previous
+    /// line has always just closed that gap. Without this every colour
+    /// segment was refused mid-programme with "only 2s since the last
+    /// line" and then became due once the programme went quiet, which is
+    /// how the form guide came to play after the sign-off as a show of its
+    /// own. See CommentaryBudget.ReserveForProgramme for what is still
+    /// enforced, which is everything else.
+    ///
+    /// Called on the UI thread like NextAsync, and for the same reason -
+    /// the facts are read before the first await.
+    /// </summary>
+    public async Task<SpokenSegment?> ForTheProgrammeAsync(CancellationToken ct = default)
+    {
+        // THE RACE IS OVER, AND THIS SAYS SO ITSELF (11 Oct 2026).
+        //
+        // A programme only ever runs after the flag, so it can state that
+        // rather than wait to be told - and waiting was a real bug, not a
+        // tidiness point. RaceFinished is otherwise only called from the
+        // announcer screen's half-second tick, on the state transition,
+        // while the post-race sequence starts within a second of the flag
+        // on a thread of its own. Ask before that tick has run and _racing
+        // is still true, which makes Order() offer ONLY the in-race kinds
+        // (BattleWatch and PaceNote, see InRace) - so the form guide was
+        // never a candidate at all, and the segment the programme wanted
+        // went unasked for and then played by itself after the sign-off.
+        //
+        // Idempotent: it sets a bool false. The tick calling it again a
+        // moment later costs nothing.
+        RaceFinished();
+
+        _forTheProgramme = true;
+
+        try
+        {
+            return await NextAsync(ct).ConfigureAwait(true);
+        }
+        finally
+        {
+            _forTheProgramme = false;
+        }
+    }
+
     public async Task<SpokenSegment?> NextAsync(CancellationToken ct = default)
     {
         if (Held)
@@ -806,7 +862,7 @@ public sealed class CommentaryDirector
         // in the next real quiet instead, which after a recap is the gap
         // before the next race is called. Nothing is lost and nobody is
         // billed for a read the room talked over.
-        if (_racing || Held || Writing || ShowOnAir.Playing)
+        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy)
         {
             return null;
         }
@@ -829,7 +885,12 @@ public sealed class CommentaryDirector
         // the night's own programme playing in it is not a gap. Nothing is
         // deferred and nothing is lost - this is asked again on the next
         // tick, and the quiet after the sign-off is a real one.
-        if (_racing || Held || Writing || ShowOnAir.Playing)
+        //
+        // ShowFloor beside it because ShowOnAir only knows about the BED:
+        // the recap sequence has quiet stretches between its lines with no
+        // music under them, and a paid read dropped into one of those is
+        // still a read over the programme. See ShowFloor.
+        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy)
         {
             return null;
         }
@@ -955,7 +1016,9 @@ public sealed class CommentaryDirector
             return null;
         }
 
-        var verdict = Budget.Reserve(kind, _className);
+        var verdict = _forTheProgramme
+            ? Budget.ReserveForProgramme(kind, _className)
+            : Budget.Reserve(kind, _className);
 
         if (!verdict.Allowed)
         {
@@ -1049,15 +1112,26 @@ public sealed class CommentaryDirector
     {
         if (_settings.CommentaryCoHost && spec.CanBeExchange)
         {
+            // THE LEAD COMMENTATOR HAS A NAME NOW (11 Oct 2026), where the
+            // club has typed one on the Commentary page. This passed null
+            // for him while naming the co-host, which left the model
+            // writing a two-hander in which one of the two people had a
+            // name and the other did not - and a model asked to write
+            // dialogue between a named person and an unnamed one picks a
+            // name for the unnamed one. On 11 Oct the co-host called him
+            // Laura, on air, twice. See AppSettings.RecapAnnouncerName and
+            // CommentaryExchange.Brief, which has always taken both.
+            var host = CommentaryService.Field(_settings.RecapAnnouncerName);
+
             var turns = await _commentary
-                .BuildExchangeAsync(kind, pack, announcer: null, _settings.CommentaryCoHostName, ct: ct)
+                .BuildExchangeAsync(kind, pack, host, _settings.CommentaryCoHostName, ct: ct)
                 .ConfigureAwait(false);
 
             if (turns.Count > 0)
             {
                 return new SpokenSegment(
                     kind,
-                    CommentaryExchange.Flatten(turns, announcer: null, _settings.CommentaryCoHostName),
+                    CommentaryExchange.Flatten(turns, host, _settings.CommentaryCoHostName),
                     turns);
             }
 
