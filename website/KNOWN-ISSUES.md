@@ -1,6 +1,6 @@
 # Known issues found while writing the docs (not published)
 
-Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice round, the name check and race audio. The docs describe what the app does today; fixing any of these means updating the page named.
+Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice round, the name check and race audio, and again on 11 Oct 2026 after the commentary depth round. The docs describe what the app does today; fixing any of these means updating the page named.
 
 ## Still open
 
@@ -41,11 +41,168 @@ describe, listed worst first.
 | **Driver warnings are undocumented anywhere on the site.** Nothing covers the Race Control warning menu, `WarningRules.PresetReasons`, taking the last warning back, the per-class warning ladder (`WarningLadderForm`), or that a black flag marks the saved result DQ. The Big Screen's new banner section has to say "that warning's rung on the class's ladder" with nothing to link to. `race-control/running-a-race.md` is also missing the **Warnings** leaderboard column. | Nowhere - the one real feature-sized hole left in the docs |
 | Comments only, but they contradict the shipped build: `KokoroSpeech.cs:42-43` still says the Windows voice stands in for Kokoro, and `MixerControl.cs:1353` says the announcer can speak "in the free Windows voice". | Not documented |
 
+## Still open: found on 11 Oct 2026, wiring the commentary depth
+
+The two bookends of the evening were given readers, the race intro was
+given the venue's lap record, the strength of the field, what the evening
+has done to a driver's pace, the car and a proved championship conditional. Proving
+the conditional is what turned up the bug below - it is in the scoring, not
+in the announcer, and nobody had been looking at it. The four silences under
+it are not bugs, and they are written down because each one looks exactly
+like one from the floor.
+
+| Issue | Where it's documented |
+|---|---|
+| **A club can type a negative points value into a championship's scoring scheme, and nothing clamps it.** Found 11 Oct 2026, while proving the championship conditional. `SeasonsControl`'s **Points** column validates what was typed with `int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out int _)`, and `NumberStyles.Integer` includes `AllowLeadingSign` - so `-5` passes the cell's own validation with no complaint, `SaveCurrentSeasonFromUi` parses it exactly the same way into `Season.PointsScheme`, and `Season.PointsForPosition` is a plain lookup that hands it straight back. The only floor anywhere near it is in `Season.DefaultPointsScheme` (`Math.Max(0, 11 - position)`), and that shapes the default table and nothing a club types over it. **The consequence is that a driver can be worse off for having raced a round.** `SeasonStore.ComputeStandings` sums a driver's scored rounds, and under the "best N of M" drop rule a driver still UNDER the cap takes `TotalPoints = entry.RawPoints` - every round counted, the negative one included - so a round paying minus five leaves them five points behind where they stood before they turned up. (At or over the cap the drop rule happens to save them: `scored.OrderByDescending(p => p).Take(best)` throws the worst rounds away first.) That breaks the assumption the rest of the app quietly runs on: **that adding a round can only ever help.** The championship conditional's proof is the one piece of code that already accounts for it - `CommentaryReaders.ChampionshipConditional` starts every other entrant's ceiling at the total they came in with and prices retiring as one of the outcomes open to them, because on a negative scheme not finishing can be the best a driver can do, and its remarks say so at length. Nothing else necessarily does; `Championship.SwingFor`, `ChampionshipLive` and the Big Screen's "if it ended now" were all written against schemes that pay nothing worse than zero. **Deliberately left open, because the fix is a decision rather than a defect report:** clamping the cell at zero is one line and closes it, and a club may legitimately want a penalty row in a scheme of its own - at which point the rest of the app has to be made safe for negatives instead of kept away from them. Asher's call. | Not documented, and should not be until it is decided. race-control/results-and-championships.md step 3 describes **Points scheme** as the 10-9-8-...-1 default with a **Points** value you click to change, and says nothing about a sign |
+
+### Not bugs - four silences at the ends of the night
+
+Each of these is the announcer deciding to say nothing rather than say
+something a driver in the room could correct, and each is a club-side gap
+rather than a code one. Recorded so the next person to hear the gap does
+not go looking for the fault.
+
+- **Practice rounds are not counted in the cold open's "races to run".**
+  `CommentaryReaders.NightAhead` filters tonight's programme to
+  `round.Kind != RoundKind.Practice` before it counts anything, the same
+  judgement `RacesIn` makes about the history. A club whose evening is ten
+  heats and twenty practice slots is told ten, and that is correct: "thirty
+  races to run" would be the app reading out its own booking sheet as a race
+  meeting. **What it would take to change:** nothing a club can type - it is
+  a decision about what the word "race" means in that sentence, and the
+  present answer is the defensible one.
+- **There is no count of visiting drivers, and there cannot be one yet.**
+  `NightAhead.TravelledFrom` is returned null on purpose. There is no notion
+  of club membership anywhere in HeatCaller: no member list, no club
+  identity of its own for a driver to be outside of, and nothing on a
+  profile that says guest. The nearest thing is `DriverProfile.HomeTrack`,
+  free text a club types for intro colour, and turning it into a count means
+  comparing free text with the day's free-text venue name - "Brighton MRC"
+  against "Brighton Indoor" makes a member a visitor, and every regular who
+  never filled the box in makes himself a local by accident.
+  `ExcludeFromRecords` is not it either: it covers guests, staff demo cars
+  and anyone running outside the competition under one tick, so counting it
+  would announce the club's own marshal's demo car as a visiting driver.
+  **What it would take:** a visitor tick on a driver's profile - one
+  explicit field, set by the club, with no inference anywhere near it.
+- **There is no championship sentence in the caller's own words at either
+  bookend.** `NightAhead.ChampionshipNote` and `NightDone.ChampionshipNote`
+  both exist, both are documented as "the caller's words, because only the
+  season knows", and both are returned null - because there is nowhere in
+  the app to type that sentence. There is no note on a `Season`, none on a
+  championship, and `RaceEvent.Notes` is the day's own scratch pad for
+  weather and admin, which must never be read to a room. Nor is it a thing
+  for a reader to work out: "two rounds left and four points covering the top
+  three" needs the rounds remaining and the points still on offer, which is
+  the one sum `CommentaryReaders` says out loud it does not do, and a line
+  assembled there would be a second opinion against the **Championship
+  check** segment. **What it would take:** one field to type the season note
+  into - on a season, or on the race day's own setup - read out as typed and
+  never generated.
+- **"Nobody can catch him now" remains unsayable.**
+  `CommentaryReportFacts.ChampionshipCheck` has the line written
+  (`champdecided`) and fires it on `alive == 1`, where `alive` counts
+  `ChampionshipStanding.StillAlive`. That field defaults to `true` and
+  neither caller ever sets it to anything else - `CommentaryReaders.Championship`
+  and `ChampionshipBefore` both construct the row with six arguments and both
+  say in their own comments why: whether a title is mathematically settled
+  needs the rounds left and the points still on offer, and a `Season` is a
+  set of races that have happened plus a rule that takes more as they are
+  recorded. There is no planned round count anywhere on it -
+  `CountBestRounds` is the drop cap, not the length of the season - and the
+  championship conditional refused the same claim for the same reason.
+  **What it would take:** a planned round count on a season - how many
+  rounds the championship will run - after which "that settles it" and the
+  title permutations both become provable instead of guessed.
+
+  One edge worth knowing while it stays like this, since it is the one way
+  the line is reachable: with every row alive, `alive == 1` is true for a
+  table with exactly ONE driver in it - a season only one driver has scored
+  in. The line then goes out, and nothing proved it. It is a narrow case and
+  a real one, and a `ranked.Count > 1` guard beside the existing
+  `alive == 1` would close it without waiting for the round count. (The
+  neighbouring `alive is >= 2 and <= 4` branch - "N drivers can still win" -
+  fires for any table of two to four and is likewise unproved, which
+  `CommentaryReaders.Championship`'s own remarks admit: "it is still a claim
+  this cannot stand behind".)
+
+## Fixed, not yet released (11 Oct)
+
+The commentary depth round - the request of 10 Oct 2026, planned in
+`claude\commentary-depth-2026-10-10.md` and marked off against that plan in
+`HeatCaller\HeatCaller\ROADMAP.md`. These are the parts of it that close
+faults rather than add material.
+
+- **Three segments that could never say anything now can.** **Form guide**,
+  **Halfway standings** and **This day at the club** each had a title, a
+  description, a tier, a budget and a tick box under **Segments** on
+  **Voice - Commentary**, and each fell through `CommentaryDirector.Candidates`'
+  `default` arm - so a club that ticked one got silence for the rest of its
+  life and nothing ever said why. All three have a case and a reader now
+  (`CommentaryHistoryFacts.FormGuide`, `CommentaryReportFacts.MidMeetingStandings`,
+  `CommentaryHistoryFacts.ThisDayAtTheClub`), and the `default` arm now lists
+  by name the members that are written somewhere other than by the model, so
+  the next segment added without a reader is a visible omission rather than a
+  silent one. `CommentaryDepthTests` holds every member of `SegmentKind` to
+  having a case or being on that list. (10 Oct 2026)
+- **The two bookends had the same fault and outlasted it by a day.**
+  **Cold open** and **Sign-off numbers** had a tick box and no reader at all:
+  `CommentaryDirector.NightAhead` and `NightDone` had been declared since the
+  bookends were built and nothing in the app had ever set either, so both
+  segments were silent in the field every night, for every club, for as long
+  as they had existed. They now read the night's programme and the night's
+  filed results respectively (`CommentaryReaders.NightAhead`, `NightDone`,
+  wired in `MainForm.Commentary.cs`). Worth keeping in mind: they outlasted
+  the three above because a comment further down the same method read as
+  though wiring `director.Upcoming` had dealt with them - it never had, and
+  that comment now says so. A note that reads like a fix is how a fault stays
+  in the field for a fortnight. (11 Oct 2026)
+- **A show no longer opens before there is a line to open for.** The recap's
+  opener used to start before the model's answer was awaited, on the
+  reasoning that it would play across the gap rather than being added to it.
+  Rehearsal 5 had the model take 41.6s and 37.5s against a 6s gap, so the
+  club heard the opener land, ring out, and then eighteen seconds of music
+  bed with nobody speaking over it - twice in twelve minutes. The opener is
+  now started after the recap is written and rendered, which also means a
+  race the model had nothing to say about opens no show at all. (11 Oct 2026)
+- **The console no longer repeats a skipped-segment line hundreds of times a
+  night.** Rehearsal 5 produced roughly four hundred copies of
+  `[brain] Skipped grid history - 6 lines in the last ten minutes already.`
+  in twelve minutes, because the director's half-second tick logged every
+  refusal, and it buried the audio fault the night had been recorded to find.
+  A refusal is now said once per reason, keyed on the reason rather than the
+  segment, so a refusal that changes is still reported and only the same
+  reason twice in a row is held back (`CommentaryDirector._refusalSaid`).
+  (11 Oct 2026)
+- **Grid history retuned, now the race intro carries the same history.**
+  Its budget came down from 6 a meeting and 2 a class to 3 and 1, its
+  description now reads "A debut or a rivalry the race intro did not get to.",
+  and its facts are keyed on the night rather than the race - every fact
+  `CommentaryHistoryFacts.ForIntro` builds is true for the whole evening, so a
+  race-scoped key let the same debut go out from the intro and then again
+  from the segment. (10-11 Oct 2026)
+
 ## Built but not reachable (10 Oct)
 
 Written, tested and shipped with no way for a club to get at it. Recorded here
 so it is either wired up or deleted, and deliberately **not** documented - a
 page describing something a club can't reach is worse than no page.
+
+**Re-checked 11 Oct 2026, and all three still hold:** `ShowTreatment.IdentItem`
+has no caller and no page has the text box, `ShowTreatment.NextShowDrama` is
+still never set, and nothing calls `ShowTreatment.PunctuateAsync` - the only
+other mention of it in the app is a comment in `HandOverAsync` explaining why
+it is reachable for a thing that is not a show.
+
+**What this list did not contain, and should have:** the **Cold open** and
+**Sign-off numbers** segments, which were the same fault one layer up - a tick
+box, a tier, a budget, and no reader behind either - and which were silent in
+the field for every club for as long as they existed. They were never written
+down here, which is most of why they lasted. Both have readers as of 11 Oct
+2026 and are in "Fixed, not yet released (11 Oct)" above; the three segments
+fixed on 10 Oct 2026 are there too. A segment with a box and no reader belongs
+in this section, and the test that now pins it (`CommentaryDepthTests`) is
+there so the question never has to be asked by hand again.
 
 - **The club's voice ID / station ident.** `ShowIdent`, `ShowRunningOrder.IdentDue` (a 40-minute floor) and `AppSettings.ShowIdentLine` are all there, and `ShowTreatment.IdentItem` returns the item, but no block builder calls it and no page has the text box. Needs one field on **Voice → Commentary**.
 - **The drama-shaped show.** `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s) and `LongerLift` (0.35 s) give a show a bigger open when the race it is talking about earned one. `ShowTreatment.NextShowDrama` is never set, so every show is `ShowDrama.None`.

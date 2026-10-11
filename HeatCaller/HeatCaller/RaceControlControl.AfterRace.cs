@@ -408,6 +408,43 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Recap has the club's history for {Plural.Of(raceHistory.Grid.Count, "finisher")}.");
         }
 
+        // And what the club's garage knows about the cars they raced (11
+        // Oct 2026) - the one thing the main voice has never mentioned.
+        // Here on the UI thread with the two above, and guarded the same
+        // way: the host reads the Garage, the session history, the
+        // programme and the profiles for this, and this is the save path.
+        //
+        // The race day goes with it, so a car line - "that car is the
+        // club's own", "his first Open race here" - is said once an
+        // evening rather than once in the heat's recap and again in the
+        // main's. See RaceCars.NightKey.
+        RaceCars? raceCars = null;
+
+        if (commentaryAvailable && RecapCarFacts is not null)
+        {
+            try
+            {
+                var found = RecapCarFacts.Invoke(record, round);
+
+                // Nothing found is null rather than an empty RaceCars, so
+                // the recap's prompt leaves the whole section out instead
+                // of carrying a heading over nothing - which is a fact the
+                // model would be tempted to fill in.
+                raceCars = found.Count > 0 ? new RaceCars(found, _events?.Active?.Id) : null;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Recap goes without the cars - they could not be worked out: {ex.Message}");
+            }
+        }
+
+        if (raceCars is { Cars.Count: > 0 })
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Recap has the garage's own record of {Plural.Of(raceCars.Cars.Count, "car")}.");
+        }
+
         // Heat or main, the opening and sign-off, the mechanic - from the
         // settings, the program and the Garage, so worked out here on the
         // UI thread for the same reason as the standings, and guarded the
@@ -592,7 +629,8 @@ public sealed partial class RaceControlControl
                 var generation = commentaryAvailable
                     ? _commentary!.BuildRaceSummaryAsync(
                         record, championship, plan?.Context, raceHistory, followOnWork.Token,
-                        historyPacked: packed => recapHistory = packed)
+                        historyPacked: packed => recapHistory = packed,
+                        cars: raceCars)
                     : null;
 
                 // A recap that was written but never spoken is not "the last
@@ -2404,6 +2442,19 @@ public sealed partial class RaceControlControl
         // the staging chain waiting on an intro that is never asked for.
         RaceForm? form = null;
         ChampionshipAtStake? stake = null;
+        RaceScene? scene = null;
+
+        // Which layout the venue's record is read for. The round's own
+        // where it has one, because that is the name the intro's facts
+        // print as "Track:" - a record line naming a different layout
+        // than the line above it would have the prompt holding two tracks
+        // for one race. Otherwise the picker's, which is the layout the
+        // record is actually kept against (see
+        // CheckAndAnnounceTrackRecord), and the venue line names it
+        // itself.
+        var layoutName = string.IsNullOrWhiteSpace(round.TrackLayoutName)
+            ? SelectedTrackName()
+            : round.TrackLayoutName;
 
         try
         {
@@ -2433,6 +2484,94 @@ public sealed partial class RaceControlControl
                 _events,
                 _sessionHistory,
                 _profiles);
+
+            // THE RACE'S OWN SETTING (11 Oct 2026): the venue's outright
+            // lap record, how strong this field is against the club's
+            // season, and what the night has done to these drivers' pace.
+            // The three things that make two races with the same ten
+            // entries sound different even before anybody's career is
+            // mentioned - and the intro is where the app had least to say.
+            //
+            // The venue's record needs no programme, so it is read whether
+            // or not there is a round store; the other two are counted
+            // over the class's rounds and cannot be.
+            //
+            // THE WHOLE ROSTER, not the eight the facts name. The field's
+            // counts are about the field - a ten-car race in which eight
+            // are named is still a ten-car race - and the service filters
+            // the per-driver lines to the drivers it names. See
+            // FieldStrength.
+            scene = new RaceScene(
+                CommentaryReaders.LayoutRecord(_trackLayouts, _sessionHistory, layoutName),
+                _rounds is null
+                    ? null
+                    : CommentaryReaders.Field(
+                        round.AssignedTransponders,
+                        round.ClassName,
+                        _sessionHistory,
+                        _rounds),
+                _rounds is null
+                    ? null
+                    : CommentaryReaders.PaceTonight(
+                        round.AssignedTransponders,
+                        round.ClassName,
+                        _profiles,
+                        _sessionHistory,
+                        _rounds),
+
+                // Keyed on the night, for the same reason the history is:
+                // the record and the entry are the same all evening, and
+                // an intro runs before every race. See RaceScene.NightKey.
+                _events?.Active?.Id,
+
+                // AND THE NIGHT'S THREAD (11 Oct 2026): the one storyline
+                // the evening is being told as, so a race intro can refer
+                // to what the cold open set up. Read here with the rest of
+                // the setting because it is the same UI-thread pass over
+                // the same stores - see RaceScene.Thread for why it
+                // travels with a race's setting without being one.
+                //
+                // No _rounds guard, unlike the field and the pace above:
+                // the reader takes a null programme itself and answers
+                // null, because a club with no programme has nobody it can
+                // say is racing tonight.
+                CommentaryReaders.NightStory(
+                    _rounds,
+                    _sessionHistory,
+                    _profiles,
+                    _events?.ActiveRoundScope()),
+
+                // AND THE CHAMPIONSHIP CONDITIONAL (11 Oct 2026): one NAMED
+                // finishing order and what the club's own results prove it
+                // would do to the table - "if Carl wins this race and Bill
+                // finishes second, Carl takes the lead of the Winter
+                // Series".
+                //
+                // Read here with the rest of the setting because it is the
+                // same UI-thread pass over the same stores the stakes above
+                // already walked - the seasons, the programme, the events
+                // and the history. From the Task.Run below onwards this is
+                // on a pool thread, and those stores belong to the UI
+                // thread; the rule BugHunt5CommentaryTests pins for the
+                // director's own readers is the same rule here.
+                //
+                // THE WHOLE ROSTER, like the field above it and unlike the
+                // per-driver lines. The proof has to price every driver who
+                // could take points off the two it names, and a proof over
+                // the eight the prompt happens to name is not a proof. See
+                // CommentaryReaders.ChampionshipConditional.
+                //
+                // No _rounds guard: the reader is handed the round store and
+                // answers null without one, because a season's rule cannot
+                // take a race whose round it cannot see.
+                CommentaryReaders.ChampionshipConditional(
+                    round,
+                    round.AssignedTransponders,
+                    _seasons,
+                    _rounds,
+                    _events,
+                    _sessionHistory,
+                    _profiles));
         }
         catch (Exception ex)
         {
@@ -2440,11 +2579,40 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the history and the standings - they could not be worked out: {ex.Message}");
         }
 
+        if (scene?.Venue is { } venueRecord)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has the {venueRecord.LayoutName} lap record: "
+                + $"{venueRecord.LapSeconds.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)}s, "
+                + $"{venueRecord.Holder}, {venueRecord.SetDescribed}.");
+        }
+
         if (stake is not null)
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [commentary] Round intro has what this race is worth in {stake.SeasonName}: "
                 + string.Join(", ", stake.OnThisGrid.Select(r => $"P{r.PositionNow} {r.Name}")));
+        }
+
+        // SAID IN THE LOG EVERY TIME IT IS CARRIED, because this is the one
+        // claim in the intro about a race that has not been run - so when a
+        // club brings a night's console log back and asks why the announcer
+        // said what it said, the condition it was proved for is in the file
+        // beside the sentence. The margin too, or "no margin" where the
+        // reader could not prove one was the same whatever the rest of the
+        // field did. The silence is not logged: this reader answers null far
+        // more often than not and a line for every refusal would bury the
+        // night's real messages.
+        if (scene?.Conditional is { } decides)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has a {decides.SeasonName} conditional: "
+                + $"{decides.WinnerName} first and {decides.SecondName} second takes the lead"
+                + (decides.DisplacedName.Length > 0 ? $" from {decides.DisplacedName}" : string.Empty)
+                + (decides.LeadBy is { } margin
+                    ? $", by {margin.ToString(System.Globalization.CultureInfo.InvariantCulture)}."
+                    : " - no margin that holds for every other finishing order, so none is said.")
+                + $" Proved over {Plural.Of(decides.RoundsCounted, "counted round")}.");
         }
 
         // Released however this ends - spoken, dropped, failed - and in any
@@ -2557,7 +2725,8 @@ public sealed partial class RaceControlControl
                     clubNight: clubNight,
                     form: form,
                     stake: stake,
-                    historyPacked: packed => introHistory = packed);
+                    historyPacked: packed => introHistory = packed,
+                    scene: scene);
 
                 if (string.IsNullOrWhiteSpace(answer))
                 {

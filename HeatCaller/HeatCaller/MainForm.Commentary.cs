@@ -26,6 +26,7 @@ public partial class MainForm
     private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary)
     {
         raceControl.MechanicSetupFacts = MechanicSetupFactsFor;
+        raceControl.RecapCarFacts = RecapCarFactsFor;
 
         commentary.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
         commentary.LoadVoices = MechanicVoiceChoicesAsync;
@@ -156,6 +157,72 @@ public partial class MainForm
         // clubs that have just installed this, and is the right answer.
         director.OnThisDay = () => CommentaryReaders.OnThisDay(_sessionHistory);
 
+        // THE NIGHT'S THREAD - the one storyline the evening is told as,
+        // set at the cold open and resolved at the sign-off.
+        //
+        // Read fresh on every pass like the rest of these, and for this
+        // one that is the feature rather than a convenience. Nothing about
+        // a thread is remembered anywhere in this app, so a thread the
+        // night has contradicted cannot be offered: by the time the next
+        // segment is weighed up this has already seen the heat that beat
+        // the subject, and the storyline turns instead of repeating. A
+        // thread held between passes would be the "can anyone stop Dave"
+        // that keeps asking after Dave went out in heat three, which is
+        // the one failure a room notices instantly and laughs at. See
+        // NightThread.
+        //
+        // The same scope as NightProgress above and for its reasons:
+        // tonight's rounds are who is out and whether the night is over,
+        // and last week's programme is neither.
+        director.NightStory = () => CommentaryReaders.NightStory(
+            _rounds,
+            _sessionHistory,
+            _profiles,
+            _raceEvents.ActiveRoundScope());
+
+        // THE TWO BOOKENDS - the evening's shape at the top of the night
+        // and its numbers on the way out (11 Oct 2026).
+        //
+        // THESE TWO ARE WHY THE WHOLE SHOW HAD NO BRACKET. The director has
+        // declared NightAhead and NightDone since the bookends were built,
+        // and nothing in the app had ever set either - so SegmentKind
+        // ColdOpen and SignOffNumbers had a title, a tier, a budget and a
+        // tick box on the Commentary page and were silent in the field
+        // every night, for every club, for as long as they have existed.
+        // Exactly the fault the halfway standings, this-day-at-the-club and
+        // form guide had until 10 Oct 2026, and it outlasted theirs because
+        // the note further down this method read as though the bookends had
+        // been dealt with along with the continuity lines. They had not.
+        //
+        // The cold open reads the PROGRAMME and the sign-off reads the
+        // RESULTS, which is the one thing to keep in mind when touching
+        // either: the opening is said before a wheel has turned, so
+        // anything it was gated on having recorded would silence it at the
+        // only moment it exists for. See CommentaryReaders.NightAhead.
+        director.NightAhead = () => CommentaryReaders.NightAhead(
+            _rounds,
+
+            // The same scope as NightStory and NightProgress, for their
+            // reasons: tonight's rounds are tonight's shape, and last
+            // week's programme is not.
+            _raceEvents.ActiveRoundScope(),
+
+            // The race day in hand, for the venue the club typed on it -
+            // nothing else off it is read. Null when no day is open, and
+            // then the opening is said without a place, which is what most
+            // clubs want anyway: they race where they always race.
+            _raceEvents.Active);
+
+        // The sign-off takes no scope at all, and that is not an omission -
+        // see the reader. A race the club ran tonight counts towards the
+        // night's totals whether it was filed against one of tonight's
+        // rounds, against another day's, or against no round at all,
+        // because the sign-off is about what happened rather than about
+        // what was planned.
+        director.NightDone = () => CommentaryReaders.NightDone(
+            _sessionHistory,
+            _profiles);
+
         // How far through tonight's programme we are, which is what the
         // budget releases the night's allotment against. Counted from the
         // rounds themselves rather than from a tally kept as the night
@@ -176,10 +243,19 @@ public partial class MainForm
 
         // What is left on tonight's programme, and what has just run. These
         // two are what the show's continuity is built from - "that was the
-        // B-main; still to come, the A-main" - and they were the reason none
-        // of it could speak: CommentaryContinuity, ComingUpNext, the cold
-        // open and the sign-off all read them, and nothing had ever wired
-        // them up, so every one of those was silent in the field.
+        // B-main; still to come, the A-main" - and they were the reason
+        // none of it could speak: CommentaryContinuity and ComingUpNext
+        // both read them, nothing had ever wired them up, and so every
+        // continuity line in the app was silent in the field.
+        //
+        // THE TWO BOOKENDS DO NOT READ THESE, whatever this comment used to
+        // claim. The cold open reads NightAhead and the sign-off reads
+        // NightDone, and those two readers were not written until 11 Oct
+        // 2026 - CommentaryReaders.NightAhead and NightDone, wired above.
+        // Until then both ends of the night had a tick box and no reader at
+        // all, so wiring these never did anything for either of them, and
+        // a note saying otherwise is how a fault stays in the field for a
+        // fortnight with something in the source that reads like a fix.
         //
         // The same scope as NightProgress above, for its reasons.
         director.Upcoming = () => CommentaryReaders.Upcoming(
@@ -283,6 +359,42 @@ public partial class MainForm
             _cars.All,
             _setupLog.All,
             _chassisTemplates.Get);
+    }
+
+    /// <summary>
+    /// What the garage and the club's own saved results know about the
+    /// cars in a saved race, for the recap - see CommentaryReaders.Cars.
+    /// Asked by Race Control on the UI thread, where the Garage's stores
+    /// are read, exactly like the mechanic's brief above.
+    ///
+    /// A reader of its own and not an extension of the brief: that is the
+    /// winner's SETUP, for the interview, and this is the finishers' cars,
+    /// for the recap. The two must never say the same thing - the
+    /// interview runs straight after the recap - which is why nothing in
+    /// here touches the setup log. See RaceControlControl.RecapCarFacts.
+    /// </summary>
+    private IReadOnlyList<RaceCar> RecapCarFactsFor(SessionRecord record, RoundDefinition? round)
+    {
+        // The race day it was run on, for a car lent for that day: the
+        // round's own day, or the day in hand for a race that isn't a
+        // round. The same answer MechanicSetupFactsFor works out above,
+        // and for the same reason - Car.DriverFor will not let last
+        // Tuesday's loan answer for tonight, but only if it is told which
+        // day to ask about.
+        var eventId = (round is null ? null : _raceEvents.EventForRound(round.Id)?.Id) ?? _raceEvents.Active?.Id;
+
+        return CommentaryReaders.Cars(
+            record,
+            round?.ClassName,
+            eventId,
+            _profiles,
+            _sessionHistory,
+            _rounds,
+
+            // Every car the club has, retired ones included - the reader
+            // drops those itself, so that judgement stays in one place
+            // beside the rest of them.
+            _cars.All);
     }
 
     /// <summary>

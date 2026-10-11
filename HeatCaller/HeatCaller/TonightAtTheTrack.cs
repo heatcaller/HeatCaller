@@ -33,6 +33,38 @@ public sealed record TrackEvolution(string ClassName, string FirstRace, string L
 public sealed record FastestTonight(string ClassName, string DriverName, long LapMs, string Race);
 
 /// <summary>
+/// How one driver's pace has moved tonight: their middle flying lap in
+/// their FIRST race of the night against their LATEST.
+///
+/// WHY THIS IS A RECORD OF ITS OWN AND NOT A SECOND SUM
+///
+/// The class-wide evolution figure is the MIDDLE of exactly these
+/// changes - <see cref="TonightAtTheTrack.Evolution"/> reads them from
+/// <see cref="TonightAtTheTrack.Changes"/> and sorts them - so a line
+/// about one driver and the figure on the Next Up bar can never disagree
+/// about the same laps. Two implementations of "how much quicker is he"
+/// would drift apart the first time a result was corrected mid-evening,
+/// and nothing would ever say so.
+/// </summary>
+/// <param name="Transponder">The driver.</param>
+/// <param name="FirstMs">Their middle lap in their first race tonight.</param>
+/// <param name="LatestMs">And in their latest.</param>
+/// <param name="Races">How many of tonight's races they had enough flying laps in to be measured at all.</param>
+/// <param name="FirstRace">The race the change is counted FROM, as the club labelled it - the scope any line about this has to say.</param>
+/// <param name="LatestRace">And the one it is counted to.</param>
+public sealed record DriverPaceTonight(
+    string Transponder,
+    long FirstMs,
+    long LatestMs,
+    int Races,
+    string FirstRace,
+    string LatestRace)
+{
+    /// <summary>Their middle lap now against then. Negative when they are quicker now - the same sign TrackEvolution.DeltaMs uses.</summary>
+    public long DeltaMs => LatestMs - FirstMs;
+}
+
+/// <summary>
 /// Tonight at the track, from the races already saved: how the track has
 /// changed for each class since its first race of the night (track
 /// evolution - the grip coming up as the rubber goes down, or going off as
@@ -96,25 +128,11 @@ public static class TonightAtTheTrack
                 continue;
             }
 
-            // Each driver's middle lap in each race they had laps in, in
-            // running order: their first against their latest.
-            var changes = new List<long>();
-            var drivers = races
-                .SelectMany(race => race.Results
-                    .Where(r => !string.IsNullOrWhiteSpace(r.Transponder) && !GhostService.IsGhost(r.Transponder))
-                    .Select(r => (r.Transponder, Middle: MiddleLap(r))))
-                .Where(x => x.Middle > 0)
-                .GroupBy(x => x.Transponder, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var driver in drivers)
-            {
-                var laps = driver.Select(x => x.Middle).ToList();
-
-                if (laps.Count >= 2)
-                {
-                    changes.Add(laps[^1] - laps[0]);
-                }
-            }
+            // Each driver's middle lap in their first race tonight against
+            // their latest - through Changes, so the class's figure is the
+            // middle of exactly the numbers a driver's own line is read
+            // from. See Changes and PaceTonight for why that matters.
+            var changes = Changes(races, roundOf).Select(change => change.DeltaMs).ToList();
 
             if (changes.Count < LeastDrivers)
             {
@@ -175,6 +193,99 @@ public static class TonightAtTheTrack
             .ToList();
 
         return laps.Count < LeastLaps ? 0 : laps[laps.Count / 2];
+    }
+
+    /// <summary>
+    /// Each driver's change across a set of tonight's races, in the order
+    /// the races ran - the one measurement both the class's evolution
+    /// figure and anything said about a driver are made from.
+    ///
+    /// Drivers with only one race in the set are left out: one race is not
+    /// a change, whatever the laps came out at.
+    ///
+    /// THE LeastDrivers BAR IS NOT APPLIED HERE, and that is deliberate.
+    /// It exists because one driver's night is not the TRACK's - see the
+    /// class summary - which is a judgement about the class-wide figure and
+    /// not about a driver's own. Evolution applies it; a reader asking
+    /// about one person must not, or a two-car class could never say that
+    /// either of them had found half a second.
+    /// </summary>
+    /// <param name="races">Tonight's races to measure over, OLDEST FIRST - what Races returns.</param>
+    /// <param name="roundOf">A round by id, for the label of a race with none of its own.</param>
+    internal static List<DriverPaceTonight> Changes(
+        List<SessionRecord> races, Func<string, RoundDefinition?> roundOf)
+    {
+        var found = new List<DriverPaceTonight>();
+
+        var drivers = races
+            .SelectMany(race => race.Results
+                .Where(r => !string.IsNullOrWhiteSpace(r.Transponder) && !GhostService.IsGhost(r.Transponder))
+                .Select(r => (r.Transponder, Middle: MiddleLap(r), Race: race)))
+            .Where(x => x.Middle > 0)
+            .GroupBy(x => x.Transponder, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var driver in drivers)
+        {
+            // In running order, because SelectMany walked the races in it
+            // and GroupBy keeps what it was given: first is their first
+            // race tonight and last is their latest.
+            var runs = driver.ToList();
+
+            if (runs.Count < 2)
+            {
+                continue;
+            }
+
+            found.Add(new DriverPaceTonight(
+                runs[0].Transponder,
+                runs[0].Middle,
+                runs[^1].Middle,
+                runs.Count,
+                NameOf(runs[0].Race, roundOf),
+                NameOf(runs[^1].Race, roundOf)));
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Each driver's own change tonight, the biggest first - for a race
+    /// intro that wants to say what the night has done to somebody rather
+    /// than what it has done to the track.
+    ///
+    /// Biggest first so that the driver who has found - or lost - the most
+    /// is the one that survives a cap, which is the one a commentator
+    /// would reach for. By how much it moved either way, because a driver
+    /// going backwards all evening is as much of a story as one coming on.
+    ///
+    /// Empty before anybody has had two races tonight, which is every
+    /// club's first race of the night and the right answer for it.
+    ///
+    /// Call it on the UI thread: it reads the session history and the
+    /// programme.
+    /// </summary>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="roundOf">A round by id - how a race gets its class and its label.</param>
+    /// <param name="nowLocal">Now, in local time, for which night counts as tonight.</param>
+    /// <param name="className">The class to measure, or blank for every class racing tonight.</param>
+    public static IReadOnlyList<DriverPaceTonight> PaceTonight(
+        IEnumerable<SessionRecord> history,
+        Func<string, RoundDefinition?> roundOf,
+        DateTime nowLocal,
+        string? className = null)
+    {
+        var wanted = (className ?? string.Empty).Trim();
+
+        var races = Races(history, roundOf, nowLocal)
+            .Where(r => wanted.Length == 0 || string.Equals(r.ClassName, wanted, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.Session)
+            .ToList();
+
+        return races.Count < 2
+            ? Array.Empty<DriverPaceTonight>()
+            : Changes(races, roundOf)
+                .OrderByDescending(change => Math.Abs(change.DeltaMs))
+                .ToList();
     }
 
     /// <summary>The race's own label, or its round's when it has none.</summary>

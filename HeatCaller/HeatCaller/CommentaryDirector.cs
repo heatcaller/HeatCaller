@@ -242,6 +242,25 @@ public sealed class CommentaryDirector
     /// <summary>The evening's numbers, for the sign-off.</summary>
     public Func<NightDone>? NightDone { get; set; }
 
+    /// <summary>
+    /// THE NIGHT'S THREAD - the one storyline the evening is being told
+    /// as. Wire this to CommentaryReaders.NightStory.
+    ///
+    /// Read fresh on every pass like the rest of them, and for this one
+    /// that is not a convenience, it is the feature. A thread is a framing
+    /// of what the club's results actually say, so asking again is what
+    /// makes a thread the night has contradicted impossible to offer: by
+    /// the time the next segment is weighed up the reader has seen the heat
+    /// that beat the subject. Held between passes it would be the "can
+    /// anyone stop Dave" that keeps asking after Dave went out, which is
+    /// the one failure a room notices instantly and laughs at. See
+    /// NightThread.
+    ///
+    /// Null until wired, and then both bookends read exactly as they did
+    /// before there was any of this.
+    /// </summary>
+    public Func<NightThread?>? NightStory { get; set; }
+
     /// <summary>The grid as the club's history knows them, and the pairs with previous.</summary>
     public Func<(IReadOnlyList<DriverForm> Grid, IReadOnlyList<HeadToHead> Rivalries)>? GridHistory { get; set; }
 
@@ -1199,21 +1218,55 @@ public sealed class CommentaryDirector
 
             case SegmentKind.ColdOpen:
             {
-                if (NightAhead?.Invoke() is not { } ahead)
+                var opening = new List<FactBlock>();
+
+                if (NightAhead?.Invoke() is { } ahead
+                    && CommentaryShowFacts.ColdOpen(ahead, _dayKey) is { } block)
                 {
-                    return Array.Empty<FactBlock>();
+                    opening.Add(block);
                 }
 
-                return CommentaryShowFacts.ColdOpen(ahead, _dayKey) is { } block
-                    ? new[] { block }
-                    : Array.Empty<FactBlock>();
+                // AND THE NIGHT'S THREAD IS SET HERE (11 Oct 2026), second
+                // because the shape of the evening orients a room and the
+                // storyline hooks it - "forty-one drivers, thirty races",
+                // then "can anybody stop that run tonight". Either can be
+                // absent and the other still reads.
+                //
+                // Both go out in ONE pack, so both are spent together when
+                // the line is actually spoken and neither can come back
+                // later in the evening on its own.
+                if (NightStory?.Invoke() is { } story
+                    && CommentaryShowFacts.ThreadAhead(story, _dayKey) is { } thread)
+                {
+                    opening.Add(thread);
+                }
+
+                return opening;
             }
 
             case SegmentKind.SignOffNumbers:
             {
-                return NightDone?.Invoke() is { } done
-                    ? CommentaryShowFacts.SignOff(done, _dayKey)
-                    : Array.Empty<FactBlock>();
+                var closing = new List<FactBlock>();
+
+                // THE THREAD RESOLVED, AND FIRST. FactPack keeps the order
+                // it is given and drops the tail when the room runs short,
+                // so this is the one line that has to survive: the numbers
+                // nobody was counting are the sign-off's own argument, but
+                // the storyline is what the room has been waiting on since
+                // the cold open, and a bracket is noticed mostly when it is
+                // missing.
+                if (NightStory?.Invoke() is { } story
+                    && CommentaryShowFacts.ThreadDone(story, _dayKey) is { } thread)
+                {
+                    closing.Add(thread);
+                }
+
+                if (NightDone?.Invoke() is { } done)
+                {
+                    closing.AddRange(CommentaryShowFacts.SignOff(done, _dayKey));
+                }
+
+                return closing;
             }
 
             // What is left here is written somewhere other than by the

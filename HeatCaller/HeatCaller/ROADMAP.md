@@ -48,7 +48,7 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: **1,921 tests, measured** (`check.cmd`, 10 Oct 2026 - 1,921 passed, 0 failed, 27.9 minutes; the relay's 505 are counted separately below), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`) |
+| Tests | `HeatCaller.Tests`: **2,180 tests, measured** (`check.cmd`, 11 Oct 2026 - 2,180 passed, 0 failed, 0 warnings, 15.3 minutes; the relay's 507 are counted separately below), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`). This run is the commentary depth round complete - the 166 tests it added over the 2,014 measured earlier the same day are the bookends, the night's thread, the championship conditional and the four new kinds of material. **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
 | Relay | TypeScript on Fly.io (`relay\`), 36 test files, 507 tests (measured 10 Oct). **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes, and the refusal messages renamed off the retired Windows voice - `Hear It` and `Preview` in the app do nothing until `fly deploy --ha=false` has run |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
@@ -141,6 +141,227 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 
 Written down here the moment it is asked for, because a request held only
 in a chat is a request that is lost when the chat is.
+
+### Built since it was asked for
+
+- **The championship conditional, with its condition said out loud**
+  (asked 11 Oct 2026, **built 11 Oct 2026**). A race intro saying what the
+  race could decide - but as a NAMED hypothetical rather than a promise:
+  *"if Sam wins and Bill is second, Sam leads by three."*
+
+  The reasoning it was asked with, kept as it was written:
+
+  > The flat version - "a win here and he leads the championship" - was
+  > deliberately not built on 10 Oct, and must not be. What a result does
+  > to a table depends on where **everyone else** finishes, and the drop
+  > rule ("best 5 of 7") means there is no arithmetic shortcut:
+  > `Championship.SwingFor` recomputes the whole table twice rather than
+  > subtracting, and says in its own comment why. A conditional stated
+  > flatly is true for one finishing order out of many, and said over the
+  > PA and then falsified forty minutes later it is the timing system
+  > telling forty people something untrue. `CommentaryReaders`' own header
+  > already keeps that silence: *"An approximation would be worse than
+  > silence."*
+  >
+  > What the honest version needs: a reader that scores **one named**
+  > hypothetical order through `SeasonStore.ComputeStandings` - the
+  > machinery exists, `ChampionshipLive.Table` does exactly this for the
+  > live table - and a prompt discipline that makes the model state the
+  > condition and never drop it. Half of this feature is the prompt rule:
+  > a model handed "if Sam wins and Bill is second, Sam leads by three"
+  > will cheerfully say "Sam can take the lead here", which is the thing
+  > that must not be said. That rule is the part to get right first, and
+  > it is why this is its own piece of work rather than a line added to
+  > the intro's stakes.
+
+  What was built, and what was deliberately not:
+
+  - `CommentaryReaders.ChampionshipConditional` picks the two drivers in
+    the race who stand highest in the table, names the **challenger** as
+    the winner and the one above them as second, and then PROVES the claim
+    for every arrangement of the rest of the field - the named two through
+    `SeasonStore.ComputeStandings`, every other entrant priced at the
+    **maximum total** over every position still open to them and over
+    retiring, and everybody not in the race at the total they came in
+    with. It says nothing unless the winner's total is strictly greater
+    than all of those: level on points is not leading, which is
+    `ChampionshipLive.Headline`'s own judgement.
+  - The trap it was written around: `Season.PointsForPosition` is a
+    LOOKUP into a list a club types itself, so "the best position
+    available" is not "the most points available". A club can type a
+    scheme where fourth pays more than third - the test that matters most
+    in `CommentaryConditionalTests` - and a proof built on the better
+    position would have said a sentence that was false.
+  - The margin is said only when it is the same margin in every
+    arrangement, which is when no other entrant can reach past the named
+    runner-up. Otherwise the line says the lead changes hands and says no
+    number. There is no "at least three" hedging.
+  - **The title decided** - "nobody can catch him now" - was refused, and
+    not for want of trying. It needs the rounds left in the season and the
+    points still on offer, and nothing in this app knows either: a season
+    is a set of races that have happened plus a rule that takes more as
+    they are recorded, with no planned count anywhere. That silence is the
+    one `CommentaryReaders`' own header already keeps and
+    `CommentaryReportFacts.ChampionshipCheck` already leaves to its
+    caller, and it stays kept.
+  - **Half of it is the prompt rule**, as asked. Two defences:
+    `CommentaryConditionalFacts.Conditional` ends the line on *"- worked
+    out for that finishing order and no other"*, so a model that drops the
+    condition is left with a sentence that has a hole in it rather than a
+    plausible lie; and the intro's prompt forbids the outcome without both
+    halves of the condition, forbids "can", "could", "might", "needs
+    only", "is on for" and "is in line for" by name, and says to leave the
+    fact out altogether rather than trim it. There is deliberately no
+    post-generation guard that bins a spoken line for looking shortened:
+    no pattern over English can tell a condition from a hedge, and a
+    guard loose enough to pass a well-written line would also pass "Carl
+    can take the lead, if things go his way".
+
+### The depth plan, marked off (11 Oct 2026)
+
+The request of 10 Oct 2026 - *"right now when they talk they do a lot of
+talking but just say much of the same thing beyond the race specifics...
+maybe a little research on F1 racing and incorporate facts, story lines,
+etc."* - planned in `claude\commentary-depth-2026-10-10.md`. That file is
+the plan and is left as it was written; this is where it stands against its
+own order of work, because a plan that is never marked off is a plan
+somebody re-reads in a month and cannot tell from a to-do list.
+
+Worth saying first, because it is the finding the plan itself turned on:
+**the first move was never new facts.** It was plumbing in material that was
+already written and not connected. `CommentaryHistoryFacts.ResultInContext` -
+"he has never finished this high", the one history fact written for a
+finishing position - had no caller anywhere in the app, and the recap, the
+longest and most-heard segment of the night, had the finishing order, one
+lap time and a closeness to talk over for half a minute. That is what "says
+much the same thing" was, and no amount of prompt wording would have fixed
+it.
+
+**Done:**
+
+- **The theme tag and the variety budget** (the plan's step 1, and the one
+  it called the highest-leverage single change). `FactBlock.Theme` tags what
+  a fact is ABOUT, `FactTheme` writes the tags, `SaidTonight.ThemeCooled`
+  holds a theme for `ThemeCooldown` spoken segments, `FactPack.Build` drops a
+  cooled block and `PackedFacts.Themes` carries what went out. So three
+  consecutive segments can no longer all be about the same driver's streak,
+  each inside its own budget, which is precisely what the repetition sounded
+  like from the floor.
+- **The recap has the history it already had.** `ResultInContext` and the
+  driver-form facts reach the recap through
+  `CommentaryHistoryFacts.ForRecap`, called from `CommentaryService`'s recap
+  prompt, and the cars reach it through `CommentaryRaceFacts.ForRecap`.
+- **The race intro has the same history**, through
+  `CommentaryHistoryFacts.ForIntro` on every intro rather than only behind
+  the separate **Grid history** segment - with the night's key, so a club
+  running six heats with the same ten entries no longer hears the same debut
+  announced six times.
+- **The three silent segments** (step 3): **Form guide**, **Halfway
+  standings** and **This day at the club**, 10 Oct 2026. See
+  `website\KNOWN-ISSUES.md`.
+- **Grid history reconsidered** (step 4), now the intro carries the history
+  itself: 3 a meeting and 1 a class where it was 6 and 2, keyed on the night,
+  and described as "A debut or a rivalry the race intro did not get to."
+- **The two bookends**, which the plan did not know about: **Cold open** and
+  **Sign-off numbers** had a tick box and no reader either, and had been
+  silent in the field for every club for as long as they existed. 11 Oct
+  2026, `CommentaryReaders.NightAhead` and `NightDone`.
+- **The field** (Tier 1, 4). `CommentaryReaders.Field` / `FieldStrength`,
+  read out by `CommentaryRaceFacts.Entry` and `MainWinners` - the biggest
+  entry since the opener, how many of this grid have won a main this year.
+- **The venue** (Tier 1, 3). `CommentaryReaders.LayoutRecord` /
+  `VenueRecord` and `CommentaryRaceFacts.LayoutRecord` - the layout's
+  outright lap record, who holds it and when it was set.
+- **Tonight against tonight** - *part* of Tier 1, 7, and read the next
+  bullet before writing it down as that item. `CommentaryReaders.PaceTonight`
+  / `DriverTonight` and `CommentaryRaceFacts.Tonight` say what the evening
+  has done to one driver's pace: their middle flying lap in their first race
+  tonight against the same in their latest, through
+  `TonightAtTheTrack.Changes` so it can never disagree with the class-wide
+  evolution figure on the Next Up bar.
+- **The car** (Tier 1, 5). `CommentaryReaders.Cars` / `RaceCar` and
+  `CommentaryRaceFacts.CarRaced`, in the recap - so the main voice mentions a
+  car for the first time, where only the mechanic's interview ever had.
+- **The night's thread** (Tier 2, first bullet - "the cheapest thing on this
+  page with the largest effect"). `NightThread` with `ThreadAhead` at the
+  cold open, `ThreadSoFar` riding along in a race intro and `ThreadDone` at
+  the sign-off. The rule that makes it shippable is one sentence and is
+  stated at length on `NightThread`: **the shape is invented, the claim
+  inside it never is.** Nothing about a thread is remembered anywhere, so a
+  thread the night has contradicted cannot be offered - the reader sees the
+  heat that beat the subject before the next segment is weighed up, and the
+  builders turn the thread instead of repeating it.
+- **The throw to the commercial break and the come-back from it** - one
+  piece of the plan's broadcast furniture, and the one the club owner asked
+  for by name. `CommercialBreak` and
+  `RaceControlControl.HoldTheCommercialBreakAsync`: the sponsors have the
+  crowd's screen for exactly as long as the model takes to write the recap,
+  with an 8s floor and a 90s ceiling, and the recap comes back from it on the
+  sting.
+- **The championship conditional** - its own entry above, with the reasoning
+  it was asked with.
+
+**Not done, and these are the ones to be accurate about:**
+
+- **Stakes permutations** (Tier 1, 1 - the plan's richest seam). What exists
+  is where this grid's drivers stand in the table before the race
+  (`ChampionshipBefore`) and ONE named finishing order proved out
+  (`ChampionshipConditional`). The permutation walk over the REMAINING
+  rounds that the plan asked for is not built and cannot be: nothing in this
+  app knows how many rounds a season will run. A `Season` is a set of races
+  that have happened plus a rule that takes more as they are recorded, and
+  `CountBestRounds` is the drop cap, not the length. **Blocked on a planned
+  round count on a season** - the same thing that keeps "nobody can catch him
+  now" unsayable.
+- **Practice against now** (Tier 1, 7) - the item the plan actually wrote,
+  which is *"He was a second off this in practice."* That is NOT what was
+  built. `TonightAtTheTrack.Races` filters practice out by name
+  (`s.SessionType != RaceSessionType.Practice`), as does every reader in the
+  commentary layer, so the pace figure above compares a race with a race and
+  a club's practice times are never spoken about at all. Whoever picks this
+  up has a decision to make first rather than a reader to write: practice
+  has no result and no finishing order, which is why `RacesIn` excludes it
+  everywhere, and a pace fact that quietly starts counting it would also
+  make a practice session a race in whatever else reads the same helper.
+- **Season form beyond a streak** (Tier 1, 2). `FormLine` reads the last few
+  placings in the class out in order, most recent first, which is the form
+  GUIDE. The plan asked for the shape of the last month - "third podium in
+  four weeks, and the two he missed he did not finish" - and that needs dates
+  and the nights a driver was absent from. `DriverForm` carries neither; it
+  carries counts and a list of placings with no window on it.
+- **The long callback** (Tier 1, 6 - "the one that makes an evening feel like
+  a season"). Nothing recalls a specific past race. The closest the app gets
+  is `Rivalry`'s "They last met ..." tail from `HeadToHead.LastMetDescribed`
+  and the anniversary segment `ThisDayAtTheClub`. "The last time these two
+  shared a front row it ended in the fence" needs a narrative of one named
+  past race, and nothing builds one.
+- **The promise, paid off** (Tier 2). `SaidTonight` knows what has been said;
+  nothing anywhere knows what a segment UNDERTOOK. There is no promise
+  recorded and nothing collects one, so "watch the inside line at turn three"
+  in an intro is never picked up in a later recap.
+- **The two voices disagreeing** about something harmless and coming back to
+  it (Tier 2). `CommentaryExchange` splits a segment into two voices with a
+  beat and a bed nudge, and that is all: nothing tracks a running
+  disagreement across segments.
+- **Broadcast furniture beyond the break** (Tier 2, and step 6 of the order
+  of work). No time checks and no "if you have just joined us". The time
+  check is blocked by the same hole as everything else that wants a clock:
+  `director.Upcoming` is wired with `inAbout: null` because the app has no
+  "minutes until the next race" to hand over - see "Known open issues".
+- **The asides that are not about the race** (Tier 2, last bullet) - the
+  weather, the raffle, somebody's birthday. Nothing in the app holds a line
+  like that. Exactly the same shape as `NightAhead.ChampionshipNote`, which
+  is null for the same reason: it is the caller's own words and there is
+  nowhere to type them.
+
+**And the plan's three open questions are still open**, none of them answered
+by any of the above: how far Tier 2 goes (does an invented CLUB history
+belong, when it reads as Tier 3 to a driver who was there); whether F1 stat
+density is right for a club night at all, where the honest risk is that this
+lands as pompous rather than alive; and whether the local model is big enough
+now that a pack carries twelve facts rather than four.
+
+### Still not started
 
 - **A photo with a sponsor's read, on the Big Screen while the read goes
   out** (asked 10 Oct 2026). The **Sponsors** page already takes slides,

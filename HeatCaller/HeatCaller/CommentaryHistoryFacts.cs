@@ -928,8 +928,13 @@ public static class CommentaryHistoryFacts
     /// <summary>
     /// "two", "three" - small counts read as words in speech, and these
     /// lines are written to be spoken rather than shown.
+    ///
+    /// Internal rather than private since 11 Oct 2026: CommentaryRaceFacts
+    /// reads counts out too, and two spellings of the same count in one
+    /// broadcast - "six of the 8 drivers" - is the sort of difference
+    /// nobody notices in review and everybody hears on the night.
     /// </summary>
-    private static string Spell(int count) => count switch
+    internal static string Spell(int count) => count switch
     {
         2 => "two",
         3 => "three",

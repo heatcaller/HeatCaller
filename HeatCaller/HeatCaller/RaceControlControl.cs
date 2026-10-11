@@ -250,6 +250,27 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     public Func<SessionRecord, RoundDefinition?, IReadOnlyList<string>>? MechanicSetupFacts { get; set; }
 
+    /// <summary>
+    /// What the club's garage and its own saved results know about the
+    /// finishers' cars, for the recap (11 Oct 2026) - see
+    /// CommentaryReaders.Cars. Given the saved race and the round it was
+    /// run for (null for a freeform race). Worked out by the host, which
+    /// owns the Garage; asked on the UI thread. Null leaves the recap
+    /// saying nothing about a car, which is exactly how it read before
+    /// there was any of this.
+    ///
+    /// ITS OWN READER BESIDE <see cref="MechanicSetupFacts"/> rather than
+    /// folded into it. The mechanic's brief is the WINNER'S SETUP; this is
+    /// every named finisher's car - whose it is, and whether the driver has
+    /// moved class since the club last saw them. Different stores,
+    /// different questions, and deliberately never allowed to say the same
+    /// thing: the interview runs straight after the recap, so a recap that
+    /// also announced the setup change would be the two halves of one
+    /// broadcast repeating each other a minute apart. See
+    /// CommentaryRaceFacts.CarRaced for why the setup log is not in there.
+    /// </summary>
+    public Func<SessionRecord, RoundDefinition?, IReadOnlyList<RaceCar>>? RecapCarFacts { get; set; }
+
     /// <summary>Raised when the bar's button is offering a programme step rather than a start. The host runs it through the programme tab.</summary>
     internal event Action<ProgramStep>? RunProgramStepRequested;
 

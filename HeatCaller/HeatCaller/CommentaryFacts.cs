@@ -57,9 +57,38 @@ public sealed record FactBlock(string Key, string Text, string? Theme = null);
 /// cannot drift: two spellings of the same theme is a cooldown that never
 /// fires, and nothing would ever say so.
 ///
-/// Three of them, because three are used. A theme nothing tags is a theme
-/// nothing cools, so the venue, the car and the field go in here when the
-/// facts that are about them are written and not before.
+/// Five of them, because five are used. A theme nothing tags is a theme
+/// nothing cools, so one goes in here when the facts that are about it are
+/// written and not before - which is why the venue and the field arrived
+/// with CommentaryRaceFacts on 11 Oct 2026 and not with the first three.
+///
+/// AND WHY THERE IS STILL NO "car". The car facts in
+/// CommentaryRaceFacts are tagged <see cref="Driver"/>, because "the car
+/// Sam raced is the club's own" is a line about Sam: cooled under a car
+/// theme of its own it would collide with nothing, since nothing else in
+/// the app is tagged with one, and a theme that can only ever meet itself
+/// is a cooldown that never fires. Tagged on the driver it does the job
+/// the theme exists for - it stops the recap landing on somebody the
+/// night has just talked about.
+///
+/// AND WHY THE NIGHT'S THREAD HAS NO TAG OF ITS OWN EITHER (11 Oct 2026),
+/// which is the same reason read the other way round. A thread line -
+/// "Dave has won the last race of the night at each of the club's last
+/// three race days" - is tagged <see cref="Driver"/> on its subject,
+/// because the thing it has to cool is everything ELSE about that driver:
+/// the room has just been told about Dave's run, and the next segment
+/// landing on Dave's season as well is precisely the complaint this tag
+/// was added for. A "thread:" tag would collide with nothing, since
+/// nothing else in the app would ever carry one, and a theme that can only
+/// ever meet itself is a cooldown that never fires.
+///
+/// Note that only the MID-EVENING thread is tagged at all. At the cold
+/// open and the sign-off the thread is the segment's own subject, and the
+/// fact a segment is ABOUT is never held back for variety's sake - see
+/// FactBlock.Theme. So the same storyline carries a theme when it rides
+/// along in a race intro and none when it is the point of the segment,
+/// which is the distinction that class summary draws rather than an
+/// inconsistency. See CommentaryShowFacts.ThreadSoFar.
 /// </summary>
 public static class FactTheme
 {
@@ -79,6 +108,43 @@ public static class FactTheme
     /// <summary>The club's own past - a race day run on this date in another year.</summary>
     public static string PastDay(int yearsAgo) =>
         "pastday:" + yearsAgo.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// One track plan - the subject of a venue record.
+    ///
+    /// The LAYOUT and not the driver who holds the record, which is the
+    /// whole reason this tag exists. "The outright record on this layout,
+    /// set by Billy in March" is a line about the track; cooled under
+    /// Billy it would silence the venue for a night and a half because a
+    /// form guide happened to mention him, and would leave two lines about
+    /// the same track free to go out back to back. See
+    /// CommentaryRaceFacts.LayoutRecord.
+    ///
+    /// Trimmed and lower-cased because a layout is found by its NAME
+    /// everywhere in this app - the Race Control picker lists names, and
+    /// TrackLayoutStore.IsNameTaken compares them without regard to case -
+    /// so "Club Oval" and "club oval" are one track and must be one theme.
+    /// Two spellings of a theme is a cooldown that never fires, and
+    /// nothing would ever say so.
+    /// </summary>
+    public static string Venue(string? layoutName) =>
+        string.IsNullOrWhiteSpace(layoutName)
+            ? "venue"
+            : "venue:" + layoutName.Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// One class's field - the subject of how big an entry is and how many
+    /// of it have won.
+    ///
+    /// ToLowerInvariant rather than the current culture: on a Turkish PC
+    /// ToLower turns an I into a dotless one, so "Indoor" and "indoor"
+    /// would be two themes there and one everywhere else - a cooldown that
+    /// fires on the developer's machine and not in the clubhouse.
+    /// </summary>
+    public static string Field(string? className) =>
+        string.IsNullOrWhiteSpace(className)
+            ? "field"
+            : "field:" + className.Trim().ToLowerInvariant();
 }
 
 /// <summary>

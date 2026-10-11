@@ -124,6 +124,7 @@ A card with nothing to say is left out. With no card at all, the board stays up.
 - The grid roll call and sponsor slides come first: the cards wait while either is up.
 - The cards don't show in practice, Demo Mode or a warm-up.
 - The track map is hidden while the cards are up.
+- A [commercial break](#the-commercial-break-after-a-race) comes first too. While one is on, the sponsors have the screen and neither the cards nor the board are shown.
 
 "Tonight" runs from 6 a.m. to 6 a.m., so a club night that goes past midnight is one night. A race counts for its class through the round it was run for, so a freeform race with no round isn't on the cards.
 
@@ -164,6 +165,7 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 | **Cold open** | COLD OPEN |
 | **Race intros** | ROUND INTRO |
 | **Race recaps** | RACE RECAP |
+| **Badges earned** | BADGES EARNED |
 | **Sign-off numbers** | SIGN-OFF |
 | **Halfway standings** | STANDINGS SO FAR |
 | **Championship check** | CHAMPIONSHIP CHECK |
@@ -179,7 +181,9 @@ See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A
 
 Press <kbd>O</kbd> on the Big Screen to turn the band off, and <kbd>O</kbd> again to bring it back. It starts on, and unlike the track map's <kbd>M</kbd> the choice is remembered between sessions, so a club that doesn't want it presses the key once and not every race night. A club that never runs a show never sees the band at all.
 
-The band is only up while the show's own music is playing, so it needs **Play an opener and a music bed under the show** ticked on **Voice → Commentary**, with an opener or a bed chosen. See [The show's music](../announcer/commentary.md#the-shows-music).
+The band also reads **COMMERCIAL BREAK** for the length of a [commercial break](#the-commercial-break-after-a-race) after a race. That one isn't a segment - there's no opener, no bed and nobody talking over it - but it is what's on air, and a band that went dark for the forty seconds of adverts between the teaser and the recap would read as the broadcast having stopped rather than gone to a break. Where a show and a break are somehow both on, the show wins.
+
+Otherwise the band is only up while the show's own music is playing, so it needs **Play an opener and a music bed under the show** ticked on **Voice → Commentary**, with an opener or a bed chosen. See [The show's music](../announcer/commentary.md#the-shows-music).
 
 It works in every look, including a club's own, and with or without a club logo. Every open Big Screen shows it. If a show ends early or stops partway, the band comes down by itself within half a second, because the Big Screen keeps asking whether a show is on rather than waiting to be told.
 
@@ -330,7 +334,29 @@ These are on the **Rotation timing** card, under the slides.
 
 The Big Screen alternates: leaderboard, one slide, leaderboard, the next slide, and so on through the list. **Restore Defaults** sets the timing back to 60 seconds, 8 seconds and the recommended setting. **Each slide shows for (sec):** applies to pictures only — a video plays to its own end.
 
+During a [commercial break](#the-commercial-break-after-a-race) the alternating stops: the slides run one straight into the next and the leaderboard doesn't get a turn until the break is over. **Each slide shows for (sec):** still sets how long each picture holds.
+
 Leave **Never interrupt the leaderboard while a race is actually running (recommended)** on unless you have a good reason: mid-race is exactly when people want the live standings.
+
+### The commercial break after a race
+
+After the checkered flag the announcer says "stand by for the recap" and then has to wait while the model writes it - half a minute is normal, and a slow night is longer. Your slides can fill that wait as a commercial break: they take the crowd's screen, one slide straight into the next, instead of taking a turn each with the standings.
+
+Tick **Play the sponsors as a commercial break while the recap is being written** under **Broadcast** on **Voice → Commentary**. It's off until you do, and it needs this page's **Show sponsor slides on the Big Screen** ticked with at least one slide to show, and a Big Screen open. Without those, nothing changes.
+
+What the Big Screen does:
+
+- The sponsors take the screen **the moment the break starts**, rather than waiting out whatever is left of **Leaderboard shows for (sec):** — which by default is up to a minute, and would be the whole of the wait the break exists to fill.
+- Slides follow one another at **Each slide shows for (sec):**, with no leaderboard between them.
+- Once the rotation has been round **every slide the club has**, it holds on the last one and the break ends rather than playing them again. A club with one slide gets that slide for the whole break. (A video has no last frame worth holding, so there the board comes back.)
+- When the break ends the board comes straight back, before the recap's opener, so a slide is never still up underneath the broadcast. A **video** is the one exception: it keeps its slot and finishes, because cutting a sponsor's spot off part way is worse for them than letting it run under the recap's first line.
+- The band at the foot of the window reads **COMMERCIAL BREAK** while it runs.
+
+The break is never shorter than **8 seconds** or longer than **90**, and it ends at once when the next race is called to the grid. A **grid roll call** takes priority: while one is up this window can't carry a break at all.
+
+Every open Big Screen follows the break, and each asks twice a second whether one is on rather than waiting to be told — so a break that ends, one abandoned because the next race was called, and one that started while the window was being built all come to the same place within half a second.
+
+The timings and the rest of the after-race running order are on the Commentary page. See [The commercial break](../announcer/commentary.md#the-commercial-break).
 
 ### Sponsor reads
 
@@ -404,6 +430,9 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 | One slide never shows, and its preview on the **Sponsors** page is blank | The image is missing, unreadable, or over the size limits (50 MB, 20000 pixels across or down, 40 million pixels in all). | Remove it, save a smaller copy of the picture, and add that. |
 | **Add Video** says video is unavailable | The video player's files are missing from beside `HeatCaller.exe`. | Reinstall HeatCaller. Sponsor images keep working in the meantime. |
 | A video slide is skipped, pictures are fine | VLC couldn't open that particular file. | Re-export it as an MP4 (H.264) from whatever made it, and add that. |
+| The sponsors never take over after a race | **Play the sponsors as a commercial break while the recap is being written** is off on **Voice → Commentary**, or this page's slides are off, or there are no slides, or a grid roll call is up. | Check both pages. The console says "No commercial break - no Big Screen is up with the club's sponsor slides switched on." |
+| The sponsors come back to the board before the recap arrives | The break hit its 90-second ceiling, or it has been round every slide the club has. | Nothing to fix. The recap still goes out when it's ready. Add more slides if you want the break to fill a longer wait. |
+| A sponsor slide is still up while the recap is talking | A video keeps its slot rather than being cut off part way. | Deliberate. Pictures are taken down the moment the break ends. |
 | The music keeps playing over a sponsor video | **Play a sponsor video's own sound** is off, so there's nothing to silence, or **Silence the music and the crowd while it plays** is off. | Check both on the **Sponsors** page. |
 | A sponsor video is silent on a phone but has sound on the Big Screen | Deliberate. Phone browsers won't autoplay sound. | Nothing to fix. |
 | A sponsor is never read out | No copy in **Their read:**, both **Read at the end of an ad break...** and **Read in the gap between races...** unticked, **In tonight's rotation** unticked, or **Commentary** isn't on. | Check the **Sponsor reads** card on the **Sponsors** page, and see [Commentary](../announcer/commentary.md). |
