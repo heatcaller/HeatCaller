@@ -167,6 +167,127 @@ const SIGNUP_BOX = "signupbox";
  */
 const SIGNUP_MAX_BODY = 4 * 1024;
 
+/**
+ * Shout-outs and dedications the club's own page takes in, for the
+ * announcer - the room's way into the broadcast from outside the room.
+ *
+ * WHY THE RELAY TAKES THESE AT ALL
+ *
+ * HeatCaller's own web server already does, on the club Wi-Fi, and that
+ * covers everybody standing in the building. This covers the ones who are
+ * not: a driver's family at home, somebody who could not make it, the
+ * member who wants their mate's first race mentioned. That is a different
+ * and larger group of people, and it is the half of the feature a club
+ * would notice.
+ *
+ * EVERY ONE OF THEM IS UNAPPROVED. The relay holds a sentence until the
+ * laptop collects it, and the laptop files it as something the race
+ * director has to tick off before the announcer will say it (ClubNotes).
+ * Nothing on this path can reach a PA on its own, and nothing about it is
+ * trusted: not the message, not the name, not the sender.
+ */
+const NOTES_CHANNEL = "notes";
+
+/** The flag the laptop sets to say its club wants these at all - see notesOpenFor. */
+const NOTES_OPEN_DOC = "notesopen";
+
+/**
+ * A note's whole body, in bytes.
+ *
+ * One kilobyte. The message itself is capped far below this
+ * (NOTE_MAX_CHARS) and the only other field is a name, so anything near
+ * this is not a shout-out.
+ */
+const NOTES_MAX_BODY = 1024;
+
+/** The ids of collected notes, in a batch from the laptop. Room for the whole held set and no more. */
+const NOTES_COLLECT_MAX_BODY = 8 * 1024;
+
+/**
+ * The longest a message may be, matching ClubNotes.MostChars on the
+ * laptop.
+ *
+ * The two are deliberately the same number written in two places, because
+ * the alternative is the relay accepting something the laptop will then
+ * silently drop - and the person who typed it being told it was sent. If
+ * one moves, the other has to.
+ */
+const NOTE_MAX_CHARS = 200;
+
+/** And the longest a sender's name may be - ClubNote.From's own 40. */
+const NOTE_MAX_NAME = 40;
+
+/**
+ * The most notes the relay will hold for one club at a time.
+ *
+ * Forty. The laptop empties this every time it polls, so the only way to
+ * reach it is a club with nobody running the app and somebody sending
+ * messages anyway - and then forty is plenty to look at when they next
+ * open it, and a ceiling on what a stranger can leave in a club's folder.
+ */
+const NOTES_HELD_MOST = 40;
+
+/**
+ * THE ROOM'S VOTE (12 Oct 2026) - who the room reckons wins the next race,
+ * from anybody with the club's link rather than only from the hall.
+ *
+ * WHY THIS ROUTE IS CHEAPER TO OWN THAN THE SHOUT-OUTS ABOVE
+ *
+ * A note is a stranger's WORDS, which is why that path holds everything
+ * unapproved until a race director reads it. A vote is a tap on one of the
+ * names the LAPTOP put on the ballot: this relay will not store a driver
+ * id that is not on the published ballot, so nothing arriving here can
+ * become a word the announcer says. The worst anybody with the link can
+ * achieve is being wrong about who wins.
+ *
+ * WHY THE VOTES ARE KEYED BY VOTER AND NOT BY ARRIVAL
+ *
+ * One vote per person, changeable. The item id is a hash of the ballot's
+ * own salt and the sender's address, so a second vote REPLACES the first -
+ * the same rule the laptop's own store has (RoomVote holds votes per
+ * voter). Counting arrivals instead would make the tally a measure of who
+ * pressed hardest.
+ *
+ * The salt is minted per ballot and never leaves the relay, so the ids say
+ * nothing: they cannot be correlated between two races or two clubs, and
+ * nobody can test whether a given address has voted.
+ */
+const VOTE_CHANNEL = "votes";
+
+/** The ballot the laptop publishes: whether the club wants this, whether a vote is running, and the grid. */
+const VOTE_BALLOT_DOC = "voteballot";
+
+/**
+ * The ballot's whole body, in bytes.
+ *
+ * Four kilobytes. Sixteen drivers at sixty characters is under a
+ * kilobyte, so anything near this is not a grid.
+ */
+const VOTE_BALLOT_MAX_BODY = 4 * 1024;
+
+/** A vote's whole body: one driver id. */
+const VOTE_SEND_MAX_BODY = 512;
+
+/**
+ * The most drivers one ballot may carry, matching RoomVote.MostOptions on
+ * the laptop - and the same deliberate duplication the note length has:
+ * if one moves, the other has to.
+ */
+const VOTE_MOST_DRIVERS = 16;
+
+/** The longest a driver's name or id may be - RoomVote.MostChars' own sixty. */
+const VOTE_MAX_CHARS = 60;
+
+/**
+ * The most votes the relay will hold for one race, matching
+ * RoomVote.MostVoters.
+ *
+ * Nobody reaches it by voting. It is a ceiling on what the relay keeps in
+ * a club's folder, and the laptop reads the whole set each poll rather
+ * than draining it - see readRoomVotes.
+ */
+const VOTES_HELD_MOST = 500;
+
 /** The laptop's signup/answer body: a hash, a state, a line for the phone and at most one driver's name and number. */
 const SIGNUP_ANSWER_MAX_BODY = 8 * 1024;
 
@@ -741,6 +862,18 @@ export class Relay {
   private readonly signupPinGuard: PinGuard;
   /** signin, status and submit together, per club and address. */
   private readonly signupTraffic: Limiter;
+
+  /**
+   * Shout-outs from one address, per club: four in five minutes.
+   *
+   * Far tighter than sign-up's traffic limiter beside it, and for a
+   * different reason. A sign-up is somebody filling a form in and
+   * correcting it; a shout-out is one sentence somebody means to send
+   * once. There is no honest reason to send a fifth, so the limit is set
+   * where a person will never meet it and a script meets it immediately.
+   */
+  private readonly notesTraffic: Limiter;
+  private readonly voteTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
@@ -900,6 +1033,12 @@ export class Relay {
     // a club night's newcomers may all be on the venue's one address - so
     // more room than the manager's, still a wall for a script.
     this.signupTraffic = new Limiter(300, 60 * 1000, () => this.now().getTime());
+    this.notesTraffic = new Limiter(4, 5 * 60 * 1000, () => this.now().getTime());
+
+    // Looser than the notes limiter, and matching the laptop's own Wi-Fi
+    // route: changing your mind is a legitimate thing to do here, where
+    // sending a second dedication is not.
+    this.voteTraffic = new Limiter(6, 5 * 60 * 1000, () => this.now().getTime());
 
     // Prepare Lines on the laptop walks a whole announcer style in one go -
     // a hundred or so lines, two at a time - and a club is entitled to do
@@ -1828,6 +1967,56 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "signup" && rest[1] === "answer") {
       await this.answerSignup(request, response, club);
+      return;
+    }
+
+    // Shout-outs for the announcer. Three routes and the same shape as
+    // sign-up above: the public one takes a sentence in, and the laptop
+    // collects and clears with the publish token it already has. The
+    // fourth says whether the club wants them at all.
+    if (method === "POST" && rest.length === 2 && rest[0] === "notes" && rest[1] === "send") {
+      await this.sendClubNote(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "notes" && rest[1] === "inbox") {
+      await this.readClubNotes(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "notes" && rest[1] === "collected") {
+      await this.clearClubNotes(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "notes" && rest[1] === "open") {
+      await this.setClubNotesOpen(request, response, club);
+      return;
+    }
+
+    // The room's vote. Same shape again: the laptop publishes the ballot
+    // and reads the votes with the publish token it already has, and the
+    // two public routes let anybody with the link see the grid and pick
+    // from it. There is no "collected" route - the laptop re-reads the
+    // whole set each poll, because a vote can be CHANGED and draining
+    // them would lose the change. See readRoomVotes.
+    if (method === "POST" && rest.length === 2 && rest[0] === "vote" && rest[1] === "open") {
+      await this.setRoomVoteBallot(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "vote" && rest[1] === "ballot") {
+      await this.roomVoteBallot(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "vote" && rest[1] === "send") {
+      await this.sendRoomVote(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "vote" && rest[1] === "inbox") {
+      await this.readRoomVotes(request, response, club);
       return;
     }
 
@@ -4821,6 +5010,560 @@ export class Relay {
    * every time - nothing is taken off by collecting, only by answering, so
    * a laptop that closes half way loses nothing (RelaySignupDesk).
    */
+  /**
+   * Whether this club wants shout-outs from its page at all.
+   *
+   * SET BY THE LAPTOP, not inferred. The alternative - take them and let
+   * the laptop decide later - means holding strangers' words in the folder
+   * of a club that never asked for them, which is the one thing a store
+   * holding other people's text must not do.
+   *
+   * Absent means no. A club that has never run a version of HeatCaller
+   * that knows about this has not switched it on.
+   */
+  private async notesOpenFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, NOTES_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["open"] === true;
+  }
+
+  /**
+   * The laptop saying whether its club takes shout-outs - sent when the
+   * setting changes and on every start, so a club that turns it off is
+   * closed on the relay too rather than merely ignoring what arrives.
+   */
+  private async setClubNotesOpen(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const open = body["open"] === true;
+
+    await this.store.putSnapshot(club, NOTES_OPEN_DOC, {
+      seq: this.now().getTime(),
+      publishedAt: this.now().toISOString(),
+      body: { open },
+    });
+
+    // CLOSING CLEARS WHAT IS HELD. A club switching this off has decided
+    // it does not want other people's messages, and leaving a pile of
+    // them in its folder would be keeping exactly what it just declined.
+    if (!open) {
+      await this.withLock(club, async () => {
+        for (const item of await this.store.listItems(club, NOTES_CHANNEL)) {
+          await this.store.deleteItem(club, NOTES_CHANNEL, item.id);
+        }
+      });
+    }
+
+    sendJson(response, 200, { ok: true, open });
+  }
+
+  /**
+   * A shout-out from anybody with the club's link.
+   *
+   * PUBLIC, and the only thing it can achieve is a line in a list that the
+   * race director reads. See NOTES_CHANNEL for why that is enough to make
+   * this route safe to have.
+   */
+  private async sendClubNote(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.notesTraffic.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "You have sent a few already - give the announcer a chance." });
+      return;
+    }
+
+    this.notesTraffic.hit(who);
+
+    if (!(await this.notesOpenFor(club))) {
+      // 404 rather than 403, as the laptop's own route does: a club that
+      // has this switched off has no such page, and saying "switched off"
+      // tells a stranger there is a thing to switch on.
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That message could not be read." });
+      return;
+    }
+
+    const message = typeof body["m"] === "string" ? body["m"].trim() : "";
+    const from = typeof body["n"] === "string" ? body["n"].trim() : "";
+
+    if (message.length === 0) {
+      sendJson(response, 400, { ok: false, error: "There is nothing in it." });
+      return;
+    }
+
+    if (message.length > NOTE_MAX_CHARS) {
+      sendJson(response, 400, {
+        ok: false,
+        error: `That is a bit long - keep it under ${NOTE_MAX_CHARS} characters so the announcer can work it into a sentence.`,
+      });
+      return;
+    }
+
+    const outcome = await this.withLock(club, async () => {
+      // Read again inside the lock: the club may have closed notes, or the
+      // held set may have filled, while this request waited for it.
+      if (!(await this.notesOpenFor(club))) {
+        return "closed" as const;
+      }
+
+      if ((await this.store.itemSizes(club, NOTES_CHANNEL)).length >= NOTES_HELD_MOST) {
+        return "full" as const;
+      }
+
+      // The id is random and says nothing. It is not a hash of the
+      // message, which would let anybody test whether a given sentence had
+      // been sent, and not a counter, which would leak how many had.
+      const id = randomBytes(12).toString("hex");
+
+      await this.store.putItem(club, NOTES_CHANNEL, id, {
+        seq: this.now().getTime(),
+        publishedAt: this.now().toISOString(),
+        body: {
+          m: message,
+          ...(from.length > 0 ? { n: from.slice(0, NOTE_MAX_NAME) } : {}),
+        },
+      });
+
+      return "sent" as const;
+    });
+
+    if (outcome === "closed") {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (outcome === "full") {
+      sendJson(response, 429, {
+        ok: false,
+        error: "The announcer has plenty to get through already tonight. Try again in a while.",
+      });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
+  /**
+   * What the laptop collects: everything held, oldest first.
+   *
+   * NOT DELETED HERE. The laptop confirms through notes/collected once the
+   * notes are on its own disk, so a poll whose answer never arrived does
+   * not lose somebody's message - the same at-least-once shape every other
+   * inbox on this relay has, and duplicates are the laptop's problem to
+   * drop (ClubNotes refuses a note it already holds).
+   */
+  private async readClubNotes(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const held = await this.store.listItems(club, NOTES_CHANNEL);
+
+    const items = held
+      .filter((item) => isPlainObject(item.doc.body))
+      .slice()
+      .sort((a, b) => a.doc.seq - b.doc.seq)
+      .map((item) => {
+        const body = item.doc.body as Record<string, unknown>;
+
+        return {
+          id: item.id,
+          m: typeof body["m"] === "string" ? body["m"] : "",
+          n: typeof body["n"] === "string" ? body["n"] : "",
+          at: item.doc.publishedAt,
+        };
+      })
+      .filter((item) => item.m.length > 0);
+
+    sendJson(response, 200, { ok: true, items });
+  }
+
+  /**
+   * The laptop saying it has them, so the relay can let them go.
+   *
+   * An id it is not holding is not an error: a poll answered twice, or a
+   * club closing notes between the poll and the confirmation, both land
+   * here with ids that have already gone.
+   */
+  private async clearClubNotes(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_COLLECT_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const asked = Array.isArray(body["ids"]) ? (body["ids"] as unknown[]) : [];
+
+    // Held to what the relay would ever be holding, so a body of ten
+    // thousand ids is not ten thousand store calls.
+    const ids = asked
+      .filter((id): id is string => typeof id === "string" && isValidItemId(id))
+      .slice(0, NOTES_HELD_MOST);
+
+    let gone = 0;
+
+    await this.withLock(club, async () => {
+      for (const id of ids) {
+        await this.store.deleteItem(club, NOTES_CHANNEL, id);
+        gone++;
+      }
+    });
+
+    sendJson(response, 200, { ok: true, cleared: gone });
+  }
+
+  /**
+   * The ballot as the laptop last published it, or undefined when this
+   * club has never switched the vote on.
+   *
+   * Absent means no, exactly as notesOpenFor's does: a club that has never
+   * run a version of HeatCaller that knows about this has not asked for
+   * it.
+   */
+  private async roomBallotFor(club: string): Promise<
+    { open: boolean; race: string; drivers: { id: string; name: string }[]; salt: string } | undefined
+  > {
+    const body = (await this.store.getSnapshot(club, VOTE_BALLOT_DOC))?.body;
+
+    if (!isPlainObject(body) || body["enabled"] !== true) {
+      return undefined;
+    }
+
+    const drivers = Array.isArray(body["drivers"]) ? (body["drivers"] as unknown[]) : [];
+
+    return {
+      open: body["open"] === true,
+      race: typeof body["race"] === "string" ? body["race"] : "",
+      salt: typeof body["salt"] === "string" ? body["salt"] : "",
+      drivers: drivers
+        .filter(isPlainObject)
+        .map((one) => ({
+          id: typeof one["id"] === "string" ? one["id"] : "",
+          name: typeof one["name"] === "string" ? one["name"] : "",
+        }))
+        .filter((one) => one.id.length > 0 && one.name.length > 0),
+    };
+  }
+
+  /**
+   * The laptop publishing the ballot: whether its club wants this at all,
+   * whether a vote is running, and the grid to pick from.
+   *
+   * Sent when the race director opens or closes a vote, when the setting
+   * changes, and on every start - so a club that turns it off is CLOSED on
+   * the relay rather than merely ignoring what arrives.
+   *
+   * THE SALT IS MINTED HERE AND NEVER SENT BACK. It keys the votes by
+   * voter without the ids saying who anybody is; a new one per ballot
+   * means two races cannot be correlated. See VOTE_CHANNEL.
+   */
+  private async setRoomVoteBallot(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, VOTE_BALLOT_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const enabled = body["enabled"] === true;
+    const open = enabled && body["open"] === true;
+    const race = typeof body["race"] === "string" ? body["race"].trim().slice(0, VOTE_MAX_CHARS) : "";
+
+    const offered = Array.isArray(body["drivers"]) ? (body["drivers"] as unknown[]) : [];
+
+    const seen = new Set<string>();
+    const drivers: { id: string; name: string }[] = [];
+
+    for (const one of offered) {
+      if (!isPlainObject(one) || drivers.length >= VOTE_MOST_DRIVERS) {
+        continue;
+      }
+
+      const id = typeof one["id"] === "string" ? one["id"].trim().slice(0, VOTE_MAX_CHARS) : "";
+      const name = typeof one["name"] === "string" ? one["name"].trim().slice(0, VOTE_MAX_CHARS) : "";
+
+      // An id that storage would refuse is dropped here rather than at the
+      // moment somebody votes for it, when the answer would be a 400 that
+      // looked like the voter's fault.
+      if (id.length === 0 || name.length === 0 || !isValidItemId(id) || seen.has(id)) {
+        continue;
+      }
+
+      seen.add(id);
+      drivers.push({ id, name });
+    }
+
+    // A NEW BALLOT IS A NEW RACE, so the votes for the one before it go.
+    // Without this, opening the B-main's vote would start it with the
+    // A-main's votes already in it.
+    const previous = (await this.store.getSnapshot(club, VOTE_BALLOT_DOC))?.body;
+    const sameRace =
+      isPlainObject(previous) && typeof previous["race"] === "string" && previous["race"] === race && race.length > 0;
+
+    const salt =
+      sameRace && typeof previous["salt"] === "string" && previous["salt"].length > 0
+        ? previous["salt"]
+        : randomBytes(16).toString("hex");
+
+    await this.store.putSnapshot(club, VOTE_BALLOT_DOC, {
+      seq: this.now().getTime(),
+      publishedAt: this.now().toISOString(),
+      body: { enabled, open, race, drivers, salt },
+    });
+
+    // CLEARED when the club switches the feature off, and when the ballot
+    // moves to a different race. Not when a vote merely closes: the
+    // laptop reads the votes AFTER the race to work out its verdict, and
+    // throwing them away at the flag would be throwing away the answer.
+    if (!enabled || !sameRace) {
+      await this.withLock(club, async () => {
+        for (const item of await this.store.listItems(club, VOTE_CHANNEL)) {
+          await this.store.deleteItem(club, VOTE_CHANNEL, item.id);
+        }
+      });
+    }
+
+    sendJson(response, 200, { ok: true, enabled, open, drivers: drivers.length });
+  }
+
+  /**
+   * The grid to pick from, for anybody with the club's link.
+   *
+   * NO TALLY GOES OUT, and that is deliberate - the same rule the laptop's
+   * own page has. A room that can see what it is voting for is a
+   * bandwagon rather than a prediction, and the announcer's line is only
+   * worth anything if each vote was that person's own guess.
+   */
+  private async roomVoteBallot(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const ballot = await this.roomBallotFor(club);
+
+    if (ballot === undefined) {
+      // 404 rather than 403, as every other switched-off route here does:
+      // a club that has not asked for this has no such page.
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    sendJson(response, 200, {
+      ok: true,
+      open: ballot.open,
+      race: ballot.race,
+      drivers: ballot.drivers,
+    });
+  }
+
+  /**
+   * A vote from anybody with the club's link.
+   *
+   * PUBLIC, and the only thing it can achieve is one of the laptop's own
+   * driver ids landing in a list the laptop then counts. See VOTE_CHANNEL
+   * for why that makes this route safe to have without an approval gate.
+   */
+  private async sendRoomVote(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.voteTraffic.blocked(who)) {
+      sendJson(response, 429, {
+        ok: false,
+        error: "You have changed your mind a few times already - that one stands.",
+      });
+      return;
+    }
+
+    this.voteTraffic.hit(who);
+
+    const ballot = await this.roomBallotFor(club);
+
+    if (ballot === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (!ballot.open) {
+      sendJson(response, 409, { ok: false, error: "Voting on this one has closed." });
+      return;
+    }
+
+    const body = await readBody(request, response, VOTE_SEND_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That vote could not be read." });
+      return;
+    }
+
+    const picked = typeof body["d"] === "string" ? body["d"].trim() : "";
+
+    if (picked.length === 0) {
+      sendJson(response, 400, { ok: false, error: "There is nobody in it." });
+      return;
+    }
+
+    // ONLY A NAME THE LAPTOP PUT ON THE BALLOT. This is what keeps the
+    // channel to a set of the laptop's own ids rather than a place to
+    // write arbitrary strings into a club's folder.
+    if (!ballot.drivers.some((one) => one.id === picked)) {
+      sendJson(response, 400, { ok: false, error: "That driver is not on the grid for this race." });
+      return;
+    }
+
+    const voter = this.roomVoterKey(ballot.salt, request);
+
+    const outcome = await this.withLock(club, async () => {
+      // Read again inside the lock: the club may have closed the vote, or
+      // moved the ballot on, while this request waited for it.
+      const now = await this.roomBallotFor(club);
+
+      if (now === undefined || !now.open || !now.drivers.some((one) => one.id === picked)) {
+        return "closed" as const;
+      }
+
+      const held = await this.store.itemSizes(club, VOTE_CHANNEL);
+
+      // The ceiling only bites on a voter who is not already in it - a
+      // vote being CHANGED must never be turned away for a limit about
+      // how many people have voted.
+      if (held.length >= VOTES_HELD_MOST && !held.some((one) => one.id === voter)) {
+        return "full" as const;
+      }
+
+      await this.store.putItem(club, VOTE_CHANNEL, voter, {
+        seq: this.now().getTime(),
+        publishedAt: this.now().toISOString(),
+        body: { d: picked },
+      });
+
+      return "sent" as const;
+    });
+
+    if (outcome === "closed") {
+      sendJson(response, 409, { ok: false, error: "Voting on this one has closed." });
+      return;
+    }
+
+    if (outcome === "full") {
+      sendJson(response, 429, { ok: false, error: "That is as many votes as this one can take." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
+  /**
+   * Who a vote belongs to, without storing anything about them.
+   *
+   * The ballot's salt and the sender's address, hashed. The salt never
+   * leaves this relay and is minted per race, so the id cannot be
+   * correlated between two races or two clubs and nobody can test whether
+   * a given address has voted. See VOTE_CHANNEL.
+   */
+  private roomVoterKey(salt: string, request: IncomingMessage): string {
+    return createHash("sha256")
+      .update(`${salt}|${clientAddress(request)}`)
+      .digest("hex")
+      .slice(0, 32);
+  }
+
+  /**
+   * What the laptop collects: every vote held, by voter.
+   *
+   * NOT DRAINED, and this is the one place the vote's shape differs from
+   * the shout-outs'. A note is said once and collecting it is the end of
+   * it; a vote can be CHANGED after the laptop has already seen it, so
+   * draining the set would lose the change and leave the laptop counting
+   * a pick its owner had replaced. The laptop re-applies the whole set
+   * each poll instead, which is free because RoomVote.Cast holds one vote
+   * per voter and replacing a pick with the same pick does nothing.
+   *
+   * The set is cleared when the ballot moves to another race or the club
+   * switches the feature off - see setRoomVoteBallot.
+   */
+  private async readRoomVotes(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const held = await this.store.listItems(club, VOTE_CHANNEL);
+
+    const items = held
+      .filter((item) => isPlainObject(item.doc.body))
+      .slice()
+      .sort((a, b) => a.doc.seq - b.doc.seq)
+      .map((item) => ({
+        v: item.id,
+        d: typeof (item.doc.body as Record<string, unknown>)["d"] === "string"
+          ? ((item.doc.body as Record<string, unknown>)["d"] as string)
+          : "",
+      }))
+      .filter((item) => item.d.length > 0)
+      .slice(0, VOTES_HELD_MOST);
+
+    sendJson(response, 200, { ok: true, items });
+  }
+
   private async readSignupInbox(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
     const who = this.authorise(request, club);
 

@@ -47,6 +47,8 @@ public enum SegmentKind
     Honours,
     MechanicInterview,
     GridHistory,
+    ClubAside,
+    RoomVerdict,
 
     ColdOpen,
     ThisDayInHistory,
@@ -199,7 +201,17 @@ public sealed class CommentaryBudget
     /// </summary>
     public const double OpeningFloat = 0.15;
 
-    /// <summary>How many spoken segments a ten-minute stretch may hold, whatever the budget allows.</summary>
+    /// <summary>
+    /// How many spoken segments a ten-minute stretch may hold, whatever the
+    /// budget allows - for a race whose size is not known.
+    ///
+    /// STILL SIX, and still the number for a club with no programme. What
+    /// changed on 11 Oct 2026 is that a race the programme CAN size moves
+    /// off it: quieter in practice and the heats, half again in the top
+    /// main. See <see cref="RaceStature"/>, which sets out why a cap that
+    /// never moves is what made every race of an evening sound alike, and
+    /// <see cref="Stature"/> for how this one is told.
+    /// </summary>
     public const int AirtimeCap = 6;
 
     /// <summary>What the relay allows per club at once (MAX_IN_FLIGHT_PER_CLUB on its side).</summary>
@@ -310,6 +322,33 @@ public sealed class CommentaryBudget
             // segment that still has something true and unsaid to offer is
             // not worth breaking three other files to remove.
             new(SegmentKind.GridHistory,       SegmentTier.Colour, 1, true, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(90), 3, 1, "Grid history", "A debut or a rivalry the race intro did not get to.", true),
+
+            // THE ONE SEGMENT WHOSE SUBJECT IS THE ROOM (12 Oct 2026).
+            //
+            // MaxPerClass is int.MaxValue and not 1, which every other
+            // Colour row sets: a note is not ABOUT a class, and six
+            // dedications on a night when a club ran one class would
+            // otherwise become one. Six per meeting is the real cap, and
+            // it is high because the club decides how many notes there
+            // are by typing them - the budget's job here is only to stop
+            // an evening becoming a message service.
+            //
+            // NOT a two-hander. A dedication is sincere; two commentators
+            // bantering over "Jack's first race since his operation" is
+            // the one place this app's second voice would be actively
+            // unwelcome.
+            new(SegmentKind.ClubAside,         SegmentTier.Colour, 1, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(45), 6, int.MaxValue, "Club notes", "A dedication, a birthday, the raffle - whatever the night has that the timing cannot know."),
+
+            // A TWO-HANDER, and the only Colour segment that is. The
+            // room being wrong is something for two commentators to enjoy
+            // at each other - which is the opposite of the club aside
+            // above, where a second voice would be unwelcome.
+            //
+            // ONCE PER CLASS, because the vote is opened per race and a
+            // club that voted on every heat would turn the best line of
+            // the night into a running feature. Six a meeting is a cap on
+            // a club that ran six classes, not a target.
+            new(SegmentKind.RoomVerdict,       SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(30), 6, 1, "The room's verdict", "What the room voted would happen, held up against what did.", true),
 
             // --- Flourish: the furniture ---
             new(SegmentKind.ColdOpen,            SegmentTier.Flourish, 1, true, TimeSpan.FromMinutes(5), TimeSpan.Zero,             1, 1, "Cold open", "Sets the evening out before the first race.", true),
@@ -588,6 +627,16 @@ public sealed class CommentaryBudget
         _dayId = dayId ?? string.Empty;
         _roundsRun = 0;
         _roundsTotal = 0;
+
+        // A fresh night knows nothing about what is on it yet. Without
+        // this, a new day opened straight after an A-main would pace its
+        // first practice session as a final.
+        Stature = RaceStature.Unknown;
+
+        // THE DIAL IS NOT RESET. It is the club's own setting rather than
+        // anything about tonight, and a new day opened mid-evening must not
+        // quietly put the announcer back to Standard - see ShowChatter.
+
         _spentTonight = 0;
         _entitledHighWater = 0;
         _lastSpoken = null;
@@ -614,6 +663,76 @@ public sealed class CommentaryBudget
     /// several it does not.
     /// </summary>
     private bool _insideAProgramme;
+
+    /// <summary>
+    /// How big the race in front of the announcer is - see
+    /// <see cref="RaceStature"/>. <see cref="RaceStature.Unknown"/> until
+    /// something says otherwise, which is the flat cap this has always had.
+    ///
+    /// A PROPERTY SET ON A TICK, not a constructor argument and not an
+    /// event. The round under the announcer changes while the app runs -
+    /// a club picks a different one, seeds the mains mid-evening, drops
+    /// back to a freeform race - and a value taken once at construction
+    /// would have the budget pacing the A-main as whatever was selected
+    /// when the announcer screen first opened. Read on every judgement, so
+    /// there is nothing in here that can go stale.
+    ///
+    /// Volatile rather than locked: it is a small readonly struct written
+    /// from the UI thread and read from whichever thread is judging, and
+    /// nothing downstream cares whether it sees this race's value or the
+    /// last one's for a single ask. A lock here would be a lock taken on
+    /// every segment of every race for a value that cannot tear.
+    /// </summary>
+    public RaceStature Stature
+    {
+        get => new(_statureBilling, _statureLast);
+        set
+        {
+            _statureBilling = value.Billing;
+            _statureLast = value.LastOfTheNight;
+        }
+    }
+
+    /// <summary>
+    /// How much the club wants said - the key of one of
+    /// <see cref="ShowChatter.All"/>. Blank is Standard, which is the
+    /// pacing exactly as it shipped.
+    ///
+    /// SEPARATE FROM <see cref="Stature"/> ON PURPOSE (12 Oct 2026). The
+    /// stature is a fact about the race in front of the announcer, read off
+    /// the club's programme. This is a matter of taste, typed on the
+    /// Commentary page. Folding the two together would mean a club turning
+    /// the dial up had to be modelled as every race being bigger than it
+    /// is, and then the log could not say which of the two had moved.
+    ///
+    /// A string rather than the enum, and volatile for the same reason the
+    /// stature's halves are: set from the UI thread, read from whichever
+    /// thread is judging, and a reference assignment cannot tear. An
+    /// unknown key reads as Standard, so a settings file from a later
+    /// build cannot pick a volume nobody chose.
+    /// </summary>
+    public string Chatter
+    {
+        get => _chatter;
+        set => _chatter = value ?? string.Empty;
+    }
+
+    private volatile string _chatter = string.Empty;
+
+    /// <summary>
+    /// The two halves of <see cref="Stature"/>, held apart.
+    ///
+    /// A struct cannot be volatile in C#, and these two can: an enum over
+    /// int, and a bool. Holding the parts rather than the whole is what
+    /// makes the property above lock-free. The worst a reader can see is
+    /// one half of a change that landed between its two reads - a cap one
+    /// judgement out of date, on a value that moves once per race - where
+    /// a lock would be taken for every segment of every race all evening.
+    /// </summary>
+    private volatile RaceBilling _statureBilling = RaceBilling.Unknown;
+
+    /// <inheritdoc cref="_statureBilling"/>
+    private volatile bool _statureLast;
 
     /// <summary>
     /// Asks as part of a programme rather than as filler between races,
@@ -825,9 +944,31 @@ public sealed class CommentaryBudget
             return No($"only {(now - last).TotalSeconds:0}s since the last line");
         }
 
-        if (spec.Speaks && _spokenAt.Count >= AirtimeCap)
+        // THE CAP MOVES WITH THE RACE (11 Oct 2026). Quieter in practice
+        // and the heats, half again in the top main - see RaceStature. A
+        // club with no programme is still on the flat six, which is what
+        // AirtimeCap says.
+        //
+        // AND THEN WITH THE CLUB'S DIAL (12 Oct 2026). The race decides the
+        // SHAPE of the evening and the club decides the volume it sits at -
+        // see ShowChatter, which also explains why the two are kept apart.
+        // The curve survives every stop on the dial: Non-stop in a heat is
+        // still quieter than Non-stop in the top main.
+        var shape = Stature.AirtimeCap;
+        var ceiling = ShowChatter.Scaled(shape, Chatter);
+
+        if (spec.Speaks && _spokenAt.Count >= ceiling)
         {
-            return No($"{_spokenAt.Count} lines in the last ten minutes already");
+            // SAYS WHICH OF THE TWO MOVED IT, because a club that has
+            // turned the dial down and then wonders why the night is quiet
+            // has to be able to read the answer rather than guess at it.
+            var why = ceiling == shape
+                ? Stature.Billing == RaceBilling.Unknown
+                    ? string.Empty
+                    : $" - this is {Stature.Describe}, which allows {ceiling}"
+                : $" - this is {Stature.Describe} at {ShowChatter.For(Chatter).Name}, which allows {ceiling}";
+
+            return No($"{_spokenAt.Count} lines in the last ten minutes already{why}");
         }
 
         if (_open.Count >= RelayInFlightCap && spec.Tier > SegmentTier.Core)

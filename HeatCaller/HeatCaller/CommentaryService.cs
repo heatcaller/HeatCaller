@@ -775,14 +775,75 @@ public sealed class CommentaryService
 
         var conditionalLines = HistoryLines(conditionalPack);
 
-        // All four sections marked as ONE pack and only once. The caller
-        // holds a single PackedFacts and marks it when the line is actually
+        // AND WHAT IS STILL POSSIBLE (12 Oct 2026): the rounds that remain
+        // and who can still win it. The depth plan's richest seam and the
+        // one it listed first, blocked until a season could say how long
+        // it was - see Season.PlannedRounds.
+        //
+        // A SECTION OF ITS OWN for the reason the conditional's note gives:
+        // ForIntro's cap is three and the field, the record and the pace
+        // already compete for them, so a line appended there would be
+        // built on every race and then dropped on most of them.
+        //
+        // KEYED ON THE ROUND, which is what the conditional beside it uses
+        // when a club has no race day open. The claim turns on the rounds
+        // REMAINING, so it changes as the season is run rather than within
+        // one night - and a title that has not moved cannot offer a
+        // different sentence anyway, because the reader's own proof comes
+        // back the same.
+        var titlePack = HistoryPack(
+            scene?.Stakes is { } onTheLine
+            && CommentaryStakesFacts.ForTheTitle(onTheLine, round.Id) is { } riding
+                ? new[] { riding }
+                : Array.Empty<FactBlock>(),
+            MaxStakesChars);
+
+        var titleLines = HistoryLines(titlePack);
+
+        // AND THE LAYOUT'S OWN HISTORY (11 Oct 2026): who has been winning
+        // on this piece of tarmac, and what the drivers on this grid have
+        // each done round it before tonight.
+        //
+        // A SECTION OF ITS OWN, like the conditional above and for the same
+        // reason stated at MaxLayoutChars: ForIntro's cap is three and the
+        // field, the record and the pace figures already compete for them,
+        // so lines appended there would have been built on every race of
+        // the evening and heard on none of them.
+        //
+        // KEYED ON THE NIGHT. Everything in it is true for the whole
+        // evening - a run of wins is the same run until somebody ends it,
+        // and a driver's best here is the same until they beat it - so a
+        // race-scoped key would have a club running six heats hear the same
+        // line in all six. The round falls back for a table test, exactly
+        // as the setting's key does.
+        //
+        // NOT RENAMED HERE, unlike the history and the setting: the reader
+        // puts the announcer's own name in it already, the same SpokenName
+        // the result lines and the voice queue read. See
+        // CommentaryReaders.LayoutStory.
+        var layoutPack = HistoryPack(
+            CommentaryRaceFacts.ForTheLayout(scene?.Legend, threadNight),
+            MaxLayoutChars);
+
+        var layoutLines = HistoryLines(layoutPack);
+
+        // EVERY section marked as ONE pack and only once. The caller holds
+        // a single PackedFacts and marks it when the line is actually
         // spoken, so a second report would overwrite the first set of keys -
         // and the night would get the same record, or the same storyline,
         // back in the next heat with nothing to show it had. See Both,
         // which folds over however many sections there are for exactly
         // this reason, and HistoryPack's remarks.
-        if (Both(historyPack, scenePack, threadPack, conditionalPack) is { Empty: false } carried)
+        //
+        // EVERY ONE OF THEM, and a section left out of this fold is the
+        // quietest bug this file can hold: the line goes into the prompt
+        // and is heard, its key is never spent and its theme never cools,
+        // so the next race offers the same sentence again and nothing
+        // anywhere says it has already been said. titlePack was left out of
+        // it on the day it was written (12 Oct 2026) and found by a bug
+        // hunt rather than by anyone listening. Add the section here in the
+        // same edit that creates it.
+        if (Both(historyPack, scenePack, threadPack, conditionalPack, titlePack, layoutPack) is { Empty: false } carried)
         {
             historyPacked?.Invoke(carried);
         }
@@ -808,6 +869,13 @@ public sealed class CommentaryService
                 ? "The venue, the field and the night so far, worked out from the club's own results:\n"
                   + string.Join("\n", sceneLines) + "\n"
                 : string.Empty) +
+            // Straight after the venue's own record, which is the figure it
+            // is the rest of: one section about this piece of tarmac rather
+            // than two the model has to put together itself.
+            (layoutLines.Count > 0
+                ? "This track layout's own history, worked out from the club's own results:\n"
+                  + string.Join("\n", layoutLines) + "\n"
+                : string.Empty) +
             (threadLines.Count > 0
                 ? "Tonight's storyline, worked out from the club's own results:\n"
                   + string.Join("\n", threadLines) + "\n"
@@ -819,6 +887,12 @@ public sealed class CommentaryService
             (conditionalLines.Count > 0
                 ? "What one finishing order would do to that championship, worked out from the club's own results:\n"
                   + string.Join("\n", conditionalLines) + "\n"
+                : string.Empty) +
+            // And what the season still has riding on it, beside the table
+            // and the conditional for the same reason they sit together.
+            (titleLines.Count > 0
+                ? "What the championship still has riding on it, proved over the rounds that remain:\n"
+                  + string.Join("\n", titleLines) + "\n"
                 : string.Empty) +
             FactsClose + "\n" +
             // Length comes from the system prompt - saying "one sentence"
@@ -1470,6 +1544,36 @@ public sealed class CommentaryService
     private const int MaxConditionalChars = 400;
 
     /// <summary>
+    /// The room the title's stakes get in an intro prompt.
+    ///
+    /// Four hundred, like the conditional and the layout beside it - and
+    /// taken from the BUILDER rather than typed again here, because the
+    /// figure is a fact about the longest sentence that builder can
+    /// produce and a copy of it would drift the first time the copy
+    /// changed. See CommentaryStakesFacts.MostChars, which carries the
+    /// measurement and the reason: FactPack.Lay drops a block that will not
+    /// fit WHOLE, so a cap below the worst case deletes the claim instead
+    /// of shortening it, and this shipped at 240 against a worst case of
+    /// 319.
+    /// </summary>
+    private const int MaxStakesChars = CommentaryStakesFacts.MostChars;
+
+    /// <summary>
+    /// The most of the intro's prompt the LAYOUT'S own history may take -
+    /// who has been winning here, and the grid's own bests round it.
+    ///
+    /// Four hundred, like the two sections above it, and for the lesson
+    /// <see cref="MaxSceneChars"/> was written from: a section sharing
+    /// another's budget is a section that exists in the code and never
+    /// reaches the model. Three lines at most go in here
+    /// (CommentaryRaceFacts.ForTheLayout) and each is one sentence, so this
+    /// is a ceiling rather than a squeeze - but it is a ceiling, because a
+    /// club with a grid of eight who have all raced this layout for years
+    /// must not spend half an intro reading lap times out.
+    /// </summary>
+    private const int MaxLayoutChars = 400;
+
+    /// <summary>
     /// What has already been said tonight, so the recap and the intro do
     /// not say it again - FILTER ONLY. Nothing in this class ever marks it.
     ///
@@ -1990,6 +2094,18 @@ public sealed class CommentaryService
     /// </param>
     public sealed record RecapContext(string? Kind, bool Opening, bool Closing, string ShowName, string? UpNext, bool InterviewFollows = false, string AnnouncerName = "", bool MoreFollows = false);
 
+    /// <summary>
+    /// The longest the mains-on-this-layout section may run to.
+    ///
+    /// ONE SENTENCE AND A SHORT ONE, because there is only ever one line
+    /// in it: a run extended and a run ended are the same sentence from
+    /// two sides and only one of them can be true of a race. A section of
+    /// its own rather than room inside another, for the reason
+    /// MaxLayoutChars gives - this is the line a club repeats afterwards,
+    /// and it must not be the one squeezed out by three car facts.
+    /// </summary>
+    internal const int MaxMainsChars = 240;
+
     /// <summary>The longest show name the prompts carry - as long as the Commentary page lets one be typed.</summary>
     internal const int MaxShowNameChars = 60;
 
@@ -2039,7 +2155,8 @@ public sealed class CommentaryService
         RaceForm? history = null,
         CancellationToken ct = default,
         Action<PackedFacts>? historyPacked = null,
-        RaceCars? cars = null)
+        RaceCars? cars = null,
+        MainsOnLayout? mains = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -2168,9 +2285,25 @@ public sealed class CommentaryService
 
         var carLines = HistoryLines(carPack);
 
-        // Both sections marked as ONE pack and only once - see Both, and
-        // HistoryPack's remarks for the overwrite this avoids.
-        if (Both(historyPack, carPack) is { Empty: false } carried)
+        // THE RUN OF MAINS ON THIS LAYOUT (11 Oct 2026) - the one claim in
+        // the whole broadcast that no human announcer could make. Nobody
+        // standing at a club track holds "who won the main on this layout
+        // at each of the last fourteen meetings" in their head, across
+        // three classes and four layouts and two years of Thursday nights.
+        //
+        // KEYED ON THE RACE, not the night, and this is the one section of
+        // the recap where that is right: a run ending is news about this
+        // result, and the next main of the evening is a different class
+        // with a different run. See RunOfMainsHere.
+        var mainsPack = HistoryPack(
+            CommentaryRaceFacts.ForTheMainsHere(mains, winner.Transponder, PromptName(winner.Transponder), session.Id),
+            MaxMainsChars);
+
+        var mainsLines = HistoryLines(mainsPack);
+
+        // All three sections marked as ONE pack and only once - see Both,
+        // and HistoryPack's remarks for the overwrite this avoids.
+        if (Both(historyPack, carPack, mainsPack) is { Empty: false } carried)
         {
             historyPacked?.Invoke(carried);
         }
@@ -2225,6 +2358,10 @@ public sealed class CommentaryService
                 : string.Empty) +
             (carLines.Count > 0
                 ? "The cars, from the club's own garage and results:\n" + string.Join("\n", carLines) + "\n"
+                : string.Empty) +
+            (mainsLines.Count > 0
+                ? "This layout's own history of this class's mains, from the club's saved results:\n"
+                  + string.Join("\n", mainsLines) + "\n"
                 : string.Empty) +
             (championshipLines.Count > 0 ? string.Join("\n", championshipLines) + "\n" : string.Empty) +
             (upNext.Length > 0 ? $"Up next on the program: {upNext}\n" : string.Empty) +
@@ -2310,6 +2447,18 @@ public sealed class CommentaryService
                   + "it fits, for the driver each one is listed against and for no other driver. Keep the scope each "
                   + "line states exactly as written, do not name a car, a class, a count or an owner that is not "
                   + "listed, and do not turn one of these lines into a bigger claim than it already makes."
+                : string.Empty)
+            // AND THE RUN OF MAINS, which gets a stronger instruction than
+            // the history and the cars do - not because it is more exact,
+            // but because it is the one line in the recap a club will
+            // repeat to somebody afterwards, and a run embroidered by a
+            // sentence is the whole claim gone. Work it IN, do not move the
+            // number, and do not reach past it.
+            + (mainsLines.Count > 0
+                ? " The line about this layout's mains is the club's own filed history and its count of meetings is "
+                  + "exact. Work it in - it is the most interesting thing in these facts - keeping both names and the "
+                  + "number exactly as written. Do not round the number, do not say \"about\" or \"roughly\", do not "
+                  + "add a year or a date, and do not turn it into a claim about a championship, a season or a record."
                 : string.Empty)
             + (kind is not null ? " Say what kind of race it was, as the Type in the facts has it." : string.Empty)
             + (opening
@@ -2803,6 +2952,47 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// The night in four minutes - a piece about the whole evening for
+    /// somebody who was not there. See <see cref="NightRecap"/>, which
+    /// holds the instruction and explains why this is not the sign-off.
+    ///
+    /// ITS OWN WORD ALLOWANCE, not a multiple of the club's per-line
+    /// limit: that setting is about one spoken line, and somebody who
+    /// wanted terse race calls did not thereby ask for a one-paragraph
+    /// summary of their evening. See NightRecap.Words.
+    ///
+    /// Null when there is no model, or when the night has no facts worth
+    /// a piece - a club whose first meeting was three heats gets silence
+    /// rather than three minutes of padding.
+    /// </summary>
+    /// <param name="facts">The night's facts, packed with no "already said" filter - see CommentaryDirector.NightFacts.</param>
+    public async Task<string?> BuildNightRecapAsync(PackedFacts facts, CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty)
+        {
+            return null;
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + NightRecap.Instruction;
+
+        // The prompt builder ADDS this to the club's per-line limit, so
+        // what goes in is the difference rather than the whole allowance -
+        // see NightRecap.ExtraWordsOver.
+        var extra = NightRecap.ExtraWordsOver(_settings.CommentaryMaxWords);
+
+        return await RecordAndReturn("Night recap", Client.GenerateAsync(
+            BuildSystemPrompt(extra),
+            body,
+            maxTokens: MaxTokensForWordLimit(extra),
+            temperature: Variety,
+            ct: ct));
+    }
+
+    /// <summary>
     /// The announcer introducing himself, for the segments that open and
     /// close the night - and nothing at all for the rest of them.
     ///
@@ -2877,7 +3067,7 @@ public sealed class CommentaryService
             facts.Text + "\n" +
             FactsClose +
             "\n\n" + InstructionFor(kind) +
-            "\n\n" + CommentaryExchange.Brief(announcer, coHost, turns);
+            "\n\n" + CommentaryExchange.Brief(announcer, coHost, turns, _settings.CoHostStance);
 
         // Two people need more words than one. The limit on the page is
         // what a single line may run to, so each extra turn is given
@@ -2933,6 +3123,43 @@ public sealed class CommentaryService
         SegmentKind.QualifyingReport =>
             "Read this as a short qualifying report, two sentences at most. Lead with pole.",
 
+        // THE ONE INSTRUCTION THAT IS MOSTLY PROHIBITIONS (12 Oct 2026).
+        //
+        // Every other segment asks the model to make something of the
+        // facts. This one asks it to carry somebody else's sentence
+        // across intact, because the quoted words were typed by a person
+        // about a person: "it's Jack's first race since his operation" is
+        // a kindness, and a language model guessing what the operation
+        // was, or how Jack must be feeling, is the single most
+        // embarrassing thing this app could put over a PA.
+        //
+        // So: say it, warmly, once, and add nothing. The quote marks in
+        // the fact are there to make the boundary obvious.
+        SegmentKind.ClubAside =>
+            "Pass this on to the crowd warmly, in one short sentence, as a presenter reading a message. Keep the "
+            + "quoted words as they are - you may introduce them, you must not reword, shorten or extend them. Do "
+            + "not add any detail of your own: nothing about why, nothing about how anyone feels, no good wishes "
+            + "beyond what is written, and no guess at anything the message leaves unsaid. Do not mention the "
+            + "racing, the results or the program.",
+
+        // THE ONE SEGMENT THAT CAN BE WRONG, and the figures in it belong
+        // to forty people who are standing in the room and know what they
+        // voted. So the numbers are exact or they are not said: a
+        // percentage nudged to a rounder one, or a count softened to "most
+        // of the room", is this app misreporting its own audience back to
+        // itself.
+        //
+        // And nobody is made a fool of. The room being wrong is funny
+        // about the ROOM; the same line aimed at the driver nobody backed
+        // would be the app sneering at a club member on their own PA.
+        SegmentKind.RoomVerdict =>
+            "Say what the room voted and what then happened, as a commentator enjoying it. Use the figures exactly "
+            + "as given - do not round a percentage, soften a count, or describe the vote as close, unanimous or "
+            + "overwhelming beyond what the numbers say. Be warm about the driver who won whether the room backed "
+            + "them or not: the joke is on the room, never on a driver. Do not say who anybody should have picked, "
+            + "do not add a reason the room voted as it did, and do not mention anything about the race that is "
+            + "not in the facts.",
+
         SegmentKind.ChampionshipCheck =>
             "Give the championship picture in one or two sentences, as a commentator would between races.",
 
@@ -2985,6 +3212,8 @@ public sealed class CommentaryService
         SegmentKind.PaceNote => "Pace",
         SegmentKind.ComingUpNext => "Coming up",
         SegmentKind.GridHistory => "Grid",
+        SegmentKind.ClubAside => "Club note",
+        SegmentKind.RoomVerdict => "Room vote",
         SegmentKind.FormGuide => "Form",
         SegmentKind.QualifyingReport => "Qualifying",
         SegmentKind.ChampionshipCheck => "Championship",

@@ -82,7 +82,7 @@ Ollama loads a model into memory on its first request, which can take a while on
 
 ## Settings
 
-The settings are on cards down the tab, in this order: **Connection**, **What it writes**, **Segments**, **The co-host**, **Writing style**, **Race recap**, **Broadcast** and **The show's music**.
+The settings are on cards down the tab, in this order: **Connection**, **What it writes**, **Segments**, **The co-host**, **Writing style**, **Race recap**, **Broadcast**, **The show's music** and **Recording the night**.
 
 ### Connection
 
@@ -129,7 +129,7 @@ They all come switched on, and they're grouped by when they happen - and, just a
 
 | Tick box | What it does | What it needs first |
 |---|---|---|
-| **Form guide** | How the drivers in a main have been going lately. | At least 3 finished races on file for a driver before they can be talked about. It reads up to their last 4 results, for up to 3 drivers. |
+| **Form guide** | How the drivers in a main have been going lately - their recent placings, and the shape of their last few race nights. | At least 3 finished races on file for a driver before their placings can be talked about. It reads up to their last 4 results, for up to 3 drivers. The nights half needs the driver out at **3** of the club's last **6** nights in the class - see [The shape of the last few weeks](#the-shape-of-the-last-few-weeks). |
 | **Qualifying report** | What qualifying decided, before the mains go out. | A class on track with a qualifying order worked out from its filed heats, and a name on pole. The margin to second is only given when both actually set a lap. |
 | **Milestones** | A hundredth race, a first podium, a club record. | <!-- TODO: confirm what Milestones needs before it speaks. The tick box exists but nothing appears to feed the segment any facts, so it may never say anything - the same shape of fault the form guide, the halfway standings and this day at the club had. Left undocumented until that is settled. --> |
 | **Mechanic's interview** | The announcer asks the winning car's mechanic two questions. | A race run as a main, and **After a main, a quick interview with the winner's mechanic** ticked under **Broadcast** below - that tick box is what actually turns the interview on. <!-- TODO: confirm what this Segments tick box does on its own. Unticking it does not appear to stop the interview, which is decided by the Broadcast tick box and the round being a main. --> |
@@ -150,6 +150,42 @@ A segment with nothing true to say stays quiet rather than padding, which is why
 
 !!! note
     This card decides **whether a segment speaks at all**. **Which segments get it**, further down under [The show's music](#the-shows-music), is a different list: it decides which of them get your club's opener and bed under them. A segment unticked here is silent, music or no music.
+
+### The co-host
+
+A second commentator, for the segments that suit one. The announcer makes a remark and the co-host answers — written as one request to the model and split in two, so the answer actually answers the question rather than being a second line written blind.
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Two voices in the booth** | Turns the co-host on. Only the segments marked as a two-hander in the table above use them. | Off |
+| **Co-host's name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
+| **Co-host's voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. | Blank |
+| **What they're like:** | Their point of view — see below. | Even-handed |
+
+Anything that can't be split cleanly into two voices is simply said in one instead. That costs a second request to the model, so it's worth knowing it happens — but it only happens when the model ignores the format, and a silence would cost more.
+
+#### What they're like
+
+The exchange worked from the day it shipped and still sounded like one commentator cut in half, because the two of them agreed with each other: the announcer asked, the co-host confirmed. Every broadcast pair that works, works because the two of them want different things.
+
+So you pick a disposition, and it goes into the same request that already carried both names. It costs nothing extra — no second call, no extra allowance.
+
+| Choice | What it does |
+|---|---|
+| **Even-handed** | No particular point of view. The second voice exactly as it was before this setting existed. |
+| **Backs the underdog** | Pulls for whoever is further down the order, and is never that impressed by the favourite winning. |
+| **Takes nothing on one lap** | Wants to see it twice before it counts — *"let's see him do that again"*. |
+| **Remembers everything** | Reaches for the night this happened before, and the number behind what just happened. |
+| **Winds up the front-runner** | Gently ribs whoever is dominating, and enjoys it when the order gets shaken up. |
+| **Looks after the newcomers** | Notices the first race, the youngest driver, the personal best. |
+| **Been coming here for years** | Talks about your track as somewhere they know rather than somewhere they're visiting. |
+
+Two rules hold whichever you pick, and neither is optional:
+
+- **Nobody is ever unkind about a driver.** No mocking, no doubting anyone's ability, nothing a driver would mind hearing over a PA with their family in the room. The edge is always about the racing, never the person. The needling choice is held to this as firmly as the others.
+- **A point of view is never a licence to invent.** Each disposition is a way of *reacting* to the facts the announcer was given, and the last thing the model is told is still that neither of them invents a result, a lap time or a prediction. A co-host who "remembers everything" and is given no history to remember has nothing to reach for, and simply answers.
+
+If you pick nothing, nothing is added to the request at all — a club on **Even-handed** gets exactly the show it had.
 
 ### Writing style
 
@@ -435,9 +471,94 @@ Nothing that fires *during* a race is on the list: a battle call or a record lap
 
 Untick all of them and nothing gets music, which is a different thing from switching the feature off — the files stay chosen.
 
+### Recording the night
+
+Every race is recorded as it goes out — the voice, the music, the effects, exactly as the room heard it — and **each driver gets an mp3 of the stretches where the announcer called them**.
+
+The clips are the half worth having. A driver who posts the forty seconds where their pass for the lead was called is the best advertisement your club has, and nobody else in RC timing produces one at all.
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Record each race, and cut each driver their own clip** | The master switch. | On |
+| **A clip for each driver as well as the race's own recording** | The per-driver clips. Off leaves just the race's own mp3. | On |
+| **Keep the last:** | How many race nights are kept. After a race, the oldest night's folder beyond this is removed. | 6 nights |
+| **Folder:** | Where it all goes. **Open folder** works whatever the switches say. | `Documents\HeatCaller Race Audio` |
+
+Under the settings, a line says how many nights and roughly how many megabytes are on disk now — you can't sensibly choose a count without knowing what a night costs.
+
+#### Where the files are
+
+A folder per night, named by date, with a `Highlights` folder inside it:
+
+```
+Documents\HeatCaller Race Audio\
+  2026-10-11\
+    2026-10-11 Box Stock A-Main.mp3
+    Highlights\
+      2026-10-11 Box Stock A-Main - P1 Bill Hargrove.mp3
+      2026-10-11 Box Stock A-Main - P2 Sam Bellamy.mp3
+```
+
+The console says where they went after each race, and how many clips were cut.
+
+#### What goes in a driver's clip
+
+It's worked out from **the race the app has already saved** — there's deliberately no second log of "what the announcer said and when", which would have been a second account of the race that could drift from the real one. A driver's own lap times are the timeline: the running total of them is the moment of each crossing, so the app knows to the millisecond when the call about them would have landed.
+
+A stretch is kept around each of: their fastest lap, the crossing where they took the lead, a crossing where they'd moved up the order, a warning or penalty, and — for the top three — from the flag to the end of the broadcast, which is the finish call, the result and the interview. Each runs from **7 seconds before** the moment to **11 seconds after**, so it doesn't start mid-sentence, and stretches closer than 2 seconds are joined rather than butted together with a seam you can hear.
+
+Capped at **two and a half minutes** per driver: somebody who passed a car on every lap of a twenty-minute main would otherwise be handed most of the race back. Past the cap, whole stretches are dropped from the end, never cut in the middle. A clip with no call in it isn't written at all.
+
+#### The night's top and tail
+
+Every race is recorded through its own broadcast, so a recap, the honours, the interview and the colour are all in that race's mp3. The two parts of the evening that aren't in any race are the **cold open** before the first one and the **sign-off** after the last — and those are the two set pieces about the *night* rather than about one heat, which makes them the two you'd actually post.
+
+They now get a recording of their own, in the same night's folder, named `Cold Open` and `Sign-Off`. It's the real broadcast with a recorder round it: your own opener in front of it, the bed under it, the playout at the end. Nothing is written twice and no model is asked anything, so the file can't disagree with what the room heard.
+
+If something is already recording when a bookend starts, it isn't recorded separately and the console says so — nothing is lost, because whatever is recording has it in it. That's a deliberate refusal: only one thing can take a copy of the mix at a time, and the thing that would have been quietly lost is a race's own recording.
+
+!!! note
+    This is the recording of the sign-off **as it goes out**, which is as long as your sign-off is — usually under a minute. The longer piece about the whole evening is separate; it's below.
+
+#### The night in four minutes
+
+**Write And Play It**, on this card, is for the people who were **not** there.
+
+After the last race it writes the whole evening as a short piece — a driver's family at home, the member who could not make it, the one who left after their main — plays it out once in the hall, and leaves it in tonight's folder as `The Night`, beside the races and the bookends.
+
+It is the one thing HeatCaller makes that somebody outside the building would choose to sit through. Until this, a club had a results table to post and nothing else.
+
+**It is not the sign-off, and the difference is the whole point.** The sign-off is twenty seconds said to a room that was there, so it refers to things. This explains them: the model is told who it is for, told to move through the evening roughly in order rather than listing the highlights, and told that "the A-main" means nothing to somebody who was not watching, so it has to say what it was. It is also allowed to repeat what the room already heard — the result the sign-off mentioned in passing is exactly what somebody at home wants — so its facts are gathered with the "already said" filter switched off entirely. Without that, a club that had a good sign-off would get an empty recap.
+
+It is **four hundred words**, and the same four hundred whatever you have set **Up to:** words to under *What it writes*. That setting is about one spoken line; somebody who wanted terse race calls did not thereby ask for a one-paragraph summary of their evening. If you have set a limit *longer* than the piece, you keep it.
+
+**Why it plays in the hall rather than being rendered silently.** A piece read to nobody and written straight to a file is the purer idea, but it would need a second route from a written line to audio — bypassing the voice queue, the music bed and the ducking — and a second way to produce the show is a second way for it to sound wrong. So this is a real broadcast with a recorder round it: your opener in front of it, the bed under it, the playout at the end, and a file that cannot disagree with what the room heard. It costs nothing to let the room hear it while people are packing up, and a club that would rather not simply doesn't press the button.
+
+**Read in pieces.** Four minutes handed to a voice engine as one request is a request that times out or comes back truncated. It is split into pieces a voice can take, **only ever at the end of a sentence**, so the pauses inside it are the pauses inside a paragraph rather than a stop in the middle of a clause. A single sentence longer than a piece goes out whole rather than being cut.
+
+Each piece queues like any other spoken line, which means **a flag call still jumps in front of whatever of it is unspoken**. On a night that turns out not to be quite over, the race wins.
+
+**When it refuses.** It says why, in one sentence, rather than half-working:
+
+| It says | Because |
+|---|---|
+| There is nothing filed for tonight yet | No races have been run. This is for after the last one. |
+| The announcer is muted | Nobody would hear it and the recording would be silent. Unmute it on the **Mixer**. |
+| Something else is on air | A programme, a break or another show has the broadcast. Wait for it. |
+| The commentary isn't set up on this PC | No model is configured — see **Connection** at the top of this page. |
+
+Nothing is written until it has the broadcast floor, because writing takes the best part of a minute and a segment that started in the middle of that would be talking over the recap's own opener by the time it arrived. The recorder starts *after* the writing, so the file doesn't open with a minute of silence.
+
+#### Two things worth knowing
+
+- **Recordings are not kept with the club's data, on purpose.** Backups zip the data folder whole, and an evening of race audio is a few hundred megabytes — so they go to Documents, where a backup can never sweep them up. Copy a night's folder somewhere else to keep it past the count.
+- **Recording doesn't need the announcer.** A club that runs no commentary at all still has music, effects, flag calls and lap times going out of the PC, and a recording of that is a recording of their night. The card is on this tab because this is the tab about what goes out over the PA.
+
+A recording stops itself after **40 minutes**, and won't start — or carry on — with less than **750 MB** free on the disk. The race itself needs that disk for the crash journal and the race history; a recording is the one thing here that's nice to have, so it's the first thing out of the way.
+
 ## What the announcer draws on
 
-Beyond the result itself, the announcer has five kinds of record about a race to reach for. Every one of them is counted out of your club's own filed results, and every one has a bar it has to clear first - so a new club, or a club with a tiny field, hears very little of this. That's deliberate: "the biggest field the club has ever had" said about three cars teaches a room that the superlatives mean nothing.
+Beyond the result itself, the announcer has seven kinds of record about a race to reach for. Every one of them is counted out of your club's own filed results, and every one has a bar it has to clear first - so a new club, or a club with a tiny field, hears very little of this. That's deliberate: "the biggest field the club has ever had" said about three cars teaches a room that the superlatives mean nothing.
 
 | What it draws on | Where it's used | What it needs before it says anything |
 |---|---|---|
@@ -446,6 +567,8 @@ Beyond the result itself, the announcer has five kinds of record about a race to
 | **What the night has done to a driver's pace** | Race intros | The driver to have been out at least **twice** tonight, with their middle lap having moved by at least **0.15s** either way. Below that it's traffic and tire pickup rather than a driver finding the track. |
 | **What a driver has found since practice** | Race intros | The driver to have both **practised** and **raced** tonight, with at least 3 flying laps in each, and their middle lap having moved by at least **0.15s** either way. Scoped as "in practice tonight" and never to a class - see below. |
 | **The car a finisher raced** | Race recaps | The **Garage** to know exactly one car as theirs for the day. A car has to have been in the garage **2 months** before it's "had"; a car added at the sign-up desk this evening isn't club history. Moving class needs at least **4** earlier starts here, all in one other class. |
+| **A driver's own best lap on this layout** | Race intros | The driver to have raced on that layout at least **4** times, and to have a name on their profile. Laps set earlier tonight don't count — the figure is what they had to beat when they walked in. |
+| **Who has been winning on this layout** | Race intros | One driver to have won the last **3** or more races the club filed on that layout, and at least **3** races on it in all. A race with fewer than **3** real cars out neither counts as a win nor breaks a run. |
 
 Four things follow from how these are counted:
 
@@ -467,6 +590,69 @@ Where a club has both, the race-to-race figure wins the room. It is the stronger
 **Practice is still not a race.** It is read through a helper of its own, and nothing else in HeatCaller has started counting it: not the field strength, not the form guide, not the championship, not "their first Open race here", and not a start in anybody's career. That separation is the whole reason this took as long to build as it did - letting practice through the helper the rest of the commentary layer uses would have been one call site away from a practice run turning up in somebody's record.
 
 A club that doesn't run its practice through HeatCaller hears nothing about practice, all evening, exactly as before.
+
+### The shape of the last few weeks
+
+> "Carl has finished in the top three on each of the club's last four Box Stock nights."
+>
+> "Sam has been out at every one of the club's last six Box Stock nights."
+>
+> "Bill has finished every one of the 8 races they have started over the club's last four Box Stock nights."
+>
+> "Dave is back after missing the club's last three Box Stock nights - their last was 22 August."
+
+The form guide reads a driver's recent placings out in order — *"fourth, second, first, sixth"*. That's a results sheet read aloud. This is the other half, and the difference isn't detail, it's the **unit**: a club member's memory is organised by nights, not races. *"He's been on the podium three weeks running"* is a thing a regular says to another regular in the pits.
+
+One line per driver, and it's the best thing that's true of them — a driver on a podium run who also hasn't missed a night gets the run, because two sentences about one person in one segment is repetition. At most **two** of these go into a form guide, and the strongest claims win the places rather than whoever was first on the grid.
+
+What each one needs:
+
+| The line | What it needs |
+|---|---|
+| A run of top-three nights | **3** or more of the club's most recent nights in a row, counting only nights the driver was there for |
+| Out at every one | the full window — all **6** of the club's last nights in the class |
+| Finished everything they started | at least **6** races started in the window, and no retirement or disqualification in any of them |
+| Back after a while away | **3** or more of the club's nights missed, and a date for their last one |
+
+Three rules are worth knowing, because each of them is a way this could be wrong in front of a room that was there:
+
+- **The window is your club's own race nights, not a span of weeks.** A club that skipped a fortnight for a holiday hasn't had a driver miss two weeks, and a club that races fortnightly isn't owed half the lines. The last **6** nights you actually raced that class is the whole of it.
+- **A run is only ever broken by a night the driver was there for and didn't manage it.** Being away for a fortnight doesn't end a podium run — and the room that was there knows it.
+- **Tonight doesn't count.** A run of three that includes the heat an hour ago is the app describing this evening as history in front of the people who watched it.
+
+A night is the same 6am-to-6am night the rest of the app counts by, so a club night running past midnight is one night rather than two. Practice and demo races are no part of it, and a driver with no name entered on their profile is left out rather than called by their transponder.
+
+These are said **once a night** rather than once a race: a run of three nights is still three until the club races again.
+
+### The layout's own history
+
+> "The last four races the club has run on this layout, Club Oval, have all gone to Bill."
+>
+> "Sam's own quickest lap on this layout, Club Oval, is 11.390s, set in August, over the 6 races they have run on it."
+
+These two are the ones **no human announcer could produce**, and that's the whole point of them.
+
+The layout's **lap record** in the table above belongs to one driver, and a club of forty hears it as a fact about somebody else. These belong to whoever is being talked about. Everybody has a best lap on your layout — including the driver who finishes eighth every week — and nobody in the room is holding forty drivers' bests across four layouts in their head.
+
+Both are read from your own filed results, and both are held to the usual bars:
+
+- **Tonight doesn't count.** "His best ever here" said about a lap he set in the heat an hour ago is the timing system describing this evening as club history, in front of the man who did it. The figure is what he had to beat when he arrived — which is also the only version worth hearing *before* a race.
+- **Four races before a best is a figure.** Everybody's second lap on a new track is their best. Four means they've been round it enough times that the figure is their measure of the place.
+- **Three wins before a run is a run.** Two in a row is chance where ten drivers share the wins — and the driver who won the one before those two is standing right there.
+- **A race needs three real cars** to count as a win on a layout. An evening somebody turned up to alone neither starts a run nor ends one.
+- **It says "races", never "mains".** The count is over every race filed on that layout, because that's what your results can prove. "The last five A-mains" would be a claim the app can't stand behind, and whoever won the heat in between would be the first to say so.
+- **A name on the profile, or nothing.** A driver with no name entered is left out rather than called by their transponder.
+
+Both are said **once a night** rather than once a race, like the lap record — a run of wins is the same run until somebody ends it.
+
+It needs **no program**. A layout isn't a class: what's been run on that tarmac is a fact about the tarmac, so this is the one piece of depth a club gets on its first night with HeatCaller and nothing filled in on the **Program** tab.
+
+The console says what it found, either way:
+
+```
+7:12:40 PM  [commentary] Round intro has Club Oval's own history: 14 races filed on it, the last 4 of them to Bill, and 3 drivers on this grid with a best lap here worth stating.
+7:31:02 PM  [commentary] Round intro has no layout history - nothing filed on this layout before tonight, or no layout named for the race.
+```
 
 ## The night's thread
 
@@ -548,6 +734,293 @@ What counts as racing is the program, not the check-in sheet: a driver ticked in
 | "3 drivers raced here for the first time tonight." | At least **4** earlier race nights on file. In a club's first month every driver's first filed race is this week, so without that bar a club racing for fifteen years would be told nineteen drivers were new. It goes by filed results, not by when somebody typed a profile in. |
 
 "Tonight" is the race night, 6 a.m. to 6 a.m., so a club night that runs its mains past midnight is one night. The sign-off counts every race the club ran tonight whether it was filed against one of tonight's rounds or not, because it's about what happened rather than what was planned. An evening with nothing filed gets no sign-off at all.
+
+## Club notes: the things the timing can't know
+
+Everything else the announcer says comes off the timing loop — results, laps, history, championships. All of it true, and none of it about the room.
+
+A club note is the other kind: *"it's Jack's first race since his operation — good to have him back"*, somebody's birthday, the raffle closing at eight. One sentence, typed by a person because they know something the decoder cannot, and the one people repeat in the car park.
+
+### Typing one
+
+**Notes** on the announcer strip on **Race Control** — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Type it, press Enter, and the announcer works it into a sentence of its own between races.
+
+The window lists everything for tonight: what's waiting for you, what's ready to go out, and what's already been said. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
+
+### Letting the room send them
+
+Two switches on the **Club notes** card on the **Commentary** tab, and both are **off** until you turn them on:
+
+| Switch | Who can send | Where from |
+|---|---|---|
+| **Take them from phones on the club's Wi-Fi** | Anybody in the building | `/shoutout` on this PC's own address — the same one the live results are on |
+| **Take them from the club's own web page** | Anybody with the link, including the people who couldn't make it | Your club's relay address |
+
+Both land in the same list, and **nothing from either is ever said until you have read it and approved it.** That gate is what makes a public route to a PA something that can exist at all: anonymous text from a crowd going straight to a voice wired to the speakers isn't a feature with a risk to manage, it's a prank waiting for the first person who finds the address. The worst a stranger can do here is give you something to delete.
+
+They're off by default not because approving is risky but because each one writes to the race PC's disk on a stranger's request, and a club that hasn't decided it wants that shouldn't have it switched on by an update.
+
+What stops a flood:
+
+- **Four messages per phone every five minutes**, on both routes. There's no honest reason to send a fifth.
+- **Twelve of the night's twenty slots** for the room, so it can never fill the list and leave you unable to add the one that matters.
+- **200 characters**, which is about fifteen seconds aloud. A note is an aside the announcer works in, not a speech.
+- The relay holds at most forty at a time and hands them over to the laptop every half a minute, which empties it.
+
+Turning the web-page switch off tells the relay to stop taking them **and to throw away anything it's holding** — a club that declines other people's messages shouldn't have a pile of them left in its folder.
+
+### What the announcer does with one
+
+It gets a segment of its own, **From The Club** on the Big Screen's band, and the model is told — in as many words — to pass the message on warmly in one short sentence, keep the quoted words exactly as written, and add nothing: nothing about why, nothing about how anyone feels, no good wishes beyond what's there, and no guess at anything the message leaves unsaid.
+
+That instruction is almost all prohibitions, on purpose. *"Jack's first race since his operation"* is a kindness, and a language model guessing what the operation was would be the single most embarrassing thing this app could put over a PA.
+
+It's never a two-hander, whatever the co-host settings say. A dedication is sincere, and two commentators bantering over one is the one place the second voice would be actively unwelcome.
+
+## The room's vote
+
+The room votes on who wins, and after the race the announcer says what it reckoned.
+
+This is the only thing in the broadcast the people on the bank made themselves. Everything else the announcer says — the results, the laps, the records, the run of mains, the form guide — is arithmetic over the timing: true by construction, and nothing to do with the room. This is the room's **opinion**, held up against what happened.
+
+It is also the only segment in the app that **can be wrong**, which is the point of it:
+
+> "The room had Bill Hargrove at forty-eight per cent tonight, and Bill has delivered."
+
+> "Sam Teague has won it instead, with thirty-two per cent of the room's vote."
+
+> "Dave Bellamy has won it — and not one of the twenty people who voted had picked him."
+
+That last one is the line people repeat in the car park, and no amount of lap data could ever get to it.
+
+### Running one
+
+Open and close it on the **Votes** button on Race Control's announcer strip, beside **Notes**.
+
+| Step | What happens |
+|---|---|
+| Call the race to the grid | The window offers **Open voting on &lt;this race&gt;**, with the drivers actually staged on the ballot |
+| Open it | Phones can vote. The button on the strip carries the count as it climbs, in your look's accent |
+| Before the start | Press **Close voting** — or don't; it closes itself when the result comes in |
+| After the race | The announcer works the verdict in as a segment of its own, **The Room's Verdict** on the Big Screen's band |
+
+The ballot is the cars **actually staged**, not the program's assigned list: a driver who didn't turn up must not be on it. The program's list is the fallback for a vote opened before anybody has crossed the loop.
+
+Opening a vote on the next race closes the one before it, so a club can never have two running.
+
+### Letting the room vote
+
+Two switches, under **The room's vote** on this tab, both off until you turn them on:
+
+| Switch | Who it lets in |
+|---|---|
+| **Let phones on the club's Wi-Fi vote** | Everybody in the building, at `/vote` on this PC's own address |
+| **Let the club's own web page vote** | The people who aren't — a driver's family at home, the member who couldn't make it |
+
+They're genuinely different groups, which is the same argument the shout-outs make for having both routes. A prediction from somebody watching the live results at home is as good as one from the bank, and the announcer's line is better the more of the room is in it.
+
+**There is no approval list, and there doesn't need to be.** A club note is a stranger's *words*, which is why that route has a gate in front of it. A vote is a tap on one of the names your club put on the ballot — nothing a phone sends here can become a word the announcer says. The worst a stranger on your Wi-Fi can achieve is being wrong about who wins.
+
+- **One vote per phone.** A second vote replaces the first, so somebody who tapped the wrong name on a phone screen can fix it and nobody gets two.
+- **No running tally is ever shown to a phone.** A room that can see what it's voting for is a bandwagon, not a prediction — and the announcer's line is only worth anything if each vote was that person's own guess.
+- **Nothing is stored about who voted.** The phone is the voter; there's no name, no sign-in, and nothing kept beyond the fact that it has voted once.
+- The page redraws itself every few seconds, so a phone left on it through two races is never offering the wrong grid.
+
+Both switches are off by default for the one reason every public route here is: each writes to the race PC's disk on a stranger's request.
+
+#### How the web-page route works
+
+This PC **publishes the ballot** — whether you want this at all, whether a vote is running, and the grid to pick from — and the relay refuses any driver who isn't on it. So the relay can only ever hold a set of your own driver ids, which is the whole reason this route needs no approval list where the shout-outs do.
+
+It then reads the votes back every 15 seconds, faster than the shout-outs' 30 because the number you're watching to decide when to close the vote has to be moving.
+
+**The votes are not drained by being read**, and that's the one place this differs from the shout-outs. A shout-out is said once, so collecting it is the end of it. A vote can be *changed* — somebody taps a different name two minutes later — so emptying the inbox would lose the change and leave the announcer counting a pick its owner had replaced. This PC re-reads the whole set each time instead, which costs nothing because a vote already held is skipped without touching the disk.
+
+The relay throws the votes away when the ballot moves to another race, and when you switch the route off — not merely when a vote closes, because the verdict is worked out *after* the race and discarding them at the flag would discard the answer.
+
+Nothing on the relay says who voted. Each vote is keyed by a hash of the ballot's own salt and the sender's address; the salt never leaves the relay and is minted fresh per race, so the keys can't be used to follow one person from one race to the next, and nobody can test whether a given address has voted.
+
+If the relay can't be reached, or predates this feature, the console says so once rather than every 15 seconds — and says so again when it starts working.
+
+### When it says nothing
+
+Most of the care in this feature is in the silence, because a claim about what "the room" predicted — made off four people's guesses — would make everything else the announcer says sound invented.
+
+| It says nothing when | Why |
+|---|---|
+| Fewer than five people voted | Four people's guesses are not "the room" |
+| The room split evenly | There is nobody it picked, so "the room had Bill" would be untrue |
+| The race run isn't the one voted on | The vote is keyed to the **round**, not its name — see below |
+| No result has been filed yet | A verdict before the result would be predicting something that already happened |
+| It has already been said | Once, like every other segment |
+
+**Keyed to the round, not its name.** A club running Stock and Mod has two rounds both labelled "A-Main". Matched on the label, the room's Stock prediction would be read out over the Mod A-main — a verdict about the wrong race, said with complete confidence. The vote carries the round's own id so that cannot happen.
+
+**It closes itself twice over**: when the result comes in, and in any case twenty minutes after it opened, whatever anybody pressed. A poll left open through two more heats would be collecting votes for a race that had already been run and then telling the room what it "predicted".
+
+### What the model is told
+
+The figures go across exactly as counted, with instructions not to round a percentage, soften a count, or describe the vote as close, unanimous or overwhelming beyond what the numbers say. These are forty people standing in the room who know what they voted, and a percentage nudged to a rounder-sounding one is this app misreporting its own audience back to itself.
+
+And nobody is made a fool of. The room being wrong is funny about the **room**; the same line aimed at the driver nobody backed would be the app sneering at a club member over their own PA. The model is told to be warm about whoever won, whether the room backed them or not — and never to say who anybody should have picked, or why it thinks the room voted as it did.
+
+It never says who any individual picked, because it is never told.
+
+### It's a two-hander
+
+The only Colour segment that is, and deliberately: the room being wrong is something for two commentators to enjoy at each other. That's the opposite of a club note, where a second voice would be actively unwelcome.
+
+Once per class, too. The vote is opened per race, and a club that voted on every heat would turn the best line of the night into a running feature.
+
+## What the championship still has riding on it
+
+In the race intro, when a season has enough left to decide:
+
+> "There are two rounds of the Winter Series left, this one included. Only Bill Hargrove and Sam Teague can still win it. Bill leads on 148 points, by 12."
+
+> "This is the last round of the Winter Series. It is between Bill Hargrove and Sam Teague today, and nobody else can take it."
+
+> "Bill Hargrove has already won the Winter Series on 148 points. Nobody left can reach that, even winning all two remaining rounds."
+
+### It needs one thing from you
+
+**Rounds in the season**, on a championship's own rules — the same window as the best-of-N drop.
+
+Nothing else in HeatCaller knows how long a season is, and it can't be worked out: a championship is a set of races that have *happened*, plus a rule that takes more in as they're recorded. "Best 5 of 7" looks like a length and isn't — it's the drop cap, a rule about each driver's own rounds rather than about your calendar.
+
+**Leave it at none and the announcer says nothing about any of this.** That's deliberate. A false *"nobody can catch him now"* said over a PA, in front of the drivers it's about, is the timing system telling your club something untrue about its own championship — and it would be found out three weeks later. The box changes no points and no standings; only the announcer reads it.
+
+### The claim is proved, not calculated
+
+This matters more than it sounds, so it's worth being plain about.
+
+The obvious way to answer *"can Sam still catch Bill?"* is the gap against the points still available. **That's wrong whenever you run a drop rule**, because a driver's total then isn't their points added up.
+
+A real case. Best 4 of 6. Bill has won four rounds; Sam has been second in four:
+
+| | Rounds scored | Total |
+|---|---|---|
+| Bill | 10, 10, 10, 10 | 40 |
+| Sam | 9, 9, 9, 9 | 36 |
+
+Four points apart, two rounds to go, ten points a round available. Every shortcut says it's still open.
+
+It isn't. Bill keeps his four wins whatever happens, so he stays on 40. Sam winning *both* remaining rounds counts his best four — 10, 10, 9, 9 — which is 38. He is already mathematically out, and no arithmetic on the gap would have found that.
+
+So HeatCaller doesn't do arithmetic. For each rival it **plays the remaining rounds out at their extremes**: the rival wins every one of them, the leader scores nothing in any of them, and the whole season is re-scored through the same code that produces your standings table — drop rule and all. If the leader still leads *that*, the rival cannot catch them however the season falls.
+
+One rival at a time, because two of them can't both win the same round. And drawing level counts as catching: where your table settles a tie is your table's business, not something to claim a championship on.
+
+### When it says nothing
+
+Most of the time, and on purpose:
+
+| It says nothing when | Why |
+|---|---|
+| The season has no planned length | There's no remainder to reason about |
+| More than three drivers can still win it | "Nine people can still win it" is the absence of stakes, not a fact — and the standings segment already says where everyone is |
+| Fewer than three rounds have counted | A championship nobody has raced three rounds of is a scoreboard, not a season |
+| The season is already past its planned length | This race counts towards a title that's over |
+| Nothing in the points table scores | No round can change anything |
+| The table has more than forty drivers in it | Each rival costs a re-score of the whole season; this keeps it off a race night's critical path |
+
+Four rounds into a nine-round season, everyone is usually still in it — so the ordinary answer is silence. The console says which of these it was after every intro, so a quiet night reads as a decision rather than a fault.
+
+## The claim no human announcer could make
+
+After a main, the recap reads your layout's own history of that class's mains — counted in **meetings**, not races:
+
+> Bill Hargrove had won the Stock 17.5 main on this layout, Clubhouse Loop, at each of the last 14 club meetings. Sam Teague has ended that run tonight.
+
+Nobody standing at a club track holds that in their head, across three classes and four layouts and two years of Thursdays. HeatCaller does, because it filed every one of them. When the winner *extends* the run instead, it says so — *"that is five club meetings in a row that Bill has won the Stock 17.5 main on this layout"*.
+
+How it's counted, and why each rule is there:
+
+- **Mains only.** A run that counts heats is a run of heats. It needs your **Program** tab: a session on its own doesn't know a main from a qualifier.
+- **One class at a time.** A club with three classes has three mains a night, and a run across all of them is a run of nothing.
+- **Meetings, not races.** A club that runs an A-main and a B-main would otherwise have one evening count twice. A meeting is the same 6am-to-6am night the rest of the app counts by, so a club night past midnight is one meeting.
+- **The top main of each meeting is the one that counts** — the lowest main tier filed that night. A B-main winner can't end the A-main's run.
+- **Tonight isn't counted into the bar it's measured against.** The run is what it was *before* this race; otherwise every winner would be their own precedent.
+- **A meeting with no clear winner is passed over** without breaking the run — fewer than three real cars out, no first place recorded, or a first place that was a DNF or a DQ. Ghosts, rentals and anyone flagged out of records never count, here or anywhere else.
+
+**It needs four meetings filed on the layout and a run of at least three** before it says anything. A run as long as the layout's whole history isn't a run, it's the layout being new.
+
+The model is told to work the line in and told, in as many words, not to round the number, not to add a date, and not to turn it into a claim about a championship or a record. It's the line a club repeats to somebody afterwards, so a sentence of embroidery would be the whole claim gone.
+
+The console says what it found either way, so a silent main reads as a decision rather than a fault:
+
+```
+8:41:09 PM  [commentary] On this layout, Bill Hargrove has won the Stock 17.5 main at the last 14 of 31 meetings filed on it. The recap says whether tonight ended that.
+8:41:09 PM  [commentary] No run of mains to call on this layout - either nobody has won two in a row here, or the club has not filed enough meetings on it yet.
+```
+
+This sits alongside what the race *intro* already says about a layout — the outright lap record, and each driver's own best here. See [What the announcer draws on](#what-the-announcer-draws-on).
+
+## How the night is paced
+
+A broadcast that talks at the same rate all evening teaches a room to stop listening, because nothing it says is ever more important than anything else it said — and then the one moment that mattered arrives with the same shrug as heat three.
+
+So the announcer is quiet early and loud late, and it works that out from **your program**. Two things move with the race in front of it:
+
+| The race | Spoken segments per ten minutes | Two voices? |
+|---|---|---|
+| A practice session | 3 | No |
+| A heat or qualifier | 4 | No |
+| A B-main or below | 6 | Yes |
+| The A-main, or your only final | 9 | Yes |
+| **Whatever is last on tonight's program** | **two more than the row above** | **Yes** |
+
+Those are the **Standard** figures. The whole column moves with **How chatty**, on the **Segments** card — see [How chatty](#how-chatty) below.
+
+The last race of the evening gets the extra whatever it is: everyone still in the hall has stayed for that one, and after it they go home, so there's no later race the airtime is being saved for. A practice session put at the end of the program doesn't count as the finale — your final main still does.
+
+Two things are worth being plain about.
+
+**A club with no program loses nothing.** A freeform race, or a club that has never opened the **Program** tab, has nothing to size a race by — so it gets the flat six spoken segments and the second voice, exactly as before. Nothing here quietly takes the announcer away from a club that hasn't set a program up.
+
+**These are ceilings, not targets.** A quiet club with a small allowance won't reach four in a heat, let alone nine in a main. Every money gate still sits in front of this one, and nothing here makes anything be said — it only decides what is allowed to be.
+
+The console says which one it's on as the round changes, and a refusal says which ceiling it was refused against, so a quiet heat reads as a decision rather than a fault:
+
+```
+7:14:02 PM  [brain] The next race is a heat - up to 4 spoken segments in ten minutes, one voice.
+7:22:41 PM  [brain] Form guide in one voice - a heat, and the two-hander is held for the mains.
+7:28:10 PM  [brain] Battle watch held back: 4 lines in the last ten minutes already - this is a heat, which allows 4
+```
+
+The money side was already paced this way: the night's share of the month is released against how much of the program has run, so the mains always arrived with the most to spend. What was still flat was the airtime, and a ceiling that never moves is what made every race of an evening sound alike.
+
+### How chatty
+
+The shape above is right for every club — it's what stops a room tuning the announcer out. The *level* it sits at is taste. Forty drivers, a good PA and a crowd that came to watch wants more than four lines in a heat; eight mates on a Tuesday wants the result and then quiet.
+
+So **How chatty**, at the top of the **Segments** card, is the volume that shape sits at. Five stops, and the curve survives all of them — Non-stop in a heat is still quieter than Non-stop in the A-main.
+
+| Race | Sparing | Measured | **Standard** | Lively | Non-stop |
+|---|---|---|---|---|---|
+| A practice session | 2 | 2 | **3** | 5 | 6 |
+| A heat or qualifier | 2 | 3 | **4** | 6 | 8 |
+| A B-main or below | 3 | 5 | **6** | 9 | 12 |
+| The A-main, or your only final | 5 | 7 | **9** | 14 | 18 |
+| No program at all (freeform) | 3 | 5 | **6** | 9 | 12 |
+
+The last race on the program still gets its extra at every volume: a Standard heat that closes the night allows 6, a Non-stop one allows 12. Nothing the dial can do goes past 20 — one every thirty seconds with no race in between, past which the number has stopped meaning anything.
+
+**Lively and Non-stop also let the co-host out in the heats.** By default the second voice is held for the mains, because a signal spent on everything isn't a signal — but a club asking for a chatty evening means the two voices as much as it means the count.
+
+Two things worth knowing before you decide the setting is broken:
+
+- **It can't silence a race.** Intros and recaps are essential and are never refused for airtime at all. On **Sparing** you still hear every race introduced and every result called; what you lose is the colour around them.
+- **It can't make the club talk more than it can afford.** Every money gate sits in *front* of the airtime ceiling, so **Non-stop** at a club with a small monthly allowance buys very little — the ceiling goes up and the headroom is what actually decides.
+
+Leave it on **Standard** and nothing changes: that's the pacing exactly as it shipped.
+
+The console names whichever of the two moved the ceiling, so a quiet night reads as a decision rather than a fault:
+
+```
+7:14:02 PM  [brain] The next race is a heat - up to 2 spoken segments in ten minutes at Sparing, one voice.
+7:28:10 PM  [brain] Battle watch held back: 2 lines in the last ten minutes already - this is a heat at Sparing, which allows 2
+```
 
 ## Not hearing the same thing twice
 

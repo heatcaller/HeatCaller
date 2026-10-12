@@ -28,6 +28,25 @@ internal static class SponsorVideoEngine
     private static string? _problem;
 
     /// <summary>
+    /// Whether a background warm-up has been started - see
+    /// <see cref="WarmUp"/>. Read and written under <see cref="Gate"/>.
+    /// </summary>
+    private static bool _warming;
+
+    /// <summary>
+    /// Whether the one attempt at loading the engine has FINISHED, either
+    /// way. Not the same thing as <see cref="_tried"/>, which goes true at
+    /// the START of the attempt: between the two there is a thread inside
+    /// the lock holding libvlc.dll open, and anything that asks
+    /// <see cref="TryGet"/> in that window waits for it.
+    ///
+    /// Volatile and outside the lock on purpose: the whole reason it exists
+    /// is to be readable by a UI thread that must NOT take the lock. See
+    /// the note on <see cref="Settled"/>.
+    /// </summary>
+    private static volatile bool _settled;
+
+    /// <summary>
     /// Where the native LibVLC files sit, relative to the exe. This is
     /// VlcWindowsX64TargetDir in HeatCaller.csproj, which is the package's
     /// own default - the two have to agree, and PublishLayoutTests holds
@@ -117,7 +136,90 @@ internal static class SponsorVideoEngine
                 problem = _problem;
                 return null;
             }
+            finally
+            {
+                // EITHER WAY, and only now that the attempt is over - a
+                // failure is as settled as a success, and both let a UI
+                // thread stop waiting. See Settled.
+                _settled = true;
+            }
         }
+    }
+
+    /// <summary>
+    /// Whether the one attempt at loading the engine is OVER - it loaded,
+    /// or it failed and <see cref="Problem"/> says why.
+    ///
+    /// WHY ANYTHING ASKS THIS RATHER THAN JUST CALLING TryGet (11 Oct 2026).
+    /// Loading LibVLC means loading two native DLLs and scanning a plugin
+    /// folder of a few hundred files, and on the club's PC that took
+    /// FORTY-THREE SECONDS the first time. It had always been done on the
+    /// UI thread at the moment the first advert of the night came up, which
+    /// is the moment a commercial break starts - so the window in front of
+    /// the crowd froze solid for three quarters of a minute, the freeze
+    /// watchdog wrote a 1.2 GB dump of the app mid-break, the recap that
+    /// was being written behind it was dropped for taking too long, and the
+    /// advert finally appeared twelve seconds into the programme that
+    /// replaced it.
+    ///
+    /// So the engine is warmed on a background thread (see
+    /// <see cref="WarmUp"/>) and nothing on the UI thread ever calls
+    /// TryGet without asking this first: taking the lock while the warm-up
+    /// holds it is the same freeze by another route.
+    /// </summary>
+    internal static bool Settled => _settled;
+
+    /// <summary>
+    /// Starts loading the engine on a background thread, once, and reports
+    /// how it went. Does nothing when it is already loaded, already
+    /// loading, or already known to be broken.
+    ///
+    /// SAFE ON A BACKGROUND THREAD. Nothing here touches a control: making
+    /// the engine is pure native loading, and the two things that ARE
+    /// UI-bound - the MediaPlayer and the VideoView - are made by
+    /// <see cref="SponsorVideoSurface"/> on the UI thread afterwards, which
+    /// costs nothing once the engine exists.
+    ///
+    /// <paramref name="say"/> is called from the background thread, so a
+    /// caller that writes to a window marshals it.
+    /// </summary>
+    internal static void WarmUp(Action<string>? say = null)
+    {
+        lock (Gate)
+        {
+            if (_tried || _warming)
+            {
+                return;
+            }
+
+            _warming = true;
+        }
+
+        Task.Run(() =>
+        {
+            var started = Environment.TickCount64;
+
+            try
+            {
+                var vlc = TryGet(out var problem);
+                var took = (Environment.TickCount64 - started) / 1000.0;
+
+                say?.Invoke(vlc is not null
+                    ? $"{AppTime.LogStampNow()}  [sponsor] The video player is ready ({took:0.#}s to start). "
+                      + "Video adverts will play the moment a commercial break asks for one."
+                    : $"{AppTime.LogStampNow()}  [sponsor] The video player won't start on this PC, so video adverts "
+                      + $"are skipped: {problem ?? "no reason given."}");
+            }
+            catch (Exception ex)
+            {
+                // TryGet does not throw. This is here because a warm-up
+                // that threw on a pool thread would take the app down with
+                // it, and the whole point of this is that a club's evening
+                // does not depend on the video player.
+                say?.Invoke($"{AppTime.LogStampNow()}  [sponsor] Couldn't start the video player: "
+                            + $"{ex.GetType().Name}: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>

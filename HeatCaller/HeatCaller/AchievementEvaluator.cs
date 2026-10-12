@@ -1085,7 +1085,15 @@ public static partial class AchievementEvaluator
     /// a statement that their laps are not the club's records, past ones
     /// included.
     /// </summary>
-    private static bool CanHoldTrackRecord(string transponder, ProfileStore? profiles)
+    /// <summary>
+    /// INTERNAL rather than private since 11 Oct 2026, so the commentary
+    /// readers can keep the same rule. A reader that let a ghost's or a
+    /// rental's lap stand as a driver's best would put a figure on the PA
+    /// that the club's own Track Layouts page contradicts, and a second
+    /// copy of this rule is how the two come to disagree after somebody
+    /// ticks a box on a guest. See CommentaryReaders.LayoutStory.
+    /// </summary>
+    internal static bool CanHoldTrackRecord(string transponder, ProfileStore? profiles)
     {
         if (GhostService.IsGhost(transponder))
         {

@@ -163,6 +163,70 @@ public sealed partial class RaceControlControl : UserControl
     private readonly AnnouncerStrip _announcerStrip = new();
 
     /// <summary>
+    /// Tonight's club notes - the asides that are not about the racing.
+    ///
+    /// A FUNC RATHER THAN A CONSTRUCTOR ARGUMENT, like Commentary and
+    /// ShowMusic beside it: this control's constructor already takes
+    /// fourteen stores, the notes are owned by MainForm, and a parameter
+    /// added to that list is a parameter every test that builds one has to
+    /// be told about. Null at a club running an older wiring, and then the
+    /// button says nothing is waiting and opens nothing.
+    /// </summary>
+    internal Func<ClubNotes?>? TonightsNotes { get; set; }
+
+    /// <summary>
+    /// Tonight's room vote, for the Votes button beside the notes one and
+    /// for filing the result after a race - see
+    /// <see cref="RoomVote.Finished"/>.
+    /// </summary>
+    /// <remarks>Internal because <see cref="RoomVote"/> is, as with the notes above.</remarks>
+    internal Func<RoomVote?>? TonightsVote { get; set; }
+
+    /// <summary>
+    /// How many notes are waiting for the race director to tick off, for
+    /// the strip's button.
+    ///
+    /// Asked on Race Control's own once-a-second tick, which is why it is
+    /// a count off a list already in memory and not a file read. Never
+    /// throws: the strip is on the busiest screen in the app and a number
+    /// beside a button is not worth a race night.
+    /// </summary>
+    /// <summary>
+    /// How many people have voted in the poll that is open, for the number
+    /// on the Votes button. Nought when none is open, and nought rather
+    /// than a throw if the store cannot be read - this is on the race
+    /// tick, and nothing about a vote is worth a race night for.
+    /// </summary>
+    private int VotesCastSoFar()
+    {
+        try
+        {
+            if (TonightsVote?.Invoke() is { } vote && vote.Taking)
+            {
+                return vote.Votes;
+            }
+
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private int NotesWaitingForApproval()
+    {
+        try
+        {
+            return TonightsNotes?.Invoke()?.Counts().ToApprove ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
     /// The director, once MainForm has one. A function rather than the
     /// thing itself because the announcer screen builds it and this page
     /// is made first.
@@ -527,7 +591,12 @@ public sealed partial class RaceControlControl : UserControl
                 // On the same second. "Writing" is the state worth
                 // catching and a line takes seconds to write, so once a
                 // second is a warning rather than a record of one.
-                _announcerStrip.Show(Commentary?.Invoke(), _settings.CommentaryEnabled, _speaking);
+                _announcerStrip.Show(
+                    Commentary?.Invoke(),
+                    _settings.CommentaryEnabled,
+                    _speaking,
+                    NotesWaitingForApproval(),
+                    VotesCastSoFar());
             }
         };
         _clockRefreshTimer.Start();

@@ -458,6 +458,62 @@ public sealed class AppSettings
     /// <summary>What the announcer calls the co-host. Blank: they are talked to but never named.</summary>
     public string CommentaryCoHostName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// What the co-host is LIKE - the key of one of
+    /// <see cref="CoHostStance.All"/>. Blank for the plain second voice,
+    /// which is what this has always been and what a club that picks
+    /// nothing keeps.
+    ///
+    /// ASKED FOR ON 11 OCT 2026. The exchange worked and still sounded like
+    /// one commentator cut in half, because the two of them agreed with
+    /// each other: A asked, B confirmed. Broadcast pairs work when the two
+    /// want different things, so the club picks a disposition - backs the
+    /// underdog, takes nothing on one lap, winds up the front-runner - and
+    /// it rides into the same brief that already carried both names. No
+    /// extra call and no extra allowance. See CoHostStance, which also
+    /// explains why nothing here is ever allowed to be unkind about a
+    /// driver.
+    /// </summary>
+    public string CoHostStance { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How much the club wants the announcer to talk - the key of one of
+    /// <see cref="ShowChatter.All"/>. Blank is Standard, which is the
+    /// pacing exactly as it shipped, so no existing club hears a change.
+    ///
+    /// ASKED FOR ON 12 OCT 2026, the morning after the pacing landed. The
+    /// quiet-early-loud-late SHAPE is right for every club - it is what
+    /// stops a room learning to tune the announcer out - but the level it
+    /// sits at is taste: forty drivers and a crowd want more than four
+    /// lines in a heat, eight mates on a Tuesday want less. One dial, five
+    /// stops, and the curve is kept at every one of them.
+    /// </summary>
+    public string CommentaryChatter { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether a phone on the club's own Wi-Fi may send the announcer a
+    /// shout-out - see WebServerService.Notes.
+    ///
+    /// OFF until a club turns it on, and not because approving notes is
+    /// risky: nothing from the room is ever said without the race director
+    /// ticking it off (ClubNotes). It is off because the route writes to
+    /// the race PC's disk on a stranger's request, and a club that has not
+    /// decided it wants that should not have it switched on by an update.
+    /// </summary>
+    public bool ClubNotesFromTheRoom { get; set; }
+
+    /// <summary>
+    /// And whether the club's page on the relay may take them too - from
+    /// anybody with the link, including the people who could not make it.
+    ///
+    /// A SEPARATE SWITCH from the Wi-Fi one, deliberately. The Wi-Fi is
+    /// the room: everybody on it is standing in the building. The relay is
+    /// the internet, and a club may reasonably want one and not the other.
+    /// Both land in the same approval list and neither can reach the
+    /// announcer without it.
+    /// </summary>
+    public bool ClubNotesFromTheRelay { get; set; }
+
     // The co-host's voice, one per engine, exactly as the mechanic's is
     // held - the club can switch engine on Voice Settings at any time and
     // a voice id means nothing to the others. Blank for an engine means
@@ -517,6 +573,29 @@ public sealed class AppSettings
     // band (which ends at 70), so it gets longer without jumping to a
     // paragraph instruction. Existing settings files keep their own value -
     // adjust "Max length" on the Commentary tab to change it.
+    /// <summary>
+    /// Whether phones on the club Wi-Fi may vote in tonight's room vote -
+    /// see RoomVote and WebServerService.Vote.
+    ///
+    /// OFF BY DEFAULT, like both club-note routes and for the same reason:
+    /// it opens a route on this PC that a stranger's phone can write to.
+    /// What it cannot do is put anybody's words on the PA - a vote is a
+    /// tap on one of the names the club itself put on the ballot, so the
+    /// worst a stranger can do here is be wrong about who wins.
+    /// </summary>
+    public bool RoomVoteFromTheRoom { get; set; }
+
+    /// <summary>
+    /// Whether the club's own page on the relay may take votes - see
+    /// RelayPublisher.Vote.
+    ///
+    /// OFF BY DEFAULT, like both note routes. This is the half of the room
+    /// that is not in the room: a driver's family watching the live
+    /// results at home. Their prediction is as good as one from the bank,
+    /// and the announcer's line is better the more of the room is in it.
+    /// </summary>
+    public bool RoomVoteFromTheRelay { get; set; }
+
     public int CommentaryMaxWords { get; set; } = 45;
 
     // Maps to the model's "temperature". Named in plain terms here since

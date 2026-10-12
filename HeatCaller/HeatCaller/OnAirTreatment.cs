@@ -294,6 +294,25 @@ internal sealed class OnAirBar : Control
     /// <summary>What the band says now - see <see cref="Say"/>. Empty draws nothing at all.</summary>
     public string Saying { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Who the line on air is about - "Hargrove · Bellamy", or empty where
+    /// the line names nobody, which is most lines.
+    ///
+    /// ADDED 11 Oct 2026, and it is the whole reason this band stopped
+    /// being decoration. "ON AIR │ BATTLE WATCH" told a room that something
+    /// was happening; "ON AIR │ BATTLE WATCH │ Hargrove · Bellamy" tells
+    /// them what to look at, at the moment the voice says it. See
+    /// LowerThird, which works out who from the line itself.
+    ///
+    /// A SECOND PLATE rather than more words on the caption's. The caption
+    /// is what is playing and the names are who it is about: two different
+    /// kinds of thing, and running them into one line - "BATTLE WATCH -
+    /// HARGROVE, BELLAMY" - is how a lower third turns into a sentence
+    /// nobody reads. It is also what lets the names be dropped first when
+    /// the band is squeezed, which is the right thing to lose.
+    /// </summary>
+    public string About { get; private set; } = string.Empty;
+
     public OnAirBar()
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer
@@ -323,14 +342,38 @@ internal sealed class OnAirBar : Control
     /// each would be a band flickering across the bottom of the wall for
     /// the whole segment.
     /// </summary>
-    public void Say(string caption)
+    public void Say(string caption) => Say(caption, string.Empty);
+
+    /// <summary>
+    /// What is on air and who it is about - see <see cref="About"/>.
+    ///
+    /// THE WIPE IS FOR THE CAPTION ONLY. The names change while one
+    /// segment runs, because a two-hander names one driver in its first
+    /// turn and another in its second - and a band that wiped across the
+    /// bottom of the wall at each of those would be the flicker the
+    /// single-argument overload's note already warns about. So a change of
+    /// names repaints and a change of caption wipes.
+    /// </summary>
+    public void Say(string caption, string? about)
     {
+        var who = (about ?? string.Empty).Trim();
+        var sameWho = string.Equals(About, who, StringComparison.Ordinal);
+
         if (string.Equals(Saying, caption, StringComparison.Ordinal))
         {
+            if (sameWho)
+            {
+                return;
+            }
+
+            About = who;
+            Invalidate();
+
             return;
         }
 
         Saying = caption;
+        About = who;
         _shownAt = Environment.TickCount64;
 
         // Not started while the band is down: a timer ticking behind a
@@ -448,8 +491,28 @@ internal sealed class OnAirBar : Control
             new Rectangle(tally.Left + gap + lamp + gap, tally.Top, Math.Max(0, tally.Width - (gap + lamp + gap * 2)), tally.Height),
             Color.White, TallyRed, flags);
 
+        // WHO IT IS ABOUT, on a plate of its own at the right-hand end -
+        // and sized from the words rather than given a share, because the
+        // caption is the part a spectator is reading and the names are the
+        // part that makes them look at the board. Never more than a third
+        // of the band, and dropped entirely when there is not room for it:
+        // see About for why these are the right thing to lose.
+        using var whoFont = new Font(AppTheme.BoldFont.FontFamily, Math.Max(10f, plate.Height * 0.38f), FontStyle.Regular, GraphicsUnit.Pixel);
+
+        var whoWidth = 0;
+
+        if (About.Length > 0)
+        {
+            var wanted = TextRenderer.MeasureText(g, About, whoFont, Size.Empty, measure).Width + radius * 2;
+
+            if (wanted <= plate.Width / 3)
+            {
+                whoWidth = wanted;
+            }
+        }
+
         var caption = new Rectangle(tally.Right + gap, plate.Top,
-            Math.Max(0, plate.Right - tally.Right - gap), plate.Height);
+            Math.Max(0, plate.Right - tally.Right - gap - (whoWidth > 0 ? whoWidth + gap : 0)), plate.Height);
 
         // A band squeezed so hard that the plate would be narrower than its
         // own corners: the tally alone, which is still the thing that says
@@ -482,6 +545,30 @@ internal sealed class OnAirBar : Control
         {
             g.FillRectangle(accent, caption.Left + radius, caption.Bottom - rule * 2, caption.Width - radius * 2, rule);
         }
+
+        if (whoWidth <= 0)
+        {
+            return;
+        }
+
+        var who = new Rectangle(caption.Right + gap, plate.Top, whoWidth, plate.Height);
+
+        // THE ACCENT'S PLATE, where the caption's is the look's Surface.
+        // The two plates have to be told apart from across a hall, and a
+        // second Surface-coloured plate beside the first reads as one plate
+        // with a line drawn down it. The ink is worked out from the accent
+        // for the reason the caption's is worked out from its plate: a
+        // club's accent can be any colour, Gold included, and white on gold
+        // is unreadable.
+        using (var path = AppTheme.RoundedRect(who, radius))
+        using (var fill = new SolidBrush(Highlight))
+        {
+            g.FillPath(fill, path);
+        }
+
+        TextRenderer.DrawText(g, About, whoFont,
+            new Rectangle(who.Left + radius, who.Top, who.Width - radius * 2, who.Height),
+            Looks.ClearestTextOn(Highlight), Highlight, flags);
     }
 
     protected override void Dispose(bool disposing)

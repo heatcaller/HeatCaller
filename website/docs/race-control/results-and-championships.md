@@ -133,10 +133,14 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Only count mains - leave qualifying heats out** | Leaves qualifying heats out. | On |
 | **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
+| **Rounds in the season:** | How many rounds the championship is *scheduled* to run. **Only the announcer uses this** — it changes no points and no standings. It's the one figure that lets it talk about what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
 
 The rules read each race's round to find its class and whether it was a main. A freeform race with no round can't match a class or mains-only rule, but you can still tick it by hand.
 
 Championships created before the rules existed stay hand-picked until you turn the rule on.
+
+!!! note
+    **Rounds in the season** isn't something HeatCaller can work out, which is why it has to be typed. A championship here is a set of races that have *happened*, plus a rule that takes more in as they're recorded — there's no calendar in it. And **Count each driver's best** looks like a season length but isn't: it's a drop cap, a rule about each driver's own rounds. See [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it) for what the announcer does with it, including why it proves its claims instead of calculating them.
 
 ### Ticking races in and out
 

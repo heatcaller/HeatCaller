@@ -62,6 +62,25 @@ internal sealed class RaceAudioStore
     /// </summary>
     private const int DefaultMinFreeMb = 750;
 
+    /// <summary>
+    /// How many race nights' recordings are kept before the oldest night's
+    /// folder is deleted.
+    ///
+    /// SIX, which is about six weeks at a weekly club and about a quarter
+    /// of a gigabyte a night at the stored size - a gigabyte and a half,
+    /// which is a lot and is also a ceiling.
+    ///
+    /// A CEILING RATHER THAN AN ARCHIVE, and the difference is the whole
+    /// reason this exists. The feature wrote an mp3 of every race and a
+    /// clip for every driver in it, and nothing ever deleted any of it: a
+    /// club running a season would have put twenty gigabytes of broadcast
+    /// into Documents without ever being told it was happening, which is
+    /// the exact fault the fifth bug hunt found in the photo-finish frames.
+    /// A club that wants a night kept copies the folder, which is what the
+    /// class note already tells them to do.
+    /// </summary>
+    private const int DefaultKeepNights = 6;
+
     private sealed class AudioFile
     {
         public bool Enabled { get; set; } = true;
@@ -69,6 +88,7 @@ internal sealed class RaceAudioStore
         public string Folder { get; set; } = string.Empty;
         public int MaxMinutes { get; set; } = DefaultMaxMinutes;
         public int MinFreeMb { get; set; } = DefaultMinFreeMb;
+        public int KeepNights { get; set; } = DefaultKeepNights;
     }
 
     private readonly AudioFile _file;
@@ -243,6 +263,176 @@ internal sealed class RaceAudioStore
 
     /// <summary>The free-disk floor in MB - see <see cref="DefaultMinFreeMb"/>. Never below 100MB, whatever the file says.</summary>
     public int MinFreeMb => Math.Max(100, _file.MinFreeMb <= 0 ? DefaultMinFreeMb : _file.MinFreeMb);
+
+    /// <summary>
+    /// How many nights are kept - see <see cref="DefaultKeepNights"/>.
+    ///
+    /// Floored at one and capped at a hundred and four, which is two years
+    /// of weekly racing: a hand-edited file cannot turn the ceiling off,
+    /// and it cannot set it to nothing either. Zero would mean tonight's
+    /// own folder being deleted the moment the first race was written,
+    /// which is a feature that quietly does nothing.
+    /// </summary>
+    public int KeepNights
+    {
+        get => Math.Clamp(_file.KeepNights <= 0 ? DefaultKeepNights : _file.KeepNights, 1, 104);
+        set
+        {
+            var wanted = Math.Clamp(value, 1, 104);
+
+            if (_file.KeepNights == wanted)
+            {
+                return;
+            }
+
+            _file.KeepNights = wanted;
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Deletes the oldest night folders until only <see cref="KeepNights"/>
+    /// are left, and says what it removed.
+    ///
+    /// WHY HERE AND NOT IN THE RECORDER. The folder is this store's, the
+    /// rule is this store's, and the recorder's job is to get one race onto
+    /// the disk. It is called after a race has been written, which is both
+    /// the only moment the folder definitely grew and a moment nothing is
+    /// waiting on - never on the audio path, never at launch.
+    ///
+    /// BY NAME, NOT BY TIMESTAMP. Every night folder is named yyyy-MM-dd
+    /// (FolderForNight), and a name sorts the same way a date does. A
+    /// folder's own modified time is not the night it holds: copying the
+    /// folder, a sync tool touching it, or restoring it from a backup all
+    /// move it, and a club would lose the wrong night.
+    ///
+    /// ANYTHING THAT IS NOT A NIGHT IS LEFT ALONE. A club that drops a
+    /// folder called "Keep these" in there keeps it, which is exactly what
+    /// somebody who has just read the note about copying a night would do.
+    ///
+    /// Never throws. A folder that will not delete - a file open in a media
+    /// player, a sync tool holding it - is reported and skipped, and tried
+    /// again after the next race.
+    /// </summary>
+    public void PruneOldNights(Action<string>? log = null)
+    {
+        try
+        {
+            var root = Folder;
+
+            if (!Directory.Exists(root))
+            {
+                return;
+            }
+
+            // Only the folders that ARE nights, newest name first.
+            //
+            // "Folder" and not "Path" as the element name: a tuple element
+            // called Path inside a file that also calls System.IO.Path by
+            // name is a compiler error waiting for whoever writes the next
+            // line of it.
+            var nights = Directory.EnumerateDirectories(root)
+                .Select(folder => (Folder: folder, Name: System.IO.Path.GetFileName(folder)))
+                .Where(one => IsNightFolderName(one.Name))
+                .OrderByDescending(one => one.Name, StringComparer.Ordinal)
+                .Skip(KeepNights)
+                .ToList();
+
+            if (nights.Count == 0)
+            {
+                return;
+            }
+
+            var gone = 0;
+
+            foreach (var (folder, name) in nights)
+            {
+                try
+                {
+                    Directory.Delete(folder, recursive: true);
+                    gone++;
+                }
+                catch (Exception ex)
+                {
+                    log?.Invoke($"{AppTime.LogStampNow()}  [audio] Couldn't remove the recordings from {name} "
+                                + $"({ex.Message}). They will be tried again after the next race.");
+                }
+            }
+
+            if (gone > 0)
+            {
+                log?.Invoke($"{AppTime.LogStampNow()}  [audio] Removed the recordings from "
+                            + $"{Plural.Of(gone, "night")}, keeping the last {Plural.Of(KeepNights, "night")}. "
+                            + "Copy a night's folder somewhere else to keep it.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // A folder that cannot be listed costs the club some disk and
+            // never a race.
+            log?.Invoke($"{AppTime.LogStampNow()}  [audio] Couldn't tidy the recordings folder ({ex.Message}).");
+        }
+    }
+
+    /// <summary>
+    /// Whether a folder name is one of ours: exactly yyyy-MM-dd, which is
+    /// what <see cref="FolderForNight"/> writes.
+    ///
+    /// Parsed rather than pattern-matched on length, so "2026-13-45" is not
+    /// a night and is left alone with everything else a club has put in
+    /// there.
+    /// </summary>
+    private static bool IsNightFolderName(string? name) =>
+        name is { Length: 10 }
+        && DateTime.TryParseExact(
+            name,
+            "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out _);
+
+    /// <summary>
+    /// How much is in the recordings folder, in megabytes, and how many
+    /// nights - for a settings page to show, because a club cannot decide
+    /// how many nights to keep without knowing what a night costs.
+    ///
+    /// Zero and zero when the folder is not there yet, which is every club
+    /// that has not finished a race since installing. Never throws.
+    /// </summary>
+    public (int Nights, long Megabytes) OnDisk()
+    {
+        try
+        {
+            var root = Folder;
+
+            if (!Directory.Exists(root))
+            {
+                return (0, 0);
+            }
+
+            var nights = Directory.EnumerateDirectories(root).Count(one => IsNightFolderName(System.IO.Path.GetFileName(one)));
+
+            var bytes = 0L;
+
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    bytes += new FileInfo(file).Length;
+                }
+                catch
+                {
+                    // A file deleted between the listing and the measuring.
+                }
+            }
+
+            return (nights, bytes / (1024 * 1024));
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
 
     /// <summary>
     /// The folder tonight's files go in: the audio folder, then the night.

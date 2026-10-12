@@ -177,6 +177,26 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 
 See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
 
+### Who it's about
+
+Beside the caption, on a plate in the look's accent, the band names **the drivers the line on air has just named** — *Hargrove · Bellamy*. It appears the moment the voice says them and changes as the voice moves on.
+
+This is what the band was missing. "ON AIR │ BATTLE WATCH" told the room that something was happening; "ON AIR │ BATTLE WATCH │ Hargrove · Bellamy" tells them what to look at, while the leaderboard underneath is still showing all twelve cars.
+
+It's worked out from **the line itself**, not from what the segment was handed. The facts go to the model and what comes back is the model's sentence, so a segment given three drivers may well have named one of them — the band has to agree with what the room is hearing, and the only thing that knows that is the sentence.
+
+What it won't do is guess:
+
+- A name goes up only where the line contains it **whole**, with nothing but letters or digits either side. "Sam" is never found inside "Samantha", "Art" never inside "started", "Ed" never inside "edged".
+- A driver whose name is **shorter than three letters** is never matched at all. A club with an "Al" or a "Jo" would otherwise light the band up on half the sentences in an evening — "also", "job", "join" — and a wrong name three feet high on a wall is worse than no name. It costs them a caption and never puts a wrong one up.
+- Where you've typed an **Announcer name** on a profile, that's what the line is searched for and the **driver's own name** is what goes on the band — so it always matches the row on the board beside it.
+- Only drivers **on track** are looked for, so a line that happens to mention somebody who isn't out can't caption a board with no row for them.
+- Longest name first, so a club with both "Bill" and "Bill Hargrove" gets the right one.
+
+At most **three** names. A recap that names eight finishers would turn the band into a second leaderboard in a smaller font, which is the one thing it must not become — two is the common case and the one this is really for: a battle, a pair, a gap.
+
+A line that names nobody — a flag call, a continuity announcement, most of a twelve-car recap — puts nobody up, and the band says what's playing and no more. The names are also the first thing dropped when the window is too narrow to hold all three plates, because the caption is the part a spectator is reading.
+
 ### Turning it off
 
 Press <kbd>O</kbd> on the Big Screen to turn the band off, and <kbd>O</kbd> again to bring it back. It starts on, and unlike the track map's <kbd>M</kbd> the choice is remembered between sessions, so a club that doesn't want it presses the key once and not every race night. A club that never runs a show never sees the band at all.
@@ -374,12 +394,27 @@ These are on the **Sponsor reads** card, at the foot of the page.
 | **Name, as it's said:** | The name as the voice should say it, which isn't always what's on their banner: "and co" rather than the ampersand. |
 | **One-line tagline:** | One short line, heard once on their first read of the night. Leave it empty if they only bought the full read. |
 | **Their read:** | The sentences to read out, up to 600 characters. Leave it empty and the sponsor gets a one-line mention instead. |
+| **Picture for their read:** | What the Big Screen shows for the length of their read. Choose a picture the club has already uploaded, or **Upload...** one for the read. With **None** chosen the screen shows their name instead — see below. |
 | **Share of the reads:** | 1 to 10. Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share. |
 | **In tonight's rotation** | Untick to take a sponsor out of tonight's reads and keep everything you've typed, for a sponsor whose season has finished. |
 
 Under **Their read:**, HeatCaller says how long the copy takes to say and over how many gaps, for example "About 37 seconds to read, read over 2 gaps. 550 of 600 characters used." It's worth a look, because it's the one thing about a read you can't judge by looking at it: four lines of text is nearly a minute out loud.
 
 The list shows each sponsor's name, with "read" where they have copy, "share" and the number where their share is more than one, and "off tonight" where they're out of the rotation. **Remove** asks first, says that their slides and videos stay where they are, and can be undone.
+
+#### What the crowd screen shows during a read
+
+A slide is a picture. A video is a picture that moves. The **read** — the part that costs the announcer airtime, and the part a sponsor paid most for — used to put its text on the announcement banner and leave the crowd screen on the standings. It was the one part of the rotation with nothing to look at.
+
+Now the sponsor goes up for the length of the read:
+
+- **A picture, where they have one.** Set it per sponsor with **Picture for their read:**. Choose one the club already uploaded, or upload one — an uploaded picture joins the slides at the top of the page, so you can see it and remove it there rather than it sitting in a folder you can't reach.
+- **Their name, where they don't.** Large, centred, spelt as in **Name, as it's said:**. That's the answer for every sponsor until somebody uploads something, and it's most of what a slide was doing for them anyway. A picture you've since removed from the slides falls back to the name too.
+
+It holds the screen for about as long as the words take and then the standings come back. The slide rotation waits while a read is on air rather than moving on mid-sentence, and a video — if one is somehow still up — keeps the screen, because cutting an advert off part way is worse than a read going out over the standings.
+
+!!! note
+    This needs the announcer switched on, because a read is something the announcer says. A club running slides with no commentary is unaffected.
 
 #### Where reads are heard
 
@@ -389,6 +424,33 @@ The list shows each sponsor's name, with "read" where they have copy, "share" an
 | **Read in the gap between races, when the commentary has nothing to say** | A read goes out in the gap between races, where the commentary segments live. | On |
 
 Untick both and nothing is read out. The slides and videos carry on as before.
+
+#### Telling a sponsor what they got
+
+**Copy report for tonight**, on the **Sponsor reads** card, puts a plain-text report on the clipboard ready to paste into an email:
+
+```
+Club Night 14 - sponsor reads
+Sunday 11 October 2026
+
+7 reads went out across the evening.
+Reads go out both in the gaps between races and on the tail of a commercial break.
+
+Ralph's Tavern: 4 reads (57% of the evening's reads; they bought 50%)
+Quickway Diner: 3 reads (43% of the evening's reads; they bought 50%)
+Last Season Motors: no reads - switched off for this night
+```
+
+This is the thing that renews a sponsor, and no other timing software in this sport does it at all. Three deliberate choices in it are worth knowing about, because each one is the difference between a report a sponsor trusts and one they can argue with:
+
+- **Both numbers, always.** The share they *got* beside the share they *bought*. The rotation's promise is that everyone ends within one read of their share — and a report with only the count would have the sponsor on share 2 comparing their four reads with somebody else's three and ringing you about it.
+- **A sponsor who got nothing is still in it**, with the reason: switched off for the night, nothing typed for them to read, or the night simply had no gap long enough for their turn. Leaving them out is the one thing you must not do with a figure you're sending to somebody who paid.
+- **It makes no claim about the slides.** The slide rotation is a flat list of pictures and HeatCaller doesn't know which sponsor any one of them belongs to, so "your logo was on screen fourteen times" is not a number it has. The report says so itself, so you're never the one who has to explain the gap.
+
+The clipboard rather than a file, because pasting into an email is what actually happens to this. The whole report is also shown in the message that confirms it was copied, so you can read it before you send it.
+
+!!! note
+    The counts are **tonight's**, and they come from the announcer's own rotation — the same thing that decides whose turn each read is. They start again with each new race day, and they survive closing the laptop between the heats and the mains.
 
 #### How long a read runs
 

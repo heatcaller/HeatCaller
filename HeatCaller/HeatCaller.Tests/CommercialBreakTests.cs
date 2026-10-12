@@ -698,6 +698,164 @@ public sealed class CommercialBreakTests : IDisposable
     // ------------------------------------------------------------------
     //  Reading the source
     // ------------------------------------------------------------------
+    //  The night the window froze (11 Oct 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_video_is_never_started_before_the_player_has_finished_loading()
+    {
+        // The first video of the night used to load LibVLC on the UI
+        // thread, at the moment a commercial break began: 43 seconds with
+        // the Big Screen frozen in front of the crowd, a 1.2 GB freeze
+        // dump, and the recap behind it dropped for being late. The engine
+        // is warmed on a pool thread now, and nothing on the UI thread may
+        // ask for it until that has finished - asking TryGet while the
+        // warm-up holds its lock is the same freeze by another route.
+        var source = Source("BigScreenForm.cs");
+
+        var play = MethodBody(
+            source, "private void ShowSponsorVideo(string path)", "private void WarmTheVideoPlayerIfNeeded()");
+
+        var gate = play.IndexOf("if (!SponsorVideoEngine.Settled)", StringComparison.Ordinal);
+        var made = play.IndexOf("MakeVideoSurface();", StringComparison.Ordinal);
+
+        Assert.True(gate >= 0, "Nothing stops a video slide loading the video player on the UI thread any more.");
+        Assert.True(made >= 0, "ShowSponsorVideo no longer makes the video surface the way this test reads it.");
+
+        Assert.True(
+            gate < made,
+            "The video surface is made before anything asks whether the player has finished loading, so the first "
+            + "advert of the night freezes the Big Screen again.");
+
+        // And the surface is only ever made from here, so there is one
+        // place to hold that promise.
+        Assert.Equal(1, Occurrences(source, "MakeVideoSurface();"));
+    }
+
+    [Fact]
+    public void The_video_player_is_warmed_up_from_the_tick_and_only_in_the_background()
+    {
+        var source = Source("BigScreenForm.cs");
+
+        // Asked on the window's own half-second tick, so a video added on
+        // the Sponsors page mid-evening is warmed within half a second
+        // rather than at the break that wants it.
+        var breakTick = MethodBody(source, "private void UpdateCommercialBreak()", "private string WhyNoVideo()");
+
+        Assert.Contains("WarmTheVideoPlayerIfNeeded();", breakTick, StringComparison.Ordinal);
+
+        // Marshalled, because the warm-up reports from the pool thread it
+        // runs on and StatusMessage ends up on a control.
+        var warm = MethodBody(
+            source, "private void WarmTheVideoPlayerIfNeeded()", "private SponsorVideoSurface MakeVideoSurface()");
+
+        Assert.Contains("SponsorVideoEngine.WarmUp(message => SafeInvoke(", warm, StringComparison.Ordinal);
+
+        // Nothing in the engine's own warm-up touches a control - the
+        // player and the view are made on the UI thread afterwards, which
+        // is cheap once the engine exists.
+        var engine = Source("SponsorVideo.cs");
+
+        Assert.Contains("internal static void WarmUp(", engine, StringComparison.Ordinal);
+        Assert.Contains("internal static bool Settled => _settled;", engine, StringComparison.Ordinal);
+
+        // Settled goes true when the attempt is OVER, either way - not when
+        // it starts, which is what _tried does. The whole point is that a
+        // failure lets the UI thread stop waiting too.
+        Assert.Contains("_settled = true;", MethodBody(engine, "finally", "internal static bool Settled"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_video_that_started_after_the_break_ended_is_not_shown_at_all()
+    {
+        // 11 Oct: the advert appeared twelve seconds into the recap that
+        // replaced the break. An advert over the night's own programme is
+        // worth less to the sponsor than the same advert in the next
+        // break, so it is dropped and gets that one.
+        var play = MethodBody(
+            Source("BigScreenForm.cs"),
+            "private void ShowSponsorVideo(string path)",
+            "private void WarmTheVideoPlayerIfNeeded()");
+
+        var started = play.IndexOf("_video.Play(path, sound)", StringComparison.Ordinal);
+        var asked = play.IndexOf("if (!CommercialBreak.Running)", StringComparison.Ordinal);
+        var onScreen = play.IndexOf("_video.View.Visible = true;", StringComparison.Ordinal);
+
+        Assert.True(started >= 0, "ShowSponsorVideo no longer starts the video the way this test reads it.");
+
+        Assert.True(
+            asked > started,
+            "Nothing asks whether the commercial break is still on after the video has started, so a slow first "
+            + "frame puts an advert over the recap again.");
+
+        Assert.True(
+            asked < onScreen,
+            "The video is put on the crowd's screen before anything asks whether the break is still on.");
+
+        // CommercialBreak.Running and NOT this window's own flag: that one
+        // is only brought up to date on the tick, and the tick has not had
+        // a turn since Play was called, so it says the break is still on
+        // when it is not.
+        Assert.Contains("_video.Stop();", play, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_break_leads_with_a_video_even_when_a_slide_is_already_up()
+    {
+        // This asked for a video only when NOTHING was on the screen, and
+        // between races the rotation has a still up about half the time -
+        // so half a club's breaks never asked. A club that had loaded
+        // three videos saw one of them, once, all evening.
+        var body = MethodBody(
+            Source("BigScreenForm.cs"), "private void UpdateCommercialBreak()", "private string WhyNoVideo()");
+
+        Assert.Contains("ShowNextSponsorSlide(leadWithVideo: true);", body, StringComparison.Ordinal);
+        Assert.Contains("!_showingSponsor || haveAVideoToLeadWith", body, StringComparison.Ordinal);
+
+        // A video already PLAYING still keeps the screen: cutting an
+        // advert off part way is the one thing this file goes out of its
+        // way never to do.
+        Assert.Contains("!videoPlaying && NextVideoSlide() is not null", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_paid_read_stands_down_while_a_sponsor_video_is_on_the_crowds_screen()
+    {
+        // Two adverts for two different sponsors over each other sells
+        // neither. 11 Oct: the written copy went out seven seconds into
+        // the club's video advert, because the video's own hand-back is
+        // what ticks AdBreak.BreaksEnded in the first place - so the owed
+        // read is nearly always sitting there waiting exactly while one is
+        // playing.
+        var source = Source("CommentaryDirector.cs");
+
+        foreach (var (from, until) in new[]
+                 {
+                     ("public SponsorRead? NextAdBreakRead(TimeSpan gap)", "public SponsorRead? NextSegmentRead(TimeSpan gap)"),
+                     ("public SponsorRead? NextSegmentRead(TimeSpan gap)", "public void SalesReadSaid(SponsorRead? read)"),
+                 })
+        {
+            Assert.Contains("CommercialBreak.VideoOnScreen", MethodBody(source, from, until), StringComparison.Ordinal);
+        }
+
+        // The ad-break read keeps its debt when it stands down, exactly as
+        // it does for a race - the sponsor loses nothing, the read moves.
+        var owed = MethodBody(
+            source,
+            "public SponsorRead? NextAdBreakRead(TimeSpan gap)",
+            "public SponsorRead? NextSegmentRead(TimeSpan gap)");
+
+        var gate = owed.IndexOf("CommercialBreak.VideoOnScreen", StringComparison.Ordinal);
+        var settled = owed.IndexOf("_adBreakOwed = false;", StringComparison.Ordinal);
+
+        Assert.True(
+            gate < settled,
+            "The owed ad-break read is settled before the gate that stands it down, so a read the room never heard "
+            + "is counted as having gone out.");
+    }
+
+    // ------------------------------------------------------------------
     //
     //  The same pair ShowOnScreenTests and BugHunt5RaceNightTests each
     //  keep, kept again here rather than shared: each test class that reads

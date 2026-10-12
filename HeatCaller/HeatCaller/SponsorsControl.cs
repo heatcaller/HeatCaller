@@ -15,6 +15,30 @@ public sealed class SponsorsControl : UserControl
     private readonly SponsorStore _store;
     private readonly UndoService _undo;
 
+    /// <summary>
+    /// How many reads each sponsor has had tonight - wire this to the
+    /// director's own rotation (CommentaryDirector.Sponsors.ReadsTonight).
+    ///
+    /// A READER rather than a figure pushed in, like every other count in
+    /// this app: the night moves while this page is open, and a club that
+    /// presses the report button after the last race must get the last
+    /// race's reads in it.
+    ///
+    /// Null until wired, and then the report says no reads went out -
+    /// which is true of a club whose announcer has never run.
+    /// </summary>
+    internal Func<IReadOnlyDictionary<string, int>>? ReadsTonight { get; set; }
+
+    /// <summary>
+    /// The race day as the club named it, for the top of the report -
+    /// "Club Night 14". Null is fine; the report then has no heading of
+    /// its own, which is right for a club that files nothing against an
+    /// event.
+    /// </summary>
+    internal Func<string?>? EventName { get; set; }
+
+    private readonly Button _btnReport = new();
+
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
     private readonly ListBox _lstSlides = new();
     private readonly PictureBox _picPreview = new();
@@ -77,6 +101,45 @@ public sealed class SponsorsControl : UserControl
     /// </summary>
     private const int SponsorListWidth = 260;
     private const int SponsorNameWidth = 300;
+    /// <summary>
+    /// The picture the crowd screen shows while this sponsor's read is
+    /// being said (12 Oct 2026, asked for 10 Oct).
+    ///
+    /// A DROP-DOWN OF WHAT THE CLUB ALREADY HAS, plus an Upload button, so
+    /// the two ways a club would want to answer this are one row: point it
+    /// at a slide they have already uploaded, or bring in a picture for
+    /// the read. Upload puts the file in the same folder the rotation uses
+    /// and so it appears here too - which is deliberate, because a picture
+    /// stored anywhere else would be one a club could neither see nor
+    /// delete.
+    ///
+    /// "None" is the ordinary answer and is not nothing: the Big Screen
+    /// shows the sponsor's NAME for the length of the read. See
+    /// SponsorOnAir.
+    /// </summary>
+    private readonly ComboBox _cmbSponsorPicture = new();
+
+    private readonly Button _btnSponsorPicture = new();
+
+    /// <summary>What "none" reads as in the drop-down - it says what happens, not that nothing does.</summary>
+    private const string NoPictureItem = "None - show their name";
+
+    /// <summary>
+    /// How wide the picture drop-down is at the normal text size.
+    ///
+    /// Three hundred, like the name box beside it, and it has to be SET:
+    /// left to itself a ComboBox is 121 pixels, and "None - show their
+    /// name" needs 202 at the normal text size and 372 at 200% - so the
+    /// ordinary answer, the one every sponsor has until somebody uploads
+    /// something, was the one the club could not read. Caught by
+    /// LayoutTests at every size on 12 Oct 2026.
+    ///
+    /// Scaled through UiLayout.AtTextSize in SizeFields with every other
+    /// field on this page, never set in the pixels the page happens to be
+    /// running at.
+    /// </summary>
+    private const int SponsorPictureWidth = 300;
+
     private const int SalesCopyWidth = 440;
 
     /// <summary>How many sponsors the list shows, and how many lines of copy the box shows, before each scrolls.</summary>
@@ -477,9 +540,36 @@ public sealed class SponsorsControl : UserControl
         grid.AddHint("Heard once, on their first read of the night. Leave it empty if they only bought the full read.");
         grid.AddRow("Their read:", _txtSponsorCopy);
         grid.AddHint(_lblCopyLength);
+        _cmbSponsorPicture.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbSponsorPicture.SelectedIndexChanged += (_, _) => PictureChosen();
+
+        _btnSponsorPicture.Text = "Upload...";
+        _btnSponsorPicture.Click += (_, _) => UploadSponsorPicture();
+
+        grid.AddRow("Picture for their read:", FieldGrid.Inline(_cmbSponsorPicture, _btnSponsorPicture));
+        grid.AddHint(
+            "On the Big Screen for the length of their read - the one part of the rotation that had nothing to "
+            + "look at. Choose a picture the club has already uploaded, or upload one for the read; an uploaded "
+            + "picture joins the slides above, so you can see it and remove it there. With none chosen the screen "
+            + "shows their name instead, spelt as in the box above.");
+
         grid.AddRow("Share of the reads:", _numSponsorWeight);
         grid.AddHint("Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share.");
         grid.AddField(_chkSponsorEnabled);
+
+        // WHAT EACH OF THEM GOT (11 Oct 2026). The counting has happened
+        // since the paid reads were built and nothing ever collected it
+        // into something a club could send - which is the one thing on
+        // this page that renews a sponsor. See SponsorReport.
+        _btnReport.Text = "Copy report for tonight";
+        _btnReport.Click += (_, _) => CopyTheReport();
+
+        grid.AddField(new ButtonBar().With(_btnReport));
+        grid.AddHint(
+            "Puts a plain-text report of what each sponsor got tonight on the clipboard, ready to paste into an "
+            + "email: the reads they had, the share of the evening that was, and the share they bought. It covers "
+            + "the reads only - the slide rotation is a list of pictures and the app does not know which sponsor "
+            + "each one belongs to, so a figure for those would not be one anybody could stand behind.");
 
         var card = new Section("Sponsor reads");
 
@@ -489,6 +579,57 @@ public sealed class SponsorsControl : UserControl
         card.Add(grid, gapBelow: 0);
 
         return card;
+    }
+
+    /// <summary>
+    /// Builds tonight's sponsor report and puts it on the clipboard.
+    ///
+    /// THE CLIPBOARD AND NOT A FILE, because the thing a club secretary
+    /// actually does with this is paste it into an email. A file would mean
+    /// a Save dialog, a folder to remember and an attachment to find - and
+    /// a report that needs opening is a report that gets forwarded as a
+    /// screenshot. The text is short enough to read in the message that
+    /// confirms it went.
+    ///
+    /// Clipboard.SetText throws often enough to be worth catching - another
+    /// application holding the clipboard open is all it takes - and a club
+    /// told why can press it again.
+    /// </summary>
+    private void CopyTheReport()
+    {
+        try
+        {
+            var report = SponsorReport.ForTheNight(
+                _store.Sponsors,
+                ReadsTonight?.Invoke(),
+                _store.ReadPlan().Placement,
+                EventName?.Invoke(),
+                DateTime.Now);
+
+            if (string.IsNullOrWhiteSpace(report))
+            {
+                return;
+            }
+
+            Clipboard.SetText(report);
+
+            AppDialog.Show(
+                this,
+                "The report is on the clipboard - paste it into an email.\n\n" + report,
+                "Sponsor report copied",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                this,
+                $"Couldn't copy the report: {ex.Message}\n\n"
+                    + "Something else on this PC may be holding the clipboard. Try again.",
+                "Report not copied",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>
@@ -518,6 +659,7 @@ public sealed class SponsorsControl : UserControl
 
         Fit(_txtSponsorName, UiLayout.AtTextSize(SponsorNameWidth));
         Fit(_txtSponsorTagline, UiLayout.AtTextSize(SalesCopyWidth));
+        Fit(_cmbSponsorPicture, UiLayout.AtTextSize(SponsorPictureWidth));
 
         // Four lines of the box's own font, and the hint's gap twice over
         // for the room a text box keeps inside its edge - exactly how the
@@ -983,6 +1125,8 @@ public sealed class SponsorsControl : UserControl
             _txtSponsorCopy.Text = sponsor?.SalesCopy ?? string.Empty;
             _numSponsorWeight.Value = Math.Clamp(sponsor?.Weight ?? 1, (int)_numSponsorWeight.Minimum, (int)_numSponsorWeight.Maximum);
             _chkSponsorEnabled.Checked = sponsor?.Enabled ?? true;
+
+            FillPictureChoices(sponsor?.PictureFileName);
         }
         finally
         {
@@ -996,8 +1140,140 @@ public sealed class SponsorsControl : UserControl
         _txtSponsorCopy.Enabled = on;
         _numSponsorWeight.Enabled = on;
         _chkSponsorEnabled.Enabled = on;
+        _cmbSponsorPicture.Enabled = on;
+        _btnSponsorPicture.Enabled = on;
 
         ShowCopyLength();
+    }
+
+    /// <summary>
+    /// Fills the picture drop-down with the pictures the club has, and
+    /// selects this sponsor's.
+    ///
+    /// PICTURES ONLY. The slide list holds videos too, and a video under a
+    /// spoken read would be two adverts at once - the collision the
+    /// commercial break was built to stop. SponsorStore.OnScreenFor
+    /// refuses one as well, so a hand-edited file cannot get one in here
+    /// either.
+    ///
+    /// A name that is no longer in the folder is still SHOWN as selected,
+    /// so a club can see what it was pointed at rather than finding it
+    /// silently back on "none" - and the read falls back to the sponsor's
+    /// name in the meantime.
+    /// </summary>
+    private void FillPictureChoices(string? chosen)
+    {
+        _cmbSponsorPicture.Items.Clear();
+        _cmbSponsorPicture.Items.Add(NoPictureItem);
+
+        foreach (var slide in _store.SlideFileNames)
+        {
+            if (!SponsorMedia.IsVideoName(slide))
+            {
+                _cmbSponsorPicture.Items.Add(slide);
+            }
+        }
+
+        var wanted = chosen ?? string.Empty;
+
+        if (wanted.Length == 0)
+        {
+            _cmbSponsorPicture.SelectedIndex = 0;
+
+            return;
+        }
+
+        // Still named even when the file has gone - see the remarks.
+        if (!_cmbSponsorPicture.Items.Contains(wanted))
+        {
+            _cmbSponsorPicture.Items.Add(wanted);
+        }
+
+        _cmbSponsorPicture.SelectedItem = wanted;
+    }
+
+    /// <summary>A picture picked from the drop-down. "None" stores nothing, which is what the name fallback reads.</summary>
+    private void PictureChosen()
+    {
+        if (_fillingSponsor)
+        {
+            return;
+        }
+
+        var picked = _cmbSponsorPicture.SelectedIndex <= 0
+            ? string.Empty
+            : _cmbSponsorPicture.SelectedItem as string ?? string.Empty;
+
+        SaveSponsorField(sponsor => sponsor.PictureFileName = picked);
+    }
+
+    /// <summary>
+    /// Brings a picture in for this sponsor's read.
+    ///
+    /// THROUGH AddSlide, which is the one path a picture enters this app
+    /// by: it checks the size, copies it into the club's own folder under
+    /// a name of its own, and adds it to the rotation. The rotation part
+    /// is deliberate rather than incidental - a picture stored outside it
+    /// would be one the club could neither see nor delete, and the only
+    /// remove button on this page works on that list.
+    /// </summary>
+    private void UploadSponsorPicture()
+    {
+        if (_store.Sponsor(SelectedSponsorId) is null)
+        {
+            return;
+        }
+
+        using var picker = new OpenFileDialog
+        {
+            Title = "Choose a picture for this sponsor's read",
+            Filter = "Images (" + string.Join(";", SponsorMedia.ImageExtensions.Select(e => "*" + e)) + ")|"
+                + string.Join(";", SponsorMedia.ImageExtensions.Select(e => "*" + e))
+                + "|All files (*.*)|*.*",
+        };
+
+        if (picker.ShowDialog(FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        string? stored;
+        string? why;
+
+        try
+        {
+            stored = _store.AddSlide(picker.FileName, out why);
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                this,
+                $"That picture couldn't be brought in: {ex.Message}",
+                "Couldn't add the picture",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+
+            return;
+        }
+
+        if (stored is null)
+        {
+            AppDialog.Show(
+                this,
+                why ?? "That picture couldn't be used.",
+                "Couldn't add the picture",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        SaveSponsorField(sponsor => sponsor.PictureFileName = stored);
+
+        // The slide list above has a new row, and the drop-down a new
+        // entry - both are the same folder.
+        RefreshSlides();
+        FillPictureChoices(stored);
     }
 
     /// <summary>

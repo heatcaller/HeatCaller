@@ -1524,6 +1524,30 @@ public sealed partial class WebServerService
             case "/logo.png":
                 HandleLogo(context);
                 break;
+            case "/shoutout":
+                // The room's way into the broadcast - see
+                // WebServerService.Notes. Served even when the club has it
+                // switched off, with the page saying so, because a club
+                // that printed the address on a poster should get an
+                // explanation rather than a 404.
+                WriteHtml(context, BuildNotePage());
+                break;
+            case "/api/note":
+                HandleClubNote(context);
+                break;
+            case "/vote":
+                // The room's vote on who wins - see
+                // WebServerService.Vote. Served even when the club has it
+                // switched off, with the page saying no vote is running,
+                // for the same reason /shoutout is.
+                WriteHtml(context, BuildVotePage());
+                break;
+            case "/api/vote/ballot":
+                HandleVoteBallot(context);
+                break;
+            case "/api/vote":
+                HandleRoomVote(context);
+                break;
             case "/broadcast":
                 // The broadcast graphics for OBS - see WebServerService.Camera.
                 WriteHtml(context, BuildBroadcastPage());

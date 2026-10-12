@@ -454,6 +454,97 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Recap has the garage's own record of {Plural.Of(raceCars.Cars.Count, "car")}.");
         }
 
+        // AND WHO HAS BEEN WINNING THE MAINS ON THIS LAYOUT (11 Oct 2026) -
+        // the one claim in the broadcast no human announcer could make.
+        // Nobody standing at a club track holds "who won the main here at
+        // each of the last fourteen meetings" in their head, across three
+        // classes and four layouts and two years of Thursdays.
+        //
+        // ONLY FOR A MAIN. A heat cannot end a run of mains, and reading
+        // the mains' history out after one would be the announcer talking
+        // about a race that has not happened yet.
+        //
+        // Here on the UI thread with the two above, and guarded the same
+        // way: this walks the session history, the programme and the
+        // profiles, and this is the save path.
+        MainsOnLayout? raceMains = null;
+
+        if (commentaryAvailable && round?.Kind == RoundKind.Main)
+        {
+            try
+            {
+                // The layout the race was actually RUN on, which is what
+                // the session recorded; the round's own name is the
+                // fallback for an old file that never carried one.
+                var ranOn = string.IsNullOrWhiteSpace(record.TrackLayoutName)
+                    ? round?.TrackLayoutName
+                    : record.TrackLayoutName;
+
+                raceMains = CommentaryReaders.MainsHere(
+                    _sessionHistory,
+                    _rounds,
+                    _profiles,
+                    ranOn,
+                    round?.ClassName);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Recap goes without this layout's run of mains - it could not be worked out: {ex.Message}");
+            }
+        }
+
+        // AND THE ROOM'S OWN CALL (12 Oct 2026). Filed HERE, by the code
+        // that has just saved the result, rather than asked for later by
+        // the announcer: the segments are picked on a tick minutes after
+        // the flag, and asking "who won the last race" at that moment
+        // means asking whichever part of the app happens to still be
+        // holding it. See RoomVote.Finished.
+        //
+        // Keyed on the ROUND'S ID, which is why a club running two classes
+        // cannot have its Stock prediction read out over the Mod A-main.
+        if (TonightsVote?.Invoke() is { } roomVote)
+        {
+            try
+            {
+                // Position one and an actual finish - a DNF or a DQ placed
+                // first is not a win, the same rule the records use.
+                var won = record.Results
+                    .FirstOrDefault(entry => entry.Position == 1 && string.IsNullOrWhiteSpace(entry.Status));
+
+                if (won is not null)
+                {
+                    roomVote.Finished(round?.Id, won.Transponder, won.DriverName);
+                }
+            }
+            catch (Exception ex)
+            {
+                // A vote is the one thing on a race night that is purely
+                // for fun. It must never be the reason a result is not
+                // filed.
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] The room's vote goes unsettled - the result could not be filed against it: {ex.Message}");
+            }
+        }
+
+        // SAID EITHER WAY, which is the lesson the colour segment cost
+        // three rounds of testing to learn: "the reader found nothing" and
+        // "the reader never ran" look identical in a race-night log unless
+        // one of them says so.
+        if (raceMains is { } mainsHere)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] On this layout, {mainsHere.HolderName} has won the "
+                + $"{mainsHere.ClassName} main at the last {mainsHere.HolderMeetings} of "
+                + $"{Plural.Of(mainsHere.Meetings, "meeting")} filed on it. The recap says whether tonight ended that.");
+        }
+        else if (commentaryAvailable && round?.Kind == RoundKind.Main)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No run of mains to call on this layout - either nobody has "
+                + "won two in a row here, or the club has not filed enough meetings on it yet.");
+        }
+
         // Heat or main, the opening and sign-off, the mechanic - from the
         // settings, the program and the Garage, so worked out here on the
         // UI thread for the same reason as the standings, and guarded the
@@ -660,7 +751,8 @@ public sealed partial class RaceControlControl
                     ? _commentary!.BuildRaceSummaryAsync(
                         record, championship, plan?.Context, raceHistory, followOnWork.Token,
                         historyPacked: packed => recapHistory = packed,
-                        cars: raceCars)
+                        cars: raceCars,
+                        mains: raceMains)
                     : null;
 
                 // A recap that was written but never spoken is not "the last
@@ -3042,12 +3134,87 @@ public sealed partial class RaceControlControl
                         round.ClassName,
                         _profiles,
                         _sessionHistory,
-                        _rounds));
+                        _rounds),
+
+                // AND THE LAYOUT'S OWN HISTORY (11 Oct 2026): who has been
+                // winning on this piece of tarmac, and what each driver on
+                // this grid has done round it before tonight. The outright
+                // record above belongs to one driver and the room hears it
+                // as somebody else's news; a driver's own best here belongs
+                // to whoever is being talked about, and the regular who
+                // finishes eighth has one too.
+                //
+                // NO _rounds GUARD, unlike the field, the pace and the
+                // practice figures. A layout is not a class: what has been
+                // run on this tarmac is a fact about the tarmac, and a club
+                // with no programme at all has it. That is deliberate -
+                // it is the one depth fact a club gets on its first night
+                // with HeatCaller and no Program tab filled in.
+                //
+                // Read here with the rest of the setting for the same
+                // UI-thread reason as everything above it: from the
+                // Task.Run below onwards this is on a pool thread, and
+                // these stores belong to the UI thread.
+                CommentaryReaders.LayoutStory(
+                    _sessionHistory,
+                    _profiles,
+                    layoutName,
+                    round.AssignedTransponders),
+
+                // AND WHAT THE TITLE STILL HAS RIDING ON IT (12 Oct 2026):
+                // the rounds that remain and who can still win it. The
+                // richest seam the depth plan named and the one it listed
+                // first; it sat blocked for two days for want of a single
+                // figure - how long a season is - which nothing in this app
+                // could derive and a club had to type. See
+                // Season.PlannedRounds.
+                //
+                // Read here with the rest of the setting for the UI-thread
+                // reason every reader above gives, and it is the most
+                // expensive of them: the proof recomputes the whole season
+                // once per rival who might still catch the leader, through
+                // SeasonStore.ComputeStandings, because the drop rule means
+                // the gap and the points available cannot answer it. The
+                // reader's own ceilings - a table of forty, and giving up
+                // the moment more than three drivers are still in it - are
+                // what keep that off a race night's critical path.
+                //
+                // No _rounds guard, like the conditional: the reader takes
+                // the round store and answers null without one.
+                CommentaryReaders.TitleOnTheLine(
+                    round,
+                    round.AssignedTransponders,
+                    _seasons,
+                    _rounds,
+                    _events,
+                    _sessionHistory,
+                    _profiles));
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the history and the standings - they could not be worked out: {ex.Message}");
+        }
+
+        // SAID EITHER WAY. The reader refuses far more often than it
+        // answers - a season with no planned length, a title four drivers
+        // can still win - and "it found nothing" and "it never ran" look
+        // identical in a race-night log unless one of them says so.
+        if (scene?.Stakes is { } riding)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has what {riding.SeasonName} has riding on it: "
+                + $"{Plural.Of(riding.RoundsLeft, "round")} left including this one, "
+                + (riding.CannotBeCaught
+                    ? $"and {riding.LeaderName} cannot be caught."
+                    : $"and {Plural.Of(riding.StillInIt.Count, "driver")} can still win it."));
+        }
+        else
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the title's stakes - no championship "
+                + "this race counts towards has a planned number of rounds set, or too many drivers can still win it "
+                + "for that to be worth saying. Set the rounds on the season's own rules to hear it.");
         }
 
         if (scene?.Venue is { } venueRecord)
@@ -3056,6 +3223,27 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Round intro has the {venueRecord.LayoutName} lap record: "
                 + $"{venueRecord.LapSeconds.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)}s, "
                 + $"{venueRecord.Holder}, {venueRecord.SetDescribed}.");
+        }
+
+        // AND WHAT THE LAYOUT'S OWN HISTORY CAME TO. Said either way, which
+        // is the lesson the colour segment cost three rounds of testing to
+        // learn: "the reader found nothing" and "the reader never ran" look
+        // identical in a race-night log unless one of them says so.
+        if (scene?.Legend is { } legend)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has {legend.LayoutName}'s own history: "
+                + $"{Plural.Of(legend.RacesOnLayout, "race")} filed on it, "
+                + (legend.WinnerRun > 0
+                    ? $"the last {legend.WinnerRun} of them to {legend.WinnerName}, "
+                    : "no run of wins on it, ")
+                + $"and {Plural.Of(legend.Bests.Count, "driver")} on this grid with a best lap here worth stating.");
+        }
+        else
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Round intro has no layout history - nothing filed on "
+                + "this layout before tonight, or no layout named for the race.");
         }
 
         if (stake is not null)

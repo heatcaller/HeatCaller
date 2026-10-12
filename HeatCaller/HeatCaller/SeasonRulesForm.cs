@@ -48,6 +48,15 @@ public sealed class SeasonRulesForm : Form
     private readonly CheckedListBox _lstEvents = new ThemedCheckedListBox();
     private readonly CheckBox _chkAllEvents = new ThemedCheckBox();
     private readonly NumericUpDown _numBest = new();
+
+    /// <summary>
+    /// How many rounds the season is planned to run - see
+    /// Season.PlannedRounds, which explains why nothing else in the app
+    /// knows it and what it lets the announcer say.
+    /// </summary>
+    private readonly NumericUpDown _numPlanned = new();
+
+    private readonly Label _lblPlannedHint = new();
     private readonly Label _lblBestHint = new();
 
     private const string AllClasses = "(every class)";
@@ -79,6 +88,11 @@ public sealed class SeasonRulesForm : Form
             UiLayout.AtTextSize(BestWidth),
             TextRenderer.MeasureText("00", _numBest.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
         _numBest.Width = bestWidth;
+
+        // The same width as the box above it - two numeric boxes of
+        // different widths in one column reads as a mistake, and both hold
+        // a round count of at most two digits.
+        _numPlanned.Width = bestWidth;
 
         _lstEvents.Height = EventRows * _lstEvents.ItemHeight + 4;
 
@@ -211,6 +225,15 @@ public sealed class SeasonRulesForm : Form
         _numBest.Font = AppTheme.BodyFont;
         _numBest.ValueChanged += (_, _) => UpdateBestHint();
 
+        _numPlanned.Minimum = 0;
+        _numPlanned.Maximum = 60;
+        _numPlanned.Font = AppTheme.BodyFont;
+        _numPlanned.ValueChanged += (_, _) => UpdatePlannedHint();
+
+        _lblPlannedHint.AutoSize = true;
+        _lblPlannedHint.ForeColor = AppTheme.TextMuted;
+        _lblPlannedHint.Font = AppTheme.BodyFont;
+
         _lblBestHint.AutoSize = true;
         _lblBestHint.ForeColor = AppTheme.TextMuted;
         _lblBestHint.Font = AppTheme.BodyFont;
@@ -219,6 +242,23 @@ public sealed class SeasonRulesForm : Form
         // too narrow for both - see the width the constructor works out.
         var bestRow = new FieldGrid();
         var bestCaption = bestRow.AddRow("Count each driver's best:", FieldGrid.Inline(_numBest, _lblBestHint));
+
+        var plannedRow = new FieldGrid();
+        // The caption is not returned for the width sum below: the hint
+        // beside this box is shorter than the best-rounds one, so this row
+        // can never be the widest line on the window.
+        plannedRow.AddRow("Rounds in the season:", FieldGrid.Inline(_numPlanned, _lblPlannedHint));
+
+        var lblPlannedWhy = new Label
+        {
+            Text = "Only the announcer uses this, and it is the one figure that lets it talk about what is still "
+                 + "possible: \"nobody can catch him now\", \"three rounds left and these two are level\", "
+                 + "\"a win today and it's his\". Leave it at none and it says nothing about any of that rather "
+                 + "than guessing. It changes no points and no standings.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
 
         var lblDropHint = new Label
         {
@@ -283,7 +323,14 @@ public sealed class SeasonRulesForm : Form
         Indented(body.Add(lblTagged, gapBelow: UiLayout.SectionGap));
         body.Add(lblScoring, gapBelow: UiLayout.RowGap);
         body.Add(bestRow, gapBelow: UiLayout.HintGap);
-        body.Add(lblDropHint, gapBelow: 0);
+        body.Add(lblDropHint, gapBelow: UiLayout.SectionGap);
+
+        // HOW LONG THE SEASON IS (12 Oct 2026). Under the scoring rules
+        // because that is where a club is already thinking about the shape
+        // of the season, and it is the one field on this window that
+        // changes no points at all - see Season.PlannedRounds.
+        body.Add(plannedRow, gapBelow: UiLayout.HintGap);
+        body.Add(lblPlannedWhy, gapBelow: 0);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -325,6 +372,7 @@ public sealed class SeasonRulesForm : Form
         _chkAuto.Checked = _season.AutoInclude;
         _chkMainsOnly.Checked = _season.MainsOnly;
         _numBest.Value = Math.Clamp(_season.CountBestRounds, 0, 60);
+        _numPlanned.Value = Math.Clamp(_season.PlannedRounds, 0, 60);
 
         _cmbClass.SelectedIndex = ClassIndexFor(_season.ClassName);
 
@@ -341,6 +389,7 @@ public sealed class SeasonRulesForm : Form
         _ = events;
 
         UpdateBestHint();
+        UpdatePlannedHint();
         UpdateEnabled();
     }
 
@@ -350,6 +399,7 @@ public sealed class SeasonRulesForm : Form
         season.AutoInclude = _chkAuto.Checked;
         season.MainsOnly = _chkMainsOnly.Checked;
         season.CountBestRounds = (int)_numBest.Value;
+        season.PlannedRounds = (int)_numPlanned.Value;
 
         season.ClassName = _cmbClass.SelectedItem switch
         {
@@ -455,6 +505,16 @@ public sealed class SeasonRulesForm : Form
         _lblBestHint.Text = _numBest.Value == 0
             ? EveryRoundHint
             : Plural.Word((long)_numBest.Value, "round");
+
+    /// <summary>
+    /// What the planned length means beside the box. "Not said" rather
+    /// than "none", because nought here is an absence of information and
+    /// not a season of no rounds.
+    /// </summary>
+    private void UpdatePlannedHint() =>
+        _lblPlannedHint.Text = _numPlanned.Value == 0
+            ? "not said - the announcer stays quiet about what is still possible"
+            : Plural.Word((long)_numPlanned.Value, "round");
 
     /// <summary>
     /// Greys out what the current choices make meaningless, rather than

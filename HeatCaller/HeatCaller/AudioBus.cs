@@ -302,6 +302,18 @@ internal static class AudioBus
     /// </summary>
     public static void Listen(IMixListener listener) => _listener = listener;
 
+    /// <summary>
+    /// Whether anything is taking a copy of the mix right now.
+    ///
+    /// ADDED 11 Oct 2026 for one reason, and it is worth stating because
+    /// the field above is a SINGLE listener on purpose. Starting a second
+    /// recorder silently displaces the first, so the thing at risk is a
+    /// club's recording of a race - which would simply end wherever the
+    /// second one started, with nothing anywhere to say why. Anything that
+    /// wants to start recording asks this first. See BookendRecording.
+    /// </summary>
+    public static bool Listening => _listener is not null;
+
     /// <summary>Stops giving this listener the mix. Does nothing when something else is listening by now.</summary>
     public static void StopListening(IMixListener listener)
     {

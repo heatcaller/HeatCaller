@@ -68,6 +68,25 @@ public sealed class BigScreenForm : Form
 
     private readonly Label _lblOnDeck = new();
     private readonly PictureBox _picSponsor = new();
+
+    /// <summary>
+    /// The sponsor's NAME, large and centred, for the length of a read
+    /// they have no picture for (12 Oct 2026).
+    ///
+    /// The no-picture answer is not a blank screen and not the standings:
+    /// it is the sponsor's name in front of the room while it is being
+    /// read out, which is most of what a slide was doing for them anyway.
+    /// See SponsorOnAir.
+    /// </summary>
+    private readonly Label _lblSponsorRead = new();
+
+    /// <summary>
+    /// True while a sponsor's READ owns the screen - which is not the same
+    /// as <see cref="_showingSponsor"/> and must not be, or the rotation's
+    /// own timer would call the slot over and move on mid-sentence. See
+    /// UpdateSponsorRead.
+    /// </summary>
+    private bool _showingRead;
     private readonly Panel _pnlLeaderboardArea = new();
     private readonly System.Windows.Forms.Timer _sponsorTimer = new();
     private int _sponsorIndex = -1;
@@ -104,6 +123,22 @@ public sealed class BigScreenForm : Form
     /// PC - see ShowSponsorVideo, which explains why it is said once.
     /// </summary>
     private bool _videoProblemSaid;
+
+    /// <summary>
+    /// Whether this window has already asked for the video player to be
+    /// warmed up - see WarmTheVideoPlayerIfNeeded. Asked once per window
+    /// rather than on the tick that notices the first video slide, because
+    /// the engine is loaded once per RUN of the app.
+    /// </summary>
+    private bool _videoWarmAsked;
+
+    /// <summary>
+    /// Whether this window has already said that a slide was skipped
+    /// because the video player was still starting. Once per window, like
+    /// _videoProblemSaid and for the same reason - the warm-up happens once
+    /// and the sentence is only interesting the first time.
+    /// </summary>
+    private bool _videoWarmingSaid;
 
     /// <summary>
     /// Whether this window currently holds an ad break open (AdBreak.Begin
@@ -152,6 +187,22 @@ public sealed class BigScreenForm : Form
 
     private readonly Label _lblAnnouncement = new();
     private DateTime? _lastAnnouncementUtc;
+
+    /// <summary>
+    /// Who the latest spoken line was about, as the band writes them -
+    /// "Hargrove · Bellamy", or empty where the line named nobody.
+    ///
+    /// REPLACED BY EVERY LINE, including one that names nobody. The band
+    /// has to be about what the room is hearing NOW: a flag call or a
+    /// countdown names no driver, and leaving the last battle's two names
+    /// up underneath it would be the screen contradicting the voice. See
+    /// LowerThird.
+    ///
+    /// Written on the UI thread from OnAnnouncementTextReady's SafeInvoke
+    /// and read on the UI thread by UpdateOnAir, so there is nothing to
+    /// guard.
+    /// </summary>
+    private string _sayingAbout = string.Empty;
 
     // The warning banner: a full-width strip under the top band, shown for
     // a few seconds when race control warns somebody, then hidden again.
@@ -563,6 +614,8 @@ public sealed class BigScreenForm : Form
 
         _pnlLeaderboardArea.BackColor = CanvasColor;
         _picSponsor.BackColor = CanvasColor;
+        _lblSponsorRead.BackColor = CanvasColor;
+        _lblSponsorRead.ForeColor = AppTheme.Accent;
 
         _pnlOnDeck.BackColor = PanelColor;
         _lblOnDeck.ForeColor = HighlightColor;
@@ -711,6 +764,17 @@ public sealed class BigScreenForm : Form
         _picSponsor.SizeMode = PictureBoxSizeMode.Zoom;
         _picSponsor.Visible = false;
 
+        _lblSponsorRead.Dock = DockStyle.Fill;
+        _lblSponsorRead.TextAlign = ContentAlignment.MiddleCenter;
+        _lblSponsorRead.Visible = false;
+
+        // A long sponsor name wraps rather than running off the side of a
+        // crowd screen. AutoSize off, because the label is docked to fill
+        // the board's place and sizing itself to its text would fight the
+        // dock.
+        _lblSponsorRead.AutoSize = false;
+        _lblSponsorRead.AutoEllipsis = true;
+
         _rollCall.Dock = DockStyle.Fill;
         _rollCall.Visible = false;
 
@@ -724,6 +788,7 @@ public sealed class BigScreenForm : Form
 
         _pnlLeaderboardArea.Controls.Add(_attractBoard);
         _pnlLeaderboardArea.Controls.Add(_rollCall);
+        _pnlLeaderboardArea.Controls.Add(_lblSponsorRead);
         _pnlLeaderboardArea.Controls.Add(_picSponsor);
         _pnlLeaderboardArea.Controls.Add(_grid);
 
@@ -876,6 +941,12 @@ public sealed class BigScreenForm : Form
             _lblOnDeck.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
             _lblWarning.Font = Face(AppTheme.BoldFont.FontFamily, 30F);
 
+            // The sponsor being read, large and centred in the board's
+            // place. Sized here with every other font on this window, so
+            // it follows the scale and is disposed with them rather than
+            // being built fresh on each read - see OwnFont.
+            _lblSponsorRead.Font = Face(AppTheme.BoldFont.FontFamily, 72F);
+
             foreach (var font in old)
             {
                 font.Dispose();
@@ -957,6 +1028,15 @@ public sealed class BigScreenForm : Form
     private void SponsorTimer_Tick(object? sender, EventArgs e)
     {
         if (_sponsors is null)
+        {
+            return;
+        }
+
+        // A READ OWNS THE SCREEN while it is on air, and the rotation's
+        // own timer must not call the slot over underneath it - that is
+        // what would cut a sponsor's picture off mid-sentence. See
+        // UpdateSponsorRead, which puts it up and takes it down.
+        if (SponsorOnAir.Showing)
         {
             return;
         }
@@ -1060,34 +1140,9 @@ public sealed class BigScreenForm : Form
             return;
         }
 
-        try
+        if (!PutSponsorPictureUp(path))
         {
-            // Only a slide no bigger than the Sponsors page takes in, sized
-            // from its header before anything is decoded (see
-            // SponsorStore.ReadSlide). This used to decode whatever the file
-            // held, on the UI thread, each time the slide came round - so
-            // one too big to decode froze the Big Screen mid-event, again
-            // every rotation. It is skipped like an unreadable one.
-            if (SponsorStore.ReadSlide(path) is not { } bytes)
-            {
-                return;
-            }
-
-            var previous = _picSponsor.Image;
-            // Copied into a Bitmap of its own before the stream closes - an
-            // Image from FromStream keeps reading its stream for life, and
-            // this one's is disposed at the end of the block. Orientation is
-            // fixed first, as the copy doesn't carry the EXIF tag. (An
-            // animated GIF shows its first frame.)
-            using var stream = new MemoryStream(bytes);
-            using var decoded = Image.FromStream(stream);
-            TrackAttachmentStore.ApplyExifOrientation(decoded);
-            _picSponsor.Image = new Bitmap(decoded);
-            previous?.Dispose();
-        }
-        catch
-        {
-            return; // unreadable image - stay on the leaderboard
+            return; // too big, or unreadable - stay on the leaderboard
         }
 
         // A picture following a video: the video surface comes down and the
@@ -1186,6 +1241,37 @@ public sealed class BigScreenForm : Form
     /// </summary>
     private void ShowSponsorVideo(string path)
     {
+        // NOT ON THE UI THREAD, EVER (11 Oct 2026). Making the surface
+        // loads LibVLC on the thread that asks, and on the club's PC that
+        // took 43 seconds: the Big Screen froze in front of the crowd for
+        // three quarters of a minute at the exact moment a commercial break
+        // started, the watchdog wrote a 1.2 GB dump mid-break, and the
+        // recap being written behind it was dropped for taking too long.
+        // See SponsorVideoEngine.Settled, which sets the whole thing out.
+        //
+        // So the engine is warmed in the background and this slide is
+        // SKIPPED while that is still going on. A still slide or the
+        // standings holding the screen for one more slot costs a club
+        // nothing; a frozen window costs it the race.
+        if (!SponsorVideoEngine.Settled)
+        {
+            WarmTheVideoPlayerIfNeeded();
+
+            if (!_videoWarmingSaid)
+            {
+                _videoWarmingSaid = true;
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [sponsor] The video player is still starting up, so this advert is "
+                    + "skipped - the next break will have it. (Starting it takes a few seconds the first time, and "
+                    + "only the first time.)");
+            }
+
+            return;
+        }
+
+        // Cheap now: the engine is already loaded, and all this makes is a
+        // player and a view.
         _video ??= MakeVideoSurface();
 
         if (!_video.Available)
@@ -1207,6 +1293,7 @@ public sealed class BigScreenForm : Form
         }
 
         var sound = _sponsors!.Current.PlayVideoSound;
+        var startedAt = Environment.TickCount64;
 
         if (!_video.Play(path, sound))
         {
@@ -1220,9 +1307,38 @@ public sealed class BigScreenForm : Form
             return;
         }
 
+        var tookToStart = (Environment.TickCount64 - startedAt) / 1000.0;
+
+        // THE BREAK MAY HAVE GONE WHILE THIS WAS STARTING (11 Oct 2026).
+        // An advert with its own soundtrack is only ever wanted inside the
+        // commercial break that asked for it. If starting it took long
+        // enough for the break to end - a slow first frame, a file being
+        // read off a memory stick, a PC busy rendering the recap - then by
+        // the time there is a picture the programme is on air, and what the
+        // room gets is an advert talking over the night's own recap. That is
+        // exactly what happened on 11 Oct.
+        //
+        // CommercialBreak.Running rather than this window's own
+        // _breakHasTheScreen: that flag is only brought up to date on the
+        // tick, and the tick has not had a turn since Play was called.
+        if (!CommercialBreak.Running)
+        {
+            _video.Stop();
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [sponsor] \"{Path.GetFileName(path)}\" took {tookToStart:0.#}s to start and "
+                + "the commercial break was over by then, so it is not shown - an advert over the recap is worse than "
+                + "no advert. It gets the next break.");
+
+            ShowLeaderboardAgain();
+
+            return;
+        }
+
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [sponsor] Playing the video \"{Path.GetFileName(path)}\" on the Big Screen"
-            + (sound ? " with its sound." : ", silent."));
+            + (sound ? " with its sound." : ", silent.")
+            + (tookToStart >= 1.0 ? $" It took {tookToStart:0.#}s to start." : string.Empty));
 
         // Only while the video actually has sound to be talked over, and
         // only when the club wants it. A silent ad over the music is a
@@ -1237,6 +1353,8 @@ public sealed class BigScreenForm : Form
         _attractBoard.Visible = false;
         _attractShowing = false;
         _picSponsor.Visible = false;
+        _lblSponsorRead.Visible = false;
+        _showingRead = false;
         _video.View.Visible = true;
 
         // No BringToFront. What takes this area is decided by visibility, not
@@ -1247,6 +1365,50 @@ public sealed class BigScreenForm : Form
         _showingSponsor = true;
         _sponsorTimer.Interval = VideoBackstopMs;
         UpdateTrackMap();
+    }
+
+    /// <summary>
+    /// Asks for the video player to be loaded in the background, once,
+    /// where the club has a video advert at all.
+    ///
+    /// ASKED ON THE TICK rather than when this window opens, so a video
+    /// added on the Sponsors page while the Big Screen is up is warmed
+    /// within half a second of being added rather than at the break that
+    /// wants it. The cost of asking is a bool once it has been asked.
+    ///
+    /// Why it has to happen at all, and why in the background, is in
+    /// SponsorVideoEngine.Settled.
+    /// </summary>
+    private void WarmTheVideoPlayerIfNeeded()
+    {
+        if (_videoWarmAsked || SponsorVideoEngine.Settled || _sponsors is null)
+        {
+            return;
+        }
+
+        var hasOne = false;
+
+        foreach (var name in _sponsors.SlideFileNames)
+        {
+            if (SponsorMedia.IsVideoName(name))
+            {
+                hasOne = true;
+                break;
+            }
+        }
+
+        // No videos: nothing to warm, and nothing is remembered either -
+        // the next tick asks again, which is how one added later is caught.
+        if (!hasOne)
+        {
+            return;
+        }
+
+        _videoWarmAsked = true;
+
+        // Reported from the pool thread it runs on, so it is marshalled -
+        // StatusMessage ends up on the console, which is a control.
+        SponsorVideoEngine.WarmUp(message => SafeInvoke(() => StatusMessage?.Invoke(message)));
     }
 
     /// <summary>
@@ -1311,6 +1473,15 @@ public sealed class BigScreenForm : Form
     private void ShowLeaderboardAgain()
     {
         _picSponsor.Visible = false;
+
+        // AND THE SPONSOR BEING READ. Cleared here as well as in
+        // UpdateSponsorRead, because this is the one path every other part
+        // of the window comes back to the board through - a read's name
+        // left visible underneath a roll call or a video would be stuck
+        // there until the next read.
+        _lblSponsorRead.Visible = false;
+        _showingRead = false;
+
         StopSponsorVideo();
 
         // Not over the roll call, while one is up - it shows the board
@@ -1424,6 +1595,142 @@ public sealed class BigScreenForm : Form
     /// got wrong in the direction that costs something, and a report that
     /// stops arriving cannot. See CommercialBreak.SponsorScreenUp.
     /// </summary>
+    /// <summary>
+    /// Decodes a sponsor picture into the picture box, or false when it
+    /// cannot be shown.
+    ///
+    /// EXTRACTED 12 Oct 2026, when the sponsor's read wanted the same
+    /// picture put up for a different reason - the rotation's own slot and
+    /// a read being said. Two copies of this would be two answers to "how
+    /// big a picture is too big" and two places to get the stream's
+    /// lifetime wrong.
+    ///
+    /// Only a slide no bigger than the Sponsors page takes in, sized from
+    /// its header before anything is decoded (see SponsorStore.ReadSlide).
+    /// This used to decode whatever the file held, on the UI thread, each
+    /// time the slide came round - so one too big to decode froze the Big
+    /// Screen mid-event, again every rotation.
+    /// </summary>
+    private bool PutSponsorPictureUp(string path)
+    {
+        try
+        {
+            if (SponsorStore.ReadSlide(path) is not { } bytes)
+            {
+                return false;
+            }
+
+            var previous = _picSponsor.Image;
+
+            // Copied into a Bitmap of its own before the stream closes - an
+            // Image from FromStream keeps reading its stream for life, and
+            // this one's is disposed at the end of the block. Orientation is
+            // fixed first, as the copy doesn't carry the EXIF tag. (An
+            // animated GIF shows its first frame.)
+            using var stream = new MemoryStream(bytes);
+            using var decoded = Image.FromStream(stream);
+            TrackAttachmentStore.ApplyExifOrientation(decoded);
+            _picSponsor.Image = new Bitmap(decoded);
+            previous?.Dispose();
+
+            return true;
+        }
+        catch
+        {
+            return false; // unreadable image
+        }
+    }
+
+    /// <summary>
+    /// Puts the sponsor on the crowd screen while their read is being
+    /// said, and takes them off when it is done.
+    ///
+    /// WHY THIS DOES NOT USE <see cref="_showingSponsor"/>. That flag
+    /// means "the rotation has the screen", and the rotation's timer calls
+    /// the slot over on its own schedule - which underneath a read would
+    /// move to the next slide mid-sentence. So a read has a flag of its
+    /// own and the rotation stands down while one is on air (see
+    /// SponsorTimer_Tick).
+    ///
+    /// A VIDEO KEEPS THE SCREEN, the one exception, for the reason every
+    /// other path here gives: cutting an advert off part way is worse for
+    /// the sponsor than the read going out over the standings. In practice
+    /// the two cannot collide - a paid read stands down while a video is
+    /// up - and this is the guard for the case where that ever stops being
+    /// true.
+    /// </summary>
+    private void UpdateSponsorRead()
+    {
+        if (SponsorOnAir.Showing)
+        {
+            if (_showingRead || (_video is not null && _video.View.Visible))
+            {
+                return;
+            }
+
+            // The roll call keeps the screen too: a sponsor's name over it
+            // would hide whose car has not been heard.
+            if (_rollCallSinceUtc is not null)
+            {
+                return;
+            }
+
+            _showingRead = ShowTheSponsorBeingRead(SponsorOnAir.PictureFileName, SponsorOnAir.SponsorName);
+
+            return;
+        }
+
+        if (!_showingRead)
+        {
+            return;
+        }
+
+        _showingRead = false;
+        _lblSponsorRead.Visible = false;
+
+        ShowLeaderboardAgain();
+    }
+
+    /// <summary>
+    /// The sponsor's picture where they have one, and their name where
+    /// they do not. False when neither could be shown, and then the read
+    /// goes out over the standings exactly as it used to.
+    /// </summary>
+    private bool ShowTheSponsorBeingRead(string? pictureFileName, string sponsorName)
+    {
+        if (pictureFileName is { Length: > 0 }
+            && _sponsors is not null
+            && _sponsors.ResolvePath(pictureFileName) is { } path
+            && PutSponsorPictureUp(path))
+        {
+            _lblSponsorRead.Visible = false;
+            _grid.Visible = false;
+            _attractBoard.Visible = false;
+            _attractShowing = false;
+            _picSponsor.Visible = true;
+
+            return true;
+        }
+
+        // NO PICTURE, so the name - which is the answer a club gets for
+        // every sponsor until they upload one, and is most of what a slide
+        // was doing for them anyway.
+        if (sponsorName.Length == 0)
+        {
+            return false;
+        }
+
+        _lblSponsorRead.Text = sponsorName.ToUpperInvariant();
+
+        _picSponsor.Visible = false;
+        _grid.Visible = false;
+        _attractBoard.Visible = false;
+        _attractShowing = false;
+        _lblSponsorRead.Visible = true;
+
+        return true;
+    }
+
     private void UpdateCommercialBreak()
     {
         if (IsDisposed || Disposing || _sponsors is null)
@@ -1446,6 +1753,10 @@ public sealed class BigScreenForm : Form
             if (canCarryOne)
             {
                 CommercialBreak.SponsorScreenReady();
+
+                // While there is still time: the break that wants it is
+                // somewhere between now and the end of the next race.
+                WarmTheVideoPlayerIfNeeded();
             }
 
             // And whether an advert is actually PLAYING, which is what
@@ -1519,10 +1830,84 @@ public sealed class BigScreenForm : Form
         // screen went back to the standings. An advert is the thing a
         // commercial break is FOR, so the break starts on one where there
         // is one, and the stills fill the rest of it.
-        if (!_showingSponsor)
+        //
+        // AND IT LEADS WITH ONE EVEN IF A SLIDE IS ALREADY UP (11 Oct
+        // 2026). This used to be "if nothing is showing", and between races
+        // the rotation has a still slide up about half the time - so half
+        // the club's breaks never asked for a video at all. They kept the
+        // still that happened to be up, and the break's remaining slots ran
+        // on in file order; a break is about one turn of the rotation long,
+        // so the advert came up roughly never. A club that had loaded three
+        // videos saw one of them, once, all evening.
+        //
+        // A still already up has nothing to lose by being replaced - it has
+        // had its slot, and it comes round again. A VIDEO already playing
+        // does: cutting one off part way is the thing ShowSponsorVideo and
+        // UpdateCommercialBreak both go out of their way not to do.
+        var videoPlaying = _video is not null && _video.View.Visible;
+        var haveAVideoToLeadWith = !videoPlaying && NextVideoSlide() is not null;
+
+        if (!_showingSponsor || haveAVideoToLeadWith)
         {
             ShowNextSponsorSlide(leadWithVideo: true);
         }
+
+        // SAID OUT LOUD, once per break, because this is the one decision
+        // in this window a club cannot see the workings of. "I loaded three
+        // videos and only one played" was a real report, and the log it
+        // came with had nothing in it either way - no video line, no
+        // skipped line, nothing. Now it says what the break leads with and,
+        // where that is not an advert, why not.
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [sponsor] Commercial break on the Big Screen: "
+            + (videoPlaying
+                ? "an advert is already playing and keeps the screen."
+                : haveAVideoToLeadWith
+                    ? "leading with a video advert."
+                    : $"no video advert to lead with - {WhyNoVideo()} The break runs the slides instead."));
+    }
+
+    /// <summary>
+    /// Why a break could not lead with a video, in a club's words. Only
+    /// asked when NextVideoSlide has already answered null, so it is
+    /// working out WHICH of the reasons it was.
+    /// </summary>
+    private string WhyNoVideo()
+    {
+        if (_sponsors is null)
+        {
+            return "this window has no sponsor slides.";
+        }
+
+        var videos = 0;
+        var missing = 0;
+
+        foreach (var name in _sponsors.SlideFileNames)
+        {
+            if (!SponsorMedia.IsVideoName(name))
+            {
+                continue;
+            }
+
+            videos++;
+
+            if (_sponsors.ResolvePath(name) is null)
+            {
+                missing++;
+            }
+        }
+
+        if (videos == 0)
+        {
+            return "none of the club's sponsor slides is a video (add one on the Sponsors page).";
+        }
+
+        if (missing >= videos)
+        {
+            return $"all {Plural.Of(videos, "video slide")} the club has are missing their files.";
+        }
+
+        return $"the club has {Plural.Of(videos, "video slide")} but none could be found just now.";
     }
 
     private void OnRaceEvent(RacerStanding standing, bool isValid, bool isFastestLap) => SafeInvoke(RefreshAll);
@@ -1533,7 +1918,73 @@ public sealed class BigScreenForm : Form
     private void OnAnnouncementTextReady(string text)
     {
         _lastAnnouncementUtc = DateTime.UtcNow;
-        SafeInvoke(() => _lblAnnouncement.Text = text);
+
+        SafeInvoke(() =>
+        {
+            _lblAnnouncement.Text = text;
+
+            // AND WHO IT IS ABOUT, for the band at the bottom (11 Oct
+            // 2026). Worked out here rather than on the half-second tick
+            // because this is the one moment the line is known, and
+            // because walking the standings twice a second for the whole
+            // of a race to re-answer a question whose answer cannot have
+            // changed is exactly the sort of thing that makes a club
+            // laptop warm.
+            //
+            // Inside the SafeInvoke: the standings and the profiles belong
+            // to the UI thread, and this event arrives on whichever thread
+            // queued the line.
+            _sayingAbout = LowerThird.Line(LowerThird.NamesIn(text, WhoCouldBeNamed()));
+        });
+    }
+
+    /// <summary>
+    /// The drivers a spoken line could be about: everyone on track, by
+    /// both the name the announcer would say and the name this screen
+    /// shows.
+    ///
+    /// ON TRACK, not every profile the club has. A recap names the
+    /// finishers of the race just run and the board beside the band is
+    /// showing those same cars, so a club with two hundred profiles pays
+    /// for a dozen comparisons rather than two hundred - and a line that
+    /// mentioned a driver who is not out cannot put a name on the band
+    /// over a board that has no row for them.
+    ///
+    /// THE TWO NAMES ARE OFTEN DIFFERENT, which is the whole reason this
+    /// returns pairs: the announcer reads the club's Announcer name where
+    /// they have typed one, and the board shows the driver's own. See
+    /// LowerThird.Candidate.
+    /// </summary>
+    private IReadOnlyList<LowerThird.Candidate> WhoCouldBeNamed()
+    {
+        var who = new List<LowerThird.Candidate>();
+
+        try
+        {
+            foreach (var standing in _race.GetOrderedStandings())
+            {
+                if (_profiles.Get(standing.TransponderId) is not { } profile)
+                {
+                    continue;
+                }
+
+                var said = profile.SpokenName;
+                var shown = string.IsNullOrWhiteSpace(profile.DriverName) ? said : profile.DriverName;
+
+                if (!string.IsNullOrWhiteSpace(said))
+                {
+                    who.Add(new LowerThird.Candidate(said, shown));
+                }
+            }
+        }
+        catch
+        {
+            // No names on the band rather than no Big Screen - the bargain
+            // every Update method on this window makes. The caption still
+            // says what is playing.
+        }
+
+        return who;
     }
 
     private void SafeInvoke(Action action)
@@ -1798,6 +2249,13 @@ public sealed class BigScreenForm : Form
         UpdateTicker();
         UpdateOnAir();
 
+        // The sponsor whose read is going out, before the break is asked:
+        // a read cannot happen while a video is on the crowd screen (the
+        // announcer's paid reads stand down for one), so the two never
+        // want the screen at the same moment - and if they ever did, the
+        // video would keep it. See UpdateSponsorRead.
+        UpdateSponsorRead();
+
         // Last, so everything above has had its turn at the screen before
         // the break takes it or gives it back. Asked here for the reason
         // UpdateOnAir is - see the note on it.
@@ -1842,6 +2300,8 @@ public sealed class BigScreenForm : Form
 
                 _grid.Visible = false;
                 _picSponsor.Visible = false;
+                _lblSponsorRead.Visible = false;
+                _showingRead = false;
                 _rollCall.Visible = true;
 
                 // A slide that was up when the race was staged ends here. It
@@ -1903,7 +2363,11 @@ public sealed class BigScreenForm : Form
         {
             // Not beside a sponsor slide between races either: there is no
             // race to show, and the slide would lose a third of its width.
+            // Nor under a sponsor's read, for UpdateAttract's reason: the
+            // read's picture sits in front of the map, so what showed was
+            // the map round the edges of somebody's logo.
             show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && !_attractShowing
+                   && !_showingRead
                    && !(_showingSponsor && _race.State is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
                    && _trackMap().Line is not null;
         }
@@ -1942,9 +2406,19 @@ public sealed class BigScreenForm : Form
         {
             var finishedFor = _finishedSinceUtc is { } since ? DateTime.UtcNow - since : TimeSpan.Zero;
 
+            // AND NOT OVER A SPONSOR'S READ (12 Oct 2026). _showingRead
+            // was added to UpdateSponsorRead and to nothing else, and the
+            // attract board is the FRONT-most control in
+            // _pnlLeaderboardArea - so the cards came up over a paid read's
+            // picture, between races, which is exactly when both of them
+            // happen. The club had promised that sponsor their name on the
+            // crowd screen. Every flag that says who owns this screen has
+            // to be read by every method that takes it; see the note at the
+            // top of this file.
             show = _attract is not null
                 && _rollCallSinceUtc is null
                 && !_showingSponsor
+                && !_showingRead
                 && AttractMode.Showing(_race.State, finishedFor, _race.IsWarmingUp, _race.IsPracticeMode, _race.IsDemoMode);
 
             if (show && !_attractShowing)
@@ -1980,7 +2454,7 @@ public sealed class BigScreenForm : Form
         else
         {
             _attractBoard.Visible = false;
-            _grid.Visible = _rollCallSinceUtc is null && !_showingSponsor;
+            _grid.Visible = _rollCallSinceUtc is null && !_showingSponsor && !_showingRead;
         }
 
         // The map goes with the board, and comes back with it.
@@ -2150,12 +2624,28 @@ public sealed class BigScreenForm : Form
         {
             // Before it is shown, so the band's first paint already has the
             // words in it rather than wiping on empty and filling in.
-            _onAir.Say(caption);
+            //
+            // AND WHO THE LINE IS ABOUT (11 Oct 2026). On the tick, like
+            // the caption, so the names follow the voice through a show
+            // rather than being set once when it opened: a two-hander
+            // names one driver in its first turn and another in its
+            // second. The band repaints for a change of names and only
+            // wipes for a change of caption - see OnAirBar.Say.
+            _onAir.Say(caption, _sayingAbout);
         }
 
         if (_onAir.Visible != show)
         {
             _onAir.Visible = show;
+
+            if (!show)
+            {
+                // The show is over. Nothing is being said, so there is
+                // nobody it is about - and the next show must not open
+                // with the last one's names in it for the half second
+                // before its first line arrives.
+                _sayingAbout = string.Empty;
+            }
         }
     }
 

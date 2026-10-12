@@ -1,4 +1,4 @@
-﻿namespace HeatCaller;
+namespace HeatCaller;
 
 /// <summary>
 /// MainForm's side of the recap's broadcast (27 Sep 2026): what the Garage
@@ -46,6 +46,10 @@ public partial class MainForm
     private static void WireShowMusic(AnnouncerControl announcer, CommentaryControl commentary)
     {
         commentary.TestShowMusic = announcer.TestShowMusicAsync;
+
+        // The night in four minutes - written, played once and kept in
+        // tonight's folder. See NightRecap.
+        commentary.PlayTonightsRecap = announcer.PlayTonightsRecapAsync;
 
         // The loaded audio is shared (ShowMusic), so this is really telling
         // the announcer screen to drop it - said explicitly rather than
@@ -119,6 +123,57 @@ public partial class MainForm
         // next gap - see SponsorStore.ReadPlan.
         director.SponsorReads = () => _sponsors.ReadPlan();
 
+        // THE ONE READER THAT WALKS NO STORE OF FIGURES (12 Oct 2026). The
+        // next thing about the NIGHT the club wants mentioned - a
+        // dedication, a birthday, the raffle. Everything else on this list
+        // is arithmetic over the timing; this is a sentence a human typed
+        // because they know something the decoder cannot.
+        //
+        // The day goes in on the same ask, so last week's notes are gone
+        // before one of them can be offered: ClubNotes.NewMeeting is cheap
+        // and idempotent for the day it is already on, exactly like the
+        // director's own. Done here rather than on a tick of its own
+        // because this is asked on the tick anyway, and a note read out at
+        // the wrong meeting - to the wrong room, about people who are not
+        // there - is the one failure this feature must not have.
+        director.ClubAside = () =>
+        {
+            _clubNotes.NewMeeting(_raceEvents.Active?.Id);
+
+            return _clubNotes.ToSay();
+        };
+
+        // And marked said only once the segment carrying it has survived -
+        // see CommentaryDirector._marks for why that is not the same
+        // moment as being chosen.
+        director.ClubAsideSaid = id => _clubNotes.Said(id);
+
+        // WHAT THE ROOM RECKONED (12 Oct 2026) - the only segment in the
+        // app that can be wrong, and the only one whose content the people
+        // in the room made themselves.
+        //
+        // The day goes in on the same ask, exactly as the notes' does, so
+        // last week's vote is gone before a verdict about it can be
+        // offered. RoomVote answers null on a thin vote, a split room, a
+        // race with no result filed yet and a vote already said - so
+        // anything that comes back here is already worth saying.
+        director.RoomsCall = () =>
+        {
+            _roomVote.NewMeeting(_raceEvents.Active?.Id);
+
+            return _roomVote.CallWaiting();
+        };
+
+        // Marked said only once the segment carrying it has survived - see
+        // CommentaryDirector._marks, same as the aside above.
+        director.RoomsCallSaid = raceKey => _roomVote.Said(raceKey);
+
+        // What the crowd screen shows while a sponsor's read goes out -
+        // their picture, or their name where they have none. Asked per
+        // read rather than captured, so a picture removed this afternoon
+        // is not shown tonight. See SponsorOnAir.
+        director.SponsorOnScreenFor = id => _sponsors.OnScreenFor(id);
+
         // Who is on track, and the class their record should be counted
         // over. Taken from the session rather than the programme: it is
         // the drivers actually staged, which is what the intro is about.
@@ -137,6 +192,23 @@ public partial class MainForm
             _profiles,
             _sessionHistory,
             _rounds);
+
+        // AND THE SHAPE OF THEIR LAST FEW NIGHTS (11 Oct 2026) - the half
+        // of a form guide the app did not have. A reader of its own and not
+        // something taken off GridHistory above, because a night is a DATE
+        // and the shape needs the nights a driver was absent from; neither
+        // is in DriverForm. See CommentaryWeekFacts.
+        //
+        // Read fresh every time rather than captured, like the rest of
+        // them, so a result corrected mid-evening moves this with it.
+        director.RecentWeeks = () => _rounds is null
+            ? Array.Empty<DriverWeeks>()
+            : CommentaryReaders.RecentWeeks(
+                _race.GetOrderedStandings().Select(s => s.TransponderId).ToList(),
+                _activeRound?.ClassName,
+                _profiles,
+                _sessionHistory,
+                _rounds);
 
         // The club's own qualifying method, not the calculator's default -
         // a report that ranks by total laps at a club that qualifies on a

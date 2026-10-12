@@ -33,6 +33,68 @@ public sealed class CommentaryControl : UserControl
     private readonly CheckBox _chkCoHost = new ThemedCheckBox();
     private readonly TextBox _txtCoHostName = new();
     private readonly ComboBox _cmbCoHostVoice = new();
+
+    // --- Recording the night (11 Oct 2026) ---
+    //
+    // The recording and the per-driver clips have been written after every
+    // race since they were built, and no page had a single control for any
+    // of it: a club could not turn it off, could not find the files, and
+    // was never told that a season of broadcast was accumulating in
+    // Documents. See RaceAudioStore.
+    //
+    // The store is this card's own rather than the one Race Control holds.
+    // Both load the same small file and neither caches a decision from it -
+    // Race Control reads its switches at each green - so a change made
+    // here is in force at the next race without anything being told.
+    private readonly RaceAudioStore _audio = RaceAudioStore.Load();
+    private readonly CheckBox _chkRecord = new ThemedCheckBox();
+    private readonly CheckBox _chkClips = new ThemedCheckBox();
+    private readonly TextBox _txtAudioFolder = new();
+    private readonly Button _btnAudioFolder = new();
+    private readonly Button _btnAudioOpen = new();
+    private readonly NumericUpDown _numKeepNights = new();
+    private readonly Label _lblOnDisk = new();
+
+    // --- What the co-host is LIKE (11 Oct 2026) ---
+    //
+    // The exchange worked and still sounded like one commentator cut in
+    // half, because the two of them agreed with each other. A disposition
+    // is what makes a booth pair a pair - see CoHostStance. The line under
+    // the picker says what the club has just chosen in its consequences
+    // rather than its label, the way the show music's Describe lines do.
+    private readonly ComboBox _cmbCoHostStance = new();
+    private readonly Label _lblCoHostStance = new();
+
+    // --- How chatty the night is (12 Oct 2026) ---
+    //
+    // The pacing gives an evening a shape - quiet through the heats,
+    // everything saved for the mains - and this is the volume that shape
+    // sits at. One dial, five stops, and the curve survives all of them.
+    // See ShowChatter. The line under it works its figures out from the
+    // real tables rather than repeating them, so it cannot end up lying.
+    private readonly ComboBox _cmbChatter = new();
+    private readonly Label _lblChatter = new();
+
+    // --- Club notes (12 Oct 2026) ---
+    //
+    // The asides that are not about the racing, and the two ways the room
+    // can send one in. Both OFF until a club asks for them: each writes to
+    // this PC's disk on a stranger's request, and nothing from either can
+    // be said without the race director ticking it off (ClubNotes).
+    private readonly CheckBox _chkNotesWifi = new ThemedCheckBox();
+    private readonly CheckBox _chkNotesRelay = new ThemedCheckBox();
+    private readonly Label _lblNotesWhere = new();
+
+    // --- The room's vote (12 Oct 2026) ---
+    //
+    // Off until a club asks for it, for the one reason every public route
+    // here is: it writes to this PC's disk on a stranger's request. Unlike
+    // the notes above it needs no approval gate, because a vote is a tap
+    // on a name the club itself put on the ballot - nothing a phone sends
+    // can become a word the announcer says. See RoomVote.
+    private readonly CheckBox _chkVoteWifi = new ThemedCheckBox();
+    private readonly CheckBox _chkVoteRelay = new ThemedCheckBox();
+    private readonly Label _lblVoteWhere = new();
     private readonly CheckBox _chkIntros = new ThemedCheckBox();
     private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
     private readonly CheckBox _chkSummaries = new ThemedCheckBox();
@@ -136,6 +198,18 @@ public sealed class CommentaryControl : UserControl
     private readonly Button _btnBedPick = new();
     private readonly Button _btnBedClear = new();
     private readonly Button _btnTestShow = new();
+
+    /// <summary>
+    /// Writes and plays the night's own recap - see NightRecap. On the
+    /// recording card rather than the show's, because what a club wants
+    /// out of it is the FILE: the piece plays once in a hall that is
+    /// packing up, and then sits in the night's folder for the people who
+    /// were not there.
+    /// </summary>
+    private readonly Button _btnNightRecap = new();
+
+    /// <summary>What happened when it was pressed, in the club's words.</summary>
+    private readonly Label _lblNightRecap = new();
     private readonly Label _lblOpenerFile = new();
     private readonly Label _lblBedFile = new();
     private readonly Label _lblShowResult = new();
@@ -179,12 +253,35 @@ public sealed class CommentaryControl : UserControl
     private (Font Font, int Count, int Width)? _toneWidth;
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _coHostVoiceWidth;
+    private (Font Font, int Count, int Width)? _coHostStanceWidth;
+    private (Font Font, int Count, int Width)? _chatterWidth;
+
+    /// <summary>
+    /// Raised when the club switches shout-outs from its web page OFF, so
+    /// MainForm can tell the relay to stop taking them and throw away
+    /// whatever it is holding.
+    ///
+    /// An event rather than this page reaching for the publisher: a
+    /// settings page knows what was ticked and nothing about how the relay
+    /// is reached - see RelayPublisher.CloseClubNotesOnTheRelay, which
+    /// also explains why switching it off has to be SENT rather than
+    /// inferred from the polling stopping.
+    /// </summary>
+    internal event Action? NotesClosedOnTheRelay;
+
+    /// <summary>
+    /// Raised when the club switches the relay's vote route off, so the
+    /// relay is TOLD rather than left taking votes nobody will read. The
+    /// mirror of <see cref="NotesClosedOnTheRelay"/>.
+    /// </summary>
+    internal event Action? VoteClosedOnTheRelay;
     private (Font Font, int Count, int Width)? _honoursVoiceWidth;
 
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
     private const string TestCaption = "Test Connection";
     private const string LoadVoicesCaption = "Load Voices";
     private const string TestShowCaption = "Play It";
+    private const string NightRecapCaption = "Write And Play It";
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields.</summary>
     private const int EndpointWidth = 300;
@@ -244,6 +341,13 @@ public sealed class CommentaryControl : UserControl
     /// which has the announcer.
     /// </summary>
     internal Func<Task<string?>>? TestShowMusic { get; set; }
+
+    /// <summary>
+    /// Writes tonight's recap, plays it out once and keeps it as a file -
+    /// AnnouncerControl.PlayTonightsRecapAsync. Null until wired, and then
+    /// the button does nothing.
+    /// </summary>
+    internal Func<Task<string?>>? PlayTonightsRecap { get; set; }
 
     /// <summary>
     /// Tells the announcer screen that the show's music has changed, so it
@@ -1074,11 +1178,63 @@ public sealed class CommentaryControl : UserControl
         // in a different place is how a settings page starts lying.
         // ------------------------------------------------------------------
 
+        // HOW CHATTY, at the top of the Segments card because it governs
+        // every box below it: a club that turns this down hears fewer of
+        // the things it has switched on, rather than different ones. Filled
+        // from ShowChatter.All and the handler attached after the club's own
+        // choice is selected, for the reason FillLibrary gives.
+        _cmbChatter.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbChatter.Items.Clear();
+
+        foreach (var level in ShowChatter.All)
+        {
+            _cmbChatter.Items.Add(level.Name);
+        }
+
+        var chatterNow = ShowChatter.For(_settings.CommentaryChatter);
+        var chatterAt = 0;
+
+        for (var i = 0; i < ShowChatter.All.Count; i++)
+        {
+            if (ShowChatter.All[i].Key == chatterNow.Key)
+            {
+                chatterAt = i;
+                break;
+            }
+        }
+
+        _cmbChatter.SelectedIndex = chatterAt;
+
+        _cmbChatter.SelectedIndexChanged += (_, _) =>
+        {
+            var at = _cmbChatter.SelectedIndex;
+
+            _settings.CommentaryChatter = at >= 0 && at < ShowChatter.All.Count
+                ? ShowChatter.All[at].Key
+                : string.Empty;
+
+            _settings.Save();
+            _lblChatter.Text = ShowChatter.Describe(_settings.CommentaryChatter);
+        };
+
+        _lblChatter.Text = ShowChatter.Describe(_settings.CommentaryChatter);
+
+        var chatterGrid = new FieldGrid();
+
+        Stepped(chatterGrid.AddRow("How chatty:", Line(_cmbChatter)));
+        chatterGrid.AddHint(_lblChatter);
+
         var segments = new Section("Segments");
 
         segments.Add(Hint(
             "What the announcer covers beyond the intros and recaps above. Each one only speaks when the race actually "
             + "gives it something to say, so switching them all on does not mean hearing them all every race."));
+
+        segments.Add(Hint(
+            "The night is paced to be quiet through practice and the heats and to spend what it held back on the "
+            + "mains, which is what stops a room tuning the announcer out. How chatty sets the volume that shape sits "
+            + "at - it never changes the shape, so the mains are always the loudest part of the evening."));
+        segments.Add(chatterGrid, gapBelow: UiLayout.SectionGap);
 
         var switchedOff = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(_settings.CommentarySegmentsOff));
 
@@ -1152,13 +1308,145 @@ public sealed class CommentaryControl : UserControl
         _cmbCoHostVoice.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbCoHostVoice.SelectedIndexChanged += (_, _) => SaveCoHostVoice();
 
+        // THE STANCE. Filled from CoHostStance.All rather than written out
+        // here, so adding one is a table entry; and the handler is attached
+        // AFTER the list is filled and the club's own choice selected, for
+        // the reason FillLibrary gives - filling a box raises
+        // SelectedIndexChanged, and a club whose stance had gone would have
+        // it quietly saved as the first one in the list.
+        _cmbCoHostStance.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbCoHostStance.Items.Clear();
+
+        foreach (var stance in CoHostStance.All)
+        {
+            _cmbCoHostStance.Items.Add(stance.Name);
+        }
+
+        var stanceNow = CoHostStance.For(_settings.CoHostStance);
+        _cmbCoHostStance.SelectedIndex = Math.Max(0, CoHostStance.All.ToList().FindIndex(one => one.Key == stanceNow.Key));
+
+        _cmbCoHostStance.SelectedIndexChanged += (_, _) =>
+        {
+            var at = _cmbCoHostStance.SelectedIndex;
+
+            _settings.CoHostStance = at >= 0 && at < CoHostStance.All.Count
+                ? CoHostStance.All[at].Key
+                : string.Empty;
+
+            _settings.Save();
+            _lblCoHostStance.Text = CoHostStance.Describe(_settings.CoHostStance);
+        };
+
+        _lblCoHostStance.Text = CoHostStance.Describe(_settings.CoHostStance);
+
         var coHostGrid = new FieldGrid();
 
         Stepped(coHostGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
         Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice)));
+        Stepped(coHostGrid.AddRow("What they're like:", Line(_cmbCoHostStance)));
+        coHostGrid.AddHint(_lblCoHostStance);
         coHostGrid.AddHint(
             "With no voice picked for the engine in use, the announcer's own voice reads both halves - still a conversation, "
             + "and better than nothing. The list is filled from the same engine as the mechanic's, beside Load Voices above.");
+
+        // ------------------------------------------------------------------
+        // Club notes (12 Oct 2026)
+        // ------------------------------------------------------------------
+
+        Check(_chkNotesWifi, "Take them from phones on the club's Wi-Fi");
+        _chkNotesWifi.Checked = _settings.ClubNotesFromTheRoom;
+        _chkNotesWifi.CheckedChanged += (_, _) =>
+        {
+            _settings.ClubNotesFromTheRoom = _chkNotesWifi.Checked;
+            _settings.Save();
+            DescribeNoteRoutes();
+        };
+
+        Check(_chkNotesRelay, "Take them from the club's own web page");
+        _chkNotesRelay.Checked = _settings.ClubNotesFromTheRelay;
+        _chkNotesRelay.CheckedChanged += (_, _) =>
+        {
+            _settings.ClubNotesFromTheRelay = _chkNotesRelay.Checked;
+            _settings.Save();
+
+            // THE RELAY IS TOLD WHEN IT IS SWITCHED OFF, not left to work
+            // it out. The publisher stops polling the moment this is
+            // unticked, so without this the relay would go on taking
+            // strangers' messages for a club that had declined them - and
+            // holding them. See RelayPublisher.CloseClubNotesOnTheRelay.
+            if (!_chkNotesRelay.Checked)
+            {
+                NotesClosedOnTheRelay?.Invoke();
+            }
+
+            DescribeNoteRoutes();
+        };
+
+        DescribeNoteRoutes();
+
+        var notes = new Section("Club notes");
+
+        notes.Add(Hint(
+            "The things about a night the timing cannot know - a dedication, somebody's birthday, the raffle closing "
+            + "at eight. Type them on the Notes button on Race Control's announcer strip, and the announcer works one "
+            + "into a sentence of its own between races, says it once, and adds nothing to it."));
+        notes.Add(Hint(
+            "The room can send them in too, if you let it. Nothing anybody sends is ever said until you have read it "
+            + "and approved it on that same screen, so the worst a stranger can do is give you something to delete."));
+        notes.Add(_chkNotesWifi, stretch: false, gapBelow: 0);
+        notes.Add(_chkNotesRelay, stretch: false, gapBelow: 0);
+        notes.Add(_lblNotesWhere);
+
+        // ------------------------------------------------------------------
+        // The room's vote (12 Oct 2026)
+        // ------------------------------------------------------------------
+
+        Check(_chkVoteWifi, "Let phones on the club's Wi-Fi vote");
+        _chkVoteWifi.Checked = _settings.RoomVoteFromTheRoom;
+        _chkVoteWifi.CheckedChanged += (_, _) =>
+        {
+            _settings.RoomVoteFromTheRoom = _chkVoteWifi.Checked;
+            _settings.Save();
+            DescribeVoteRoutes();
+        };
+
+        Check(_chkVoteRelay, "Let the club's own web page vote");
+        _chkVoteRelay.Checked = _settings.RoomVoteFromTheRelay;
+        _chkVoteRelay.CheckedChanged += (_, _) =>
+        {
+            _settings.RoomVoteFromTheRelay = _chkVoteRelay.Checked;
+            _settings.Save();
+
+            // THE RELAY IS TOLD WHEN IT IS SWITCHED OFF, exactly as the
+            // notes route is: the publisher stops polling the moment this
+            // is unticked, so without this the relay would go on taking
+            // votes for a club that had declined them - and holding them.
+            // See RelayPublisher.CloseRoomVoteOnTheRelay.
+            if (!_chkVoteRelay.Checked)
+            {
+                VoteClosedOnTheRelay?.Invoke();
+            }
+
+            DescribeVoteRoutes();
+        };
+
+        DescribeVoteRoutes();
+
+        var roomVote = new Section("The room's vote");
+
+        roomVote.Add(Hint(
+            "The room votes on who wins, and after the race the announcer says what it reckoned - including the one "
+            + "line no timing system could produce, which is that nobody in the room picked the driver who won. It is "
+            + "the only thing the announcer says that the people on the bank made themselves, and the only one that "
+            + "can be wrong."));
+        roomVote.Add(Hint(
+            "Open and close it on the Votes button on Race Control's announcer strip, beside Notes - open it when the "
+            + "race is called to the grid, and it closes itself when the result comes in. The announcer stays quiet "
+            + "unless enough people voted to speak for the room, and says nothing at all if the room split evenly. "
+            + "It never says who anybody picked."));
+        roomVote.Add(_chkVoteWifi, stretch: false, gapBelow: 0);
+        roomVote.Add(_chkVoteRelay, stretch: false, gapBelow: 0);
+        roomVote.Add(_lblVoteWhere);
 
         var coHost = new Section("The co-host");
 
@@ -1166,7 +1454,8 @@ public sealed class CommentaryControl : UserControl
             "A second commentator, for the segments that suit one. The announcer makes a remark and the co-host answers - "
             + "written as one request and split in two, so the answer actually answers the question. Segments marked above "
             + "as a two-hander use them; the rest stay single-voice, and anything that can't be split cleanly is simply "
-            + "said in one voice instead."));
+            + "said in one voice instead. Give them a point of view and the two of them stop agreeing with each other, "
+            + "which is what makes a pair in a booth sound like two people."));
         coHost.Add(_chkCoHost, stretch: false);
         coHost.Add(coHostGrid, gapBelow: 0);
 
@@ -1217,7 +1506,7 @@ public sealed class CommentaryControl : UserControl
         _btnStingClear.Text = "Remove";
         _btnStingClear.Click += (_, _) => ClearShowMusic(ShowPart.Sting);
 
-        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblStingFile, _lblShowResult })
+        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblStingFile, _lblShowResult, _lblCoHostStance, _lblChatter, _lblNotesWhere, _lblVoteWhere, _lblNightRecap, _lblOnDisk })
         {
             label.AutoSize = true;
             label.ForeColor = AppTheme.TextMuted;
@@ -1368,6 +1657,82 @@ public sealed class CommentaryControl : UserControl
         }
 
         // ------------------------------------------------------------------
+        // Recording the night (11 Oct 2026)
+        //
+        // Last on the page, after everything that decides what the
+        // broadcast IS: this is only about keeping a copy of it.
+        // ------------------------------------------------------------------
+
+        Check(_chkRecord, "Record each race, and cut each driver their own clip");
+        _textSize.Wear(_chkRecord, () => AppTheme.BoldFont);
+        _chkRecord.Checked = _audio.Enabled;
+        _chkRecord.CheckedChanged += (_, _) =>
+        {
+            _audio.Enabled = _chkRecord.Checked;
+            UpdateEnabledState();
+        };
+
+        Check(_chkClips, "A clip for each driver as well as the race's own recording");
+        _chkClips.Checked = _audio.DriverHighlights;
+        _chkClips.CheckedChanged += (_, _) => _audio.DriverHighlights = _chkClips.Checked;
+
+        _txtAudioFolder.ReadOnly = true;
+        _txtAudioFolder.Text = _audio.Folder;
+
+        _btnAudioFolder.Text = "Choose...";
+        _btnAudioFolder.Click += (_, _) => PickAudioFolder();
+
+        _btnAudioOpen.Text = "Open folder";
+        _btnAudioOpen.Click += (_, _) => OpenAudioFolder();
+
+        _numKeepNights.Minimum = 1;
+        _numKeepNights.Maximum = 104;
+        _numKeepNights.Value = Math.Clamp(_audio.KeepNights, 1, 104);
+        _numKeepNights.ValueChanged += (_, _) =>
+        {
+            _audio.KeepNights = (int)_numKeepNights.Value;
+            ShowWhatIsOnDisk();
+        };
+
+        var audioGrid = new FieldGrid();
+
+        Stepped(audioGrid.AddRow("Keep the last:", Line(_numKeepNights, Suffix("race nights - the oldest night's folder is removed after a race, so this is a ceiling rather than an archive"))));
+        Stepped(audioGrid.AddRow("Folder:", Line(_txtAudioFolder, _btnAudioFolder, _btnAudioOpen)));
+        audioGrid.AddHint(_lblOnDisk);
+
+        var audio = new Section("Recording the night");
+
+        audio.Add(Hint(
+            "Every race is recorded as it goes out - the voice, the music, the effects, exactly as the room heard it - "
+            + "and each driver gets an mp3 of the stretches where the announcer called them. The clips are the half worth "
+            + "having: a driver who posts the forty seconds where their pass for the lead was called is the best "
+            + "advertisement your club has. They go in a folder per night, with a Highlights folder inside it."));
+        audio.Add(_chkRecord, stretch: false);
+        audio.Add(_chkClips, stretch: false, gapBelow: UiLayout.HintGap);
+        audio.Add(Hint(
+            "Recordings are deliberately NOT kept with the club's data, so a backup can never sweep them up - an evening "
+            + "is a few hundred megabytes. Copy a night's folder somewhere else to keep it past the count below."));
+        audio.Add(audioGrid, gapBelow: UiLayout.SectionGap);
+
+        // THE NIGHT IN FOUR MINUTES, on this card because what a club
+        // wants out of it is the file - it lands in the same night's
+        // folder as the races and the bookends. See NightRecap.
+        _btnNightRecap.Text = NightRecapCaption;
+        _btnNightRecap.Click += async (_, _) => await PlayTonightsRecapAsync();
+
+        var recapGrid = new FieldGrid();
+
+        recapGrid.AddHint(
+            "After the last race: the whole evening written as a short piece for the people who were not there, "
+            + "played out once with your opener and bed round it, and kept in tonight's folder as \"The Night\". "
+            + "It is the one thing this app makes that somebody outside the building would choose to listen to.");
+        Stepped(recapGrid.AddRow("Tonight's recap:", Line(Steady(_btnNightRecap, NightRecapCaption), _lblNightRecap)));
+
+        audio.Add(recapGrid, gapBelow: 0);
+
+        ShowWhatIsOnDisk();
+
+        // ------------------------------------------------------------------
         // The page
         // ------------------------------------------------------------------
 
@@ -1383,10 +1748,13 @@ public sealed class CommentaryControl : UserControl
         page.Add(writes);
         page.Add(segments);
         page.Add(coHost);
+        page.Add(notes);
+        page.Add(roomVote);
         page.Add(style);
         page.Add(recap);
         page.Add(broadcast);
-        page.Add(show, gapBelow: 0);
+        page.Add(show);
+        page.Add(audio, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -1399,7 +1767,7 @@ public sealed class CommentaryControl : UserControl
         {
             connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
             pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, honoursGrid, coHostGrid,
-            showMusicGrid,
+            showMusicGrid, audioGrid,
         }));
 
         _textSize.Keep(SizeFields);
@@ -1471,13 +1839,15 @@ public sealed class CommentaryControl : UserControl
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
         Fit(_cmbMechanicVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbMechanicVoice, ref _voiceWidth)));
         Fit(_cmbCoHostVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
+        Fit(_cmbCoHostStance, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostStance, ref _coHostStanceWidth)));
+        Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
         Fit(_cmbHonoursVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
 
         foreach (var number in new[]
                  {
                      _numTimeout, _numFinishers, _numInterval, _numObservations, _numMaxWords, _numVariety,
                      _numSummaryDelay, _numTeaserGap, _numStability, _numStyleEx, _numDuckPercent,
-                     _numOpenerLevel, _numBedLevel, _numBedDuck, _numVoiceEnters,
+                     _numOpenerLevel, _numBedLevel, _numBedDuck, _numVoiceEnters, _numKeepNights,
                  })
         {
             Fit(number, NumberWidth(number));
@@ -1658,6 +2028,8 @@ public sealed class CommentaryControl : UserControl
         // The longest voice may have come or gone: the pickers measured again.
         _voiceWidth = null;
         _coHostVoiceWidth = null;
+        _coHostStanceWidth = null;
+        _chatterWidth = null;
         _honoursVoiceWidth = null;
         SizeFields();
     }
@@ -1825,6 +2197,158 @@ public sealed class CommentaryControl : UserControl
     /// which is the honest state of a damaged install - the club's own
     /// Choose... still works.
     /// </summary>
+    /// <summary>
+    /// Where the recordings go. A folder the club picks, or the default
+    /// under Documents.
+    ///
+    /// The box is READ-ONLY and this is the only way to change it, which is
+    /// deliberate: a typed path can be a network share, and the store's own
+    /// note explains at length why merely asking Windows whether one exists
+    /// hands this account's credentials to whoever runs that server. The
+    /// store refuses one anyway; this means a club never gets as far as
+    /// typing it.
+    /// </summary>
+    private void PickAudioFolder()
+    {
+        try
+        {
+            using var dialog = new FolderBrowserDialog
+            {
+                SelectedPath = _audio.Folder,
+                Description = "Choose a folder for the race recordings",
+            };
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            _audio.FolderSetting = dialog.SelectedPath;
+            _txtAudioFolder.Text = _audio.Folder;
+
+            ShowWhatIsOnDisk();
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(this, $"Couldn't change the recordings folder: {ex.Message}",
+                "Folder not changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Opens the recordings folder, making it first if no race has been
+    /// recorded yet - which is the usual state of it the first time
+    /// somebody presses this, and an error about a missing folder would
+    /// read as the feature being broken.
+    /// </summary>
+    private void OpenAudioFolder()
+    {
+        var folder = _audio.Folder;
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = folder,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(this, $"Couldn't open {folder}: {ex.Message}",
+                "Folder not opened", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>
+    /// What is in the recordings folder now.
+    ///
+    /// A club cannot decide how many nights to keep without knowing what a
+    /// night costs, and this is the only place in the app that has ever
+    /// said so. Asked when the page is built and when the count changes -
+    /// never on a timer: it walks the folder, and a settings page that
+    /// measured a few gigabytes twice a second would be the reason a club
+    /// PC was busy.
+    /// </summary>
+    private void ShowWhatIsOnDisk()
+    {
+        var (nights, megabytes) = _audio.OnDisk();
+
+        _lblOnDisk.Text = nights == 0
+            ? "Nothing recorded yet. A folder appears here after the first race of a night."
+            : $"On disk now: {Plural.Of(nights, "night")}, about {megabytes:n0} MB.";
+    }
+
+    /// <summary>
+    /// Says where the room can send one from, and what the address is -
+    /// which is the part a club actually needs, because an address nobody
+    /// is given is a route nobody uses.
+    /// </summary>
+    private void DescribeNoteRoutes()
+    {
+        var wifi = _chkNotesWifi.Checked;
+        var relay = _chkNotesRelay.Checked;
+
+        if (!wifi && !relay)
+        {
+            _lblNotesWhere.Text = "Only you can add one at the moment, on the Notes button on Race Control.";
+            return;
+        }
+
+        var said = new List<string>();
+
+        if (wifi)
+        {
+            // The same address the Club Website page gives out for the
+            // live results, with the page's own path on the end. Said
+            // rather than linked because somebody is going to write it on
+            // a whiteboard.
+            said.Add($"on the club Wi-Fi at {WebServerService.NotesPath} under this PC's own address");
+        }
+
+        if (relay)
+        {
+            said.Add("from your club's web page, for the people who could not make it");
+        }
+
+        _lblNotesWhere.Text = "Messages can come in " + string.Join(", and ", said)
+            + ". Every one waits on Race Control until you approve it.";
+    }
+
+    /// <summary>
+    /// Where the room votes, said rather than linked - somebody is going
+    /// to write it on a whiteboard.
+    /// </summary>
+    private void DescribeVoteRoutes()
+    {
+        var wifi = _chkVoteWifi.Checked;
+        var relay = _chkVoteRelay.Checked;
+
+        if (!wifi && !relay)
+        {
+            _lblVoteWhere.Text = "Nobody can vote at the moment. You can still open a vote on Race Control to see "
+                + "the grid, but no phone has a way in.";
+            return;
+        }
+
+        var said = new List<string>();
+
+        if (wifi)
+        {
+            said.Add($"on the club Wi-Fi at {WebServerService.VotePath} under this PC's own address");
+        }
+
+        if (relay)
+        {
+            said.Add("from your club's web page, for the people who could not make it");
+        }
+
+        _lblVoteWhere.Text = "The room can vote " + string.Join(", and ", said)
+            + ". No running tally is ever shown to a phone, so nobody votes with the crowd.";
+    }
+
     private void FillLibrary(ComboBox box, ShowPart part)
     {
         box.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -1900,6 +2424,56 @@ public sealed class CommentaryControl : UserControl
     /// the announcer, because the levels are the whole point and they can
     /// only be judged against an actual voice.
     /// </summary>
+    /// <summary>
+    /// Presses it: writes the recap, plays it, and says what happened.
+    ///
+    /// The button stays down for the whole thing - the writing AND the
+    /// playing, which together is a couple of minutes - so nobody starts
+    /// a second recap over the first. The same shape as Play It above,
+    /// and the caption says which half it is on, because a button that
+    /// says "Playing..." through forty seconds of silence while a model
+    /// writes looks broken.
+    /// </summary>
+    private async Task PlayTonightsRecapAsync()
+    {
+        if (PlayTonightsRecap is null)
+        {
+            return;
+        }
+
+        _btnNightRecap.Enabled = false;
+        _btnNightRecap.Text = "Writing...";
+        _lblNightRecap.Text = string.Empty;
+        _lblNightRecap.ForeColor = AppTheme.TextMuted;
+
+        try
+        {
+            var problem = await PlayTonightsRecap.Invoke();
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _lblNightRecap.Text = problem
+                ?? "Played, and saved in tonight's folder as \"The Night\". Open folder above to find it.";
+            _lblNightRecap.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+        }
+        catch (Exception ex)
+        {
+            _lblNightRecap.Text = ex.Message;
+            _lblNightRecap.ForeColor = AppTheme.Accent;
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _btnNightRecap.Enabled = true;
+                _btnNightRecap.Text = NightRecapCaption;
+            }
+        }
+    }
+
     private async Task TestShowMusicAsync()
     {
         if (TestShowMusic is null)
@@ -2134,6 +2708,23 @@ public sealed class CommentaryControl : UserControl
 
     private void UpdateEnabledState()
     {
+        // RECORDING IS NOT GATED ON THE ANNOUNCER (11 Oct 2026). A club
+        // that runs no commentary at all still has music, effects, flag
+        // calls and lap times going out of this PC, and a recording of that
+        // is a recording of their night. The card is on this page because
+        // this is the page about what goes out over the PA, not because it
+        // depends on anything else on it.
+        //
+        // Open folder stays live whatever the switches say: somebody
+        // turning recording off is quite likely to want the files they
+        // already have.
+        var recording = _chkRecord.Checked;
+
+        _chkClips.Enabled = recording;
+        _txtAudioFolder.Enabled = recording;
+        _btnAudioFolder.Enabled = recording;
+        _numKeepNights.Enabled = recording;
+
         var on = _chkEnabled.Checked;
         _chkUseRelay.Enabled = on;
         _txtEndpoint.Enabled = on;
@@ -2222,8 +2813,18 @@ public sealed class CommentaryControl : UserControl
         var anyExchange = _segmentBoxes.Any(pair => pair.Value.Checked && CommentaryBudget.Spec(pair.Key).CanBeExchange);
 
         _chkCoHost.Enabled = on && anyExchange;
+        _cmbChatter.Enabled = on;
+
+        // NOT GATED ON THE ANNOUNCER being switched on, deliberately - the
+        // same argument the recording card makes. A club can collect
+        // messages all evening with the AI off and read them out itself;
+        // what it cannot do is have the announcer say them, which is
+        // already true because there is no announcer.
+        _chkNotesWifi.Enabled = true;
+        _chkNotesRelay.Enabled = true;
         _txtCoHostName.Enabled = on && anyExchange && _chkCoHost.Checked;
         _cmbCoHostVoice.Enabled = on && anyExchange && _chkCoHost.Checked;
+        _cmbCoHostStance.Enabled = on && anyExchange && _chkCoHost.Checked;
 
         // The show's music dresses the segments, so it goes dark with
         // commentary itself. Remove is dark when there is nothing there to
@@ -2258,6 +2859,13 @@ public sealed class CommentaryControl : UserControl
         // Nothing to play: a Test button that does nothing reads as the
         // feature being broken rather than as a club with no files in yet.
         _btnTestShow.Enabled = musicOn && (_showMusic.OpenerPath is not null || _showMusic.BedPath is not null);
+
+        // THE RECAP NEEDS THE ANNOUNCER, not the music. It is read plainly
+        // where a club has unticked the sign-off's music (the handler says
+        // so), but with no commentary at all there is nothing to write it
+        // with - and a button that answers "the commentary isn't set up"
+        // every time is a button that should have been greyed out.
+        _btnNightRecap.Enabled = _chkEnabled.Checked;
 
         foreach (var box in _showBoxes.Values)
         {

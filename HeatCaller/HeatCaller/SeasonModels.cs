@@ -101,6 +101,140 @@ public sealed class Season
     /// </summary>
     public int CountBestRounds { get; set; }
 
+    /// <summary>
+    /// How many rounds this championship is SCHEDULED to run - the length
+    /// of the season, as the club planned it. Zero means they have not
+    /// said, which is what every season made before 12 Oct 2026 holds and
+    /// is the honest default.
+    ///
+    /// WHY THIS IS NOT DERIVABLE, AND WHY IT HAD TO BE ASKED FOR
+    ///
+    /// Nothing else in this app knows it. A Season is a set of races that
+    /// have HAPPENED plus a rule that takes more as they are recorded, so
+    /// the only round count anywhere is "how many have been run so far".
+    /// <see cref="CountBestRounds"/> looks like a length and is not - it is
+    /// the drop cap, and "best 5 of 7" is a rule about a driver's own
+    /// rounds rather than about the calendar.
+    ///
+    /// WHAT IT UNLOCKS, which is the whole reason it exists: everything
+    /// the announcer could say about what is still POSSIBLE. "Nobody can
+    /// catch him now", "three rounds left and these two are level", "a win
+    /// today and it is his" are all claims about the rounds remaining, and
+    /// with no planned length there are no rounds remaining to reason
+    /// about - only rounds already run. See CommentaryReaders.TitleStakes.
+    ///
+    /// Zero keeps the announcer quiet about all of it rather than guessing,
+    /// which is right: a club that has not told the app its season length
+    /// has not given it the figure, and inventing one would put a false
+    /// "he cannot be caught" over a PA.
+    /// </summary>
+    public int PlannedRounds { get; set; }
+
+    /// <summary>
+    /// How many rounds are still to come after the ones counted so far,
+    /// or null when the club has not said how long the season is.
+    ///
+    /// Never negative: a club that planned six rounds and ran seven has a
+    /// season that over-ran, and the honest answer is then that none
+    /// remain rather than minus one.
+    /// </summary>
+    public int? RoundsRemainingAfter(int roundsCounted) =>
+        PlannedRounds <= 0 ? null : Math.Max(0, PlannedRounds - Math.Max(0, roundsCounted));
+
+    /// <summary>
+    /// The biggest figure in this season's scheme.
+    ///
+    /// Read off the table rather than assumed to be the first row's: a club
+    /// that typed its own scheme can have the best score anywhere in it,
+    /// and a bonus row below the podium is a real thing people enter.
+    ///
+    /// NOT "THE MOST A ROUND CAN BE WORTH", which is what this was called
+    /// and is not what it answers. It reads the ROWS; a race is scored
+    /// through <see cref="PointsForPosition"/>, which takes the FIRST row
+    /// for a position - so a scheme holding two rows for first place has a
+    /// biggest figure that nobody can ever score. Anything proving what is
+    /// still possible wants a PLACE and then that lookup's price for it:
+    /// see <see cref="BestPayingPosition"/>, which is what
+    /// CommentaryReaders.TitleOnTheLine asks, and
+    /// CommentaryStakesTests.The_best_paying_place_is_read_through_the_lookup_that_scores_a_race,
+    /// which is the two of them disagreeing on purpose.
+    /// </summary>
+    public int MostPointsInARound() =>
+        PointsScheme.Count == 0 ? 0 : Math.Max(0, PointsScheme.Max(row => row.Points));
+
+    /// <summary>
+    /// The finishing position that PAYS the most on this season's own
+    /// scheme - the place a driver's best possible round is - or zero when
+    /// nothing scores.
+    ///
+    /// WHY THIS IS NOT ALWAYS ONE, and why anything that assumed it was
+    /// was wrong. The scheme is a list a club TYPES. Third paying more than
+    /// second is a real thing people enter, by design (an endurance round
+    /// weighted differently) and by accident (a row edited and the one
+    /// above it forgotten). So "the best available result" and "the most
+    /// points available" are two different positions, and a simulation
+    /// built on winning the race proves nothing about the points.
+    ///
+    /// READ THROUGH <see cref="PointsForPosition"/> rather than off the
+    /// rows, because that lookup is what actually scores a race and it
+    /// takes the FIRST row for a position: a scheme holding two rows for
+    /// first place pays whichever one was typed first, and the higher of
+    /// the two is a figure nobody can score. The lowest position among
+    /// those paying the most wins the tie, so a proof built on it has the
+    /// fewest hypothetical cars in it.
+    ///
+    /// Used by CommentaryReaders.TitleOnTheLine to build a rival's best
+    /// possible remaining round. See its remarks for why that has to be
+    /// played out rather than added up.
+    /// </summary>
+    public int BestPayingPosition()
+    {
+        var bestPosition = 0;
+        var bestPoints = 0;
+
+        foreach (var row in PointsScheme)
+        {
+            if (row.Position < 1)
+            {
+                continue;
+            }
+
+            var pays = PointsForPosition(row.Position);
+
+            if (bestPosition == 0 || pays > bestPoints || (pays == bestPoints && row.Position < bestPosition))
+            {
+                bestPosition = row.Position;
+                bestPoints = pays;
+            }
+        }
+
+        return bestPoints > 0 ? bestPosition : 0;
+    }
+
+    /// <summary>
+    /// Whether any row of this scheme TAKES points away - a negative
+    /// figure somewhere in the table.
+    ///
+    /// The Season Rules page accepts one, and a club has reasons to: a
+    /// penalty row for a position that is really a disqualification. It
+    /// makes one thing unprovable, which is why this is asked.
+    ///
+    /// WHAT IT BREAKS. Every "nobody can catch him" claim in this app is
+    /// proved by playing the remaining rounds out with the rival at their
+    /// best and the leader at their worst, and the leader's worst is taken
+    /// to be scoring NOTHING - not entering. On a scheme where nothing is
+    /// negative that is exactly right: a round worth zero either leaves a
+    /// total alone or is dropped by the best-of rule, so it is the same as
+    /// not being there. With a negative row it is no longer the worst case
+    /// at all - a leader can finish in a place that costs them points and
+    /// come out BELOW where their absence would have left them - so a proof
+    /// built on absence would claim a title that could still be lost.
+    ///
+    /// So CommentaryReaders.TitleOnTheLine refuses the whole season rather
+    /// than price a worst case it has not got.
+    /// </summary>
+    public bool PenalisesAnyone() => PointsScheme.Any(row => row.Points < 0);
+
     public List<PointsSchemeEntry> PointsScheme { get; set; } = DefaultPointsScheme();
 
     /// <summary>

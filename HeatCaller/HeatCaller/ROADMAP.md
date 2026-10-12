@@ -272,6 +272,40 @@ it.
 - **The venue** (Tier 1, 3). `CommentaryReaders.LayoutRecord` /
   `VenueRecord` and `CommentaryRaceFacts.LayoutRecord` - the layout's
   outright lap record, who holds it and when it was set.
+- **Stakes permutations** (Tier 1, 1 - the plan's richest seam, and the
+  item it listed first), 12 Oct 2026 - `CommentaryReaders.TitleOnTheLine`
+  and `CommentaryStakesFacts`. This sat in the "not done" list below for
+  two days saying it was **blocked on a planned round count on a season**,
+  which was exactly right: a `Season` is a set of races that have happened
+  plus a rule that takes more as they are recorded, and `CountBestRounds`
+  is the drop cap rather than the length. Nothing in the app could derive
+  it, so it was asked for - `Season.PlannedRounds`, one box on the
+  season's own rules, nought meaning "not said" and the announcer then
+  silent about all of it.
+- **The asides that are not about the race** (Tier 2, last bullet) - the
+  weather, the raffle, somebody's birthday. Built 12 Oct 2026 as
+  `ClubNotes`, with both inbound routes and the approval gate - see "The
+  room in the show" below. This entry's own answer until then was that
+  nothing in the app held a line like that and there was nowhere to type
+  one, which was exactly right and is exactly what was built: a store, a
+  window on Race Control, and a segment of its own.
+  `NightAhead.ChampionshipNote` is still null for the reason this gave,
+  and is still the same shape - a club that wanted one would now point it
+  at the notes store rather than at a new box.
+- **Season form beyond a streak** (Tier 1, 2), 12 Oct 2026 -
+  `CommentaryWeekFacts`. This entry sat in the "not done" list below until
+  12 Oct and the reason it gave was right: the plan asked for the shape of
+  the last month, which needs DATES and the nights a driver was away, and
+  `DriverForm` carries neither - it is counts and a list of placings with
+  no window on it. So `DriverForm` was not extended; a reader that counts
+  the club's own race NIGHTS was written beside it. "Carl has finished in
+  the top three on each of the club's last four Box Stock nights", "Dave
+  is back after missing the last three - their last was 22 August."
+  The window is the club's own nights rather than calendar weeks, which
+  is the one thing the plan's own wording got wrong: a club that skipped a
+  fortnight has not had a driver miss two weeks. A run is only broken by a
+  night the driver was THERE for and did not manage it, never by one they
+  were away.
 - **Tonight against tonight** - *part* of Tier 1, 7; the other part is
   **Practice against now** below, built 11 Oct 2026. `CommentaryReaders.PaceTonight`
   / `DriverTonight` and `CommentaryRaceFacts.Tonight` say what the evening
@@ -521,22 +555,6 @@ rounds of testing above would have been one.
 
 **Not done, and these are the ones to be accurate about:**
 
-- **Stakes permutations** (Tier 1, 1 - the plan's richest seam). What exists
-  is where this grid's drivers stand in the table before the race
-  (`ChampionshipBefore`) and ONE named finishing order proved out
-  (`ChampionshipConditional`). The permutation walk over the REMAINING
-  rounds that the plan asked for is not built and cannot be: nothing in this
-  app knows how many rounds a season will run. A `Season` is a set of races
-  that have happened plus a rule that takes more as they are recorded, and
-  `CountBestRounds` is the drop cap, not the length. **Blocked on a planned
-  round count on a season** - the same thing that keeps "nobody can catch him
-  now" unsayable.
-- **Season form beyond a streak** (Tier 1, 2). `FormLine` reads the last few
-  placings in the class out in order, most recent first, which is the form
-  GUIDE. The plan asked for the shape of the last month - "third podium in
-  four weeks, and the two he missed he did not finish" - and that needs dates
-  and the nights a driver was absent from. `DriverForm` carries neither; it
-  carries counts and a list of placings with no window on it.
 - **The long callback** (Tier 1, 6 - "the one that makes an evening feel like
   a season"). Nothing recalls a specific past race. The closest the app gets
   is `Rivalry`'s "They last met ..." tail from `HeadToHead.LastMetDescribed`
@@ -547,20 +565,20 @@ rounds of testing above would have been one.
   nothing anywhere knows what a segment UNDERTOOK. There is no promise
   recorded and nothing collects one, so "watch the inside line at turn three"
   in an intro is never picked up in a later recap.
-- **The two voices disagreeing** about something harmless and coming back to
-  it (Tier 2). `CommentaryExchange` splits a segment into two voices with a
-  beat and a bed nudge, and that is all: nothing tracks a running
-  disagreement across segments.
+- **The two voices coming back to a disagreement** (Tier 2) - HALF of this
+  is built and the half that is left is the harder one. They do disagree
+  now: `CoHostStance` gives the co-host a point of view (12 Oct 2026), and
+  before it the two of them agreed with each other, which is why the
+  exchange sounded like one commentator cut in half. What is still missing
+  is the THREAD: nothing records that a disagreement happened, so nothing
+  can come back to it two segments later. That needs the same machinery as
+  "the promise, paid off" above - something that knows what a segment
+  undertook - and the two are probably one piece of work.
 - **Broadcast furniture beyond the break** (Tier 2, and step 6 of the order
   of work). No time checks and no "if you have just joined us". The time
   check is blocked by the same hole as everything else that wants a clock:
   `director.Upcoming` is wired with `inAbout: null` because the app has no
   "minutes until the next race" to hand over - see "Known open issues".
-- **The asides that are not about the race** (Tier 2, last bullet) - the
-  weather, the raffle, somebody's birthday. Nothing in the app holds a line
-  like that. Exactly the same shape as `NightAhead.ChampionshipNote`, which
-  is null for the same reason: it is the caller's own words and there is
-  nowhere to type them.
 
 **And the plan's three open questions are still open**, none of them answered
 by any of the above: how far Tier 2 goes (does an invented CLUB history
@@ -569,22 +587,639 @@ density is right for a club night at all, where the honest risk is that this
 lands as pompous rather than alive; and whether the local model is big enough
 now that a pack carries twelve facts rather than four.
 
+### Where the broadcast goes next (12 Oct 2026)
+
+Asked for the same day the bug hunt landed: *"plan and brainstorm additional
+ways to improve my chief differentiator and add value."* Planned in
+`claude\broadcast-value-2026-10-12.md`. Nothing in it is built.
+
+Its first decision is the one worth repeating here, because it is a decision
+AGAINST the obvious next step: **it is deliberately not more facts.** The
+depth plan asked for material and got seventeen items of it, and its own
+hardest question - whether F1 stat density suits a club night at all - is
+still open and probably answers "no more". So that page is about new MEMORY,
+new OUTPUTS, new AUDIENCES and a change to WHEN the writing happens.
+
+In its own order of work:
+
+1. **A moment ledger** - the app detects a last-lap pass, a record falling, a
+   photo finish, announces them and throws them away. Nothing keeps a moment
+   as a thing with a name, a lap and a driver. Four later items are assembled
+   out of moments, so this is first.
+2. **The proof view and the quiet-night report** - every claim in this app is
+   derived and none of the derivation is visible to the club that bought it,
+   and every refusal is logged with a reason and nothing adds them up. The
+   two cheapest items on the page.
+3. **The driver's own cut** - sixty to ninety seconds about one driver's
+   night, with their own clips in it. `RaceHighlights.DriverClip`,
+   `CommentaryWeekFacts` and `NightRecap` are all already there; nothing
+   assembles a piece about one driver FOR that driver. The first thing this
+   app would make that a driver takes home.
+4. **Write ahead and hold** - every segment is written when it is needed,
+   which caps the model size, which is the depth plan's third open question.
+   The next race's intro is knowable the moment the current race goes green,
+   and `ShowTreatment.AbandonBlock` already exists for throwing a held thing
+   away.
+5. **A promise ledger** - finishes "the promise, paid off" and the half of
+   "the two voices coming back to a disagreement" that is listed above as
+   still missing. The two are one piece of work, as that entry suspected.
+6. **The night before** - a preview written from the entry list and posted to
+   the club page. The only item whose job is to get people to the track.
+7. **The club's own voice** - ElevenLabs is already wired and the user runs a
+   voice relay, so a clone is a voice id rather than an integration. Gated on
+   a consent decision rather than on code: a cloned voice is a person's
+   likeness and the club has to hold the consent and be able to revoke it.
+8. **Listen along from home**, 9. **the race director's private channel**,
+   10. **the long callback and the season film**.
+
+Explicitly off that page: more statistics, video (the most valuable artifact
+this app could produce and a different product - it wants a page of its own),
+and the slide-to-booking link, which `SponsorReport`'s own remarks already
+name as sponsor fulfilment rather than broadcast.
+
+### The frozen window and the advert over the recap (11 Oct 2026)
+
+Reported as "written copy train wrecked into a video commercial" and "I
+loaded three videos, only 1 played". The log's TIMESTAMPS tell it, not its
+line order - the lines come from several threads:
+
+```
+7:46:32  Commercial break - the sponsors have the crowd's screen
+7:46:42  [watchdog] FROZEN - no answer for 10s, 5% of one core (stuck waiting)
+7:47:03  Dump saved in 21.6s (1190 MB)
+7:47:03  Commercial break ran 31.2s - the recap is written and rendered
+7:47:03  [show] Rejoin - the opener from 8.2s ...          <- the recap starts
+7:47:14  Recap dropped - the next race was called before it was ready (44.2s)
+7:47:15  Playing the video "...Quickway-Diner...mp4" with its sound
+7:47:15  The window is answering again, after about 43s frozen
+7:47:22  Read for ad4cf2e1 - more of their copy to come in the next gap
+```
+
+**One cause, four symptoms.** `BigScreenForm.ShowSponsorVideo` made the
+video surface on the UI thread, and making it loads LibVLC: two native DLLs
+and a plugin folder of several hundred files. First video of the night, so
+it was paid in full - **43 seconds, on the window in front of the crowd, at
+the exact moment a break started**. From that one blockage: the watchdog
+fired and wrote 1.2 GB of dump mid-break; the recap behind it took 44.2 s
+and was dropped for being late; the advert appeared 12 s into the programme
+that replaced it; and the owed ad-break read went out 7 s into the advert,
+because by then the recap was gone, the floor was free and nothing in the
+read's gate knew an advert was playing.
+
+What changed:
+
+- `SponsorVideoEngine.WarmUp` + `.Settled`. The engine is loaded on a pool
+  thread, once, as soon as `BigScreenForm.WarmTheVideoPlayerIfNeeded` sees
+  the club has a video slide - asked on the half-second tick, so a video
+  added mid-evening is warmed within half a second of being added. Nothing
+  on the UI thread calls `TryGet` without asking `Settled` first: taking
+  that lock while the warm-up holds it is the same freeze by another route.
+  A break that arrives before it is settled runs the stills for that slot
+  and says so.
+- `ShowSponsorVideo` times `Play` and, when it succeeds, asks
+  `CommercialBreak.Running` again - **not** `_breakHasTheScreen`, which is
+  only brought up to date on the tick and so is stale by definition at that
+  moment. A video that started after the break ended is stopped and the
+  board comes back.
+- `NextAdBreakRead` and `NextSegmentRead` gained `CommercialBreak.VideoOnScreen`
+  beside `ShowOnAir.Playing` and `ShowFloor.Busy`. The ad-break read KEEPS
+  its debt, as it does for a race, so the sponsor loses nothing.
+- **"Three loaded, one played" was a real bug, and a separate one.**
+  `UpdateCommercialBreak` asked for a video only `if (!_showingSponsor)` -
+  nothing on the screen. Between races the rotation has a still up about
+  half the time, so half of a club's breaks never asked at all: they kept
+  whatever still was up, and the rest of the break ran in file order, which
+  for a break one turn of the rotation long reaches a video roughly never.
+  Now a still already up is replaced (it has had its slot and comes round
+  again) and only a video already PLAYING keeps the screen.
+- And the window now says what each break leads with, or why it couldn't -
+  `WhyNoVideo`. The report came with a log that had no video line in it
+  either way, which is the same mistake `WriteColourAsync` made above.
+
+### How chatty the night is (12 Oct 2026)
+
+Asked for the morning after the pacing landed: "I want the ability to tune
+the nights pacing so I can make more or less chatty."
+
+The right answer was NOT another set of numbers. `RaceStature` gives an
+evening a shape - 3 in practice, 4 in a heat, 6 in a B-main, 9 in the top
+main, +2 for the last race - and that shape is right for every club: it is
+what stops a room learning to tune the announcer out. What is taste is the
+LEVEL it sits at.
+
+So `ShowChatter` scales it. Five stops, `Scaled(cap, key)` rounds away from
+zero and clamps to `[Least=1, Most=20]`, and the curve survives every one
+of them - Non-stop in a heat is still quieter than Non-stop in the A-main,
+which is the property `ShowChatterTests` spends most of its length on.
+
+| | Sparing | Measured | Standard | Lively | Non-stop |
+|---|---|---|---|---|---|
+| scale | 0.5 | 0.75 | 1.0 | 1.5 | 2.0 |
+| heat | 2 | 3 | 4 | 6 | 8 |
+| top main | 5 | 7 | 9 | 14 | 18 |
+| co-host below the mains | no | no | no | **yes** | **yes** |
+
+Decisions worth keeping:
+
+- **Kept apart from the stature.** The stature is a fact about the race,
+  read off the programme; the dial is a club setting typed on a page.
+  Folded together, a club turning the dial up would have had to be
+  modelled as every race being bigger than it is, and then the log could
+  not say which of the two had moved. It now says: "this is a heat at
+  Sparing, which allows 2".
+- **`NewMeeting` resets the stature and NOT the dial**, for the same
+  reason - one is about tonight and the other is not.
+- **Blank is Standard, and an unknown key is Standard too**, so an
+  existing club hears no change and a settings file from a later build
+  cannot pick a volume nobody chose.
+- **The dial also governs the second voice**, which is the half that is
+  easy to miss: a club asking for a chatty evening means the two voices as
+  much as it means the count, and holding the co-host back through the
+  heats of a big meeting is the pacing being clever at the club's expense.
+- **`Describe` works its figures out from the real tables** rather than
+  repeating them, so the line under the picker cannot end up lying - the
+  same rule the show music's own Describe lines follow.
+- Two things it deliberately **cannot** do, both stated on the page
+  because a club would otherwise conclude the setting was broken: it
+  cannot silence a race (essentials never reach the airtime gate), and it
+  cannot make a club talk past its allowance (every money gate is in
+  front of the ceiling).
+
+### The room in the show (12 Oct 2026)
+
+The depth plan's last Tier 2 hole, and the ROADMAP's own answer to it was
+that nothing in the app holds a line like that and there is nowhere to type
+one. `ClubNotes` is that place, and the two routes the club asked for -
+"Dedications and shout outs should come from both the WiFi and the relay" -
+are built on it.
+
+**The gate is the design.** `ClubNote.Approved` is false for anything that
+did not come from the race director's keyboard, and `ToSay()` offers only
+approved notes. So there is no version of either route that can put a
+stranger's words on a PA: the worst they achieve is a row on a screen
+somebody reads and deletes. Everything else here is detail hung off that
+one sentence.
+
+Shape:
+
+| Piece | Where |
+|---|---|
+| The store, the gate, the per-night clearing | `ClubNotes.cs` |
+| The approval window | `ClubNotesForm.cs`, off the **Notes** button on `AnnouncerStrip` |
+| The segment | `SegmentKind.ClubAside`, `CommentaryShowFacts.ClubAside`, `InstructionFor` |
+| The club Wi-Fi route | `WebServerService.Notes.cs` - `/shoutout`, `POST /api/note` |
+| The relay routes | `server.ts` - `notes/send`, `notes/inbox`, `notes/collected`, `notes/open` |
+| The laptop's collector | `RelayPublisher.Notes.cs`, on a 30s tick of its own |
+
+Decisions worth keeping:
+
+- **Twelve of the twenty slots for the room** (`MostFromTheRoom`). Without
+  the split, a phone route is a way for the room to fill the list and leave
+  the race director unable to add the one note that mattered - with a
+  message that only said the list was full.
+- **Collect, file, then confirm.** The relay holds each note until the
+  laptop says it has it, so a poll whose answer never arrived loses
+  nobody's message; the duplicate that follows is refused by the store's
+  own rule. Confirming before filing would turn a crash between the two
+  into somebody's dedication quietly gone.
+- **`_asideInFlight` is cleared at the top of every pass.** A note that
+  went into a segment which was then dropped must stay unsaid: without the
+  clear, the next segment of any kind that survived would mark it said, and
+  the club would have promised somebody a mention that nobody heard.
+- **The fact asks `CommentaryService.Field` directly with
+  `ClubNotes.MostChars`.** `CommentaryFacts.Clean` caps at forty, which is
+  right for a name and would cut a note off mid-sentence - and the
+  sanitising is the part that matters here, because this is the only string
+  in the broadcast that came from a stranger's phone.
+- **Switching the relay route off is SENT, not inferred.** The poll loop
+  stops the moment the setting is unticked, so without
+  `CloseClubNotesOnTheRelay` the relay would go on taking strangers'
+  messages for a club that had declined them - and holding them. Closing
+  also clears what is held.
+- **The instruction is almost all prohibitions**, and that is the point: a
+  model guessing what Jack's operation was is the most embarrassing thing
+  this app could put over a PA.
+- Both switches **off by default**, not because approving is risky but
+  because each writes to the race PC's disk on a stranger's request.
+
+All ten of that brainstorm's ideas are now built.
+
+## What the title still has riding on it (12 Oct 2026)
+
+The depth plan's richest seam, listed first in it, and the last of its
+Tier 1 items to be built.
+
+| Part | Where |
+|---|---|
+| The season's planned length | `Season.PlannedRounds`, `RoundsRemainingAfter`, `MostPointsInARound` |
+| The box a club types it in | `SeasonRulesForm` - **Rounds in the season** |
+| The proof | `CommentaryReaders.TitleOnTheLine`, `CanStillCatch`, `FutureRound` |
+| The fact | `CommentaryStakesFacts.ForTheTitle`, `TitleStakes` |
+| Where it is said | the race intro - `RaceScene.Stakes`, `CommentaryService` MaxStakesChars |
+
+Decisions worth keeping:
+
+- **THE GAP AND THE POINTS AVAILABLE CANNOT ANSWER IT.** This is the whole
+  of the design. "Can Sam still catch Bill" looks like subtraction and is
+  not, because with a drop rule a driver's total is not their points added
+  up. The case the tests pin: best 4 of 6, Bill has won four rounds and
+  Sam has been second in four - 40 to 36, two rounds left, twenty points
+  available, so every shortcut says it is open. It is not. Bill keeps his
+  four wins whatever happens; Sam winning both remaining rounds swaps two
+  9s for two 10s and reaches 38. He is already out. One off the drop cap
+  (best 5) and he is back in it, which the companion test pins so the
+  refusal cannot be mistaken for an accident of the fixture.
+- **So each rival's best case is PLAYED OUT against the leader's worst**,
+  through `SeasonStore.ComputeStandings` - the one place in this app that
+  applies the drop rule, which is the same reason
+  `ChampionshipConditional` recomputes instead of subtracting. The rival
+  wins every remaining round; the leader scores nothing in any of them. If
+  the leader still leads, that rival cannot catch them for EVERY
+  arrangement, not most.
+- **One rival at a time.** Two of them cannot both win the same round, so
+  pricing them together would prove something weaker than it looked.
+- **Drawing level counts as catching.** Where a table settles a tie is the
+  table's business and not something to claim a championship on.
+- **Each future round is its own session id** (`FutureRound`).
+  `Hypothetical`'s single `ConditionalSessionId` could not be reused:
+  several of these go into one list, and two sessions sharing an id is a
+  season counting one round where it was handed three.
+- **Nought means "not said", not "a season of no rounds".** A club that
+  has not given the app the figure gets silence rather than a guess, and
+  the hint beside the box says so in those words.
+- **It refuses past three drivers still in it** (`MostStillInIt`). "Only
+  Bill and Sam can win it" is the stakes of a season; "nine people can
+  still win it" is the absence of stakes dressed up as a fact, and the
+  standings segment already says where everybody is. Four rounds into a
+  nine-round season this is the answer every time, which is correct.
+- **Two ceilings keep the proof off a race night's critical path**: a
+  table of at most forty (`MostInTableToProve`), and giving up the moment
+  more than three are still in it. Each rival costs one recompute of the
+  whole season.
+- **Said in the INTRO, not the recap.** It is what the race about to run is
+  worth - the thing an intro has least to say about and the thing a room
+  most wants framed.
+- **Logged either way**, the lesson `RaceControlControl.AfterRace` states
+  twice elsewhere: the reader refuses far more often than it answers, and
+  "it found nothing" and "it never ran" look identical in a race-night log
+  unless one of them says so.
+
+## A sponsor's picture during their read (12 Oct 2026)
+
+Asked for 10 Oct, settled 12 Oct: the picture can be uploaded or chosen
+from one already uploaded, and with none the Big Screen shows the
+sponsor's name as the Sponsors page spells it.
+
+| Part | Where |
+|---|---|
+| The per-sponsor picture | `SponsorBooking.PictureFileName`, `SponsorStore.OnScreenFor` |
+| Whether a read is on air | `SponsorOnAir` |
+| The read telling it | `AnnouncerControl.SayTheSponsorsReadIfThereIsOne` |
+| The screen | `BigScreenForm.UpdateSponsorRead`, `ShowTheSponsorBeingRead` |
+| The row that sets it | `SponsorsControl` - **Picture for their read** |
+
+Decisions worth keeping:
+
+- **A DEADLINE, NOT A STOP SIGNAL.** `SpeakReminder` is fire and forget,
+  so a picture waiting for a signal that never arrives is a picture left
+  on a crowd screen for the rest of the night. The read's own spoken
+  length sets a deadline and everything asks "has that passed yet";
+  `SponsorOnAir.End` exists for the paths that do know and nothing depends
+  on it being called.
+- **The no-picture answer is the sponsor's NAME**, not a blank screen and
+  not the standings - which is most of what a slide was doing for them
+  anyway, and is what every sponsor gets until somebody uploads one. A
+  picture since deleted resolves to null in `OnScreenFor`, at the one
+  point that can see the folder, so it falls back to the name as well.
+- **An uploaded picture joins the slide rotation**, deliberately rather
+  than incidentally: it goes in through `AddSlide`, the one path a picture
+  enters this app by, and a file stored outside that list would be one a
+  club could neither see nor delete.
+- **A read has its own flag, not `_showingSponsor`.** That flag means "the
+  rotation has the screen", and the rotation's timer calls the slot over
+  on its own schedule - which underneath a read would move to the next
+  slide mid-sentence. The rotation stands down while a read is on air.
+- **A video keeps the screen**, the one exception, for the reason every
+  other path here gives. In practice they cannot collide, because a paid
+  read already stands down while a video is up; the guard is for the day
+  that stops being true.
+- **The decode was extracted** (`PutSponsorPictureUp`) rather than copied:
+  two copies would be two answers to "how big a picture is too big" and
+  two places to get the stream's lifetime wrong.
+- **The name's font is sized in `ApplyScale`** with every other font on
+  the window, so it follows the display scale and is disposed with them -
+  not built fresh per read.
+
+## The room's vote (12 Oct 2026)
+
+The last of the ten, and the only segment in the app that can be wrong.
+The room picks who wins; afterwards the announcer holds that up against
+the result.
+
+| Part | Where |
+|---|---|
+| The poll, the tally and the verdict | `RoomVote.cs` |
+| The window the race director runs it from | `RoomVoteForm.cs`, off the **Votes** button on `AnnouncerStrip` |
+| The fact | `CommentaryShowFacts.RoomVerdict` |
+| The segment | `SegmentKind.RoomVerdict`, its spec row, `InstructionFor`, `ShowBlock` caption |
+| The club Wi-Fi route | `WebServerService.Vote.cs` - `/vote`, `/api/vote/ballot`, `POST /api/vote` |
+| The relay route | `server.ts` - `vote/open`, `vote/ballot`, `vote/send`, `vote/inbox` |
+| The laptop's side of it | `RelayPublisher.Vote.cs`, on a 15s tick of its own |
+| The result going in | `RaceControlControl.AfterRace` - `RoomVote.Finished`, by the code that just filed it |
+
+Decisions worth keeping:
+
+- **Keyed on the ROUND'S ID, never its label.** A club running two classes
+  has two rounds both labelled "A-Main". Matched on the label, the room's
+  Stock prediction is read out over the Mod A-main - a verdict about the
+  wrong race, said with complete confidence, which is the worst failure
+  this feature has available to it. `RoomVote.IsTheRace` is the one place
+  that comparison happens.
+- **The result is filed by the code that saved it**, not asked for later.
+  The announcer picks segments on a tick minutes after the flag, and
+  asking "who won the last race" then means asking whichever part of the
+  app still happens to be holding it.
+- **Silence is most of the feature.** Under `LeastVotes` (5) there is no
+  verdict; a room that split evenly picked nobody; a race with no result
+  filed has nothing to say. A claim about what "the room" predicted, made
+  off four guesses, would make every other thing the announcer says sound
+  invented.
+- **No approval gate, and none is needed.** A club note is a stranger's
+  words, which is why `ClubNotes` has one. A vote is a tap on a name the
+  club itself put on the ballot, so nothing arriving from a phone can
+  become a word the announcer says. The worst a stranger can do is be
+  wrong about who wins. That is the whole reason this route is cheaper to
+  own than the notes one.
+- **No running tally goes out to a phone.** A room that can see what it is
+  voting for is a bandwagon rather than a prediction, and the line is only
+  worth anything if each vote was that person's own guess.
+- **Votes are held per voter, not counted as they arrive.** A second vote
+  from one phone replaces the first, so somebody who tapped the wrong name
+  can fix it and nobody gets two. Counting arrivals would have made the
+  tally a measure of who pressed hardest.
+- **The voter ceiling only bites on a NEW voter**, or the limit would stop
+  the one thing it is not about.
+- **It closes itself twice over** - on the result, and after
+  `LongestOpen` (20 min) whatever anybody pressed. A prediction gathered
+  after the flag is not a prediction.
+- **The ballot is the staged cars**, with the program's assigned list only
+  as a fallback. A driver who did not turn up must not be on it.
+- **The numbers are spelled out in the fact** rather than left for the
+  model, and the brief forbids rounding or characterising the vote beyond
+  what the figures say. These are forty people standing in the room who
+  know what they voted.
+- **The joke is on the room, never on a driver.** The same line aimed at
+  the driver nobody backed would be the app sneering at a club member over
+  their own PA.
+- **A two-hander, and the only Colour segment that is** - the opposite
+  call from the club aside, where a second voice would be unwelcome. Once
+  per class, or the best line of the night becomes a running feature.
+
+### The relay route (12 Oct 2026, same day)
+
+Both routes now exist, as they do for the notes. Decisions that are
+particular to this one:
+
+- **The laptop PUBLISHES the ballot; the relay refuses everything else.**
+  `vote/open` carries enabled, open, the race and the grid, and
+  `sendRoomVote` will not store a driver id that is not on it. That is the
+  whole safety argument for a public vote route with no approval gate: the
+  channel can only ever hold a set of the laptop's own ids.
+- **The inbox is NOT drained by being read**, and this is the one place
+  the vote's shape differs from the shout-outs'. A note is said once, so
+  collecting it ends it. A vote can be CHANGED, so draining would lose the
+  change and leave the announcer counting a pick its owner had replaced.
+  The laptop re-applies the whole set each poll, which is free:
+  `RoomVote.PickOf` skips a vote already held, so a settled vote never
+  rewrites the file.
+- **The relay clears the votes when the ballot moves to another race**, and
+  when the club switches the route off - NOT when a vote merely closes.
+  The verdict is worked out after the race, so discarding at the flag
+  would discard the answer. `setRoomVoteBallot` decides this by comparing
+  the race on the incoming ballot with the one it is holding.
+- **Votes are keyed by a hash of the ballot's salt and the sender's
+  address.** One vote per person, changeable, with ids that say nothing:
+  the salt never leaves the relay and is minted per race, so the keys
+  cannot be correlated between two races or two clubs and nobody can test
+  whether a given address has voted. The salt is kept while the ballot
+  stays on one race, so closing a vote does not look like a new voter.
+- **The relay's voter keys are marked `relay:` on the laptop.** Both routes
+  write into one list of votes, and a hashed relay key colliding with a
+  Wi-Fi client key would be one person's vote replacing another's.
+- **The ballot is published when it CHANGES, not every poll**
+  (`_ballotAsPublished`). A request per poll carrying a grid that has not
+  moved would be most of what this costs on the wire.
+- **15 seconds, against the notes' 30.** A dedication can wait; the number
+  the race director watches to decide when to close the vote has to be
+  moving, and the window is only a few minutes long.
+- **No tally on the public ballot route**, same as the laptop's own page. A
+  room that can see what it is voting for is a bandwagon.
+
+Verified for real: `npx tsc --noEmit` clean, and the relay suite runs
+**552 tests, 0 failures** - 523 before this and 29 new in
+`relay/test/vote.test.ts`. The relay is the one half of HeatCaller that
+can be built and tested in a Linux container, so this part is not
+inference.
+
+### A gap worth closing in the notes route
+
+`RelayPublisher.NotesProblem` is written and **never read anywhere in the
+app**. So when the relay cannot be reached for shout-outs, or predates
+them, nothing says so: the failure mode is "dedications silently never
+arrive", which is the hardest kind to diagnose on a race night.
+
+The vote route does not repeat this - `VoteTrouble` says it through `Log`
+once when it changes, and says so again when it recovers. The notes file
+was left alone rather than edited on the same pass, because it is
+committed and working; the one-for-one fix is a `NotesTrouble` helper
+beside the vote's.
+
+### Two accessibility faults the club-notes batch shipped with
+
+Found on 12 Oct 2026 by reading the committed files back, and fixed in the
+same batch as the vote. Both are CS0053 - a public property whose type is
+internal - and both would have failed the build:
+
+- `CommentaryDirector.ClubAside` was `public Func<ClubNote?>?` with
+  `ClubNote` internal.
+- `RelayPublisher.TonightsNotes` was `public Func<ClubNotes?>?` with
+  `ClubNotes` internal.
+
+Both are now `internal`, which is what the same hook already was on
+`WebServerService` and `RaceControlControl`. The lesson is the one
+`RaceStature` taught two days earlier and it did not stick: **a hook
+carrying one of this app's internal store types is internal.** Worth
+checking first on any new hook, because the error names the property and
+not the reason.
+
+## The night in four minutes (12 Oct 2026)
+
+The piece a club posts for the people who were not there. Written after the
+last race, played out once with the show round it, kept in the night's
+folder as `The Night`.
+
+| Part | Where |
+|---|---|
+| The length, the splitter, the instruction | `NightRecap.cs` |
+| The model call | `CommentaryService.BuildNightRecapAsync` |
+| The facts, with no "already said" filter | `CommentaryDirector.NightFacts` |
+| The recorder round it | `BookendRecording.StartForTheNight` |
+| The orchestration | `AnnouncerControl.PlayTonightsRecapAsync`, `SayTheRecap` |
+| The button | `CommentaryControl` - **Write And Play It**, on the audio card |
+
+Decisions worth keeping:
+
+- **It plays in the hall rather than being rendered silently.** The silent
+  render is the purer idea and this file's own note used to say so, but it
+  needs a path from a written line to audio bytes that bypasses the voice
+  queue, the bed and the ducking - a second way to produce the show, and so
+  a second way for it to sound wrong. What comes out instead is a real
+  broadcast with a recorder round it, and the file cannot disagree with
+  what the room heard. `BookendRecording`'s class note was rewritten to say
+  this rather than to say the piece was unbuilt.
+- **The facts are packed with `said: null`.** Every other segment passes
+  `Said` so the night does not repeat itself. This one must: the result the
+  sign-off mentioned in passing is exactly what somebody at home wants, and
+  a club that had a good sign-off would otherwise get an empty recap.
+  `NightFacts` also spends no budget and cools no theme - it is asked once,
+  by hand.
+- **`SponsorCopy.Tidy` is NOT used to clean the script**, and this was
+  caught before it shipped. `Tidy`'s cap is `SponsorCopy.MaxChars` - six
+  hundred characters, sized for a sponsor's read - and a four-hundred-word
+  piece is nearer two and a half thousand. It would have thrown away three
+  quarters of every recap in silence, which is the exact class of quiet
+  bug the whole of 11-12 Oct was spent on. `NightRecap.OneBlock` does the
+  same sanitising with the recap's own `MostChars` of six thousand, which
+  sits above anything `MostChunks` would keep in any case, so the character
+  cap can never be the thing doing the cutting.
+- **The word allowance is absolute, not additive.**
+  `CommentaryService.BuildSystemPrompt` ADDS its argument to the club's
+  per-line limit, which is right for the race summary it was built for and
+  wrong here: handed four hundred flat, a club with a three-hundred-word
+  line limit would have got a seven-hundred-word recap - five minutes, not
+  the four it is named for - and every club a different length.
+  `NightRecap.ExtraWordsOver` passes the difference instead, and a club
+  that asked for longer writing than the whole piece keeps it.
+- **Split only at sentence ends, and never inside one.** A single sentence
+  longer than a chunk goes out whole: a sentence cut mid-clause by a voice
+  engine is worse than a long one. `MostChunks` (15) is a backstop against
+  a model that ignored the length, not a target - a club must not have a
+  button that plays for twenty minutes.
+- **Each chunk queues like any other line**, so a flag call jumps in front
+  of whatever is unspoken. On a night that turns out not to be over, the
+  race wins.
+- **The floor is claimed BEFORE the model is asked, the recorder started
+  AFTER.** Writing takes the best part of a minute: a segment that started
+  inside it would be talking over the recap's own opener by the time it
+  arrived, and a recorder running through that minute puts a minute of
+  silence at the top of the file.
+- **It refuses in words rather than half-working** - nothing filed, muted,
+  floor held, no model - because the caller is a button on a settings page
+  that has to say something either way.
+
 ### Still not started
 
-- **A photo with a sponsor's read, on the Big Screen while the read goes
-  out** (asked 10 Oct 2026). The **Sponsors** page already takes slides,
-  videos and the read copy (`SponsorCopy`, `SponsorsControl`), and a read
-  already puts its text on the Big Screen's announcement banner
-  (`SpeakReminder(paid.Text, showOnScreens: true)`). What is wanted is a
-  picture of that sponsor up on the crowd screen for the length of the
-  read - the read is the only part of the rotation that currently has
-  nothing to look at. Worth settling first: whether it is a slide the club
-  has already uploaded, picked per sponsor, or a picture of its own; and
-  what the screen shows when a read has no picture.
 - **A spoken option for the split times** (asked 10 Oct 2026). The split
   CALLS exist already - **Fastest sector**, **Up at the split**, **Record
   pace at the split** on **Voice - Announcements** - so this is something
   else, and what exactly is still to be settled with the club.
+
+## The swarm bug hunt (12 Oct 2026)
+
+Eight agents read the five days of code between 8 and 12 Oct at once - the
+club notes, the room's vote, the night's recap, the sponsor picture, the
+stakes, the pacing, the threading and the compile - with no compiler
+between any of them. What follows is what came back, because a hunt whose
+findings are not written down is a hunt that has to happen again.
+
+### Fixed
+
+| What | Where |
+|---|---|
+| `TonightsNotes` was `public` and names an `internal` type - CS0053, the whole solution. The session's one build breaker, and the FOURTH time this error has landed | `RelayPublisher.Notes.cs` |
+| A rival's "best case" was the best POSITION rather than the most POINTS, so a club whose own table pays most below the win had a champion declared in front of the man who could still catch him | `CommentaryReaders.CanStillCatch`, `FutureRound`, `Season.BestPayingPosition` |
+| A scheme with a negative row has no priceable worst case for the leader - refused outright | `Season.PenalisesAnyone` |
+| "Rounds counted" counted RACES, so an A-main and a B-main into one championship made a six-round season nine rounds in with nothing left to race for | `CommentaryReaders.RoundsCountedSoFar` |
+| The margin was measured to second in the table, who on a season with a drop rule need not be one of the drivers the sentence names | `CommentaryReaders.TitleOnTheLine` |
+| `titlePack` was missing from the `Both(...)` fold, so the claim's key was never spent and its theme never cooled - the same sentence offered again next race with nothing to show it had gone out | `CommentaryService` |
+| `MaxStakesChars` was 240 against a measured worst case of 319, and `FactPack.Lay` drops a block that will not fit WHOLE - the claim was built, logged, and silently never reached the model | `CommentaryStakesFacts.MostChars` |
+| The per-pass marker for which note or verdict a segment carries was wiped before any segment reached it, so `ClubAsideSaid` and `RoomsCallSaid` could not fire at all - the From The Club segment went silent after note one | `CommentaryDirector._marks` |
+| The recap's and the bookends' recorders were finished, and the broadcast floor released, BEFORE the fire-and-forget voice call spoke - a nought-byte file and "no sound came out of HeatCaller at all", on every club with no music files | `AnnouncerControl.RunAsShowAsync`, `PlayTonightsRecapAsync`, `ShowTreatment.WaitForTheReadAsync` |
+| A recap at its limit is five minutes and a show winds up after four, so the music came up under the last of it | `NightRecap.LongestRead`, `ShowTreatment.RunLongAsync` |
+| `RaceAudioRecorder.StartFor` never asked `AudioBus.Listening`, so a race silently displaced a bookend recording. The race still wins; it now says so | `RaceAudioRecorder` |
+| `RoomVote` and `ClubNotes` had NO lock, written from an HttpListener thread and the publisher's thread while the UI thread enumerated their collections - an `InvalidOperationException` crash dialog in front of a room. Both now gate every member and hand out copies | `RoomVote`, `ClubNotes` |
+| Restoring the grid's selection set `Selected` and not `CurrentCell`, so **Let the announcer say it** approved the oldest waiting note while the chosen row stayed highlighted | `ClubNotesForm.Fill` |
+| `_showingRead` was added to `UpdateSponsorRead` and to nothing else, and the attract board is the front-most control - the cards came up over a paid read's picture | `BigScreenForm.UpdateAttract`, `UpdateTrackMap` |
+
+Pinned by `CommentaryStakesTests` (16 new) and `BugHunt6Tests` (6 new, two
+of them deliberate thread stress).
+
+### Open, and why each is still open
+
+- **A commercial break can put a slide up over a sponsor's read.**
+  `UpdateCommercialBreak`'s `canCarryOne` does not read `_showingRead`, so
+  another sponsor's picture can land on the screen while this sponsor's
+  name is being said. The one-line guard is obvious and the consequences
+  are not: `canCarryOne` false hands the screen back through
+  `SponsorSlotEnded`, which is the only route to `AdBreak.End` and so to
+  un-muting the club's music - the exact knot this file records going
+  wrong twice before. It wants a build and a night on the floor, not a
+  guess.
+- **A shout-out the night's list has no room for is answered `{"ok":true}`
+  and then deleted.** The relay holds forty and the night takes twelve
+  from the room, so a thirteenth sender is told their message went
+  through, has it collected off the relay, and has it refused on the
+  laptop - with the only trace a line in the club's own console.
+  `RelayPublisher.Notes` documents collecting-and-discarding as
+  deliberate, and it is right about its own half: leaving them on the
+  relay forever is how an inbox stops being emptied. The sender-facing
+  falsehood is the part nobody chose. Closing the `notes/open` flag when
+  the list fills would give them a 404 "Not found", which is a different
+  lie. It needs a third state on the relay - taking, full, off - which is
+  a protocol addition, a redeploy, and a decision about what a stranger
+  should be told.
+- **`SaidTonight.Save()` and `Restore()` are dead code**, so "already said
+  tonight" does not survive a restart: a club that reopens HeatCaller
+  mid-evening gets every record, storyline and stakes line it has already
+  heard.
+- **`SponsorOnAir.End()` is never called.** Harmless today - the read
+  expires on its own clock - but a read cut short by anything leaves the
+  picture up for the rest of its estimated length.
+- **`CoHostStance` has no tests at all.**
+- **`CommentaryService.Field`'s default of 40 characters truncates a
+  41-60 character announcer name.**
+- **`Stature` is recomposed on every access.**
+- **The Big Screen's band reads "Sign-Off" during the night's recap**,
+  which is the segment kind it borrows rather than what it is.
+- **No race-in-progress guard on Write And Play It** - it checks the
+  floor and the mute, not whether a race is running.
+- **The relay identifies a race by its label rather than its id** on the
+  vote route, which the app itself refuses to do (`RoomVote.IsTheRace`).
+- **`roomVote.Finished` is called after an early return and with no
+  `IsDemo` guard**, so a demo race can settle a real vote.
+- **The relay collapses IPv6 addresses to a /64** for rate limiting.
+- **`chatterGrid` and `recapGrid` are missing from `LineUp`.**
+- **Orphaned doc comments in four places, and a CS1587 doc comment inside
+  `RaceScene`'s parameter list** - neither breaks a build, both mislead a
+  reader.
+
+### What the hunt says about how this code is written
+
+- **CS0053 has now landed four times** (`RaceStature`,
+  `CommentaryDirector.ClubAside`, `RelayPublisher.TonightsNotes` twice).
+  A `public` member may not name an `internal` type, and every hook on
+  these partials is a `Func<>` over an internal store. The rule is: a hook
+  whose type is internal is `internal`.
+- **A fire-and-forget call is not a finished one.** `SpeakReminder` queues
+  and returns. Three separate places treated it as though the words had
+  been said - and all three were the no-music path of a pair whose
+  music path waited properly, one line away.
+- **A section added to a fold has to be added to the fold.** `titlePack`
+  and `_showingRead` are the same bug in two files: a new piece of state
+  wired into the one method that creates it and none of the methods that
+  have to read it. Both are silent.
+- **A store reached from a web route needs a lock on the day the route is
+  written**, not on the day it crashes.
 
 ## Next, in order
 

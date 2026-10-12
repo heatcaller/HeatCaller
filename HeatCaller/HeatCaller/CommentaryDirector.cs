@@ -236,6 +236,21 @@ public sealed class CommentaryDirector
     /// </summary>
     public Func<SponsorReadPlan>? SponsorReads { get; set; }
 
+    /// <summary>
+    /// What the crowd screen should show while one sponsor's read goes
+    /// out - wire this to SponsorStore.OnScreenFor.
+    ///
+    /// Asked by the ONE place a paid read is spoken, at the moment it is
+    /// spoken, rather than carried on the read itself: a
+    /// <see cref="SponsorRead"/> is planned ahead of the gap it lands in
+    /// and a picture chosen minutes earlier could since have been removed.
+    /// See SponsorOnAir.
+    ///
+    /// Null at a club on an older wiring, and then a read goes out over
+    /// the standings exactly as it always did.
+    /// </summary>
+    public Func<string, SponsorOnScreen?>? SponsorOnScreenFor { get; set; }
+
     /// <summary>The evening's shape, for the cold open.</summary>
     public Func<NightAhead>? NightAhead { get; set; }
 
@@ -264,6 +279,25 @@ public sealed class CommentaryDirector
     /// <summary>The grid as the club's history knows them, and the pairs with previous.</summary>
     public Func<(IReadOnlyList<DriverForm> Grid, IReadOnlyList<HeadToHead> Rivalries)>? GridHistory { get; set; }
 
+    /// <summary>
+    /// The shape of this grid's last few race NIGHTS in the class - a run
+    /// of podium nights, perfect attendance, a clean run of finishes, a
+    /// driver back after a while away. Wire this to
+    /// CommentaryReaders.RecentWeeks.
+    ///
+    /// A READER OF ITS OWN rather than something worked out from
+    /// <see cref="GridHistory"/>, and that is the point rather than an
+    /// oversight. GridHistory counts a driver's recent PLACINGS and the
+    /// form guide reads them out in order; this counts NIGHTS, which needs
+    /// the dates and the nights a driver was absent from - neither of
+    /// which DriverForm carries. See CommentaryWeekFacts for why the unit
+    /// is what makes the difference.
+    ///
+    /// Null until wired, and then the form guide reads exactly as it did
+    /// before there was any of this.
+    /// </summary>
+    public Func<IReadOnlyList<DriverWeeks>>? RecentWeeks { get; set; }
+
     /// <summary>A class's qualifying, once it is done.</summary>
     public Func<IReadOnlyList<QualifyingLine>>? Qualifying { get; set; }
 
@@ -288,6 +322,101 @@ public sealed class CommentaryDirector
     /// year has no anniversary, and nothing here invents one.
     /// </summary>
     public Func<IReadOnlyList<ClubRaceDay>>? OnThisDay { get; set; }
+
+    /// <summary>
+    /// The next thing about the NIGHT the club wants mentioned - a
+    /// dedication, a birthday, the raffle - or null, which is the answer
+    /// on almost every tick of almost every evening.
+    ///
+    /// THE ONLY FACT IN HERE NOBODY WORKED OUT. Every other reader on this
+    /// class walks the timing, the history or the programme. This one
+    /// reads a sentence a human typed because they know something the
+    /// decoder cannot, and it is the one the room repeats afterwards.
+    ///
+    /// Only ever hands over an APPROVED note - that is ClubNotes.ToSay's
+    /// promise, and the reason the gate lives in the store rather than
+    /// here: there is no route into this director that can carry an
+    /// unapproved one.
+    ///
+    /// Null until wired, and then the segment stays quiet.
+    /// </summary>
+    /// <remarks>
+    /// INTERNAL, where almost every other hook on this class is public,
+    /// because <see cref="ClubNote"/> is - a public property carrying an
+    /// internal type is CS0053. Everything that sets this is in the app.
+    /// </remarks>
+    internal Func<ClubNote?>? ClubAside { get; set; }
+
+    /// <summary>
+    /// What the room voted would happen in the race just run, and who
+    /// actually won it - see <see cref="RoomVote"/>, which answers null
+    /// on a thin vote, a split room or a vote about a different race, so
+    /// anything arriving here is already worth saying.
+    /// </summary>
+    /// <remarks>Internal for the same CS0053 reason as <see cref="ClubAside"/>.</remarks>
+    internal Func<RoomsVerdict?>? RoomsCall { get; set; }
+
+    /// <summary>
+    /// Called with the race whose verdict has just been SPOKEN, so the
+    /// vote is marked said and the room is never told twice. The mirror of
+    /// <see cref="ClubAsideSaid"/>, and settled at the same instant and
+    /// for the same reason.
+    /// </summary>
+    internal Action<string>? RoomsCallSaid { get; set; }
+
+    /// <summary>
+    /// Told that a note has actually gone out, so the store can mark it
+    /// said - see <see cref="ClubAsideSaid"/>.
+    ///
+    /// A delegate rather than the store itself, for the reason every other
+    /// reader here is one: this class walks no stores and holds none, and
+    /// a director that owned the notes file would be a director that had
+    /// to be told about a race day changing.
+    /// </summary>
+    public Action<string>? ClubAsideSaid { get; set; }
+
+    /// <summary>
+    /// Which note went into the facts of the segment being written, so it
+    /// can be marked said if and only if that segment survives.
+    ///
+    /// Cleared on every pass. A note put into a segment that was then
+    /// dropped - held, too slow, refused - must stay unsaid: a dedication
+    /// marked said and never spoken is one the club promised somebody and
+    /// nobody heard, which is worse than one said a minute late.
+    /// </summary>
+    /// <summary>
+    /// What each kind would mark as SAID if its segment survives this
+    /// pass - a club note's id, a room vote's race.
+    ///
+    /// PER KIND, and that is the whole point. A single field could not
+    /// work once NextAsync gathered the whole pass up front: every kind's
+    /// Candidates ran before any kind was tried, so the last one to record
+    /// a mark would have overwritten the rest. Keyed by kind, each
+    /// segment reads its own.
+    ///
+    /// Written during the gather (UI thread), read during the awaited loop
+    /// (a pool thread), and cleared only at the top of the next gather -
+    /// so it is never mutated while it is being read. Same discipline as
+    /// _pass beside it.
+    ///
+    /// A kind whose segment is dropped simply never reads its mark, and
+    /// the next gather clears it. That is the promise the old single field
+    /// was written for and could not keep: a dedication that went into a
+    /// segment which was then dropped stays unsaid.
+    /// </summary>
+    private Dictionary<SegmentKind, string> _marks = new();
+
+    /// <summary>
+    /// Records what this kind marks said if it survives - see
+    /// <see cref="_marks"/>.
+    /// </summary>
+    private void MarkWhenSpoken(SegmentKind kind, string? what)
+    {
+        if (what is { Length: > 0 } mark)
+        {
+            _marks[kind] = mark;
+        }
+    }
 
     /// <summary>A class's championship, after its last main.</summary>
     public Func<IReadOnlyList<ChampionshipStanding>>? Championship { get; set; }
@@ -421,6 +550,33 @@ public sealed class CommentaryDirector
 
     /// <summary>The club's month, as the relay reported it on its last answer.</summary>
     public void MonthlyUsage(int used, int allowance) => Budget.MonthlyUsage(used, allowance);
+
+    /// <summary>
+    /// How big the race in front of the announcer is - see
+    /// <see cref="RaceStature"/>. Told on the tick, because the round under
+    /// the announcer changes while the app runs.
+    ///
+    /// Kept here as well as on the budget because the DIRECTOR needs it
+    /// too: the budget decides how much may be said, and this decides
+    /// whether what is said is worth two voices. See WriteAsync.
+    /// </summary>
+    public RaceStature Stature
+    {
+        get => Budget.Stature;
+        set => Budget.Stature = value;
+    }
+
+    /// <summary>
+    /// How much the club wants said - see <see cref="ShowChatter"/>. Held
+    /// on the budget, which is what the ceiling is read from, and exposed
+    /// here because the director needs it too: the dial decides whether the
+    /// second voice comes out below the mains. See WriteAsync.
+    /// </summary>
+    public string Chatter
+    {
+        get => Budget.Chatter;
+        set => Budget.Chatter = value;
+    }
 
     /// <summary>
     /// A race has gone green. The detectors start again, because a fight
@@ -564,6 +720,11 @@ public sealed class CommentaryDirector
         // It costs nothing in the usual case: a pass where nothing turns
         // out to be worth saying asked every one of these anyway.
         var pass = new Dictionary<SegmentKind, IReadOnlyList<FactBlock>>();
+
+        // Last pass's marks go before this pass records any - see _marks.
+        // A segment that was dropped must not be marked said by the next
+        // pass's segment of the same kind.
+        _marks = new Dictionary<SegmentKind, string>();
 
         foreach (var kind in order)
         {
@@ -862,7 +1023,17 @@ public sealed class CommentaryDirector
         // in the next real quiet instead, which after a recap is the gap
         // before the next race is called. Nothing is lost and nobody is
         // billed for a read the room talked over.
-        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy)
+        //
+        // AND AN ADVERT ON THE CROWD'S SCREEN WINS TOO (11 Oct 2026). A
+        // sponsor's video has its own soundtrack, and on 11 Oct the club's
+        // written copy went out seven seconds into one: two adverts for two
+        // different sponsors over each other, which is worth nothing to
+        // either of them. The video's own hand-back is what ticks
+        // BreaksEnded in the first place, so the owed read is almost always
+        // sitting there waiting exactly while one is playing - and a video
+        // that starts slowly, or a break that ended under it, puts the two
+        // in the same few seconds. See CommercialBreak.VideoOnScreen.
+        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
         {
             return null;
         }
@@ -890,7 +1061,11 @@ public sealed class CommentaryDirector
         // the recap sequence has quiet stretches between its lines with no
         // music under them, and a paid read dropped into one of those is
         // still a read over the programme. See ShowFloor.
-        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy)
+        //
+        // And VideoOnScreen for the reason NextAdBreakRead gives at length:
+        // a gap with a sponsor's video advert playing in it is not a gap
+        // either, and two adverts over each other sell neither.
+        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
         {
             return null;
         }
@@ -1002,6 +1177,25 @@ public sealed class CommentaryDirector
     private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
     {
         var spec = CommentaryBudget.Spec(kind);
+
+        // NOT CLEARED HERE ANY MORE, and the reason is worth keeping.
+        // This used to read "cleared before the candidates are gathered,
+        // every pass", which was true until NextAsync was changed to
+        // gather the WHOLE pass up front - after which Candidates ran
+        // during the gather, these two lines wiped what it recorded, and
+        // CandidatesForPass then returned the cached blocks without
+        // re-running it. So the marks were never in hand when a segment
+        // survived: ClubAsideSaid and RoomsCallSaid could not fire at all.
+        //
+        // A club note was spoken, its fact key was spent, and the store
+        // was never told - so ToSay() offered the same note again, its key
+        // was already spent, the pack came back empty, and the club notes
+        // segment went silent for the rest of the night after note one.
+        //
+        // The marks are now recorded PER KIND at gather time (see
+        // MarkWhenSpoken) and read by the kind being tried, so caching
+        // cannot lose them and a dropped segment still marks nothing.
+
         var blocks = CandidatesForPass(kind, _className);
 
         if (blocks.Count == 0)
@@ -1072,6 +1266,23 @@ public sealed class CommentaryDirector
 
             Budget.Settle(verdict.Ticket);
 
+            // THE MARK FOR THIS KIND, at the same instant as the facts
+            // and for the same reason: every path out above gives the
+            // ticket back and marks nothing, so a dedication whose segment
+            // was dropped is still waiting to be said rather than quietly
+            // spent. See _marks.
+            if (_marks.TryGetValue(kind, out var mark) && mark.Length > 0)
+            {
+                if (kind == SegmentKind.ClubAside)
+                {
+                    ClubAsideSaid?.Invoke(mark);
+                }
+                else if (kind == SegmentKind.RoomVerdict)
+                {
+                    RoomsCallSaid?.Invoke(mark);
+                }
+            }
+
             // The pack, not just its keys: the themes have to be marked
             // with them or the variety rule never fires and nothing says
             // so. See SaidTonight.Mark(PackedFacts) - and note that every
@@ -1110,7 +1321,33 @@ public sealed class CommentaryDirector
     /// </summary>
     private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct)
     {
-        if (_settings.CommentaryCoHost && spec.CanBeExchange)
+        // TWO VOICES ARE SAVED FOR THE RACES THAT EARN THEM (11 Oct 2026).
+        //
+        // The second voice is the loudest signal this broadcast has, and
+        // spending it on every heat is how it stops meaning anything. A
+        // room that hears the second voice only in the mains learns,
+        // without ever being told, that two voices means this one counts -
+        // which is worth more than the same segment being a two-hander in
+        // heat three.
+        //
+        // A club with no programme keeps every bit of the show it already
+        // had: RaceStature.Unknown is worth two voices. See
+        // RaceStature.WorthTwoVoices.
+        // AND THE CLUB'S DIAL CAN LET THEM OUT ANYWAY (12 Oct 2026). A club
+        // that asks for a chatty evening means the two voices as much as it
+        // means the count - holding the co-host back through the heats of a
+        // big meeting with a crowd in is the pacing being clever at the
+        // club's expense. See ShowChatter.TwoVoicesEverywhere.
+        var twoVoices = _settings.CommentaryCoHost
+                        && (Stature.WorthTwoVoices || ShowChatter.TwoVoicesEverywhere(Chatter));
+
+        if (!twoVoices && _settings.CommentaryCoHost && spec.CanBeExchange)
+        {
+            Say($"[brain] {spec.Title} in one voice - {Stature.Describe}, and the two-hander is held for the mains. "
+                + $"Turn the chattiness up past {ShowChatter.Standard.Name} to hear them in the heats.");
+        }
+
+        if (twoVoices && spec.CanBeExchange)
         {
             // THE LEAD COMMENTATOR HAS A NAME NOW (11 Oct 2026), where the
             // club has typed one on the Commentary page. This passed null
@@ -1245,9 +1482,40 @@ public sealed class CommentaryDirector
                 // The RACE's key and not the night's, unlike the grid
                 // history above: a heat gets filed between races, so the
                 // window these placings are read from really does change.
-                return GridHistory?.Invoke() is { } form
+                // AND THE SHAPE OF THE LAST FEW NIGHTS (11 Oct 2026), which
+                // is the half of a form guide the app did not have. The
+                // placings below are a results sheet read aloud - "fourth,
+                // second, first, sixth"; this is the thing a regular says
+                // to another regular in the pits: "he has been on the
+                // podium three weeks running". Same segment, because they
+                // answer the same question and a club does not want two
+                // form guides - and the per-driver themes are what stop
+                // both landing on the same person. See CommentaryWeekFacts.
+                //
+                // THE NIGHT'S KEY for these and the RACE's for the placings
+                // below, which is not an inconsistency. A heat gets filed
+                // between races, so the window those placings are read from
+                // really does change; a run of three NIGHTS is still three
+                // until the club races again, so a race-scoped key would
+                // have a club running six heats hear the same sentence in
+                // all six.
+                var weeks = RecentWeeks?.Invoke() is { } shape
+                    ? CommentaryWeekFacts.ForTheWeeks(shape, className, _dayKey)
+                    : Array.Empty<FactBlock>();
+
+                var placings = GridHistory?.Invoke() is { } form
                     ? CommentaryHistoryFacts.FormGuide(form.Grid, _raceKey, className)
                     : Array.Empty<FactBlock>();
+
+                if (weeks.Count == 0)
+                {
+                    return placings;
+                }
+
+                // The weeks FIRST. A run of podium nights is the stronger
+                // claim and the one a room reacts to, and the pack's cap
+                // keeps the order it is given.
+                return weeks.Concat(placings).ToList();
             }
 
             case SegmentKind.MidMeetingStandings:
@@ -1265,6 +1533,47 @@ public sealed class CommentaryDirector
                 return CommentaryReportFacts.MidMeetingStandings(
                     soFar,
                     $"{_dayKey}:{soFar.ClassName}:{soFar.RoundsRun}");
+            }
+
+            case SegmentKind.ClubAside:
+            {
+                // KEYED ON THE NOTE'S OWN ID, not on the night or the
+                // race. Each note is its own fact and is said once; a
+                // night-scoped key would let the first dedication spend
+                // the key and silence the other five.
+                if (ClubAside?.Invoke() is not { } note)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                if (CommentaryShowFacts.ClubAside(note, note.Id) is not { } aside)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                MarkWhenSpoken(SegmentKind.ClubAside, note.Id);
+
+                return new[] { aside };
+            }
+
+            case SegmentKind.RoomVerdict:
+            {
+                // KEYED ON THE RACE, not on the night: the vote is opened
+                // per race, so a night-scoped key would let the first
+                // verdict spend it and silence every one after.
+                if (RoomsCall?.Invoke() is not { } asked)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                if (CommentaryShowFacts.RoomVerdict(asked.Call, asked.WinnerName, _raceKey) is not { } verdict)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                MarkWhenSpoken(SegmentKind.RoomVerdict, asked.RaceKey);
+
+                return new[] { verdict };
             }
 
             case SegmentKind.ThisDayInHistory:
@@ -1366,6 +1675,27 @@ public sealed class CommentaryDirector
                 return Array.Empty<FactBlock>();
         }
     }
+
+    /// <summary>
+    /// Everything the night's own facts amount to, packed for a piece
+    /// rather than for a line - see <see cref="NightRecap"/>.
+    ///
+    /// THE SAME FACTS THE SIGN-OFF IS BUILT FROM, and deliberately WITHOUT
+    /// the "already said" filter: a recap for somebody who was not there
+    /// wants the result the room heard an hour ago. Passing Said here, as
+    /// every segment does, would hand a club that had a good sign-off an
+    /// empty recap - which is exactly backwards.
+    ///
+    /// SPENDS NOTHING. No budget is reserved, nothing is marked said, and
+    /// no theme is cooled: this is asked once, by somebody pressing a
+    /// button, and what it costs is the one model call the caller makes
+    /// with it.
+    ///
+    /// Empty on a night with nothing filed, and then there is no recap to
+    /// write - which the caller says in those words.
+    /// </summary>
+    public PackedFacts NightFacts() =>
+        FactPack.Build(Gather(SegmentKind.SignOffNumbers), said: null);
 
     /// <summary>The fight this pass's battle facts were built from. See Candidates.</summary>
     private Battle? _calling;

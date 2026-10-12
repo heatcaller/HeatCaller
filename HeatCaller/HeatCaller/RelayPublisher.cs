@@ -77,7 +77,7 @@ public sealed record RelayProbe(bool Ok, string Message);
 /// touched here - callers hand over a finished JSON string built on the UI
 /// thread, which is the same discipline the embedded web server follows.
 /// </summary>
-public sealed class RelayPublisher : IDisposable
+public sealed partial class RelayPublisher : IDisposable
 {
     /// <summary>Far beyond a race day's worth of sessions; a ceiling, not a working limit.</summary>
     private const int MaxQueuedResults = 500;
@@ -1685,6 +1685,38 @@ public sealed class RelayPublisher : IDisposable
                     {
                         _managerProblem = null;
                         Interlocked.Exchange(ref _managerPinLockedUntilTicks, 0);
+                    }
+
+                    // Shout-outs for the announcer, on a slow tick of its
+                    // own - see RelayPublisher.Notes. Slow because a
+                    // dedication is not urgent and the relay holds it
+                    // safely; and only while the club wants them, because
+                    // the inbox is the one route that costs a request per
+                    // poll with nothing to show for it on almost every
+                    // club.
+                    if (_settings.ClubNotesFromTheRelay && Environment.TickCount64 >= _nextNotesPollTick)
+                    {
+                        _nextNotesPollTick = Environment.TickCount64 + (long)NotesPollEvery.TotalMilliseconds;
+                        CollectClubNotes(pass.Token);
+                    }
+                    else if (!_settings.ClubNotesFromTheRelay)
+                    {
+                        _notesProblem = null;
+                    }
+
+                    // The room's vote, on a faster tick than the notes -
+                    // see RelayPublisher.Vote. Faster because the number
+                    // the race director watches to decide when to close
+                    // the vote has to be moving, and the window is only a
+                    // few minutes long.
+                    if (_settings.RoomVoteFromTheRelay && Environment.TickCount64 >= _nextVotePollTick)
+                    {
+                        _nextVotePollTick = Environment.TickCount64 + (long)VotePollEvery.TotalMilliseconds;
+                        CollectRoomVotes(pass.Token);
+                    }
+                    else if (!_settings.RoomVoteFromTheRelay)
+                    {
+                        ForgetVoteTrouble();
                     }
 
                     // Driver sign-up on its own, slower tick. Answers owed

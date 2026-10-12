@@ -1,4 +1,4 @@
-﻿namespace HeatCaller;
+namespace HeatCaller;
 
 /// <summary>
 /// The announcer screen's side of the broadcast segments: feeding the
@@ -77,6 +77,14 @@ public partial class AnnouncerControl
     /// they describe the club as a whole and say so.
     /// </summary>
     public Func<string?>? RaceClassName { get; set; }
+
+    /// <summary>
+    /// How big the race in front of the announcer is - see
+    /// <see cref="RaceStature"/>. Supplied by whoever knows the programme,
+    /// which is MainForm; null here means the flat cap the app has always
+    /// had, which is what a club with no programme keeps.
+    /// </summary>
+    public Func<RaceStature>? RaceSize { get; set; }
 
     /// <summary>
     /// The broadcast segments' console lines - every refusal, with its
@@ -213,6 +221,167 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
+    /// Writes tonight's recap, plays it out once with the show round it,
+    /// and keeps it as a file - see <see cref="NightRecap"/>.
+    ///
+    /// Answers null when it went out, and otherwise why not, in words a
+    /// club can act on. The same contract as TestShowMusicAsync above, and
+    /// for the same reason: the caller is a button on a settings page that
+    /// has to say something either way.
+    ///
+    /// THE ORDER HERE IS THE DESIGN. The floor is claimed BEFORE the model
+    /// is asked, because writing takes the best part of a minute and a
+    /// segment that started in the middle of it would be talking over the
+    /// recap's own opener by the time it arrived. The recorder is started
+    /// AFTER the writing, because a recorder running through a minute of
+    /// silence is a minute of silence in the file.
+    /// </summary>
+    public async Task<string?> PlayTonightsRecapAsync()
+    {
+        if (Director is not { } director || _commentary is not { IsAvailable: true })
+        {
+            return "The commentary isn't set up on this PC yet, so there is nothing to write the recap with.";
+        }
+
+        if (Treatment is not { } treatment)
+        {
+            return "The commentary isn't set up on this PC yet.";
+        }
+
+        if (_announcer.Muted)
+        {
+            return "The announcer is muted, so nobody would hear it and the recording would be silent. "
+                + "Unmute it on the Mixer and try again.";
+        }
+
+        if (ShowFloor.Busy)
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} is on air. Wait for it to finish and try again.";
+        }
+
+        var facts = director.NightFacts();
+
+        if (facts.Empty)
+        {
+            return "There is nothing filed for tonight yet, so there is no night to recap. "
+                + "Run the races first - this is for after the last one.";
+        }
+
+        if (!ShowFloor.TryClaim(TheNightRecap))
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} has the broadcast. Wait for it to finish and try again.";
+        }
+
+        BookendRecording? recording = null;
+
+        try
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing tonight's recap...");
+
+            var script = await _commentary.BuildNightRecapAsync(facts).ConfigureAwait(true);
+
+            var chunks = NightRecap.Chunks(script);
+
+            if (chunks.Count == 0)
+            {
+                return "The model did not write anything usable. Try again, or check the Connection card above.";
+            }
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Tonight's recap: {Plural.Of(chunks.Count, "piece")} to read, "
+                + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
+
+            // Started once there is something to record. See the note above.
+            recording = BookendRecording.StartForTheNight(line => StatusMessage?.Invoke(line));
+
+            // THE SIGN-OFF'S OWN TREATMENT, because that is what this is
+            // shaped like: the opener in front, the bed under it and the
+            // playout at the end. Treats() is asked first, so a club that
+            // has unticked the sign-off's music gets the recap read plainly
+            // rather than the one piece of music it said it did not want.
+            //
+            // RunLongAsync rather than RunAsync: a show winds itself up
+            // after four minutes and a recap at its limit is five, so the
+            // ordinary ceiling brought the music up under the last of it
+            // and closed the recording's file there. See
+            // NightRecap.LongestRead.
+            if (treatment.Treats(SegmentKind.SignOffNumbers)
+                && await treatment.RunLongAsync(
+                    () => SayTheRecap(chunks),
+                    SegmentKind.SignOffNumbers,
+                    NightRecap.LongestRead).ConfigureAwait(true))
+            {
+                return null;
+            }
+
+            // RunLongAsync answers false when there was no music to put
+            // round it - and in that case it has NOT spoken, so this must.
+            SayTheRecap(chunks);
+
+            // AND THEN WAITED FOR, which this path did not do and the one
+            // above always has (12 Oct 2026).
+            //
+            // SpeakReminder queues and returns. So on a club with no music
+            // files the two lines above said "play the recap" and fell
+            // straight through to the finally below, which finished the
+            // recording and released the broadcast floor before a word had
+            // been spoken: a nought-byte mp3 reported as "no sound came out
+            // of HeatCaller at all", and the floor handed to whatever asked
+            // for it next while the recap was still being read. The music
+            // path was right because RunLongAsync waits for quiet inside
+            // itself; the two were one line apart and behaved completely
+            // differently.
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead).ConfigureAwait(true);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"Couldn't play tonight's recap: {ex.Message}";
+        }
+        finally
+        {
+            recording?.Finish(line => StatusMessage?.Invoke(line));
+
+            ShowFloor.Release(TheNightRecap);
+        }
+    }
+
+    /// <summary>What the night's recap calls itself while it holds the broadcast floor - see ShowFloor.</summary>
+    private const string TheNightRecap = "tonight's recap";
+
+    /// <summary>
+    /// Reads the recap out, a piece at a time.
+    ///
+    /// Each piece is queued like any other spoken line, so a flag call can
+    /// still jump in front of whatever of it is unspoken - which on a
+    /// night that turns out not to be quite over matters more than the
+    /// recap does.
+    ///
+    /// Every piece but the last is marked as having another hard behind
+    /// it, so the pauses inside the recap are the pauses inside a
+    /// paragraph rather than the full stop the voice queue puts after a
+    /// line on its own. See AnnouncementService.SpeechTail.
+    /// </summary>
+    private void SayTheRecap(IReadOnlyList<string> chunks)
+    {
+        for (var at = 0; at < chunks.Count; at++)
+        {
+            var run = CommentaryExchange.ExchangeRun.At(at, chunks.Count);
+
+            _announcer.SpeakReminder(
+                chunks[at],
+                showOnScreens: true,
+                tail: run.AnotherFollows
+                    ? AnnouncementService.SpeechTail.BackToBack
+                    : AnnouncementService.SpeechTail.Normal,
+                lead: run.FollowsAnother
+                    ? AnnouncementService.SpeechLead.FollowsOn
+                    : AnnouncementService.SpeechLead.Normal);
+        }
+    }
+
+    /// <summary>
     /// One tick: tell the director where the race is, then ask whether
     /// anything is worth saying.
     ///
@@ -260,6 +429,33 @@ public partial class AnnouncerControl
         }
 
         var racing = _race.State == RaceState.Racing;
+
+        // HOW BIG THIS RACE IS, on every tick rather than at the green.
+        //
+        // On the tick because it has to be right BEFORE the race as well
+        // as during it: the intro, the grid history and the form guide all
+        // go out while the grid is forming, and they are part of what the
+        // pacing is about. And on every tick rather than once, because the
+        // round under the announcer changes while the app runs - a club
+        // picks a different one, seeds the mains mid-evening, or drops back
+        // to a freeform race.
+        // The club's own dial, read on the tick like everything else here,
+        // so turning it on the Commentary page while a race is on takes
+        // effect at the next segment rather than at the next race.
+        director.Chatter = _settings.CommentaryChatter ?? string.Empty;
+
+        if (RaceSize?.Invoke() is { } size && director.Stature != size)
+        {
+            director.Stature = size;
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [brain] The next race is {size.Describe} - up to "
+                + $"{Plural.Of(ShowChatter.Scaled(size.AirtimeCap, director.Chatter), "spoken segment")} in ten minutes"
+                + $" at {ShowChatter.For(director.Chatter).Name}"
+                + (size.WorthTwoVoices || ShowChatter.TwoVoicesEverywhere(director.Chatter)
+                    ? ", two voices where a segment suits them."
+                    : ", one voice."));
+        }
 
         // A new session number means a new race, whatever happened to the
         // one before it - finished, reset, or abandoned halfway.
@@ -677,64 +873,114 @@ public partial class AnnouncerControl
         // exact thing ShowTreatment.AbandonBlock exists to stop.
         var abandoned = false;
 
+        // RECORDING THE NIGHT'S BOOKENDS (11 Oct 2026). Every race is
+        // already recorded through its own broadcast, so a recap, the
+        // honours and the interview are all in that race's mp3. The cold
+        // open and the sign-off were in no file at all - and they are the
+        // two set pieces about the NIGHT rather than about one heat, which
+        // makes them the two a club would actually post.
+        //
+        // Null for every segment that is not one of those two, and for a
+        // club with recording switched off. See BookendRecording, which
+        // also explains why it refuses to start while anything else is
+        // recording.
+        var taping = BookendRecording.StartFor(said.Kind, line => StatusMessage?.Invoke(line));
+
+        // THE WHOLE OF IT INSIDE THE RECORDER'S FINALLY (12 Oct 2026), and
+        // the nesting is the fix rather than tidiness.
+        //
+        // The plain fallback used to sit AFTER the finally that closes the
+        // bookend's file - so on a club with no music files the cold open
+        // and the sign-off were recorded, finished and reported before the
+        // words were even queued, and every one of those mp3s was nought
+        // bytes with "no sound came out of HeatCaller at all" beside it in
+        // the log. Both set pieces, every night, for every club that had
+        // not dropped the music in: the two files a club would actually
+        // post. The music path was right all along because RunAsync waits
+        // for quiet inside itself.
+        //
+        // The inner try keeps what the outer one cannot: a block that
+        // throws is logged AND still falls through to the fallback, which
+        // is what it did before.
         try
         {
-            // The facts are read here, on the thread this came back on,
-            // and handed over - the rule CommentaryDirector.NextAsync
-            // follows for the same reason. Null when the night gives
-            // nothing to bridge to: no programme entered, nothing filed
-            // yet, the last race of the evening already run.
-            var order = ContinuityShow.Around(
-                said,
-                director.ContinuityNow(),
-                director.Continuity,
-                SpeakOnce,
-                SpeakTurn,
-                SayContinuityLine);
-
-            if (order is { } block)
+            try
             {
-                var result = await treatment.RunBlockAsync(block).ConfigureAwait(true);
+                // The facts are read here, on the thread this came back on,
+                // and handed over - the rule CommentaryDirector.NextAsync
+                // follows for the same reason. Null when the night gives
+                // nothing to bridge to: no programme entered, nothing filed
+                // yet, the last race of the evening already run.
+                var order = ContinuityShow.Around(
+                    said,
+                    director.ContinuityNow(),
+                    director.Continuity,
+                    SpeakOnce,
+                    SpeakTurn,
+                    SayContinuityLine);
 
-                abandoned = result.Abandoned;
+                if (order is { } block)
+                {
+                    var result = await treatment.RunBlockAsync(block).ConfigureAwait(true);
+
+                    abandoned = result.Abandoned;
+                }
+                else
+                {
+                    // said.Kind, so the running order can tell a sign-off from an
+                    // ordinary segment. It is the one cue that cannot be worked out
+                    // from the clock - "last show of the night" is only knowable from
+                    // what is being said - and without it the sign-off never gets its
+                    // playout. See ShowRunningOrder.
+                    await treatment.RunAsync(SpeakOnce, said.Kind).ConfigureAwait(true);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // said.Kind, so the running order can tell a sign-off from an
-                // ordinary segment. It is the one cue that cannot be worked out
-                // from the clock - "last show of the night" is only knowable from
-                // what is being said - and without it the sign-off never gets its
-                // playout. See ShowRunningOrder.
-                await treatment.RunAsync(SpeakOnce, said.Kind).ConfigureAwait(true);
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {ex.GetType().Name}: {ex.Message}");
+            }
+
+            // A race moved on and took the block with it: said out loud in
+            // the console rather than left as silence. The club paid a
+            // write for this line and nobody heard it, and a quiet night
+            // with no reason in the log is the thing this whole layer is
+            // logged to death to avoid. NOT said plainly afterwards - the
+            // room's attention is on the track and a race call is already
+            // in front of it on the voice queue.
+            if (abandoned && !spoken)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [show] Written, then dropped - the race moved on before the block reached it.");
+            }
+
+            // No music to play, or it failed before the lines went in, or
+            // the gap had no room for a block at all - said the ordinary
+            // way. The words are the part that matters, and this is exactly
+            // what happened before any of the staging existed.
+            if (!spoken && !abandoned)
+            {
+                SpeakOnce();
+
+                // AND WAITED FOR, but only where there is a file open to
+                // wait for. Every other way into this method is a
+                // half-second tick that must not be held up for the length
+                // of a read, and a segment with no recorder has nothing
+                // that closing early could spoil.
+                if (taping is not null)
+                {
+                    await treatment.WaitForTheReadAsync().ConfigureAwait(true);
+                }
             }
         }
-        catch (Exception ex)
+        finally
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {ex.GetType().Name}: {ex.Message}");
+            // In the FINALLY, so a block that threw or was abandoned still
+            // closes its file off: half a broadcast on disk is worth
+            // having, and a recorder left listening would hold the tap for
+            // the rest of the evening and silently displace the next
+            // race's own recording. Finish never throws and never waits.
+            taping?.Finish(line => StatusMessage?.Invoke(line));
         }
-
-        if (spoken)
-        {
-            return;
-        }
-
-        if (abandoned)
-        {
-            // Said out loud in the console rather than left as silence: the
-            // club paid a write for this line and nobody heard it, and a
-            // quiet night with no reason in the log is the thing this whole
-            // layer is logged to death to avoid.
-            StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [show] Written, then dropped - the race moved on before the block reached it.");
-
-            return;
-        }
-
-        // No music to play, or it failed before the lines went in, or the
-        // gap had no room for a block at all - said the ordinary way. The
-        // words are the part that matters, and this is exactly what
-        // happened before any of the staging existed.
-        SpeakOnce();
     }
 
     /// <summary>
@@ -782,6 +1028,25 @@ public partial class AnnouncerControl
         // read that went out but was never counted would be read again in the
         // next gap, which is the one thing a paying sponsor would notice.
         director.SalesReadSaid(paid);
+
+        // AND THE SPONSOR ON THE CROWD SCREEN for the length of it (12 Oct
+        // 2026). The read was the one part of the rotation with nothing to
+        // look at: a slide is a picture, a video is a picture that moves,
+        // and the part that costs the announcer airtime left the screen on
+        // the standings.
+        //
+        // Asked for HERE rather than read off the plan, because a read is
+        // planned ahead of the gap it lands in and a picture chosen
+        // minutes earlier could since have been removed. Before the words
+        // are queued, so the picture is up as the voice starts.
+        if (director.SponsorOnScreenFor?.Invoke(paid.SponsorId) is { } onScreen)
+        {
+            SponsorOnAir.Begin(
+                onScreen.PictureFileName,
+                onScreen.Name,
+                SponsorCopy.SpokenLength(paid.Text));
+        }
+
         _announcer.SpeakReminder(paid.Text, showOnScreens: true);
 
         return true;

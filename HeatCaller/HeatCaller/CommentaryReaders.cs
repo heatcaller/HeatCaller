@@ -1232,6 +1232,462 @@ public static class CommentaryReaders
     /// actually take, and nothing sets the demo flag or the "[DEMO]" label
     /// that ComputeStandings refuses to score.
     /// </summary>
+    /// <summary>
+    /// WHAT IS STILL POSSIBLE IN THE CHAMPIONSHIP THIS RACE COUNTS
+    /// TOWARDS, over the rounds that remain (12 Oct 2026).
+    ///
+    /// "With two rounds still to run, only Bill and Sam can win it."
+    /// "Bill has already won it - nobody left can reach him." The richest
+    /// seam the commentary depth plan named, and the one it listed first;
+    /// it sat blocked for two days for want of a single figure, which is
+    /// how long a season is. See Season.PlannedRounds.
+    ///
+    /// HOW EACH HALF IS PROVED, and it is the same method
+    /// <see cref="ChampionshipConditional"/> uses because it is the only
+    /// one that survives the drop rule. "Best 5 of 7" means a driver's
+    /// total is not their points added up, so there is no arithmetic
+    /// shortcut: a rival 40 points behind with two rounds left may be
+    /// unable to gain 40, because their two worst rounds would drop
+    /// instead. The gap and the points available cannot answer it.
+    ///
+    /// So the remaining rounds are PLAYED OUT at their extremes, through
+    /// SeasonStore.ComputeStandings, the one place in this app that applies
+    /// the drop rule:
+    ///
+    ///   for each rival, the rival takes the place that PAYS MOST in every
+    ///   remaining round and the leader scores nothing in any of them.
+    ///
+    /// That is the rival's best case against the leader's worst, so if the
+    /// leader still leads it, that rival cannot catch them - for every
+    /// arrangement, not most. Each rival is tried on their own, because two
+    /// of them cannot both win the same round and pricing them together
+    /// would prove something weaker than it looked.
+    ///
+    /// THE PLACE THAT PAYS MOST, NOT THE WIN. The scoring scheme is a list
+    /// the club TYPES, so third paying more than second is a thing people
+    /// enter - and then the best finishing POSITION and the most POINTS
+    /// AVAILABLE are two different places, and a round built on winning
+    /// proves nothing about the total. The sibling reader beside this one
+    /// says the same in capitals and this one did not listen for a day.
+    /// See Season.BestPayingPosition, and FutureRound for why the places
+    /// ahead of the rival have to be filled with cars.
+    ///
+    /// AND THE LEADER'S WORST IS "NOTHING", which is only true while no row
+    /// of the scheme is negative - a round worth zero either leaves a total
+    /// alone or is dropped by the best-of rule, so it is the same as not
+    /// being there. The moment a row takes points away, a leader can finish
+    /// somewhere WORSE than absent, and a proof built on absence would claim
+    /// a title that can still be lost. See Season.PenalisesAnyone.
+    ///
+    /// WHAT IT REFUSES, and the refusals are the feature:
+    /// <list type="bullet">
+    /// <item>a race counting towards no championship;</item>
+    /// <item>a season with no planned length - nothing to remain;</item>
+    /// <item>a season already past its planned length, where this race
+    /// counts towards a title that is over;</item>
+    /// <item>a season whose races do not come to a countable number of
+    /// rounds - see <see cref="RoundsCountedSoFar"/>, which is where the
+    /// difference between a race and a round lives;</item>
+    /// <item>a season too few rounds in to be a season;</item>
+    /// <item>a scheme where nothing scores, so no round can change
+    /// anything;</item>
+    /// <item>a scheme that takes points away, which leaves the leader's
+    /// worst case unpriceable;</item>
+    /// <item>a scheme whose best-paying place is further down the field
+    /// than a hypothetical round can be built out to;</item>
+    /// <item>a title more than <see cref="CommentaryStakesFacts.MostStillInIt"/>
+    /// drivers can still win, which is most of most seasons and is the
+    /// absence of a story rather than one;</item>
+    /// <item>a table too long to prove in the time a race intro has.</item>
+    /// </list>
+    ///
+    /// Said in a race INTRO rather than a recap: it is what the race about
+    /// to run is worth, which is the thing an intro has least to say about
+    /// and the thing a room most wants framed.
+    /// </summary>
+    /// <param name="round">The round about to run, for the championship it belongs to.</param>
+    /// <param name="transponders">Who is on this grid - only used to say names the way the announcer would.</param>
+    public static TitleStakes? TitleOnTheLine(
+        RoundDefinition? round,
+        IReadOnlyList<string> transponders,
+        SeasonStore? seasons,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events,
+        SessionHistoryStore history,
+        ProfileStore? profiles = null)
+    {
+        var entrants = Entrants(transponders, profiles);
+
+        foreach (var (season, counted) in ChampionshipLive.Candidates(round, seasons, rounds, events, history))
+        {
+            // HOW MANY ROUNDS THOSE RACES COME TO, which is not how many
+            // races they are - see RoundsCountedSoFar, which is also the
+            // only refusal in this method that was a bug first.
+            if (RoundsCountedSoFar(counted, events) is not { } roundsCounted
+                || roundsCounted < CommentaryStakesFacts.LeastRoundsCounted)
+            {
+                continue;
+            }
+
+            // THE FIGURE THE CLUB HAD TO TYPE. Null means they have not,
+            // and then none of this is sayable - see Season.PlannedRounds.
+            if (season.RoundsRemainingAfter(roundsCounted) is not { } left || left < 1)
+            {
+                continue;
+            }
+
+            // A scheme where nothing scores cannot change a table, so
+            // "nobody can catch him" would be true and meaningless - and
+            // the simulation below would prove it off a scheme the club
+            // has effectively switched off.
+            //
+            // THE PLACE THAT PAYS MOST, which is not necessarily the win:
+            // the scheme is a list a club types, so third can pay more than
+            // second, and a best case built on the best POSITION is not the
+            // most POINTS. The sibling reader beside this one states the
+            // same hazard in capitals. See Season.BestPayingPosition.
+            var bestPaying = season.BestPayingPosition();
+
+            if (bestPaying < 1)
+            {
+                continue;
+            }
+
+            // A SCHEME THAT TAKES POINTS AWAY has no priceable worst case
+            // for the leader, so nothing here can be proved on it: scoring
+            // nothing stops being the worst a leader can do the moment a
+            // row is negative. See Season.PenalisesAnyone for the whole
+            // argument - it is the refusal that keeps "he cannot be caught"
+            // off a PA where he can.
+            if (season.PenalisesAnyone())
+            {
+                continue;
+            }
+
+            // And a scheme whose best-paying place is further down the
+            // field than one hypothetical round can reasonably be built out
+            // to - see MostFillersToProve.
+            if (bestPaying > MostFillersToProve + 1)
+            {
+                continue;
+            }
+
+            // Held to what can be proved in the time an intro has. Each
+            // rival costs one standings recompute over the whole season,
+            // and the table is every driver who has scored - not just this
+            // grid.
+            var before = SeasonStore.ComputeStandings(season, counted, profiles);
+
+            if (before.Count < 2 || before.Count > MostInTableToProve)
+            {
+                continue;
+            }
+
+            var leader = before[0];
+
+            var stillInIt = new List<string> { leader.DriverName };
+
+            foreach (var rival in before.Skip(1))
+            {
+                if (CanStillCatch(season, counted, left, bestPaying, leader.DriverName, rival.DriverName, profiles))
+                {
+                    stillInIt.Add(rival.DriverName);
+
+                    // Past the ceiling there is no sentence to build, so
+                    // the rest of the table is not worth proving. This is
+                    // the ordinary exit two rounds into a nine-round
+                    // season.
+                    if (stillInIt.Count > CommentaryStakesFacts.MostStillInIt)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (stillInIt.Count > CommentaryStakesFacts.MostStillInIt)
+            {
+                continue;
+            }
+
+            // Said the way the announcer would say them where this grid
+            // holds them, and as the standings hold them otherwise - a
+            // driver who can still win it need not be in this race.
+            string Say(string name) =>
+                Sayable(entrants, profiles, name) is { Length: > 0 } said ? said : CommentaryFacts.Clean(name);
+
+            var leaderName = Say(leader.DriverName);
+
+            if (leaderName.Length == 0)
+            {
+                continue;
+            }
+
+            // THE MARGIN, to the best-placed driver who can still WIN it -
+            // not to whoever happens to be second in the table.
+            //
+            // Nearly always the same driver and the same figure. Where they
+            // are not, second in the table is somebody this sentence does
+            // not name, and the copy reads "leads on 148 points, by 3"
+            // directly beside "only Bill and Sam can still win it" - with
+            // the three belonging to a driver who cannot. That is reachable
+            // rather than theoretical: a rival three points back whose best
+            // rounds are already full of maximum scores gains nothing from
+            // the rounds that remain, because the drop rule throws the new
+            // ones away. It is the same rule that makes every claim in here
+            // need playing out instead of adding up.
+            //
+            // With nobody able to catch the leader there is no contender to
+            // measure to, and the copy does not use this figure at all; the
+            // gap to second is then the honest thing to carry.
+            var chaser = stillInIt.Count > 1 ? stillInIt[1] : before[1].DriverName;
+
+            return new TitleStakes(
+                Typed(season.Name),
+                roundsCounted,
+                left,
+                leaderName,
+                TransponderOf(entrants, leader.DriverName),
+                leader.TotalPoints,
+                leader.TotalPoints - Points(before, chaser),
+                stillInIt.Count == 1,
+                stillInIt.Select(Say).Where(name => name.Length > 0).ToList());
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The most drivers a championship table may hold and still be proved.
+    ///
+    /// Forty. Each rival costs one recompute of the whole season, so a
+    /// club with two hundred names in a table would be asked for two
+    /// hundred passes over every race of it in the moment a race intro is
+    /// being written. A club with forty drivers in one championship is
+    /// already a big club.
+    /// </summary>
+    private const int MostInTableToProve = 40;
+
+    /// <summary>
+    /// Whether one rival can still reach the leader - their BEST case
+    /// against the leader's worst, played out through the drop rule.
+    ///
+    /// The rival takes <paramref name="bestPaying"/> - the place that pays
+    /// most on this season's own scheme, which is not necessarily the win -
+    /// in every remaining round, and the leader scores nothing in any of
+    /// them. If the leader is still ahead after that, this rival cannot
+    /// catch them whatever happens. Anything short of playing it out would
+    /// be arithmetic over a total that is not a sum, and anything built on
+    /// the best POSITION rather than the best POINTS would be arithmetic
+    /// over the wrong round - see the remarks on
+    /// <see cref="TitleOnTheLine"/>.
+    ///
+    /// LEVEL COUNTS AS CAUGHT. A rival who can draw level has not been
+    /// shut out: where the table settles a tie is the table's business and
+    /// not something to claim a championship on.
+    /// </summary>
+    private static bool CanStillCatch(
+        Season season,
+        IReadOnlyList<SessionRecord> counted,
+        int roundsLeft,
+        int bestPaying,
+        string leaderName,
+        string rivalName,
+        ProfileStore? profiles)
+    {
+        // A rival whose own name looks like one of the filler cars would
+        // have the filler's result land on their row and score nothing in
+        // the round meant to be their best - see FillerPrefix, which is
+        // built so this cannot happen. Unprovable rather than disproved, so
+        // it comes back "can still catch": the ceiling on how many drivers
+        // may still win it then silences the whole sentence, which is the
+        // right way for a proof to fail.
+        if (rivalName.StartsWith(FillerPrefix, StringComparison.Ordinal)
+            || leaderName.StartsWith(FillerPrefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var played = new List<SessionRecord>(counted);
+
+        for (var at = 0; at < roundsLeft; at++)
+        {
+            // The rival in the place that PAYS most, with the places ahead
+            // of them filled by cars that score nothing - the best case
+            // being priced. The leader's absence from the round is the
+            // leader scoring nothing, which is the other half.
+            played.Add(FutureRound(at, rivalName, bestPaying));
+        }
+
+        var after = SeasonStore.ComputeStandings(season, played, profiles);
+
+        var rival = Points(after, rivalName);
+        var leader = Points(after, leaderName);
+
+        return rival >= leader;
+    }
+
+    /// <summary>
+    /// The most hypothetical cars one remaining round may be filled out
+    /// with to put a driver on the place that pays most.
+    ///
+    /// Sixty-three, so any scheme whose best-paying place is in the first
+    /// sixty-four is provable - which is every scheme a club has typed.
+    /// Past it a round would be built with hundreds of cars in it, once per
+    /// rival per remaining round, in the moment a race intro is being
+    /// written; and a club that has put its biggest score against position
+    /// four hundred has not typed a scheme worth reasoning about.
+    /// </summary>
+    private const int MostFillersToProve = 63;
+
+    /// <summary>
+    /// The name the filler cars in a hypothetical round race under - the
+    /// places ahead of the driver whose best case is being priced.
+    /// </summary>
+    /// <remarks>
+    /// A CONTROL CHARACTER LEADS IT, and that is the whole point.
+    /// SeasonStore.ComputeStandings keys a standings table on the driver's
+    /// NAME, without regard to case, and takes one score per driver per
+    /// session. A filler sharing a real driver's name would therefore put
+    /// its own result on that driver's row - and for the driver being
+    /// priced that is fatal: the filler's row comes first, so the rival
+    /// would score nothing at all in the round meant to be their best, and
+    /// the proof would shut out a rival who is not shut out.
+    ///
+    /// No name typed into this app can hold a \u0001. The text boxes
+    /// cannot produce one, a transponder file cannot carry one, and
+    /// CommentaryService.Field turns control characters into spaces before
+    /// anything is said. <see cref="CanStillCatch"/> checks anyway, because
+    /// "cannot happen" is not a check.
+    /// </remarks>
+    private const string FillerPrefix = "\u0001" + "open-seat-";
+
+    /// <summary>
+    /// A hypothetical round still to come, in which one driver takes the
+    /// place that pays most and nobody else scores anything.
+    /// </summary>
+    /// <remarks>
+    /// THE PLACES AHEAD ARE REAL CARS, because position is not read off the
+    /// result. ComputeStandings counts the drivers it has scored so far in
+    /// the session - which is what makes removing a ghost close the field
+    /// up - so a row saying "Position = 4" in a round of one entrant scores
+    /// as a WIN. The only way to put a driver fourth is to put three cars
+    /// in front of them. A round built the other way proved the best
+    /// POSITION and was read as the most POINTS, which on a club's own
+    /// typed scheme are two different places.
+    ///
+    /// AND THOSE CARS COMPLETE NO LAPS, so they take places without taking
+    /// points: the position is worked out before the lap check, so a
+    /// lapless filler holds its place, scores nothing and counts no round.
+    /// They land on rows of their own in the hypothetical table, which
+    /// nothing reads - see <see cref="FillerPrefix"/> for why those rows
+    /// cannot be a real driver's.
+    ///
+    /// ONE LAP for the driver being priced, which matters: ComputeStandings
+    /// reads a row with no laps as a DNF - on the entry list, never across
+    /// the line - and gives it no points and no round.
+    ///
+    /// ITS OWN ID PER ROUND, which <see cref="Hypothetical"/>'s single
+    /// ConditionalSessionId could not give: several of these go into one
+    /// list, and two sessions sharing an id is a season counting one round
+    /// where it was handed three.
+    ///
+    /// No RoundId, because these rounds do not exist. EventSpine has
+    /// already chosen the races that count by the time this is added to
+    /// them, so nothing downstream asks.
+    /// </remarks>
+    private static SessionRecord FutureRound(int at, string driverName, int position)
+    {
+        var place = Math.Clamp(position, 1, MostFillersToProve + 1);
+
+        var results = new List<SessionResultEntry>(place);
+
+        for (var ahead = 1; ahead < place; ahead++)
+        {
+            results.Add(new SessionResultEntry
+            {
+                Transponder = string.Empty,
+                DriverName = $"{FillerPrefix}{at}-{ahead}",
+                Position = ahead,
+                Laps = 0,
+            });
+        }
+
+        results.Add(new SessionResultEntry
+        {
+            Transponder = driverName,
+            DriverName = driverName,
+            Position = place,
+            Laps = 1,
+        });
+
+        return new SessionRecord
+        {
+            Id = $"if-the-season-runs-out-{at}",
+            SessionType = RaceSessionType.Race,
+            StartedAtUtc = DateTime.UtcNow.AddDays(at + 1),
+            Results = results,
+        };
+    }
+
+    /// <summary>
+    /// How many ROUNDS of a championship the races counting towards it come
+    /// to, or null when they do not come to a count this app can stand
+    /// behind.
+    ///
+    /// WHY IT IS NOT A COUNT OF RACES, which is what this was for half a day
+    /// and was wrong. A club's "round" is a race DAY - eight rounds of a
+    /// winter series is eight meetings - and the things counting towards a
+    /// championship are SESSIONS. One meeting can hand a championship more
+    /// than one: an A-main and a B-main both carry RoundKind.Main, and a
+    /// championship with no class named counts every class's main on the
+    /// night. Counting races as rounds then has a six-round season already
+    /// nine rounds in, so nothing remains, so a rival with two meetings
+    /// left to catch somebody in is told over a PA that they cannot - the
+    /// exact false claim this whole file exists in order not to make.
+    ///
+    /// THE DAYS ARE COUNTED instead, through the rounds those races were
+    /// filed under: RaceEvent.RoundIds is what makes a round part of a
+    /// meeting.
+    ///
+    /// AND IT REFUSES unless they come to exactly one race per day, which is
+    /// the shape the proof downstream is built for - it plays each remaining
+    /// round out as ONE race. A championship counting two races a meeting
+    /// has a best case worth two races a meeting, and pricing it at one
+    /// under-rates every rival: the same false shut-out by the other road.
+    /// Nearly every club is already the provable shape, because MainsOnly
+    /// and a named class give it to them.
+    ///
+    /// Null, too, for a race this app cannot place on a day at all. A
+    /// session ticked into a championship by hand carries no round, and a
+    /// championship holding one has a round count that is a guess.
+    /// </summary>
+    private static int? RoundsCountedSoFar(
+        IReadOnlyList<SessionRecord> counted,
+        RaceEventStore? events)
+    {
+        if (events is null || counted.Count == 0)
+        {
+            return null;
+        }
+
+        var days = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var session in counted)
+        {
+            // EventForRound rather than a lookup built here: which day a
+            // round belongs to is RaceEventStore's own question and it is
+            // already the one EventSpine.RuleAccepts asks.
+            if (session.RoundId is not { Length: > 0 } roundId
+                || events.EventForRound(roundId) is not { } day
+                || !days.Add(day.Id))
+            {
+                return null;
+            }
+        }
+
+        return days.Count;
+    }
+
     private static SessionRecord Hypothetical(
         RoundDefinition? round,
         IReadOnlyList<(string Transponder, string Name)> order) => new()
@@ -1521,6 +1977,719 @@ public static class CommentaryReaders
             // midnight is one night and a record set at ten past twelve is
             // still tonight's rather than yesterday's history.
             TonightAtTheTrack.NightOf(setUtc.ToLocalTime()) == TonightAtTheTrack.NightOf(today));
+    }
+
+    /// <summary>
+    /// The shape of these drivers' last few race NIGHTS in a class - a run
+    /// of podium nights, perfect attendance, a clean run of finishes, or a
+    /// driver back after a while away.
+    ///
+    /// WHY NIGHTS AND NOT RACES (11 Oct 2026)
+    ///
+    /// <see cref="GridHistory"/> already counts a driver's recent placings,
+    /// and CommentaryHistoryFacts.FormGuide reads them out in order -
+    /// "fourth, second, first, sixth". That is a results sheet read aloud.
+    /// A club member's memory is organised by NIGHTS: "he has been on the
+    /// podium three weeks running" is a thing a regular says to another
+    /// regular in the pits, and it is what the depth plan asked for and did
+    /// not get. See CommentaryWeekFacts.
+    ///
+    /// Counting nights is also why DriverForm could not be extended to do
+    /// it. A night is a DATE, and the shape needs the nights a driver was
+    /// ABSENT from as much as the ones they raced; DriverForm carries
+    /// counts and a list of placings with no window on it, so a run of
+    /// three podiums in it could be three weeks or three years and a
+    /// driver who missed a month looks identical to one who did not.
+    ///
+    /// THE WINDOW IS THE CLUB'S OWN NIGHTS, never a span of calendar
+    /// weeks. A club that skipped a fortnight for a holiday has not had a
+    /// driver miss two weeks, and a club that races fortnightly is not
+    /// owed half the lines. The last
+    /// <see cref="CommentaryWeekFacts.NightsInWindow"/> nights the club
+    /// actually raced this class is the whole of it.
+    ///
+    /// A NIGHT IS THE 6AM-TO-6AM NIGHT the rest of the app counts by
+    /// (TonightAtTheTrack.NightOf), so a club night running past midnight
+    /// is one night rather than two.
+    ///
+    /// TONIGHT IS LEFT OUT. Every line is about what a driver brought with
+    /// them, and a run of three that includes the heat an hour ago is the
+    /// app describing this evening as history in front of the room that
+    /// watched it. The same rule VenueRecord.SetTonight states.
+    ///
+    /// Empty when there is no programme to scope a class by, no filed
+    /// nights, or nobody with enough of them. Call it on the UI thread,
+    /// like everything else here.
+    /// </summary>
+    /// <param name="transponders">Who is in the race. Only these drivers are worked out.</param>
+    /// <param name="className">Whose nights to count. Blank counts every race the club has run.</param>
+    /// <param name="profiles">The club's profiles - for the announcer's name for a driver.</param>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="rounds">The club's rounds, for scoping to a class. A class cannot be scoped without them.</param>
+    /// <param name="nowLocal">Now, in local time - for which night counts as tonight and which year is this one. Defaults to now.</param>
+    public static IReadOnlyList<DriverWeeks> RecentWeeks(
+        IReadOnlyList<string>? transponders,
+        string? className,
+        ProfileStore? profiles,
+        SessionHistoryStore history,
+        RoundDefinitionStore rounds,
+        DateTime? nowLocal = null)
+    {
+        var found = new List<DriverWeeks>();
+
+        if (profiles is null || transponders is null || transponders.Count == 0)
+        {
+            return found;
+        }
+
+        var today = nowLocal ?? DateTime.Now;
+        var tonight = TonightAtTheTrack.NightOf(today);
+
+        // The class's races, newest first, with practice and demo already
+        // left out - the rule RacesIn states.
+        var races = RacesIn(className, history, rounds);
+
+        // Grouped into the club's own race NIGHTS, newest night first.
+        // A list of (night, that night's races) rather than a dictionary,
+        // because the ORDER is the whole point: a run is counted backwards
+        // from the most recent night.
+        var nights = new List<(DateTime Night, List<SessionRecord> Races)>();
+
+        foreach (var race in races)
+        {
+            var night = TonightAtTheTrack.NightOf(race.EndedAtUtc.ToLocalTime());
+
+            // Tonight is not history. See the remarks.
+            if (night == tonight)
+            {
+                continue;
+            }
+
+            if (nights.Count > 0 && nights[^1].Night == night)
+            {
+                nights[^1].Races.Add(race);
+
+                continue;
+            }
+
+            if (nights.Count >= CommentaryWeekFacts.NightsInWindow)
+            {
+                break;
+            }
+
+            nights.Add((night, new List<SessionRecord> { race }));
+        }
+
+        if (nights.Count == 0)
+        {
+            return found;
+        }
+
+        foreach (var transponder in transponders)
+        {
+            if (WeeksOf(nights, profiles, transponder, today) is { } weeks)
+            {
+                found.Add(weeks);
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// One driver's shape over these nights, newest night first - or null
+    /// when they have no sayable name or were not out at any of them.
+    ///
+    /// The thresholds are the BUILDER's, not this reader's: every figure is
+    /// handed over so CommentaryWeekFacts can refuse it and say why, which
+    /// is how every other figure in here works.
+    /// </summary>
+    private static DriverWeeks? WeeksOf(
+        IReadOnlyList<(DateTime Night, List<SessionRecord> Races)> nights,
+        ProfileStore profiles,
+        string transponder,
+        DateTime nowLocal)
+    {
+        var who = Typed(transponder);
+
+        if (who.Length == 0)
+        {
+            return null;
+        }
+
+        var name = SaidAs(profiles, who);
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var wasOut = 0;
+        var started = 0;
+        var finishedAll = true;
+        var run = 0;
+        var runLive = true;
+        var lastOut = string.Empty;
+
+        foreach (var (_, racesThatNight) in nights)
+        {
+            var bestThatNight = 0;
+            var raced = false;
+
+            foreach (var race in racesThatNight)
+            {
+                foreach (var entry in race.Results)
+                {
+                    if (!string.Equals(Typed(entry.Transponder), who, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    raced = true;
+                    started++;
+
+                    // A retirement or a disqualification is not a finish,
+                    // and is what "finished every one of them" has to be
+                    // false for.
+                    if (Typed(entry.Outcome).Length > 0)
+                    {
+                        finishedAll = false;
+                    }
+                    else if (entry.Position > 0 && (bestThatNight == 0 || entry.Position < bestThatNight))
+                    {
+                        bestThatNight = entry.Position;
+                    }
+
+                    break;
+                }
+            }
+
+            if (!raced)
+            {
+                // A NIGHT THEY MISSED NEITHER COUNTS NOR BREAKS A RUN. A
+                // driver away for a fortnight has not had his podium run
+                // ended by being on holiday, and a room that was there
+                // knows it. See CommentaryWeekFacts.
+                continue;
+            }
+
+            wasOut++;
+
+            if (lastOut.Length == 0)
+            {
+                // The newest night they were out at, which is what "their
+                // last was" means. Dated off that night's last race.
+                lastOut = When(racesThatNight[^1], nowLocal);
+            }
+
+            if (!runLive)
+            {
+                continue;
+            }
+
+            if (bestThatNight is > 0 and <= PodiumPlaces)
+            {
+                run++;
+            }
+            else
+            {
+                // A night they WERE there for and did not manage it. This
+                // is the only thing that ends a run.
+                runLive = false;
+            }
+        }
+
+        if (wasOut == 0)
+        {
+            return null;
+        }
+
+        return new DriverWeeks(
+            who,
+            name,
+            nights.Count,
+            wasOut,
+            nights.Count - wasOut,
+            run,
+            started,
+            finishedAll,
+            lastOut);
+    }
+
+    /// <summary>
+    /// What counts as a podium. Three, as everywhere else - and said as
+    /// "the top three" in the line rather than "a podium", because a club
+    /// running six-car heats does not hand out trophies for them.
+    /// </summary>
+    private const int PodiumPlaces = 3;
+
+    /// <summary>
+    /// What the club's whole filed history says about the layout a race is
+    /// being run on, beyond the one outright record
+    /// <see cref="LayoutRecord"/> carries: every driver on this grid's own
+    /// best lap here, and who has been winning here lately.
+    ///
+    /// WHY THIS IS WORTH WALKING THE HISTORY FOR (11 Oct 2026)
+    ///
+    /// The outright record belongs to one driver, and a club of forty hears
+    /// it as a fact about somebody else. A driver's own best on a layout
+    /// belongs to whoever is being talked about - the eighth-place regular
+    /// has one too - and no human announcer can hold forty drivers' bests
+    /// across four layouts in his head. It is the cheapest line in the
+    /// broadcast that is about the listener.
+    ///
+    /// WHY NOT DriverStats, AND WHY NOT AchievementEvaluator
+    ///
+    /// DriverStats counts a driver across everything they race and knows
+    /// nothing about layouts. AchievementEvaluator's BestEverOn is the
+    /// layout's OUTRIGHT best across all drivers, which is the record this
+    /// is explicitly not. What IS reused is the one rule that must not be
+    /// written twice - whose laps may stand as a record at all - because a
+    /// reader that let a ghost's or a rental's lap stand as a driver's best
+    /// would put a number on the PA that the club's own Track Layouts page
+    /// contradicts. See AchievementEvaluator.CanHoldTrackRecord.
+    ///
+    /// RACES, AND ONLY RACES. Practice sessions have no result anybody
+    /// would call a finish and a demo race's laps are invented, so both are
+    /// left out - the rule <see cref="RacesIn"/> states and this honours
+    /// without needing a programme, because a layout is not a class.
+    ///
+    /// TONIGHT IS LEFT OUT ENTIRELY. "His best ever here is 11.402" said
+    /// about a lap he set in the heat an hour ago is the timing system
+    /// describing this evening as club history, in front of the man who did
+    /// it - the same fault VenueRecord.SetTonight exists to prevent. So the
+    /// figure is what he had to beat when he arrived, which is also the only
+    /// version of it that is worth hearing before a race.
+    ///
+    /// Null when there is no layout named or nothing has been filed on it.
+    /// Call it on the UI thread, like everything else here.
+    /// </summary>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="profiles">The club's profiles - for the announcer's name for a driver, and for whose laps may stand.</param>
+    /// <param name="layoutName">The layout being raced on, as the round or the session names it.</param>
+    /// <param name="transponders">Who is in the race. Their own bests are the only ones worked out.</param>
+    /// <param name="nowLocal">Now, in local time - for which night counts as tonight and which year is this one. Defaults to now.</param>
+    public static LayoutLegend? LayoutStory(
+        SessionHistoryStore history,
+        ProfileStore? profiles,
+        string? layoutName,
+        IReadOnlyList<string>? transponders,
+        DateTime? nowLocal = null)
+    {
+        var wanted = Typed(layoutName);
+
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
+
+        var today = nowLocal ?? DateTime.Now;
+        var tonight = TonightAtTheTrack.NightOf(today);
+
+        // Every RACE the club has filed on this layout before tonight,
+        // oldest first - the order the run below is counted in.
+        var onLayout = new List<SessionRecord>();
+
+        foreach (var session in history.All)
+        {
+            if (session.SessionType == RaceSessionType.Practice
+                || session.IsDemoSession()
+                || !string.Equals(Typed(session.TrackLayoutName), wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // Tonight's own races are not history yet. See the remarks.
+            if (TonightAtTheTrack.NightOf(session.EndedAtUtc.ToLocalTime()) == tonight)
+            {
+                continue;
+            }
+
+            onLayout.Add(session);
+        }
+
+        if (onLayout.Count == 0)
+        {
+            return null;
+        }
+
+        onLayout.Sort((a, b) => a.EndedAtUtc.CompareTo(b.EndedAtUtc));
+
+        var bests = new List<DriverOnLayout>();
+
+        foreach (var transponder in transponders ?? Array.Empty<string>())
+        {
+            if (OwnBestOn(onLayout, profiles, transponder, today) is { } best)
+            {
+                bests.Add(best);
+            }
+        }
+
+        // Quickest first, so an intro that can only carry two carries the
+        // two figures worth stating rather than the first two it was
+        // handed. ForTheLayout then decides how many survive.
+        bests.Sort((a, b) => a.BestSeconds.CompareTo(b.BestSeconds));
+
+        var (winner, run) = RunOfWinsOn(onLayout, profiles);
+
+        return new LayoutLegend(Typed(onLayout[^1].TrackLayoutName), onLayout.Count, bests, winner, run);
+    }
+
+    /// <summary>
+    /// One driver's quickest lap in these races, with the month they set it
+    /// and how many of the races they were in - or null when they have
+    /// neither a sayable name, a lap, nor enough races here to make the
+    /// figure their measure of the place.
+    ///
+    /// The threshold itself is the BUILDER's
+    /// (CommentaryRaceFacts.LeastRacesForOwnBest), not this reader's: the
+    /// count is handed over so the builder can refuse it and say why, which
+    /// is how every other figure in here works.
+    /// </summary>
+    private static DriverOnLayout? OwnBestOn(
+        IReadOnlyList<SessionRecord> onLayout,
+        ProfileStore? profiles,
+        string transponder,
+        DateTime nowLocal)
+    {
+        var who = Typed(transponder);
+
+        if (who.Length == 0 || profiles is null)
+        {
+            return null;
+        }
+
+        // The announcer's own name for them, never the transponder and
+        // never the name on an old result - a transponder changes hands
+        // between seasons. See SaidAs.
+        var name = SaidAs(profiles, who);
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        // Whose laps may stand at all. A ghost's or a rental's lap left in
+        // an old saved result would otherwise become this driver's "best
+        // ever here" - a number the club's own Track Layouts page does not
+        // recognise. The same rule the live record keeps.
+        if (!AchievementEvaluator.CanHoldTrackRecord(who, profiles))
+        {
+            return null;
+        }
+
+        var bestMs = 0L;
+        var setAtUtc = default(DateTime);
+        var races = 0;
+
+        foreach (var session in onLayout)
+        {
+            foreach (var entry in session.Results)
+            {
+                if (!string.Equals(Typed(entry.Transponder), who, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                races++;
+
+                if (entry.FastLapMs > 0 && (bestMs == 0 || entry.FastLapMs < bestMs))
+                {
+                    bestMs = entry.FastLapMs;
+                    setAtUtc = session.EndedAtUtc;
+                }
+
+                // One row per driver per session; a second would double
+                // the race count.
+                break;
+            }
+        }
+
+        if (races == 0 || bestMs <= 0)
+        {
+            return null;
+        }
+
+        return new DriverOnLayout(who, name, bestMs / 1000.0, Month(setAtUtc, nowLocal), races);
+    }
+
+    /// <summary>
+    /// The unbroken run of one driver winning every one of the club's most
+    /// recent races on this layout, newest backwards - or no name and zero,
+    /// which is the usual answer at a club where the wins go round.
+    ///
+    /// A WIN NEEDS SOMEBODY TO BEAT. A race with fewer than
+    /// <see cref="LeastCarsForAWin"/> finishers is not counted as a win and
+    /// does not break a run either: it is passed over, because a two-car
+    /// heat somebody turned up alone for should neither make a run nor end
+    /// one. A race with no identifiable winner is treated the same way.
+    ///
+    /// Counted by TRANSPONDER and named from today's profile, like
+    /// everything else that holds a run to a person - see SaidAs.
+    /// </summary>
+    private static (string Winner, int Run) RunOfWinsOn(
+        IReadOnlyList<SessionRecord> onLayout,
+        ProfileStore? profiles)
+    {
+        if (profiles is null)
+        {
+            return (string.Empty, 0);
+        }
+
+        var holder = string.Empty;
+        var run = 0;
+
+        for (var at = onLayout.Count - 1; at >= 0; at--)
+        {
+            var winner = WinnerIn(onLayout[at], profiles);
+
+            if (winner.Length == 0)
+            {
+                // Nothing to count and nothing to break. See the remarks.
+                continue;
+            }
+
+            if (holder.Length == 0)
+            {
+                holder = winner;
+                run = 1;
+                continue;
+            }
+
+            if (!string.Equals(holder, winner, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            run++;
+        }
+
+        if (run == 0)
+        {
+            return (string.Empty, 0);
+        }
+
+        return (SaidAs(profiles, holder), run);
+    }
+
+    /// <summary>
+    /// Who won this race, as a transponder - or empty when nobody did in a
+    /// way worth counting: too few cars out, no first place recorded, or a
+    /// first place whose laps may not stand.
+    /// </summary>
+    private static string WinnerIn(SessionRecord session, ProfileStore profiles)
+    {
+        var cars = 0;
+        var first = string.Empty;
+
+        foreach (var entry in session.Results)
+        {
+            var who = Typed(entry.Transponder);
+
+            if (who.Length == 0 || !AchievementEvaluator.CanHoldTrackRecord(who, profiles))
+            {
+                continue;
+            }
+
+            cars++;
+
+            // Position 1 and an actual finish. A DNF or a DQ placed first
+            // by an old file is not a win.
+            if (entry.Position == 1 && Typed(entry.Outcome).Length == 0)
+            {
+                first = who;
+            }
+        }
+
+        return cars >= LeastCarsForAWin ? first : string.Empty;
+    }
+
+    /// <summary>
+    /// How many real cars have to be out for the race to count as a win on
+    /// a layout.
+    ///
+    /// Three. "The last five races here have gone to Bill" said about five
+    /// evenings Bill turned up to on his own is true and is the kind of
+    /// true a club laughs at - and it is the superlative with nothing
+    /// behind it that every threshold in CommentaryRaceFacts exists to
+    /// avoid.
+    /// </summary>
+    private const int LeastCarsForAWin = 3;
+
+    /// <summary>
+    /// Who has been winning this class's MAINS on this layout, counted in
+    /// MEETINGS rather than races - the one claim in this app that no human
+    /// announcer could make.
+    ///
+    /// WHY THIS IS NOT <see cref="LayoutStory"/>'s run (11 Oct 2026)
+    ///
+    /// LayoutStory counts an unbroken run of wins over every race filed on
+    /// a layout, of any kind, in any class. That is a true figure and
+    /// WhoWinsHere says it carefully - but it is not the line a club
+    /// actually wants, which is about the race that matters:
+    ///
+    ///   "Bill had won the main on this layout at each of the last
+    ///    fourteen meetings. Tonight that run ends."
+    ///
+    /// Three things have to be different for that sentence to be true.
+    /// MAINS ONLY, because a run that counts heats is a run of heats.
+    /// ONE CLASS, because a club with three classes has three mains a
+    /// night and a run across all of them is a run of nothing. And
+    /// MEETINGS, not races, because a club that runs an A and a B main
+    /// would otherwise have one evening count twice.
+    ///
+    /// ONE MAIN PER MEETING, and it is the top one: the lowest
+    /// <see cref="RoundDefinition.MainTier"/> filed that night, latest
+    /// first on a tie. A B-main winner must not end the A-main's run.
+    ///
+    /// TONIGHT IS LEFT OUT, like LayoutStory - this is the bar the night's
+    /// own result is held against, so counting the result into the bar
+    /// would make every winner their own precedent. The caller passes
+    /// tonight's winner to the fact builder; see
+    /// CommentaryRaceFacts.ForTheMainsHere.
+    ///
+    /// Null every way of having nothing: no layout named, no class named,
+    /// no programme to tell a main from a heat, nothing filed, or nobody
+    /// with a run. A club with no Program tab filled in has no mains to
+    /// count and gets silence rather than a guess.
+    ///
+    /// Call it on the UI thread, like everything else here.
+    /// </summary>
+    /// <param name="history">Every session the club has filed.</param>
+    /// <param name="rounds">The programme - the only thing that knows a main from a heat, and which class each was.</param>
+    /// <param name="profiles">For the announcer's name for a driver, and for whose wins may stand.</param>
+    /// <param name="layoutName">The layout being raced on, as the round or the session names it.</param>
+    /// <param name="className">The class whose mains are counted. Blank is no answer, not "every class".</param>
+    /// <param name="nowLocal">Now, in local time - for which night counts as tonight. Defaults to now.</param>
+    public static MainsOnLayout? MainsHere(
+        SessionHistoryStore history,
+        RoundDefinitionStore? rounds,
+        ProfileStore? profiles,
+        string? layoutName,
+        string? className,
+        DateTime? nowLocal = null)
+    {
+        var layout = Typed(layoutName);
+        var cls = Typed(className);
+
+        if (rounds is null || profiles is null || layout.Length == 0 || cls.Length == 0)
+        {
+            return null;
+        }
+
+        // Which filed rounds are this class's MAINS, and what tier each is.
+        // By id, which is what a session carries - a session knows nothing
+        // about classes or round kinds on its own.
+        var tiers = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var round in rounds.All)
+        {
+            if (round.Kind != RoundKind.Main
+                || string.IsNullOrWhiteSpace(round.Id)
+                || !string.Equals(Typed(round.ClassName), cls, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // An untiered main is the top one - a club that runs a single
+            // final and never set a tier on it has run its A-main. The
+            // same reading RaceStature takes.
+            tiers[round.Id] = round.MainTier <= 0 ? 0 : round.MainTier;
+        }
+
+        if (tiers.Count == 0)
+        {
+            return null;
+        }
+
+        var today = nowLocal ?? DateTime.Now;
+        var tonight = TonightAtTheTrack.NightOf(today);
+
+        // The top main of each meeting, by meeting. The 6am-to-6am night
+        // the rest of the app counts by, so a club night that runs past
+        // midnight is one meeting.
+        var topOfEachMeeting = new Dictionary<DateTime, (SessionRecord Session, int Tier)>();
+
+        foreach (var session in history.All)
+        {
+            if (session.SessionType == RaceSessionType.Practice
+                || session.IsDemoSession()
+                || session.RoundId is not { } id
+                || !tiers.TryGetValue(id, out var tier)
+                || !string.Equals(Typed(session.TrackLayoutName), layout, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var night = TonightAtTheTrack.NightOf(session.EndedAtUtc.ToLocalTime());
+
+            // Tonight's own races are the thing being held against this,
+            // not part of it. See the remarks.
+            if (night == tonight)
+            {
+                continue;
+            }
+
+            if (!topOfEachMeeting.TryGetValue(night, out var already)
+                || tier < already.Tier
+                || (tier == already.Tier && session.EndedAtUtc > already.Session.EndedAtUtc))
+            {
+                topOfEachMeeting[night] = (session, tier);
+            }
+        }
+
+        if (topOfEachMeeting.Count == 0)
+        {
+            return null;
+        }
+
+        // Newest meeting first, which is the direction a run is counted in.
+        var meetings = topOfEachMeeting
+            .OrderByDescending(one => one.Key)
+            .Select(one => one.Value.Session)
+            .ToList();
+
+        var holder = string.Empty;
+        var run = 0;
+
+        foreach (var session in meetings)
+        {
+            var winner = WinnerIn(session, profiles);
+
+            if (winner.Length == 0)
+            {
+                // Nothing to count and nothing to break - the same rule
+                // RunOfWinsOn states, and for the same reason.
+                continue;
+            }
+
+            if (holder.Length == 0)
+            {
+                holder = winner;
+                run = 1;
+                continue;
+            }
+
+            if (!string.Equals(holder, winner, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            run++;
+        }
+
+        if (run == 0)
+        {
+            return null;
+        }
+
+        return new MainsOnLayout(
+            layout,
+            cls,
+            meetings.Count,
+            SaidAs(profiles, holder),
+            holder,
+            run);
     }
 
     /// <summary>

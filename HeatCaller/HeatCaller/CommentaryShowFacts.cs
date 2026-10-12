@@ -556,6 +556,133 @@ public static class CommentaryShowFacts
         $"thread:{dayKey}:{story.SubjectId.Trim()}:{stage}";
 
     /// <summary>
+    /// A thing about the night that is not about the racing - a
+    /// dedication, a birthday, the raffle closing at eight.
+    ///
+    /// THE ONE FACT IN THE APP NOBODY WORKED OUT. Everything else the
+    /// announcer says comes off the timing loop: results, laps, history,
+    /// championships. All of it true and none of it about the room. This
+    /// is a sentence a human typed because they know something the
+    /// decoder cannot - and it is the one people repeat in the car park.
+    ///
+    /// QUOTED, AND SAID TO BE SOMEBODY ELSE'S WORDS. The club's own
+    /// wording goes into the facts inside quotation marks with the sender
+    /// named where there is one, so the model works it in rather than
+    /// reading it out flat or, worse, elaborating on it. A dedication
+    /// embroidered by a language model is the single most embarrassing
+    /// thing this app could do: "Jack's first race since his operation"
+    /// must not become a guess at what the operation was.
+    ///
+    /// NO THEME. A theme is permission for FactPack to drop a block for
+    /// variety, and this is the whole subject of its own segment - it is
+    /// never held back, and there is only ever one of them in a pack.
+    /// </summary>
+    /// <param name="note">The note, already approved - see ClubNotes, which is the only thing that offers one.</param>
+    /// <param name="key">This note's own id, so one note is one fact and saying it spends only itself.</param>
+    /// <remarks>
+    /// INTERNAL, where every other builder here is public, because
+    /// <see cref="ClubNote"/> is - and a public method carrying an
+    /// internal type does not compile. Nothing outside the app has any
+    /// business building this one anyway.
+    /// </remarks>
+    internal static FactBlock? ClubAside(ClubNote note, string key)
+    {
+        // CommentaryFacts.Clean would be WRONG here, and quietly: it caps
+        // at forty characters, which is right for a name and would cut a
+        // note off mid-sentence. The sanitising is the part that matters
+        // and is the same - brackets and braces out, control characters
+        // collapsed - so Field is asked for directly with the store's own
+        // limit. This is the only string in the broadcast that came from a
+        // stranger's phone, so it is also the one place that sanitising is
+        // not merely tidiness.
+        var said = CommentaryService.Field(note.Text, ClubNotes.MostChars);
+
+        if (said.Length == 0)
+        {
+            return null;
+        }
+
+        // A name, so the usual cap is the right one.
+        var from = CommentaryFacts.Clean(note.From);
+
+        var text = from.Length > 0
+            ? $"The club has asked for this to be mentioned, from {from}: \"{said}\""
+            : $"The club has asked for this to be mentioned: \"{said}\"";
+
+        return new FactBlock($"aside:{key}", text, null);
+    }
+
+    /// <summary>
+    /// What the room reckoned about the race just run - see
+    /// <see cref="RoomVote"/>, which is the only thing that offers one and
+    /// which stays silent on a thin vote or a split room.
+    ///
+    /// THE ONLY SEGMENT IN THE APP THAT CAN BE WRONG, and that is the
+    /// point of it. Everything else the announcer says was worked out from
+    /// the timing and is true by construction; this is the room's opinion
+    /// held up against the result. It is also the one line here that no
+    /// amount of lap data could ever produce.
+    ///
+    /// THE NUMBERS ARE SPELLED OUT IN THE FACT rather than left for the
+    /// model to work out, because the one thing this must never do is
+    /// misreport what the room said. A percentage invented or rounded into
+    /// a rounder-sounding one is a claim about forty people who are
+    /// standing right there and know what they voted.
+    ///
+    /// NO THEME, like the club aside and for the same reason: it is the
+    /// whole subject of its own segment, there is only ever one in a pack,
+    /// and it is never held back for variety.
+    /// </summary>
+    /// <param name="call">The verdict, already judged worth saying.</param>
+    /// <param name="winnerName">Who won, as the rest of the broadcast names them.</param>
+    /// <param name="key">This race's key, so a verdict is one fact and is said once.</param>
+    /// <remarks>
+    /// INTERNAL rather than public because <see cref="RoomCall"/> is - the
+    /// same reason <see cref="ClubAside"/> is, and the same CS0051 if it
+    /// were not.
+    /// </remarks>
+    internal static FactBlock? RoomVerdict(RoomCall call, string? winnerName, string key)
+    {
+        var pick = CommentaryFacts.Clean(call.PickName);
+        var won = CommentaryFacts.Clean(winnerName);
+
+        if (pick.Length == 0)
+        {
+            return null;
+        }
+
+        var opened =
+            $"Before the race the room voted on who would win it. {call.Votes} people voted, "
+            + $"and {call.PickShare} per cent of them picked {pick}.";
+
+        string closed;
+
+        if (call.RoomWasRight)
+        {
+            closed = $"{pick} won the race, so the room called it right.";
+        }
+        else if (won.Length == 0)
+        {
+            // THE RESULT IS NOT IN HAND. Said as the room's own figure and
+            // nothing more - a verdict with no winner in it must not imply
+            // one either way.
+            closed = "The race has been run.";
+        }
+        else if (call.NobodyHadTheWinner)
+        {
+            closed =
+                $"{won} won the race, and not one of the {call.Votes} people who voted had picked them.";
+        }
+        else
+        {
+            closed =
+                $"{won} won the race instead, with {call.WinnerShare} per cent of the room's vote.";
+        }
+
+        return new FactBlock($"verdict:{key}", $"{opened} {closed}", null);
+    }
+
+    /// <summary>
     /// "two", "three" - small counts read as words, because these lines
     /// are written to be spoken rather than shown.
     ///

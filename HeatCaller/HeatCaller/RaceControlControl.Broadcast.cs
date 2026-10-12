@@ -164,6 +164,165 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Opens tonight's club notes - the asides that are not about the
+    /// racing, and the approval list for anything the room sent in.
+    ///
+    /// A WINDOW RATHER THAN A CARD ON A PAGE, and modal. It is opened
+    /// between races, used for fifteen seconds and closed; a card would
+    /// take permanent room on the screen the race director needs most, to
+    /// show an empty list on almost every night.
+    /// </summary>
+    private void ShowTonightsClubNotes()
+    {
+        if (TonightsNotes?.Invoke() is not { } notes)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Club notes aren't set up on this PC.");
+
+            return;
+        }
+
+        try
+        {
+            using var form = new ClubNotesForm(notes);
+
+            form.ShowDialog(FindForm());
+
+            var (toSay, toApprove, said) = notes.Counts();
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Club notes: {Plural.Of(toSay, "note")} ready to be said, "
+                + $"{toApprove} waiting to be approved, {said} already said tonight.");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't open the club notes: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens tonight's room vote: who the room reckons wins the race about
+    /// to run, and what it said once that race has been run.
+    ///
+    /// A WINDOW, like the club notes beside it and for the same reasons -
+    /// see <see cref="ShowTonightsClubNotes"/>.
+    ///
+    /// THE GRID COMES FROM THE SESSION, NOT THE PROGRAM. What the room is
+    /// voting on is the cars actually staged: a program's assigned list is
+    /// what the club intended, and a driver who did not turn up must not
+    /// be on the ballot. The program's list is the fallback for a vote
+    /// opened before anybody has crossed the loop.
+    /// </summary>
+    private void ShowTonightsRoomVote()
+    {
+        if (TonightsVote?.Invoke() is not { } vote)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] The room vote isn't set up on this PC.");
+
+            return;
+        }
+
+        try
+        {
+            var round = _activeRound?.Invoke();
+
+            using var form = new RoomVoteForm(
+                vote,
+                round?.Id,
+                RaceLabel(round),
+                round?.ClassName,
+                GridToVoteOn(round),
+                _settings.RoomVoteFromTheRoom
+                    ? $"{WebServerService.VotePath} on this PC's address"
+                    : null);
+
+            form.ShowDialog(FindForm());
+
+            StatusMessage?.Invoke(vote.OnRace is { Length: > 0 } onRace
+                ? $"{AppTime.LogStampNow()}  [show] Room vote on {onRace}: {Plural.Of(vote.Votes, "vote")} in, "
+                  + (vote.Taking ? "still open." : "closed.")
+                : $"{AppTime.LogStampNow()}  [show] No room vote has been opened tonight.");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't open the room vote: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// What to call the race on the ballot: its own label where the
+    /// program gives one, with the class in front so a window open on
+    /// "A-Main" says which A-main.
+    /// </summary>
+    private static string? RaceLabel(RoundDefinition? round)
+    {
+        if (round is null)
+        {
+            return null;
+        }
+
+        var label = (round.RoundLabel ?? string.Empty).Trim();
+        var className = (round.ClassName ?? string.Empty).Trim();
+
+        if (label.Length == 0)
+        {
+            return className.Length > 0 ? className : null;
+        }
+
+        return className.Length > 0 ? $"{className} {label}" : label;
+    }
+
+    /// <summary>
+    /// The drivers on the ballot - see the note on
+    /// <see cref="ShowTonightsRoomVote"/> for why the staged cars come
+    /// first and the program's list is only the fallback.
+    /// </summary>
+    private IReadOnlyList<VoteOption> GridToVoteOn(RoundDefinition? round)
+    {
+        // THE NAME COMES FROM THE PROFILE, not from the standing.
+        // RacerStanding carries a TransponderId and the lap figures and
+        // nothing else - it is what the timing loop keeps, and a name is
+        // not a timing fact. Both branches below therefore ask the profile
+        // store the same way, so a ballot built from the staged cars and
+        // one built from the program cannot name the same driver
+        // differently.
+        var staged = _race.GetOrderedStandings()
+            .Where(one => !string.IsNullOrWhiteSpace(one.TransponderId))
+            .Select(one => new VoteOption(one.TransponderId, NameOnTheBallot(one.TransponderId)))
+            .ToList();
+
+        if (staged.Count >= 2 || round is null)
+        {
+            return staged;
+        }
+
+        return round.AssignedTransponders
+            .Where(one => !string.IsNullOrWhiteSpace(one))
+            .Select(one => new VoteOption(one, NameOnTheBallot(one)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// One driver as the ballot should name them - their profile's name, or
+    /// their transponder where the club has never given them one.
+    /// </summary>
+    /// <remarks>
+    /// The transponder is a poor name and it is the right fallback: a phone
+    /// showing a number at least shows the car that is on the track, and
+    /// dropping the entry instead would be a ballot missing a driver who is
+    /// about to race. RoomVote folds duplicates by id, so two unnamed cars
+    /// stay two options.
+    ///
+    /// Not DriverProfile.SpokenName, which is for the announcer's mouth:
+    /// it prefers AnnouncerName, the box a club types a phonetic spelling
+    /// into, and "Sham-u-el" on a phone screen reads as a fault. This is a
+    /// label somebody taps.
+    /// </remarks>
+    private string NameOnTheBallot(string transponder) =>
+        _profiles.Get(transponder)?.DriverName is { Length: > 0 } named ? named : transponder;
+
+    /// <summary>
     /// Stops the show that is on air: the bed is ridden down and whatever
     /// the running order had left is dropped.
     ///

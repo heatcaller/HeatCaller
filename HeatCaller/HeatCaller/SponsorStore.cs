@@ -420,6 +420,37 @@ public sealed class SponsorStore
     /// <see cref="RestoreSponsor"/>, which is why the caller must keep hold
     /// of it BEFORE calling this.
     /// </summary>
+    /// <summary>
+    /// What the crowd screen should show for one sponsor's read, or null
+    /// when there is no such sponsor.
+    ///
+    /// THE PICTURE IS CHECKED TO BE ON DISK HERE, not when it is shown. A
+    /// club that pointed a read at a slide and then removed that slide
+    /// from the rotation has deleted the file, and the honest answer is
+    /// then the sponsor's name again rather than a gap on the screen - so
+    /// the missing file is resolved to null at the one point that can see
+    /// the folder. See SponsorBooking.PictureFileName.
+    /// </summary>
+    public SponsorOnScreen? OnScreenFor(string id)
+    {
+        if (Sponsor(id) is not { } sponsor)
+        {
+            return null;
+        }
+
+        var picture = sponsor.PictureFileName;
+
+        // A video is not a picture. The folder holds both, and a read is a
+        // spoken thing with its own length - handing LibVLC a clip to play
+        // underneath it would be two adverts at once, which is the exact
+        // collision the commercial break was built to stop.
+        var usable = !string.IsNullOrWhiteSpace(picture)
+            && !SponsorMedia.IsVideoName(picture)
+            && ResolvePath(picture) is not null;
+
+        return new SponsorOnScreen(usable ? picture : null, sponsor.Name ?? string.Empty);
+    }
+
     public int RemoveSponsor(string id)
     {
         var sponsor = Sponsor(id);
@@ -590,7 +621,37 @@ public sealed class SponsorBooking
     /// read tonight.
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// The picture the crowd screen shows while this sponsor's read is
+    /// being said (12 Oct 2026). A name in the same folder as the slides,
+    /// so a club can either upload one for the read or point it at a
+    /// picture already in the rotation.
+    ///
+    /// EMPTY IS THE ORDINARY CASE and has a real answer rather than a
+    /// blank screen: the Big Screen shows this sponsor's
+    /// <see cref="Name"/>, taken from this page, for the length of the
+    /// read. See SponsorOnAir.
+    ///
+    /// Also treated as empty when the file has gone - a club that removed
+    /// it from the slide rotation has deleted it, and the name is the
+    /// right answer again rather than an error. See
+    /// SponsorStore.OnScreenFor.
+    /// </summary>
+    public string PictureFileName { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// What the crowd screen should show while one sponsor's read goes out -
+/// their picture where they have one, and their name where they do not.
+///
+/// A snapshot handed over for a single decision, like the rotation's own:
+/// see SponsorOnAir, which holds it for the length of the read, and
+/// SponsorStore.OnScreenFor, which is the only thing that builds one.
+/// </summary>
+/// <param name="PictureFileName">The picture, already checked to be on disk, or null when there is none to show.</param>
+/// <param name="Name">The sponsor as this page spells it - what the screen shows when there is no picture.</param>
+public sealed record SponsorOnScreen(string? PictureFileName, string Name);
 
 public sealed class SponsorSettings
 {

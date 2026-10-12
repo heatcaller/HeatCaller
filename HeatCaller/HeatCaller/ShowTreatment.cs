@@ -864,7 +864,7 @@ internal sealed class ShowTreatment
     /// simply speak, which it has NOT done in that case.
     /// </summary>
     public Task<bool> RunAsync(Action speak, CancellationToken ct = default) =>
-        RunShowAsync(speak, kind: null, ct);
+        RunShowAsync(speak, kind: null, LongestRead, ct);
 
     /// <summary>
     /// The same, saying which segment this is - so the running order can
@@ -872,9 +872,76 @@ internal sealed class ShowTreatment
     /// working it out from the clock. See ShowRunningOrder.
     /// </summary>
     public Task<bool> RunAsync(Action speak, SegmentKind kind, CancellationToken ct = default) =>
-        RunShowAsync(speak, kind, ct);
+        RunShowAsync(speak, kind, LongestRead, ct);
 
-    private async Task<bool> RunShowAsync(Action speak, SegmentKind? kind, CancellationToken ct)
+    /// <summary>
+    /// Waits for the announcer to finish a read that has NO MUSIC round it,
+    /// so a caller on the plain path can hold something open until the
+    /// words have actually gone out.
+    ///
+    /// WHY THIS EXISTS. SpeakReminder queues and returns - it reports
+    /// nothing and waits for nothing - so a caller that speaks and then
+    /// closes a file or releases the broadcast floor does both of those
+    /// before a single word has been said. On the music path
+    /// <see cref="RunAsync(Action, SegmentKind, CancellationToken)"/>
+    /// already waits, and the two paths were one line apart and behaved
+    /// completely differently: the night's recap wrote a nought-byte mp3
+    /// and reported "no sound came out of HeatCaller at all" for every club
+    /// that had not dropped the music files in, and freed the floor over a
+    /// recap still being read. Found 12 Oct 2026.
+    ///
+    /// The same wait the music path uses, against this show's own view of
+    /// whether the announcer is talking - see ShowSpeaking for why that is
+    /// per-wait rather than a field.
+    ///
+    /// NOT FOR THE HALF-SECOND TICK. This is for a caller that already
+    /// awaits - a button, or a segment with a recorder open. Awaiting it on
+    /// a path that must not block would hold that path for the length of a
+    /// read.
+    /// </summary>
+    /// <param name="longest">
+    /// The ceiling, for a read longer than an ordinary one -
+    /// <see cref="LongestRead"/> when null. The night's recap is up to
+    /// fifteen pieces of twenty seconds, which is past four minutes on its
+    /// own; see NightRecap.LongestRead.
+    /// </param>
+    public async Task WaitForTheReadAsync(TimeSpan? longest = null, CancellationToken ct = default)
+    {
+        var speaking = new ShowSpeaking();
+
+        // A plain delegate in a local, for the reason OpenShowAsync states
+        // at length: a capturing local function is not promised the same
+        // delegate instance twice, so the -= below might take nothing off
+        // and leave this attached to the announcer for the rest of the
+        // night.
+        Action<bool> onSpeaking = now => speaking.Now = now;
+
+        _announcer.SpeakingChanged += onSpeaking;
+
+        try
+        {
+            await WaitForQuietAsync(speaking, longest ?? LongestRead, ct).ConfigureAwait(true);
+        }
+        finally
+        {
+            _announcer.SpeakingChanged -= onSpeaking;
+        }
+    }
+
+    /// <summary>
+    /// The same again, for a read that is legitimately longer than
+    /// <see cref="LongestRead"/> - the night's recap, which is up to
+    /// fifteen pieces of twenty seconds and would otherwise have the music
+    /// wound up under its last minute. See NightRecap.LongestRead.
+    /// </summary>
+    public Task<bool> RunLongAsync(
+        Action speak,
+        SegmentKind kind,
+        TimeSpan longest,
+        CancellationToken ct = default) =>
+        RunShowAsync(speak, kind, longest < LongestRead ? LongestRead : longest, ct);
+
+    private async Task<bool> RunShowAsync(Action speak, SegmentKind? kind, TimeSpan longest, CancellationToken ct)
     {
         var run = await OpenShowAsync(kind, ShowBlock.CaptionFor(kind), ct).ConfigureAwait(true);
 
@@ -887,7 +954,7 @@ internal sealed class ShowTreatment
         {
             speak();
 
-            await WaitForQuietAsync(run.Speaking, ct).ConfigureAwait(true);
+            await WaitForQuietAsync(run.Speaking, longest, ct).ConfigureAwait(true);
         }
         finally
         {
@@ -1989,7 +2056,7 @@ internal sealed class ShowTreatment
     /// fires false between every two lines of an exchange, and the read is
     /// only over when one of those gaps lasts.
     /// </summary>
-    private async Task WaitForQuietAsync(ShowSpeaking speaking, CancellationToken ct)
+    private async Task WaitForQuietAsync(ShowSpeaking speaking, TimeSpan longest, CancellationToken ct)
     {
         var started = DateTime.UtcNow;
         var quietSince = DateTime.MinValue;
@@ -1998,7 +2065,12 @@ internal sealed class ShowTreatment
         // is taken for the end of the read.
         var grace = started + Quiet;
 
-        while (DateTime.UtcNow - started < LongestRead)
+        // Never shorter than the default, whatever a caller asks for: this
+        // is a safety net, and a net somebody can pull tighter than the
+        // reads it has to catch is not one.
+        var ceiling = longest < LongestRead ? LongestRead : longest;
+
+        while (DateTime.UtcNow - started < ceiling)
         {
             await Task.Delay(200, ct).ConfigureAwait(true);
 
@@ -2023,7 +2095,7 @@ internal sealed class ShowTreatment
             }
         }
 
-        Status?.Invoke($"[show] The read ran past {LongestRead.TotalMinutes:0} minutes - winding the music up anyway.");
+        Status?.Invoke($"[show] The read ran past {ceiling.TotalMinutes:0} minutes - winding the music up anyway.");
     }
 
     private static float Level(int percent, float fallback) =>

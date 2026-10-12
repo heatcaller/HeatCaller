@@ -1136,6 +1136,8 @@ public sealed partial class RaceControlControl
         // or stops mid-sentence - needs to be accounted for afterwards.
         _announcerStrip.ReplayWanted += () => _ = ReplayLastSegmentAsync();
         _announcerStrip.SkipWanted += SkipWhatIsOnAir;
+        _announcerStrip.NotesWanted += ShowTonightsClubNotes;
+        _announcerStrip.VotesWanted += ShowTonightsRoomVote;
 
         _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);

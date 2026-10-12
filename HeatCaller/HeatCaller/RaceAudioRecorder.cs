@@ -228,6 +228,29 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             var recorder = new RaceAudioRecorder(wav, wavPath, folder, baseName, startedUtc, maxSamples, minFreeBytes);
             recorder._writer.Start();
 
+            // SOMETHING WAS ALREADY RECORDING, and this takes the tap off
+            // it: AudioBus holds ONE listener and Listen replaces it.
+            //
+            // THE RACE WINS, which is the right way round and is what
+            // BookendRecording's own refusal says in the other direction -
+            // a race's mp3 is the one a club cannot record again. But the
+            // thing displaced ends wherever this starts, and the one
+            // unforgivable version of that is the silent one: a cold open
+            // or the night's recap that stops mid-sentence with nothing
+            // anywhere to say why. AudioBus.Listening was added on 11 Oct
+            // 2026 for exactly this and this caller never asked it
+            // (12 Oct 2026).
+            //
+            // Said rather than refused, and said here rather than above, so
+            // it only goes in the log when the takeover actually happens -
+            // a race that gets no further than "no room on the disk" has
+            // displaced nothing.
+            if (AudioBus.Listening)
+            {
+                log($"{AppTime.LogStampNow()}  [audio] Something else was already recording - this race takes the "
+                    + "feed, and whatever it was ends here. Its own file is still written, just short.");
+            }
+
             // Last, so the tap can never be handed a buffer before the
             // writer thread that drains the queue is running.
             AudioBus.Listen(recorder);
@@ -680,6 +703,14 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             TryDelete(recording.WavPath, log);
 
             SweepOrphans(store, recording.WavPath, log);
+
+            // AND THE CEILING (11 Oct 2026). Nothing ever deleted any of
+            // this: a club running a season would have put twenty
+            // gigabytes of broadcast into Documents without being told it
+            // was happening. Here because this is the only moment the
+            // folder definitely grew, and because nothing is waiting on
+            // this thread. See RaceAudioStore.PruneOldNights.
+            store.PruneOldNights(log);
         }
         catch (Exception ex)
         {

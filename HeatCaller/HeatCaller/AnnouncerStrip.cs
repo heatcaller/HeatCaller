@@ -38,6 +38,30 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// <summary>Stops whatever is on air now - see <see cref="SkipWanted"/>.</summary>
     private readonly Button _skip = new();
 
+    /// <summary>
+    /// Opens tonight's club notes - see <see cref="NotesWanted"/>.
+    ///
+    /// ON THIS ROW because a dedication arrives in the middle of an
+    /// evening and the person it has to reach is holding a microphone and
+    /// looking at this screen. It is also the only button here that
+    /// carries a NUMBER: a route from the room is no use at all if nobody
+    /// notices anything came in, and nobody has the developer console
+    /// open on a race night.
+    /// </summary>
+    private readonly Button _notes = new();
+
+    /// <summary>
+    /// Opens tonight's room vote: who the room reckons wins the next one,
+    /// and what it said once the race has been run.
+    ///
+    /// BESIDE NOTES because it is the same kind of button - something
+    /// about the night that no amount of lap data knows, reached from the
+    /// screen the person with the microphone is already looking at. It
+    /// carries a number for the same reason too: a vote nobody can see
+    /// filling up is a vote the race director forgets to close.
+    /// </summary>
+    private readonly Button _votes = new();
+
     private bool _holding;
 
     public AnnouncerStrip()
@@ -80,15 +104,25 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
 
         _skip.Text = SkipCaption;
         _skip.AutoSize = true;
-        _skip.Margin = new Padding(0, 0, 0, 0);
+        _skip.Margin = new Padding(0, 0, 6, 0);
         _skip.Click += (_, _) => SkipWanted?.Invoke();
+
+        _notes.Text = NotesCaption;
+        _notes.AutoSize = true;
+        _notes.Margin = new Padding(0, 0, 6, 0);
+        _notes.Click += (_, _) => NotesWanted?.Invoke();
+
+        _votes.Text = VotesCaption;
+        _votes.AutoSize = true;
+        _votes.Margin = new Padding(0, 0, 0, 0);
+        _votes.Click += (_, _) => VotesWanted?.Invoke();
 
         // Focus off after a click, for the reason the flag buttons do it:
         // a button that keeps focus keeps answering to Space and Enter, and
         // on this row that means a stray keypress puts the last segment out
         // over a live PA, or cuts off the one being spoken. Done here
         // rather than by Race Control because the buttons are this class's.
-        AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip);
+        AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip, _notes, _votes);
 
         Controls.Add(_lamp);
         Controls.Add(_state);
@@ -96,6 +130,8 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         Controls.Add(_hold);
         Controls.Add(_replay);
         Controls.Add(_skip);
+        Controls.Add(_notes);
+        Controls.Add(_votes);
     }
 
     private const string OffText = "Announcer: off";
@@ -108,6 +144,8 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     private const string ReleaseCaption = "Release";
     private const string ReplayCaption = "Play again";
     private const string SkipCaption = "Skip";
+    private const string NotesCaption = "Notes";
+    private const string VotesCaption = "Votes";
 
     /// <summary>What the strip says when nothing has been said yet tonight.</summary>
     private const string NothingYet = "Nothing yet";
@@ -129,6 +167,20 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     public event Action? SkipWanted;
 
     /// <summary>
+    /// Raised when the race director wants tonight's club notes - to tick
+    /// off something the room sent in, or to type one of their own.
+    /// </summary>
+    public event Action? NotesWanted;
+
+    /// <summary>
+    /// Opens tonight's room vote - see <see cref="VotesWanted"/>. Beside
+    /// the notes button because it is the same kind of thing: something
+    /// about the night that the timing cannot know, reached from the
+    /// screen the person with the microphone is looking at.
+    /// </summary>
+    public event Action? VotesWanted;
+
+    /// <summary>
     /// Draws the strip for how things stand.
     ///
     /// Called on Race Control's own once-a-second tick. "Writing" is the
@@ -142,7 +194,17 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// a flag count, not just a segment. The race director reaching for
     /// the mic cares that the speakers are busy, not whose line it is.
     /// </param>
-    public void Show(CommentaryDirector? director, bool enabled, bool speaking)
+    /// <param name="notesWaiting">
+    /// How many club notes are waiting to be approved - see ClubNotes. The
+    /// one number on this row, because something arriving from the room
+    /// that nobody notices is the same as no route at all.
+    /// </param>
+    /// <param name="votesIn">
+    /// How many people have voted in the poll that is open, or nought when
+    /// none is - see RoomVote. The second number on this row, and the
+    /// reason is the same as the first's.
+    /// </param>
+    public void Show(CommentaryDirector? director, bool enabled, bool speaking, int notesWaiting = 0, int votesIn = 0)
     {
         if (director is null || !enabled)
         {
@@ -200,6 +262,38 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // setting - the same rule the Commentary page's Test button goes by.
         _replay.Enabled = director.LastSaid is not null;
         _skip.Enabled = speaking || ShowOnAir.Playing;
+
+        // ALWAYS ENABLED, unlike the two above, and the difference is the
+        // point: Play again and Skip act on something that may not exist,
+        // where this opens a window - and the window is where a club types
+        // its first note, so it has to be reachable when the list is
+        // empty.
+        //
+        // The count only when there is one. "Notes" with a nought beside it
+        // reads as a fault; "Notes (3)" reads as three people waiting.
+        var caption = notesWaiting > 0 ? $"{NotesCaption} ({notesWaiting})" : NotesCaption;
+
+        if (!string.Equals(_notes.Text, caption, StringComparison.Ordinal))
+        {
+            _notes.Text = caption;
+        }
+
+        // In the look's accent while something is waiting, so it catches
+        // an eye that is on the leaderboard rather than on this row.
+        _notes.ForeColor = notesWaiting > 0 ? AppTheme.Accent : AppTheme.TextDark;
+
+        // The same rule as the notes count, for the same reason: a nought
+        // beside it reads as a fault. A vote that is open with nobody in
+        // it yet still shows plain "Votes", because the useful signal is
+        // the number climbing.
+        var votes = votesIn > 0 ? $"{VotesCaption} ({votesIn})" : VotesCaption;
+
+        if (!string.Equals(_votes.Text, votes, StringComparison.Ordinal))
+        {
+            _votes.Text = votes;
+        }
+
+        _votes.ForeColor = votesIn > 0 ? AppTheme.Accent : AppTheme.TextDark;
     }
 
     /// <summary>

@@ -46,6 +46,88 @@ public sealed record VenueRecord(
     bool SetTonight);
 
 /// <summary>
+/// One driver's own history on the layout a race is being run on.
+///
+/// WHY THIS IS THE LINE NOBODY CAN BEAT (11 Oct 2026)
+///
+/// The outright record on a layout belongs to one driver, and a club of
+/// forty hears it as a fact about somebody else. THIS one belongs to
+/// whoever is being talked about: everybody has a best lap on this layout,
+/// including the driver who finishes eighth every week, and a human
+/// announcer cannot hold forty drivers' bests across four layouts in his
+/// head. It is the cheapest sentence in the whole broadcast that is about
+/// the listener.
+///
+/// THE SCOPE IS IN THE LINE, as it is for everything in this file: "his
+/// best here" is a claim about ONE layout, and said without the layout it
+/// is a different and false claim about his career.
+/// </summary>
+/// <param name="DriverId">The transponder.</param>
+/// <param name="Name">What the announcer calls them - already the profile's spoken name, never a transponder.</param>
+/// <param name="BestSeconds">Their quickest lap ever on this layout, before tonight.</param>
+/// <param name="BestSetDescribed">
+/// When they set it, as the caller worded it - "August", or "March 2025".
+/// The month and not the day: a best lap is not an event, and "in August"
+/// is how somebody would say it.
+/// </param>
+/// <param name="RacesOnLayout">How many races they have run on this layout. What makes the figure mean anything - see <see cref="CommentaryRaceFacts.LeastRacesForOwnBest"/>.</param>
+public sealed record DriverOnLayout(
+    string DriverId,
+    string Name,
+    double BestSeconds,
+    string BestSetDescribed,
+    int RacesOnLayout);
+
+/// <summary>
+/// What the club's whole filed history says about the layout a race is
+/// being run on, beyond the one outright record <see cref="VenueRecord"/>
+/// carries.
+///
+/// Two things, and both of them are things no human in the room could
+/// know: every driver on this grid's own best lap here, and who has been
+/// winning here lately.
+/// </summary>
+/// <param name="LayoutName">The layout, so every line can say its own scope.</param>
+/// <param name="RacesOnLayout">How many races the club has filed on it. The threshold everything here is held to.</param>
+/// <param name="Bests">Each driver on this grid who has enough history here to be worth a sentence. May be empty, which is the usual answer at a club in its first weeks.</param>
+/// <param name="WinnerName">
+/// Who has won every one of the last <paramref name="WinnerRun"/> races on
+/// this layout. Empty when the last two races went to different drivers,
+/// which is most of the time and is not a fact.
+/// </param>
+/// <param name="WinnerRun">How many in a row. Below <see cref="CommentaryRaceFacts.LeastRunToCall"/> this is not a run, it is a coincidence.</param>
+public sealed record LayoutLegend(
+    string LayoutName,
+    int RacesOnLayout,
+    IReadOnlyList<DriverOnLayout> Bests,
+    string WinnerName,
+    int WinnerRun);
+/// <summary>
+/// Who has been winning one class's MAINS on this layout, counted in
+/// MEETINGS - see <see cref="CommentaryReaders.MainsHere"/>.
+///
+/// THE RUN IS THE BAR, NOT THE NEWS. Everything in here is about the
+/// meetings BEFORE tonight: the fact builder is handed tonight's winner
+/// separately and decides whether the night extended the run or ended it.
+/// A record that counted tonight in would make every winner their own
+/// precedent.
+/// </summary>
+/// <param name="LayoutName">The layout, which every line must name - a run "here" means nothing without it.</param>
+/// <param name="ClassName">The class whose mains were counted. In the line too: a club with three classes has three mains a night.</param>
+/// <param name="Meetings">How many meetings the club has run a main of this class on this layout, before tonight.</param>
+/// <param name="HolderName">The announcer's name for whoever won the last <see cref="HolderMeetings"/> of them. Never a transponder.</param>
+/// <param name="HolderId">Their transponder - for comparing against tonight's winner, and for the fact's theme.</param>
+/// <param name="HolderMeetings">How many meetings in a row they won it. Never zero: the reader answers null rather than a run of none.</param>
+public sealed record MainsOnLayout(
+    string LayoutName,
+    string ClassName,
+    int Meetings,
+    string HolderName,
+    string HolderId,
+    int HolderMeetings);
+
+
+/// <summary>
 /// How strong the field in a race is, against the club's own season.
 ///
 /// COUNTED OVER THE WHOLE ROUND, NOT OVER THE DRIVERS THE PROMPT NAMES.
@@ -256,7 +338,20 @@ public sealed record RaceScene(
     string? NightKey = null,
     NightThread? Thread = null,
     RaceConditional? Conditional = null,
-    IReadOnlyList<DriverAgainstPractice>? Practice = null);
+    IReadOnlyList<DriverAgainstPractice>? Practice = null,
+    LayoutLegend? Legend = null,
+
+    /// <summary>
+    /// WHAT IS STILL POSSIBLE IN THE CHAMPIONSHIP, over the rounds that
+    /// remain - "only Bill and Sam can still win it", "nobody left can
+    /// reach him". Proved by CommentaryReaders.TitleOnTheLine, and null
+    /// for every season whose length the club has not typed. See
+    /// TitleStakes and CommentaryStakesFacts.
+    ///
+    /// LAST, so every caller written before 12 Oct 2026 still compiles
+    /// and still means what it meant.
+    /// </summary>
+    TitleStakes? Stakes = null);
 
 /// <summary>
 /// The finishers' cars in a race just run, for its recap, with the race
@@ -330,6 +425,39 @@ public static class CommentaryRaceFacts
     /// actually complained about.
     /// </summary>
     public const int LeastRacesSince = 3;
+
+    /// <summary>
+    /// How many races a driver has to have run on a layout before their own
+    /// best lap on it is a figure rather than a coincidence.
+    ///
+    /// Four. Three would let a driver's second-ever visit to a layout be
+    /// "his best here", which is true and worthless - everybody's second
+    /// lap on a new track is their best. Four means they have been round
+    /// it enough times that the figure is their measure of the place, which
+    /// is what makes "he has never gone quicker here" worth hearing.
+    /// </summary>
+    public const int LeastRacesForOwnBest = 4;
+
+    /// <summary>
+    /// How many wins in a row on one layout make a run worth calling.
+    ///
+    /// Three. Two in a row is a coincidence at a club where ten drivers
+    /// share the wins, and calling it one is the superlative-with-nothing-
+    /// behind-it fault again - with the added cost that the driver who won
+    /// the race before those two is standing right there.
+    /// </summary>
+    public const int LeastRunToCall = 3;
+
+    /// <summary>
+    /// How many drivers' own bests on the layout a single intro may carry.
+    ///
+    /// Two. Each one is a sentence about a person, and the prompt names
+    /// eight drivers - unchecked, this section alone would be eight
+    /// sentences of lap times, which is the thing a crowd stops listening
+    /// to. Two is a remark about the pair worth remarking on; the cap on
+    /// <see cref="ForIntro"/> then decides whether both survive.
+    /// </summary>
+    public const int OwnBestFacts = 2;
 
     /// <summary>
     /// How many cars make a FIELD worth a sentence. Four. Three cars out
@@ -478,6 +606,121 @@ public static class CommentaryRaceFacts
         // out back to back - which is the wrong way round. See
         // FactBlock.Theme.
         return new FactBlock($"venue:{key}:{layout}", text.ToString(), FactTheme.Venue(record.LayoutName));
+    }
+
+    /// <summary>
+    /// A driver's OWN best lap on the layout being raced on, and how many
+    /// times they have been round it.
+    ///
+    /// THE ONE THAT IS ABOUT THE LISTENER. The outright record on a layout
+    /// belongs to one driver and the rest of the room hears it as somebody
+    /// else's news. This belongs to whoever is being talked about, and the
+    /// driver who finishes eighth every week has one too - see
+    /// <see cref="DriverOnLayout"/>.
+    ///
+    /// WHAT IT DELIBERATELY DOES NOT SAY. It does not predict, compare two
+    /// drivers, or suggest anybody is due. It states a figure and the
+    /// number of races it was measured over, and leaves the announcer to
+    /// make something of it - which is the discipline every builder in
+    /// this file keeps.
+    ///
+    /// Null three ways, each of them the honest answer: no name to say it
+    /// about, no time to say, and too few races on this layout for the
+    /// figure to be their measure of the place (see
+    /// <see cref="LeastRacesForOwnBest"/>).
+    /// </summary>
+    /// <param name="driver">The driver's history here, as the reader worked it out.</param>
+    /// <param name="layoutName">The layout, which the line must name - see the note on this class about scope.</param>
+    /// <param name="key">Which night - see <see cref="ForIntro"/>. A driver's best here is the same all evening until they beat it.</param>
+    public static FactBlock? BestOnThisLayout(DriverOnLayout driver, string layoutName, string key)
+    {
+        var who = CommentaryFacts.Clean(driver.Name);
+        var layout = CommentaryFacts.Clean(layoutName);
+        var when = CommentaryFacts.CleanLong(driver.BestSetDescribed);
+
+        if (who.Length == 0 || layout.Length == 0 || driver.BestSeconds <= 0)
+        {
+            return null;
+        }
+
+        if (driver.RacesOnLayout < LeastRacesForOwnBest)
+        {
+            return null;
+        }
+
+        // Invariant, for the reason LayoutRecord states at length: on a
+        // comma-decimal PC "11,402s" escapes the spoken-time rewrite and
+        // goes out over the PA as eleven thousand four hundred seconds.
+        var text = new StringBuilder(
+            $"{who}'s own quickest lap on this layout, {layout}, is {CommentaryFacts.Invariant(driver.BestSeconds, "0.000")}s");
+
+        // The month only where the caller could date it. A figure with no
+        // date is still a true figure, unlike the outright record, which
+        // cannot be told apart from one set an hour ago without one.
+        text.Append(when.Length > 0 ? $", set in {when}" : string.Empty);
+
+        text.Append($", over the {Plural.Of(driver.RacesOnLayout, "race")} they have run on it.");
+
+        // THEMED ON THE DRIVER, not on the venue - and the difference is
+        // the opposite way round from LayoutRecord's. The subject of this
+        // line is the person: two of these about the same driver must not
+        // go out back to back, and it must not be silenced because
+        // somebody else's record was read out about the same track. See
+        // FactBlock.Theme.
+        return new FactBlock(
+            $"ownbest:{key}:{layout}:{driver.DriverId}",
+            text.ToString(),
+            FactTheme.Driver(driver.DriverId));
+    }
+
+    /// <summary>
+    /// Who has been winning on this layout - the unbroken run of one
+    /// driver taking every race the club has filed on it lately.
+    ///
+    /// ANOTHER CLAIM NO HUMAN HOLDS. "The last five races on this layout
+    /// have all gone to Bill" is countable only by something that has read
+    /// every result the club ever filed, and it is the line that gives a
+    /// race a shape before it starts: everybody in the room now knows what
+    /// would be remarkable about the next twenty minutes.
+    ///
+    /// RACES, AND THE LINE SAYS RACES. Not mains, not a championship -
+    /// the count is over every race filed on this layout, because that is
+    /// what the reader can prove from the history alone. Wording it as
+    /// "the last five A-mains" would be a claim the store cannot support,
+    /// and the driver who won the heat in between would be the first to
+    /// say so. The same discipline LayoutRecord keeps about classes.
+    ///
+    /// Null when there is no run - which is the usual answer at a club
+    /// where the wins go round, and is not a disappointment: a layout
+    /// nobody owns has nothing to say here and the intro reads as it did.
+    /// </summary>
+    /// <param name="legend">The layout's history, as the reader worked it out.</param>
+    /// <param name="key">Which night - a run is the same fact all evening until somebody ends it.</param>
+    public static FactBlock? WhoWinsHere(LayoutLegend legend, string key)
+    {
+        var who = CommentaryFacts.Clean(legend.WinnerName);
+        var layout = CommentaryFacts.Clean(legend.LayoutName);
+
+        if (who.Length == 0 || layout.Length == 0)
+        {
+            return null;
+        }
+
+        if (legend.WinnerRun < LeastRunToCall || legend.RacesOnLayout < LeastRacesOnLayout)
+        {
+            return null;
+        }
+
+        var text =
+            $"The last {Spell(legend.WinnerRun)} races the club has run on this layout, {layout}, have all gone to {who}.";
+
+        // THEMED ON THE VENUE and not on the winner, which is the opposite
+        // of BestOnThisLayout above and deliberate: the subject of this
+        // line is the track. Themed on the winner it would silence the
+        // layout for a night because somebody mentioned them in a form
+        // guide, and would let this and the outright record go out back to
+        // back about the same piece of tarmac.
+        return new FactBlock($"winshere:{key}:{layout}", text, FactTheme.Venue(legend.LayoutName));
     }
 
     /// <summary>
@@ -822,6 +1065,185 @@ public static class CommentaryRaceFacts
             if (AgainstPractice(driver, raceKey) is { } since)
             {
                 found.Add(since);
+            }
+        }
+
+        var cap = Math.Max(1, most);
+
+        return found.Count <= cap ? found : found.Take(cap).ToList();
+    }
+
+    /// <summary>
+    /// The layout's own section of an intro: who has been winning here, and
+    /// whose own best lap here is worth stating.
+    ///
+    /// A SECTION OF ITS OWN, not more items for <see cref="ForIntro"/>, and
+    /// that is the whole reason this method exists. ForIntro's cap is three
+    /// and the field, the record and the pace figures already compete for
+    /// them - appended there, every line below would have been built on
+    /// every race of the evening and heard on none of them. The conditional
+    /// made the same argument on the same day and got the same answer: its
+    /// own section, its own character cap, so it can never squeeze a record
+    /// out of the prompt and a record can never squeeze it. See
+    /// CommentaryService.MaxLayoutChars.
+    ///
+    /// THE RUN FIRST. "The last five races here have all gone to Bill"
+    /// gives the race a shape before it starts - the room now knows what
+    /// would be remarkable about the next twenty minutes - where a lap time
+    /// is a figure. So if only one line survives the cap, that is the one.
+    ///
+    /// Empty is the usual answer at a club in its first weeks, and every
+    /// way of being empty is correct: a new layout, a club where the wins
+    /// go round, a grid nobody has raced here four times. The intro then
+    /// reads exactly as it did before there was any of this.
+    /// </summary>
+    /// <param name="legend">The layout's history, as CommentaryReaders.LayoutStory worked it out. Null at a club with no layout named.</param>
+    /// <param name="key">
+    /// Which night. Everything here is true for the whole evening - a run
+    /// of wins is the same run until somebody ends it, and a driver's best
+    /// here is the same until they beat it - so a race-scoped key would
+    /// have a club running six heats hear the same line in all six. The
+    /// same argument <see cref="ForIntro"/> makes for its night key.
+    /// </param>
+    /// <param name="most">How many at most. Three: the run, and up to <see cref="OwnBestFacts"/> drivers' own bests.</param>
+    /// <summary>
+    /// How many meetings the club must have run a class's main on a layout
+    /// before a run there is worth saying.
+    ///
+    /// Four, so a layout laid out last month cannot produce "he has won
+    /// the main here at every meeting" off two evenings. Higher than
+    /// <see cref="LeastRunToCall"/> on purpose: the run is the claim, and
+    /// a run that IS the whole history of the layout is not a run, it is
+    /// the layout being new.
+    /// </summary>
+    public const int LeastMeetingsHere = 4;
+
+    /// <summary>
+    /// The run of main wins on this layout, as tonight's result leaves it -
+    /// either extended, or ended.
+    ///
+    /// THE LINE NO HUMAN ANNOUNCER COULD SAY. Nobody standing at a club
+    /// track holds "who won the main on this layout at each of the last
+    /// fourteen meetings" in their head, across three classes and four
+    /// layouts and two years of Thursday nights. The app does, because it
+    /// filed every one of them - and this is the sentence that proves the
+    /// announcer is reading the club's own history rather than being
+    /// enthusiastic about a lap time.
+    ///
+    /// ENDED IS THE BETTER HALF, and it is the one that did not exist
+    /// before 11 Oct 2026: WhoWinsHere can say a run is running, and
+    /// nothing could say one had just stopped. "That run ends tonight" is
+    /// the moment the whole feature is for, and it is a moment that only
+    /// happens once.
+    ///
+    /// NOTHING IS EMBROIDERED. The run counted is the run BEFORE tonight,
+    /// so the extended line says one more than the reader found and the
+    /// ended line says exactly what the reader found. Neither claims a
+    /// meeting that is not in the count.
+    /// </summary>
+    /// <param name="mains">The mains' history here, as CommentaryReaders.MainsHere worked it out.</param>
+    /// <param name="winnerId">Tonight's winner, as a transponder. Empty when nobody won in a way worth counting.</param>
+    /// <param name="winnerName">The announcer's name for them. Empty is no fact, not an anonymous one.</param>
+    /// <param name="key">Which race - a run ending is this race's news, and the next main of the night is a different question.</param>
+    public static FactBlock? RunOfMainsHere(MainsOnLayout mains, string? winnerId, string? winnerName, string key)
+    {
+        var layout = CommentaryFacts.Clean(mains.LayoutName);
+        var cls = CommentaryFacts.Clean(mains.ClassName);
+        var holder = CommentaryFacts.Clean(mains.HolderName);
+        var winner = CommentaryFacts.Clean(winnerName);
+        var who = CommentaryFacts.Clean(winnerId);
+
+        if (layout.Length == 0 || cls.Length == 0 || holder.Length == 0 || winner.Length == 0 || who.Length == 0)
+        {
+            return null;
+        }
+
+        if (mains.HolderMeetings < LeastRunToCall || mains.Meetings < LeastMeetingsHere)
+        {
+            return null;
+        }
+
+        var sameDriver = string.Equals(who, CommentaryFacts.Clean(mains.HolderId), StringComparison.OrdinalIgnoreCase);
+
+        // EXTENDED: the run counted is the one before tonight, so tonight
+        // makes it one longer. Said about the person, which is why it is
+        // themed on them below.
+        if (sameDriver)
+        {
+            return new FactBlock(
+                $"mainsrun:{key}:{layout}:{cls}",
+                $"That is {Spell(mains.HolderMeetings + 1)} club meetings in a row that {winner} has won the "
+                + $"{cls} main on this layout, {layout}.",
+                FactTheme.Driver(who));
+        }
+
+        // ENDED. Both names are in it and the count is exactly what the
+        // reader found - the meetings the run actually covered, not
+        // counting tonight, which is the meeting that ended it.
+        return new FactBlock(
+            $"mainsrun:{key}:{layout}:{cls}",
+            $"{holder} had won the {cls} main on this layout, {layout}, at each of the last "
+            + $"{Spell(mains.HolderMeetings)} club meetings. {winner} has ended that run tonight.",
+
+            // THEMED ON THE VENUE, not on either driver - and the choice is
+            // the same one WhoWinsHere makes. The subject of this sentence
+            // is what happens on this piece of tarmac; two drivers are named
+            // in it and neither of them is what it is about. Themed on the
+            // winner it would be held back because a form guide mentioned
+            // them, which is the wrong line to lose.
+            FactTheme.Venue(mains.LayoutName));
+    }
+
+    /// <summary>
+    /// The mains' own history here as a recap can use it - at most one
+    /// line, because a run extended and a run ended are the same sentence
+    /// from two sides and only one of them is ever true.
+    /// </summary>
+    /// <param name="mains">Null at a club with no layout named, no class, no programme, or nothing filed. Then nothing.</param>
+    /// <param name="winnerId">Tonight's winner's transponder.</param>
+    /// <param name="winnerName">And the announcer's name for them.</param>
+    /// <param name="key">This race's key - see RunOfMainsHere.</param>
+    public static IReadOnlyList<FactBlock> ForTheMainsHere(
+        MainsOnLayout? mains,
+        string? winnerId,
+        string? winnerName,
+        string key)
+    {
+        if (mains is null || RunOfMainsHere(mains, winnerId, winnerName, key) is not { } run)
+        {
+            return Array.Empty<FactBlock>();
+        }
+
+        return new[] { run };
+    }
+
+    public static IReadOnlyList<FactBlock> ForTheLayout(LayoutLegend? legend, string key, int most = 1 + OwnBestFacts)
+    {
+        var found = new List<FactBlock>();
+
+        if (legend is null)
+        {
+            return found;
+        }
+
+        if (WhoWinsHere(legend, key) is { } run)
+        {
+            found.Add(run);
+        }
+
+        var bests = 0;
+
+        foreach (var driver in legend.Bests)
+        {
+            if (bests >= OwnBestFacts)
+            {
+                break;
+            }
+
+            if (BestOnThisLayout(driver, legend.LayoutName, key) is { } best)
+            {
+                found.Add(best);
+                bests++;
             }
         }
 

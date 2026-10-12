@@ -645,6 +645,18 @@ internal sealed class ShowBlock
         SegmentKind.QualifyingReport => "Qualifying Report",
         SegmentKind.FormGuide => "Form Guide",
         SegmentKind.GridHistory => "The Grid",
+
+        // Named for what the ROOM is being told rather than for what the
+        // app calls the store. A crowd reading "Club Notes" on the band
+        // would be reading an admin screen's label; "From The Club" is
+        // what the sentence actually is.
+        SegmentKind.ClubAside => "From The Club",
+
+        // Named for the room rather than for the vote. "Room Vote" would
+        // be the band naming a feature; this is the band naming what the
+        // voice is about to say.
+        SegmentKind.RoomVerdict => "The Room's Verdict",
+
         SegmentKind.ThisDayInHistory => "This Day At The Track",
         SegmentKind.MechanicInterview => "In The Pits",
         SegmentKind.ComingUpNext => "Coming Up",

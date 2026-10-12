@@ -133,6 +133,26 @@ public partial class MainForm : Form
     private readonly CheckInStore _checkInStore;
     private readonly DayScheduleStore _daySchedule;
     private readonly SponsorStore _sponsors;
+
+    /// <summary>
+    /// Tonight's club notes - the asides that are not about the racing.
+    ///
+    /// One instance, here, because two things read it and one writes it:
+    /// Race Control's notes window edits it, the announcer's director asks
+    /// it for the next one to say, and the web routes add to it. A second
+    /// instance would be a second copy of the file in memory, and a note
+    /// approved in the window would never reach the announcer.
+    /// </summary>
+    private readonly ClubNotes _clubNotes;
+
+    /// <summary>
+    /// Tonight's room vote - one instance, for the same reason the notes
+    /// are one: the window the race director opens it from, the Wi-Fi
+    /// route the phones vote through and the announcer that reads the
+    /// verdict must all be looking at the same list of votes.
+    /// </summary>
+    private readonly RoomVote _roomVote;
+
     private readonly WebServerService _webServer;
     private readonly UndoService _undo = new();
     private readonly ToolTip _footerTooltip = new();
@@ -661,6 +681,8 @@ public partial class MainForm : Form
         _checkInStore = CheckInStore.Load();
         _daySchedule = DayScheduleStore.Load();
         _sponsors = SponsorStore.Load();
+        _clubNotes = ClubNotes.Load();
+        _roomVote = RoomVote.Load();
 
         // --- The event spine ---
         //
@@ -794,6 +816,19 @@ public partial class MainForm : Form
         // From the publisher's own thread; OnClientRawMessage takes lines
         // from any thread, and holds them until the window is up.
         _relayPublisher.Log = OnClientRawMessage;
+
+        // Where a shout-out collected from the club's page is filed - the
+        // same single ClubNotes instance the announcer reads from and the
+        // Wi-Fi route writes to, so all three agree. The publisher files
+        // on its own thread; ClubNotes writes its own file and nothing
+        // here touches a control.
+        _relayPublisher.TonightsNotes = () => _clubNotes;
+
+        // And tonight's vote, which the publisher both PUBLISHES a ballot
+        // from and reads votes into - see RelayPublisher.Vote. The same
+        // single instance again, so a vote from the club's web page lands
+        // in the list the announcer reads its verdict from.
+        _relayPublisher.TonightsVote = () => _roomVote;
 
         // Said once, at the start: why the relay, the voice relay or the PIN
         // emails are quiet after a restore, in the log as well as on the
@@ -946,6 +981,20 @@ public partial class MainForm : Form
 
         _webServer = new WebServerService(_race, _profiles, _daySchedule, _sponsors, _settings);
         _webServer.StatusMessage += OnClientRawMessage;
+
+        // Shout-outs from a phone in the room - see
+        // WebServerService.Notes. The switch is read on every request
+        // rather than captured, so turning it on takes effect without
+        // restarting the server; the store is the same single instance the
+        // announcer reads from, so an approved note actually goes out.
+        _webServer.TonightsNotes = () => _clubNotes;
+        _webServer.NotesFromTheRoomOpen = () => _settings.ClubNotesFromTheRoom;
+
+        // And the room's vote, the same way and for the same reasons: the
+        // setting is read on each request rather than captured, and the
+        // store is the one instance the announcer reads the verdict from.
+        _webServer.TonightsVote = () => _roomVote;
+        _webServer.VotingFromTheRoomOpen = () => _settings.RoomVoteFromTheRoom;
 
         // Sign-on from a phone. Same shape as the race-control commands
         // below: the request arrives on a thread-pool thread, and every

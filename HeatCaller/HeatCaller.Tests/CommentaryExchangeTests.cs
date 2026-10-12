@@ -132,6 +132,137 @@ public sealed class CommentaryExchangeTests
         Assert.Equal("One.\nTwo.", CommentaryExchange.Flatten(turns, null, null));
     }
 
+    // ------------------------------------------------------------------
+    //  What the co-host is LIKE (11 Oct 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_club_that_picks_no_stance_gets_the_brief_it_always_had()
+    {
+        // An instruction to have no character is still an instruction, and
+        // every sentence in a brief is one the model reads instead of a
+        // fact. Nothing added means nothing changed.
+        var plain = CommentaryExchange.Brief("Alex", "Dave");
+        var chosen = CommentaryExchange.Brief("Alex", "Dave", 2, string.Empty);
+
+        Assert.Equal(plain, chosen);
+        Assert.DoesNotContain("unkind", plain, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_stance_reaches_the_brief_and_the_fact_rule_still_has_the_last_word()
+    {
+        var brief = CommentaryExchange.Brief("Alex", "Dave", 2, "sceptic");
+
+        Assert.Contains("does not accept one lap", brief, StringComparison.OrdinalIgnoreCase);
+
+        // THE ORDER IS THE POINT. A disposition is the one thing in this
+        // brief that pulls towards invention - a co-host told to reach for
+        // history will reach for it whether or not any was supplied - so
+        // the last thing the model reads is still that both of them stick
+        // to the facts.
+        var stance = brief.IndexOf("does not accept one lap", StringComparison.OrdinalIgnoreCase);
+        var facts = brief.IndexOf("neither invents a result", StringComparison.Ordinal);
+
+        Assert.True(facts > stance, "The stance is now written after the rule that stops it inventing anything.");
+    }
+
+    [Fact]
+    public void Every_stance_carries_the_rule_that_keeps_it_from_being_unkind()
+    {
+        // This is a club of forty people who all know each other, and a
+        // driver hearing the PA take a dig at him in front of his kids is
+        // the fastest way for a club to switch the announcer off. It rides
+        // with EVERY stance, the needling one included.
+        foreach (var stance in CoHostStance.All)
+        {
+            if (stance.Key.Length == 0)
+            {
+                continue;
+            }
+
+            var brief = CommentaryExchange.Brief("Alex", "Dave", 2, stance.Key);
+
+            Assert.Contains(CoHostStance.NeverCruel, brief, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void A_stance_from_a_newer_build_is_the_plain_co_host_rather_than_a_guess()
+    {
+        // A club whose settings came back from a backup written by a later
+        // version gets the second voice they have always had, not a
+        // character nobody in the room chose.
+        Assert.Equal(CoHostStance.EvenHanded, CoHostStance.For("something-from-0.70"));
+        Assert.Equal(CoHostStance.EvenHanded, CoHostStance.For(null));
+        Assert.Equal(CoHostStance.EvenHanded, CoHostStance.For("   "));
+
+        // And the brief it produces is the one a club with no stance gets.
+        Assert.Equal(
+            CommentaryExchange.Brief("Alex", "Dave"),
+            CommentaryExchange.Brief("Alex", "Dave", 2, "something-from-0.70"));
+    }
+
+    [Fact]
+    public void The_stances_are_distinct_and_each_one_actually_says_something()
+    {
+        // A table whose entries differ only in name would read as a
+        // feature and behave as none.
+        var keys = CoHostStance.All.Select(one => one.Key).ToList();
+        var names = CoHostStance.All.Select(one => one.Name).ToList();
+
+        Assert.Equal(keys.Count, keys.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+        foreach (var stance in CoHostStance.All)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(stance.Name));
+            Assert.False(string.IsNullOrWhiteSpace(stance.Blurb));
+
+            if (stance.Key.Length == 0)
+            {
+                // The plain one is the only one with nothing to say, and it
+                // must stay that way.
+                Assert.Equal(string.Empty, stance.Brief);
+                continue;
+            }
+
+            // Long enough to be an instruction, short enough not to crowd
+            // out the facts it is meant to be reacting to.
+            Assert.InRange(stance.Brief.Length, 80, 600);
+
+            // Written about B, because A is the lead and the club chose a
+            // disposition for the SECOND voice.
+            Assert.Contains("B ", stance.Brief, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void A_stance_never_turns_into_a_licence_to_invent()
+    {
+        // Each of the three stances that reach for something the facts may
+        // not hold says so itself, rather than leaving it to the closing
+        // rule alone.
+        foreach (var key in new[] { "archivist", "softie", "oldhand" })
+        {
+            var stance = CoHostStance.For(key);
+
+            Assert.Contains("never", stance.Brief, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void The_page_describes_the_stance_by_what_it_does()
+    {
+        // A club reads the consequence rather than the label.
+        var plain = CoHostStance.Describe(null);
+        var needler = CoHostStance.Describe("needler");
+
+        Assert.Contains("no particular point of view", plain, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Winds up the front-runner", needler, StringComparison.Ordinal);
+        Assert.Contains("never", needler, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Only_the_segments_that_suit_a_second_voice_are_marked_for_one()
     {

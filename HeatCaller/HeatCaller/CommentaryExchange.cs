@@ -168,7 +168,12 @@ public static class CommentaryExchange
     /// <param name="announcer">What the announcer is called, for colour. May be blank.</param>
     /// <param name="coHost">What the co-host is called. May be blank.</param>
     /// <param name="turns">How many turns to ask for. Clamped to MostTurns.</param>
-    public static string Brief(string? announcer, string? coHost, int turns = 2)
+    /// <param name="stance">
+    /// What the co-host is LIKE - see <see cref="CoHostStance"/>. Blank for
+    /// the plain second voice, which is what every club had before 11 Oct
+    /// 2026 and what one that picks no stance keeps.
+    /// </param>
+    public static string Brief(string? announcer, string? coHost, int turns = 2, string? stance = null)
     {
         var wanted = Math.Clamp(turns, 2, MostTurns);
 
@@ -201,7 +206,23 @@ public static class CommentaryExchange
                 + "and must not invent any.";
         }
 
-        return $"Write this as a short exchange between two commentators in the booth.{who} "
+        // THE STANCE GOES BEFORE THE FACT RULE, NOT AFTER IT.
+        //
+        // A disposition is the one thing in this brief that pulls towards
+        // invention: a co-host told to reach for history will reach for
+        // history whether or not any was supplied, and one told to doubt a
+        // lap time is a step from doubting the timing loop. So the last
+        // sentence the model reads is still the one that says both of them
+        // stick to the facts, and every stance in CoHostStance is written
+        // as a way of REACTING to facts rather than a source of them.
+        var disposition = CoHostStance.BriefFor(stance);
+
+        if (disposition.Length > 0)
+        {
+            disposition = " " + disposition;
+        }
+
+        return $"Write this as a short exchange between two commentators in the booth.{who}{disposition} "
              + $"Use exactly {wanted} lines, each starting with \"{AnnouncerTag}\" or \"{CoHostTag}\", alternating and starting with {AnnouncerTag}. "
              + "Put nothing else in the answer - no stage directions, no blank lines, no names of your own. "
              + "Both of them stick to the facts above; neither invents a result, a lap time or a prediction.";

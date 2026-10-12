@@ -1362,7 +1362,26 @@ public partial class MainForm
         // handing a line to the director.
         _raceControlControl.ShowMusic = () => announcer.ShowMusicTreatment;
 
+        // And tonight's club notes, for the Notes button on the announcer
+        // strip - the approval list for anything the room sent in. The
+        // same single instance the announcer's director reads from, so a
+        // note approved in that window reaches the announcer rather than a
+        // second copy of the file.
+        _raceControlControl.TonightsNotes = () => _clubNotes;
+
+        // And tonight's room vote, off the Votes button beside it. One
+        // instance again: the window opens and closes the poll the phones
+        // are voting in and the announcer reads the verdict from.
+        _raceControlControl.TonightsVote = () => _roomVote;
+
         announcer.RaceClassName = () => _activeRound?.ClassName;
+
+        // And how big that round is, which is what paces the whole
+        // broadcast - quieter in practice and the heats, everything it held
+        // back spent on the top main. Read fresh on each tick rather than
+        // captured, so seeding the mains mid-evening re-sizes the rest of
+        // the night. See RaceStature.
+        announcer.RaceSize = () => RaceStature.Of(_activeRound, _rounds);
 
         WireCommentaryReaders(announcer.Director);
 
@@ -1415,6 +1434,16 @@ public partial class MainForm
         // The show's music: the page chooses the files, the announcer
         // screen plays them - see MainForm.Commentary.cs.
         WireShowMusic(announcer, commentary);
+
+        // Shout-outs from the club's web page switched OFF has to be SENT
+        // to the relay rather than inferred from the polling stopping, or
+        // the relay goes on taking strangers' messages for a club that
+        // declined them - and holding them. See
+        // RelayPublisher.CloseClubNotesOnTheRelay.
+        commentary.NotesClosedOnTheRelay += () => _relayPublisher.CloseClubNotesOnTheRelay();
+
+        // And the same for the room's vote, for the same reason.
+        commentary.VoteClosedOnTheRelay += () => _relayPublisher.CloseRoomVoteOnTheRelay();
 
         // And a club who has never been asked is put onto the show music
         // that ships with the app - once, here, where the app is known to
@@ -1565,6 +1594,21 @@ public partial class MainForm
 
         var sponsors = new SponsorsControl(_sponsors, _undo) { Dock = DockStyle.Fill };
         pageSponsors.Controls.Add(sponsors);
+
+        // WHAT EACH SPONSOR GOT TONIGHT (11 Oct 2026), for the report
+        // button on that page. Readers rather than figures handed over, so
+        // a club pressing it after the last race gets the last race's
+        // reads in it - see SponsorsControl.ReadsTonight.
+        //
+        // The announcer's own rotation is the only count there is: it is
+        // what decides whose turn each read was and what increments when
+        // one goes out. An empty dictionary before the announcer has ever
+        // run, which the report words as no reads rather than as a fault.
+        sponsors.ReadsTonight = () =>
+            _announcerControl?.Director?.Sponsors.ReadsTonight
+            ?? new Dictionary<string, int>(StringComparer.Ordinal);
+
+        sponsors.EventName = () => _raceEvents.Active?.Name;
 
         var webServer = new WebServerControl(
             _webServer,
