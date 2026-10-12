@@ -580,12 +580,24 @@ rounds of testing above would have been one.
   `director.Upcoming` is wired with `inAbout: null` because the app has no
   "minutes until the next race" to hand over - see "Known open issues".
 
-**And the plan's three open questions are still open**, none of them answered
-by any of the above: how far Tier 2 goes (does an invented CLUB history
-belong, when it reads as Tier 3 to a driver who was there); whether F1 stat
-density is right for a club night at all, where the honest risk is that this
-lands as pompous rather than alive; and whether the local model is big enough
-now that a pack carries twelve facts rather than four.
+**Two of the plan's three open questions are now ANSWERED (12 Oct 2026):**
+
+- **Whether F1 stat density is right for a club night at all** - the one the
+  plan called its hardest, where the stated risk was landing as pompous
+  rather than alive. **It is right as it is.** Seventeen items of material
+  went in and the risk did not land. The decision that comes with it is just
+  as firm: **no more statistics.** The density is where it should be, so the
+  next work is memory, outputs, audiences and timing rather than another
+  seam of figures. See `claude\broadcast-value-2026-10-12.md`.
+- **Whether the local model is big enough now a pack carries twelve facts
+  rather than four** - answered by deciding to take the model off the
+  critical path rather than by measuring it. A segment written during the
+  previous race has sixty seconds of slack instead of none, which makes the
+  model size a choice rather than a constraint. See that plan's item 2.
+
+**The third is still open**, and nothing above answers it: how far Tier 2
+goes - does an invented CLUB history belong, when it reads as Tier 3 to a
+driver who was there.
 
 ### Where the broadcast goes next (12 Oct 2026)
 
@@ -632,10 +644,52 @@ In its own order of work:
 8. **Listen along from home**, 9. **the race director's private channel**,
    10. **the long callback and the season film**.
 
-Explicitly off that page: more statistics, video (the most valuable artifact
-this app could produce and a different product - it wants a page of its own),
-and the slide-to-booking link, which `SponsorReport`'s own remarks already
-name as sponsor fulfilment rather than broadcast.
+**Decided 12 Oct 2026, the same day it was written.** Stat density is right
+as it is and no more statistics are to be added. Item 6, the race director's
+private channel, is **skipped**. The honest rule for a stale held segment is
+adopted as that plan states it: hold the words, re-check the facts' keys at
+the moment of speaking, abandon on any mismatch. The **slide-to-booking link
+is in**, moved up out of that page's exclusions, because it is the one figure
+`SponsorReport` has to refuse and the first one a sponsor asks for. Still
+out: video, and anything that invents a record. Everything else on the page
+is to be built.
+
+### Item 1a is a reader, not a store - and the rule it ran into
+
+Taken while reading the code on 12 Oct 2026, before a line was written, and
+recorded here because it is the kind of decision that looks like a detail
+and is not.
+
+The plan proposed a `NightMoments` store in the shape `ClubNotes` uses.
+`RaceHighlights`' own first paragraph is the argument against it:
+
+> There is deliberately NO second log of "what the announcer said and when".
+> One was the obvious thing to build and it would have been wrong twice
+> over: it would have had to be written from the audio path (which AudioBus
+> exists to keep clear of anything that can block), and it would have been a
+> second account of the race that could drift from the real one the moment
+> anybody changed a rule about laps. Everything here is arithmetic on the
+> record the app already keeps.
+
+So the moments are DERIVED from the saved result, exactly as
+`RaceHighlights.MarksFrom` already derives which seconds of a recording
+belong to each driver - and `RaceHighlights.Moment` is already an enum of
+`FastestLap`, `Lead`, `Pass`, `Warning` and `Podium`.
+
+Three consequences, all of them improvements:
+
+1. **It cannot drift.** One account of the race, read off rather than
+   written beside.
+2. **It works backwards over the whole archive**, which a store could never
+   have done - and that is exactly what item 1c, the long callback, needs. A
+   store would have had nothing to say about any night before it shipped.
+3. **One kind of moment leaves the scope, and should.** A leader going off,
+   retiring, or losing a lot of time is the only kind on the list that
+   cannot be derived honestly, and `SessionResultEntry.LapsLed`'s own
+   comment says why: "the running order between crossings isn't stored, so
+   'were they ahead at the moment they finished that lap' is the only
+   question a saved result can answer honestly". Not built, rather than
+   guessed at.
 
 ### The frozen window and the advert over the recap (11 Oct 2026)
 

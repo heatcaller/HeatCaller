@@ -3,7 +3,62 @@
 Asked for 12 Oct 2026: *"Plan and brainstorm additional ways to improve my
 chief differentiator and add value."*
 
-A plan, not a build. Nothing in here is implemented.
+**DECIDED 12 Oct 2026, and the decisions are at the top because three of
+them change what is below.**
+
+- **Stat density is right as it is.** The depth plan's open question -
+  whether F1 stat density suits a club night at all - is answered: it does,
+  and the risk it named has not landed. **No more statistics** all the same;
+  everything below is memory, outputs, audiences and timing.
+- **Item 6, the race director's private channel: SKIPPED.** Not building it.
+- **The honest rule for a stale held segment is adopted** as item 2 states
+  it: hold the words, re-check the facts' keys at the moment of speaking,
+  abandon on any mismatch.
+- **The slide-to-booking link is IN**, moved up out of "what is not on this
+  page". It is sponsor fulfilment rather than broadcast and it is the one
+  figure `SponsorReport` has to refuse today.
+- **Still out: video, and anything that invents a record.**
+- **Everything else here is to be built.**
+
+### And one design decision taken while reading the code (12 Oct 2026)
+
+**Item 1a is a READER, not a store, and that is not a detail.**
+
+The plan proposed a `NightMoments` store in the shape `ClubNotes` uses. That
+is precisely the thing `RaceHighlights` was written to prevent, and it says
+so in its own first paragraph:
+
+> There is deliberately NO second log of "what the announcer said and when".
+> One was the obvious thing to build and it would have been wrong twice
+> over: it would have had to be written from the audio path (which AudioBus
+> exists to keep clear of anything that can block), and it would have been a
+> second account of the race that could drift from the real one the moment
+> anybody changed a rule about laps. Everything here is arithmetic on the
+> record the app already keeps.
+
+So the ledger derives its moments from the saved result instead, exactly as
+`RaceHighlights.MarksFrom` already derives the stretches of a recording that
+belong to each driver. `RaceHighlights.Moment` is already an enum of
+`FastestLap`, `Lead`, `Pass`, `Warning` and `Podium`.
+
+Three things follow, and all three are improvements:
+
+1. **It cannot drift.** There is one account of the race and the moments are
+   read off it.
+2. **It works backwards over the whole archive.** A store would have had
+   moments only for the nights after it shipped; a reader has them for every
+   night already on disk - which is what item 1c, the long callback, needs
+   and what a store could never have given it.
+3. **One kind of moment drops out of scope, and should.** A leader going off
+   or losing a lot of time is the only kind on the list that cannot be
+   derived honestly - `SessionResultEntry.LapsLed`'s own comment says "the
+   running order between crossings isn't stored, so 'were they ahead at the
+   moment they finished that lap' is the only question a saved result can
+   answer honestly". So it is not built, rather than guessed at.
+
+---
+
+A plan. What is built is marked off in the roadmap.
 
 The differentiator, as the roadmap states it: **HeatCaller is a broadcast
 that happens to keep time**, and the timing is the nice-to-have for clubs
@@ -298,6 +353,12 @@ concludes the feature does not work.
 
 ## 6. The voice only entertains, and it knows enough to help
 
+**SKIPPED 12 Oct 2026.** Not being built. The section is left as it was
+written rather than deleted, because the argument for it is still the
+argument, and the one thing it turned on - `AudioBus` taking exactly one
+listener - is now recorded in the roadmap as a constraint rather than as a
+bug.
+
 Same brain, same facts, a different audience and a private channel: one
 earpiece for the race director.
 
@@ -322,8 +383,8 @@ which is most of the value for none of the risk.
 
 Ordered by value per hour, with the dependencies respected.
 
-1. **The moment ledger (1a).** Everything else gets cheaper. One store, in a
-   shape this codebase has built twice this week.
+1. **The moment ledger (1a).** Everything else gets cheaper. A READER over
+   the sessions already saved - see the design decision at the top.
 2. **The proof view (5a)** and **the quiet-night report (5b).** The two
    cheapest items on the page, and they protect everything already built.
 3. **The driver's own cut (3a).** The first output a driver takes home.
@@ -338,9 +399,13 @@ Ordered by value per hour, with the dependencies respected.
 7. **The club's own voice (4).** Strategically the biggest and gated on a
    consent decision rather than on code.
 8. **Listen along (3b).** Gated on a club's appetite and the relay's bill.
-9. **The race director's channel (6).**
-10. **The long callback (1c)** and **the season film (3d).** Both want the
-    ledger to have been running for a while.
+9. ~~The race director's channel (6).~~ Skipped.
+10. **The long callback (1c)** and **the season film (3d).** A reader rather
+    than a store means neither has to wait for a ledger to have been running:
+    the material is the club's own archive.
+11. **The slide-to-booking link.** Last because it is the only item that is
+    not the broadcast, not because it is the least wanted - it is the figure
+    a sponsor asks for first.
 
 ---
 
@@ -351,8 +416,10 @@ Ordered by value per hour, with the dependencies respected.
 - **Video.** Rendering the Big Screen to frames and publishing an MP4 is the
   single most valuable artifact this app could produce and it is a different
   product. Worth a page of its own, not a bullet on this one.
-- **The slide-to-booking link.** Already named in `SponsorReport`'s own
-  remarks as the work that would let the report count screen time. Still
-  right, still outstanding, and it is sponsor fulfilment rather than
-  broadcast.
+- **The slide-to-booking link.** MOVED IN on 12 Oct 2026 - see the decisions
+  at the top. `SponsorReport`'s own remarks name it as the work that would
+  let the report count screen time, and today the report has to refuse that
+  figure: the rotation keeps a flat list of file names and `SponsorBooking`
+  has no slide on it, so "your logo was on screen fourteen times" is not a
+  number this app has. It is the one number a sponsor actually asks for.
 - **Anything that invents a record.** Tier 3, as it was on 10 Oct.

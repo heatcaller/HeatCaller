@@ -60,7 +60,21 @@ internal static class RaceHighlights
     }
 
     /// <summary>One moment worth keeping, in milliseconds after the green.</summary>
-    internal sealed record Mark(string Transponder, Moment What, long RaceTimeMs);
+    /// <param name="Transponder">Whose moment it is.</param>
+    /// <param name="What">Why this stretch belongs to them - see <see cref="Moment"/>.</param>
+    /// <param name="RaceTimeMs">When, in milliseconds after the green.</param>
+    /// <param name="Lap">
+    /// Which lap it was on, where the moment is a crossing. Nought where it
+    /// is not one: a warning is given at a time rather than on a lap, and a
+    /// podium is the flag.
+    ///
+    /// ADDED 12 Oct 2026 and defaulted, so nothing that builds a Mark had to
+    /// change. The timeline walk below had the lap in hand all along and
+    /// threw it away, and it is the one thing that tells a pass for the lead
+    /// on the LAST lap - the best moment in racing - from one on lap three
+    /// that was given back on lap four. See NightMoments.
+    /// </param>
+    internal sealed record Mark(string Transponder, Moment What, long RaceTimeMs, int Lap = 0);
 
     /// <summary>A stretch of the recording, in milliseconds from the start of the FILE (not from the green).</summary>
     internal sealed record Window(long StartMs, long EndMs)
@@ -235,7 +249,7 @@ internal static class RaceHighlights
 
             if (best >= 0 && best < times.Count)
             {
-                marks.Add(new Mark(row.Transponder, Moment.FastestLap, times[best]));
+                marks.Add(new Mark(row.Transponder, Moment.FastestLap, times[best], best + 1));
             }
 
             // Already timestamped by whoever gave it, in the same clock -
@@ -306,7 +320,7 @@ internal static class RaceHighlights
 
             if (wasAt.TryGetValue(crossing.Transponder, out var before) && now > 0 && now < before)
             {
-                marks.Add(new Mark(crossing.Transponder, Moment.Pass, crossing.At));
+                marks.Add(new Mark(crossing.Transponder, Moment.Pass, crossing.At, crossing.Lap));
             }
 
             if (now == 1 && !string.Equals(leader, crossing.Transponder, StringComparison.OrdinalIgnoreCase))
@@ -316,7 +330,7 @@ internal static class RaceHighlights
                 // is no call for it; every leader after that is a call.
                 if (leader.Length > 0)
                 {
-                    marks.Add(new Mark(crossing.Transponder, Moment.Lead, crossing.At));
+                    marks.Add(new Mark(crossing.Transponder, Moment.Lead, crossing.At, crossing.Lap));
                 }
 
                 leader = crossing.Transponder;
