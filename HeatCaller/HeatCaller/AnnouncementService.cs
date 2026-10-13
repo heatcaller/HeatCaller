@@ -755,6 +755,14 @@ public sealed partial class AnnouncementService
                 // followed by the whole fanfare and then the finish call.
                 StopCurrentPlayback();
                 StopPlayingSound();
+
+                // And the sponsor's picture with it - see SponsorOnAir.End,
+                // which was written for this and called from nowhere. A
+                // mute is the club saying "stop", and a logo left on the
+                // crowd screen for another half minute with nothing being
+                // said about it is a read the sponsor did not get and the
+                // room cannot explain.
+                SponsorOnAir.End();
             }
         }
     }
@@ -809,7 +817,8 @@ public sealed partial class AnnouncementService
                     "[voice] Test skipped - ElevenLabs API key or voice not configured.",
                     speedOverride: speed,
                     honourMute: false,
-                    voice: voice);
+                    voice: voice,
+                    forListeners: false);
             }
             catch (Exception ex)
             {

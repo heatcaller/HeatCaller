@@ -38,8 +38,10 @@ namespace HeatCaller;
 ///   Update now      backs up, applies, and restarts - now.
 ///   After tonight   keeps the downloaded version and installs it the NEXT
 ///                   TIME HEATCALLER STARTS, which is the only moment that
-///                   is safe by definition: nothing is open, no race is
-///                   running, nobody is waiting. Remembered in settings
+///                   is safe: nothing is open, no race is running, nobody
+///                   is waiting. (A start in the middle of a meeting - a
+///                   crash, a new look - is checked, and waits for the next
+///                   one; see ApplyWhatWasHeldForNextStart.) Remembered in settings
 ///                   (UpdateWaitingForNextStart), because it is a promise
 ///                   that has to outlive the process.
 ///   Not now         nothing. Not asked again this run; asked again next
@@ -132,7 +134,7 @@ internal static class AppUpdates
 
     // EVERY ONE OF THESE IS CALLED FROM A BACKGROUND THREAD. CheckAsync is
     // started and forgotten, and what follows the first await is not on the
-    // UI thread - so each of these four is MainForm's job to marshal
+    // UI thread - so each of these five is MainForm's job to marshal
     // (Invoke), and each one here is written as though it blocks, because it
     // does. Reading race state or opening a window from the wrong thread is
     // the kind of fault that only shows up on somebody else's race night.
@@ -157,6 +159,16 @@ internal static class AppUpdates
     /// needs are not - see BackupService.CaptureSecrets.
     /// </summary>
     internal static Func<string>? BackUp { get; set; }
+
+    /// <summary>
+    /// Keeps the "After tonight" answer: puts the version in
+    /// UpdateWaitingForNextStart and saves the settings, handing back whether
+    /// the save happened. Set once by MainForm, and must do it on the UI
+    /// thread - the live settings are that thread's to change, and a save
+    /// from here could serialise them while it was changing them, or land
+    /// after a newer save and put older settings back on disk.
+    /// </summary>
+    internal static Func<string, bool>? HoldForNextStart { get; set; }
 
     /// <summary>Where this class says things. The console, by way of MainForm.</summary>
     internal static Action<string>? Log { get; set; }
@@ -206,7 +218,24 @@ internal static class AppUpdates
     }
 
     /// <summary>Whether this copy can update itself at all - an installed build, with checks left on.</summary>
-    internal static bool Available(AppSettings settings) => settings.UpdateChecksOn && Manager() is not null;
+    /// <remarks>
+    /// Never in a rehearsal. The backup before an update would be of the
+    /// rehearsal copy, and Velopack restarts the new version as the real app
+    /// on the club's real data - which was never backed up - while whoever
+    /// is practising thinks they are still in the copy.
+    /// </remarks>
+    internal static bool Available(AppSettings settings) =>
+        settings.UpdateChecksOn && !AppPaths.IsRehearsal && Manager() is not null;
+
+    /// <summary>
+    /// The switches the new version is restarted with. Only --dpi-aware is
+    /// carried over: it is how this copy was asked to draw itself, and
+    /// losing it at an update would quietly change the look. --rehearsal
+    /// never gets this far (see Available), and the rest are Velopack's or
+    /// the freeze watchdog's, which never reach a running app.
+    /// </summary>
+    private static string[]? RestartArgs() =>
+        Program.DpiAwareWanted(Environment.GetCommandLineArgs()) ? new[] { Program.DpiAwareSwitch } : null;
 
     /// <summary>
     /// The "After tonight" promise, kept. Called from MainForm's startup,
@@ -216,13 +245,38 @@ internal static class AppUpdates
     /// Returns true when it is applying one, in which case the app is about
     /// to be restarted by Velopack and the caller should stop what it is
     /// doing.
+    ///
+    /// The next start is NOT always between meetings: the app restarts
+    /// itself for a new look, after a crash, or because a volunteer closed
+    /// and opened it - all of which can happen with a race day open, hours
+    /// after "After tonight" was answered before it was opened. So the same
+    /// facts Offer asks about are asked again here, and while any of them
+    /// holds the promise is kept (not cleared) for a later start.
     /// </summary>
-    internal static bool ApplyWhatWasHeldForNextStart(AppSettings settings)
+    /// <param name="raceDayOpen">A race day is open, or the race days could not be read and it cannot be told.</param>
+    /// <param name="raceState">What Race Control is doing - Idle at any ordinary start.</param>
+    /// <param name="unfinishedRaceInJournal">The race journal has an unfinished race in it.</param>
+    internal static bool ApplyWhatWasHeldForNextStart(
+        AppSettings settings, bool raceDayOpen, RaceState raceState, bool unfinishedRaceInJournal)
     {
         var waiting = settings.UpdateWaitingForNextStart;
 
         if (waiting.Length == 0)
         {
+            return false;
+        }
+
+        // A rehearsal's settings are a copy of the club's, promise and all.
+        // It is the real app's promise to keep, not the copy's - see
+        // Available - so it is left alone in both.
+        if (AppPaths.IsRehearsal)
+        {
+            return false;
+        }
+
+        if (HeldBecause(raceDayOpen, raceState, unfinishedRaceInJournal) is { } why)
+        {
+            Say($"The update to {waiting} held for the next start is still waiting - {why}. It installs at a start when nothing is.");
             return false;
         }
 
@@ -262,7 +316,7 @@ internal static class AppUpdates
             // club to be looking at - so the installer puts the new version
             // in and the club opens it again. Nothing is lost, and it keeps
             // the promise that the app never relaunches itself unasked.
-            manager.ApplyUpdatesAndRestart(pending);
+            manager.ApplyUpdatesAndRestart(pending, RestartArgs());
             return true;
         }
         catch (Exception ex)
@@ -352,7 +406,7 @@ internal static class AppUpdates
 
             Say($"{newVersion} is downloaded and ready.");
 
-            Offer(settings, manager, update, newVersion);
+            Offer(manager, update, newVersion);
         }
         finally
         {
@@ -368,9 +422,9 @@ internal static class AppUpdates
     /// downloaded update sits there, and the question comes the next time
     /// this is called and the app is idle.
     /// </summary>
-    private static void Offer(AppSettings settings, UpdateManager manager, UpdateInfo update, string newVersion)
+    private static void Offer(UpdateManager manager, UpdateInfo update, string newVersion)
     {
-        if (NothingInProgressNow is not { } idle || Ask is not { } ask)
+        if (NothingInProgressNow is not { } idle || Ask is not { } ask || HoldForNextStart is not { } hold)
         {
             // No host wired up. The update stays downloaded; nothing is
             // applied without somebody being asked.
@@ -406,7 +460,7 @@ internal static class AppUpdates
 
                 try
                 {
-                    manager.ApplyUpdatesAndRestart(update.TargetFullRelease);
+                    manager.ApplyUpdatesAndRestart(update.TargetFullRelease, RestartArgs());
                 }
                 catch (Exception ex)
                 {
@@ -416,8 +470,15 @@ internal static class AppUpdates
                 return;
 
             case Answer.AfterTonight:
-                settings.UpdateWaitingForNextStart = newVersion;
-                settings.Save();
+                // Not set and saved here: this is a background thread. See
+                // HoldForNextStart.
+                if (!hold(newVersion))
+                {
+                    _declinedThisRun = newVersion;
+                    Say($"{newVersion} couldn't be held for the next start (the settings weren't saved) - it will be offered again next time HeatCaller starts.");
+                    return;
+                }
+
                 Say($"{newVersion} will be installed the next time HeatCaller is opened. Nothing happens before then.");
                 return;
 

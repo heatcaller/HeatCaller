@@ -48,7 +48,7 @@ public partial class MainForm
 
             // Ctrl+Z is the app's Undo - unless a text box has the focus,
             // where it belongs to the box's own undo.
-            if (keyData == (Keys.Control | Keys.Z) && !IsTypingInTextField())
+            if (keyData == (Keys.Control | Keys.Z) && !FocusedControlHasOwnUndo())
             {
                 // Not btnUndo.PerformClick(): in Race Mode the footer is
                 // hidden, and a hidden button ignores PerformClick.
@@ -84,7 +84,10 @@ public partial class MainForm
 
             // Ctrl+1 to Ctrl+9: that page in the sidebar, counting from the
             // top in the order the sidebar shows them (hidden pages skipped).
-            // Not in Race Mode, which is one page on purpose.
+            // Not in Race Mode, which is one page on purpose. The rows on
+            // screen, not the whole visible order: with a page search typed
+            // the sidebar shows only the pages that match, and Ctrl+1 is the
+            // first of those.
             if ((keyData & Keys.Modifiers) == Keys.Control && !_raceMode)
             {
                 var index = key switch
@@ -96,7 +99,7 @@ public partial class MainForm
 
                 if (index >= 0)
                 {
-                    var pages = VisibleOrderedNavNames();
+                    var pages = lstNav.Items;
                     if (index < pages.Count)
                     {
                         GoToPage(pages[index]);
@@ -336,6 +339,40 @@ public partial class MainForm
         return focused is TextBoxBase or UpDownBase or ComboBox
                || focused is DataGridView { IsCurrentCellInEditMode: true };
     }
+
+    /// <summary>
+    /// True when Ctrl+Z belongs to the focused control rather than to the
+    /// app's Undo - see HasOwnUndo.
+    /// </summary>
+    private bool FocusedControlHasOwnUndo()
+    {
+        Control? focused = ActiveControl;
+
+        while (focused is ContainerControl { ActiveControl: { } inner })
+        {
+            focused = inner;
+        }
+
+        return HasOwnUndo(focused);
+    }
+
+    /// <summary>
+    /// True for a control with an undo of its own: a text box that can be
+    /// typed in, a number box, a combo that can be typed in, or a grid cell
+    /// being edited.
+    ///
+    /// Not IsTypingInTextField, which is about letter keys and so counts any
+    /// combo and any text box. A drop-down list and a read-only box have no
+    /// undo, so Ctrl+Z there went nowhere - and a drop-down is often exactly
+    /// where the change to be undone was made (Race Day's event picker
+    /// promises a switch made by accident is one Ctrl+Z back).
+    /// </summary>
+    internal static bool HasOwnUndo(Control? focused) =>
+        focused is IDataGridViewEditingControl
+        || focused is TextBoxBase { ReadOnly: false }
+        || focused is UpDownBase
+        || focused is ComboBox { DropDownStyle: not ComboBoxStyle.DropDownList }
+        || focused is DataGridView { IsCurrentCellInEditMode: true };
 
     /// <summary>
     /// True when Escape means something to the focused control: a grid cell

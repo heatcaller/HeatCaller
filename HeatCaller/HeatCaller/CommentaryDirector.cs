@@ -105,6 +105,16 @@ public sealed class CommentaryDirector
         Sponsors = new SponsorRotation();
         Continuity = new ContinuityVoice();
 
+        // Written down as each line is heard, not only after a paid
+        // segment: continuity is what still runs with the AI off. Only its
+        // own half - this is the UI thread, mid running order, and the
+        // budget is Save's business after a segment.
+        Continuity.LineHeard = () =>
+        {
+            _settings.CommentaryContinuityNight = Continuity.Save();
+            _settings.Save();
+        };
+
         // Whatever ad breaks have already run tonight are not this
         // director's to read for. One is built the first time the
         // announcer screen's tick asks for it, which can be well after the
@@ -128,6 +138,45 @@ public sealed class CommentaryDirector
 
     /// <summary>Whose turn it is for a sponsor read. Not on the budget's ladder - see SponsorRotation.</summary>
     public SponsorRotation Sponsors { get; }
+
+    /// <summary>
+    /// What the night came to: every segment weighed up, what became of it,
+    /// and the facts the last one that went out was built from.
+    ///
+    /// INTERNAL because NightAccount is - a public property on a public
+    /// class may not name an internal type, which is CS0053 and has landed
+    /// four times on this project in a week. Everything that reads it is in
+    /// this assembly.
+    /// </summary>
+    internal NightAccount Account { get; } = new();
+
+    /// <summary>
+    /// What the broadcast has pointed the room at tonight, so a later
+    /// segment can come back to it. See NightPromises, which states at
+    /// length what a promise is allowed to be.
+    ///
+    /// Internal, with the reader below, for the reason Account is: the
+    /// type is internal, and a public member may not name one.
+    /// </summary>
+    internal NightPromises Promises { get; } = new();
+
+    /// <summary>
+    /// Tonight's moments, strongest first - what a promise is paid off
+    /// with. Wire this to NightMoments.Over over the race day's own
+    /// sessions.
+    ///
+    /// A READER, like every other source in this class, and here that is
+    /// the whole of what makes the callback honest: the moments are
+    /// arithmetic over the club's saved results, so by the time a promise
+    /// is weighed up the reader has seen the race that has since been
+    /// filed. Held between passes it would go on offering a callback about
+    /// a result the club had since corrected, and would never see the race
+    /// that is the whole reason there is anything to come back to.
+    ///
+    /// Null until wired, and then nothing is ever come back to, which is
+    /// how the show read before any of this.
+    /// </summary>
+    internal Func<IReadOnlyList<NightMoments.Moment>>? MomentsTonight { get; set; }
 
     /// <summary>
     /// Whose turn each phrasing of a continuity line is, and what the room
@@ -451,15 +500,37 @@ public sealed class CommentaryDirector
         Budget.NightsLeftThisMonth = _settings.CommentaryNightsPerMonth;
         Budget.KeepEverythingRunning = _settings.CommentaryKeepEverything;
 
-        Said.NewMeeting(dayId);
-        Sponsors.NewMeeting(dayId);
+        // RESTORED, NOT RESET (13 Oct 2026). This was NewMeeting, and
+        // SaidTonight.Restore - which calls NewMeeting itself, and only
+        // picks facts back up when the day matches - was written at the
+        // same time as Budget.Restore above and then called by nobody. So
+        // the spend survived a restart and the facts did not, and a club
+        // that reopened the app between the heats and the mains heard
+        // every record and storyline over again.
+        Said.Restore(_settings.CommentaryFactsNight, dayId);
+
+        // And the sponsors' reads, for the same reason and with the same
+        // miss behind it: SponsorRotation.Restore existed and nobody called
+        // it, so a restart wiped the counts on the club's sponsor report.
+        // Saved after every read (SalesReadSaid), so laying it back over
+        // the night on every tick puts back exactly what is already here.
+        Sponsors.Restore(_settings.SponsorRotationNight, dayId);
+
+        // Guards itself on the day actually changing, like the two above.
+        Account.NewMeeting(dayId);
+
+        // And the same, for the same reason. Last week's promises were
+        // paid off or were not, and either way nothing is coming back to
+        // them - see NightPromises.
+        Promises.NewMeeting(dayId);
 
         // Guards itself on the day actually changing, like the two above
         // and for the reason the comment below spells out - this method
         // runs on a half-second tick, and a rotation reset twice a second
         // is a rotation that always hands out whatever a fresh shuffle
-        // happens to start with.
-        Continuity.NewMeeting(dayId);
+        // happens to start with. Restored for the same day, like Said
+        // above - see ContinuityVoice.Restore.
+        Continuity.Restore(_settings.CommentaryContinuityNight, dayId);
 
         // The paid reads' own state, guarded on the day ACTUALLY changing.
         //
@@ -615,6 +686,19 @@ public sealed class CommentaryDirector
 
         if (Pace.Saw(new LapSeen(driverId, seconds)) is { } note)
         {
+            // Not over a bigger one still waiting to be said. PaceWatch
+            // gives each lap its biggest true thing, but this is a single
+            // slot: without the check, somebody's first personal best a
+            // lap later replaced the fastest lap of the race and that was
+            // never called. A pending note past its deadline is dropped by
+            // Candidates anyway, so it does not block a fresh one.
+            if (_pending is { } waiting
+                && note.Kind < waiting.Kind
+                && _clock() - _pendingAt <= CommentaryBudget.Spec(SegmentKind.PaceNote).NeedsBy)
+            {
+                return;
+            }
+
             _pending = note;
             _pendingAt = _clock();
         }
@@ -623,10 +707,32 @@ public sealed class CommentaryDirector
     private PaceNote? _pending;
     private DateTime _pendingAt;
 
-    /// <summary>Tonight's spend and tonight's facts, for AppSettings to hold across a restart.</summary>
+    /// <summary>
+    /// The note the pass is writing, so Spent clears that one and not a
+    /// newer record that came in during the write - the same reason
+    /// BattleWatch keeps _calling.
+    /// </summary>
+    private PaceNote? _paceCalling;
+
+    /// <summary>
+    /// Tonight's spend and tonight's facts, for AppSettings to hold across
+    /// a restart.
+    ///
+    /// AND IT NOW HOLDS BOTH. This comment said "and tonight's facts" for
+    /// a month while saving only the spend, which is a worse kind of wrong
+    /// than saying nothing - anyone reading it would have stopped looking.
+    ///
+    /// Called from SaveOn after every segment that was actually SPOKEN,
+    /// not on the way out: the restart this exists for is usually not a
+    /// planned one, and a club that force-closes a frozen window is
+    /// exactly the club that must not hear the evening twice.
+    /// </summary>
     public void Save()
     {
         _settings.CommentaryBudgetNight = Budget.Save();
+        _settings.CommentaryFactsNight = Said.Save();
+        _settings.SponsorRotationNight = Sponsors.Save();
+        _settings.CommentaryContinuityNight = Continuity.Save();
         _settings.Save();
     }
 
@@ -634,20 +740,26 @@ public sealed class CommentaryDirector
     // The pull
     // ------------------------------------------------------------------
 
-    /// <summary>
-    /// The next thing worth saying, or null - which is most of the time.
-    ///
-    /// Called on the host's own timer rather than pushing: the host knows
-    /// whether the announcer is mid-sentence, whether a race is being
-    /// staged, and whether anybody is listening, and none of that is this
-    /// class's business.
-    /// </summary>
+    // NextAsync's own summary used to be here, stranded above this field
+    // by an edit that moved the method and left the comment behind - one
+    // of the four orphans the 12 Oct bug hunt recorded. A doc comment
+    // describing "the next thing worth saying" sitting on a bool is worse
+    // than none: a reader takes it for the field's own and stops looking.
+    // It has gone down onto NextAsync, which had no summary at all.
+
     /// <summary>
     /// Whether this pass is being asked for by a PROGRAMME rather than as
     /// filler between races - see ForTheProgrammeAsync, and
     /// CommentaryBudget.ReserveForProgramme for the one gate it lifts.
     /// </summary>
     private bool _forTheProgramme;
+
+    /// <summary>
+    /// Held for the length of a pass, so there is only ever one - see
+    /// ForTheProgrammeAsync, which waits for it, and NextAsync, which gives
+    /// way to it.
+    /// </summary>
+    private readonly SemaphoreSlim _onePass = new(1, 1);
 
     /// <summary>
     /// One segment for the post-race programme to speak INSIDE its own
@@ -686,19 +798,63 @@ public sealed class CommentaryDirector
         // moment later costs nothing.
         RaceFinished();
 
+        // AFTER THE TICK'S PASS, NOT BESIDE IT (bug hunt 7). The flag can
+        // fall while the announcer's tick is half way through writing a
+        // battle call, and the programme asks for its colour straight away.
+        // Two passes at once share _pass, _marks, the budget and tonight's
+        // facts, none of which are built for it, and _forTheProgramme set
+        // here would have let the tick's next kind skip its gap. So this
+        // waits its turn - the colour is not wanted until after the
+        // honours, and the tick's pass drops its in-race call as soon as
+        // the write comes back (see TryAsync). Resumes on the UI thread,
+        // which the gather at the top of the pass needs.
+        await _onePass.WaitAsync(ct).ConfigureAwait(true);
+
         _forTheProgramme = true;
 
         try
         {
-            return await NextAsync(ct).ConfigureAwait(true);
+            return await PassAsync(ct).ConfigureAwait(true);
         }
         finally
         {
             _forTheProgramme = false;
+            _onePass.Release();
         }
     }
 
+    /// <summary>
+    /// The next thing worth saying, or null - which is most of the time.
+    ///
+    /// Called on the host's own timer rather than pushing: the host knows
+    /// whether the announcer is mid-sentence, whether a race is being
+    /// staged, and whether anybody is listening, and none of that is this
+    /// class's business.
+    /// </summary>
     public async Task<SpokenSegment?> NextAsync(CancellationToken ct = default)
+    {
+        // The tick's pass gives way rather than waits: a programme pass is
+        // running, and the tick asks again half a second later anyway.
+        if (!_onePass.Wait(0))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await PassAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _onePass.Release();
+        }
+    }
+
+    /// <summary>
+    /// One pass down the ladder. Only ever run by NextAsync or
+    /// ForTheProgrammeAsync, and only while holding _onePass.
+    /// </summary>
+    private async Task<SpokenSegment?> PassAsync(CancellationToken ct)
     {
         if (Held)
         {
@@ -725,6 +881,18 @@ public sealed class CommentaryDirector
         // A segment that was dropped must not be marked said by the next
         // pass's segment of the same kind.
         _marks = new Dictionary<SegmentKind, string>();
+
+        // TONIGHT'S MOMENTS, ONCE FOR THE WHOLE PASS, and before the
+        // gather loop that needs them.
+        //
+        // Once because NightMoments.Over walks every saved race of the
+        // evening and the loop below asks for twenty segments' facts: read
+        // per kind, a twenty-race night would re-derive four hundred races
+        // worth of moments on a half-second tick. And here rather than
+        // inside Gather for the reason the gather loop itself is here -
+        // this is the last point in the pass certainly still on the thread
+        // the host called from, and the session history belongs to it.
+        _momentsThisPass = MomentsNow();
 
         foreach (var kind in order)
         {
@@ -760,6 +928,14 @@ public sealed class CommentaryDirector
                 {
                     return null;
                 }
+
+                // The race started or finished while that one was being
+                // written. The rest of this order belongs to the phase that
+                // has gone, so nothing further is written for it.
+                if (InRace(kind) != _racing)
+                {
+                    return null;
+                }
             }
         }
         finally
@@ -777,6 +953,44 @@ public sealed class CommentaryDirector
     private Dictionary<SegmentKind, IReadOnlyList<FactBlock>>? _pass;
 
     /// <summary>
+    /// Tonight's moments as this pass sees them. Empty between passes and
+    /// on a night nothing has happened in yet.
+    ///
+    /// Not cleared in the finally beside _pass, deliberately: it is read
+    /// once per kind in the gather loop AND once more by the pay-off in
+    /// Gather, and both of those run inside the pass. It is overwritten at
+    /// the top of the next pass, which is the only place it is written.
+    /// </summary>
+    private IReadOnlyList<NightMoments.Moment> _momentsThisPass = Array.Empty<NightMoments.Moment>();
+
+    /// <summary>
+    /// Tonight's moments, with a reader that throws treated as a night
+    /// nothing has happened in - the rule Gather and ReadNightProgress
+    /// already follow, and it matters as much here: this one runs before
+    /// the gather loop, so a session history caught mid-save would
+    /// otherwise take the whole pass down rather than costing one
+    /// callback.
+    /// </summary>
+    private IReadOnlyList<NightMoments.Moment> MomentsNow()
+    {
+        if (MomentsTonight is null)
+        {
+            return Array.Empty<NightMoments.Moment>();
+        }
+
+        try
+        {
+            return MomentsTonight() ?? Array.Empty<NightMoments.Moment>();
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't work out tonight's moments: {ex.Message}");
+
+            return Array.Empty<NightMoments.Moment>();
+        }
+    }
+
+    /// <summary>
     /// A segment's candidate facts, with a reader that throws treated as
     /// nothing to say.
     ///
@@ -787,9 +1001,11 @@ public sealed class CommentaryDirector
     /// </summary>
     private IReadOnlyList<FactBlock> Gather(SegmentKind kind)
     {
+        IReadOnlyList<FactBlock> own;
+
         try
         {
-            return Candidates(kind, _className);
+            own = Candidates(kind, _className);
         }
         catch (Exception ex)
         {
@@ -797,6 +1013,65 @@ public sealed class CommentaryDirector
 
             return Array.Empty<FactBlock>();
         }
+
+        // THE CALLBACK RIDES ALONG, in whichever segment turns out to go
+        // out, exactly as CommentaryShowFacts.ThreadSoFar does.
+        //
+        // HERE RATHER THAN IN A CASE ARM OF Candidates, and rather than as
+        // a segment of its own, and both of those are decisions:
+        //
+        //   A segment of its own would be a segment ABOUT THE BROADCAST.
+        //   "Earlier we mentioned Carl, and Carl has just taken the lead"
+        //   is worth five seconds inside a race recap and is an odd thing
+        //   to stop an evening for.
+        //
+        //   One case arm would mean picking which segment gets to carry a
+        //   callback, and the honest answer is whichever one the budget
+        //   lets through next - which is not knowable from inside a case
+        //   arm. This is the one funnel every kind comes through.
+        //
+        // AND IT IS LAST IN THE LIST. FactPack keeps the order it is given
+        // and drops the tail when the room runs short, so a callback never
+        // costs a segment the fact it is actually about. A reminder of
+        // something the room already heard is the first thing that should
+        // go.
+        //
+        // Never on an Essential. A race intro and a race recap are the two
+        // segments a club gets whatever else is switched off, they are
+        // written by CommentaryService rather than from here, and a result
+        // read-out interrupted by "as we were saying earlier" is the one
+        // place this would land badly. They never reach Gather anyway -
+        // Order() skips them - and the guard is here so that stays true if
+        // Order ever changes.
+        if (kind is SegmentKind.RaceIntro or SegmentKind.RaceRecap or SegmentKind.BadgesEarned)
+        {
+            return own;
+        }
+
+        // AND NEVER ON ITS OWN. A callback is colour inside a segment that
+        // has something to say; a segment with nothing of its own is
+        // supposed to be dropped before it costs anything, and the budget
+        // asks that by looking at this list - so a lone callback here would
+        // turn "nothing to say about the form guide" into a form guide
+        // whose entire content is a reminder about a driver. The club would
+        // get a night of the announcer referring back to itself, and
+        // NightAccount's own count of segments that had nothing to say
+        // would quietly stop being true.
+        if (own.Count == 0)
+        {
+            return own;
+        }
+
+        if (Promises.PayOff(_momentsThisPass, _clock()) is not { } callback)
+        {
+            return own;
+        }
+
+        var with = new List<FactBlock>(own.Count + 1);
+        with.AddRange(own);
+        with.Add(callback);
+
+        return with;
     }
 
     /// <summary>
@@ -1090,6 +1365,11 @@ public sealed class CommentaryDirector
 
         Sponsors.Said(read);
 
+        // Kept at once rather than on the way out, for the reason Save
+        // gives: the restart this is for is usually a force-closed window.
+        _settings.SponsorRotationNight = Sponsors.Save();
+        _settings.Save();
+
         _lastSalesRead = _clock();
 
         Say(read.MoreToCome
@@ -1171,7 +1451,7 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
-    private static bool InRace(SegmentKind kind) =>
+    internal static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote;
 
     private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
@@ -1196,10 +1476,22 @@ public sealed class CommentaryDirector
         // MarkWhenSpoken) and read by the kind being tried, so caching
         // cannot lose them and a dropped segment still marks nothing.
 
+        // COUNTED HERE, before anything can refuse it, so the night's
+        // account has an honest denominator: "eleven of nineteen" means
+        // nineteen were weighed up rather than nineteen nearly said. See
+        // NightAccount.
+        Account.Weighed(kind);
+
         var blocks = CandidatesForPass(kind, _className);
 
         if (blocks.Count == 0)
         {
+            // The commonest answer of all, and until 12 Oct 2026 it was
+            // written down nowhere: a club reading the log saw a handful of
+            // refusals and could not tell whether the quiet was three
+            // segments or thirty.
+            Account.NothingToSay();
+
             return null;
         }
 
@@ -1207,6 +1499,12 @@ public sealed class CommentaryDirector
 
         if (pack.Empty)
         {
+            // Facts existed and every one was already spent, or had just
+            // been talked about. Also silent until now, and a different
+            // thing from having nothing to say - a club that hears this all
+            // evening has a variety rule biting rather than thin results.
+            Account.EveryFactSpent();
+
             return null;
         }
 
@@ -1224,6 +1522,12 @@ public sealed class CommentaryDirector
                 Say($"[brain] Skipped {spec.Title.ToLowerInvariant()} - {verdict.Reason}.");
             }
 
+            // EVERY TIME, where the line above is once per reason: the
+            // console must not repeat itself and a tally that counted one in
+            // ten would be a tally of nothing. By the typed reason rather
+            // than by the sentence - see BudgetRefusal.
+            Account.Refused(verdict.Why);
+
             return null;
         }
 
@@ -1237,6 +1541,13 @@ public sealed class CommentaryDirector
         {
             Writing = true;
 
+            // The verdict's fallback, obeyed. Colour and flourish segments
+            // say "relay or nothing", and nothing read it, so when the relay
+            // refused one Ollama wrote it anyway. Only once the relay has
+            // told us the club's month: before that the relay is not this
+            // club's brain yet, and the local model is all it has.
+            FallbackCommentaryBrain.RelayOnly = verdict.Fallback == BrainFallback.None && Budget.AllowanceKnown;
+
             var written = await WriteAsync(kind, spec, pack, ct).ConfigureAwait(false);
 
             if (written is null)
@@ -1248,6 +1559,11 @@ public sealed class CommentaryDirector
             if (_clock() - asked > spec.NeedsBy)
             {
                 Budget.Release(verdict.Ticket);
+                Account.DroppedAfterWriting();
+
+                // Nobody heard it, so it is not the line Repeat offers.
+                _commentary.ForgetLine(written.Text);
+
                 Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - it came back after the moment had gone.");
                 return null;
             }
@@ -1260,11 +1576,41 @@ public sealed class CommentaryDirector
             if (Held)
             {
                 Budget.Release(verdict.Ticket);
+                Account.DroppedAfterWriting();
+                _commentary.ForgetLine(written.Text);
+
                 Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - the segments were held while it was being written.");
                 return null;
             }
 
+            // The race went green or the flag fell while it was being
+            // written. A battle call that comes back after the chequered
+            // flag is inside its deadline but describes a race that is
+            // over, and would be said into the recap; a "coming up next"
+            // that comes back after the green would be said over the race.
+            // Given back like a hold, so nothing is marked said.
+            if (InRace(kind) != _racing)
+            {
+                Budget.Release(verdict.Ticket);
+                Account.DroppedAfterWriting();
+
+                // Nobody heard this one either - see the two drops above.
+                _commentary.ForgetLine(written.Text);
+
+                Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - the race "
+                    + (_racing ? "went green" : "finished")
+                    + " while it was being written.");
+                return null;
+            }
+
             Budget.Settle(verdict.Ticket);
+
+            // IT WENT OUT, with the facts it was built from, at the same
+            // instant as everything else that is settled here - so a
+            // segment written and then dropped is not counted as said and
+            // its facts are not offered as the proof of a line nobody
+            // heard. See NightAccount.Proof.
+            Account.Spoke(kind, pack);
 
             // THE MARK FOR THIS KIND, at the same instant as the facts
             // and for the same reason: every path out above gives the
@@ -1282,6 +1628,30 @@ public sealed class CommentaryDirector
                     RoomsCallSaid?.Invoke(mark);
                 }
             }
+
+            // THE PROMISE LEDGER, both halves of it, at the same instant
+            // and under the same rule as everything else settled here: a
+            // segment written and then dropped pointed the room at nobody
+            // and came back to nothing. See NightPromises.
+            //
+            // Retired first, recorded second, and the order is deliberate.
+            // A callback is itself a segment about a driver, so recording
+            // comes back round and files a FRESH promise about the same
+            // person - which is right, because the room has just been
+            // reminded about Carl and there is something to come back to
+            // again. It cannot loop: the race that paid the old promise
+            // off had to have gone green before this line went out, so it
+            // is already too early to pay the new one. Coming back to Carl
+            // twice needs two races, which is the right answer.
+            foreach (var key in pack.Keys)
+            {
+                if (Promises.IsPayOffKey(key))
+                {
+                    Promises.MarkPaid(key);
+                }
+            }
+
+            Promises.Note(kind, pack, NameFor, written.IsExchange, _clock());
 
             // The pack, not just its keys: the themes have to be marked
             // with them or the variety rule never fires and nothing says
@@ -1307,6 +1677,7 @@ public sealed class CommentaryDirector
         finally
         {
             Writing = false;
+            FallbackCommentaryBrain.RelayOnly = false;
         }
     }
 
@@ -1425,6 +1796,8 @@ public sealed class CommentaryDirector
 
                     return Array.Empty<FactBlock>();
                 }
+
+                _paceCalling = note;
 
                 return new[] { CommentaryFacts.Pace(note, names, _raceKey) };
             }
@@ -1720,7 +2093,16 @@ public sealed class CommentaryDirector
             }
 
             case SegmentKind.PaceNote:
-                _pending = null;
+                // Only if it is still the one that was said. A faster lap
+                // seen while it was being written is a new note, and
+                // PaceWatch will not raise it again. Exchanged rather than
+                // compared and set, because Lap writes this from the UI
+                // thread while this runs wherever the write came back.
+                if (_paceCalling is { } said)
+                {
+                    Interlocked.CompareExchange(ref _pending, null, said);
+                }
+
                 break;
         }
     }

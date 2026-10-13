@@ -205,6 +205,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             var local = startedUtc.ToLocalTime();
             var folder = store.FolderForNight(local);
             Directory.CreateDirectory(folder);
+            RaceAudioStore.MarkAsNight(folder);
 
             var minFreeBytes = (long)store.MinFreeMb * 1024 * 1024;
 
@@ -660,6 +661,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                         : "The file has been removed."));
                 TryDelete(recording.WavPath, log);
                 SweepOrphans(store, recording.WavPath, log);
+
+                // A new night's folder may have been made for it all the
+                // same, so the ceiling still applies.
+                store.PruneOldNights(log);
                 return;
             }
 
@@ -691,6 +696,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
                 log($"{AppTime.LogStampNow()}  [audio] Could not make an mp3 of \"{baseName}\" ({why}). The "
                     + $"recording is kept as a wav instead and plays as it is: {kept}");
+
+                // The ceiling matters most here: a PC with no mp3 encoder
+                // fails like this every race, with five times the file.
+                store.PruneOldNights(log);
                 return;
             }
 

@@ -400,7 +400,7 @@ public sealed class SponsorSalesCopyTests : IDisposable
     }
 
     [Fact]
-    public void The_ad_break_read_names_what_the_crowd_has_just_watched()
+    public void The_ad_break_read_does_not_claim_the_advert_was_theirs()
     {
         var rotation = new SponsorRotation();
         rotation.NewMeeting("day-1");
@@ -411,7 +411,10 @@ public sealed class SponsorSalesCopyTests : IDisposable
             WholeCopy);
 
         Assert.NotNull(read);
-        Assert.StartsWith("That was Clarke and Sons.", read!.Text);
+        // The rotation picks whose turn it is, not whose video just ran,
+        // so the lead-in must not say the advert was theirs.
+        Assert.StartsWith("And now, a word from Clarke and Sons.", read!.Text);
+        Assert.DoesNotContain("That was", read.Text);
         Assert.Equal(SponsorMoment.AfterTheAdvert, read.Moment);
     }
 
@@ -502,7 +505,7 @@ public sealed class SponsorSalesCopyTests : IDisposable
         var read = _rig.Director.NextAdBreakRead(WholeCopy);
 
         Assert.NotNull(read);
-        Assert.StartsWith("That was Clarke and Sons.", read!.Text);
+        Assert.StartsWith("And now, a word from Clarke and Sons.", read!.Text);
     }
 
     [Fact]

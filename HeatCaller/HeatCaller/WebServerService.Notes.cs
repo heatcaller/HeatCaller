@@ -220,7 +220,7 @@ public sealed partial class WebServerService
             .catch(function(){ msg.textContent = 'Could not reach the laptop.'; send.disabled = false; });
         });
         </script>
-        {{LookWatchScript}}
+        <script>{{LookWatchScript}}</script>
         </body></html>
         """;
     }

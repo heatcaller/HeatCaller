@@ -43,8 +43,9 @@ public sealed class RecentWeeksTests : IDisposable
         int podiumRun = 0,
         int started = 11,
         bool finishedAll = false,
-        string lastOut = "3 October") =>
-        new(id, name, clubRan, out_, missed, podiumRun, started, finishedAll, lastOut);
+        string lastOut = "3 October",
+        int missedSince = 0) =>
+        new(id, name, clubRan, out_, missed, podiumRun, started, finishedAll, lastOut, missedSince);
 
     [Fact]
     public void A_run_of_podium_nights_says_how_many_and_over_what()
@@ -62,7 +63,7 @@ public sealed class RecentWeeksTests : IDisposable
         // is a claim about a career, and at a club running two classes it
         // is one a driver can disprove by naming the other.
         Assert.Contains(Stock, block.Text);
-        Assert.Contains("the club's last", block.Text);
+        Assert.Contains("the last four Box Stock nights they have raced", block.Text);
     }
 
     [Fact]
@@ -137,7 +138,7 @@ public sealed class RecentWeeksTests : IDisposable
         // A room would rather hear what somebody did than what they
         // missed, so this only lands when nothing else is true.
         var back = CommentaryWeekFacts.OneDriver(
-            Weeks(clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: "22 August"), Stock, "night-1");
+            Weeks(clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: "22 August", missedSince: 3), Stock, "night-1");
 
         Assert.NotNull(back);
         Assert.Contains("back after missing", back!.Text);
@@ -146,7 +147,7 @@ public sealed class RecentWeeksTests : IDisposable
         // And never without a date on it - "back after missing three
         // nights" with no "their last was" is a claim with nothing behind it.
         Assert.Null(CommentaryWeekFacts.OneDriver(
-            Weeks(clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: ""), Stock, "night-1"));
+            Weeks(clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: "", missedSince: 3), Stock, "night-1"));
     }
 
     [Fact]
@@ -197,7 +198,7 @@ public sealed class RecentWeeksTests : IDisposable
         // happened to be first on the grid.
         var grid = new[]
         {
-            Weeks(id: "A", name: "Sam", clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: "22 August"),
+            Weeks(id: "A", name: "Sam", clubRan: 6, out_: 3, missed: 3, started: 3, lastOut: "22 August", missedSince: 3),
             Weeks(id: "B", name: "Bill", clubRan: 6, out_: 6, missed: 0, started: 12, finishedAll: true),
             Weeks(id: "C", name: "Carl", podiumRun: 5),
         };

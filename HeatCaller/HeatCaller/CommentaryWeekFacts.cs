@@ -162,7 +162,7 @@ public static class CommentaryWeekFacts
             return 300 + driver.RacesStarted;
         }
 
-        return driver.NightsMissed;
+        return driver.NightsMissedSinceLastOut;
     }
 
     /// <summary>
@@ -248,10 +248,16 @@ public static class CommentaryWeekFacts
     {
         // A RUN OF PODIUM NIGHTS. The strongest of these by a long way,
         // and the one a regular would actually say out loud.
+        //
+        // "The last N they have raced", never "the club's last N": a night
+        // they missed does not break the run (see the class note), so the
+        // run can span a night they were not at, and "each of the club's
+        // last three" would then claim a top three on a night they were
+        // not there for - which the room can disprove.
         if (driver.PodiumNightsRunning >= LeastNightsRunning)
         {
-            return $"{who} has finished in the top three on each of the club's last "
-                   + $"{CommentaryHistoryFacts.Spell(driver.PodiumNightsRunning)} {nights}.";
+            return $"{who} has finished in the top three on each of the last "
+                   + $"{CommentaryHistoryFacts.Spell(driver.PodiumNightsRunning)} {nights} they have raced.";
         }
 
         // NOT MISSED ONE. Colour rather than news, and worth it: the
@@ -265,23 +271,28 @@ public static class CommentaryWeekFacts
 
         // FINISHED EVERYTHING THEY STARTED. The quiet virtue, and the one
         // thing a mid-pack regular is reliably better at than the fast
-        // drivers - which is exactly why it is worth saying.
+        // drivers - which is exactly why it is worth saying. The span is
+        // every night the club ran in the window, because that is what
+        // the races were counted over; the nights they were out at can be
+        // spread across it, so they are not "the club's last" anything.
         if (driver.FinishedEverything && driver.RacesStarted >= LeastRacesForClean)
         {
             return $"{who} has finished every one of the {Plural.Of(driver.RacesStarted, "race")} they have "
-                   + $"started over the club's last {CommentaryHistoryFacts.Spell(driver.NightsOut)} {nights}.";
+                   + $"started over the club's last {CommentaryHistoryFacts.Spell(driver.NightsTheClubRan)} {nights}.";
         }
 
         // BACK AFTER A WHILE AWAY, where the caller could date it. Last,
         // because it is the only one of the four that is about absence,
         // and a room would rather hear what somebody did than what they
-        // missed.
+        // missed. Counted on the nights missed SINCE they were last out,
+        // not every night missed in the window: a driver who raced last
+        // week and missed three nights a month ago is not "back".
         var lastOut = CommentaryFacts.CleanLong(driver.LastOutDescribed);
 
-        if (driver.NightsMissed >= LeastNightsRunning && lastOut.Length > 0)
+        if (driver.NightsMissedSinceLastOut >= LeastNightsRunning && lastOut.Length > 0)
         {
             return $"{who} is back after missing the club's last "
-                   + $"{CommentaryHistoryFacts.Spell(driver.NightsMissed)} {nights} - "
+                   + $"{CommentaryHistoryFacts.Spell(driver.NightsMissedSinceLastOut)} {nights} - "
                    + $"their last was {lastOut}.";
         }
 
@@ -314,12 +325,18 @@ public static class CommentaryWeekFacts
 /// <see cref="CommentaryWeekFacts"/>.
 /// </param>
 /// <param name="RacesStarted">How many races they started across the window - two or three a night at most clubs.</param>
-/// <param name="FinishedEverything">They finished every one of those races: no retirement, no disqualification.</param>
+/// <param name="FinishedEverything">They finished every one of those races: no retirement, no disqualification, no race saved with no laps.</param>
 /// <param name="LastOutDescribed">
 /// The day they were last out, as a commentator would date it - "3
 /// October". Only meaningful when they have missed nights since; empty
 /// when the caller could not date it, and the line about absence is then
 /// not said at all.
+/// </param>
+/// <param name="NightsMissedSinceLastOut">
+/// How many of the club's most recent nights they missed before the newest
+/// one they were out at - the nights "back after missing the club's last
+/// three" is about. Not <paramref name="NightsMissed"/>, which counts a
+/// miss anywhere in the window.
 /// </param>
 public sealed record DriverWeeks(
     string DriverId,
@@ -330,4 +347,5 @@ public sealed record DriverWeeks(
     int PodiumNightsRunning,
     int RacesStarted,
     bool FinishedEverything,
-    string LastOutDescribed);
+    string LastOutDescribed,
+    int NightsMissedSinceLastOut);

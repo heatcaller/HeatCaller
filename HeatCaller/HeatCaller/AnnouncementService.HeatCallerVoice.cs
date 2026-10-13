@@ -162,8 +162,11 @@ public sealed partial class AnnouncementService
         // The allowance is the one refusal that reaches past new lines: the
         // saved ones are passed over too, so the whole night is one voice.
         // (The same rule as HeatCallerSavedLinesPassedOver, read here in the
-        // one look above.)
-        if (!allowanceSpent && await VoiceLibrary.Shared.TryLoadAsync(profile, text) is { } saved)
+        // one look above.) So is a consent that is missing or taken back: a
+        // saved take is the person's voice as surely as a new one.
+        if (!allowanceSpent
+            && !HeatCallerConsentWithheld(profile)
+            && await VoiceLibrary.Shared.TryLoadAsync(profile, text) is { } saved)
         {
             return new SynthesisResult(saved, LineSource.Library);
         }
@@ -806,6 +809,37 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// Something a rest may have been over was just put right on this PC -
+    /// a consent recorded - so the next line tries the HeatCaller voice in
+    /// the background at once instead of waiting out the half hour a
+    /// settled refusal rests for. The usual probe, so the rest ends the
+    /// usual way: when the relay speaks a line.
+    ///
+    /// Not ResetHeatCallerVoiceState: that forgets a spent allowance too,
+    /// and recording a consent says nothing about the allowance.
+    /// </summary>
+    /// <param name="why">Lower case, to sit inside a sentence in the log.</param>
+    internal void RetryHeatCallerVoiceSoon(string why)
+    {
+        bool resting;
+
+        lock (_heatCallerLock)
+        {
+            resting = _heatCallerReason is not null;
+
+            if (resting)
+            {
+                _heatCallerRetryUtc = DateTime.MinValue;
+            }
+        }
+
+        if (resting)
+        {
+            StatusMessage?.Invoke($"[voice] {Capitalised(why)} - the HeatCaller voice is tried again with the next line.");
+        }
+    }
+
+    /// <summary>
     /// Whether saved HeatCaller takes are passed over for this profile right
     /// now: the HeatCaller voice chosen, and its month's allowance spent.
     /// The one rule behind the saved-line check in RenderWithHeatCallerAsync,
@@ -813,9 +847,15 @@ public sealed partial class AnnouncementService
     /// flag and release takes - so that none of them plays in the HeatCaller
     /// voice on a night the rest is in the Kokoro voice.
     ///
-    /// Only the allowance. While the relay merely can't be reached, saved
+    /// Of the relay's refusals, only the allowance. While the relay merely can't be reached, saved
     /// lines DO still play in the HeatCaller voice - that is what the docs
     /// promise, and what RenderWithHeatCallerAsync has always done.
+    ///
+    /// And the consent: a cloned voice with no consent on record, or one
+    /// taken back, passes its saved and prepared takes over too. Those were
+    /// rendered in the person's voice before, and the gate in SpeakAsync
+    /// only sees lines on their way to the relay - so without this, Take It
+    /// Back stopped new lines while every saved one went on playing.
     /// </summary>
     private bool HeatCallerSavedLinesPassedOver(VoiceProfile profile)
     {
@@ -824,11 +864,25 @@ public sealed partial class AnnouncementService
             return false;
         }
 
+        if (HeatCallerConsentWithheld(profile))
+        {
+            return true;
+        }
+
         lock (_heatCallerLock)
         {
             return _heatCallerAllowanceSpent;
         }
     }
+
+    /// <summary>
+    /// True when the consent gate would refuse this profile's HeatCaller
+    /// voice. With no client there are no settings to read and no relay
+    /// either, so nothing is passed over on its account - the app always
+    /// has one (MainForm sets it as it starts).
+    /// </summary>
+    private bool HeatCallerConsentWithheld(VoiceProfile profile) =>
+        HeatCallerVoice is { } client && !client.ConsentAllows(profile.HeatCallerVoice);
 
     /// <summary>The relay spoke a line: whatever it last refused for is over, and the allowance is as it just said.</summary>
     /// <param name="cached">
@@ -980,7 +1034,13 @@ public sealed partial class AnnouncementService
             or HeatCallerRefusal.NotIncluded
             or HeatCallerRefusal.Off
             or HeatCallerRefusal.NotAllowed
-            or HeatCallerRefusal.UnknownVoice;
+            or HeatCallerRefusal.UnknownVoice
+
+            // Settled, because nothing about it changes until somebody
+            // records the consent: every line for the rest of the night
+            // would otherwise say the same thing again. The club is told
+            // once, with what to do about it.
+            or HeatCallerRefusal.NoConsent;
 
         var reason = ex.Refusal switch
         {
@@ -989,6 +1049,11 @@ public sealed partial class AnnouncementService
             HeatCallerRefusal.Off => "the HeatCaller voice isn't switched on for this relay",
             HeatCallerRefusal.NotAllowed => "the relay didn't accept this club's token",
             HeatCallerRefusal.UnknownVoice => "that HeatCaller voice isn't available any more",
+
+            // The message carries VoiceConsent's own reason, which names
+            // the fix - so it is used as written rather than summarised
+            // into something a club cannot act on.
+            HeatCallerRefusal.NoConsent => ex.Message,
             HeatCallerRefusal.Busy => "the HeatCaller voice is busy",
             _ => "the HeatCaller relay can't be reached",
         };

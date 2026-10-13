@@ -303,12 +303,15 @@ public sealed partial class RaceControlControl
     /// that isn't the one already selected. Null when the program is done
     /// or there is no program.
     /// </summary>
-    private RoundDefinition? NextRound()
+    /// <param name="alsoSkip">A round to pass over as well - one just run whose result is not linked to it yet.</param>
+    private RoundDefinition? NextRound(string? alsoSkip = null)
     {
         var active = _activeRound?.Invoke();
 
         return OrderedProgram()
-            .FirstOrDefault(r => !r.IsRecorded && !string.Equals(r.Id, active?.Id, StringComparison.Ordinal));
+            .FirstOrDefault(r => !r.IsRecorded
+                                 && !string.Equals(r.Id, active?.Id, StringComparison.Ordinal)
+                                 && (alsoSkip is null || !string.Equals(r.Id, alsoSkip, StringComparison.Ordinal)));
     }
 
     /// <summary>

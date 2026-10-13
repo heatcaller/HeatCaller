@@ -49,7 +49,16 @@ public sealed class SponsorStore
                     // what the rotation counts a sponsor's reads against,
                     // so one without would be counted against every other
                     // sponsor that also had none. Filled in once, here.
-                    loaded.Sponsors = loaded.Sponsors ?? new List<SponsorBooking>();
+                    //
+                    // A null entry ("Sponsors": [ {...}, null ]) is dropped
+                    // here too. It threw on sponsor.Id below, and a throw in
+                    // here loads the whole file as unreadable - every sponsor
+                    // and slide gone, and the next edit saving that over the
+                    // club's file. Null text is filled in while here, so
+                    // nothing further along has to ask.
+                    loaded.Sponsors = (loaded.Sponsors ?? new List<SponsorBooking>())
+                        .Where(sponsor => sponsor is not null)
+                        .ToList();
 
                     foreach (var sponsor in loaded.Sponsors)
                     {
@@ -57,6 +66,11 @@ public sealed class SponsorStore
                         {
                             sponsor.Id = NewSponsorId();
                         }
+
+                        sponsor.Name ??= string.Empty;
+                        sponsor.Tagline ??= string.Empty;
+                        sponsor.SalesCopy ??= string.Empty;
+                        sponsor.PictureFileName ??= string.Empty;
                     }
 
                     return new SponsorStore(loaded);

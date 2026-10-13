@@ -11,7 +11,7 @@ namespace HeatCaller;
 /// <param name="AheadId">The transponder in front.</param>
 /// <param name="BehindId">The transponder behind.</param>
 /// <param name="Position">Where the car ahead is running. 1 is the lead.</param>
-/// <param name="GapSeconds">The gap at the line, as RaceGaps measures it.</param>
+/// <param name="GapSeconds">The gap at the line, as RaceGaps measures it. NaN when it cannot be measured this tick.</param>
 /// <param name="LapsDown">How many laps behind the car behind is. Anything but zero is not a fight.</param>
 public readonly record struct PairGap(string AheadId, string BehindId, int Position, double GapSeconds, int LapsDown);
 
@@ -102,6 +102,16 @@ public sealed class BattleWatch
     /// <summary>And how long in real time, so a fast polling loop cannot turn two seconds into a battle.</summary>
     public TimeSpan MinDuration { get; set; } = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// How long a fight is held, untouched, while its gap cannot be
+    /// measured. That happens for the moment between one car passing and
+    /// both having crossed the line, which is never longer than the new gap
+    /// itself, so a couple of seconds covers it at any tick rate. Bounded so
+    /// a gap that stays unmeasurable - a lap added by hand - cannot keep a
+    /// fight alive on numbers that are going stale.
+    /// </summary>
+    public TimeSpan UnmeasuredHold { get; set; } = TimeSpan.FromSeconds(2);
+
     /// <summary>How long the same pair is left alone after being talked about.</summary>
     public TimeSpan Cooldown { get; set; } = TimeSpan.FromMinutes(2);
 
@@ -131,11 +141,32 @@ public sealed class BattleWatch
 
             var key = CommentaryFacts.Pair(pair.AheadId, pair.BehindId);
 
+            // NO GAP THIS TICK IS NOT THE SAME AS APART. Straight after a
+            // pass the car now ahead has crossed and the other has not, and
+            // until it does there is no gap to measure. Ending the fight
+            // there threw away the very swap that makes it worth a line, so
+            // it is held as it stands and the next measured tick sees the
+            // new order and counts the lead change. Never started on one,
+            // and a lapped car is still dropped below.
+            if (double.IsNaN(pair.GapSeconds) && pair.LapsDown == 0)
+            {
+                if (_streaks.TryGetValue(key, out var held) && now - held.Last <= UnmeasuredHold)
+                {
+                    seen.Add(key);
+                }
+                else
+                {
+                    _streaks.Remove(key);
+                }
+
+                continue;
+            }
+
             // A lapped car is not racing the car it happens to be behind.
             // Without this the leader catching a backmarker reads as the
             // fight of the night, which is the most embarrassing thing an
             // announcer can say.
-            if (pair.LapsDown != 0 || pair.GapSeconds < 0 || pair.GapSeconds > CloseSeconds)
+            if (pair.LapsDown != 0 || double.IsNaN(pair.GapSeconds) || pair.GapSeconds < 0 || pair.GapSeconds > CloseSeconds)
             {
                 _streaks.Remove(key);
                 continue;

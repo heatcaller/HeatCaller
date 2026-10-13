@@ -538,6 +538,25 @@ internal sealed class ShowBlock
             // has gone out.
             var exempt = !anySegment && !item.IsContinuity && ask <= room + Overrun;
 
+            // An exempt segment skips the running total below, so whatever
+            // went out in front of it - a look-back bridge, the voice-ID -
+            // would push the overrun past Overrun's bound. Nothing but
+            // continuity can be in front of the first segment, and
+            // continuity is what comes off first, so it comes off here and
+            // the segment goes out as the first item, paying no settle or
+            // mark.
+            if (exempt && total + ask > room + Overrun)
+            {
+                for (var j = 0; j < i; j++)
+                {
+                    going[j] = false;
+                }
+
+                total = TimeSpan.Zero;
+                taken = 0;
+                ask = item.Estimate;
+            }
+
             if (!exempt && total + ask > room)
             {
                 if (item.IsContinuity)

@@ -58,6 +58,18 @@ public sealed partial class RelayPublisher
     /// <summary>The state last told to the relay, so a club switching it off is actually sent the change.</summary>
     private volatile bool _notesOpenAsTold;
 
+    /// <summary>
+    /// And whether the relay was last told the night's list is full, so a
+    /// list that fills - or empties - is sent rather than inferred.
+    ///
+    /// SEPARATE FROM THE OPEN FLAG because it changes on a different
+    /// clock. Open changes about twice a season; full changes several
+    /// times an evening as the race director reads notes out. Both ride on
+    /// the same request - there is only one flag document on the relay -
+    /// but either changing has to send it.
+    /// </summary>
+    private volatile bool _notesFullAsTold;
+
     /// <summary>What went wrong collecting shout-outs from the relay, or null.</summary>
     public string? NotesProblem => _notesProblem;
 
@@ -104,7 +116,11 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        if (!TellTheRelayNotesAreOpen(target, club, wanted: true, token))
+        // FULL IS SENT WITH OPEN, every poll where either has changed.
+        // Without it the relay takes a note the night's list has no room
+        // for, answers the sender yes, and this method collects it and
+        // throws it away - see ClubNotes.NoRoomFromTheRoom.
+        if (!TellTheRelayNotesAreOpen(target, club, wanted: true, full: notes.NoRoomFromTheRoom, token))
         {
             return;
         }
@@ -215,9 +231,14 @@ public sealed partial class RelayPublisher
     /// False when it could not be sent, and then nothing is collected -
     /// the relay would answer 404 anyway.
     /// </summary>
-    private bool TellTheRelayNotesAreOpen(RelayTarget target, string club, bool wanted, CancellationToken token)
+    private bool TellTheRelayNotesAreOpen(
+        RelayTarget target,
+        string club,
+        bool wanted,
+        bool full,
+        CancellationToken token)
     {
-        if (_notesOpenTold && _notesOpenAsTold == wanted)
+        if (_notesOpenTold && _notesOpenAsTold == wanted && _notesFullAsTold == full)
         {
             return true;
         }
@@ -227,7 +248,7 @@ public sealed partial class RelayPublisher
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/notes/open");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
             request.Content = new StringContent(
-                JsonSerializer.Serialize(new { open = wanted }), Encoding.UTF8, "application/json");
+                JsonSerializer.Serialize(new { open = wanted, full }), Encoding.UTF8, "application/json");
 
             using var response = Send(request, token);
 
@@ -241,6 +262,7 @@ public sealed partial class RelayPublisher
             }
 
             _notesOpenAsTold = wanted;
+            _notesFullAsTold = full;
             _notesOpenTold = true;
 
             return true;
@@ -328,6 +350,10 @@ public sealed partial class RelayPublisher
         // On a thread of its own: this is called from a settings page, and
         // a page that waited for a network round trip to redraw a tick box
         // is a page that appears to have frozen.
-        Task.Run(() => TellTheRelayNotesAreOpen(target, club, wanted: false, CancellationToken.None));
+        // full: false with it, because a closed club has no list to be
+        // full - and leaving the old value behind would have the relay
+        // holding "off and full", which is two reasons to refuse where
+        // there is one.
+        Task.Run(() => TellTheRelayNotesAreOpen(target, club, wanted: false, full: false, CancellationToken.None));
     }
 }

@@ -12,7 +12,19 @@ namespace HeatCaller;
 /// a voice re-tuned on the relay is rendered again rather than played from
 /// a take that no longer matches.
 /// </summary>
-internal sealed record HeatCallerVoiceChoice(string Id, string Name, string What, string Rev)
+/// <param name="Cloned">
+/// The relay says this voice is a CLONE of a real person - a club's own
+/// announcer. Nothing is spoken in it until the club has recorded that
+/// they agreed; see VoiceConsent.
+///
+/// FROM THE RELAY AND NOWHERE ELSE, which is the point. The laptop is
+/// never told whose voice it is, nor the real ElevenLabs id behind it -
+/// only that consent is required. A laptop that decided this for itself
+/// would decide wrong the first time somebody ran an old build, so it is
+/// asked rather than assumed. The default is false only because a relay
+/// that does not mention it has no clones to mention.
+/// </param>
+internal sealed record HeatCallerVoiceChoice(string Id, string Name, string What, string Rev, bool Cloned = false)
 {
     public override string ToString() => string.IsNullOrWhiteSpace(What) ? Name : $"{Name} - {What}";
 }
@@ -78,6 +90,18 @@ internal enum HeatCallerRefusal
 
     /// <summary>The relay does not know this club, or the token is wrong.</summary>
     NotAllowed,
+
+    /// <summary>
+    /// The voice is a clone of a real person and this PC has no record
+    /// that they agreed to it - see VoiceConsent.
+    ///
+    /// REFUSED BEFORE ANYTHING LEAVES THE LAPTOP, unlike every other
+    /// refusal here, which are all answers from the relay. That is
+    /// deliberate: a line already sent is a line already rendered in
+    /// somebody's voice, and asking afterwards whether that was allowed is
+    /// asking too late.
+    /// </summary>
+    NoConsent,
 }
 
 /// <summary>Thrown by <see cref="HeatCallerVoiceClient"/> with a reason the announcer can act on and a sentence a person can read.</summary>
@@ -180,6 +204,17 @@ internal sealed class HeatCallerVoiceClient
     /// surprise.
     /// </summary>
     internal bool UsingVoiceRelay => RelayPublisher.NormaliseBaseUrl(_settings.VoiceRelayBaseUrl).Length > 0;
+
+    /// <summary>
+    /// Whether the consent gate in SpeakAsync would let a line out in this
+    /// voice right now. For the takes that never reach SpeakAsync - the
+    /// saved and prepared ones, rendered in the voice on an earlier night -
+    /// so that taking a consent back stops those too, not only new lines.
+    /// The same rule, read from the same settings.
+    /// </summary>
+    internal bool ConsentAllows(string? voiceId) =>
+        VoiceConsent.Allows(VoiceConsent.MaySpeakWith(
+            voiceId, _settings.HeatCallerVoiceIsCloned(voiceId), _settings.HeatCallerVoiceConsent()));
 
     /// <summary>Where this laptop's relay is, or null when the Club Website page has not been set up. Read once per call - the settings change on the UI thread.</summary>
     private (string Root, string Club, string Token)? Target()
@@ -386,7 +421,14 @@ internal sealed class HeatCallerVoiceClient
                             id,
                             Text(entry, "name") is { Length: > 0 } name ? name : id,
                             Text(entry, "what"),
-                            Text(entry, "rev")));
+                            Text(entry, "rev"),
+
+                            // Only the literal true. Anything else -
+                            // absent, a string, a number - is not a clone,
+                            // which is the same opt-in rule the relay's own
+                            // config parser applies at the other end.
+                            entry.TryGetProperty("cloned", out var cloned)
+                                && cloned.ValueKind == JsonValueKind.True));
                     }
                 }
 
@@ -435,6 +477,29 @@ internal sealed class HeatCallerVoiceClient
         if (string.IsNullOrWhiteSpace(voiceId))
         {
             throw new HeatCallerVoiceException(HeatCallerRefusal.UnknownVoice, "No HeatCaller voice is chosen.");
+        }
+        // THE CONSENT BEHIND A CLONED VOICE, checked here and nowhere
+        // else on the way out, because this is the one method every spoken
+        // line in the app passes through on its way to the relay.
+        //
+        // BEFORE THE REQUEST, not after. Every other refusal in this class
+        // is the relay's answer to something already sent - and a line
+        // already sent is a line already rendered in somebody's voice, so
+        // asking then whether that was allowed is asking too late.
+        //
+        // Fails closed: anything short of a recorded, unrevoked consent
+        // naming somebody, FOR THIS VOICE, refuses - and a refusal here is
+        // not a silence. It throws like every other one, the caller falls
+        // back to the free Kokoro voice, and the console says which of
+        // VoiceConsent's reasons it was and what to do about it.
+        var allowed = VoiceConsent.MaySpeakWith(
+            voiceId, _settings.HeatCallerVoiceIsCloned(voiceId), _settings.HeatCallerVoiceConsent());
+
+        if (!VoiceConsent.Allows(allowed))
+        {
+            throw new HeatCallerVoiceException(
+                HeatCallerRefusal.NoConsent,
+                "Nothing was spoken in the club's own voice because " + VoiceConsent.Because(allowed));
         }
 
         if (string.IsNullOrWhiteSpace(text))
@@ -760,6 +825,26 @@ internal sealed class HeatCallerVoiceClient
         if (string.IsNullOrWhiteSpace(voiceId))
         {
             throw new HeatCallerVoiceException(HeatCallerRefusal.UnknownVoice, "No HeatCaller voice is chosen.");
+        }
+        // THE SAME GATE ON THE PREVIEW, and it is worth saying why rather
+        // than treating it as thoroughness.
+        //
+        // A preview is a render of the voice, so previewing a cloned voice
+        // with no consent on file renders a real person saying something
+        // just as surely as a race call does. It is not the step where a
+        // club DISCOVERS the voice either - the relay only offers a club a
+        // cloned voice once its operator has put it on that club's list,
+        // which means the club already arranged the clone. So there is no
+        // chicken and egg here to be generous about: record the consent,
+        // then listen.
+        var mayPreview = VoiceConsent.MaySpeakWith(
+            voiceId, _settings.HeatCallerVoiceIsCloned(voiceId), _settings.HeatCallerVoiceConsent());
+
+        if (!VoiceConsent.Allows(mayPreview))
+        {
+            throw new HeatCallerVoiceException(
+                HeatCallerRefusal.NoConsent,
+                "That voice was not previewed because " + VoiceConsent.Because(mayPreview));
         }
 
         if (string.IsNullOrWhiteSpace(text))

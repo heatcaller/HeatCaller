@@ -163,6 +163,35 @@ internal static class CloudBackupStatus
         settings.LastCloudBackupProblem = string.Join(" ", failed.Select(o => o.Line));
     }
 
+    /// <summary>
+    /// Keeps the written-down result true when the club ticks or unticks a
+    /// service, because Assess reads it as being about the services ticked
+    /// now. A service ticked on has never had a copy, so no copy has reached
+    /// every service switched on yet: the light reads "Not yet" rather than
+    /// green on the strength of the others. The last problem is kept, as it
+    /// is about services that are all still ticked. A service ticked off
+    /// leaves the time true (that copy reached the rest too), but the last
+    /// problem may have been about the one just switched off, and saying it
+    /// beside a red light for up to a day would be wrong - so it goes, and
+    /// with it the time, since a round that had a problem was not a full
+    /// success for the services left either; the next backup settles it.
+    /// Does NOT save the settings; the caller does.
+    /// </summary>
+    public static void ServiceSwitched(AppSettings settings, bool switchedOn)
+    {
+        if (switchedOn)
+        {
+            settings.LastCloudBackupUtc = null;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.LastCloudBackupProblem))
+        {
+            settings.LastCloudBackupUtc = null;
+            settings.LastCloudBackupProblem = string.Empty;
+        }
+    }
+
     /// <summary>"OneDrive", "OneDrive and Dropbox", "Google Drive, iCloud Drive and OneDrive".</summary>
     private static string Names(IEnumerable<Service> services) => Names(services.Select(s => s.Name));
 

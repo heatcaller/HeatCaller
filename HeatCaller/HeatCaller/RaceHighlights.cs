@@ -397,7 +397,15 @@ internal static class RaceHighlights
                 .ToList();
 
             var windows = Merge(kept.Select(mark => WindowFor(mark, greenAtMs, lengthMs)), JoinGapMs);
-            windows = WithinBudget(windows, MaxPerDriverMs);
+
+            // The podium is kept BEFORE the budget is spent, not after. It is
+            // always the latest stretch - it starts at the flag - and the
+            // budget is spent earliest first, so a winner who came through
+            // the field would otherwise use it all on the passes and lose
+            // the finish, the result and the interview.
+            windows = kept.FirstOrDefault(mark => mark.What == Moment.Podium) is { } flag
+                ? KeepingPodium(windows, WindowFor(flag, greenAtMs, lengthMs), MaxPerDriverMs)
+                : WithinBudget(windows, MaxPerDriverMs);
 
             var total = windows.Sum(window => window.LengthMs);
 
@@ -490,6 +498,65 @@ internal static class RaceHighlights
         }
 
         return kept;
+    }
+
+    /// <summary>
+    /// <see cref="WithinBudget"/> with the stretch holding the podium kept
+    /// first, then as many of the others as still fit, earliest first and
+    /// whole, handed back in time order.
+    ///
+    /// A podium stretch longer than the budget on its own (a run of moments
+    /// right up to the flag that merged into it) is trimmed from the FRONT,
+    /// so what goes is the approach rather than the finish.
+    /// </summary>
+    private static List<Window> KeepingPodium(IReadOnlyList<Window> windows, Window podium, long budgetMs)
+    {
+        // Merge leaves the stretches apart, so the podium lies wholly inside
+        // exactly one of them. None when the flag is past the end of the
+        // file - nothing of it was recorded, so there is nothing to keep.
+        var at = -1;
+
+        for (var i = 0; i < windows.Count; i++)
+        {
+            if (podium.LengthMs > 0 && windows[i].StartMs <= podium.StartMs && windows[i].EndMs >= podium.EndMs)
+            {
+                at = i;
+                break;
+            }
+        }
+
+        if (at < 0)
+        {
+            return WithinBudget(windows, budgetMs);
+        }
+
+        var reserved = windows[at];
+
+        if (reserved.LengthMs > budgetMs)
+        {
+            return new List<Window> { reserved with { StartMs = reserved.EndMs - budgetMs } };
+        }
+
+        var kept = new List<Window> { reserved };
+        var used = reserved.LengthMs;
+
+        for (var i = 0; i < windows.Count; i++)
+        {
+            if (i == at)
+            {
+                continue;
+            }
+
+            if (used + windows[i].LengthMs > budgetMs)
+            {
+                break;
+            }
+
+            kept.Add(windows[i]);
+            used += windows[i].LengthMs;
+        }
+
+        return kept.OrderBy(window => window.StartMs).ToList();
     }
 
     /// <summary>

@@ -74,6 +74,9 @@ public sealed class ContinuityVoice
     /// <summary>Every continuity line the room has actually heard tonight.</summary>
     private readonly HashSet<string> _heard = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The line each pool last handed out through <see cref="PickOrRepeat"/>, so a repeat is never the same words twice running.</summary>
+    private readonly Dictionary<string, string> _lastOut = new(StringComparer.Ordinal);
+
     private readonly Random _shuffle;
 
     private string _dayId = string.Empty;
@@ -88,6 +91,15 @@ public sealed class ContinuityVoice
 
     /// <summary>How many continuity lines the room has heard tonight. For the console and the tests.</summary>
     public int Heard => _heard.Count;
+
+    /// <summary>
+    /// Told each time the room hears a line it had not heard tonight, so the
+    /// owner can write the night down (CommentaryDirector.Save). Continuity
+    /// goes out with the AI switched off, when no paid segment ever runs to
+    /// save anything - so waiting for one would lose the night on a restart.
+    /// On the thread <see cref="Said"/> is called on, which is the UI's.
+    /// </summary>
+    public Action? LineHeard { get; set; }
 
     /// <summary>True when this exact line has already been heard tonight.</summary>
     public bool AlreadyHeard(string? line) =>
@@ -112,6 +124,64 @@ public sealed class ContinuityVoice
         _bags.Clear();
         _last.Clear();
         _heard.Clear();
+        _lastOut.Clear();
+    }
+
+    private sealed record SavedNight(string DayId, List<string>? Lines);
+
+    /// <summary>Tonight's heard lines, for AppSettings to hold across a restart - the continuity half of SaidTonight.Save.</summary>
+    public string Save() =>
+        System.Text.Json.JsonSerializer.Serialize(new SavedNight(_dayId, _heard.ToList()));
+
+    /// <summary>
+    /// <see cref="NewMeeting"/>, picking tonight's heard lines back up when
+    /// the saved night is the same race day - so a laptop closed between the
+    /// heats and the mains does not come back and offer the room the same
+    /// sentences again. Anything unreadable is a fresh night, not a throw.
+    ///
+    /// Only when the day actually changes, which includes the first call
+    /// after the app starts: the host calls this twice a second, and the
+    /// lines heard since then are already in memory.
+    /// </summary>
+    public void Restore(string? saved, string? dayId)
+    {
+        var day = dayId ?? string.Empty;
+
+        if (string.Equals(_dayId, day, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        NewMeeting(day);
+
+        if (string.IsNullOrWhiteSpace(saved))
+        {
+            return;
+        }
+
+        SavedNight? night;
+
+        try
+        {
+            night = System.Text.Json.JsonSerializer.Deserialize<SavedNight>(saved);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return;
+        }
+
+        if (night is null || !string.Equals(night.DayId, day, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        foreach (var line in night.Lines ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                _heard.Add(line.Trim());
+            }
+        }
     }
 
     /// <summary>
@@ -187,10 +257,59 @@ public sealed class ContinuityVoice
     /// </summary>
     public void Said(string? line)
     {
-        if (!string.IsNullOrWhiteSpace(line))
+        // Not written down before a race day is known: the honours can be
+        // heard with the commentary switched off, when the director is never
+        // told the day, and a save with no day in it would overwrite the
+        // night a restart is meant to pick back up.
+        if (!string.IsNullOrWhiteSpace(line) && _heard.Add(line.Trim()) && _dayId.Length > 0)
         {
-            _heard.Add(line.Trim());
+            LineHeard?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// <see cref="Pick"/>, except that once every phrasing has been heard
+    /// tonight one is said again rather than none - the bag still turning,
+    /// and never the same words as this pool's last.
+    ///
+    /// ONLY FOR A LINE WHOSE SILENCE COSTS MORE THAN A REPEAT. The honours
+    /// hand-back is one: without it the whole segment is dropped (see
+    /// RaceHonours.Segment), so a pool of sixteen fixed sentences was
+    /// silencing the honours for the rest of a busy night. A bridge is not
+    /// one - a gap with one item fewer is fine, which is why Pick refuses.
+    /// </summary>
+    public string? PickOrRepeat(string pool, IReadOnlyList<string> candidates)
+    {
+        var picked = Pick(pool, candidates);
+
+        if (picked is null)
+        {
+            var lines = candidates
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+                .Select(candidate => candidate.Trim())
+                .ToList();
+
+            _lastOut.TryGetValue(pool, out var before);
+
+            // Bounded, for Pick's reason: a refilled bag can offer the same
+            // index again, and a hang is worse than a repeat.
+            for (var attempt = 0; attempt < lines.Count * 3 && picked is null; attempt++)
+            {
+                var line = lines[NextIndex(pool, lines.Count)];
+
+                if (lines.Count == 1 || !string.Equals(line, before, StringComparison.OrdinalIgnoreCase))
+                {
+                    picked = line;
+                }
+            }
+        }
+
+        if (picked is not null)
+        {
+            _lastOut[pool] = picked;
+        }
+
+        return picked;
     }
 
     /// <summary>Which phrasing of <paramref name="pool"/> is next out of the bag.</summary>

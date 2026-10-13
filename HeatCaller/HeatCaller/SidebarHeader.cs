@@ -655,9 +655,12 @@ public sealed class SidebarHeader : Control
     /// title is a single word - "HEATCALLER" is one word, and the app's own
     /// mark is "HC", not "H".
     /// </summary>
-    private string Initials()
+    private string Initials() => InitialsOf(_titleLine1, _titleLine2);
+
+    /// <summary>The working of Initials, apart from a header so it can be checked without one.</summary>
+    internal static string InitialsOf(string titleLine1, string titleLine2)
     {
-        var words = $"{_titleLine1} {_titleLine2}".Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var words = $"{titleLine1} {titleLine2}".Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         if (words.Length == 0)
         {
@@ -667,6 +670,13 @@ public sealed class SidebarHeader : Control
         if (words.Length == 1)
         {
             var only = words[0];
+
+            // The app's own name is one word written as two - HEAT and
+            // CALLER - so its first two letters came out as "HE".
+            if (string.Equals(only, "HEATCALLER", StringComparison.OrdinalIgnoreCase))
+            {
+                return "HC";
+            }
 
             return (only.Length >= 2 ? only[..2] : only).ToUpperInvariant();
         }

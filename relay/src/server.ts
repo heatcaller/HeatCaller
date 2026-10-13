@@ -192,6 +192,18 @@ const NOTES_CHANNEL = "notes";
 const NOTES_OPEN_DOC = "notesopen";
 
 /**
+ * Whether this club is letting people listen along from home.
+ *
+ * Off-channel, like the notes and the vote switches, and for the same
+ * reason: it is a setting rather than something a page reads, and a
+ * channel would make it publishable by name and keep a history of it.
+ */
+const LISTEN_OPEN_DOC = "listenopen";
+
+/** The collection the announcer's lines arrive in - see CHANNELS.listen. */
+const LISTEN_CHANNEL = "listen";
+
+/**
  * A note's whole body, in bytes.
  *
  * One kilobyte. The message itself is capped far below this
@@ -1200,6 +1212,7 @@ export class Relay {
   private async lookFor(club: string): Promise<Look> {
     const site = await this.siteOf(club);
     let checkIn = false;
+    let listening = false;
 
     try {
       checkIn = (await this.checkinOf(club))?.enabled === true;
@@ -1207,7 +1220,18 @@ export class Relay {
       // As before: a check-in document that cannot be read is check-in closed.
     }
 
-    return checkIn === site.look.checkIn ? site.look : { ...site.look, checkIn };
+    try {
+      listening = await this.listeningOpenFor(club);
+    } catch {
+      // And the same rule: a switch that cannot be read is a switch that
+      // is off. The page then offers nothing, which is the right way for
+      // this one to fail - a Listen button that answers nothing is worse
+      // than no button.
+    }
+
+    return checkIn === site.look.checkIn && listening === site.look.listening
+      ? site.look
+      : { ...site.look, checkIn, listening };
   }
 
   /**
@@ -1994,6 +2018,15 @@ export class Relay {
       return;
     }
 
+    // Listening along from home. One route, and the same shape as the
+    // notes switch above: the laptop says whether its club wants it, and
+    // switching it off clears what is held. The lines themselves arrive
+    // through publish/listen like anything else.
+    if (method === "POST" && rest.length === 2 && rest[0] === "listen" && rest[1] === "open") {
+      await this.setListeningOpen(request, response, club);
+      return;
+    }
+
     // The room's vote. Same shape again: the laptop publishes the ballot
     // and reads the votes with the publish token it already has, and the
     // two public routes let anybody with the link see the grid and pick
@@ -2158,6 +2191,26 @@ export class Relay {
       return;
     }
 
+    // THE ANNOUNCER'S VOICE IS REFUSED UNTIL THE CLUB HAS SAID YES.
+    //
+    // Refused rather than quietly dropped, and refused HERE rather than
+    // trusted to the laptop not to send. The laptop has its own switch and
+    // will not send with it off, but a switch on one machine is not a
+    // guarantee: an older build, a restored backup, a second laptop
+    // somebody set up with the same token. This is the club's own voice
+    // going onto a public address, so the relay is the thing that holds
+    // the line.
+    //
+    // 403 and said plainly, because the laptop has a bug worth seeing if
+    // it is sending these at all.
+    if (spec.name === LISTEN_CHANNEL && !(await this.listeningOpenFor(club))) {
+      sendJson(response, 403, {
+        ok: false,
+        error: "This club is not letting people listen along, so the announcer's lines are not accepted.",
+      });
+      return;
+    }
+
     const limit =
       spec.kind === "collection"
         ? Math.min(this.maxBodyBytes, spec.maxItemBytes ?? COLLECTION_ITEM_MAX_BYTES)
@@ -2285,6 +2338,14 @@ export class Relay {
           }
         }
       } else {
+        // Read again inside the lock: the club may have switched listening
+        // off while this line was arriving, and that switch takes down
+        // every line under this same lock. Written after it, this line
+        // would sit on a public address the club has just said no to.
+        if (spec.name === LISTEN_CHANNEL && !(await this.listeningOpenFor(club))) {
+          return "closed" as const;
+        }
+
         const victims = await this.planRoom(spec, club, itemId as string, Buffer.byteLength(JSON.stringify(doc)));
 
         if (victims === undefined) {
@@ -2306,6 +2367,15 @@ export class Relay {
 
       return { applied: true, seq };
     });
+
+    // The same refusal as before the body was read. See there.
+    if (outcome === "closed") {
+      sendJson(response, 403, {
+        ok: false,
+        error: "This club is not letting people listen along, so the announcer's lines are not accepted.",
+      });
+      return;
+    }
 
     // Its own budget, not the club's quota, is what a channel like the
     // results index runs out of - and only later documents fill it.
@@ -2368,7 +2438,32 @@ export class Relay {
     // ChannelSpec.ownBudget for what that was costing.
     if (spec.ownBudget !== undefined) {
       let mine = others.reduce((sum, item) => sum + item.bytes, 0) + bytes;
+      let mineCount = others.length + 1;
       const mineVictims: string[] = [];
+
+      // A ROLLING CHANNEL EVICTS BY AGE AND HONOURS ITS COUNT. Everything
+      // below this is written for resultsindex, whose ids are calendar
+      // years, and neither half of it generalises - see
+      // ChannelSpec.rollOldest. `others` is already sorted oldest-written
+      // first, every one of them is a candidate, and maxItems is a real
+      // limit here rather than one the branch never reaches.
+      if (spec.rollOldest === true) {
+        for (const item of others) {
+          if (mineCount <= maxItems && mine <= spec.ownBudget) {
+            break;
+          }
+
+          mineVictims.push(item.id);
+          mine -= item.bytes;
+          mineCount--;
+        }
+
+        // Still over after dropping every other item means this one
+        // document is bigger than the whole budget, which maxItemBytes
+        // should already have refused. Refusing beats keeping nothing but
+        // it.
+        return mine > spec.ownBudget ? undefined : mineVictims;
+      }
 
       // Oldest by id, not by when it was written. The only such channel is
       // resultsindex, keyed by calendar year, and its promise is that the
@@ -5028,6 +5123,34 @@ export class Relay {
   }
 
   /**
+   * Whether the club's own list for tonight has room for another.
+   *
+   * THE THIRD STATE, AND IT CLOSES A LIE (13 Oct 2026). Open and closed
+   * were the only two, and "open" meant "the relay will take it" rather
+   * than "the club can use it". The relay holds forty; the night's list
+   * on the laptop takes twelve from the room (ClubNotes.MostFromTheRoom),
+   * and nothing told the relay which number mattered. So the thirteenth
+   * sender was answered {"ok":true}, had their message collected off the
+   * relay, and had it refused on the laptop - with the only trace a line
+   * in the club's own console. They were told it went through. It did not.
+   *
+   * SET BY THE LAPTOP, like the open flag and for the same reason: the
+   * relay does not know what a note is, cannot count the ones the club
+   * typed itself, and must not learn. It is told on the notes poll, which
+   * runs every thirty seconds anyway.
+   *
+   * ABSENT MEANS ROOM. A laptop from before this says nothing about being
+   * full, and the honest reading of silence is the old behaviour - take
+   * the note - rather than refusing every sender at a club that has not
+   * updated.
+   */
+  private async notesFullFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, NOTES_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["full"] === true;
+  }
+
+  /**
    * The laptop saying whether its club takes shout-outs - sent when the
    * setting changes and on every start, so a club that turns it off is
    * closed on the relay too rather than merely ignoring what arrives.
@@ -5054,10 +5177,15 @@ export class Relay {
 
     const open = body["open"] === true;
 
+    // Whether the club's list for tonight has room - see notesFullFor. A
+    // laptop that does not send it is not full, which is the old
+    // behaviour and the right reading of silence.
+    const full = body["full"] === true;
+
     await this.store.putSnapshot(club, NOTES_OPEN_DOC, {
       seq: this.now().getTime(),
       publishedAt: this.now().toISOString(),
-      body: { open },
+      body: { open, full },
     });
 
     // CLOSING CLEARS WHAT IS HELD. A club switching this off has decided
@@ -5068,6 +5196,84 @@ export class Relay {
         for (const item of await this.store.listItems(club, NOTES_CHANNEL)) {
           await this.store.deleteItem(club, NOTES_CHANNEL, item.id);
         }
+      });
+    }
+
+    sendJson(response, 200, { ok: true, open });
+  }
+
+  /**
+   * Whether this club is letting people listen along from home.
+   *
+   * ABSENT MEANS NO, which is the same default every public route on this
+   * relay has and the one the plan asked for by name. A room's announcer
+   * saying something unfortunate about a ten-year-old's driving is a
+   * different matter in a hall and on the internet, so a club that has
+   * never been asked has not agreed.
+   */
+  private async listeningOpenFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, LISTEN_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["open"] === true;
+  }
+
+  /**
+   * The laptop saying whether its club is letting people listen along -
+   * sent when the setting changes and on every start, so a club that
+   * turns it off is closed on the relay too rather than merely stopping
+   * sending.
+   *
+   * Both halves matter. Stopping sending leaves the last few minutes of
+   * an evening sitting on a public address for as long as the club's
+   * budget holds them; closing the switch is what takes them down.
+   */
+  private async setListeningOpen(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const open = body["open"] === true;
+
+    await this.store.putSnapshot(club, LISTEN_OPEN_DOC, {
+      seq: this.now().getTime(),
+      publishedAt: this.now().toISOString(),
+      body: { open },
+    });
+
+    // CLOSING TAKES DOWN WHAT IS HELD, for the reason the notes switch
+    // clears its own pile: a club switching this off has decided it does
+    // not want its announcer on the internet, and leaving the last few
+    // minutes of it there would be keeping exactly what it just declined.
+    if (!open) {
+      await this.withLock(club, async () => {
+        for (const item of await this.store.listItems(club, LISTEN_CHANNEL)) {
+          await this.store.deleteItem(club, LISTEN_CHANNEL, item.id);
+        }
+
+        // AND THE CACHED LISTING WITH THEM, which the notes switch does
+        // not have to do and this one does. Notes are off-channel and are
+        // only ever read by the laptop through notes/inbox; `listen` is a
+        // PUBLIC collection served through the cached listing route, so
+        // deleting the files alone left the last few minutes of the
+        // evening being handed out of memory to anybody who asked. Caught
+        // by a test rather than by reading - prune pairs its own deletes
+        // with this call for the same reason.
+        this.forgetListing(club, LISTEN_CHANNEL);
       });
     }
 
@@ -5129,7 +5335,17 @@ export class Relay {
         return "closed" as const;
       }
 
+      // TWO WAYS TO BE FULL, and until now only the first was checked.
+      // The relay's own buffer filling is rare - forty held means a laptop
+      // that has not collected for a while. The club's night list filling
+      // is ORDINARY: twelve from the room is a busy evening, and it was
+      // the case that answered a sender "yes" and then threw their
+      // message away. See notesFullFor.
       if ((await this.store.itemSizes(club, NOTES_CHANNEL)).length >= NOTES_HELD_MOST) {
+        return "full" as const;
+      }
+
+      if (await this.notesFullFor(club)) {
         return "full" as const;
       }
 
@@ -5323,7 +5539,33 @@ export class Relay {
 
     const enabled = body["enabled"] === true;
     const open = enabled && body["open"] === true;
+
+    // The race's LABEL, which is for showing people and nothing else.
     const race = typeof body["race"] === "string" ? body["race"].trim().slice(0, VOTE_MAX_CHARS) : "";
+
+    // AND ITS ID, WHICH IS WHAT IDENTITY IS DECIDED ON (13 Oct 2026).
+    // Until now the label was both, and the laptop had already written
+    // down why that cannot work: a club running two classes has two
+    // rounds both labelled "A-Main" (RoomVote.IsTheRace, which refuses
+    // the label for exactly this reason and says it is "the worst failure
+    // this feature has available to it"). The relay was doing the thing
+    // the app refuses to do, and it cost two separate things:
+    //
+    //   the votes were not cleared, because sameRace came out true - so
+    //   the Mod A-main's ballot opened with the Stock A-main's votes
+    //   already in it, which is the one case the clearing block below
+    //   exists to prevent;
+    //
+    //   and the salt was reused, which breaks the promise this route's own
+    //   comment makes - "a new one per ballot means two races cannot be
+    //   correlated". With one label over two races the same voter kept the
+    //   same hashed id across both, and the whole point of minting a salt
+    //   per ballot is that they cannot.
+    const raceKey = typeof body["raceKey"] === "string" ? body["raceKey"].trim().slice(0, VOTE_MAX_CHARS) : "";
+
+    // The laptop's own id for this poll. Absent from a laptop older than
+    // it, and then the race's label is all there is to go on.
+    const ballotId = typeof body["ballot"] === "string" ? body["ballot"].trim().slice(0, VOTE_MAX_CHARS) : "";
 
     const offered = Array.isArray(body["drivers"]) ? (body["drivers"] as unknown[]) : [];
 
@@ -5352,9 +5594,41 @@ export class Relay {
     // A NEW BALLOT IS A NEW RACE, so the votes for the one before it go.
     // Without this, opening the B-main's vote would start it with the
     // A-main's votes already in it.
+    //
+    // BY THE POLL'S ID when both ballots carry one. The label alone took a
+    // vote reopened on the same race for the same vote, kept the relay's
+    // votes, and handed them back into the laptop's new, empty poll.
     const previous = (await this.store.getSnapshot(club, VOTE_BALLOT_DOC))?.body;
+    const previousId = isPlainObject(previous) && typeof previous["ballot"] === "string" ? previous["ballot"] : "";
+
+    // THE ID WHERE THERE IS ONE, THE LABEL WHERE THERE IS NOT, and that
+    // fallback is deliberate rather than tidy. A laptop from before this
+    // change sends no raceKey, and for it the old comparison has to go on
+    // working exactly as it did: this route is also called when a vote
+    // CLOSES, and a close that failed to match would delete the votes
+    // before the laptop had read them - which is throwing away the answer,
+    // the thing the clearing block below is careful not to do.
+    //
+    // A laptop that upgrades mid-ballot has an id on the way in and none
+    // in the stored document, so the two differ and the open vote's votes
+    // are cleared. That is the safe direction of the two: a spurious clear
+    // costs a ballot that was being re-opened anyway, where a missed clear
+    // carries one race's votes into another.
+    const identityOf = (held: Record<string, unknown>): string => {
+      const key = typeof held["raceKey"] === "string" ? held["raceKey"] : "";
+
+      return key.length > 0 ? "k:" + key : "l:" + (typeof held["race"] === "string" ? held["race"] : "");
+    };
+
+    const identity = raceKey.length > 0 ? "k:" + raceKey : "l:" + race;
+
     const sameRace =
-      isPlainObject(previous) && typeof previous["race"] === "string" && previous["race"] === race && race.length > 0;
+      isPlainObject(previous) &&
+      identityOf(previous) === identity &&
+      (raceKey.length > 0 || race.length > 0) &&
+      // And the laptop's poll id when both ballots carry one: a vote
+      // reopened on the same race is a new, empty poll on the laptop.
+      (ballotId.length === 0 || previousId.length === 0 || previousId === ballotId);
 
     const salt =
       sameRace && typeof previous["salt"] === "string" && previous["salt"].length > 0
@@ -5364,7 +5638,7 @@ export class Relay {
     await this.store.putSnapshot(club, VOTE_BALLOT_DOC, {
       seq: this.now().getTime(),
       publishedAt: this.now().toISOString(),
-      body: { enabled, open, race, drivers, salt },
+      body: { enabled, open, race, raceKey, ballot: ballotId, drivers, salt },
     });
 
     // CLEARED when the club switches the feature off, and when the ballot
@@ -5466,10 +5740,19 @@ export class Relay {
 
     const outcome = await this.withLock(club, async () => {
       // Read again inside the lock: the club may have closed the vote, or
-      // moved the ballot on, while this request waited for it.
+      // moved the ballot on, while this request waited for it. Moved on is
+      // a new salt as well as a new race: this vote's key was made from
+      // the old one, so written now it would count in the next race under
+      // a key the same phone's vote there would not replace.
       const now = await this.roomBallotFor(club);
 
-      if (now === undefined || !now.open || !now.drivers.some((one) => one.id === picked)) {
+      if (
+        now === undefined ||
+        !now.open ||
+        now.salt !== ballot.salt ||
+        now.race !== ballot.race ||
+        !now.drivers.some((one) => one.id === picked)
+      ) {
         return "closed" as const;
       }
 
@@ -6796,6 +7079,27 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
     `script-src 'nonce-${nonce}'`,
     "style-src 'unsafe-inline'",
     "img-src 'self' data:",
+
+    // MEDIA, for listening along from home - see CHANNELS.listen.
+    //
+    // Without it, audio falls back to default-src 'none' and the browser
+    // blocks every note of it. That is the whole of this line's reason,
+    // and the `data:` in it needs its own:
+    //
+    // The lines arrive as base64 inside a club's own document, and THE
+    // RELAY MUST NOT DECODE THEM. Serving the audio from a route of its
+    // own would be tidier and would need only 'self' here - but it would
+    // mean the relay reaching inside a payload to find the bytes, and not
+    // doing that is the rule types.ts opens with and the thing that keeps
+    // a column added in the desktop app from being a relay deploy. So the
+    // page decodes it and plays a data: URI, and this line is the cost of
+    // that choice rather than an oversight.
+    //
+    // On every page rather than only the one that plays: the policy is one
+    // string for the whole site, two would be two things to keep right,
+    // and the widening is small - a page with a nonce on its only script
+    // and every value escaped has no way to put an <audio> anywhere.
+    "media-src 'self' data:",
     "connect-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",

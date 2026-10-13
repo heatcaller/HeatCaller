@@ -132,12 +132,15 @@ public sealed class SponsorReportTests
             new Dictionary<string, int>(StringComparer.Ordinal) { ["a"] = 5 });
 
         Assert.Contains("Quickway Diner: no reads", report);
-        Assert.Contains("no gap long enough", report);
+        Assert.Contains("their turn had not come round", report);
     }
 
     [Fact]
-    public void A_sponsor_with_nothing_typed_for_them_is_told_so_rather_than_blamed_on_the_night()
+    public void A_sponsor_with_nothing_typed_for_them_is_not_told_the_copy_cost_them_their_reads()
     {
+        // A sponsor with no copy still gets their turn as a one-line
+        // mention (SponsorRotation.Next), so "nothing was typed for them to
+        // read" blamed the copy for a zero it never caused.
         var report = Report(
             new[] { Sponsor("a", "Ralph's Tavern"), Sponsor("b", "Quickway Diner", copy: "") },
             new Dictionary<string, int>(StringComparer.Ordinal) { ["a"] = 5 });
@@ -155,7 +158,8 @@ public sealed class SponsorReportTests
             .TrimEnd();
 
         Assert.Contains("no reads", line, StringComparison.Ordinal);
-        Assert.EndsWith("- nothing was typed for them to read", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("nothing was typed", line, StringComparison.Ordinal);
+        Assert.EndsWith("- their turn had not come round when this report was made", line, StringComparison.Ordinal);
     }
 
     [Fact]

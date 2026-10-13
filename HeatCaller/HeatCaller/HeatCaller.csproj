@@ -75,19 +75,19 @@
          .NET 10 it comes with the Windows desktop runtime, and the build
          said so (NU1510, 1 Oct) - it was a package on .NET 8. -->
 
-    <!-- The free Windows voice (SAPI 5), for clubs with no ElevenLabs
-         account and as the stand-in when ElevenLabs can't speak a line.
-         Windows only, like the app, and no dependencies of its own. It
-         only talks to the speech voices already installed in Windows -
-         nothing is downloaded and no account is needed. See WindowsVoice. -->
+    <!-- The free Windows voice (SAPI 5). Retired on 10 Oct 2026 - Kokoro
+         speaks in its place - and no code uses this package any more; it
+         is still referenced, so it still ships and is still on the About
+         box's list. -->
     <PackageReference Include="System.Speech" Version="10.0.12" />
 
     <!-- The Kokoro voice (KokoroSpeech): a free, natural-sounding voice that
          runs on this PC's CPU through ONNX Runtime. The .CPU package is the
          plug-and-play one - it brings ONNX Runtime's native files with it.
          Its voices (small .npy files) are copied next to the exe on build,
-         under voices\; the 310 MB model is NOT shipped - it is downloaded
-         once from Voice Settings, only by a club that chooses Kokoro. -->
+         under voices\. The 310 MB model ships too, beside the exe, from
+         the PublishKokoroModel target below; Voice Settings can download it
+         again if that copy will not load. -->
     <PackageReference Include="KokoroSharp.CPU" Version="0.8.4" />
     <PackageReference Include="Velopack" Version="1.2.161" />
 

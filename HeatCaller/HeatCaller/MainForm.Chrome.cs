@@ -914,6 +914,11 @@ public partial class MainForm
         {
             if (_raceMode)
             {
+                // The tour walks the sidebar, which Race Mode takes away, and
+                // its next stop would put another page up over the race
+                // board. StartTour refuses Race Mode for the same reason.
+                _tour?.Close();
+
                 _preRaceModeState = WindowState;
                 pnlSidebar.Visible = false;
                 FormBorderStyle = FormBorderStyle.None;

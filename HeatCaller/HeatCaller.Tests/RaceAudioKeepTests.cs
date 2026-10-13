@@ -52,6 +52,10 @@ public sealed class RaceAudioKeepTests : IDisposable
 
         Directory.CreateDirectory(folder);
 
+        // As StartFor leaves it. _folder is not the default folder, and
+        // outside that only a marked night is ours to delete.
+        RaceAudioStore.MarkAsNight(folder);
+
         for (var at = 0; at < files; at++)
         {
             File.WriteAllText(Path.Combine(folder, $"race-{at}.mp3"), new string('x', 1024));

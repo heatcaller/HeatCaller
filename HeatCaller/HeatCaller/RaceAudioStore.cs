@@ -310,6 +310,13 @@ internal sealed class RaceAudioStore
     /// folder called "Keep these" in there keeps it, which is exactly what
     /// somebody who has just read the note about copying a night would do.
     ///
+    /// AND A DATE ON ITS OWN DOES NOT MAKE A NIGHT OURS (13 Oct 2026). A
+    /// club can point the recordings at any folder - Pictures, say, where
+    /// the photo import files everything under yyyy-MM-dd - and this
+    /// deletes whole folders. So outside the default folder, which only
+    /// HeatCaller ever writes into, a night counts only when it carries the
+    /// marker StartFor leaves in it (<see cref="MarkAsNight"/>).
+    ///
     /// Never throws. A folder that will not delete - a file open in a media
     /// player, a sync tool holding it - is reported and skipped, and tried
     /// again after the next race.
@@ -325,6 +332,8 @@ internal sealed class RaceAudioStore
                 return;
             }
 
+            var ownFolder = IsDefaultFolder(root);
+
             // Only the folders that ARE nights, newest name first.
             //
             // "Folder" and not "Path" as the element name: a tuple element
@@ -334,6 +343,7 @@ internal sealed class RaceAudioStore
             var nights = Directory.EnumerateDirectories(root)
                 .Select(folder => (Folder: folder, Name: System.IO.Path.GetFileName(folder)))
                 .Where(one => IsNightFolderName(one.Name))
+                .Where(one => ownFolder || File.Exists(System.IO.Path.Combine(one.Folder, NightMarkerFileName)))
                 .OrderByDescending(one => one.Name, StringComparer.Ordinal)
                 .Skip(KeepNights)
                 .ToList();
@@ -392,6 +402,55 @@ internal sealed class RaceAudioStore
             out _);
 
     /// <summary>
+    /// The file StartFor leaves in each night folder it makes, so the prune
+    /// can tell a night HeatCaller made from a club's own dated folder.
+    /// </summary>
+    internal const string NightMarkerFileName = ".heatcaller-night";
+
+    /// <summary>
+    /// Marks a night folder as one HeatCaller made - see PruneOldNights.
+    ///
+    /// Never throws. A night left unmarked is only ever kept for longer
+    /// than it should be, never deleted that should not be.
+    /// </summary>
+    public static void MarkAsNight(string nightFolder)
+    {
+        try
+        {
+            var marker = System.IO.Path.Combine(nightFolder, NightMarkerFileName);
+
+            if (!File.Exists(marker))
+            {
+                File.WriteAllText(marker, "HeatCaller made this folder for one race night's recordings. It is "
+                    + "deleted with everything in it once it is older than the nights the Commentary page keeps.");
+            }
+        }
+        catch
+        {
+            // See above.
+        }
+    }
+
+    /// <summary>
+    /// Whether a folder is the default one, which only HeatCaller writes
+    /// into - so its nights from before the marker existed still count.
+    /// </summary>
+    private static bool IsDefaultFolder(string root)
+    {
+        try
+        {
+            return string.Equals(
+                System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(root)),
+                System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(DefaultFolder)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// How much is in the recordings folder, in megabytes, and how many
     /// nights - for a settings page to show, because a club cannot decide
     /// how many nights to keep without knowing what a night costs.
@@ -442,7 +501,13 @@ internal sealed class RaceAudioStore
     /// are twenty files a night. The date is in each file's name as well -
     /// see RaceHighlights.BaseNameFor - so a file dragged out of here on its
     /// own still says when it is from.
+    ///
+    /// By the night it was rather than the calendar date, and in the
+    /// invariant culture - the same as PhotoFinish.FolderFor. A meeting that
+    /// runs past midnight is one night: split in two, the prune counted it
+    /// twice, and with one night kept it deleted the evening's earlier
+    /// races after the first race past midnight.
     /// </summary>
     public string FolderForNight(DateTime localStart) =>
-        Path.Combine(Folder, localStart.ToString("yyyy-MM-dd"));
+        Path.Combine(Folder, TonightAtTheTrack.NightOf(localStart).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
 }

@@ -375,9 +375,33 @@ internal static class AnnouncementText
         text = RunOfSpaces.Replace(text, " ");
         text = SpaceBeforePunctuation.Replace(text, "$1");
         text = DanglingComma.Replace(text, "$2");
-        text = RepeatedPunctuation.Replace(text, "$1");
+        text = RepeatedPunctuation.Replace(text, OneMark);
         text = LeadingPunctuation.Replace(text, string.Empty);
 
         return text.Trim();
+    }
+
+    /// <summary>
+    /// A run of full stops, question and exclamation marks down to one -
+    /// the "race.." an empty placeholder leaves - but NOT what an author
+    /// typed on purpose: an ellipsis is a pause to the voice ("And
+    /// they're off... GO!"), and "?!" is a question said with surprise.
+    /// Cutting either changes how the line is spoken.
+    /// </summary>
+    private static string OneMark(Match run)
+    {
+        var marks = run.Value;
+
+        if (marks.Length >= 3 && marks.All(c => c == '.'))
+        {
+            return "...";
+        }
+
+        if (marks.Contains('?') && marks.Contains('!') && !marks.Contains('.'))
+        {
+            return marks;
+        }
+
+        return marks[^1].ToString();
     }
 }

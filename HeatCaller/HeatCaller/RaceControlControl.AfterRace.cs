@@ -284,6 +284,80 @@ public sealed partial class RaceControlControl
     private HonoursPlan? _honours;
 
     /// <summary>
+    /// Who won, for the room's vote: position one and an actual finish - a
+    /// DNF or a DQ placed first is not a win, the same rule the records
+    /// use. Null when nobody won, and always null for a demo.
+    /// </summary>
+    /// <remarks>
+    /// Read off the OUTCOME, not the Status. Every saved row's Status is
+    /// "active" (RaceFiling.ResultsFrom), so a test for an empty Status
+    /// found no winner in any race and no vote was ever settled.
+    ///
+    /// NOT A DEMO. A demo keeps the Round box's round, so a demo run with
+    /// the voted-on round picked would close the vote and settle it with
+    /// an invented winner - and the real race after it would then be
+    /// turned away as a second call.
+    /// </remarks>
+    internal static SessionResultEntry? RoomVoteWinner(SessionRecord record) =>
+        record.IsDemoSession()
+            ? null
+            : record.Results.FirstOrDefault(entry =>
+                entry.Position == 1 && string.IsNullOrWhiteSpace(entry.Outcome) && entry.Laps > 0);
+
+    /// <summary>
+    /// Files the race's winner against the room's prediction.
+    ///
+    /// HERE, by the code that has just saved the result, rather than asked
+    /// for later by the announcer: the segments are picked on a tick
+    /// minutes after the flag, and asking "who won the last race" at that
+    /// moment means asking whichever part of the app happens to still be
+    /// holding it. See RoomVote.Finished.
+    ///
+    /// Keyed on the ROUND'S ID, which is why a club running two classes
+    /// cannot have its Stock prediction read out over the Mod A-main.
+    ///
+    /// A DEMO RACE SETTLES NOTHING, and that was the other half of this
+    /// bug. The demo's own record carries no round - SessionRecord.RoundId
+    /// is deliberately null for one - but this call passed <c>round?.Id</c>
+    /// rather than the record's, so a demo run while a vote was open on
+    /// that round matched it and settled a real vote with an invented
+    /// winner. The room would then have heard its verdict read out about a
+    /// race that never happened.
+    /// </summary>
+    private void SettleTheRoomsVote(SessionRecord record, RoundDefinition? round)
+    {
+        // IsDemoSession rather than IsDemo, so a demo saved before the flag
+        // was recorded (only its "[DEMO]" label) settles nothing either.
+        if (record.IsDemoSession())
+        {
+            return;
+        }
+
+        if (TonightsVote?.Invoke() is not { } roomVote)
+        {
+            return;
+        }
+
+        try
+        {
+            // Position one and an actual finish - see RoomVoteWinner, which
+            // reads the Outcome: every saved row's Status is "active", so a
+            // test on an empty Status found no winner in any race.
+            if (RoomVoteWinner(record) is { } won)
+            {
+                roomVote.Finished(round?.Id, won.Transponder, won.DriverName);
+            }
+        }
+        catch (Exception ex)
+        {
+            // A vote is the one thing on a race night that is purely for
+            // fun. It must never be the reason a result is not filed.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] The room's vote goes unsettled - the result could not be filed against it: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Speaks an LLM-written wrap-up line for a finished race.
     ///
     /// Deliberately fire-and-forget and deliberately AFTER the save: the
@@ -301,6 +375,18 @@ public sealed partial class RaceControlControl
     /// <param name="round">The round the race was run for - kept for a demo too, which isn't linked to it - or null for a freeform race.</param>
     private void SpeakRaceSummary(SessionRecord record, RoundDefinition? round)
     {
+        // THE ROOM'S OWN CALL FIRST, before any of the decisions below can
+        // return (12 Oct 2026, moved and guarded 13 Oct).
+        //
+        // IT WAS HALFWAY DOWN THIS METHOD, past the return for a club with
+        // the teaser off and the AI announcer off. Those clubs voted and
+        // the verdict was never filed, so the room never heard who it had
+        // picked and nothing anywhere said why - the vote simply stayed
+        // open until it timed out. Settling it needs no model, no teaser
+        // and no honours; it needs the result, which this method is handed.
+        // So it goes where nothing can skip it.
+        SettleTheRoomsVote(record, round);
+
         // The teaser is fixed text and needs nothing from the LLM, so it is
         // NOT behind the commentary guard. It used to be, which meant an
         // unreachable Ollama silently killed the teaser too - the actual
@@ -464,12 +550,16 @@ public sealed partial class RaceControlControl
         // the mains' history out after one would be the announcer talking
         // about a race that has not happened yet.
         //
+        // And only for the TOP main (untiered counts as the top, the same
+        // reading MainsHere and RaceStature use). The run is the A-main's,
+        // so a B-main winner neither ends it nor extends it.
+        //
         // Here on the UI thread with the two above, and guarded the same
         // way: this walks the session history, the programme and the
         // profiles, and this is the save path.
         MainsOnLayout? raceMains = null;
 
-        if (commentaryAvailable && round?.Kind == RoundKind.Main)
+        if (commentaryAvailable && round is { Kind: RoundKind.Main, MainTier: <= 0 })
         {
             try
             {
@@ -494,39 +584,6 @@ public sealed partial class RaceControlControl
             }
         }
 
-        // AND THE ROOM'S OWN CALL (12 Oct 2026). Filed HERE, by the code
-        // that has just saved the result, rather than asked for later by
-        // the announcer: the segments are picked on a tick minutes after
-        // the flag, and asking "who won the last race" at that moment
-        // means asking whichever part of the app happens to still be
-        // holding it. See RoomVote.Finished.
-        //
-        // Keyed on the ROUND'S ID, which is why a club running two classes
-        // cannot have its Stock prediction read out over the Mod A-main.
-        if (TonightsVote?.Invoke() is { } roomVote)
-        {
-            try
-            {
-                // Position one and an actual finish - a DNF or a DQ placed
-                // first is not a win, the same rule the records use.
-                var won = record.Results
-                    .FirstOrDefault(entry => entry.Position == 1 && string.IsNullOrWhiteSpace(entry.Status));
-
-                if (won is not null)
-                {
-                    roomVote.Finished(round?.Id, won.Transponder, won.DriverName);
-                }
-            }
-            catch (Exception ex)
-            {
-                // A vote is the one thing on a race night that is purely
-                // for fun. It must never be the reason a result is not
-                // filed.
-                StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [commentary] The room's vote goes unsettled - the result could not be filed against it: {ex.Message}");
-            }
-        }
-
         // SAID EITHER WAY, which is the lesson the colour segment cost
         // three rounds of testing to learn: "the reader found nothing" and
         // "the reader never ran" look identical in a race-night log unless
@@ -538,7 +595,7 @@ public sealed partial class RaceControlControl
                 + $"{mainsHere.ClassName} main at the last {mainsHere.HolderMeetings} of "
                 + $"{Plural.Of(mainsHere.Meetings, "meeting")} filed on it. The recap says whether tonight ended that.");
         }
-        else if (commentaryAvailable && round?.Kind == RoundKind.Main)
+        else if (commentaryAvailable && round is { Kind: RoundKind.Main, MainTier: <= 0 })
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [commentary] No run of mains to call on this layout - either nobody has "
@@ -1538,7 +1595,7 @@ public sealed partial class RaceControlControl
             {
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [badge] No honours segment for this race - either every way of throwing to the "
-                    + "honours and coming back from them has been heard tonight, or no badge had both a driver and a name that "
+                    + "honours has been heard tonight, or no badge had both a driver and a name that "
                     + "could be read out. The badges are called out one at a time instead.");
 
                 return null;
@@ -2150,8 +2207,13 @@ public sealed partial class RaceControlControl
 
             // The mark between two items of a programme - the same one a
             // block puts between its own items, so a colour segment inside
-            // the recap is punctuated the way one inside a block is.
-            if (treatment is not null && !await treatment.PunctuateAsync(nextRace))
+            // the recap is punctuated the way one inside a block is. False
+            // also means "nothing to play" (show music off, or no sting),
+            // which is a reason to go on without the mark, not to drop the
+            // colour - so only the next race being called stops it here.
+            if (treatment is not null
+                && !await treatment.PunctuateAsync(nextRace)
+                && nextRace.IsCancellationRequested)
             {
                 SayUnlessTheNextRaceStopped(stopped, nextRace);
 
@@ -2617,6 +2679,12 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void SignalSessionAudioFinishedAfterFinishCall()
     {
+        // The recording this end of broadcast belongs to, taken now. The
+        // wait below is not cancelled by the next race being called, so on a
+        // quick re-stage the signal can land after the next green - and must
+        // not stop that race's recording a few seconds in.
+        var recording = _raceAudioRecorder;
+
         _ = Task.Run(async () =>
         {
             try
@@ -2630,7 +2698,7 @@ public sealed partial class RaceControlControl
             }
             finally
             {
-                RaiseSessionAudioFinished();
+                RaiseSessionAudioFinished(onlyThisRecording: true, recording);
             }
         });
     }
@@ -2639,7 +2707,9 @@ public sealed partial class RaceControlControl
     /// Raises SessionAudioFinished without letting a failing handler escape
     /// into a background task, where nobody would ever see it.
     /// </summary>
-    private void RaiseSessionAudioFinished()
+    /// <param name="onlyThisRecording">True to finish the race recording only when it is still <paramref name="recording"/> - for a signal that can arrive after the next race has started its own.</param>
+    /// <param name="recording">The recording the signal belongs to; null when nothing was recording.</param>
+    private void RaiseSessionAudioFinished(bool onlyThisRecording = false, RaceAudioRecorder? recording = null)
     {
         try
         {
@@ -2662,13 +2732,15 @@ public sealed partial class RaceControlControl
         {
             // The recorder is the UI thread's, like everything else in the
             // filing, and this runs on a background task on most paths.
+            Action finish = onlyThisRecording ? () => FinishRaceAudioIfStill(recording) : FinishRaceAudio;
+
             if (InvokeRequired)
             {
-                BeginInvoke(FinishRaceAudio);
+                BeginInvoke(finish);
             }
             else
             {
-                FinishRaceAudio();
+                finish();
             }
         }
         catch (Exception ex)
@@ -2691,7 +2763,14 @@ public sealed partial class RaceControlControl
     // one point where it happens (FinishRaceAudio), after the broadcast has
     // ended, and that task touches nothing on this control.
 
-    /// <summary>Loaded on the first journal write of the night, so race-audio.json is read once a run rather than once a lap.</summary>
+    /// <summary>
+    /// The store as it was read at this race's green, for the recording
+    /// running now. Read again at every green rather than once a run, so a
+    /// change on the Commentary page - recording off, a new folder, more
+    /// nights kept - is in force from the next race, as that page says.
+    /// Once a race and not once a lap: FollowRaceAudio runs at every
+    /// journal write.
+    /// </summary>
     private RaceAudioStore? _raceAudioStore;
 
     /// <summary>The recording of the race on the board, or null when nothing is being recorded.</summary>
@@ -2763,8 +2842,6 @@ public sealed partial class RaceControlControl
                 FinishRaceAudio();
             }
 
-            var store = _raceAudioStore ??= RaceAudioStore.Load();
-
             // Exactly the races the crash journal leaves alone, for exactly
             // its reasons: a demo's laps are invented, practice runs on this
             // same session and has its own save, and a rehearsal must never
@@ -2775,7 +2852,6 @@ public sealed partial class RaceControlControl
             }
 
             if (_raceAudioRecorder is null
-                && store.Enabled
                 && _race.State is RaceState.Racing
                 && _raceAudioGeneration != _race.SessionGeneration)
             {
@@ -2792,6 +2868,12 @@ public sealed partial class RaceControlControl
                 _raceAudioRecord = null;
                 _raceAudioReleaseOffsets = null;
                 _raceAudioProblemSaid = false;
+
+                // Fresh at each green - see _raceAudioStore. With recording
+                // off, StartFor answers null, and the generation set above
+                // keeps this from reading the file again until the next race.
+                var store = RaceAudioStore.Load();
+                _raceAudioStore = store;
 
                 _raceAudioRecorder = RaceAudioRecorder.StartFor(
                     store,
@@ -2836,6 +2918,21 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// <see cref="FinishRaceAudio"/>, but only while the recording running
+    /// is still <paramref name="recording"/> - see
+    /// SignalSessionAudioFinishedAfterFinishCall.
+    /// </summary>
+    private void FinishRaceAudioIfStill(RaceAudioRecorder? recording)
+    {
+        if (recording is null || !ReferenceEquals(_raceAudioRecorder, recording))
+        {
+            return;
+        }
+
+        FinishRaceAudio();
+    }
+
+    /// <summary>
     /// Takes the recording off the bus now, and hands the mp3 and the clips
     /// to a background thread.
     ///
@@ -2873,6 +2970,18 @@ public sealed partial class RaceControlControl
             // open for the rest of the night.
             _ = Task.Run(() => recorder.Stop());
             return;
+        }
+
+        // Read again now, so the nights kept and the clips switch are what
+        // the Commentary page says at the end of the race and not at its
+        // green - a club that has just raised the nights kept must not lose
+        // them to the old number. The green's copy stands in when the file
+        // cannot be read this moment, rather than the defaults.
+        var latest = RaceAudioStore.Load();
+
+        if (!latest.LoadedUnreadable)
+        {
+            store = latest;
         }
 
         var log = StatusMessage;
@@ -2928,45 +3037,210 @@ public sealed partial class RaceControlControl
 
 
     /// <summary>
-    /// Speaks an LLM-written "coming up" line for a round about to start.
-    /// Called from the Stage button, straight after the race is staged.
+    /// The next round's intro, written before anybody presses Stage. See
+    /// WrittenAhead, which states at length when a held line stops being
+    /// true.
     ///
-    /// Counted as pending audio from the moment the request goes out (see
-    /// AnnouncementService.BeginLineBeingWritten), so the staging chain
-    /// waits for it rather than starting the countdown while the model is
-    /// still thinking. Spoken only if the race is still staging, and still
-    /// the race it was written for, when the answer arrives - an intro that
-    /// lands in the countdown, or after a reset, is dropped.
+    /// On this control rather than on the director because this is where
+    /// the intro lives: SpeakRoundIntro writes it, ReadIntroFacts reads its
+    /// facts, and NextRound knows what is coming.
     /// </summary>
-    /// <param name="stagedGeneration">The session the intro is for - _race.SessionGeneration straight after Stage.</param>
-    /// <returns>True if an intro was asked for, so the caller knows to wait for it.</returns>
-    private bool SpeakRoundIntro(int stagedGeneration)
+    private readonly WrittenAhead _writtenAhead = new();
+
+    /// <summary>
+    /// How long the model gets to write an intro ahead of time.
+    ///
+    /// Three times RoundIntroModelBudget, because nothing is waiting on
+    /// this one. The whole point of writing ahead is that the clock has
+    /// stopped being the constraint - a club gets the minutes between the
+    /// flag and the next call to the grid - so a model that would have been
+    /// too slow to use live can be used here. There is still a ceiling:
+    /// a request left running for the rest of the evening is a request
+    /// nobody will ever hear the answer to.
+    /// </summary>
+    private static readonly TimeSpan WriteAheadModelBudget = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Writes the NEXT round's intro now, so the start it belongs to waits
+    /// for no model.
+    ///
+    /// CALLED WHEN A RESULT IS FILED, AND THAT TIMING IS THE WHOLE
+    /// CORRECTNESS OF IT. The plan this came from says the next race's
+    /// intro is knowable the moment the current race goes green. For the
+    /// field and the venue that is true. For the STAKES and the FORM it is
+    /// false, and the false half is the half that would put an untrue
+    /// championship claim over a PA: an intro written at the green of round
+    /// four, saying Bill leads by four points, is wrong by the time Bill
+    /// has won round four.
+    ///
+    /// Nothing in WrittenAhead can catch that - a points total is not a key
+    /// that gets spent, it is simply a different number - so it is
+    /// prevented here, by WHEN this runs, and nowhere else. Do not move
+    /// this call earlier, however tempting the green flag is.
+    ///
+    /// Everything about it is best-effort. It takes no pending-audio
+    /// handle, so it can never hold a start up; it is never awaited; and a
+    /// failure costs the night nothing at all, because the live path still
+    /// writes its own intro exactly as it always did. The only thing a
+    /// wasted write costs is a model call nobody heard, which WrittenAhead
+    /// counts.
+    ///
+    /// AND A CORRECTED RESULT IS A FILING TOO. Whatever is held, and any
+    /// write still in flight, was written from the results before this
+    /// call, so both go first - a time penalty given in Edit Result left
+    /// the old points total held, and it was read over the PA at staging.
+    /// </summary>
+    /// <param name="filed">
+    /// The result just filed or corrected. Its round is skipped: the store
+    /// announces a new result before the round is linked to it, so with the
+    /// Round box empty (auto-advance, a restored race) the round just run
+    /// still looked unrun and its own intro was written again.
+    /// </param>
+    /// <param name="corrected">True for a correction rather than a new filing.</param>
+    public void WriteTheNextIntroAhead(SessionRecord? filed = null, bool corrected = false)
     {
+        // Before anything can return: a held line is stale whether or not
+        // a new one is wanted.
+        var asOf = _writtenAhead.ResultsChanged();
+
+        // A CORRECTION MADE WHILE A RACE IS ON is not written for. The
+        // round it would pick is the one after the race on track, whose own
+        // filing throws the line away again - and the write would take the
+        // model away from that race's live commentary for nothing. The
+        // filing writes the next intro from the corrected results anyway.
+        if (corrected && _race.State is (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
+        {
+            return;
+        }
+
         if (_commentary is null || !_commentary.IsAvailable || !_settings.CommentaryRaceIntros)
         {
-            return false;
+            return;
         }
 
-        var round = _activeRound?.Invoke();
-        if (round is null)
+        // Last week's held line is not wanted this week. Guarded on the day
+        // actually changing inside WrittenAhead, so this is free to call on
+        // every result.
+        _writtenAhead.NewMeeting(_events?.Active?.Id);
+
+        if (NextRound(filed?.RoundId) is not { } next || string.IsNullOrWhiteSpace(next.Id))
         {
-            return false;
+            return;
         }
 
-        // Intros kept for the races that earn one, when the Commentary page
-        // says so (27 Sep 2026): a main, or a race with a known rivalry on
-        // its grid. Said, so an intro that doesn't come isn't taken for the
-        // model having failed.
+        // NOT SKIPPED WHEN THE SAME ROUND IS ALREADY IN HAND, as it was:
+        // a result filed or corrected since may have changed the points or
+        // the form the held words state, and ResultsChanged above has
+        // already let them go. One more model call is the price.
+
+        // THE SAME FILTER THE LIVE PATH APPLIES. A club that only wants
+        // intros for mains and rivalries must not have the model asked for
+        // the heats either - the saving would be spent on lines that are
+        // never said.
         if (_settings.CommentaryIntrosMainsOrRivalriesOnly
-            && round.Kind != RoundKind.Main
-            && !_commentary.HasRivalryAmong(round.AssignedTransponders))
+            && next.Kind != RoundKind.Main
+            && !_commentary.HasRivalryAmong(next.AssignedTransponders))
         {
-            StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [commentary] No round intro for {round.RoundLabel} - intros are set to mains and rivalries only, "
-                + "and this race is neither.");
-            return false;
+            return;
         }
 
+        // On this thread, where the stores belong - see ReadIntroFacts.
+        var (clubNight, form, stake, scene) = ReadIntroFacts(next);
+
+        // The grid as it stands NOW, kept with the words: if somebody
+        // scratches between here and the call to the grid, the held line
+        // names a front row that is not there and has to go. See
+        // WrittenAhead.Fingerprint.
+        var grid = next.AssignedTransponders.ToList();
+        var label = next.RoundLabel;
+
+        // CAPTURED, not read from the field inside the job. The guard at
+        // the top of this method proved it was there on this thread; the
+        // job runs later and the field is settable, so reading it again in
+        // there would be checking one thing and using another.
+        CommentaryService commentary = _commentary;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var budget = new CancellationTokenSource(WriteAheadModelBudget);
+
+                PackedFacts? packed = null;
+
+                var line = await commentary.BuildRoundIntroAsync(
+                    next,
+                    budget.Token,
+                    log: null,
+                    clubNight: clubNight,
+                    form: form,
+                    stake: stake,
+                    historyPacked: pack => packed = pack,
+                    scene: scene,
+                    remember: false);
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    // Not said. A model that wrote nothing ahead of time
+                    // has cost the night nothing, and the live path will
+                    // ask again when the race is staged - so a line here
+                    // would be a report of something that did not matter.
+                    return;
+                }
+
+                // Not held if another result came in while this was being
+                // written - see ResultsChanged.
+                if (!_writtenAhead.Hold(next.Id, grid, line, packed, DateTime.Now, asOf))
+                {
+                    return;
+                }
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Wrote {label}'s intro ahead of time - its start will "
+                    + "wait for no model.");
+            }
+            catch (Exception ex)
+            {
+                // Best-effort, and said quietly. The live path is
+                // untouched by this failing.
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Could not write {label}'s intro ahead: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Everything a round intro is written FROM, read on the UI thread.
+    ///
+    /// LIFTED OUT OF SpeakRoundIntro UNCHANGED (12 Oct 2026) so a round
+    /// intro can also be written BEFORE it is wanted - see WrittenAhead.
+    /// The write-ahead needs these same readers for a DIFFERENT round than
+    /// the one being called to the grid, and a second copy of them would be
+    /// a second answer to "what is this race's setting": the two would
+    /// agree all season and then disagree about one race, which is the
+    /// shape of fault this whole layer is written against.
+    ///
+    /// A pure move. Its only input from the caller is the round; everything
+    /// else it touches is a field or a static on this control. The logging
+    /// deliberately did NOT come with it and stayed where it was: the live
+    /// path says all seven of its lines, and a write-ahead that said them
+    /// again would double every intro's console noise for a line that may
+    /// never be heard.
+    ///
+    /// ON THE UI THREAD, which is the reason it exists as a step of its own
+    /// rather than being read where it is used. Every reader here walks the
+    /// session history, the programme, the seasons and the event stores,
+    /// all of which belong to that thread - the rule
+    /// BugHunt5CommentaryTests pins for the director's own readers. Both
+    /// callers must be on it.
+    ///
+    /// A reader that throws costs the intro its facts and nothing else: the
+    /// catch says so and the intro goes out plainer, which is how it read
+    /// before any of this existed.
+    /// </summary>
+    /// <param name="round">The round being introduced - not necessarily the active one.</param>
+    private (bool ClubNight, RaceForm? Form, ChampionshipAtStake? Stake, RaceScene? Scene) ReadIntroFacts(RoundDefinition round)
+    {
         // On a club night a race is just a race - it isn't called a heat.
         var clubNight = _events?.EventForRound(round.Id)?.IsClubNight == true;
 
@@ -3196,6 +3470,53 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the history and the standings - they could not be worked out: {ex.Message}");
         }
 
+        return (clubNight, form, stake, scene);
+    }
+
+
+    /// <summary>
+    /// Speaks an LLM-written "coming up" line for a round about to start.
+    /// Called from the Stage button, straight after the race is staged.
+    ///
+    /// Counted as pending audio from the moment the request goes out (see
+    /// AnnouncementService.BeginLineBeingWritten), so the staging chain
+    /// waits for it rather than starting the countdown while the model is
+    /// still thinking. Spoken only if the race is still staging, and still
+    /// the race it was written for, when the answer arrives - an intro that
+    /// lands in the countdown, or after a reset, is dropped.
+    /// </summary>
+    /// <param name="stagedGeneration">The session the intro is for - _race.SessionGeneration straight after Stage.</param>
+    /// <returns>True if an intro was asked for, so the caller knows to wait for it.</returns>
+    private bool SpeakRoundIntro(int stagedGeneration)
+    {
+        if (_commentary is null || !_commentary.IsAvailable || !_settings.CommentaryRaceIntros)
+        {
+            return false;
+        }
+
+        var round = _activeRound?.Invoke();
+        if (round is null)
+        {
+            return false;
+        }
+
+        // Intros kept for the races that earn one, when the Commentary page
+        // says so (27 Sep 2026): a main, or a race with a known rivalry on
+        // its grid. Said, so an intro that doesn't come isn't taken for the
+        // model having failed.
+        if (_settings.CommentaryIntrosMainsOrRivalriesOnly
+            && round.Kind != RoundKind.Main
+            && !_commentary.HasRivalryAmong(round.AssignedTransponders))
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No round intro for {round.RoundLabel} - intros are set to mains and rivalries only, "
+                + "and this race is neither.");
+            return false;
+        }
+
+        // Read in one pass, on this thread - see ReadIntroFacts.
+        var (clubNight, form, stake, scene) = ReadIntroFacts(round);
+
         // SAID EITHER WAY. The reader refuses far more often than it
         // answers - a season with no planned length, a title four drivers
         // can still win - and "it found nothing" and "it never ran" look
@@ -3373,19 +3694,66 @@ public sealed partial class RaceControlControl
                 // one that never arrived.
                 var tidied = false;
 
-                var answer = await _commentary.BuildRoundIntroAsync(
-                    round,
-                    budget.Token,
-                    log: note =>
+                // WRITTEN AHEAD? If this round's intro was written when
+                // the last result was filed and is still true, the model is
+                // not asked at all and the start waits for nothing.
+                //
+                // EVERYTHING ELSE ON THIS PATH IS UNCHANGED, deliberately.
+                // The show's music, the staging watcher, the cut, the
+                // pending-audio handle and the UI-thread hop below all run
+                // exactly as they do for a line written here and now - the
+                // only difference is where the words came from. That is
+                // what keeps this out of the lifetime logic that cost
+                // rehearsal 1 its countdown twice.
+                //
+                // The held pack goes into introHistory, which is the same
+                // local the model's own callback fills, so the facts are
+                // marked spent where they always were: once the line has
+                // actually been queued to the announcer, and never if it is
+                // dropped. See WrittenAhead.TakeFor.
+                var ready = _writtenAhead.TakeFor(
+                    round.Id, round.AssignedTransponders, _commentary.HistorySaid, DateTime.Now);
+
+                string? answer;
+
+                if (ready.Why == WrittenAhead.Why.Used && ready.Line is { Length: > 0 } already)
+                {
+                    introHistory = ready.Facts;
+                    answer = already;
+
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [commentary] Round intro was written ahead, so the start waits "
+                        + "for no model.");
+                }
+                else
+                {
+                    // Said whenever there WAS something and it went, so a
+                    // club can see the write-ahead working rather than
+                    // wondering why it never seems to. Nothing is said when
+                    // nothing had been written - that is the ordinary case
+                    // for the first race of a night and a line every time
+                    // would bury the night's real messages.
+                    if (ready.Why != WrittenAhead.Why.NothingHeld)
                     {
-                        tidied = true;
-                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}");
-                    },
-                    clubNight: clubNight,
-                    form: form,
-                    stake: stake,
-                    historyPacked: packed => introHistory = packed,
-                    scene: scene);
+                        StatusMessage?.Invoke(
+                            $"{AppTime.LogStampNow()}  [commentary] The intro written ahead was thrown away - "
+                            + $"{WrittenAhead.Because(ready.Why)}. Writing a fresh one.");
+                    }
+
+                    answer = await _commentary.BuildRoundIntroAsync(
+                        round,
+                        budget.Token,
+                        log: note =>
+                        {
+                            tidied = true;
+                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}");
+                        },
+                        clubNight: clubNight,
+                        form: form,
+                        stake: stake,
+                        historyPacked: packed => introHistory = packed,
+                        scene: scene);
+                }
 
                 if (string.IsNullOrWhiteSpace(answer))
                 {
@@ -3440,6 +3808,10 @@ public sealed partial class RaceControlControl
                         }
 
                         _announcer.SpeakReminder(line);
+
+                        // The last line only now, for the same reason - an
+                        // intro written ahead is not recorded when written.
+                        _commentary?.IntroSpoken(line);
 
                         // Spent only now: the line is queued and the room
                         // is about to hear it. The return just above - the

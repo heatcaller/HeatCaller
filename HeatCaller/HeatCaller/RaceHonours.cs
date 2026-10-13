@@ -311,13 +311,14 @@ public static class RaceHonours
     ///
     /// BOTH HALVES OF THE HAND-OVER OR NOTHING, which is the subtle one.
     /// Where the room has already heard every way of throwing to the reader
-    /// tonight, or every way of coming back from them, the segment is not
-    /// run at all - rather than thrown without a throw, or left with the
-    /// reader as the last voice heard and the announcer never taking the
-    /// programme back. The hand-over IS the segment; the badges are what it
-    /// is about. See <see cref="Throw"/> for how unlikely running the bag
-    /// dry has been made, and RaceControlControl.SpeakHonoursAsync for what
-    /// the console says on the night it happens.
+    /// tonight, the segment is not run at all - rather than thrown without
+    /// a throw. The hand-back is never the half that is missing: it repeats
+    /// rather than leave the reader as the last voice heard and the
+    /// announcer never taking the programme back - see
+    /// <see cref="HandBack"/>. The hand-over IS the segment; the badges are
+    /// what it is about. See <see cref="Throw"/> for how unlikely running
+    /// the bag dry has been made, and RaceControlControl.SpeakHonoursAsync
+    /// for what the console says on the night it happens.
     ///
     /// <paramref name="voice"/> is PICKED FROM and not told: marking a
     /// phrasing as heard is the caller's, at the point the words actually go
@@ -433,12 +434,19 @@ public static class RaceHonours
     /// additions) and a flat pool where there is not, because with nobody
     /// to thank there is nothing to cross the praise against and "Thank
     /// you." on its own would be the announcer thanking the room.
+    ///
+    /// ONCE THEY HAVE ALL BEEN HEARD, ONE IS SAID AGAIN (ContinuityVoice
+    /// .PickOrRepeat). Unlike the throw, nothing in these changes from race
+    /// to race, so sixteen (or twelve, with nobody named) is all a night
+    /// gets - and a busy club night has more races with badges than that.
+    /// A dry hand-back drops the whole segment, so the honours stopped for
+    /// the rest of the evening; a familiar "Thank you, Jane." does not.
     /// </summary>
     private static string? HandBack(string reader, ContinuityVoice voice)
     {
         if (reader.Length == 0)
         {
-            return voice.Pick(BackPool, HandBacks);
+            return voice.PickOrRepeat(BackPool, HandBacks);
         }
 
         var candidates = new List<string>(ThanksByName.Length * WellEarneds.Length);
@@ -453,7 +461,7 @@ public static class RaceHonours
             }
         }
 
-        return voice.Pick(BackPool, candidates);
+        return voice.PickOrRepeat(BackPool, candidates);
     }
 
     /// <summary>

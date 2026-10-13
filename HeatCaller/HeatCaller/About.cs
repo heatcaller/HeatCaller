@@ -149,7 +149,7 @@ internal static class ThirdPartyCatalog
             "System.Speech",
             "10.0.12",
             "MIT",
-            "The free Windows voice, when a club has no ElevenLabs account.",
+            "Still in the install, but nothing uses it now: the free Windows voice it ran was retired on 10 Oct 2026, and Kokoro speaks in its place.",
             new[] { "System.Speech" },
             Note: "Microsoft."),
 
@@ -197,7 +197,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "The Kokoro voice itself - the model that speaks the lines.",
             Array.Empty<string>(),
-            Note: "By hexgrad. The voices (voices\\*.npy) ship beside the app with Kokoro's own LICENSE; the 310 MB model is downloaded from Voice Settings, only by a club that chooses this voice."),
+            Note: "By hexgrad. The voices (voices\\*.npy) ship beside the app with Kokoro's own LICENSE; the 310 MB model (kokoro.onnx) ships beside HeatCaller.exe too, in the installer. A club can also download it again from Voice Settings, into LocalAppData, if the bundled copy will not load."),
 
         new Component(
             "MisakiSharp",

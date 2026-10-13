@@ -353,9 +353,37 @@ public static class CommentaryReportFacts
             return found;
         }
 
+        // Level on points is level, whichever way the tie-break falls -
+        // the rule ChampionshipLive.Headline keeps. "Takes over the lead
+        // from Alex" said of two drivers on 40 points each is false.
+        var level = ranked.TakeWhile(c => c.Points == leader.Points).ToList();
+        var secondName = level.Count > 1 ? CommentaryFacts.Clean(level[1].Name) : string.Empty;
+
+        if (level.Count > 1)
+        {
+            found.Add(new FactBlock($"champlead:{raceKey}",
+                level.Count == 2 && secondName.Length > 0
+                    ? $"{leaderName} and {secondName} are level at the top of the {cls} championship on {leader.Points} points."
+                    : $"{level.Count} drivers are level at the top of the {cls} championship on {leader.Points} points."));
+        }
+
+        // Nobody stood anywhere before - the season's first scoring race.
+        // Leading it is true; "still leading" or "taking over" is not.
+        // A PositionBefore of zero is a driver new to the table tonight.
+        else if (!ranked.Any(c => c.PositionBefore >= 1))
+        {
+            var second = ranked.Count > 1 ? ranked[1] : (ChampionshipStanding?)null;
+
+            found.Add(new FactBlock($"champlead:{raceKey}",
+                second is { } next && next.BehindLeader > 0
+                    ? $"{leaderName} leads the {cls} championship on {leader.Points} points, {next.BehindLeader} clear of {CommentaryFacts.Clean(next.Name)}."
+                    : $"{leaderName} leads the {cls} championship on {leader.Points} points."));
+        }
+
         // A new name at the top is the only thing here that is genuinely
-        // news rather than a status report.
-        if (leader.PositionBefore > 1)
+        // news rather than a status report. Not first before (zero, new to
+        // the table tonight, counts) is a change of leader.
+        else if (leader.PositionBefore != 1)
         {
             var displaced = ranked.FirstOrDefault(c => c.PositionBefore == 1);
             var displacedName = CommentaryFacts.Clean(displaced.Name);

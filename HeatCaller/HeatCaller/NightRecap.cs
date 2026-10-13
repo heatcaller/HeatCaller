@@ -256,6 +256,21 @@ internal static class NightRecap
     internal const string Label = "The Night";
 
     /// <summary>
+    /// What the Big Screen's band says while the recap is read.
+    ///
+    /// SEPARATE FROM THE TREATMENT IT BORROWS (13 Oct 2026). The recap
+    /// takes the sign-off's music - the same shape of thing, an opener in
+    /// front and a playout at the end - and took the sign-off's NAME with
+    /// it, so the band read "Sign-Off" through four minutes of the night
+    /// being recapped. The band is the one thing on that screen a crowd
+    /// reads for a plain statement of what is happening.
+    ///
+    /// Not <see cref="Label"/>, which is the recording's file name: "The
+    /// Night" is right on a folder listing and thin on a band.
+    /// </summary>
+    internal const string OnTheBand = "Tonight's Racing";
+
+    /// <summary>
     /// How the model is told to write it.
     ///
     /// THREE THINGS IT IS TOLD TO DO, and they are the whole difference

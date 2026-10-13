@@ -514,6 +514,77 @@ public sealed class AppSettings
     /// </summary>
     public bool ClubNotesFromTheRelay { get; set; }
 
+    /// <summary>
+    /// Whether the club lets people listen to the announcer on its own
+    /// page - the race called, a few seconds behind the room, for the
+    /// family who could not get to the track.
+    ///
+    /// OFF until a club turns it on, and this one is the most deliberate
+    /// of the off-by-defaults here. It puts the club's own announcer, in
+    /// whatever voice it has chosen - possibly a cloned likeness of a real
+    /// member (see VoiceConsent) - onto a public address that anybody with
+    /// the link can play. That is not a thing an update gets to decide for
+    /// a club.
+    ///
+    /// Unticking it is SENT to the relay, not left to be inferred from the
+    /// announcer going quiet - see RelayPublisher.CloseListeningOnTheRelay.
+    /// </summary>
+    public bool ListenAlongOnTheRelay { get; set; }
+
+    /// <summary>
+    /// Whether the night-before preview also goes onto the club's own web
+    /// page, rather than only being saved as a file to paste wherever the
+    /// club posts things.
+    ///
+    /// OFF until a club turns it on, and here the default is doing real
+    /// work rather than being cautious for form's sake: the Write It
+    /// button has saved a FILE since this feature shipped, and a club that
+    /// has been pressing it all season to get something to paste into its
+    /// own group must not find that an update started publishing the same
+    /// words publicly. Publishing is a new decision, so it needs a new
+    /// yes.
+    ///
+    /// The preview also comes down by itself - see NightBefore.StandsFor.
+    /// </summary>
+    public bool PublishNightBeforeToTheRelay { get; set; }
+
+    /// <summary>
+    /// What the announcer has already said tonight, so a laptop closed
+    /// between the heats and the mains does not come back and say all of
+    /// it again.
+    ///
+    /// THE OTHER HALF OF <see cref="CommentaryBudgetNight"/>, and it was
+    /// missing for a month. SaidTonight.Save and Restore were written,
+    /// commented and correct, and nothing called either - so the budget
+    /// survived a restart and the facts did not, and a club that reopened
+    /// HeatCaller mid-evening got every lap record, storyline and
+    /// championship line it had already heard. The director's own Save
+    /// said it held "tonight's spend and tonight's facts"; it held one.
+    ///
+    /// Keyed to the race day inside, so last week's spend cannot silence
+    /// this week - see SaidTonight.Restore.
+    /// </summary>
+    public string CommentaryFactsNight { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Tonight's sponsor reads - how many each sponsor has had, whose turn
+    /// is next and how far each one's copy has been read - so a restart
+    /// between the heats and the mains does not wipe the counts the club
+    /// sends its sponsors. SponsorRotation.Save and Restore were written
+    /// and nothing called either, the same miss as the line above.
+    ///
+    /// Keyed to the race day inside - see SponsorRotation.Restore.
+    /// </summary>
+    public string SponsorRotationNight { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The continuity and honours lines the room has heard tonight, for
+    /// CommentaryFactsNight's reason - without it a restart offered "That
+    /// was Q2 Heat 1 for Stock." and every honours hand-over again. Keyed to
+    /// the race day inside; see ContinuityVoice.Restore.
+    /// </summary>
+    public string CommentaryContinuityNight { get; set; } = string.Empty;
+
     // The co-host's voice, one per engine, exactly as the mechanic's is
     // held - the club can switch engine on Voice Settings at any time and
     // a voice id means nothing to the others. Blank for an engine means
@@ -1230,6 +1301,85 @@ public sealed class AppSettings
     /// <summary>The token for that voice relay. Blank uses <see cref="RelayToken"/>. Sealed on disk like every other token.</summary>
     [JsonIgnore]
     public string VoiceRelayToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which HeatCaller voices the relay has told this club are CLONES of
+    /// a real person, by their short catalogue id.
+    ///
+    /// Remembered rather than asked each time, because the gate runs on
+    /// every spoken line and the catalogue is fetched when a club opens
+    /// Voice Settings. Written whenever the catalogue is read, so a voice
+    /// that stops being a clone - or starts - is right from the next look.
+    ///
+    /// AN EMPTY LIST MEANS NO CLONES, NOT "DO NOT KNOW", and that is safe
+    /// in the one direction that matters: a club with no clones is every
+    /// club today, and a club that has one has fetched the catalogue to
+    /// pick it. The cost of being wrong here is a stock voice refused for
+    /// want of a consent it never needed, which a club sees and can fix -
+    /// not a person's voice used without one.
+    /// </summary>
+    public List<string> HeatCallerClonedVoices { get; set; } = new();
+
+    /// <summary>
+    /// Which voice the club's consent is for. See VoiceConsent.Record -
+    /// a consent is for one person's voice, never for whichever voice
+    /// happens to be set.
+    /// </summary>
+    public string HeatCallerConsentVoiceId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The person who agreed their voice could be used, as the club wrote
+    /// their name. Blank is not a consent.
+    /// </summary>
+    public string HeatCallerConsentWho { get; set; } = string.Empty;
+
+    /// <summary>The day they agreed. Null before anything is recorded.</summary>
+    public DateTime? HeatCallerConsentAtUtc { get; set; }
+
+    /// <summary>
+    /// When the consent was taken back, or null.
+    ///
+    /// Kept rather than cleared, which is the decision VoiceConsent.Record
+    /// explains: a revocation is not the same as never having had
+    /// permission, and a club asked whether it ever had the right to post
+    /// a recording needs to be able to say so.
+    /// </summary>
+    public DateTime? HeatCallerConsentRevokedUtc { get; set; }
+
+    /// <summary>
+    /// Whether this voice id is one the relay called a clone - see
+    /// <see cref="HeatCallerClonedVoices"/>.
+    /// </summary>
+    public bool HeatCallerVoiceIsCloned(string? voiceId) =>
+        voiceId is { Length: > 0 } wanted
+        && HeatCallerClonedVoices.Any(one => string.Equals(one, wanted.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The club's consent as VoiceConsent reads it, or null when nothing
+    /// has been recorded.
+    ///
+    /// A record with no DATE is no record: the day is the one field a
+    /// consent cannot be without, so its absence is what "nothing
+    /// recorded" means on disk rather than a separate flag that could
+    /// disagree with it.
+    /// </summary>
+    /// <remarks>
+    /// INTERNAL because <see cref="VoiceConsent"/> is. A public method on
+    /// a public class may not return an internal type - CS0050, the whole
+    /// solution, and this shipped public on 12 Oct 2026 and failed the
+    /// build. It is the same rule RelayPublisher.TonightsNotes and
+    /// RelayPublisher.Listening both carry a note about; the rule is that
+    /// a member whose TYPE is internal is internal, and there is no
+    /// exception for "it is only a return value".
+    /// </remarks>
+    internal VoiceConsent.Record? HeatCallerVoiceConsent() =>
+        HeatCallerConsentAtUtc is { } agreed
+            ? new VoiceConsent.Record(
+                HeatCallerConsentVoiceId,
+                HeatCallerConsentWho,
+                agreed,
+                HeatCallerConsentRevokedUtc)
+            : null;
 
     /// <summary>
     /// Publish the roster - the list of who is entered and checked in.

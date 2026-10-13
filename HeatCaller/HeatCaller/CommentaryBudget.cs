@@ -118,7 +118,71 @@ public sealed record SegmentSpec(
 /// <param name="Reason">Why not, in the words the console says. Empty when allowed.</param>
 /// <param name="Fallback">What to do when the relay itself then refuses.</param>
 /// <param name="Ticket">The reservation to settle or release. Zero when not allowed.</param>
-public sealed record BudgetVerdict(bool Allowed, string Reason, BrainFallback Fallback, long Ticket);
+/// <summary>
+/// WHY a segment was refused, as a value rather than as a sentence.
+///
+/// WHY BOTH THIS AND <see cref="BudgetVerdict.Reason"/> (12 Oct 2026). The
+/// reason is a sentence written for the club's console - "only 4s since the
+/// last line", "this is the top main at Chatty, which allows 9" - and it is
+/// the right thing to show somebody. It is the wrong thing to COUNT, and
+/// anything that counted it would have to match on its words.
+///
+/// This app already has one place that matches on the words of a sentence
+/// it was handed (MainForm.Audio watching the announcer's text for "takes
+/// the lead") and the roadmap records it as the fragile shortcut rather than
+/// as a pattern to follow. A tally of a night's refusals needs to group
+/// them, and naming the setting that would release one needs to know which
+/// one it is, so the budget says which rather than leaving it to be read
+/// back out of prose. See NightAccount.
+///
+/// PUBLIC because BudgetVerdict is: a public record may not name an
+/// internal type, which is CS0053 and has landed four times on this project
+/// in a week.
+/// </summary>
+public enum BudgetRefusal
+{
+    /// <summary>Not refused at all.</summary>
+    None,
+
+    /// <summary>The club has this segment unticked, or the tier switched off.</summary>
+    SwitchedOff,
+
+    /// <summary>Its cap for the night, or for this class, is spent.</summary>
+    ItsCapForTheNight,
+
+    /// <summary>Every fact it could be built from has already been said.</summary>
+    NothingNewToSay,
+
+    /// <summary>Too soon after the last line - see SegmentSpec.MinGap.</summary>
+    TooSoonAfterTheLast,
+
+    /// <summary>The last ten minutes are already as full as the race and the club's dial allow.</summary>
+    TheAirtimeCap,
+
+    /// <summary>The relay has as many lines in flight as it will take.</summary>
+    TheRelayIsBusy,
+
+    /// <summary>The month's allowance is down to what is held back for intros and recaps.</summary>
+    TheMonthsAllowance,
+
+    /// <summary>Not enough headroom left in the night's own budget.</summary>
+    TheNightsHeadroom,
+}
+
+/// <param name="Allowed">Whether it may be written.</param>
+/// <param name="Reason">Why not, as a sentence for the club's console. Empty when allowed.</param>
+/// <param name="Fallback">What to write it with - see <see cref="BrainFallback"/>.</param>
+/// <param name="Ticket">The reservation to settle or release. Nought when nothing was taken.</param>
+/// <param name="Why">
+/// Why not, as a value - see <see cref="BudgetRefusal"/>. Defaulted so
+/// nothing that builds a verdict had to change.
+/// </param>
+public sealed record BudgetVerdict(
+    bool Allowed,
+    string Reason,
+    BrainFallback Fallback,
+    long Ticket,
+    BudgetRefusal Why = BudgetRefusal.None);
 
 /// <summary>
 /// Decides whether a commentary segment may be written right now, and in
@@ -366,12 +430,35 @@ public sealed class CommentaryBudget
 
     private readonly Func<DateTime> _clock;
 
+    /// <summary>
+    /// Taken by every member that reads or writes the night.
+    ///
+    /// The director's pass leaves the UI thread at its first await, so
+    /// from then on Reserve, Settle and Release run on a thread-pool
+    /// thread, while the UI thread's half-second tick is reading and
+    /// rewriting the same collections - and the relay's count arrives on
+    /// whichever thread its answer came back on. Plain dictionaries
+    /// written from two threads at once can be corrupted or throw, and a
+    /// switched-off segment could be judged in the gap between a clear and
+    /// its re-add. Nothing in here waits on anything while holding it.
+    /// </summary>
+    private readonly object _gate = new();
+
     // --- What the relay last told us. Zero allowance means "not heard
     // from yet", which is deliberately treated as no budget gate at all:
     // refusing to write before we know what the club has would silence a
     // club with plenty, and the relay enforces the real cap regardless.
     private int _usedThisMonth;
     private int _allowance;
+
+    // What the relay's count stood at before anything this laptop wrote
+    // tonight - see NightAllotment. Null until the relay has said anything
+    // tonight; cleared by a new night.
+    private int? _usedBeforeTonight;
+
+    // Set once Restore has read the saved night for the current day - see
+    // Restore, which is called on a half-second tick.
+    private bool _nightRestored;
 
     // --- The night ---
     private string _dayId = string.Empty;
@@ -420,10 +507,29 @@ public sealed class CommentaryBudget
     public bool KeepEverythingRunning { get; set; }
 
     /// <summary>True when this club has switched this segment off for good. See SetOff.</summary>
-    public bool IsOff(SegmentKind kind) => _off.Contains(kind);
+    public bool IsOff(SegmentKind kind)
+    {
+        lock (_gate)
+        {
+            return _off.Contains(kind);
+        }
+    }
 
-    /// <summary>Everything this club has switched off, for the settings page and for saving.</summary>
-    public IReadOnlyCollection<SegmentKind> SwitchedOff => _off;
+    /// <summary>
+    /// Everything this club has switched off, for the settings page and for
+    /// saving. A copy, so a caller enumerating it cannot meet a change made
+    /// on another thread halfway through.
+    /// </summary>
+    public IReadOnlyCollection<SegmentKind> SwitchedOff
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _off.ToArray();
+            }
+        }
+    }
 
     /// <summary>
     /// Switches one segment off for good, or back on.
@@ -445,13 +551,16 @@ public sealed class CommentaryBudget
             return;
         }
 
-        if (off)
+        lock (_gate)
         {
-            _off.Add(kind);
-        }
-        else
-        {
-            _off.Remove(kind);
+            if (off)
+            {
+                _off.Add(kind);
+            }
+            else
+            {
+                _off.Remove(kind);
+            }
         }
     }
 
@@ -497,11 +606,16 @@ public sealed class CommentaryBudget
     /// <summary>Applies a saved list of switched-off segments. See SaveSwitches.</summary>
     public void RestoreSwitches(string? saved)
     {
-        _off.Clear();
+        var off = ParseSwitches(saved);
 
-        foreach (var kind in ParseSwitches(saved))
+        lock (_gate)
         {
-            _off.Add(kind);
+            _off.Clear();
+
+            foreach (var kind in off)
+            {
+                _off.Add(kind);
+            }
         }
     }
 
@@ -523,13 +637,40 @@ public sealed class CommentaryBudget
     public Func<SegmentKind, string?, bool>? NothingNewToSay { get; set; }
 
     /// <summary>How many brain requests are in the air right now. See RelayInFlightCap.</summary>
-    public int InFlight => _open.Count;
+    public int InFlight
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _open.Count;
+            }
+        }
+    }
 
     /// <summary>Lines written tonight, settled only - a reservation in flight does not count.</summary>
-    public int SpentTonight => (int)Math.Round(_spentTonight);
+    public int SpentTonight
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return (int)Math.Round(_spentTonight);
+            }
+        }
+    }
 
     /// <summary>What the club has left this month, as the relay last reported it. Zero when it hasn't said.</summary>
-    public int RemainingThisMonth => _allowance <= 0 ? 0 : Math.Max(0, _allowance - _usedThisMonth);
+    public int RemainingThisMonth
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _allowance <= 0 ? 0 : Math.Max(0, _allowance - _usedThisMonth);
+            }
+        }
+    }
 
     /// <summary>True once the relay has told us what the club's allowance is. Before that there is no budget gate.</summary>
     public bool AllowanceKnown => _allowance > 0;
@@ -548,10 +689,35 @@ public sealed class CommentaryBudget
     /// <summary>
     /// About how many lines tonight may have. Shown to the operator as
     /// "about", because the arithmetic behind it moves as the month does.
+    ///
+    /// The month AS IT STOOD BEFORE TONIGHT, not as it stands now. The
+    /// relay's count goes up with every line this laptop writes, and
+    /// Headroom takes tonight's lines off again, so dividing what is left
+    /// now charged every line twice: a 100-line share topped out at about
+    /// 80, and "of about N lines" shrank as the night talked. What is
+    /// added back is only what the relay's count has actually moved since
+    /// tonight began, and never more than this laptop has spent and holds,
+    /// so a second machine's lines and a line Ollama wrote still come off.
     /// </summary>
-    public double NightAllotment => _allowance <= 0
-        ? 0
-        : (double)RemainingThisMonth / NightsLeftThisMonth;
+    public double NightAllotment
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_allowance <= 0)
+                {
+                    return 0;
+                }
+
+                var mine = _spentTonight + HeldLines();
+                var moved = _usedBeforeTonight is { } before ? Math.Max(0, _usedThisMonth - before) : 0;
+                var usedBeforeTonight = Math.Max(0, _usedThisMonth - Math.Min(mine, moved));
+
+                return Math.Max(0, _allowance - usedBeforeTonight) / NightsLeftThisMonth;
+            }
+        }
+    }
 
     /// <summary>
     /// What the night has earned the right to spend so far - its allotment
@@ -566,23 +732,38 @@ public sealed class CommentaryBudget
     {
         get
         {
-            if (_allowance <= 0)
+            lock (_gate)
             {
-                return double.PositiveInfinity;
+                if (_allowance <= 0)
+                {
+                    return double.PositiveInfinity;
+                }
+
+                var progress = _roundsTotal <= 0
+                    ? 0
+                    : Math.Clamp((double)_roundsRun / _roundsTotal, 0, 1);
+
+                var released = NightAllotment * (OpeningFloat + ((1 - OpeningFloat) * progress));
+
+                return Math.Max(_entitledHighWater, released);
             }
-
-            var progress = _roundsTotal <= 0
-                ? 0
-                : Math.Clamp((double)_roundsRun / _roundsTotal, 0, 1);
-
-            var released = NightAllotment * (OpeningFloat + ((1 - OpeningFloat) * progress));
-
-            return Math.Max(_entitledHighWater, released);
         }
     }
 
     /// <summary>What is left of the night's entitlement, after what is settled and what is reserved.</summary>
-    public double Headroom => Entitled - _spentTonight - _open.Values.Sum(r => r.Lines);
+    public double Headroom
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Entitled - _spentTonight - HeldLines();
+            }
+        }
+    }
+
+    /// <summary>The lines held by reservations still in flight. Called with _gate held.</summary>
+    private int HeldLines() => _open.Values.Sum(r => r.Lines);
 
     /// <summary>
     /// The relay's own count, taken from its answer to a write. The club's
@@ -596,21 +777,33 @@ public sealed class CommentaryBudget
             return;
         }
 
-        _usedThisMonth = Math.Max(0, used);
-        _allowance = allowance;
+        lock (_gate)
+        {
+            _usedThisMonth = Math.Max(0, used);
+            _allowance = allowance;
+
+            // The first word from the relay tonight fixes where the month
+            // stood before this laptop wrote anything - its count already
+            // includes what is settled and what is in flight, including a
+            // night picked back up after a restart. See NightAllotment.
+            _usedBeforeTonight ??= Math.Max(0, _usedThisMonth - (int)Math.Round(_spentTonight + HeldLines()));
+        }
     }
 
     /// <summary>How much of tonight's programme has run. Called whenever the programme is refreshed.</summary>
     public void NightShape(int roundsRun, int roundsTotal)
     {
-        _roundsRun = Math.Max(0, roundsRun);
-        _roundsTotal = Math.Max(0, roundsTotal);
+        lock (_gate)
+        {
+            _roundsRun = Math.Max(0, roundsRun);
+            _roundsTotal = Math.Max(0, roundsTotal);
 
-        // Read once here so the high water mark keeps up as the night runs,
-        // rather than only when something asks to be written.
-        var earned = Entitled;
+            // Read once here so the high water mark keeps up as the night runs,
+            // rather than only when something asks to be written.
+            var earned = Entitled;
 
-        _entitledHighWater = Math.Max(_entitledHighWater, double.IsInfinity(earned) ? 0 : earned);
+            _entitledHighWater = Math.Max(_entitledHighWater, double.IsInfinity(earned) ? 0 : earned);
+        }
     }
 
     /// <summary>
@@ -618,6 +811,15 @@ public sealed class CommentaryBudget
     /// relay has told us about the month does not.
     /// </summary>
     public void NewMeeting(string dayId)
+    {
+        lock (_gate)
+        {
+            StartNight(dayId);
+        }
+    }
+
+    /// <summary>NewMeeting's body. Called with _gate held.</summary>
+    private void StartNight(string dayId)
     {
         if (string.Equals(_dayId, dayId, StringComparison.Ordinal))
         {
@@ -640,6 +842,8 @@ public sealed class CommentaryBudget
         _spentTonight = 0;
         _entitledHighWater = 0;
         _lastSpoken = null;
+        _usedBeforeTonight = null;
+        _nightRestored = false;
 
         _perMeeting.Clear();
         _perClass.Clear();
@@ -652,7 +856,13 @@ public sealed class CommentaryBudget
     /// taking anything. For the settings page and for a caller that wants
     /// to know before it goes to the trouble of building the facts.
     /// </summary>
-    public BudgetVerdict Peek(SegmentKind kind, string? className = null) => Judge(kind, className, take: false);
+    public BudgetVerdict Peek(SegmentKind kind, string? className = null)
+    {
+        lock (_gate)
+        {
+            return Judge(kind, className, take: false);
+        }
+    }
 
     /// <summary>
     /// Whether the asking is happening INSIDE a programme - the post-race
@@ -685,12 +895,15 @@ public sealed class CommentaryBudget
     /// </summary>
     public RaceStature Stature
     {
-        get => new(_statureBilling, _statureLast);
-        set
+        get
         {
-            _statureBilling = value.Billing;
-            _statureLast = value.LastOfTheNight;
+            // ONE READ, so the two halves cannot disagree - see _stature.
+            var packed = _stature;
+
+            return new((RaceBilling)(packed >> 1), (packed & 1) == 1);
         }
+
+        set => _stature = Packed(value.Billing, value.LastOfTheNight);
     }
 
     /// <summary>
@@ -720,19 +933,32 @@ public sealed class CommentaryBudget
     private volatile string _chatter = string.Empty;
 
     /// <summary>
-    /// The two halves of <see cref="Stature"/>, held apart.
+    /// <see cref="Stature"/>'s two halves in ONE volatile int, billing in
+    /// the high bits and last-of-the-night in bit zero.
     ///
-    /// A struct cannot be volatile in C#, and these two can: an enum over
-    /// int, and a bool. Holding the parts rather than the whole is what
-    /// makes the property above lock-free. The worst a reader can see is
-    /// one half of a change that landed between its two reads - a cap one
-    /// judgement out of date, on a value that moves once per race - where
-    /// a lock would be taken for every segment of every race all evening.
+    /// WHY NOT TWO FIELDS, which is what this was (13 Oct 2026). A struct
+    /// cannot be volatile in C#, so the parts were held apart - and the
+    /// comment here weighed the cost honestly: "the worst a reader can see
+    /// is one half of a change that landed between its two reads." True,
+    /// and it chose that over "a lock taken for every segment of every
+    /// race all evening." Both halves of that trade were real.
+    ///
+    /// It just was not the only choice available. Two values that fit in
+    /// an int together can be read and written as one, which is atomic
+    /// without being locked - so the reader can no longer see the billing
+    /// of the race in front of it beside last-night's last-of-the-night
+    /// flag, and nothing waits for anything. An enum over int and a bool
+    /// are 33 bits in principle; RaceBilling has a handful of members, so
+    /// shifting by one loses nothing that exists.
+    ///
+    /// Set from the UI thread as the round under the announcer changes,
+    /// read from whichever thread is gathering a segment.
     /// </summary>
-    private volatile RaceBilling _statureBilling = RaceBilling.Unknown;
+    private volatile int _stature = Packed(RaceBilling.Unknown, false);
 
-    /// <inheritdoc cref="_statureBilling"/>
-    private volatile bool _statureLast;
+    /// <summary>The two halves as one int - see <see cref="_stature"/>.</summary>
+    private static int Packed(RaceBilling billing, bool lastOfTheNight) =>
+        ((int)billing << 1) | (lastOfTheNight ? 1 : 0);
 
     /// <summary>
     /// Asks as part of a programme rather than as filler between races,
@@ -758,15 +984,18 @@ public sealed class CommentaryBudget
     /// </summary>
     public BudgetVerdict ReserveForProgramme(SegmentKind kind, string? className = null)
     {
-        _insideAProgramme = true;
+        lock (_gate)
+        {
+            _insideAProgramme = true;
 
-        try
-        {
-            return Judge(kind, className, take: true);
-        }
-        finally
-        {
-            _insideAProgramme = false;
+            try
+            {
+                return Judge(kind, className, take: true);
+            }
+            finally
+            {
+                _insideAProgramme = false;
+            }
         }
     }
 
@@ -779,29 +1008,38 @@ public sealed class CommentaryBudget
     /// of headroom in the same moment, and the second one must not. Mirrors
     /// the relay's own reserve-then-refund for the same reason.
     /// </summary>
-    public BudgetVerdict Reserve(SegmentKind kind, string? className = null) => Judge(kind, className, take: true);
+    public BudgetVerdict Reserve(SegmentKind kind, string? className = null)
+    {
+        lock (_gate)
+        {
+            return Judge(kind, className, take: true);
+        }
+    }
 
     /// <summary>The line was written. The reservation becomes spend, and the airtime clock restarts.</summary>
     public void Settle(long ticket, bool spoken = true)
     {
-        if (!_open.Remove(ticket, out var held))
+        lock (_gate)
         {
-            return;
+            if (!_open.Remove(ticket, out var held))
+            {
+                return;
+            }
+
+            _spentTonight += held.Lines;
+
+            if (!spoken)
+            {
+                return;
+            }
+
+            var now = _clock();
+
+            _lastSpoken = now;
+            _spokenAt.Add(now);
+
+            Trim(now);
         }
-
-        _spentTonight += held.Lines;
-
-        if (!spoken)
-        {
-            return;
-        }
-
-        var now = _clock();
-
-        _lastSpoken = now;
-        _spokenAt.Add(now);
-
-        Trim(now);
     }
 
     /// <summary>
@@ -812,27 +1050,30 @@ public sealed class CommentaryBudget
     /// </summary>
     public void Release(long ticket)
     {
-        if (!_open.Remove(ticket, out var held))
+        lock (_gate)
         {
-            return;
-        }
-
-        // The counters are taken at reserve time so two requests in the
-        // air cannot both be the last one allowed. A release has to give
-        // them back, or a relay timeout would spend a segment's only turn
-        // of the night without a word being said.
-        if (_perMeeting.TryGetValue(held.Kind, out var meeting) && meeting > 0)
-        {
-            _perMeeting[held.Kind] = meeting - 1;
-        }
-
-        if (held.ClassName is { Length: > 0 } className)
-        {
-            var key = Key(held.Kind, className);
-
-            if (_perClass.TryGetValue(key, out var perClass) && perClass > 0)
+            if (!_open.Remove(ticket, out var held))
             {
-                _perClass[key] = perClass - 1;
+                return;
+            }
+
+            // The counters are taken at reserve time so two requests in the
+            // air cannot both be the last one allowed. A release has to give
+            // them back, or a relay timeout would spend a segment's only turn
+            // of the night without a word being said.
+            if (_perMeeting.TryGetValue(held.Kind, out var meeting) && meeting > 0)
+            {
+                _perMeeting[held.Kind] = meeting - 1;
+            }
+
+            if (held.ClassName is { Length: > 0 } className)
+            {
+                var key = Key(held.Kind, className);
+
+                if (_perClass.TryGetValue(key, out var perClass) && perClass > 0)
+                {
+                    _perClass[key] = perClass - 1;
+                }
             }
         }
     }
@@ -844,6 +1085,15 @@ public sealed class CommentaryBudget
     /// number presented as exact would be wrong by the second race.
     /// </summary>
     public string Describe()
+    {
+        lock (_gate)
+        {
+            return Described();
+        }
+    }
+
+    /// <summary>Describe's body. Called with _gate held.</summary>
+    private string Described()
     {
         if (!AllowanceKnown)
         {
@@ -900,23 +1150,23 @@ public sealed class CommentaryBudget
 
         Trim(now);
 
-        BudgetVerdict No(string reason) => new(false, reason, fallback, 0);
+        BudgetVerdict No(string reason, BudgetRefusal why) => new(false, reason, fallback, 0, why);
 
         // ---- The free gates, in the order that costs least to ask. ----
 
         if (_off.Contains(kind) || spec.Tier > LowestTier)
         {
-            return No("this club has it switched off");
+            return No("this club has it switched off", BudgetRefusal.SwitchedOff);
         }
 
         if (Count(_perMeeting, kind) >= spec.MaxPerMeeting)
         {
-            return No("already said tonight");
+            return No("already said tonight", BudgetRefusal.ItsCapForTheNight);
         }
 
         if (className is { Length: > 0 } && ForClass(kind, className) >= spec.MaxPerClass)
         {
-            return No($"already said for {className}");
+            return No($"already said for {className}", BudgetRefusal.ItsCapForTheNight);
         }
 
         // An essential is never refused - not for budget, not for airtime,
@@ -933,7 +1183,7 @@ public sealed class CommentaryBudget
 
         if (NothingNewToSay?.Invoke(kind, className) == true)
         {
-            return No("nothing new to say about it");
+            return No("nothing new to say about it", BudgetRefusal.NothingNewToSay);
         }
 
         // NOT INSIDE A PROGRAMME, where back-to-back is the whole idea -
@@ -941,7 +1191,7 @@ public sealed class CommentaryBudget
         // lifted there and lists the ones that are not.
         if (!_insideAProgramme && spec.Speaks && _lastSpoken is { } last && now - last < spec.MinGap)
         {
-            return No($"only {(now - last).TotalSeconds:0}s since the last line");
+            return No($"only {(now - last).TotalSeconds:0}s since the last line", BudgetRefusal.TooSoonAfterTheLast);
         }
 
         // THE CAP MOVES WITH THE RACE (11 Oct 2026). Quieter in practice
@@ -954,7 +1204,11 @@ public sealed class CommentaryBudget
         // see ShowChatter, which also explains why the two are kept apart.
         // The curve survives every stop on the dial: Non-stop in a heat is
         // still quieter than Non-stop in the top main.
-        var shape = Stature.AirtimeCap;
+        //
+        // Read ONCE, so the cap and the reason given for it describe the
+        // same race - see _stature.
+        var stature = Stature;
+        var shape = stature.AirtimeCap;
         var ceiling = ShowChatter.Scaled(shape, Chatter);
 
         if (spec.Speaks && _spokenAt.Count >= ceiling)
@@ -963,17 +1217,17 @@ public sealed class CommentaryBudget
             // turned the dial down and then wonders why the night is quiet
             // has to be able to read the answer rather than guess at it.
             var why = ceiling == shape
-                ? Stature.Billing == RaceBilling.Unknown
+                ? stature.Billing == RaceBilling.Unknown
                     ? string.Empty
-                    : $" - this is {Stature.Describe}, which allows {ceiling}"
-                : $" - this is {Stature.Describe} at {ShowChatter.For(Chatter).Name}, which allows {ceiling}";
+                    : $" - this is {stature.Describe}, which allows {ceiling}"
+                : $" - this is {stature.Describe} at {ShowChatter.For(Chatter).Name}, which allows {ceiling}";
 
-            return No($"{_spokenAt.Count} lines in the last ten minutes already{why}");
+            return No($"{_spokenAt.Count} lines in the last ten minutes already{why}", BudgetRefusal.TheAirtimeCap);
         }
 
         if (_open.Count >= RelayInFlightCap && spec.Tier > SegmentTier.Core)
         {
-            return No("the relay is busy with something that matters more");
+            return No("the relay is busy with something that matters more", BudgetRefusal.TheRelayIsBusy);
         }
 
         // ---- Then the one that costs money. ----
@@ -985,7 +1239,7 @@ public sealed class CommentaryBudget
 
         if (AllowanceKnown && RemainingThisMonth < _allowance * EssentialReserve)
         {
-            return No($"only {RemainingThisMonth} lines left this month, held for intros and recaps");
+            return No($"only {RemainingThisMonth} lines left this month, held for intros and recaps", BudgetRefusal.TheMonthsAllowance);
         }
 
         var room = Headroom;
@@ -993,7 +1247,7 @@ public sealed class CommentaryBudget
 
         if (room < cost)
         {
-            return No($"{room:0.#} lines of headroom, this needs {cost:0.#}");
+            return No($"{room:0.#} lines of headroom, this needs {cost:0.#}", BudgetRefusal.TheNightsHeadroom);
         }
 
         return Allow(spec, className, take, fallback);
@@ -1055,23 +1309,61 @@ public sealed class CommentaryBudget
         Dictionary<string, int>? PerClass);
 
     /// <summary>Tonight's spend, for AppSettings to hold across a restart. See Restore.</summary>
-    public string Save() => JsonSerializer.Serialize(new SavedNight(
-        _dayId,
-        _spentTonight,
-        _entitledHighWater,
-        _perMeeting.ToDictionary(p => p.Key.ToString(), p => p.Value),
-        new Dictionary<string, int>(_perClass)));
+    public string Save()
+    {
+        lock (_gate)
+        {
+            return JsonSerializer.Serialize(new SavedNight(
+                _dayId,
+                _spentTonight,
+                _entitledHighWater,
+                _perMeeting.ToDictionary(p => p.Key.ToString(), p => p.Value),
+                new Dictionary<string, int>(_perClass)));
+        }
+    }
 
     /// <summary>
     /// Picks the night back up, but only when it is the same race day -
     /// last week's spend must not be charged to this week. Anything
     /// unreadable is treated as a fresh night rather than throwing: a
     /// corrupt setting is not a reason to lose the announcer.
+    ///
+    /// ONCE PER NIGHT. The director calls this from the host's half-second
+    /// tick, and the saved copy is only rewritten after a line is spoken -
+    /// so reading it again on the same day put every count back to the
+    /// last save: a segment reserved and in flight lost its count, the
+    /// per-night and per-class caps above one never bound, and the high
+    /// water mark fell back between saves.
     /// </summary>
     public void Restore(string? saved, string dayId)
     {
-        NewMeeting(dayId);
+        // NORMALISED ONCE, HERE, and that is the whole of this line's job
+        // (13 Oct 2026). The comparison below used to read
+        // "dayId ?? string.Empty" inline - and a null-coalesce on a
+        // parameter declared non-nullable tells the compiler's flow
+        // analysis that the parameter may be null from that point on, so
+        // every use of it further down became CS8604. One warning, no
+        // behaviour: the defensiveness was right and only its placing was
+        // wrong.
+        var day = dayId ?? string.Empty;
 
+        lock (_gate)
+        {
+            if (_nightRestored && string.Equals(_dayId, day, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            StartNight(day);
+            _nightRestored = true;
+
+            RestoreNight(saved, day);
+        }
+    }
+
+    /// <summary>Restore's body, once the night is known to need it. Called with _gate held.</summary>
+    private void RestoreNight(string? saved, string dayId)
+    {
         if (string.IsNullOrWhiteSpace(saved))
         {
             return;
@@ -1095,6 +1387,10 @@ public sealed class CommentaryBudget
 
         _spentTonight = Math.Max(0, night.Spent);
         _entitledHighWater = Math.Max(0, night.HighWater);
+
+        // The relay's next count is taken against the spend just picked
+        // back up, not against the empty night that was there a moment ago.
+        _usedBeforeTonight = null;
 
         foreach (var (name, count) in night.PerMeeting ?? new Dictionary<string, int>())
         {

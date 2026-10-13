@@ -20,6 +20,7 @@ public enum RelayChannel
     Achievements,
     Tracks,
     Site,
+    Preview,
     CheckIn,
     Manage,
     Signup,
@@ -1704,6 +1705,39 @@ public sealed partial class RelayPublisher : IDisposable
                         _notesProblem = null;
                     }
 
+                    // The announcer's voice, out to anyone listening from
+                    // home - see RelayPublisher.Listen. On NO tick of its
+                    // own: a line that arrives late is worse than a line
+                    // that never arrives, so it goes on the pass it was
+                    // offered on, woken by OfferToListeners. The cost of
+                    // having no tick is paid in that file instead, by the
+                    // open flag's own backoff and by the queue being
+                    // allowed to throw work away.
+                    if (_settings.ListenAlongOnTheRelay)
+                    {
+                        Listening.Wanted = true;
+                        SendListenLines(pass.Token);
+                    }
+                    else
+                    {
+                        if (Listening.Wanted)
+                        {
+                            // Unticked while running. This is the queue
+                            // letting go of what it was holding, so a box
+                            // unticked mid-race does not send three more
+                            // lines after it.
+                            Listening.Wanted = false;
+                            _listenProblem = null;
+                        }
+
+                        // And the relay told, until it has taken it - see
+                        // CloseListeningOnTheRelay.
+                        if (_listenClosePending)
+                        {
+                            SendListenClose(pass.Token);
+                        }
+                    }
+
                     // The room's vote, on a faster tick than the notes -
                     // see RelayPublisher.Vote. Faster because the number
                     // the race director watches to decide when to close
@@ -3262,10 +3296,19 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.Achievements => "achievements",
         RelayChannel.Tracks => "tracks",
         RelayChannel.Site => "site",
+        RelayChannel.Preview => "preview",
         RelayChannel.CheckIn => "checkin",
         RelayChannel.Manage => "manage",
         RelayChannel.Signup => "signup",
-        _ => "state",
+
+        // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
+        // arm used to answer "state", so a channel added to the enum and
+        // forgotten here would not have failed - it would have published
+        // over the LIVE RACE FRAME, every second, for the whole evening.
+        // Nothing would have said so; the board would simply have shown
+        // the wrong thing. Now it is refused by the relay with the channel
+        // named in the error, which is a bug somebody can find.
+        _ => "unnamed-channel",
     };
 
     /// <summary>

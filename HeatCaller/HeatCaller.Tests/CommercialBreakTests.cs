@@ -836,15 +836,18 @@ public sealed class CommercialBreakTests : IDisposable
                      ("public SponsorRead? NextSegmentRead(TimeSpan gap)", "public void SalesReadSaid(SponsorRead? read)"),
                  })
         {
-            Assert.Contains("CommercialBreak.VideoOnScreen", MethodBody(source, from, until), StringComparison.Ordinal);
+            // Comments out first: the one above the gate names
+            // CommercialBreak.VideoOnScreen too, so with them left in the
+            // gate could be deleted and this would still pass.
+            Assert.Contains("CommercialBreak.VideoOnScreen", WithoutComments(MethodBody(source, from, until)), StringComparison.Ordinal);
         }
 
         // The ad-break read keeps its debt when it stands down, exactly as
         // it does for a race - the sponsor loses nothing, the read moves.
-        var owed = MethodBody(
+        var owed = WithoutComments(MethodBody(
             source,
             "public SponsorRead? NextAdBreakRead(TimeSpan gap)",
-            "public SponsorRead? NextSegmentRead(TimeSpan gap)");
+            "public SponsorRead? NextSegmentRead(TimeSpan gap)"));
 
         var gate = owed.IndexOf("CommercialBreak.VideoOnScreen", StringComparison.Ordinal);
         var settled = owed.IndexOf("_adBreakOwed = false;", StringComparison.Ordinal);
@@ -903,6 +906,15 @@ public sealed class CommercialBreakTests : IDisposable
 
         return rest[..end];
     }
+
+    /// <summary>
+    /// The code without its whole-line // comments, as BookendRecordingTests
+    /// reads it: a comment naming a call is not the call.
+    /// </summary>
+    private static string WithoutComments(string body) =>
+        string.Join(
+            "\n",
+            body.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 
     private static int Occurrences(string source, string text)
     {

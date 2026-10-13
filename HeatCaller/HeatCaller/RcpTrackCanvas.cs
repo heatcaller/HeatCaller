@@ -417,6 +417,10 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        // Before the snapshot, so Redo brings back a plan that has landed
+        // rather than one with the nudged pieces stacked on what they hit.
+        FlushPendingSettle();
+
         _redo.Add(_design.Clone());
         ShowInstead(_undo[^1]);
         _undo.RemoveAt(_undo.Count - 1);
@@ -430,6 +434,8 @@ public sealed class RcpTrackCanvas : Control
         {
             return;
         }
+
+        FlushPendingSettle();
 
         _undo.Add(_design.Clone());
         ShowInstead(_redo[^1]);
@@ -521,6 +527,111 @@ public sealed class RcpTrackCanvas : Control
 
         RaiseChanged();
     }
+
+    // The rest of the side panel's plan settings, each an undo step of its
+    // own for the reason SetRoom gives: they ride on every undo snapshot,
+    // so written straight into the plan they were silently taken back by
+    // the next Ctrl+Z, along with whatever that Ctrl+Z was meant for.
+
+    /// <summary>The size of a tile, in millimetres - one undo step per run of changes to it.</summary>
+    public void SetTileSize(double mm)
+    {
+        if (_design.TileSizeMm == mm)
+        {
+            return;
+        }
+
+        RememberSetting(nameof(SetTileSize));
+        _design.TileSizeMm = mm;
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// The kit to check the plan against, and the tile size it comes in
+    /// (null to leave the size alone) - as one undo step, since choosing a
+    /// kit is one choice.
+    /// </summary>
+    public void SetKit(string name, double? tileSizeMm)
+    {
+        var size = tileSizeMm ?? _design.TileSizeMm;
+
+        if (string.Equals(_design.KitName, name, StringComparison.Ordinal) && _design.TileSizeMm == size)
+        {
+            return;
+        }
+
+        Remember();
+        _design.KitName = name;
+        _design.TileSizeMm = size;
+        RaiseChanged();
+    }
+
+    /// <summary>Whether the racing line closes into a lap.</summary>
+    public void SetRouteClosed(bool closed)
+    {
+        if (_design.RouteClosed == closed)
+        {
+            return;
+        }
+
+        Remember();
+        _design.RouteClosed = closed;
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// How strongly the traced photo shows - one undo step per drag of the
+    /// slider. Only redrawn, not announced: the readouts do not depend on
+    /// it, and working them all out again for every step of a drag is what
+    /// RaiseChanged keeps a stroke from doing.
+    /// </summary>
+    public void SetBackdropOpacity(int opacity)
+    {
+        if (_design.BackdropOpacity == opacity)
+        {
+            return;
+        }
+
+        RememberSetting(nameof(SetBackdropOpacity));
+        _design.BackdropOpacity = opacity;
+        Invalidate();
+    }
+
+    /// <summary>
+    /// The undo step for a setting changed a notch at a time - the slider
+    /// dragged, the tile size's arrows held. Told apart from the next
+    /// gesture the way RememberWheelResize does it: the same setting again,
+    /// soon, with the snapshot this took still the newest one.
+    /// </summary>
+    private void RememberSetting(string setting)
+    {
+        var now = Environment.TickCount64;
+        var sameGesture = _settingSnapshot is not null
+                          && _undo.Count > 0
+                          && ReferenceEquals(_undo[^1], _settingSnapshot)
+                          && string.Equals(_settingChanged, setting, StringComparison.Ordinal)
+                          && now - _settingAt < WheelResizeGapMs;
+
+        _settingAt = now;
+
+        if (sameGesture)
+        {
+            return;
+        }
+
+        Remember();
+        _settingChanged = setting;
+        _settingSnapshot = _undo.Count > 0 ? _undo[^1] : null;
+    }
+
+    /// <summary>The snapshot the current setting gesture took, while it is still the newest.</summary>
+    private RcpTrackDesign? _settingSnapshot;
+
+    /// <summary>Which setting that gesture is changing.</summary>
+    private string? _settingChanged;
+
+    /// <summary>When that setting last changed (Environment.TickCount64).</summary>
+    private long _settingAt;
 
     public void ClearAll()
     {
@@ -1348,6 +1459,7 @@ public sealed class RcpTrackCanvas : Control
         {
             Remember();
             _design.Curves.Remove(curve);
+            Unpick(_selection.Forget(curve));
             RaiseChanged();
             return;
         }
@@ -1356,6 +1468,7 @@ public sealed class RcpTrackCanvas : Control
         {
             Remember();
             _design.Walls.Remove(wall);
+            Unpick(_selection.Forget(wall));
             RaiseChanged();
             return;
         }
@@ -1366,6 +1479,7 @@ public sealed class RcpTrackCanvas : Control
         {
             Remember();
             _design.Decals.Remove(decal);
+            Unpick(_selection.Forget(decal));
             RaiseChanged();
             return;
         }
@@ -1374,7 +1488,25 @@ public sealed class RcpTrackCanvas : Control
         {
             Remember();
             _design.Tiles.Remove(tile);
+            Unpick(_selection.Forget(tile));
             RaiseChanged();
+        }
+    }
+
+    /// <summary>
+    /// Tells the buttons when an erase took a piece out of the selection.
+    ///
+    /// Right-click and Ctrl+click erase in the Select tool too. A piece
+    /// erased while still picked used to stay in the selection: a nudge or
+    /// a drag then moved it and settled it, clearing a real piece nobody had
+    /// picked from where it landed, and a copy brought the erased piece
+    /// back. So EraseAt takes it out of the selection as it goes.
+    /// </summary>
+    private void Unpick(bool wasPicked)
+    {
+        if (wasPicked)
+        {
+            SelectionChanged?.Invoke();
         }
     }
 
@@ -1579,6 +1711,8 @@ public sealed class RcpTrackCanvas : Control
 
     public void SelectEverything()
     {
+        FlushPendingSettle();
+
         _selection = RcpSelection.Everything(_design);
 
         if (_selection.IsEmpty)
@@ -1649,6 +1783,7 @@ public sealed class RcpTrackCanvas : Control
                      _clipboardFrom,
                      RcpSelection.Everything(_clipboard).Bounds().Size));
 
+        FlushPendingSettle();
         Remember();
         _selection = RcpSelection.Paste(_design, _clipboard, at);
 
@@ -1664,6 +1799,10 @@ public sealed class RcpTrackCanvas : Control
             StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
             return;
         }
+
+        // The nudged block lands first, so the copy is of where it ended up
+        // and the timer does not settle the copy in its place.
+        FlushPendingSettle();
 
         var box = _selection.Bounds();
         var copy = _selection.Copy();
@@ -1766,6 +1905,25 @@ public sealed class RcpTrackCanvas : Control
 
         _selection.Settle(_design);
         RaiseChanged();
+    }
+
+    /// <summary>
+    /// Settles a nudge run still waiting for its timer, now.
+    ///
+    /// The timer settles whatever is picked when it fires, so anything that
+    /// replaces the selection (Ctrl+A, a paste, a duplicate, a new marquee)
+    /// or snapshots the plan (Undo, Redo) has to land the run first.
+    /// Otherwise the nudged pieces were left stacked on whatever they had
+    /// landed on - for good once Ctrl+A had picked both, as Settle never
+    /// clears a picked piece - which is the case ClearSelection already
+    /// handles for Escape and the tool keys.
+    /// </summary>
+    private void FlushPendingSettle()
+    {
+        if (_nudgeSettle.Enabled)
+        {
+            SettleNudgeRun();
+        }
     }
 
     /// <summary>Quarter turns clockwise, or anticlockwise for a negative count.</summary>
@@ -2320,6 +2478,8 @@ public sealed class RcpTrackCanvas : Control
     /// </summary>
     private void PickUp(Point from, Point to)
     {
+        FlushPendingSettle();
+
         var dragged = Math.Abs(to.X - from.X) > 3 || Math.Abs(to.Y - from.Y) > 3;
         var found = RcpSelection.In(_design, MarqueeCells(from, to));
 

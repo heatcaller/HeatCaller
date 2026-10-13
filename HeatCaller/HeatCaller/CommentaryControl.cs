@@ -83,6 +83,8 @@ public sealed class CommentaryControl : UserControl
     // be said without the race director ticking it off (ClubNotes).
     private readonly CheckBox _chkNotesWifi = new ThemedCheckBox();
     private readonly CheckBox _chkNotesRelay = new ThemedCheckBox();
+    private readonly CheckBox _chkListenAlong = new ThemedCheckBox();
+    private readonly Label _lblListenAlong = new();
     private readonly Label _lblNotesWhere = new();
 
     // --- The room's vote (12 Oct 2026) ---
@@ -210,6 +212,34 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>What happened when it was pressed, in the club's words.</summary>
     private readonly Label _lblNightRecap = new();
+
+    // --- A driver's own night, and the proof of a line (12 Oct 2026) ---
+
+    /// <summary>
+    /// Which driver's piece to write - tonight's drivers, filled when the
+    /// box is opened so it is never a list from an hour ago.
+    /// </summary>
+    private readonly ComboBox _cmbDriverCut = new();
+
+    private readonly Button _btnDriverCut = new();
+    private readonly Label _lblDriverCut = new();
+
+    /// <summary>
+    /// Tonight's drivers in the order the box lists them, so the box's own
+    /// index gives back a transponder.
+    ///
+    /// A LIST BESIDE THE BOX rather than objects in it. A ComboBox holding
+    /// a record needs DisplayMember and a ToString nobody can see, and the
+    /// box here is redrawn by the theme pass; an index into a list the page
+    /// owns is the shape every other picker on this page uses.
+    /// </summary>
+    private readonly List<(string Transponder, string Name)> _driversTonight = new();
+
+    private readonly Button _btnProof = new();
+    private readonly Label _lblProof = new();
+    private readonly Button _btnNightBefore = new();
+    private readonly Label _lblNightBefore = new();
+    private readonly CheckBox _chkNightBeforeRelay = new ThemedCheckBox();
     private readonly Label _lblOpenerFile = new();
     private readonly Label _lblBedFile = new();
     private readonly Label _lblShowResult = new();
@@ -275,6 +305,27 @@ public sealed class CommentaryControl : UserControl
     /// mirror of <see cref="NotesClosedOnTheRelay"/>.
     /// </summary>
     internal event Action? VoteClosedOnTheRelay;
+
+    /// <summary>
+    /// Raised when the club switches listening along OFF, so the relay is
+    /// told to stop offering the announcer and to throw away the lines it
+    /// is holding.
+    ///
+    /// The most important of these three to actually send. The other two
+    /// leave the relay collecting things nobody reads; this one leaves the
+    /// club's own announcer - possibly a named member's cloned voice -
+    /// playing to anybody with the link, from a club that has just said it
+    /// does not want that. See RelayPublisher.CloseListeningOnTheRelay.
+    /// </summary>
+    internal event Action? ListeningClosedOnTheRelay;
+
+    /// <summary>
+    /// Raised when the club unticks putting the night-before preview on its
+    /// page, so a preview already published comes down then rather than
+    /// standing until the first race is filed. The same reason as the
+    /// three above: a setting saved is not a page changed.
+    /// </summary>
+    internal event Action? NightBeforeClosedOnTheRelay;
     private (Font Font, int Count, int Width)? _honoursVoiceWidth;
 
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
@@ -282,6 +333,11 @@ public sealed class CommentaryControl : UserControl
     private const string LoadVoicesCaption = "Load Voices";
     private const string TestShowCaption = "Play It";
     private const string NightRecapCaption = "Write And Play It";
+    private const string DriverCutCaption = "Write And Play It";
+    private const string ProofCaption = "Why It Said That";
+
+    /// <summary>The night-before button's caption, held while it says "Writing..." - see Steady.</summary>
+    private const string NightBeforeCaption = "Write The Preview";
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields.</summary>
     private const int EndpointWidth = 300;
@@ -290,6 +346,25 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>The library drop-downs. Wide enough for "Good Morning America 2" and "Opening Drive (132 BPM)" without cutting either off.</summary>
     private const int ShowPieceWidth = 220;
+
+    /// <summary>
+    /// How wide the driver picker is at the normal text size.
+    ///
+    /// Two hundred and sixty, like the mechanic's voice picker, and it has
+    /// to be SET: left to itself a ComboBox is 121 pixels and would cut
+    /// most club members' names in half. The Sponsors page shipped exactly
+    /// that fault on 12 Oct 2026 and LayoutTests caught it at every text
+    /// size - see SponsorsControl.SponsorPictureWidth.
+    ///
+    /// FIXED RATHER THAN GROWN TO ITS LONGEST ITEM, which is what the
+    /// mechanic's voice picker does (Pieces.PickerWidth). That list ships
+    /// with the app and its longest name is known; this one is the club's
+    /// own members, so growing to fit would let one driver with a long name
+    /// widen the card - and at 200% text that is how a page stops fitting
+    /// on a 1280 screen. A name past this is clipped in the box and is
+    /// still right in the piece and in the file name.
+    /// </summary>
+    private const int DriverPickerWidth = 260;
     private const int MechanicNameWidth = 200;
     private const int VoicePickerWidth = 260;
     private const int TeaserWidth = 420;
@@ -350,6 +425,38 @@ public sealed class CommentaryControl : UserControl
     internal Func<Task<string?>>? PlayTonightsRecap { get; set; }
 
     /// <summary>
+    /// Tonight's drivers, for the picker - whoever has a race filed for the
+    /// night, as MainForm reads them. Null until wired, and then the picker
+    /// stays empty and says so.
+    /// </summary>
+    internal Func<IReadOnlyList<(string Transponder, string Name)>>? DriversTonight { get; set; }
+
+    /// <summary>
+    /// Writes one driver's night, plays it out once and keeps it as a file -
+    /// AnnouncerControl.PlayADriversNightAsync. Takes their transponder and
+    /// their name. Null until wired, and then the button does nothing.
+    /// </summary>
+    internal Func<string, string, Task<string?>>? PlayADriversNight { get; set; }
+
+    /// <summary>
+    /// Why the announcer said what it last said, written to the developer
+    /// console - AnnouncerControl.TheProofOfTheLastLine. Hands back a
+    /// sentence for the page either way.
+    /// </summary>
+    internal Func<string>? ProofOfTheLastLine { get; set; }
+
+    /// <summary>
+    /// Writes a preview of the next race day and saves it where the club
+    /// can get at it - see <see cref="NightBefore"/>.
+    ///
+    /// Hands back a sentence either way: where the file went, or why there
+    /// is nothing to preview. The host owns this because the preview is
+    /// built from the programme, the seasons and the club's own history,
+    /// and those stores belong to the form rather than to this page.
+    /// </summary>
+    internal Func<Task<string?>>? WriteTheNightBefore { get; set; }
+
+    /// <summary>
     /// Tells the announcer screen that the show's music has changed, so it
     /// reads the files again rather than playing the take it loaded at the
     /// start of the evening. Set by the host.
@@ -375,6 +482,19 @@ public sealed class CommentaryControl : UserControl
     // to the next tab stop (wrapping to the top of the page), and the
     // page's scrolling then scrolls to it - which is why the page jumped up.
     private bool _testRunning;
+
+    // True while Play It, the night recap or a driver's night is running.
+    // Their buttons are held down for the length of the run, and almost
+    // anything else on the card calls UpdateEnabledState, which would
+    // otherwise put them back up mid-run and let a second one start over
+    // the first.
+    private bool _testShowRunning;
+    private bool _nightRecapRunning;
+    private bool _driverCutRunning;
+
+    // The same for the night-before preview, now that UpdateEnabledState
+    // gates its button on the announcer too.
+    private bool _nightBeforeRunning;
 
     /// <summary>
     /// The model client's own diagnostic lines ("[llm] Timed out after
@@ -1398,6 +1518,44 @@ public sealed class CommentaryControl : UserControl
         notes.Add(_lblNotesWhere);
 
         // ------------------------------------------------------------------
+        // Listening along (13 Oct 2026)
+        // ------------------------------------------------------------------
+
+        Check(_chkListenAlong, "Let people listen along on the club's web page");
+        _chkListenAlong.Checked = _settings.ListenAlongOnTheRelay;
+        _chkListenAlong.CheckedChanged += (_, _) =>
+        {
+            _settings.ListenAlongOnTheRelay = _chkListenAlong.Checked;
+            _settings.Save();
+
+            // SENT when it goes off, not inferred from the announcer going
+            // quiet. Without this the relay goes on offering the club's
+            // own voice to anybody with the address. See
+            // RelayPublisher.CloseListeningOnTheRelay.
+            if (!_chkListenAlong.Checked)
+            {
+                ListeningClosedOnTheRelay?.Invoke();
+            }
+
+            DescribeListening();
+        };
+
+        DescribeListening();
+
+        var listening = new Section("Listening along");
+
+        listening.Add(Hint(
+            "The race called, on your club's own web page, a few seconds behind the room. For a driver's family at "
+            + "home, somebody away for the weekend, or the member who had to work. They press Listen and hear the "
+            + "announcer; there is nothing for them to set up and nothing for you to do once it is on."));
+        listening.Add(Hint(
+            "Switch it off and the button goes from the page and the relay throws away what it was holding. Worth "
+            + "knowing before you turn it on: this puts the voice you have chosen - including a voice cloned from "
+            + "somebody at the club - on an address anyone with the link can play."));
+        listening.Add(_chkListenAlong, stretch: false, gapBelow: 0);
+        listening.Add(_lblListenAlong);
+
+        // ------------------------------------------------------------------
         // The room's vote (12 Oct 2026)
         // ------------------------------------------------------------------
 
@@ -1506,7 +1664,7 @@ public sealed class CommentaryControl : UserControl
         _btnStingClear.Text = "Remove";
         _btnStingClear.Click += (_, _) => ClearShowMusic(ShowPart.Sting);
 
-        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblStingFile, _lblShowResult, _lblCoHostStance, _lblChatter, _lblNotesWhere, _lblVoteWhere, _lblNightRecap, _lblOnDisk })
+        foreach (var label in new[] { _lblOpenerFile, _lblBedFile, _lblStingFile, _lblShowResult, _lblCoHostStance, _lblChatter, _lblNotesWhere, _lblVoteWhere, _lblNightRecap, _lblDriverCut, _lblProof, _lblNightBefore, _lblOnDisk, _lblListenAlong })
         {
             label.AutoSize = true;
             label.ForeColor = AppTheme.TextMuted;
@@ -1703,7 +1861,7 @@ public sealed class CommentaryControl : UserControl
         var audio = new Section("Recording the night");
 
         audio.Add(Hint(
-            "Every race is recorded as it goes out - the voice, the music, the effects, exactly as the room heard it - "
+            "Every race is recorded as it goes out - the announcer and the effects, but not the club's music or the crowd bed, so a clip is the call, clean - "
             + "and each driver gets an mp3 of the stretches where the announcer called them. The clips are the half worth "
             + "having: a driver who posts the forty seconds where their pass for the lead was called is the best "
             + "advertisement your club has. They go in a folder per night, with a Highlights folder inside it."));
@@ -1728,7 +1886,104 @@ public sealed class CommentaryControl : UserControl
             + "It is the one thing this app makes that somebody outside the building would choose to listen to.");
         Stepped(recapGrid.AddRow("Tonight's recap:", Line(Steady(_btnNightRecap, NightRecapCaption), _lblNightRecap)));
 
-        audio.Add(recapGrid, gapBelow: 0);
+        audio.Add(recapGrid, gapBelow: UiLayout.SectionGap);
+
+        // ONE DRIVER'S NIGHT, on this card for the recap's reason: what a
+        // club wants out of it is the file, and it lands in the same
+        // night's folder. See DriverCut.
+        _cmbDriverCut.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        // FILLED WHEN IT IS OPENED, so it is never a list from an hour
+        // ago - a club runs races between pressing this and pressing it
+        // again. Filled once below as well, so the box is not empty the
+        // first time somebody looks at the card.
+        _cmbDriverCut.DropDown += (_, _) => FillDriversTonight();
+
+        _btnDriverCut.Text = DriverCutCaption;
+        _btnDriverCut.Click += async (_, _) => await PlayADriversNightAsync();
+
+        var cutGrid = new FieldGrid();
+
+        cutGrid.AddHint(
+            "One driver's own night, written for them: the races they ran, how their pace went and what happened "
+            + "to them, in about ninety seconds. It plays out once and lands in tonight's folder under their "
+            + "name, so a driver can be handed it. It is the first thing this app makes that a driver takes "
+            + "home - and it is deliberately about the driving rather than about where they finished, because "
+            + "most of a club does not win.");
+
+        Stepped(cutGrid.AddRow(
+            "A driver's night:",
+            Line(_cmbDriverCut, Steady(_btnDriverCut, DriverCutCaption), _lblDriverCut)));
+
+        audio.Add(cutGrid, gapBelow: UiLayout.SectionGap);
+
+        // AND WHY IT SAID THAT. Every claim the announcer makes is worked
+        // out from the club's own results, and until now none of that was
+        // visible to the club that bought it. See NightAccount.Proof.
+        _btnProof.Text = ProofCaption;
+        _btnProof.Click += (_, _) => ShowTheProof();
+
+        var proofGrid = new FieldGrid();
+
+        proofGrid.AddHint(
+            "Writes out, in the developer console, every fact the announcer's last segment was built from - and "
+            + "nothing else. Each one is worked out from this club's own saved results, so anything it said can "
+            + "be checked against them. The console is under Help.");
+
+        Stepped(proofGrid.AddRow("Check a line:", Line(Steady(_btnProof, ProofCaption), _lblProof)));
+
+        audio.Add(proofGrid, gapBelow: UiLayout.SectionGap);
+
+        // THE NIGHT BEFORE. The one thing this app writes on a day it is
+        // otherwise shut, and the only one whose job is getting people to
+        // the track rather than entertaining the people already at it.
+        // See NightBefore.
+        _btnNightBefore.Text = NightBeforeCaption;
+        _btnNightBefore.Click += async (_, _) => await WriteTheNightBeforeAsync();
+
+        var beforeGrid = new FieldGrid();
+
+        beforeGrid.AddHint(
+            "Writes a short preview of the next race day from the programme and the entry list, and saves it as "
+            + "a text file you can paste into the club's page or group. Everything in it is worded as a plan "
+            + "rather than a result - who is entered rather than who is racing - because an entry list is what "
+            + "the club means to happen and some of it will not. It says nothing about who will win and nothing "
+            + "about any final's grid, because those do not exist yet.");
+
+        Stepped(beforeGrid.AddRow("The night before:", Line(Steady(_btnNightBefore, NightBeforeCaption), _lblNightBefore)));
+
+        // PUBLISHING IS A SEPARATE YES. The button has saved a file since
+        // this shipped, and a club that has been pressing it all season
+        // for something to paste into its own group must not find that an
+        // update started putting the same words on a public address. See
+        // AppSettings.PublishNightBeforeToTheRelay.
+        Check(_chkNightBeforeRelay, "Also put it on the club's own web page");
+        _chkNightBeforeRelay.Checked = _settings.PublishNightBeforeToTheRelay;
+        _chkNightBeforeRelay.CheckedChanged += (_, _) =>
+        {
+            _settings.PublishNightBeforeToTheRelay = _chkNightBeforeRelay.Checked;
+            _settings.Save();
+
+            // TAKEN DOWN when it goes off, like the notes, the vote and
+            // listening along. Otherwise a preview the club has just said
+            // it does not want public stays on its page.
+            if (!_chkNightBeforeRelay.Checked)
+            {
+                NightBeforeClosedOnTheRelay?.Invoke();
+            }
+        };
+
+        beforeGrid.AddHint(
+            "The file is written either way. Ticked, the preview also appears at the top of your club's page "
+            + "until the meeting starts - and it comes down by itself a few hours after the first race even if "
+            + "this PC is switched off, so one left behind cannot sit there describing last week in the future "
+            + "tense.");
+
+        Stepped(beforeGrid.AddRow(string.Empty, _chkNightBeforeRelay));
+
+        audio.Add(beforeGrid, gapBelow: 0);
+
+        FillDriversTonight();
 
         ShowWhatIsOnDisk();
 
@@ -1749,6 +2004,7 @@ public sealed class CommentaryControl : UserControl
         page.Add(segments);
         page.Add(coHost);
         page.Add(notes);
+        page.Add(listening);
         page.Add(roomVote);
         page.Add(style);
         page.Add(recap);
@@ -1763,11 +2019,21 @@ public sealed class CommentaryControl : UserControl
         //
         // One caption column down every card, so the fields line up down the
         // whole page - see Stepped and Flush.
+        // EVERY GRID ON THE PAGE, and five of them were missing (13 Oct
+        // 2026). The 12 Oct bug hunt recorded chatterGrid and recapGrid;
+        // cutGrid, proofGrid and beforeGrid were missing too, which is
+        // five cards whose caption column was its own width while the
+        // other fourteen shared one. It reads as the page having been
+        // assembled rather than laid out, and it is silent - a grid left
+        // out of this still looks perfectly correct on its own.
+        //
+        // A list that has to be added to is the shape of this bug, and the
+        // layout audit is what would catch the next one.
         _textSize.Keep(() => FieldGrid.LineUp(new[]
         {
             connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
             pauseGrid, teaserGrid, voiceGrid, showGrid, mechanicGrid, honoursGrid, coHostGrid,
-            showMusicGrid, audioGrid,
+            showMusicGrid, audioGrid, chatterGrid, recapGrid, cutGrid, proofGrid, beforeGrid,
         }));
 
         _textSize.Keep(SizeFields);
@@ -1805,6 +2071,11 @@ public sealed class CommentaryControl : UserControl
             // The Club Website page can be filled in after this one, and
             // what the relay line says depends on it.
             UpdateRelayState();
+
+            // So does whether listening along is actually going out: the
+            // club website is switched on or off on that page, and this
+            // line must not go on saying nothing is sent once it is.
+            DescribeListening();
         };
 
         UpdateEnabledState();
@@ -1831,6 +2102,7 @@ public sealed class CommentaryControl : UserControl
         Fit(_cmbOpenerPiece, UiLayout.AtTextSize(ShowPieceWidth));
         Fit(_cmbBedPiece, UiLayout.AtTextSize(ShowPieceWidth));
         Fit(_cmbStingPiece, UiLayout.AtTextSize(ShowPieceWidth));
+        Fit(_cmbDriverCut, UiLayout.AtTextSize(DriverPickerWidth));
         Fit(_txtMechanicName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtCoHostName, UiLayout.AtTextSize(MechanicNameWidth));
         Fit(_txtHonoursName, UiLayout.AtTextSize(MechanicNameWidth));
@@ -2286,6 +2558,29 @@ public sealed class CommentaryControl : UserControl
     /// which is the part a club actually needs, because an address nobody
     /// is given is a route nobody uses.
     /// </summary>
+    /// <summary>
+    /// What the box means right now, under the box.
+    ///
+    /// Says the TWO things a club gets wrong about this: that the club
+    /// website has to be switched on as well (this rides on the relay, and
+    /// a club can have the announcer without the relay), and that what
+    /// goes out is whatever voice is chosen on Voice Settings.
+    /// </summary>
+    private void DescribeListening()
+    {
+        if (!_chkListenAlong.Checked)
+        {
+            _lblListenAlong.Text = "Nobody can listen in at the moment. The club's page shows the results as usual.";
+            return;
+        }
+
+        _lblListenAlong.Text = _settings.RelayEnabled
+            ? "A Listen button appears on your club's page while the announcer is speaking. It plays the last few "
+              + "lines in whatever voice you have chosen, and it starts from whatever is being said when they press it."
+            : "This needs your club website switched on as well - it is on the Club Website page. Until then nothing "
+              + "is sent and nobody can listen.";
+    }
+
     private void DescribeNoteRoutes()
     {
         var wifi = _chkNotesWifi.Checked;
@@ -2441,6 +2736,7 @@ public sealed class CommentaryControl : UserControl
             return;
         }
 
+        _nightRecapRunning = true;
         _btnNightRecap.Enabled = false;
         _btnNightRecap.Text = "Writing...";
         _lblNightRecap.Text = string.Empty;
@@ -2466,11 +2762,204 @@ public sealed class CommentaryControl : UserControl
         }
         finally
         {
+            _nightRecapRunning = false;
+
             if (!IsDisposed)
             {
-                _btnNightRecap.Enabled = true;
+                // The switch, not simply back on: commentary may have been
+                // turned off while it ran.
+                _btnNightRecap.Enabled = _chkEnabled.Checked;
                 _btnNightRecap.Text = NightRecapCaption;
             }
+        }
+    }
+
+    /// <summary>
+    /// Fills the driver picker with tonight's drivers, keeping whoever was
+    /// picked where they are still in the list.
+    ///
+    /// KEEPS THE SELECTION, because this runs every time the box is opened:
+    /// a club that picked Bill, read the hint and opened the box again must
+    /// not find it back on the first name. The list beside the box is
+    /// rebuilt with it, so an index never points at the wrong driver.
+    /// </summary>
+    private void FillDriversTonight()
+    {
+        var wanted = _cmbDriverCut.SelectedIndex >= 0 && _cmbDriverCut.SelectedIndex < _driversTonight.Count
+            ? _driversTonight[_cmbDriverCut.SelectedIndex].Transponder
+            : string.Empty;
+
+        var tonight = DriversTonight?.Invoke() ?? Array.Empty<(string Transponder, string Name)>();
+
+        var fresh = tonight
+            .Where(one => !string.IsNullOrWhiteSpace(one.Transponder) && !string.IsNullOrWhiteSpace(one.Name))
+            .ToList();
+
+        // Only when it has actually changed: refilling a ComboBox closes
+        // its own drop-down, and this runs from the event that opens it.
+        if (fresh.Count == _driversTonight.Count
+            && fresh.Select(one => one.Transponder).SequenceEqual(
+                _driversTonight.Select(one => one.Transponder), StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _driversTonight.Clear();
+        _driversTonight.AddRange(fresh);
+
+        _cmbDriverCut.Items.Clear();
+
+        foreach (var one in _driversTonight)
+        {
+            _cmbDriverCut.Items.Add(one.Name.Trim());
+        }
+
+        if (_cmbDriverCut.Items.Count == 0)
+        {
+            return;
+        }
+
+        var back = wanted.Length == 0
+            ? -1
+            : _driversTonight.FindIndex(one =>
+                string.Equals(one.Transponder, wanted, StringComparison.OrdinalIgnoreCase));
+
+        _cmbDriverCut.SelectedIndex = back >= 0 ? back : 0;
+    }
+
+    /// <summary>
+    /// Writes and plays the picked driver's own night - see
+    /// <see cref="DriverCut"/>.
+    ///
+    /// The same shape as the recap's handler above: the button says what it
+    /// is doing while it does it, and the label says what happened either
+    /// way, because a button that goes quiet is a button a club presses
+    /// again.
+    /// </summary>
+    private async Task PlayADriversNightAsync()
+    {
+        if (PlayADriversNight is null)
+        {
+            return;
+        }
+
+        if (_cmbDriverCut.SelectedIndex < 0 || _cmbDriverCut.SelectedIndex >= _driversTonight.Count)
+        {
+            _lblDriverCut.Text = _driversTonight.Count == 0
+                ? "Nobody has a race filed for tonight yet."
+                : "Pick a driver first.";
+            _lblDriverCut.ForeColor = AppTheme.Accent;
+
+            return;
+        }
+
+        var (transponder, name) = _driversTonight[_cmbDriverCut.SelectedIndex];
+
+        _driverCutRunning = true;
+        _btnDriverCut.Enabled = false;
+        _cmbDriverCut.Enabled = false;
+        _btnDriverCut.Text = "Writing...";
+        _lblDriverCut.Text = string.Empty;
+        _lblDriverCut.ForeColor = AppTheme.TextMuted;
+
+        try
+        {
+            var problem = await PlayADriversNight.Invoke(transponder, name);
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _lblDriverCut.Text = problem
+                ?? $"Played, and saved in tonight's folder as \"{DriverCut.LabelFor(name)}\". "
+                   + "Open folder above to find it.";
+            _lblDriverCut.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+        }
+        catch (Exception ex)
+        {
+            _lblDriverCut.Text = ex.Message;
+            _lblDriverCut.ForeColor = AppTheme.Accent;
+        }
+        finally
+        {
+            _driverCutRunning = false;
+
+            if (!IsDisposed)
+            {
+                _btnDriverCut.Enabled = _chkEnabled.Checked;
+                _cmbDriverCut.Enabled = _chkEnabled.Checked;
+                _btnDriverCut.Text = DriverCutCaption;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the last segment's facts out to the developer console - see
+    /// <see cref="NightAccount.Proof"/>.
+    ///
+    /// NOT INTO THE LABEL, which is one line beside a button: the proof is
+    /// several facts and the console is where this app puts anything a club
+    /// reads a few lines of. The label says where it went.
+    /// </summary>
+    private void ShowTheProof()
+    {
+        if (ProofOfTheLastLine is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _lblProof.Text = ProofOfTheLastLine.Invoke();
+            _lblProof.ForeColor = AppTheme.TextMuted;
+        }
+        catch (Exception ex)
+        {
+            _lblProof.Text = ex.Message;
+            _lblProof.ForeColor = AppTheme.Accent;
+        }
+    }
+
+    /// <summary>
+    /// Writes the next race day's preview and says where it went.
+    ///
+    /// The button is held at its own width while the caption says
+    /// "Writing..." - see Steady - because a button that shrinks under the
+    /// pointer re-lays the row it is in.
+    /// </summary>
+    private async Task WriteTheNightBeforeAsync()
+    {
+        if (WriteTheNightBefore is null)
+        {
+            return;
+        }
+
+        _nightBeforeRunning = true;
+        _btnNightBefore.Enabled = false;
+        _btnNightBefore.Text = "Writing...";
+        _lblNightBefore.Text = string.Empty;
+
+        try
+        {
+            var said = await WriteTheNightBefore.Invoke();
+
+            _lblNightBefore.Text = said ?? "The preview was written.";
+            _lblNightBefore.ForeColor = AppTheme.TextMuted;
+        }
+        catch (Exception ex)
+        {
+            _lblNightBefore.Text = ex.Message;
+            _lblNightBefore.ForeColor = AppTheme.Accent;
+        }
+        finally
+        {
+            _nightBeforeRunning = false;
+            _btnNightBefore.Text = NightBeforeCaption;
+
+            // Back to what UpdateEnabledState says rather than to true, so
+            // commentary unticked while it was writing leaves it greyed.
+            _btnNightBefore.Enabled = _chkEnabled.Checked;
         }
     }
 
@@ -2483,6 +2972,7 @@ public sealed class CommentaryControl : UserControl
 
         // The button stays down for the length of the show, so nobody
         // starts a second one over the first.
+        _testShowRunning = true;
         _btnTestShow.Enabled = false;
         _btnTestShow.Text = "Playing...";
         _lblShowResult.Text = string.Empty;
@@ -2511,6 +3001,8 @@ public sealed class CommentaryControl : UserControl
         }
         finally
         {
+            _testShowRunning = false;
+
             if (!IsDisposed)
             {
                 _btnTestShow.Text = TestShowCaption;
@@ -2822,6 +3314,12 @@ public sealed class CommentaryControl : UserControl
         // already true because there is no announcer.
         _chkNotesWifi.Enabled = true;
         _chkNotesRelay.Enabled = true;
+
+        // Listening along is NOT gated on the announcer either, and for a
+        // better reason than the notes boxes have: with the AI announcer
+        // off, the things this sends are the lap calls, flag calls and
+        // results reads, which are the ones a listener at home most wants.
+        _chkListenAlong.Enabled = true;
         _txtCoHostName.Enabled = on && anyExchange && _chkCoHost.Checked;
         _cmbCoHostVoice.Enabled = on && anyExchange && _chkCoHost.Checked;
         _cmbCoHostStance.Enabled = on && anyExchange && _chkCoHost.Checked;
@@ -2858,14 +3356,30 @@ public sealed class CommentaryControl : UserControl
 
         // Nothing to play: a Test button that does nothing reads as the
         // feature being broken rather than as a club with no files in yet.
-        _btnTestShow.Enabled = musicOn && (_showMusic.OpenerPath is not null || _showMusic.BedPath is not null);
+        _btnTestShow.Enabled = !_testShowRunning && musicOn && (_showMusic.OpenerPath is not null || _showMusic.BedPath is not null);
 
         // THE RECAP NEEDS THE ANNOUNCER, not the music. It is read plainly
         // where a club has unticked the sign-off's music (the handler says
         // so), but with no commentary at all there is nothing to write it
         // with - and a button that answers "the commentary isn't set up"
         // every time is a button that should have been greyed out.
-        _btnNightRecap.Enabled = _chkEnabled.Checked;
+        _btnNightRecap.Enabled = !_nightRecapRunning && _chkEnabled.Checked;
+
+        // THE SAME RULE for the two beside it: both need the announcer and
+        // neither needs the music. A driver with no race filed and a night
+        // with no segment said yet are both answered in words by the
+        // handlers rather than by a greyed-out button, because "nothing has
+        // been said yet tonight" is a state a club should be able to read
+        // rather than guess at from a button that will not press.
+        _btnDriverCut.Enabled = !_driverCutRunning && _chkEnabled.Checked;
+        _cmbDriverCut.Enabled = !_driverCutRunning && _chkEnabled.Checked;
+        _btnProof.Enabled = _chkEnabled.Checked;
+
+        // THE SAME RULE for the preview. It is never spoken, but it is
+        // written by the announcer's model, and with commentary unticked
+        // there is no model to write it with - the button used to stay
+        // live and answer "isn't set up" to a club whose set-up was fine.
+        _btnNightBefore.Enabled = !_nightBeforeRunning && _chkEnabled.Checked;
 
         foreach (var box in _showBoxes.Values)
         {
@@ -2958,7 +3472,14 @@ public sealed class CommentaryControl : UserControl
             };
         }
 
-        ICommentaryBrain client = relay is { RelayConfigured: true }
+        // Wrapped whenever the box is ticked, set up or not. The Club
+        // Website page is usually filled in after this one, and a restored
+        // relay address is only let through once it is checked; deciding
+        // here would leave a club on Ollama alone all night while the page
+        // tells them the relay writes first. The relay client asks the
+        // settings again on every line and steps aside when there is
+        // nothing to ask.
+        ICommentaryBrain client = relay is not null
             ? new FallbackCommentaryBrain(relay, local)
             : local;
 

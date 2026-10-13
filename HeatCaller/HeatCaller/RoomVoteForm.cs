@@ -170,11 +170,31 @@ internal sealed class RoomVoteForm : Form
     /// </summary>
     private void Fill()
     {
-        _tally.Rows.Clear();
+        var standings = _vote.Standing();
 
-        foreach (var standing in _vote.Standing())
+        // IN PLACE while the grid is the same size. This runs every second,
+        // and clearing the rows each time threw the tally back to the top -
+        // so on a grid long enough to scroll, the drivers nobody picked
+        // could not be read while the vote was open.
+        if (_tally.Rows.Count == standings.Count)
         {
-            _tally.Rows.Add(standing.Name, standing.Votes.ToString(), $"{standing.Share}%");
+            for (var i = 0; i < standings.Count; i++)
+            {
+                var cells = _tally.Rows[i].Cells;
+
+                cells[0].Value = standings[i].Name;
+                cells[1].Value = standings[i].Votes.ToString();
+                cells[2].Value = $"{standings[i].Share}%";
+            }
+        }
+        else
+        {
+            _tally.Rows.Clear();
+
+            foreach (var standing in standings)
+            {
+                _tally.Rows.Add(standing.Name, standing.Votes.ToString(), $"{standing.Share}%");
+            }
         }
 
         var taking = _vote.Taking;

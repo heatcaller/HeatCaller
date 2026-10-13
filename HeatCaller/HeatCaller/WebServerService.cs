@@ -3490,6 +3490,11 @@ public sealed partial class WebServerService
           if (sponsorCount === 0) { hideSponsor(); return; }
           sinceSwap++;
           if (showingSponsor) {
+            // Not over a race that has gone green, a video included: one
+            // started during staging or the countdown used to play on over
+            // the opening laps, as nothing here asked again once it was up.
+            // The Big Screen stops its video when the race is called.
+            if (pauseDuringRace && state === 'Racing') { hideSponsor(); return; }
             // A video holds the page until it ends (sponsorVid.onended),
             // exactly as it holds the Big Screen - the slide time is for
             // still pictures.
@@ -3553,7 +3558,12 @@ public sealed partial class WebServerService
         sponsorVid.oncanplay = function(){
           if (!loadingSponsor) return;
           loadingSponsor = false; sinceSwap = 0;
-          if (pauseDuringRace && sponsorState === 'Racing') return;
+          if (pauseDuringRace && sponsorState === 'Racing') {
+            // Let go of, not just left hidden: with its src still set it
+            // would carry on buffering the whole file - see hideSponsor.
+            try { sponsorVid.pause(); sponsorVid.removeAttribute('src'); sponsorVid.load(); } catch(e){}
+            return;
+          }
           sponsorImg.style.display = 'none';
           sponsorVid.style.display = 'block';
           document.getElementById('sponsor').style.display = 'flex';

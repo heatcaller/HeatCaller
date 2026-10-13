@@ -13,6 +13,16 @@ import type { StoredDocument } from "./types.js";
  * block unchecked would be a way to put anything at all into it.
  */
 export interface Look {
+  /**
+   * The club is letting people listen along from home, so its pages offer
+   * the control that plays the announcer - see CHANNELS.listen.
+   *
+   * Merged in rather than published with the rest of the look, exactly as
+   * `checkIn` is: it is a switch the laptop sets on a document of its own,
+   * and a page that showed a Listen button for a club that had not turned
+   * it on would be offering something that answers nothing.
+   */
+  readonly listening: boolean;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -118,6 +128,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   logoPlate: undefined,
   iconVersion: flagVersionOf(flagColours({ light: false, vars: {} })),
   checkIn: false,
+  listening: false,
   social: Object.freeze([]),
 });
 
@@ -203,6 +214,11 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     logoPlate,
     iconVersion: logoVersion ?? flagVersionOf(flagColours({ light, vars })),
     checkIn: record(checkin?.body)?.["enabled"] === true,
+
+    // Merged in by Relay.lookFor from a document of its own, the way
+    // checkIn's own flag is above. False here is the honest default for a
+    // look built without it.
+    listening: false,
     social: socialFrom(body?.["social"]),
   };
 }

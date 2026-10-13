@@ -23,6 +23,33 @@ export interface ChannelSpec {
   readonly private?: boolean;
 
   /**
+   * This collection's ids carry no order, so when it runs out of room the
+   * OLDEST WRITTEN makes way - and its maxItems is honoured as well as
+   * its byte budget.
+   *
+   * WHY THIS HAD TO BE SAID OUT LOUD (12 Oct 2026)
+   *
+   * `ownBudget` was written for exactly one channel, `resultsindex`, whose
+   * ids are calendar years. Two things follow from that and neither
+   * generalises:
+   *
+   *   it evicts by ID, oldest year first, and only ever considers ids
+   *   LOWER than the one arriving - so a channel whose ids are not
+   *   ordered would find nothing it was allowed to evict, and the
+   *   INCOMING document would be refused instead. A rolling feed would
+   *   simply stop accepting once it filled, with nothing anywhere saying
+   *   so;
+   *
+   *   and it returns before `maxItems` is ever looked at, so a count
+   *   limit on such a channel does nothing at all.
+   *
+   * Both are right for a year-keyed archive and wrong for anything that
+   * rolls. This flag is how a channel says which of the two it is. See
+   * Relay.planRoom.
+   */
+  readonly rollOldest?: boolean;
+
+  /**
    * The most documents this collection keeps, past which the oldest are
    * forgotten as new ones arrive. Absent means no count limit: the club's
    * storage quota is the only ceiling.
@@ -132,6 +159,35 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // browser after the page has drawn is a page that flashes the wrong
   // colours on every visit. Read through site.ts, which accepts nothing
   // but hex colours, a short line of text and a PNG.
+  /*
+   * A preview of a meeting that HAS NOT HAPPENED YET - the date, what is
+   * on, who is entered, and a reason to come.
+   *
+   * THE FIRST DOCUMENT HERE THAT GOES WRONG BY ITSELF. Everything else on
+   * this relay is replaced by a newer version of itself: a result by a
+   * corrected result, a roster by a fresh roster, a frame by the next
+   * frame. A preview is the first thing that becomes false through the
+   * passage of time alone - left alone it tells the public, in the future
+   * tense, about a meeting that finished hours ago.
+   *
+   * So it comes down two ways, and it needs both:
+   *
+   *   the laptop withdraws it when the meeting starts, by publishing an
+   *   empty one (NightBefore.Withdrawn) rather than dropping the channel -
+   *   dropping leaves the last thing sent standing for good, because
+   *   there is nothing newer to replace it with;
+   *
+   *   and the document carries its own expiry, which the PAGE honours.
+   *   That is the one that matters, because the case it covers is the
+   *   club's laptop never coming back - packed up, switched off, taken
+   *   home - which is exactly when a preview is at its most stale and the
+   *   one case the laptop cannot fix.
+   *
+   * The relay does not read either. It does not know what a preview is,
+   * when it expires or whether it is empty, and that is deliberate - the
+   * rule this file opens with.
+   */
+  preview: { name: "preview", kind: "snapshot", what: "a preview of a meeting that has not happened yet" },
   site: { name: "site", kind: "snapshot", what: "the club's colours, welcome line and logo" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
@@ -153,6 +209,53 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // sign-ups themselves never pass through a channel either - they wait in
   // a document of the relay's own until the desk answers them, through the
   // signup/... routes in server.ts.
+  /*
+   * The announcer's last few lines, as audio, so somebody at home can
+   * listen along with the room.
+   *
+   * NOT A STREAM, and not an archive either. Each spoken line is already
+   * rendered to bytes before it is played, so the laptop puts those bytes
+   * here as the line goes out and the club's page plays them in order a
+   * few seconds behind. That is the same at-least-once shape every other
+   * inbox on this relay has, and it has none of an encoder's ways to fail
+   * on a race night.
+   *
+   * ROLLING, AND THAT IS THE FEATURE RATHER THAN A LIMIT. Only the last
+   * `maxItems` lines are kept. Somebody who opens the page mid-evening
+   * joins the evening where it is, exactly as they would walking into the
+   * hall; they do not get the last two hours to catch up on. It also
+   * means a night cannot grow without bound on a volume somebody pays
+   * for.
+   *
+   * A BUDGET OF ITS OWN, AND THIS IS THE PART THAT MATTERS. Audio is
+   * thousands of times the size of everything else this relay holds: a
+   * night of talking is tens of megabytes against a club's whole 50MB
+   * quota. Counted against that quota it would push a club's SAVED
+   * RESULTS off the relay to make room for last Tuesday's commentary -
+   * a feature for the family at home costing the club its race archive.
+   * So it is off-quota, held to its own ceiling, and cannot evict
+   * anything but itself.
+   *
+   * Public, because that is the whole point: the page that plays it is
+   * the one the club already sends people.
+   */
+  listen: {
+    name: "listen",
+    kind: "collection",
+    what: "the announcer's last few lines, as audio, for listening along",
+
+    // About eight megabytes and forty lines, whichever runs out first.
+    // Forty lines is three or four minutes of an announcer talking, which
+    // is more than enough to be "a few seconds behind" and recover from a
+    // page that was backgrounded for a moment.
+    ownBudget: 8 * 1024 * 1024,
+    maxItems: 40,
+    maxItemBytes: 256 * 1024,
+
+    // Its ids are a running count, not years - see ChannelSpec.rollOldest
+    // for what assuming otherwise would have cost.
+    rollOldest: true,
+  },
   signup: {
     name: "signup",
     kind: "snapshot",

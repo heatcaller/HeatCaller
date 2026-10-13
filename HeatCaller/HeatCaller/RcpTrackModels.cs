@@ -579,7 +579,7 @@ public static class RcpPlan
             foreach (var end in new[] { wall.From, wall.To })
             {
                 var others = design.Walls.Count(w => !ReferenceEquals(w, wall) && w.Touches(end));
-                var curves = design.Curves.Count(c => c.At == end);
+                var curves = design.Curves.Count(c => c.At == end || ArcEndsAt(c, end));
 
                 if (others == 0 && curves == 0)
                 {
@@ -589,6 +589,28 @@ public static class RcpPlan
         }
 
         return ends;
+    }
+
+    /// <summary>
+    /// Whether one end of a turn rail's arc is at <paramref name="point"/>.
+    ///
+    /// A turn is anchored at the corner it cuts across, and its arc meets
+    /// its straights one radius out along each arm (see
+    /// RcpTrackPainter.DrawCurve) - which is where every stock layout and
+    /// a dragged rail loop put them. Only the anchor used to count as
+    /// joined, so both straights at every turn read as open: phantom end
+    /// caps in the inventory, and drawn pink at each end of every turn.
+    /// The anchor is still counted too, for plans drawn that way.
+    /// </summary>
+    private static bool ArcEndsAt(RcpCurve curve, Point point)
+    {
+        var (a, b) = curve.Arms;
+
+        bool Meets(Point arm) =>
+            Math.Abs(curve.Col + arm.X * curve.Radius - point.X) < 0.01f
+            && Math.Abs(curve.Row + arm.Y * curve.Radius - point.Y) < 0.01f;
+
+        return Meets(a) || Meets(b);
     }
 
     /// <summary>

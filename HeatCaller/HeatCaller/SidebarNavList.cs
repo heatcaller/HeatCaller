@@ -282,6 +282,38 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         return -1;
     }
 
+    /// <summary>
+    /// Where a row dragged from sourceIndex goes when it is let go at y.
+    ///
+    /// On a row, that row's place. On a group heading - which is not a row,
+    /// so IndexFromY gives -1 - the place just above the first row under it.
+    /// That used to count as a drop past the end and sent the page to the
+    /// bottom of the whole list, the opposite of where it was let go. Only a
+    /// drop below the last row means last.
+    /// </summary>
+    internal int DropTargetIndex(int y, int sourceIndex)
+    {
+        var onRow = IndexFromY(y);
+        if (onRow >= 0)
+        {
+            return onRow;
+        }
+
+        var adjusted = y + _scrollOffset;
+
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (ItemTop(i) >= adjusted)
+            {
+                // The dragged row comes out before it goes back in, so a row
+                // further down has moved up one by then.
+                return i > sourceIndex ? i - 1 : i;
+            }
+        }
+
+        return _items.Count - 1;
+    }
+
     private void InvalidateItem(int index)
     {
         if (index >= 0 && index < _items.Count)
@@ -854,11 +886,7 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         }
 
         var point = PointToClient(new Point(drgevent.X, drgevent.Y));
-        var targetIndex = IndexFromY(point.Y);
-        if (targetIndex < 0)
-        {
-            targetIndex = _items.Count - 1;
-        }
+        var targetIndex = DropTargetIndex(point.Y, sourceIndex);
         if (targetIndex == sourceIndex)
         {
             return;

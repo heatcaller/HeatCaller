@@ -393,7 +393,7 @@ public sealed class InstallerTests
         // Both commands delete their own entry before adding it - which is
         // what a volunteer who is not sure it worked will rely on, and what
         // avoids reading netsh's translated "already exists".
-        var script = NetworkSetup.ScriptText(8080, "C:\\Temp\\t.txt");
+        var script = NetworkSetup.ScriptText(8080);
 
         var deleteUrlAcl = script.IndexOf("netsh http delete urlacl url=http://+:8080/", StringComparison.Ordinal);
         var addUrlAcl = script.IndexOf(NetworkSetup.UrlAclCommand(8080), StringComparison.Ordinal);
@@ -411,10 +411,10 @@ public sealed class InstallerTests
     [Fact]
     public void The_script_never_asks_anything_and_writes_what_netsh_said()
     {
-        var script = NetworkSetup.ScriptText(8080, "C:\\Temp\\t.txt");
+        var script = NetworkSetup.ScriptText(8080);
 
         Assert.StartsWith("@echo off", script, StringComparison.Ordinal);
-        Assert.Contains("set \"T=C:\\Temp\\t.txt\"", script, StringComparison.Ordinal);
+        Assert.Contains("set \"T=%~dp0transcript.txt\"", script, StringComparison.Ordinal);
 
         // %errorlevel% must not appear: in a /c command line it is expanded
         // before the first command has run, which is the trap this script

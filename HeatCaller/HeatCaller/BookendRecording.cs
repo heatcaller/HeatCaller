@@ -140,22 +140,46 @@ internal sealed class BookendRecording
     /// matters more here, because this is the longest single thing the
     /// app ever plays and it would hold the tap for all of it.
     /// </summary>
-    internal static BookendRecording? StartForTheNight(Action<string> log)
+    internal static BookendRecording? StartForTheNight(Action<string> log) =>
+        StartForAPiece(NightRecap.Label, "tonight's recap", log);
+
+    /// <summary>
+    /// Starts recording one driver's own piece - see <see cref="DriverCut"/>.
+    ///
+    /// Its own label so a club looking in the night's folder sees "Bill
+    /// Hargrove - their night" beside the races, the bookends and The
+    /// Night, and knows at a glance which file goes to whom.
+    /// </summary>
+    internal static BookendRecording? StartForADriver(string? driverName, Action<string> log) =>
+        StartForAPiece(DriverCut.LabelFor(driverName), "a driver's own piece", log);
+
+    /// <summary>
+    /// The one way a piece that is not a segment gets recorded.
+    ///
+    /// ONE METHOD rather than the same twenty lines per piece, which is
+    /// what it had become the moment there were two of them. Everything
+    /// here is the night recap's own logic, unchanged - the refusal while
+    /// anything else is recording, the store, the label - with the label
+    /// and what to call it in the log handed in.
+    /// </summary>
+    /// <param name="label">What the file is called in the night's folder.</param>
+    /// <param name="called">What the log calls it, in the middle of a sentence.</param>
+    private static BookendRecording? StartForAPiece(string label, string called, Action<string> log)
     {
         try
         {
             if (AudioBus.Listening)
             {
-                log($"{AppTime.LogStampNow()}  [audio] Tonight's recap is not being recorded on its own - "
-                    + "something is already recording, and it keeps the tap. Nothing is lost: whatever is "
-                    + "recording has this in it.");
+                log($"{AppTime.LogStampNow()}  [audio] {char.ToUpperInvariant(called[0])}{called[1..]} is not "
+                    + "being recorded on its own - something is already recording, and it keeps the tap. "
+                    + "Nothing is lost: whatever is recording has this in it.");
 
                 return null;
             }
 
             var store = RaceAudioStore.Load();
 
-            if (RaceAudioRecorder.StartFor(store, NightRecap.Label, DateTime.UtcNow, log) is not { } recorder)
+            if (RaceAudioRecorder.StartFor(store, label, DateTime.UtcNow, log) is not { } recorder)
             {
                 return null;
             }
@@ -164,7 +188,7 @@ internal sealed class BookendRecording
         }
         catch (Exception ex)
         {
-            log($"{AppTime.LogStampNow()}  [audio] Couldn't start recording tonight's recap ({ex.Message}). "
+            log($"{AppTime.LogStampNow()}  [audio] Couldn't start recording {called} ({ex.Message}). "
                 + "The broadcast itself is unaffected.");
 
             return null;

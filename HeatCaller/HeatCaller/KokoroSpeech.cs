@@ -96,6 +96,13 @@ internal static class KokoroSpeech
     /// <summary>Which model file the failed load was reading - see ModelPath. Null when nothing has failed.</summary>
     private static string? _loadFailurePath;
 
+    /// <summary>
+    /// The bundled model has failed to load at least once this run. Kept
+    /// apart from _loadFailure because a finished download clears that one,
+    /// and ModelPath must still not go back to the bundled file afterwards.
+    /// </summary>
+    private static bool _bundledFailed;
+
     private static readonly object ReportLock = new();
     private static readonly HashSet<string> MissingVoicesReported = new(StringComparer.OrdinalIgnoreCase);
 
@@ -151,8 +158,14 @@ internal static class KokoroSpeech
             bool bundledWouldNotLoad;
             lock (EngineLock)
             {
-                bundledWouldNotLoad = _loadFailure is not null
-                    && string.Equals(_loadFailurePath, bundled, StringComparison.OrdinalIgnoreCase);
+                // _bundledFailed as well as the failure itself: a download
+                // clears _loadFailure (it is a new file), and without the
+                // flag the very next load went back to the bundled model
+                // that had just failed - and the download looked like it
+                // had done nothing.
+                bundledWouldNotLoad = _bundledFailed
+                    || (_loadFailure is not null
+                        && string.Equals(_loadFailurePath, bundled, StringComparison.OrdinalIgnoreCase));
             }
 
             return bundledWouldNotLoad && IsRealModel(DownloadedModelPath)
@@ -260,6 +273,11 @@ internal static class KokoroSpeech
             _loadFailure = reason;
             _loadFailurePath = reason is null ? null : path;
             _loadFailedAtUtc = atUtc;
+
+            if (reason is null)
+            {
+                _bundledFailed = false;
+            }
         }
     }
 
@@ -531,6 +549,26 @@ internal static class KokoroSpeech
 
             try
             {
+                return LoadFrom(path);
+            }
+            catch (Exception) when (
+                string.Equals(path, BundledModelPath, StringComparison.OrdinalIgnoreCase)
+                && IsRealModel(DownloadedModelPath))
+            {
+                // The bundled model would not load and a downloaded one is
+                // there: that one, straight away, rather than a minute of
+                // silence (RetryLoadAfter) first. This is also what happens
+                // at every start after a club downloaded its way round a bad
+                // bundled file, since nothing about the failure is kept on
+                // disk.
+                return LoadFrom(DownloadedModelPath);
+            }
+        }
+
+        static KokoroWavSynthesizer LoadFrom(string path)
+        {
+            try
+            {
                 var engine = new KokoroWavSynthesizer(path);
 
                 lock (EngineLock)
@@ -550,6 +588,11 @@ internal static class KokoroSpeech
                     _loadFailure = reason;
                     _loadFailurePath = path;
                     _loadFailedAtUtc = DateTime.UtcNow;
+
+                    if (string.Equals(path, BundledModelPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _bundledFailed = true;
+                    }
                 }
 
                 Log?.Invoke($"[voice] {char.ToUpperInvariant(reason[0])}{reason[1..]}.");

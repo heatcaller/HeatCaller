@@ -87,6 +87,50 @@ public partial class AnnouncerControl
     public Func<RaceStature>? RaceSize { get; set; }
 
     /// <summary>
+    /// Tonight's saved races, oldest first, as MainForm reads them -
+    /// everything a driver's own piece is written from. Null until wired,
+    /// and then there is no piece to write.
+    ///
+    /// HANDED IN RATHER THAN WORKED OUT HERE, because what counts as
+    /// "tonight" is TonightAtTheTrack's question and it needs the round
+    /// store to answer it. This control has the history and not the rounds,
+    /// and a second answer to "which races were tonight" is the sort of
+    /// thing that agrees all season and then disagrees about a race that
+    /// started at five to midnight.
+    /// </summary>
+    public Func<IReadOnlyList<SessionRecord>>? RacesTonight { get; set; }
+
+    /// <summary>
+    /// The club's track layouts, for the one fact in a driver's piece that
+    /// needs a store rather than a result: a lap record is only a record
+    /// because TrackLayout.RecordLapMs says so. Null means no record is
+    /// claimed, rather than a guess at one - see NightMoments.ForRace.
+    /// </summary>
+    public Func<TrackLayoutStore?>? Layouts { get; set; }
+
+    /// <summary>
+    /// What the write-ahead did tonight - intros written during the quiet
+    /// between races and whether they were used. Null when nothing is
+    /// wired, and then nothing is said about it.
+    ///
+    /// A hook rather than this page reaching for Race Control: the ledger
+    /// lives there, with the thing that writes the intros, and an
+    /// announcer page that knew how to find Race Control would be a second
+    /// path between two pages that already have one. See
+    /// WrittenAhead.Report.
+    /// </summary>
+    public Func<string?>? IntrosWrittenAhead { get; set; }
+
+    /// <summary>
+    /// What went out to anyone listening from home - lines sent, and the
+    /// ones that did not make it in time. Null when nothing is wired.
+    ///
+    /// Same reasoning: the queue lives on the relay publisher, which this
+    /// page has no business knowing about. See ListenAlong.Report.
+    /// </summary>
+    public Func<string?>? ListenedAlong { get; set; }
+
+    /// <summary>
     /// The broadcast segments' console lines - every refusal, with its
     /// reason. MainForm sends these to the developer console; a race night
     /// that went quiet is otherwise impossible to account for.
@@ -136,6 +180,38 @@ public partial class AnnouncerControl
             // MainForm's wiring because the director is built on first use
             // and may not exist when anything else is hooked up.
             _commentary.HistorySaid = _director.Said;
+
+            // And saved when an intro or a recap marks it, not only when a
+            // segment does - otherwise a restart brought back every fact
+            // those had said. Save writes AppSettings, which belongs to the
+            // UI thread, and the recap marks from the post-race task.
+            _commentary.HistoryMarked = () => RunOnUiThread(() => _director?.Save());
+
+            // AND TONIGHT'S MOMENTS, which is what a promise is paid off
+            // with - see NightPromises.
+            //
+            // Built from the two readers this control already has for a
+            // driver's own piece rather than from two more of its own: a
+            // second answer to "which races were tonight" is the sort of
+            // thing that agrees all season and then disagrees about a race
+            // that started at five to midnight.
+            //
+            // THE READERS ARE READ INSIDE THE LAMBDA, not captured. The
+            // director is built on first use, which can be before MainForm
+            // has set either of them; reading them here would have wired
+            // the callback to two nulls for the life of the app, and the
+            // only symptom would have been a feature that silently never
+            // fired. Null at call time is simply a night with no moments.
+            //
+            // EVERY MOMENT, NOT THE NIGHT'S TOP TWELVE. The only reader is
+            // the promise pay-off, which skips anything from a race that
+            // started before the promise. Capped, the strongest moments of
+            // the early races filled all twelve places by mid-evening, and a
+            // promise's pay-off in the next race - a lead change, a fastest
+            // lap - never made the list, so the promise lapsed in silence.
+            // Still strongest first, which is the order PayOff wants.
+            _director.MomentsTonight = () =>
+                NightMoments.Over(RacesTonight?.Invoke(), Layouts?.Invoke(), most: int.MaxValue);
 
             return _director;
         }
@@ -254,9 +330,33 @@ public partial class AnnouncerControl
                 + "Unmute it on the Mixer and try again.";
         }
 
+        // AND NOT WHILE A RACE IS ON (13 Oct 2026). The mute and the floor
+        // were checked and the track was not, so this could be pressed
+        // during a race and would take the broadcast for four minutes of
+        // "tonight's racing" over a heat that was still running - talking
+        // about results as settled while cars were on the track deciding
+        // them.
+        //
+        // Staging and the countdown count as on: both are seconds from a
+        // green, and a piece that long cannot be let go of once it starts.
+        // Finished does NOT - the flag is out, and after the last race is
+        // exactly when this is for.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            return "A race is on. Wait for the flag and try again - this is for between races and after the last one.";
+        }
+
         if (ShowFloor.Busy)
         {
             return $"{ShowFloor.HeldBy ?? "Something else"} is on air. Wait for it to finish and try again.";
+        }
+
+        // The director's own segments never claim the floor, so a block
+        // between races - opener, bed and all - leaves it free. Opened
+        // over one, this would be two openers and two beds at once.
+        if (_segmentInFlight || ShowOnAir.Playing)
+        {
+            return "A commentary segment is on air. Wait for it to finish and try again.";
         }
 
         var facts = director.NightFacts();
@@ -277,6 +377,56 @@ public partial class AnnouncerControl
         try
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing tonight's recap...");
+
+            // AND WHAT THE NIGHT CAME TO, said here because this is the
+            // moment a club asks for the night to be summed up - so it is
+            // the moment they will read it.
+            //
+            // The commonest way this feature disappoints is silence nobody
+            // can explain, and until 12 Oct 2026 the two commonest reasons
+            // for it were written down nowhere: a segment with nothing to
+            // build from and a segment whose facts were all spent both
+            // returned quietly. A club reading the log saw a handful of
+            // refusals and could not tell whether the quiet was three
+            // segments or thirty. See NightAccount.Report, which also names
+            // the setting that would release each.
+            if (director.Account.Report() is { Length: > 0 } account)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {account}");
+            }
+
+            // AND WHAT THE NIGHT PROMISED, on a line of its own rather than
+            // folded into the account above. The two count different
+            // things: the account counts segments the budget weighed, and
+            // this counts subjects the broadcast pointed the room at, which
+            // is a figure a club reading "said 14" cannot work out from it.
+            // See NightPromises.Report.
+            if (director.Promises.Report() is { Length: > 0 } promised)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {promised}");
+            }
+
+            // AND WHAT WAS WRITTEN IN ADVANCE. The write-ahead is the one
+            // part of this the club paid the model for and never saw: an
+            // intro written in the quiet between races is indistinguishable
+            // from one written on the spot, which is the point of it - and
+            // means a club with a bad night of it has no way of telling
+            // that half the spend went on intros that were thrown away.
+            // See WrittenAhead.Report, which names each reason.
+            if (IntrosWrittenAhead?.Invoke() is { Length: > 0 } ahead)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {ahead}");
+            }
+
+            // AND WHAT THE PEOPLE AT HOME HEARD, for the same reason: a
+            // club cannot see the other end of this at all. A listener who
+            // heard gaps all evening and a club whose log says every line
+            // went are two people who cannot have the same conversation
+            // without this line. See ListenAlong.Report.
+            if (ListenedAlong?.Invoke() is { Length: > 0 } heard)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {heard}");
+            }
 
             var script = await _commentary.BuildNightRecapAsync(facts).ConfigureAwait(true);
 
@@ -305,11 +455,17 @@ public partial class AnnouncerControl
             // ordinary ceiling brought the music up under the last of it
             // and closed the recording's file there. See
             // NightRecap.LongestRead.
+            // THE BAND SAYS WHAT THIS IS, not what it borrowed (13 Oct
+            // 2026). The treatment is the sign-off's on purpose; the NAME
+            // was coming along with it, so the Big Screen read "Sign-Off"
+            // for four minutes of the night being recapped. A crowd reads
+            // that band for a plain statement of what is happening.
             if (treatment.Treats(SegmentKind.SignOffNumbers)
                 && await treatment.RunLongAsync(
                     () => SayTheRecap(chunks),
                     SegmentKind.SignOffNumbers,
-                    NightRecap.LongestRead).ConfigureAwait(true))
+                    NightRecap.LongestRead,
+                    caption: NightRecap.OnTheBand).ConfigureAwait(true))
             {
                 return null;
             }
@@ -349,6 +505,203 @@ public partial class AnnouncerControl
 
     /// <summary>What the night's recap calls itself while it holds the broadcast floor - see ShowFloor.</summary>
     private const string TheNightRecap = "tonight's recap";
+
+    /// <summary>What a driver's own piece calls itself while it holds the floor.</summary>
+    private const string ADriversNight = "a driver's own piece";
+
+    /// <summary>
+    /// ONE DRIVER'S NIGHT, written and played (12 Oct 2026) - see
+    /// <see cref="DriverCut"/> for what it is.
+    ///
+    /// Answers null when it went out, and otherwise why not, in words a
+    /// club can act on - the same contract PlayTonightsRecapAsync holds to
+    /// and for the same reason: the caller is a button that has to say
+    /// something either way.
+    ///
+    /// ONE DRIVER AT A TIME, ON DEMAND, and that is a decision rather than
+    /// a limitation of the loop. Twenty drivers at ninety seconds each is
+    /// half an hour of a hall listening to pieces that are not about them.
+    /// The only path from a written line to audio in this app is the voice
+    /// queue with a recorder round it - the roadmap records that choice and
+    /// why the silent render was not built - so a piece gets made by being
+    /// PLAYED. Until something can render one without the room hearing it,
+    /// a club plays the ones it wants: at a presentation, or while the
+    /// place is being packed up.
+    ///
+    /// THE ORDER IS THE RECAP'S ORDER, for its reasons. The floor is
+    /// claimed before the model is asked, because writing takes the best
+    /// part of a minute and a segment that started inside it would be
+    /// talking over this piece's own opener. The recorder starts after the
+    /// writing, because a recorder running through that minute puts a
+    /// minute of silence at the top of the file.
+    /// </summary>
+    /// <param name="transponder">The driver, as their results key on.</param>
+    /// <param name="driverName">Their name, as it should be said and as the file is named.</param>
+    public async Task<string?> PlayADriversNightAsync(string? transponder, string? driverName)
+    {
+        if (_commentary is not { IsAvailable: true })
+        {
+            return "The commentary isn't set up on this PC yet, so there is nothing to write the piece with.";
+        }
+
+        if (Treatment is not { } treatment)
+        {
+            return "The commentary isn't set up on this PC yet.";
+        }
+
+        var named = (driverName ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(transponder) || named.Length == 0)
+        {
+            return "Pick a driver first.";
+        }
+
+        if (_announcer.Muted)
+        {
+            return "The announcer is muted, so nobody would hear it and the recording would be silent. "
+                + "Unmute it on the Mixer and try again.";
+        }
+
+        if (RacesTonight?.Invoke() is not { Count: > 0 } tonight)
+        {
+            return "There is nothing filed for tonight yet, so there is no night to write about. "
+                + "Run the races first.";
+        }
+
+        var facts = DriverCut.FactsFor(transponder, named, tonight, Layouts?.Invoke());
+
+        if (facts.Empty)
+        {
+            return $"{named} has no races filed for tonight, so there is nothing to write about.";
+        }
+
+        // AND NOT WHILE A RACE IS ON (13 Oct 2026). The mute and the floor
+        // were checked and the track was not, so this could be pressed
+        // during a race and would take the broadcast for four minutes of
+        // "tonight's racing" over a heat that was still running - talking
+        // about results as settled while cars were on the track deciding
+        // them.
+        //
+        // Staging and the countdown count as on: both are seconds from a
+        // green, and a piece that long cannot be let go of once it starts.
+        // Finished does NOT - the flag is out, and after the last race is
+        // exactly when this is for.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            return "A race is on. Wait for the flag and try again - this is for between races and after the last one.";
+        }
+
+        if (ShowFloor.Busy)
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} is on air. Wait for it to finish and try again.";
+        }
+
+        // The director's own segments never claim the floor, so a block
+        // between races - opener, bed and all - leaves it free. Opened
+        // over one, this would be two openers and two beds at once.
+        if (_segmentInFlight || ShowOnAir.Playing)
+        {
+            return "A commentary segment is on air. Wait for it to finish and try again.";
+        }
+
+        if (!ShowFloor.TryClaim(ADriversNight))
+        {
+            return $"{ShowFloor.HeldBy ?? "Something else"} has the broadcast. Wait for it to finish and try again.";
+        }
+
+        BookendRecording? recording = null;
+
+        try
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing {named}'s night...");
+
+            var script = await _commentary.BuildDriverCutAsync(facts).ConfigureAwait(true);
+
+            var chunks = DriverCut.Chunks(script);
+
+            if (chunks.Count == 0)
+            {
+                return "The model did not write anything usable. Try again, or check the Connection card above.";
+            }
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] {named}'s night: {Plural.Of(chunks.Count, "piece")} to read, "
+                + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
+
+            recording = BookendRecording.StartForADriver(named, line => StatusMessage?.Invoke(line));
+
+            // THE SIGN-OFF'S TREATMENT, like the night's recap: this is the
+            // same shape of thing, an opener in front and a playout at the
+            // end. Treats() is asked first so a club that has unticked the
+            // sign-off's music gets the piece read plainly rather than the
+            // one piece of music it said it did not want.
+            // And the band says whose night it is rather than "Sign-Off",
+            // for the reason the recap's own path gives. This one was the
+            // worse of the two: a piece about one driver, with their name
+            // in every sentence of it, under a band reading "Sign-Off".
+            if (treatment.Treats(SegmentKind.SignOffNumbers)
+                && await treatment.RunLongAsync(
+                    () => SayTheRecap(chunks),
+                    SegmentKind.SignOffNumbers,
+                    NightRecap.LongestRead,
+                    caption: DriverCut.OnTheBand(driverName)).ConfigureAwait(true))
+            {
+                return null;
+            }
+
+            SayTheRecap(chunks);
+
+            // AND WAITED FOR, for the reason the recap's own path states at
+            // length: SpeakReminder queues and returns, so without this the
+            // finally below would close the file and free the floor before a
+            // word had been said.
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead).ConfigureAwait(true);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"Couldn't play {named}'s night: {ex.Message}";
+        }
+        finally
+        {
+            recording?.Finish(line => StatusMessage?.Invoke(line));
+
+            ShowFloor.Release(ADriversNight);
+        }
+    }
+
+    /// <summary>
+    /// Why the announcer said what it last said, for the club that wants to
+    /// check it - see <see cref="NightAccount.Proof"/>.
+    ///
+    /// A sentence either way, because the caller is a button.
+    /// </summary>
+    public string TheProofOfTheLastLine()
+    {
+        if (Director is not { } director)
+        {
+            return "The commentary isn't set up on this PC yet.";
+        }
+
+        if (director.Account.Proof() is not { Length: > 0 } proof)
+        {
+            return "The announcer has not said one of its own segments yet tonight, so there is nothing to show.";
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {proof}");
+
+        // The promises with it, because the one fact in a pack a club is
+        // most likely to query is the callback - "how does it know we
+        // mentioned him earlier" - and the ledger's own count is the
+        // answer. See NightPromises.
+        if (director.Promises.Report() is { Length: > 0 } promised)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {promised}");
+        }
+
+        return "Written out in the developer console - every fact it was given, and nothing else.";
+    }
 
     /// <summary>
     /// Reads the recap out, a piece at a time.
@@ -391,8 +744,18 @@ public partial class AnnouncerControl
     /// </summary>
     private void FeedTheDirector()
     {
-        if (Director is not { } director || _settings?.CommentaryEnabled != true || _commentary?.IsAvailable != true)
+        if (Director is not { } director || _settings is null)
         {
+            return;
+        }
+
+        // The paid reads go out with the AI layer off as well - they are
+        // typed by a person and need no model, and the Sponsors page says
+        // so. They were behind this gate with everything else, so a club
+        // without the commentary switched on never got one read all night.
+        if (!_settings.CommentaryEnabled || _commentary?.IsAvailable != true)
+        {
+            FeedTheSponsorsOnly(director);
             return;
         }
 
@@ -464,7 +827,13 @@ public partial class AnnouncerControl
             _directorGeneration = _race.SessionGeneration;
             _lapsFed.Clear();
 
-            director.RaceStarted(_race.SessionGeneration.ToString(), RaceClassName?.Invoke());
+            // The session number alone repeats after a restart - it starts
+            // at 0 in every launch - and tonight's spent facts are restored
+            // across one, so the mains would find "pole:5" already said by
+            // a heat. The time of the green makes it this race's own.
+            director.RaceStarted(
+                $"{_race.SessionGeneration}@{DateTime.Now.Ticks}",
+                RaceClassName?.Invoke());
         }
         else if (!racing && _directorGeneration >= 0)
         {
@@ -475,7 +844,7 @@ public partial class AnnouncerControl
 
         if (racing)
         {
-            var ordered = _race.GetOrderedStandings();
+            var ordered = RacingField(_race.GetOrderedStandings());
 
             director.Standings(PairsFrom(ordered));
             FeedLaps(ordered);
@@ -525,16 +894,69 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
+    /// The sponsors' paid reads on their own, for a night with no AI
+    /// commentary - the same reads, in the same gaps, asked the same way
+    /// SpeakNextSegmentAsync asks for them when the ladder has nothing.
+    ///
+    /// The race state is checked here rather than left to the director,
+    /// because nothing feeds the director the green and the flag on this
+    /// path - its own idea of whether a race is on is whatever it was when
+    /// the commentary was last on.
+    /// </summary>
+    private void FeedTheSponsorsOnly(CommentaryDirector director)
+    {
+        var day = RaceDayId?.Invoke() ?? string.Empty;
+
+        if (day.Length == 0 || _segmentInFlight || ShowFloor.Busy)
+        {
+            return;
+        }
+
+        if (_race.State is not (RaceState.Idle or RaceState.Finished))
+        {
+            return;
+        }
+
+        director.NewMeeting(day);
+
+        // Switched off mid-race, the director was told the green and never
+        // the flag, and would refuse every read for the rest of the night.
+        if (_directorGeneration >= 0)
+        {
+            _directorGeneration = -1;
+
+            director.RaceFinished();
+        }
+
+        // Caught as SpeakNextSegmentAsync catches it: this runs on the
+        // page's timer, and nothing about an advert is worth the window.
+        try
+        {
+            SayTheSponsorsReadIfThereIsOne(director);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [sponsor] {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Every adjacent pair in the running order, as BattleWatch wants
     /// them.
     ///
     /// Gaps at the line, from RaceGaps, never by comparing lap counts -
     /// those differ for everybody the moment the leader crosses. A pair
-    /// whose gap cannot be measured is handed over as one that is miles
-    /// apart, so the detector drops it rather than treating "unknown" as
-    /// "nose to tail".
+    /// whose gap cannot be measured is handed over as NaN, never as a
+    /// number: the detector neither starts a fight on it nor ends one.
+    ///
+    /// It used to be handed over as miles apart, and that ended the very
+    /// fights this segment is for. The moment one car passes another and
+    /// crosses the line first, the pair is unmeasurable until the other
+    /// crosses too (RaceGaps finds a negative gap and returns none), so a
+    /// real pass wiped out the battle it should have been the highlight
+    /// of and its lead change was never counted.
     /// </summary>
-    private static IReadOnlyList<PairGap> PairsFrom(IReadOnlyList<RacerStanding> ordered)
+    internal static IReadOnlyList<PairGap> PairsFrom(IReadOnlyList<RacerStanding> ordered)
     {
         if (ordered.Count < 2)
         {
@@ -551,12 +973,48 @@ public partial class AnnouncerControl
                 ordered[i].TransponderId,
                 ordered[i + 1].TransponderId,
                 i + 1,
-                gap.GapMs is { } ms ? ms / 1000.0 : double.MaxValue,
+                gap.GapMs is { } ms ? ms / 1000.0 : double.NaN,
                 gap.LapsDown));
         }
 
         return pairs;
     }
+
+    /// <summary>
+    /// The running order as the commentary should see it: every ghost left
+    /// out while a real car is racing, as RaceLeader and the race's own
+    /// fastest lap leave them out. A field of nothing but ghosts is still
+    /// talked about.
+    ///
+    /// Without this a PB ghost was half of "a fight for the lead", pushed
+    /// the real leader down to second, and had its replayed laps called the
+    /// fastest of the race.
+    /// </summary>
+    internal static IReadOnlyList<RacerStanding> RacingField(IReadOnlyList<RacerStanding> ordered)
+    {
+        if (!ordered.Any(s => !Ghosts.IsGhost(s.TransponderId)))
+        {
+            return ordered;
+        }
+
+        return ordered.Where(s => !Ghosts.IsGhost(s.TransponderId)).ToList();
+    }
+
+    /// <summary>
+    /// Whether the lap at this index says anything about pace - the same
+    /// laps the session lets compete for best lap.
+    ///
+    /// Not the start lap, which runs from the green to the first crossing:
+    /// a 1.4 s dash from a grid just behind the loop became the session
+    /// best, no real lap could beat it, and the record-pace calls stopped
+    /// for the rest of the race. Nor index 1 for a car credited its start
+    /// lap at the green (see RacerStanding.StartLapCredited), nor a lap
+    /// that ran through a crash recovery.
+    /// </summary>
+    internal static bool IsPaceLap(RacerStanding standing, int index) =>
+        index > 0
+        && !(standing.StartLapCredited && index == 1)
+        && !standing.IsRecoveryLap(index);
 
     /// <summary>
     /// Hands over the laps that have come in since the last tick.
@@ -589,6 +1047,11 @@ public partial class AnnouncerControl
 
             for (var i = fed; i < now && i < laps.Count; i++)
             {
+                if (!IsPaceLap(standing, i))
+                {
+                    continue;
+                }
+
                 director.Lap(standing.TransponderId, laps[i] / 1000.0);
             }
 
@@ -629,6 +1092,24 @@ public partial class AnnouncerControl
         try
         {
             var said = await director.NextAsync().ConfigureAwait(true);
+
+            // THE GAP MAY HAVE GONE WHILE IT WAS WRITTEN (bug hunt 7).
+            // FeedTheDirector turns away staging and a claimed floor only
+            // before the pass starts, and a write takes seconds - long
+            // enough for the next race to be called to the grid or for the
+            // programme to take the floor. Asked again here, and before the
+            // sponsor's read and the hand-over below, which would otherwise
+            // go out into the same gap.
+            if (!IsDisposed && WhyNotNow(said) is { } why)
+            {
+                if (said is not null)
+                {
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [brain] Written, then dropped - {why}.");
+                }
+
+                return;
+            }
 
             if (said is null || IsDisposed)
             {
@@ -685,6 +1166,38 @@ public partial class AnnouncerControl
         {
             _segmentInFlight = false;
         }
+    }
+
+    /// <summary>
+    /// Why a segment that has just been written must not go out now, or
+    /// null when it may. The same rules as FeedTheDirector's, asked again
+    /// once the write is back, plus the one the director applies to its
+    /// own order: an in-race segment only while a race is on, and a
+    /// between-races one only while none is. The director drops those
+    /// itself once it is told the race has changed; this covers the half
+    /// second before the tick tells it.
+    /// </summary>
+    private string? WhyNotNow(SpokenSegment? said)
+    {
+        if (_race.State is RaceState.Staging or RaceState.Countdown)
+        {
+            return "the next race was called to the grid while it was being written";
+        }
+
+        if (ShowFloor.Busy)
+        {
+            return $"{ShowFloor.HeldBy ?? "the programme"} took the floor while it was being written";
+        }
+
+        if (said is not null
+            && CommentaryDirector.InRace(said.Kind) != (_race.State == RaceState.Racing))
+        {
+            return _race.State == RaceState.Racing
+                ? "the race went green while it was being written"
+                : "the race finished while it was being written";
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1012,6 +1525,16 @@ public partial class AnnouncerControl
     /// </summary>
     private bool SayTheSponsorsReadIfThereIsOne(CommentaryDirector director)
     {
+        // Not while the announcer is muted. The read is counted before it
+        // is queued (below) and SpeakReminder drops it while muted, so a
+        // twenty-minute track repair on mute billed every sponsor a read
+        // every ninety seconds that nobody heard. Asked before the director
+        // so an ad break's read stays owed rather than being spent.
+        if (_announcer.Muted)
+        {
+            return false;
+        }
+
         // The real gap where the host knows it, so copy longer than the gap
         // is split at a sentence rather than run into the next race; no
         // limit otherwise, where the read's own 25-second cap still applies.

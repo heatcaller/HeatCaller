@@ -349,6 +349,20 @@ public sealed partial class AnnouncementService
         var wasSpeaking = StopCurrentPlayback();
         var cutSound = StopPlayingSound();
 
+        // AND THE SPONSOR'S PICTURE COMES OFF THE CROWD SCREEN (13 Oct
+        // 2026). SponsorOnAir.End was written for "a read abandoned" and
+        // called from nowhere, so a read cut off here kept the screen for
+        // the rest of its ESTIMATED length - up to forty seconds of a
+        // sponsor's logo over a race going green, which is the one thing
+        // on that screen the crowd is actually watching for.
+        //
+        // Unconditionally, not only when something was speaking: a read
+        // whose words finished a moment ago still holds the screen through
+        // its overhang, and the countdown has to win that. See
+        // SponsorOnAir, and BigScreenForm, where Showing takes priority
+        // over everything else it would otherwise draw.
+        SponsorOnAir.End();
+
         // Silent when there was nothing to cut, which is the usual case -
         // the staging chain waits for the audio before it starts a countdown.
         if (!wasSpeaking && !cutSound && clearedVoice == 0 && clearedSounds == 0 && abandonedWriting == 0)

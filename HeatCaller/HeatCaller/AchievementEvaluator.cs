@@ -555,7 +555,12 @@ public static partial class AchievementEvaluator
             // Nothing here is judged when the start time was never known.
             if (record.StartedAtUtc != default)
             {
-                var today = localStart.Date;
+                // "A day" for the badges counting races in one is the club
+                // night, 6am to 6am, as everywhere else in the app: calendar
+                // days split a Saturday night at midnight, so the 00:15 main
+                // earned Weekend Warrior and the races either side of twelve
+                // never added up to Iron Driver or Double Trouble.
+                var today = TonightAtTheTrack.NightOf(localStart);
                 var racedToday = myEarlier.Where(r => r.StartedAtUtc != default && LocalDay(r) == today).ToList();
 
                 if (racedToday.Count + 1 >= 5)
@@ -573,7 +578,7 @@ public static partial class AchievementEvaluator
                     }
                 }
 
-                if (localStart.DayOfWeek == DayOfWeek.Sunday
+                if (today.DayOfWeek == DayOfWeek.Sunday
                     && myEarlier.Any(r => r.StartedAtUtc != default && LocalDay(r) == today.AddDays(-1)))
                 {
                     Award(AchievementCatalogue.WeekendWarrior, $"{today.AddDays(-1):d MMM} and {today:d MMM}");
@@ -1306,8 +1311,8 @@ public static partial class AchievementEvaluator
             .OrderByDescending(r => r.StartedAtUtc)
             .ToList();
 
-    /// <summary>The calendar day a race started on, in local time.</summary>
-    private static DateTime LocalDay(SessionRecord race) => race.StartedAtUtc.ToLocalTime().Date;
+    /// <summary>The club night a race started in, in local time - 6am to 6am (TonightAtTheTrack.NightOf).</summary>
+    private static DateTime LocalDay(SessionRecord race) => TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime());
 
     /// <summary>
     /// Who won a past race among real cars - null when fewer than two real

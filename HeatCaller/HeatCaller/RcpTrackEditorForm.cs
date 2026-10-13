@@ -569,7 +569,8 @@ public sealed class RcpTrackEditorForm : Form
                 return;
             }
 
-            Result.TileSizeMm = (double)_numTileSize.Value;
+            // Through the canvas, as an undo step (see RcpTrackCanvas.SetRoom).
+            _canvas.SetTileSize((double)_numTileSize.Value);
             HighlightTileSize();
             RefreshReadouts();
         };
@@ -622,8 +623,19 @@ public sealed class RcpTrackEditorForm : Form
                 return;
             }
 
-            Result.BackdropOpacity = _barBackdrop.Value;
-            _canvas.Invalidate();
+            // An undo step, which the canvas only redraws for - so the undo
+            // and redo buttons are put right here.
+            _canvas.SetBackdropOpacity(_barBackdrop.Value);
+
+            if (_btnUndo is not null)
+            {
+                _btnUndo.Enabled = _canvas.CanUndo;
+            }
+
+            if (_btnRedo is not null)
+            {
+                _btnRedo.Enabled = _canvas.CanRedo;
+            }
         };
 
         var lblTraceHint = new Label
@@ -651,7 +663,7 @@ public sealed class RcpTrackEditorForm : Form
                 return;
             }
 
-            Result.RouteClosed = _chkClosedRoute.Checked;
+            _canvas.SetRouteClosed(_chkClosedRoute.Checked);
             RefreshReadouts();
         };
 
@@ -719,13 +731,12 @@ public sealed class RcpTrackEditorForm : Form
                 return;
             }
 
-            Result.KitName = _cmbKit.SelectedIndex <= 0 ? string.Empty : (string)_cmbKit.SelectedItem!;
+            // The kit and the tile size it comes in, as one undo step. The
+            // canvas announces the change, which puts the size box in line.
+            var name = _cmbKit.SelectedIndex <= 0 ? string.Empty : (string)_cmbKit.SelectedItem!;
 
-            if (RcpKit.ByName(Result.KitName) is { } kit)
-            {
-                SetTileSize(kit.TileSizeMm);
-            }
-
+            _canvas.SetKit(name, RcpKit.ByName(name)?.TileSizeMm);
+            HighlightTileSize();
             RefreshReadouts();
         };
 
@@ -1042,7 +1053,7 @@ public sealed class RcpTrackEditorForm : Form
 
     private void SetTileSize(double mm)
     {
-        Result.TileSizeMm = mm;
+        _canvas.SetTileSize(mm);
 
         if ((double)_numTileSize.Value != mm)
         {

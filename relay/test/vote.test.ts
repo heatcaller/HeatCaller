@@ -348,6 +348,29 @@ describe("moving to the next race", () => {
     assert.equal(held.body.items.length, 1);
     assert.equal(held.body.items[0].d, BILL.id);
   });
+
+  it("starts empty when the same race is opened again as a new poll", async () => {
+    // Reopening a vote on the same round makes a new, empty poll on the
+    // laptop. Judged by the label alone, the relay kept its votes and
+    // handed them back into the new poll.
+    await publish({ enabled: true, open: true, race: "Stock A-Main", ballot: "poll-1", drivers: [BILL, SAM] });
+    await vote(BILL.id);
+
+    assert.equal((await inbox()).body.items.length, 1);
+
+    await publish({ enabled: true, open: true, race: "Stock A-Main", ballot: "poll-2", drivers: [BILL, SAM] });
+
+    assert.deepEqual((await inbox()).body.items, []);
+  });
+
+  it("keeps the votes when the same poll is closed", async () => {
+    await publish({ enabled: true, open: true, race: "Stock A-Main", ballot: "poll-1", drivers: [BILL, SAM] });
+    await vote(BILL.id);
+
+    await publish({ enabled: true, open: false, race: "Stock A-Main", ballot: "poll-1", drivers: [] });
+
+    assert.equal((await inbox()).body.items.length, 1);
+  });
 });
 
 describe("the laptop's own route", () => {

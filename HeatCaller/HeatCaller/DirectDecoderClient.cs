@@ -110,8 +110,33 @@ public sealed class DirectDecoderClient : IDisposable
     /// still inside the driver WILL be asked for again before it is done -
     /// and two of them would open two streams and start two read loops on
     /// one decoder, both framing the same bytes.
+    ///
+    /// Guarded by _connectLock, with the three fields after it.
     /// </summary>
     private int _connecting;
+
+    /// <summary>The generation of the connect in flight - so a Connect can tell an overtaken one from the current one.</summary>
+    private int _connectingGeneration;
+
+    /// <summary>
+    /// A Connect asked for while an overtaken connect was still inside the
+    /// driver, started as soon as that one comes out - see Connect.
+    /// </summary>
+    private bool _connectQueued;
+
+    /// <summary>
+    /// Serialises the connect bookkeeping above, the generation bump in
+    /// Disconnect, and the "still current? then publish" step. Never held
+    /// across a driver call or a status event - only around the few fields.
+    /// </summary>
+    private readonly object _connectLock = new();
+
+    /// <summary>
+    /// The last stream let go of, closing on a thread of its own and maybe
+    /// not closed yet - see Teardown. Only one stream is ever open, and each
+    /// connect waits for the close before it, so the last one is enough.
+    /// </summary>
+    private Thread? _closing;
 
     /// <summary>
     /// Bumped by every Connect and every Disconnect. A connect that comes
@@ -170,16 +195,55 @@ public sealed class DirectDecoderClient : IDisposable
     /// </summary>
     public void Connect()
     {
-        if (Interlocked.Exchange(ref _connecting, 1) == 1)
+        int generation;
+        var queued = false;
+
+        lock (_connectLock)
         {
-            // One at a time. Nothing is said about it: the retry timer asks
-            // every three seconds and would fill the console with it.
+            if (_connecting == 1)
+            {
+                if (_connectingGeneration == Volatile.Read(ref _generation))
+                {
+                    // One at a time, and the one in flight is the current
+                    // one. Nothing is said about it: the retry timer asks
+                    // every three seconds and would fill the console with it.
+                    return;
+                }
+
+                // The one in flight was overtaken by a Disconnect and is
+                // still inside the driver. This one used to be dropped
+                // without a word, leaving Connect greyed out with nothing
+                // connecting. It is kept instead, and started the moment
+                // the old one comes out - see ConnectCore's finally.
+                _connectQueued = true;
+                queued = true;
+                generation = Volatile.Read(ref _generation);
+            }
+            else
+            {
+                _connecting = 1;
+                generation = Interlocked.Increment(ref _generation);
+                _connectingGeneration = generation;
+            }
+        }
+
+        if (!queued)
+        {
+            StartConnect(generation);
             return;
         }
 
-        var generation = Interlocked.Increment(ref _generation);
+        // Connecting, so the buttons and the retry timer read it as under
+        // way. Only if nothing has happened since - a Disconnect, or the
+        // queued connect already started.
+        SetStateIfCurrent(generation, DecoderConnectionState.Connecting,
+            "Waiting for the last attempt on the EasyLap to finish before trying again... Press Disconnect to give up.");
+    }
 
-        SetState(DecoderConnectionState.Connecting, "Looking for the EasyLap decoder (Silicon Labs CP2110)...");
+    /// <summary>Publishes Connecting and starts the connect, for an attempt already counted in under _connectLock.</summary>
+    private void StartConnect(int generation)
+    {
+        SetStateIfCurrent(generation, DecoderConnectionState.Connecting, "Looking for the EasyLap decoder (Silicon Labs CP2110)...");
 
         _ = Task.Run(() => ConnectCore(generation));
     }
@@ -201,10 +265,7 @@ public sealed class DirectDecoderClient : IDisposable
             // overtaken: the Disconnect that overtook it has had the last
             // word, and an Error arriving after it would turn the status
             // light red for a decoder nobody is trying to open.
-            if (Volatile.Read(ref _generation) == generation)
-            {
-                SetState(state, message);
-            }
+            SetStateIfCurrent(generation, state, message);
         }
 
         try
@@ -214,6 +275,11 @@ public sealed class DirectDecoderClient : IDisposable
             // already been published and this is still the same attempt, not
             // a disconnection.
             Teardown();
+
+            // The stream let go of moments ago may still be closing on its
+            // own thread - see Teardown - and the decoder is opened again
+            // only once it has. Waited for here, where waiting is allowed.
+            Volatile.Read(ref _closing)?.Join();
 
             // A new connection may be a different decoder, or the same one
             // restarted: its clock is learned again from scratch.
@@ -290,14 +356,16 @@ public sealed class DirectDecoderClient : IDisposable
             // Looked at once more now the stream IS the live one: a
             // Disconnect landing between the look above and this assignment
             // would have found nothing to close, and the read loop would
-            // have started on a decoder nobody wanted.
-            if (Volatile.Read(ref _generation) != generation)
+            // have started on a decoder nobody wanted. The look and the
+            // publish are one step under _connectLock, which Disconnect's
+            // bump takes too: a Disconnect that finished in between used to
+            // be followed by Connected - a green light with nothing reading,
+            // and the retry timer leaving it alone because it said Connected.
+            if (!SetStateIfCurrent(generation, DecoderConnectionState.Connected, "Connected. Listening for lap events."))
             {
                 Teardown();
                 return;
             }
-
-            SetState(DecoderConnectionState.Connected, "Connected. Listening for lap events.");
 
             _ = Task.Run(() => ReadLoop(stream, maxInputReportLength, token), token);
         }
@@ -321,8 +389,48 @@ public sealed class DirectDecoderClient : IDisposable
             // driver call that NEVER returns leaves this set and no further
             // connect is attempted - which is the right answer: the window
             // is free either way, and asking a wedged driver again only
-            // wedges another thread behind the first.
-            Volatile.Write(ref _connecting, 0);
+            // wedges another thread behind the first. A connect asked for
+            // meanwhile is started now - see Connect - counted in under the
+            // same lock, so a Disconnect a moment later still overtakes it.
+            var next = false;
+            var nextGeneration = 0;
+
+            lock (_connectLock)
+            {
+                next = _connectQueued;
+                _connectQueued = false;
+
+                if (next)
+                {
+                    nextGeneration = Interlocked.Increment(ref _generation);
+                    _connectingGeneration = nextGeneration;
+                }
+                else
+                {
+                    _connecting = 0;
+                }
+            }
+
+            if (next)
+            {
+                try
+                {
+                    StartConnect(nextGeneration);
+                }
+                catch
+                {
+                    // A subscriber threw while reporting it. Nobody waits on
+                    // this thread, and the next Connect must not find one
+                    // still in flight.
+                    lock (_connectLock)
+                    {
+                        if (_connectingGeneration == nextGeneration)
+                        {
+                            _connecting = 0;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -439,8 +547,13 @@ public sealed class DirectDecoderClient : IDisposable
     public void Disconnect()
     {
         // Any connect still inside the driver is now working for a
-        // connection nobody wants - see ConnectCore.
-        Interlocked.Increment(ref _generation);
+        // connection nobody wants - see ConnectCore - and one queued behind
+        // it is not wanted either.
+        lock (_connectLock)
+        {
+            _connectQueued = false;
+            Interlocked.Increment(ref _generation);
+        }
 
         Teardown();
 
@@ -455,36 +568,76 @@ public sealed class DirectDecoderClient : IDisposable
     /// <see cref="State"/>. Its own method because a connect does this too,
     /// on its own thread, and must not publish Disconnected in the middle of
     /// connecting.
+    ///
+    /// The stream is closed on a thread of its own. Disconnect is called from
+    /// the UI thread - the Disconnect button, a decoder switch, closing the
+    /// app - and the stream's Dispose waits for the read loop to come out of
+    /// stream.Read with no timeout (see Connect): a decoder wedged on the bus
+    /// froze the window, and on close, after HangWatchdog had stopped, the
+    /// app just never exited.
     /// </summary>
     private void Teardown()
     {
-        if (_cts is not null)
+        // Each taken in one step, so a Disconnect and a connect tearing down
+        // at once cannot both cancel, dispose or close the same one.
+        var cts = Interlocked.Exchange(ref _cts, null);
+
+        if (cts is not null)
         {
-            _cts.Cancel();
+            cts.Cancel();
             // Safe to dispose straight away: the read loop only polls
             // ct.IsCancellationRequested, which keeps working on a disposed
             // source, and never registers callbacks on the token.
-            _cts.Dispose();
-            _cts = null;
+            cts.Dispose();
         }
 
-        if (_stream is not null)
+        var old = Interlocked.Exchange(ref _stream, null);
+
+        if (old is not null)
         {
-            try
+            var closer = new Thread(() => CloseQuietly(old))
             {
-                _stream.Dispose();
-            }
-            catch
-            {
-                // ignore - tearing down anyway
-            }
-            _stream = null;
+                IsBackground = true,
+                Name = "EasyLap close",
+            };
+
+            // Started before it is published, so a connect never joins a
+            // thread that has not started.
+            closer.Start();
+            Volatile.Write(ref _closing, closer);
         }
     }
 
     private void SetState(DecoderConnectionState state, string message)
     {
         State = state;
+        RaiseStatus(state, message);
+    }
+
+    /// <summary>
+    /// Sets the state only if <paramref name="generation"/> is still the
+    /// current one, the look and the set in one step under _connectLock -
+    /// see ConnectCore. The event is raised after the lock is let go, since
+    /// a subscriber may take as long as it likes. True if it was published.
+    /// </summary>
+    private bool SetStateIfCurrent(int generation, DecoderConnectionState state, string message)
+    {
+        lock (_connectLock)
+        {
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                return false;
+            }
+
+            State = state;
+        }
+
+        RaiseStatus(state, message);
+        return true;
+    }
+
+    private void RaiseStatus(DecoderConnectionState state, string message)
+    {
         StatusChanged?.Invoke(state, message);
         Log($"[status] {message}");
     }

@@ -284,6 +284,7 @@ describe("the voice's usage lock", () => {
             speakerBoost: true,
             speed: 1,
             outputFormat: "",
+            cloned: false,
           },
         ],
         monthlyChars: 1000,

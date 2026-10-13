@@ -226,11 +226,14 @@ public static class CommentaryReaders
         var newest = history.All
             .Where(record => record.SessionType != RaceSessionType.Practice)
             .Where(record => record.Results.Count > 0)
-            .Where(record => !string.IsNullOrWhiteSpace(record.RoundId))
             .OrderByDescending(record => record.EndedAtUtc)
             .FirstOrDefault();
 
-        if (newest?.RoundId is not { } roundId)
+        // The newest race FIRST, and only then whether it has a round. A
+        // race filed against no round is still the one the room has just
+        // watched, so it silences this - filtered out beforehand, the heat
+        // before it was read out as "that was" instead.
+        if (newest?.RoundId is not { } roundId || string.IsNullOrWhiteSpace(roundId))
         {
             return null;
         }
@@ -460,7 +463,17 @@ public static class CommentaryReaders
             .ToList();
     }
 
-    /// <summary>Where a driver came in a race, or null when they were not in it.</summary>
+    /// <summary>
+    /// Where a driver came in a race, or null when they were not in it.
+    ///
+    /// A saved row always has a place - RaceFiling numbers every car and
+    /// ResultEditor renumbers a DNF or DQ to the bottom - so the place alone
+    /// cannot say who finished. A row with no laps, or one the race director
+    /// marked DNF or DQ, is a retirement: the same reading as DriverStats'
+    /// IsFinish. Ghost cars in an older file are taken out of the count, so
+    /// a real driver behind one is not a place down (DriverStats'
+    /// PlaceAmongRealCars).
+    /// </summary>
     private static int? Placing(SessionRecord race, string transponder)
     {
         foreach (var entry in race.Results)
@@ -469,7 +482,19 @@ public static class CommentaryReaders
             {
                 // Anything that is not a placing is a retirement, which
                 // DriverForm reads as a zero.
-                return entry.Position > 0 ? entry.Position : 0;
+                if (entry.Position <= 0
+                    || entry.Laps <= 0
+                    || ResultEditor.NormaliseOutcome(entry.Outcome) is ResultEditor.Dnf or ResultEditor.Dq)
+                {
+                    return 0;
+                }
+
+                var ghostsAhead = race.Results.Count(other =>
+                    other.Position > 0
+                    && other.Position < entry.Position
+                    && GhostService.IsGhost(other.Transponder));
+
+                return Math.Max(1, entry.Position - ghostsAhead);
             }
         }
 
@@ -640,12 +665,16 @@ public static class CommentaryReaders
 
             // Change is positions GAINED - see ChampionshipLive.Arrow, which
             // draws a up-arrow for a positive one. So where they were is
-            // where they are plus what they gained.
+            // where they are plus what they gained. A driver NEW to the
+            // table has a Change of zero and stood nowhere, which is a
+            // position of zero rather than the one they hold now: read as
+            // their current place it had a first-round leader "still
+            // leading". See ChampionshipCheck.
             standings.Add(new ChampionshipStanding(
                 row.DriverName,
                 row.DriverName,
                 row.Position,
-                Math.Max(1, row.Position + row.Change),
+                row.New ? 0 : Math.Max(1, row.Position + row.Change),
                 row.Points,
                 Math.Max(0, leaderPoints - row.Points)));
         }
@@ -914,6 +943,23 @@ public static class CommentaryReaders
         SessionHistoryStore history,
         ProfileStore? profiles = null)
     {
+        // A car on this grid with no profile name still scores - its
+        // results are filed, and ComputeStandings counts them, under its
+        // transponder - but Entrants leaves it out, so the proof would
+        // pin its total where it stands while it can in fact finish third
+        // and stay ahead. Refused rather than proved wrong.
+        foreach (var transponder in transponders)
+        {
+            var who = Typed(transponder);
+
+            if (who.Length > 0
+                && !GhostService.IsGhost(who)
+                && Typed(profiles?.Get(who)?.DriverName).Length == 0)
+            {
+                return null;
+            }
+        }
+
         var entrants = Entrants(transponders, profiles);
 
         // Two to name, and a roster the proof will take. Fewer than two is
@@ -1958,7 +2004,14 @@ public static class CommentaryReaders
 
             onLayout++;
 
-            if (record.EndedAtUtc > setUtc)
+            // Races STARTED after the record. The record is stamped live,
+            // mid-race, so the race it was set in ends after it and was
+            // counted as a race "since" - one too many, and the line came
+            // a race early. A session saved without a start time falls
+            // back to its end, as before.
+            var started = record.StartedAtUtc != default ? record.StartedAtUtc : record.EndedAtUtc;
+
+            if (started > setUtc)
             {
                 since++;
             }
@@ -2130,6 +2183,7 @@ public static class CommentaryReaders
         var run = 0;
         var runLive = true;
         var lastOut = string.Empty;
+        var missedSince = 0;
 
         foreach (var (_, racesThatNight) in nights)
         {
@@ -2150,8 +2204,11 @@ public static class CommentaryReaders
 
                     // A retirement or a disqualification is not a finish,
                     // and is what "finished every one of them" has to be
-                    // false for.
-                    if (Typed(entry.Outcome).Length > 0)
+                    // false for. Nor is a row saved with no laps: a car on
+                    // the grid that never crossed the line is filed in last
+                    // place with no outcome, and DriverStats.IsFinish does
+                    // not count it either.
+                    if (Typed(entry.Outcome).Length > 0 || entry.Laps <= 0)
                     {
                         finishedAll = false;
                     }
@@ -2170,6 +2227,14 @@ public static class CommentaryReaders
                 // driver away for a fortnight has not had his podium run
                 // ended by being on holiday, and a room that was there
                 // knows it. See CommentaryWeekFacts.
+                //
+                // Newest first, so the misses before their first night out
+                // are the ones since they were last at the track.
+                if (wasOut == 0)
+                {
+                    missedSince++;
+                }
+
                 continue;
             }
 
@@ -2213,7 +2278,8 @@ public static class CommentaryReaders
             run,
             started,
             finishedAll,
-            lastOut);
+            lastOut,
+            missedSince);
     }
 
     /// <summary>
@@ -2289,6 +2355,7 @@ public static class CommentaryReaders
         // Every RACE the club has filed on this layout before tonight,
         // oldest first - the order the run below is counted in.
         var onLayout = new List<SessionRecord>();
+        var tonightOnLayout = new List<SessionRecord>();
 
         foreach (var session in history.All)
         {
@@ -2300,8 +2367,11 @@ public static class CommentaryReaders
             }
 
             // Tonight's own races are not history yet. See the remarks.
+            // They are kept aside only to tell whether a driver has
+            // already beaten their own best here tonight.
             if (TonightAtTheTrack.NightOf(session.EndedAtUtc.ToLocalTime()) == tonight)
             {
+                tonightOnLayout.Add(session);
                 continue;
             }
 
@@ -2321,7 +2391,14 @@ public static class CommentaryReaders
         {
             if (OwnBestOn(onLayout, profiles, transponder, today) is { } best)
             {
-                bests.Add(best);
+                // Still the figure from before tonight, but a lap already
+                // quicker than it tonight means the line cannot be said in
+                // the present tense. See DriverOnLayout.BeatenTonight.
+                var tonightMs = QuickestLapIn(tonightOnLayout, best.DriverId);
+
+                bests.Add(tonightMs > 0 && tonightMs / 1000.0 < best.BestSeconds
+                    ? best with { BeatenTonight = true }
+                    : best);
             }
         }
 
@@ -2333,6 +2410,27 @@ public static class CommentaryReaders
         var (winner, run) = RunOfWinsOn(onLayout, profiles);
 
         return new LayoutLegend(Typed(onLayout[^1].TrackLayoutName), onLayout.Count, bests, winner, run);
+    }
+
+    /// <summary>One driver's quickest lap across these races, in milliseconds - zero when they set none.</summary>
+    private static long QuickestLapIn(IReadOnlyList<SessionRecord> races, string transponder)
+    {
+        var quickest = 0L;
+
+        foreach (var session in races)
+        {
+            foreach (var entry in session.Results)
+            {
+                if (entry.FastLapMs > 0
+                    && string.Equals(Typed(entry.Transponder), transponder, StringComparison.OrdinalIgnoreCase)
+                    && (quickest == 0 || entry.FastLapMs < quickest))
+                {
+                    quickest = entry.FastLapMs;
+                }
+            }
+        }
+
+        return quickest;
     }
 
     /// <summary>
@@ -2765,6 +2863,7 @@ public static class CommentaryReaders
 
         string? biggestSince = null;
         var racesSince = 0;
+        var biggerTonight = false;
 
         // RacesIn hands them over newest first, so the first race with a
         // field at least this big IS the most recent one, and everything
@@ -2774,7 +2873,15 @@ public static class CommentaryReaders
             if (TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime()) == tonight)
             {
                 // Not compared with - see the remarks - but it has run
-                // since, so it is counted.
+                // since, so it is counted. A heat tonight with MORE cars
+                // than this one is noted, though: then neither "the
+                // biggest since" nor "the biggest in N races" is true, and
+                // the builder says nothing.
+                if (Starters(race) > entries.Count)
+                {
+                    biggerTonight = true;
+                }
+
                 racesSince++;
                 continue;
             }
@@ -2823,7 +2930,8 @@ public static class CommentaryReaders
             races.Count,
             biggestSince,
             racesSince,
-            entries.Count(t => wonAMain.Contains(t)));
+            entries.Count(t => wonAMain.Contains(t)),
+            biggerTonight);
     }
 
     /// <summary>
@@ -3198,6 +3306,12 @@ public static class CommentaryReaders
     /// race day that was not the anniversary of anything. Both sides are
     /// converted, so both shift together or neither does.
     ///
+    /// And both are the race NIGHT (TonightAtTheTrack.NightOf, 6am to 6am)
+    /// rather than the calendar date, like NightStory: a night that ran
+    /// past midnight is one night, so its late races are not split off
+    /// into the next day's count, and asking at half past midnight still
+    /// looks back on the night being raced.
+    ///
     /// WHY THE WINNER'S NAME IS THE SAVED ONE
     ///
     /// The result holds the name as it was on the night. A transponder
@@ -3221,7 +3335,7 @@ public static class CommentaryReaders
         DateTime? now = null,
         int most = MostPastDays)
     {
-        var today = (now ?? DateTime.Now).Date;
+        var today = TonightAtTheTrack.NightOf(now ?? DateTime.Now);
         var byDay = new Dictionary<DateTime, List<SessionRecord>>();
 
         foreach (var record in history.All)
@@ -3233,7 +3347,7 @@ public static class CommentaryReaders
                 continue;
             }
 
-            var when = record.EndedAtUtc.ToLocalTime().Date;
+            var when = TonightAtTheTrack.NightOf(record.EndedAtUtc.ToLocalTime());
 
             // Other years, so this year is out - which takes tonight's own
             // races with it, and a night that reminisced about itself an
@@ -3538,8 +3652,12 @@ public static class CommentaryReaders
             // empty name is a result saved without one and is still beaten:
             // null, and only null, means unbeaten. A race NOBODY won leaves
             // this alone, and the builder refuses the night rather than
-            // calling them unbeaten in it.
-            if (beatenBy is null && WonBy(race) is { } ahead)
+            // calling them unbeaten in it. Nor is the subject beaten by
+            // themselves: stored first but a DNF or a DQ (Placing's zero)
+            // is a race they did not win, and nobody beat them in it.
+            if (beatenBy is null
+                && WonBy(race) is { } ahead
+                && !string.Equals(Typed(ahead.Transponder), subject, StringComparison.OrdinalIgnoreCase))
             {
                 beatenBy = Typed(ahead.DriverName);
             }
@@ -4192,7 +4310,8 @@ public static class CommentaryReaders
     /// was this record set", where three weeks ago is a perfectly good
     /// answer and silence is not one.
     ///
-    /// InvariantCulture for the month's NAME, where Since uses the PC's.
+    /// InvariantCulture for the month's NAME, and Since says its month
+    /// through this for the same reason.
     /// The rest of the line around this is English and is read by an
     /// English voice, so a German PC's "Marz" dropped into it is a word
     /// the voice mispronounces in front of the room. The rule the whole
@@ -4246,8 +4365,10 @@ public static class CommentaryReaders
             return null;
         }
 
-        var month = won.ToString("MMMM");
-
-        return won.Year == now.Year ? month : $"{month} {now.Year - won.Year} year{(now.Year - won.Year == 1 ? "" : "s")} ago";
+        // Month's words: the local month, in English, with the year when it
+        // was another one. "November 1 year ago" counted calendar years, so
+        // a win five weeks before New Year's was "1 year ago", and the PC's
+        // own culture put "Oktober" into an English line.
+        return Month(won, now.ToLocalTime());
     }
 }

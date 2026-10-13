@@ -2283,6 +2283,29 @@ async function load() {
 poll(load, 2000);
 `;
 
+/**
+ * Listening along from home.
+ *
+ * ONLY WHERE THE CLUB HAS TURNED IT ON. A Listen button for a club that
+ * has not is a button that answers nothing, so the control is not drawn at
+ * all rather than drawn and disabled.
+ *
+ * A BUTTON RATHER THAN AUTOPLAY, and that is not only because browsers
+ * refuse to start audio without somebody pressing something. It is the
+ * honest shape: a page that starts talking at whoever opens it is a page
+ * people close.
+ */
+function listenControl(listening: boolean): string {
+  if (!listening) {
+    return "";
+  }
+
+  return '<div class="card" id="listen">'
+    + '<button type="button" id="listenbtn" class="btn">Listen to the announcer</button>'
+    + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
+    + "</div>";
+}
+
 export function livePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -2290,10 +2313,236 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     active: "live",
     heading: "Live",
     sub: "The race as it runs. Updates every couple of seconds.",
-    body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div><div id="board"></div>',
-    script: LIVE_JS,
+    body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      + listenControl(context.look.listening)
+      + '<div id="board"></div>',
+    script: LIVE_JS + (context.look.listening ? LISTEN_JS : ""),
   }, context);
 }
+
+/**
+ * The player.
+ *
+ * NOT A STREAM. Each line is a finished piece of audio the announcer
+ * already spoke, so this is a queue rather than a buffer: fetch what is
+ * new, play it in order, play the next one when the last one ends. There
+ * is nothing to resynchronise and nothing to drop frames from.
+ *
+ * IT JOINS WHERE THE EVENING IS. On the first poll it marks everything it
+ * finds as already heard and plays none of it, so pressing Listen does not
+ * replay the last three minutes before catching up - somebody opening the
+ * page joins the room as it is, which is what they would do walking in. On
+ * every poll after that, anything new is played.
+ *
+ * THE RELAY NEVER DECODES THE AUDIO, so this does. The bytes arrive as
+ * base64 inside the club's own document - see the media-src note on the
+ * content security policy for why that is the choice rather than a route
+ * that serves them.
+ */
+const LISTEN_JS = `
+(function () {
+  const btn = document.getElementById('listenbtn');
+  const note = document.getElementById('listennote');
+
+  if (!btn || !note) {
+    return;
+  }
+
+  // A twentieth of a second of silence, as an mp3. Played inside the press
+  // to unlock the one element every line then plays through: iPhone Safari
+  // only lets a media element make a sound if it was first started by a
+  // tap, and a line arrives from a timer seconds later, never from a tap.
+  const SILENCE = 'data:audio/mpeg;base64,//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xLEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEU4PAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
+
+  // A line the laptop sent again because its answer was lost lands a
+  // moment after the first copy. Its id coming back long after is the
+  // laptop starting its count again (a restart, a new race day), which is
+  // a new line and must be played.
+  const SAME_LINE_MS = 2 * 60 * 1000;
+
+  // Id to the time the relay had it, for every line already heard.
+  const heard = new Map();
+  const queue = [];
+  let on = false;
+  let playing = false;
+  let started = false;
+  let timer = null;
+  let player = null;
+  let current = null;
+
+  // Moved on by every press, so a sweep still waiting on the relay when
+  // Stop is pressed cannot queue lines into the next Listen.
+  let turn = 0;
+
+  function say(text) {
+    note.textContent = text;
+  }
+
+  function isNew(id, at) {
+    if (!heard.has(id)) {
+      return true;
+    }
+
+    return Math.abs(at - heard.get(id)) > SAME_LINE_MS;
+  }
+
+  async function sweep() {
+    const mine = turn;
+
+    try {
+      const listing = await fetch('/api/v1/c/' + CLUB + '/collection/listen?meta=1');
+
+      if (!listing.ok) {
+        return;
+      }
+
+      const body = await listing.json();
+
+      if (!on || mine !== turn) {
+        return;
+      }
+
+      const items = Array.isArray(body.items) ? body.items : [];
+
+      // Oldest first, so the announcer is played in the order it spoke.
+      const lines = items
+        .filter((one) => one && typeof one.id === 'string')
+        .map((one) => ({ id: one.id, at: Date.parse(one.publishedAt) || 0 }))
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+      // THE FIRST SWEEP ONLY MARKS. See the remarks above.
+      if (!started) {
+        started = true;
+        lines.forEach((one) => heard.set(one.id, one.at));
+        say(lines.length > 0 ? 'Listening. You will hear the next thing said.' : 'Listening. Nothing being said just now.');
+        return;
+      }
+
+      for (const one of lines) {
+        if (!isNew(one.id, one.at)) {
+          continue;
+        }
+
+        heard.set(one.id, one.at);
+
+        const got = await fetch('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id));
+
+        if (!got.ok) {
+          continue;
+        }
+
+        const doc = await got.json();
+
+        if (!on || mine !== turn) {
+          return;
+        }
+
+        const said = doc && doc.body ? doc.body : {};
+
+        if (typeof said.audio === 'string' && said.audio.length > 0) {
+          queue.push({ audio: said.audio, said: typeof said.said === 'string' ? said.said : '' });
+        }
+      }
+
+      playNext();
+    } catch (err) {
+      // A sweep that failed is one sweep. The next one is in two seconds,
+      // and a race night is not the moment to put an error on a page
+      // somebody is listening to.
+    }
+  }
+
+  function playNext() {
+    if (playing || queue.length === 0 || !on || player === null) {
+      return;
+    }
+
+    const next = queue.shift();
+    const line = {};
+
+    playing = true;
+    current = line;
+    say(next.said.length > 0 ? next.said : 'Playing...');
+
+    // ENDED AND ERROR BOTH MOVE ON. A line whose audio will not decode
+    // must not stop everything behind it: the room has moved on, and so
+    // should this. Only once per line, and not at all for a line Stop has
+    // already ended: an error and a refused play() can both report the
+    // same line, and the second must not cut off the one after it.
+    const done = () => {
+      if (current !== line) {
+        return;
+      }
+
+      current = null;
+      playing = false;
+      playNext();
+    };
+
+    player.onended = done;
+    player.onerror = done;
+    player.src = 'data:audio/mpeg;base64,' + next.audio;
+
+    const playing_ = player.play();
+
+    if (playing_ && typeof playing_.catch === 'function') {
+      playing_.catch(() => done());
+    }
+  }
+
+  btn.addEventListener('click', () => {
+    on = !on;
+    turn += 1;
+
+    if (on) {
+      btn.textContent = 'Stop listening';
+      say('Listening...');
+
+      // Inside the press, which is the only place this is allowed. See
+      // SILENCE.
+      if (player === null) {
+        player = new Audio();
+      }
+
+      player.onended = null;
+      player.onerror = null;
+      player.src = SILENCE;
+
+      const unlocked = player.play();
+
+      if (unlocked && typeof unlocked.catch === 'function') {
+        unlocked.catch(() => {});
+      }
+
+      sweep();
+      timer = window.setInterval(sweep, 2000);
+      return;
+    }
+
+    btn.textContent = 'Listen to the announcer';
+    say('Stopped. Nothing plays until you press it.');
+
+    if (timer !== null) {
+      window.clearInterval(timer);
+      timer = null;
+    }
+
+    // Stop means stop: the line playing now as well as the ones waiting.
+    // And the next Listen joins where the evening is then, like the first
+    // one did, rather than playing back everything said in between.
+    queue.length = 0;
+    started = false;
+    playing = false;
+    current = null;
+
+    if (player !== null) {
+      player.onended = null;
+      player.onerror = null;
+      player.pause();
+    }
+  });
+})();
+`;
 
 // -------------------------------------------------------------- standings
 
@@ -2378,6 +2627,7 @@ export function standingsPage(club: string, clubName: string, context: PageConte
 
 const HOME_JS = `
 const now = document.getElementById('now');
+const preview = document.getElementById('preview');
 const upnext = document.getElementById('upnext');
 const latest = document.getElementById('latest');
 const BASE = '/c/' + encodeURIComponent(CLUB);
@@ -2428,11 +2678,58 @@ async function latestResults() {
   return answer;
 }
 
+// THE PREVIEW, AND THE EXPIRY THE PAGE HONOURS RATHER THAN THE RELAY.
+//
+// A preview is the one document on this relay that goes wrong by itself:
+// left up it describes a meeting in the future tense hours after it
+// finished. The laptop takes it down when the meeting starts - but the
+// case that actually matters is the laptop NEVER COMING BACK, because it
+// was packed up and taken home, and that is the one the laptop cannot fix.
+// So the document carries its own 'until' and this decides.
+//
+// Empty text is a withdrawal, not an error: the laptop replaces a preview
+// with an empty one rather than dropping the channel, because dropping
+// would leave the last one standing for good.
+function previewHtml(answer) {
+  if (answer === null || answer.missing) return '';
+
+  const b = answer.body && answer.body.body ? answer.body.body : {};
+  const text = typeof b.text === 'string' ? b.text.trim() : '';
+
+  if (text === '') return '';
+
+  // A bad or missing date reads as expired. The other way round - treating
+  // an unreadable date as "stands forever" - is how a preview from March
+  // is still on a club's front page in June.
+  const until = Date.parse(String(b.until || ''));
+
+  if (!Number.isFinite(until) || Date.now() > until) return '';
+
+  // DOUBLE-BACKSLASHED, because this lives in a template literal: one
+  // backslash would be eaten there and the regex would carry a real
+  // newline, which is a syntax error that stops the whole page running.
+  // Same reason img() doubles the slash in its data: test.
+  //
+  // AND THE FIRST VERSION OF THIS COMMENT HAD THE BUG IN IT - it wrote
+  // the escape out to explain it, the template literal ate it, and the
+  // comment broke across two lines and took the page with it. So the
+  // explanation says it in words.
+  const paragraphs = text.split(/\\n\\s*\\n/).map((one) => one.trim()).filter(Boolean);
+
+  return '<div class="hero next" style="cursor:default">' +
+    '<span class="kicker">' + esc(b.kicker || 'Coming up') + '</span>' +
+    '<span class="big">' + esc(b.title || 'Next race day') + '</span>' +
+    (b.when ? '<span class="when">' + esc(b.when) + '</span>' : '') +
+    '</div>' +
+    '<div class="card">' + paragraphs.map((one) => '<p class="note">' + esc(one) + '</p>').join('') + '</div>';
+}
+
 async function load() {
-  const [state, prog, res] = await Promise.all([
+  const [state, prog, res, pre] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
     latestResults().catch(() => null),
+    grab('/snapshot/preview').catch(() => null),
   ]);
 
   if (state === null && prog === null && res === null) {
@@ -2467,6 +2764,18 @@ async function load() {
       '<span class="big">No racing right now</span>' +
       '<span class="when">Results, standings, badges and tracks are all below.</span></div>';
   }
+
+  // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
+  // now has a live race at the top of its own front page and a preview of
+  // the evening underneath it would be reading out the programme to people
+  // who are watching it happen. The preview is for the days in between,
+  // which is every day this page is open and no race is on.
+  //
+  // A line that is only 'next' is not racing: a club that has built
+  // tomorrow's rounds has a 'next' line all the night before, which is
+  // exactly when the preview is meant to show. The laptop withdraws it
+  // once the first race is filed, and its own expiry covers the rest.
+  section(preview, running || (s && fresh && LIVE.includes(String(s.state))) ? '' : previewHtml(pre));
 
   const upcoming = lines.filter((l) => l.status === 'next' || l.status === 'upcoming').slice(0, 4);
 
@@ -2513,6 +2822,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
     body:
       '<div id="now"><p class="note">Loading&hellip;</p></div>' +
+      '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
       '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
       '<div class="day">Latest results</div><div class="card" id="latest" style="display:none"></div>' +
       '<div class="day">Explore</div><div class="tiles">' +

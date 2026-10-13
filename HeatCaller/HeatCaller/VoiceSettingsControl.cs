@@ -59,6 +59,12 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Button _btnHeatCallerPreview = new();
     private readonly Label _lblHeatCallerPreviewStatus = new();
 
+    // The consent behind a cloned voice - see VoiceConsent.
+    private readonly TextBox _txtConsentWho = new();
+    private readonly Button _btnConsentRecord = new();
+    private readonly Button _btnConsentTakeBack = new();
+    private readonly Label _lblConsent = new();
+
     /// <summary>While a sample or a preview is being fetched and played, so a second press can't start another.</summary>
     private bool _heatCallerHearingRunning;
 
@@ -333,6 +339,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         // over the page for a box that changes nothing.
         _autoSaveWired.Add(_txtHeatCallerPreviewLine);
 
+        // Nor the consent name. It is recorded by its own button, on
+        // purpose (see BuildConsent) - wired here, every keystroke saved the
+        // voice profile and said "Saved automatically", which read as the
+        // consent being recorded when it was not.
+        _autoSaveWired.Add(_txtConsentWho);
+
         // Nor the ElevenLabs boxes typed into - the API key, model, language
         // and output format. Saving makes the profile current at once, and
         // every live race line reads it, so saved per keystroke a lap or flag
@@ -535,6 +547,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// Run again when the text size changes (TextSize.Keep) and when a list
     /// is refilled (RefitPickers).
     /// </summary>
+    /// <summary>
+    /// How wide the consent name box is at the normal text size. Sized for
+    /// a person's full name, which is what goes in it - see SizeFields for
+    /// why it has to be set at all.
+    /// </summary>
+    private const int ConsentWhoWidth = 240;
+
     private void SizeFields()
     {
         var field = UiLayout.AtTextSize(UiLayout.FieldWidth);
@@ -551,6 +570,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         Fit(_txtVoiceRelayClub, UiLayout.AtTextSize(RelayClubWidth));
         Fit(_txtVoiceRelayToken, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
         Fit(_txtHeatCallerPreviewLine, UiLayout.AtTextSize(UiLayout.WideFieldWidth));
+
+        // A TEXTBOX IN A ButtonBar DOES NOT SIZE ITSELF, any more than a
+        // ComboBox does: the bar grows a Button to its caption and leaves
+        // everything else at its default. Left alone this one would clip a
+        // club member's name, which is the fault the Sponsors page shipped
+        // on 12 Oct 2026 and LayoutTests caught at every text size.
+        //
+        // A NAME-SIZED box rather than a wide one, because that is what is
+        // typed in it, and the bar has two buttons to fit beside it.
+        Fit(_txtConsentWho, UiLayout.AtTextSize(ConsentWhoWidth));
         Fit(_txtApiKey, field);
         Fit(_txtLanguageCode, UiLayout.AtTextSize(LanguageBoxWidth));
         Fit(_txtOutputFormat, UiLayout.AtTextSize(OutputFormatBoxWidth));
@@ -1073,9 +1102,207 @@ public sealed partial class VoiceSettingsControl : UserControl
         Indented(card.Add(kokoro));
         card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
-        card.Add(lblHint, gapBelow: 0);
+        card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+
+        // THE CONSENT BEHIND THE CLUB'S OWN VOICE, on this card rather
+        // than a card of its own: it belongs beside the voice it is about,
+        // and a club that never clones a voice should not have a section
+        // about likeness staring at them. The hint says so when there is
+        // nothing to consent to.
+        BuildConsent(card);
 
         return (card, new[] { heatCaller, relay, kokoro });
+    }
+
+    /// <summary>
+    /// Who agreed that the club's own announcer's voice could be used, and
+    /// when - see <see cref="VoiceConsent"/>, which states at length why
+    /// this exists and what it deliberately does not hold.
+    ///
+    /// HEATCALLER HOLDS THE FACT AND NOTHING ELSE. No recording, no
+    /// signature, no audio: the club keeps all of that, and the line under
+    /// the box says so. There is nothing on this card that is any use to
+    /// somebody who takes a copy of it.
+    /// </summary>
+    private void BuildConsent(Section card)
+    {
+        _txtConsentWho.MaxLength = 60;
+        _txtConsentWho.Text = _appSettings.HeatCallerConsentWho ?? string.Empty;
+
+        // NOT SAVED AS IT IS TYPED, unlike every other box on this page,
+        // and that is the one deliberate inconsistency here. A consent is
+        // a thing somebody records on purpose, with a date attached, so it
+        // takes a press - half a name typed and wandered away from is not
+        // an agreement, and it would be stamped with today's date.
+        _btnConsentRecord.Text = "Record Consent";
+        _btnConsentRecord.Click += (_, _) => RecordConsent();
+
+        _btnConsentTakeBack.Text = "Take It Back...";
+        _btnConsentTakeBack.Click += (_, _) => TakeConsentBack();
+
+        _lblConsent.AutoSize = true;
+        _lblConsent.ForeColor = AppTheme.TextMuted;
+
+        _textSize.Wear(_lblConsent, () => AppTheme.SmallFont);
+        _textSize.ReserveLines(_lblConsent, 2);
+
+        var consent = new FieldGrid();
+
+        consent.AddRow("Who agreed:", new ButtonBar()
+            .With(_txtConsentWho)
+            .With(_btnConsentRecord)
+            .With(_btnConsentTakeBack));
+
+        consent.AddHint(
+            "Only needed for a voice that is a recording of a real person - your own announcer. The stock voices "
+            + "are nobody's, and need nothing. HeatCaller keeps the name and the date and nothing else: the "
+            + "recording and whatever they signed stay yours. Until a consent is recorded, the free voice reads "
+            + "every line.");
+
+        card.Add(consent);
+        card.Add(_lblConsent, gapBelow: 0);
+
+        ShowConsent();
+    }
+
+    /// <summary>Where the club stands, said whether or not anything is wrong - see VoiceConsent.Describe.</summary>
+    private void ShowConsent()
+    {
+        // Against the voice now chosen, so a consent for another voice says
+        // so rather than reading as if it covered this one.
+        var voice = _store.Current.HeatCallerVoice?.Trim() ?? string.Empty;
+
+        _lblConsent.Text = VoiceConsent.Describe(
+            _appSettings.HeatCallerVoiceConsent(), voice, _appSettings.HeatCallerVoiceIsCloned(voice));
+
+        // Only offered when there is something to take back.
+        _btnConsentTakeBack.Enabled = _appSettings.HeatCallerVoiceConsent() is { RevokedAtUtc: null };
+    }
+
+    /// <summary>
+    /// Records that somebody agreed, against the voice that is set.
+    ///
+    /// AGAINST THE VOICE THAT IS SET, which is the whole reason a consent
+    /// carries a voice id. A club that later clones a second announcer
+    /// does not inherit the first person's agreement for them; see
+    /// VoiceConsent.MaySpeakWith.
+    /// </summary>
+    private void RecordConsent()
+    {
+        var who = _txtConsentWho.Text.Trim();
+
+        if (who.Length == 0)
+        {
+            _lblConsent.Text = "Type the name of the person who agreed first. A consent with no name on it is not one.";
+            _lblConsent.ForeColor = AppTheme.Accent;
+            return;
+        }
+
+        var voice = _store.Current.HeatCallerVoice?.Trim() ?? string.Empty;
+
+        if (voice.Length == 0)
+        {
+            _lblConsent.Text = "Choose the HeatCaller voice this consent is for first - a consent is for one voice.";
+            _lblConsent.ForeColor = AppTheme.Accent;
+            return;
+        }
+
+        // Kept to put back if the save fails. The gate reads these same
+        // settings live, so left set they would let the voice speak - and
+        // be written by the next save of anything - while this page said
+        // the consent had not been recorded.
+        var previousVoice = _appSettings.HeatCallerConsentVoiceId;
+        var previousWho = _appSettings.HeatCallerConsentWho;
+        var previousAt = _appSettings.HeatCallerConsentAtUtc;
+        var previousRevoked = _appSettings.HeatCallerConsentRevokedUtc;
+
+        _appSettings.HeatCallerConsentVoiceId = voice;
+        _appSettings.HeatCallerConsentWho = who;
+        _appSettings.HeatCallerConsentAtUtc = DateTime.UtcNow;
+
+        // A fresh consent is not a revoked one. Recording again after a
+        // revocation is the club saying it has permission once more, which
+        // is a thing that happens - somebody comes back to the club.
+        _appSettings.HeatCallerConsentRevokedUtc = null;
+
+        if (!_appSettings.Save())
+        {
+            _appSettings.HeatCallerConsentVoiceId = previousVoice;
+            _appSettings.HeatCallerConsentWho = previousWho;
+            _appSettings.HeatCallerConsentAtUtc = previousAt;
+            _appSettings.HeatCallerConsentRevokedUtc = previousRevoked;
+
+            _lblConsent.Text = "The consent could not be saved, so it has not been recorded. Close anything that "
+                + "might have settings.json open and try again.";
+            _lblConsent.ForeColor = AppTheme.Accent;
+            return;
+        }
+
+        // A line refused for want of this consent rested the voice for half
+        // an hour; without this the club's voice stayed away that long
+        // after the consent it was waiting for had been recorded.
+        Announcer?.RetryHeatCallerVoiceSoon("a voice consent was recorded on Voice Settings");
+
+        _lblConsent.ForeColor = AppTheme.TextMuted;
+        ShowConsent();
+    }
+
+    /// <summary>
+    /// Takes the consent back, after asking.
+    ///
+    /// The record is KEPT rather than cleared - see
+    /// VoiceConsent.Record.RevokedAtUtc for why a club needs to be able to
+    /// say it once had permission.
+    /// </summary>
+    private void TakeConsentBack()
+    {
+        if (_appSettings.HeatCallerVoiceConsent() is not { } held || held.RevokedAtUtc is not null)
+        {
+            return;
+        }
+
+        var who = held.Who.Trim();
+        var named = who.Length > 0 ? who : "that person";
+
+        var confirm = AppDialog.Show(
+            FindForm(),
+            $"Take back {named}'s consent?\n\n"
+            + "Nothing will be spoken in that voice from now on - the free voice reads every line instead. The "
+            + "record that they once agreed is kept rather than deleted, so you can still say you had "
+            + "permission for anything already published. Recording a consent again puts the voice back.",
+            "Take back consent",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        // Re-read after the dialog: the app kept running while the
+        // question was on screen.
+        if (_appSettings.HeatCallerVoiceConsent() is not { } still || still.RevokedAtUtc is not null)
+        {
+            ShowConsent();
+            return;
+        }
+
+        var previous = _appSettings.HeatCallerConsentRevokedUtc;
+
+        _appSettings.HeatCallerConsentRevokedUtc = VoiceConsent.TakeBack(still, DateTime.UtcNow).RevokedAtUtc;
+
+        if (!_appSettings.Save())
+        {
+            _appSettings.HeatCallerConsentRevokedUtc = previous;
+
+            _lblConsent.Text = "The consent could NOT be taken back, so it still stands. Close anything that might "
+                + "have settings.json open and try again.";
+            _lblConsent.ForeColor = AppTheme.Accent;
+            return;
+        }
+
+        _lblConsent.ForeColor = AppTheme.TextMuted;
+        ShowConsent();
     }
 
     // --- The Kokoro voice ---------------------------------------------------
@@ -1613,6 +1840,32 @@ public sealed partial class VoiceSettingsControl : UserControl
             _heatCallerEnabled = catalogue.Enabled;
             _heatCallerVoices = catalogue.Voices;
 
+            // WHICH OF THEM ARE SOMEBODY'S OWN VOICE, written down where
+            // the gate can read it - see AppSettings.HeatCallerClonedVoices
+            // and VoiceConsent.
+            //
+            // Here because this is the one place the catalogue is read for
+            // the announcer's own voice, and the gate runs on every spoken
+            // line: asking the relay per line is not an option, and
+            // guessing is not either. Replaced wholesale rather than added
+            // to, so a voice that stops being a clone stops needing a
+            // consent from the next look at this page.
+            var clones = catalogue.Voices
+                .Where(one => one.Cloned && one.Id.Length > 0)
+                .Select(one => one.Id)
+                .ToList();
+
+            if (!clones.SequenceEqual(_appSettings.HeatCallerClonedVoices, StringComparer.OrdinalIgnoreCase))
+            {
+                _appSettings.HeatCallerClonedVoices = clones;
+                _appSettings.Save();
+
+                // The consent line says whether the chosen voice is a clone,
+                // which is only known from here.
+                _lblConsent.ForeColor = AppTheme.TextMuted;
+                ShowConsent();
+            }
+
             var savedVoice = _store.Current.HeatCallerVoice?.Trim() ?? string.Empty;
 
             // The catalogue wins the picker whenever it has anything to put
@@ -1716,6 +1969,13 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 _btnHeatCallerRefresh.Enabled = true;
                 UpdateEngineControls();
+
+                // Asked again now the flag is down. The calls above ran
+                // while it was still up, so they always stood aside - and
+                // when the samples answered first, theirs did too, leaving
+                // the picker empty for the club that came to listen. It
+                // still stands aside for a catalogue that filled the picker.
+                ShowSamplesInPickerIfNoCatalogue();
 
                 // Something changed the address, club or token while this
                 // one was in flight, so what it just showed is out of date.
@@ -3973,6 +4233,11 @@ public sealed partial class VoiceSettingsControl : UserControl
             if (!string.Equals(voiceBefore, profile.HeatCallerVoice, StringComparison.OrdinalIgnoreCase))
             {
                 Announcer?.ResetHeatCallerVoiceState("a different HeatCaller voice was chosen");
+
+                // The consent line is about the voice that is set, so it is
+                // said again for the new one.
+                _lblConsent.ForeColor = AppTheme.TextMuted;
+                ShowConsent();
             }
 
             if (!saved)

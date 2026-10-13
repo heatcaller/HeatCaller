@@ -423,18 +423,16 @@ public static class AppTheme
 
     public enum ButtonKind { Auto, Primary, Secondary, Danger, Warning }
 
-    /// <summary>Flat, colored, hand-cursor buttons instead of the default beveled Windows look. Kind is inferred from the button's text unless given explicitly.</summary>
-
-    /// <summary>
-    /// The standard button border for the current theme: a thin cyan
-    /// outline in Synthwave, none otherwise.
-    ///
-    /// Public so the few places that temporarily override a border (the
-    /// flag buttons highlight the active flag) can hand it back rather
-    /// than hardcoding "no border" and quietly diverging from everything
-    /// else - which is exactly how three competing border treatments
-    /// ended up in the app.
-    /// </summary>
+    // Two doc comments sat here, stranded above StyleContextMenu by edits
+    // that moved the members they describe and left them behind - two of
+    // the four orphans the 12 Oct 2026 bug hunt recorded. Both have gone
+    // down onto the members they were written for, neither of which had a
+    // summary of its own: StyleButton and ApplyDefaultBorder.
+    //
+    // A doc comment describing the wrong member is worse than none. A
+    // reader takes it for the member's own and stops looking, which is
+    // exactly how a wrong one on CommentaryDirector.Save hid a missing
+    // feature for a month.
 
     /// <summary>
     /// Applies the current theme to a context menu. ToolStrip renders
@@ -730,6 +728,16 @@ public static class AppTheme
         return x - gap;
     }
 
+    /// <summary>
+    /// The standard button border for the current theme: a thin cyan
+    /// outline in Synthwave, none otherwise.
+    ///
+    /// Public so the few places that temporarily override a border (the
+    /// flag buttons highlight the active flag) can hand it back rather
+    /// than hardcoding "no border" and quietly diverging from everything
+    /// else - which is exactly how three competing border treatments
+    /// ended up in the app.
+    /// </summary>
     public static void ApplyDefaultBorder(Button button)
     {
         button.FlatAppearance.BorderSize = 0;
@@ -951,6 +959,11 @@ public static class AppTheme
         return caption;
     }
 
+    /// <summary>
+    /// Flat, colored, hand-cursor buttons instead of the default beveled
+    /// Windows look. Kind is inferred from the button's text unless given
+    /// explicitly.
+    /// </summary>
     public static void StyleButton(Button button, ButtonKind kind = ButtonKind.Auto)
     {
         // Before InferKind, which reads the caption - and only when it

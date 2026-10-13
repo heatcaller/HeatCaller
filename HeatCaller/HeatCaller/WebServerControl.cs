@@ -581,7 +581,8 @@ public sealed class WebServerControl : UserControl
             + "rule to let them through.\r\n\r\n"
             + "Both need administrator, so Windows will ask you to allow it once. HeatCaller itself "
             + "keeps running as it is - nothing else changes, and this doesn't need doing again "
-            + "unless you change the port.",
+            + "unless you change the port.\r\n\r\n"
+            + NetworkSetup.PrivateNetworkNote,
             "Set up phone pages",
             MessageBoxButtons.OKCancel,
             MessageBoxIcon.Information);

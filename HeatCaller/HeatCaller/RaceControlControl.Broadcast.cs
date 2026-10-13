@@ -149,6 +149,16 @@ public sealed partial class RaceControlControl
 
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] {named} played again - asked for from Race Control.");
+
+            // And waited for before the finally lets go of the floor.
+            // Speak() only queues, so without this the floor was free
+            // before a word was said and the director could open a show of
+            // its own over the replay - the fault fixed for tonight's recap
+            // on 12 Oct. The music path above already waits inside RunAsync.
+            if (treatment is not null)
+            {
+                await treatment.WaitForTheReadAsync().ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {
@@ -211,7 +221,8 @@ public sealed partial class RaceControlControl
     /// voting on is the cars actually staged: a program's assigned list is
     /// what the club intended, and a driver who did not turn up must not
     /// be on the ballot. The program's list is the fallback for a vote
-    /// opened before anybody has crossed the loop.
+    /// opened before anybody has crossed the loop, and for one opened
+    /// between races, when the session still holds the last race's cars.
     /// </summary>
     private void ShowTonightsRoomVote()
     {
@@ -292,7 +303,14 @@ public sealed partial class RaceControlControl
             .Select(one => new VoteOption(one.TransponderId, NameOnTheBallot(one.TransponderId)))
             .ToList();
 
-        if (staged.Count >= 2 || round is null)
+        // ONLY WHILE A RACE IS ON. The standings are not cleared at the
+        // flag, so once a race has finished they are still that race's
+        // finishers until somebody stages the next one - and the ordinary
+        // time to open a vote is exactly then, with the next round already
+        // picked. Taken then, the A-main's ballot was the B-main's drivers.
+        var running = _race.State is RaceState.Countdown or RaceState.Racing;
+
+        if (round is null || (running && staged.Count >= 2))
         {
             return staged;
         }
@@ -355,7 +373,17 @@ public sealed partial class RaceControlControl
 
         try
         {
-            treatment.AbandonBlock();
+            // Only a segment block can be stopped this way. The recap, the
+            // honours, a race intro and Play again open their show without
+            // one, so say so rather than claim a stop that did not happen.
+            if (!treatment.AbandonBlock())
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [show] Skip stops a commentary segment block, and none is on air - "
+                    + "whatever is playing now runs to its end.");
+
+                return;
+            }
 
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] Show stopped from Race Control - the bed rides down and the rest of the "

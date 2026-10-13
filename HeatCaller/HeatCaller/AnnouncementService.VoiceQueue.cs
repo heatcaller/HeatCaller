@@ -290,6 +290,11 @@ public sealed partial class AnnouncementService
     /// while a line is in either.
     /// </param>
     /// <param name="voice">Another speaker's voice for this line alone - the recap's mechanic. Null for the announcer.</param>
+    /// <param name="forListeners">
+    /// False for a test asked for by hand (SpeakTest). A name check before
+    /// doors open reads out every saved driver's full name, and none of
+    /// that is the race - it must not go out on the public listen page.
+    /// </param>
     private async Task SynthesizeAndPlayAsync(
         string text,
         string announcingLogPrefix,
@@ -299,7 +304,8 @@ public sealed partial class AnnouncementService
         bool honourMute = true,
         SecondVoice? voice = null,
         SpeechTail tail = SpeechTail.Normal,
-        SpeechLead lead = SpeechLead.Normal)
+        SpeechLead lead = SpeechLead.Normal,
+        bool forListeners = true)
     {
         var currentProfile = _voiceStore.Current;
 
@@ -443,6 +449,20 @@ public sealed partial class AnnouncementService
 
             try
             {
+                // ANYONE LISTENING FROM HOME, from here and nowhere else
+                // (13 Oct 2026). This is the one point in the app where a
+                // line is definitely about to be heard: everything above
+                // can still drop it for a flag, a countdown or a mute, and
+                // a listener must hear what the room hears and nothing it
+                // did not. Offered BEFORE the speaker rather than after,
+                // because after would put the whole length of the line on
+                // top of the lag. It returns at once - see
+                // AnnouncementService.ListenAlong.
+                if (forListeners)
+                {
+                    OfferLineToListeners(text, audio);
+                }
+
                 // The pads the CALLER asked for, since 11 Oct 2026. This
                 // was the default 0.9s tail and the full lead whatever the
                 // line was, so two turns of one exchange paid both in full

@@ -372,6 +372,7 @@ public sealed class BackupRestoreControl : UserControl
             check.CheckedChanged += (_, _) =>
             {
                 CloudBackup.SetEnabled(_settings, captured, check.Checked);
+                CloudBackupStatus.ServiceSwitched(_settings, check.Checked);
                 _settings.Save();
                 RefreshCloudStatus();
             };

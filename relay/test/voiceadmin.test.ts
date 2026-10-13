@@ -33,6 +33,7 @@ const VOICE: CatalogueVoice = {
   speakerBoost: true,
   speed: 1,
   outputFormat: "mp3_44100_128",
+  cloned: false,
 };
 
 const PLAN: VoicePlan = { enabled: true, monthlyChars: 100, voices: [] };

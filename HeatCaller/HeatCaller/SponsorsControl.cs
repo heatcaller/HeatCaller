@@ -497,6 +497,12 @@ public sealed class SponsorsControl : UserControl
         // what is read: a cap applied silently further down is how a club
         // finds out their last sentence went missing from the sponsor.
         _txtSponsorCopy.MaxLength = SponsorCopy.MaxChars;
+
+        // And the name and tagline, held to what SponsorRotation will say
+        // of them - for the same reason.
+        _txtSponsorName.MaxLength = SponsorRotation.MaxNameChars;
+        _txtSponsorTagline.MaxLength = SponsorRotation.MaxTaglineChars;
+
         _txtSponsorCopy.Multiline = true;
         _txtSponsorCopy.ScrollBars = ScrollBars.Vertical;
         _txtSponsorCopy.BackColor = AppTheme.Surface;
@@ -604,7 +610,10 @@ public sealed class SponsorsControl : UserControl
                 ReadsTonight?.Invoke(),
                 _store.ReadPlan().Placement,
                 EventName?.Invoke(),
-                DateTime.Now);
+                // The race NIGHT, 6am to 6am like every other night-scoped
+                // reader - a report copied at twenty past midnight was
+                // dated the day after the club raced.
+                TonightAtTheTrack.NightOf(DateTime.Now));
 
             if (string.IsNullOrWhiteSpace(report))
             {

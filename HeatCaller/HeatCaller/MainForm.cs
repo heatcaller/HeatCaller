@@ -650,7 +650,19 @@ public partial class MainForm : Form
             automatic: false,
             BackupService.CaptureSecrets());
 
-        if (AppUpdates.ApplyWhatWasHeldForNextStart(_settings))
+        // Not "nothing is open" by definition after all: the app also
+        // restarts mid-meeting (a new look, a crash), so the held update is
+        // asked the same three things as the live question. The race days
+        // are already loaded (a field), and a file that could not be read
+        // counts as a day being open - it cannot be told that one is not.
+        // Only when something is held, so an ordinary start does not read
+        // the journal here as well as where it is offered back.
+        if (_settings.UpdateWaitingForNextStart.Length > 0
+            && AppUpdates.ApplyWhatWasHeldForNextStart(
+                _settings,
+                raceDayOpen: _raceEvents.LoadedUnreadable || _raceEvents.Active is { IsLegacy: false, IsOpen: true },
+                raceState: _race.State,
+                unfinishedRaceInJournal: RaceJournal.Unfinished() is not null))
         {
             return;
         }
@@ -683,6 +695,26 @@ public partial class MainForm : Form
         _sponsors = SponsorStore.Load();
         _clubNotes = ClubNotes.Load();
         _roomVote = RoomVote.Load();
+
+        // THE NOTES AND THE VOTE ARE PUT ON THE DAY HERE, not only when the
+        // director next gathers - that runs only with commentary on and a
+        // day open, so a note typed or sent in before it was filed under
+        // last week's day and wiped when the gather came round. On the
+        // way up with no day open this clears last week's (ClubNotes.
+        // NewMeeting adopts what is added under no day when one opens),
+        // and a day opened or switched to puts them on that day at once.
+        // Closing a day changes nothing, so a close undone keeps tonight's.
+        _clubNotes.NewMeeting(_raceEvents.Active?.Id);
+        _roomVote.NewMeeting(_raceEvents.Active?.Id);
+
+        _raceEvents.CurrentChanged += (_, _) =>
+        {
+            if (_raceEvents.Active?.Id is { Length: > 0 } dayId)
+            {
+                _clubNotes.NewMeeting(dayId);
+                _roomVote.NewMeeting(dayId);
+            }
+        };
 
         // --- The event spine ---
         //
@@ -945,6 +977,32 @@ public partial class MainForm : Form
             // the club races, earned anyway, is on the website's list too.
             _relayAchievementsReadUtc = DateTime.MinValue;
             _lastRelayDocuments.Remove(RelayChannel.Badges);
+
+            // AND THE NEXT ROUND'S INTRO IS WRITTEN NOW, so the start it
+            // belongs to waits for no model - see WrittenAhead.
+            //
+            // HERE, AND THIS IS THE ONE PLACE IT MAY GO. A result having
+            // been filed is what makes the next intro's championship and
+            // form figures true; written any earlier - at the green of the
+            // race that was just run, which is what the plan originally
+            // proposed - the held line would state a points total the race
+            // then changed. See RaceControlControl.WriteTheNextIntroAhead.
+            //
+            // Hooked to the store rather than to the places that save, for
+            // the same reason everything above it is.
+            //
+            // With the record, so the round it was run for is passed over:
+            // this is raised before that round is marked as run.
+            _raceControlControl?.WriteTheNextIntroAhead(record);
+
+            // AND THE NIGHT-BEFORE PREVIEW COMES OFF THE CLUB'S PAGE, for
+            // the same reason and in the same place: a FILED result is the
+            // first moment the app can be sure the meeting is under way
+            // rather than being set up. A green flag can be a test and a
+            // programme can be built and abandoned; a filed session
+            // happened. Idempotent after the first - see
+            // WithdrawTheNightBefore.
+            WithdrawTheNightBefore();
         };
 
         // A saved result corrected after the flag - the laptop's Edit
@@ -963,6 +1021,11 @@ public partial class MainForm : Form
             // page and every link preview would go on showing the name of
             // whoever the result USED to say had won.
             PublishResultsIndexFor(record);
+
+            // A correction can change the points and the form the next
+            // round's intro, written ahead, states - so it is thrown away
+            // and written again from the corrected results.
+            _raceControlControl?.WriteTheNextIntroAhead(record, corrected: true);
 
             // A correction that took off the lap holding the layout's
             // all-time record - a phantom crossing, say - leaves that record
@@ -2257,7 +2320,17 @@ public partial class MainForm : Form
             AppUpdates.Question(newVersion, thisVersion),
             "A new version of HeatCaller",
             MessageBoxIcon.Information,
+            defaultIndex: (int)AppUpdates.Answer.AfterTonight,
             AppUpdates.AnswerLabels), whenGone: AppUpdates.Answer.NotNow);
+
+        // On this thread for the same reason: the settings are this thread's
+        // to change and to save. A window going away is a promise not kept,
+        // and AppUpdates says so.
+        AppUpdates.HoldForNextStart = newVersion => TryAsk(() =>
+        {
+            _settings.UpdateWaitingForNextStart = newVersion;
+            return _settings.Save();
+        }, whenGone: false);
 
         // The secrets have to be taken on this thread (BackupSecrets.Capture
         // reads the live settings, which this thread is free to be changing);

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 
 namespace HeatCaller;
@@ -57,11 +58,24 @@ internal static class NetworkSetup
     /// <summary>
     /// The firewall rule. Inbound TCP on the port, private profile only: the
     /// venue's Wi-Fi set as a private network is where this belongs, and a
-    /// public hotspot is not.
+    /// public hotspot is not. Windows puts a newly joined Wi-Fi on Public,
+    /// so the button's prompt and its result both say so - see
+    /// PrivateNetworkNote.
     /// </summary>
     internal static string FirewallCommand(int port) =>
         $"netsh advfirewall firewall add rule name=\"{FirewallRuleName(port)}\" " +
         $"dir=in action=allow protocol=TCP localport={port} profile=private";
+
+    /// <summary>
+    /// The rule above only lets phones in while the Wi-Fi is set as Private,
+    /// and a venue's Wi-Fi the laptop has just joined is Public until
+    /// somebody changes it. Without this sentence the button says "set up"
+    /// and every phone still times out.
+    /// </summary>
+    internal const string PrivateNetworkNote =
+        "Phones can only connect while this PC's Wi-Fi is set as a Private network. Windows sets "
+        + "a newly joined Wi-Fi to Public, so at a new venue check it in Settings > Network & "
+        + "internet > Wi-Fi > the network's properties, and choose Private.";
 
     /// <summary>What a volunteer can be asked to paste into an admin Command Prompt if the button can't be used at all.</summary>
     internal static string BothCommands(int port) =>
@@ -82,7 +96,7 @@ internal static class NetworkSetup
     /// %errorlevel% in a /c string is expanded before the first command has
     /// even run. In a script both are ordinary.
     /// </summary>
-    internal static string ScriptText(int port, string transcriptPath)
+    internal static string ScriptText(int port)
     {
         var script = new StringBuilder();
 
@@ -90,7 +104,15 @@ internal static class NetworkSetup
         script.AppendLine("rem Written by HeatCaller (NetworkSetup) and run once, elevated.");
         script.AppendLine("rem Deleted again as soon as it has finished - nothing here is kept.");
         script.AppendLine("setlocal");
-        script.AppendLine($"set \"T={transcriptPath}\"");
+        // The transcript sits beside the script, and the script finds its own
+        // folder (%~dp0) rather than having the path written in. The path is
+        // under the user's profile, so it can hold a letter like the e in
+        // "José", and cmd reads this file in the console's code page: written
+        // in, it named a folder that does not exist, cmd then skipped both
+        // "add" commands (it will not run a command whose redirection fails)
+        // after the "delete" ones had already run. %~dp0 is filled in by cmd
+        // itself, so it is right whatever the code page.
+        script.AppendLine($"set \"T=%~dp0{TranscriptFileName}\"");
         script.AppendLine("set FAILED=0");
         script.AppendLine();
         script.AppendLine("echo === The URL reservation === > \"%T%\"");
@@ -109,6 +131,9 @@ internal static class NetworkSetup
         return script.ToString();
     }
 
+    /// <summary>The transcript's name in the script's folder. ScriptText and RunAsync must agree on it.</summary>
+    internal const string TranscriptFileName = "transcript.txt";
+
     /// <summary>How it went, in the words the page shows.</summary>
     /// <param name="Done">Both the reservation and the rule are in place.</param>
     /// <param name="Message">What to tell the volunteer, whole sentences.</param>
@@ -125,7 +150,8 @@ internal static class NetworkSetup
             true,
             "Phone pages are set up. Windows will let other devices connect to this PC on port "
             + $"{port} from now on, and this doesn't need doing again unless the port changes. "
-            + "Start the server and open one of the addresses below on a phone.",
+            + PrivateNetworkNote + " "
+            + "Then start the server and open one of the addresses below on a phone.",
             transcript),
 
         ExitUrlAclFailed => new Result(
@@ -145,7 +171,10 @@ internal static class NetworkSetup
 
         ExitBothFailed => new Result(
             false,
-            "Windows refused both changes, so nothing was altered. What it said is in the console. "
+            // Not "nothing was altered": each command deletes its own old
+            // entry first, and those deletes have run, so a setup that used
+            // to work may not any more.
+            "Windows refused both changes, so phone pages are not set up. What it said is in the console. "
             + "This PC is probably locked down by policy; running HeatCaller as administrator still works.",
             transcript),
 
@@ -155,6 +184,42 @@ internal static class NetworkSetup
             + "changed. What it managed to print is in the console.",
             transcript),
     };
+
+    /// <summary>
+    /// What netsh printed, as text. Redirected to a file, netsh writes in the
+    /// console's code page (850 on German or French Windows), not UTF-8, so
+    /// read as UTF-8 every translated letter in it came out as the
+    /// replacement character - in the very lines support is told to read.
+    /// CsvHelper.DecodeText tries strict UTF-8 first, which plain English
+    /// output and a PC set to UTF-8 both pass, and only then the code page.
+    /// </summary>
+    internal static string ReadTranscript(byte[] bytes, Encoding oemCodePage) =>
+        CsvHelper.DecodeText(bytes, oemCodePage).Trim();
+
+    /// <summary>
+    /// The console ("OEM") code page for this PC's language. Registering the
+    /// code-page provider again is harmless; should the code page still not
+    /// be available, Latin-1 keeps the text readable if not every letter.
+    /// </summary>
+    private static Encoding OemCodePage()
+    {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            var codePage = CultureInfo.CurrentCulture.TextInfo.OEMCodePage;
+
+            if (codePage > 0)
+            {
+                return Encoding.GetEncoding(codePage);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            // Fall through to Latin-1.
+        }
+
+        return Encoding.Latin1;
+    }
 
     /// <summary>When the volunteer answers No to the administrator prompt, or it is never shown to them.</summary>
     internal const int CancelledByUser = 1223;
@@ -171,7 +236,7 @@ internal static class NetworkSetup
         // two presses cannot read each other's transcript.
         var folder = Path.Combine(Path.GetTempPath(), "HeatCaller-phone-pages-" + Guid.NewGuid().ToString("N"));
         var scriptPath = Path.Combine(folder, "setup.cmd");
-        var transcriptPath = Path.Combine(folder, "transcript.txt");
+        var transcriptPath = Path.Combine(folder, TranscriptFileName);
 
         try
         {
@@ -181,9 +246,10 @@ internal static class NetworkSetup
             // page and takes a leading BOM as three stray characters on the
             // first line, which makes it fail on "@echo off" of all things.
             // The code page itself does not come into it, because everything
-            // ScriptText writes is ASCII - keep it that way.
+            // ScriptText writes is ASCII - keep it that way (it is why the
+            // transcript path is not written in; see ScriptText).
             var ascii = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-            await File.WriteAllTextAsync(scriptPath, ScriptText(port, transcriptPath), ascii).ConfigureAwait(false);
+            await File.WriteAllTextAsync(scriptPath, ScriptText(port), ascii).ConfigureAwait(false);
 
             var start = new ProcessStartInfo
             {
@@ -214,7 +280,7 @@ internal static class NetworkSetup
             await process.WaitForExitAsync().ConfigureAwait(false);
 
             var transcript = File.Exists(transcriptPath)
-                ? (await File.ReadAllTextAsync(transcriptPath).ConfigureAwait(false)).Trim()
+                ? ReadTranscript(await File.ReadAllBytesAsync(transcriptPath).ConfigureAwait(false), OemCodePage())
                 : string.Empty;
 
             return Read(process.ExitCode, transcript, port);

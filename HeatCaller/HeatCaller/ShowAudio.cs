@@ -93,6 +93,15 @@ internal sealed class ShowClip
             var rate = Math.Max(1, reader.WaveFormat.SampleRate);
             var most = (long)(MostSeconds * rate) * channels;
 
+            // The show's output (AudioBus) plays mono or stereo and nothing
+            // else. Refused here, where the club is told, rather than
+            // accepted and then silent at the show with the playlist muted.
+            if (channels > 2)
+            {
+                problem = $"{Path.GetFileName(path)} has {channels} channels - use a mono or stereo file.";
+                return null;
+            }
+
             if (reader.Length > 0)
             {
                 // Length is in bytes of the reader's own 32-bit float output.

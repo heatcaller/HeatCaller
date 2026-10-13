@@ -40,6 +40,7 @@ const CATALOGUE: CatalogueVoice[] = [
     speakerBoost: true,
     speed: 1,
     outputFormat: "mp3_44100_128",
+    cloned: false,
   },
   {
     id: "rostrum",
@@ -53,6 +54,7 @@ const CATALOGUE: CatalogueVoice[] = [
     speakerBoost: true,
     speed: 1,
     outputFormat: "mp3_44100_128",
+    cloned: false,
   },
 ];
 

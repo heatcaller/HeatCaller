@@ -102,6 +102,20 @@ public static class RoomFit
 
         var tight = spareW < ComfortableMarginMm || spareD < ComfortableMarginMm;
 
+        // TIGHT STRAIGHT ON IS NOT THE ANSWER when a quarter turn gives
+        // room all round. Without this, the same hall typed the other way
+        // round was "comfortable" one way and "only just" the other, which
+        // the note on this method says must not matter.
+        if (tight && turnedW >= ComfortableMarginMm && turnedD >= ComfortableMarginMm)
+        {
+            return new Result(
+                Verdict.Comfortable,
+                $"Fits with {Feet(turnedW)} to spare across and {Feet(turnedD)} front to back if you turn the layout "
+                    + "a quarter turn - straight on it only just goes in.",
+                turnedW,
+                turnedD);
+        }
+
         return new Result(
             tight ? Verdict.Tight : Verdict.Comfortable,
             tight

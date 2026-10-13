@@ -934,16 +934,37 @@ internal sealed class ShowTreatment
     /// fifteen pieces of twenty seconds and would otherwise have the music
     /// wound up under its last minute. See NightRecap.LongestRead.
     /// </summary>
+    /// <param name="caption">
+    /// What the crowd band says, for a piece that BORROWS another
+    /// segment's treatment (13 Oct 2026).
+    ///
+    /// The night's recap takes the sign-off's music on purpose - it is the
+    /// same shape of thing, an opener in front and a playout at the end -
+    /// and until now it took the sign-off's NAME with it, so the Big
+    /// Screen's band read "Sign-Off" for four minutes of the night being
+    /// recapped. The band is the one thing on that screen a crowd reads
+    /// for a plain statement of what is happening, and it was naming the
+    /// wrong thing.
+    ///
+    /// Null keeps the old behaviour: the kind's own caption, which is
+    /// right for every caller that is not borrowing.
+    /// </param>
     public Task<bool> RunLongAsync(
         Action speak,
         SegmentKind kind,
         TimeSpan longest,
+        string? caption = null,
         CancellationToken ct = default) =>
-        RunShowAsync(speak, kind, longest < LongestRead ? LongestRead : longest, ct);
+        RunShowAsync(speak, kind, longest < LongestRead ? LongestRead : longest, ct, caption);
 
-    private async Task<bool> RunShowAsync(Action speak, SegmentKind? kind, TimeSpan longest, CancellationToken ct)
+    private async Task<bool> RunShowAsync(
+        Action speak,
+        SegmentKind? kind,
+        TimeSpan longest,
+        CancellationToken ct,
+        string? caption = null)
     {
-        var run = await OpenShowAsync(kind, ShowBlock.CaptionFor(kind), ct).ConfigureAwait(true);
+        var run = await OpenShowAsync(kind, caption ?? ShowBlock.CaptionFor(kind), ct).ConfigureAwait(true);
 
         if (run is null)
         {
@@ -1243,8 +1264,13 @@ internal sealed class ShowTreatment
     /// Does nothing when no block is running. Safe from any thread and safe
     /// twice, which matters because several race-state changes arrive
     /// together: a stop, then a flag, then a reset.
+    ///
+    /// Returns whether there was a block to abandon. Only a block registers
+    /// here - a show opened with StartAsync or RunAsync does not - so Race
+    /// Control's Skip button uses this to say honestly whether it stopped
+    /// anything rather than claiming it did every time.
     /// </summary>
-    internal void AbandonBlock()
+    internal bool AbandonBlock()
     {
         CancellationTokenSource? abandoning;
 
@@ -1253,14 +1279,22 @@ internal sealed class ShowTreatment
             abandoning = _abandoning;
         }
 
+        if (abandoning is null)
+        {
+            return false;
+        }
+
         try
         {
-            abandoning?.Cancel();
+            abandoning.Cancel();
+
+            return true;
         }
         catch (ObjectDisposedException)
         {
             // The block finished between the read above and here, which is
             // the answer this wanted: there is nothing left to abandon.
+            return false;
         }
     }
 
@@ -1529,7 +1563,16 @@ internal sealed class ShowTreatment
                 // Discarded on purpose: the sting plays itself out while the
                 // block carries on over the top of it once the hold below is
                 // done. Play has already swallowed any failure.
-                _ = Play(new ShowOneShot(sting), Level(_settings.ShowStingLevel, 0.8f), "sting");
+                //
+                // But faded out if the block is abandoned or the next race
+                // is called: a club's sting can run far past the hold, and
+                // left alone it would play on over the countdown and the
+                // horn. The registration goes when the sting has played out.
+                var stingGain = new SmoothGainSampleProvider(new ShowOneShot(sting), 1f, downSeconds: 0.3);
+                var playing = Play(stingGain, Level(_settings.ShowStingLevel, 0.8f), "sting");
+                var cut = ct.Register(() => stingGain.Target = 0f);
+
+                _ = playing.ContinueWith(_ => cut.Dispose(), TaskScheduler.Default);
 
                 var held = sting.Length < ShowBlock.LongestSting ? sting.Length : ShowBlock.LongestSting;
 
@@ -1862,7 +1905,7 @@ internal sealed class ShowTreatment
 
             return new ShowRun(
                 _announcer, onSpeaking, speaking, running, bedGain, bedPlaying,
-                bed?.Length ?? TimeSpan.Zero, bedLevel, Status, billing);
+                bed?.Length ?? TimeSpan.Zero, bedLevel, Status, billing, openerGain);
         }
         catch (Exception ex)
         {
@@ -2212,6 +2255,12 @@ internal sealed class ShowRun
     /// </summary>
     private readonly ShowBilling? _billing;
 
+    /// <summary>
+    /// The opener's gain, where the show had one - held so a cut can ride
+    /// it down as well as the bed. See FinishAsync.
+    /// </summary>
+    private readonly SmoothGainSampleProvider? _openerGain;
+
     /// <summary>0 running, 1 finished. Interlocked, because the finally and the natural end can race.</summary>
     private int _finished;
 
@@ -2225,7 +2274,8 @@ internal sealed class ShowRun
         TimeSpan bedLength,
         float bedLevel,
         Action<string>? status,
-        ShowBilling? billing = null)
+        ShowBilling? billing = null,
+        SmoothGainSampleProvider? openerGain = null)
     {
         _announcer = announcer;
         _onSpeaking = onSpeaking;
@@ -2237,6 +2287,7 @@ internal sealed class ShowRun
         _bedLevel = bedLevel;
         _status = status;
         _billing = billing;
+        _openerGain = openerGain;
     }
 
     /// <summary>
@@ -2338,6 +2389,16 @@ internal sealed class ShowRun
         try
         {
             _announcer.SpeakingChanged -= _onSpeaking;
+
+            // A long opener can still be ringing under the voice when the
+            // show is cut, and it is a one-shot nobody else holds - left
+            // alone it would play on over the countdown and the club's
+            // music coming back. Ridden down, as OpenShowAsync's own catch
+            // does it.
+            if (cutShort && _openerGain is not null)
+            {
+                _openerGain.Target = 0f;
+            }
 
             if (_bed is not null)
             {

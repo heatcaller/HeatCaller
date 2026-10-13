@@ -262,4 +262,19 @@ public sealed partial class RaceControlControl
             tonight.Evolution,
             ChampionshipTopKept());
     }
+
+    /// <summary>
+    /// What the write-ahead did tonight, for the announcer's recap to read
+    /// out - see <see cref="WrittenAhead.Report"/>.
+    ///
+    /// Here rather than on the announcer page because the ledger is here,
+    /// with the thing that writes the intros
+    /// (RaceControlControl.AfterRace). The announcer asks through a hook
+    /// (AnnouncerControl.IntrosWrittenAhead) so neither page has to know
+    /// how to find the other.
+    ///
+    /// Null on a night where nothing was written ahead, and then the recap
+    /// says nothing about it.
+    /// </summary>
+    internal string? IntrosWrittenAhead() => _writtenAhead.Report();
 }

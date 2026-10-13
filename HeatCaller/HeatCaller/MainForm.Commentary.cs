@@ -59,6 +59,414 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Hooks up a driver's own night and the proof of a line (12 Oct 2026).
+    ///
+    /// NOT IN WireShowMusic above, which is static and so cannot see the
+    /// stores: what counts as "tonight" is TonightAtTheTrack's question and
+    /// it needs the history AND the rounds to answer it, and the one fact
+    /// that needs a store rather than a result - a lap record - needs the
+    /// layouts. All three live here.
+    ///
+    /// EVERY ONE READ FRESH WHEN IT IS ASKED, never captured, which is the
+    /// rule every other reader on this page follows: a club runs races
+    /// between opening the driver picker and opening it again.
+    /// </summary>
+    private void WireTheDriversNight(AnnouncerControl announcer, CommentaryControl commentary)
+    {
+        // TONIGHT'S RACES, through TonightAtTheTrack rather than filtered
+        // again here. Its night runs 6am to 6am and it is the same answer
+        // every pace figure on the page is read from; a second answer to
+        // "which races were tonight" is the sort of thing that agrees all
+        // season and then disagrees about a race that started at five to
+        // midnight.
+        announcer.RacesTonight = () =>
+        {
+            // A BLOCK RATHER THAN A TERNARY, because the two branches are an
+            // array and a List and those have no common type - CS0173, which
+            // the compiler is right about and which a cast would only have
+            // hidden.
+            if (_rounds is null)
+            {
+                return Array.Empty<SessionRecord>();
+            }
+
+            return TonightAtTheTrack
+                .Races(_sessionHistory.All, id => _rounds.Get(id), DateTime.Now)
+                .Select(one => one.Session)
+                .ToList();
+        };
+
+        // The layouts, for a record falling. Null would mean no record is
+        // claimed rather than a guess at one - see NightMoments.ForRace.
+        announcer.Layouts = () => _trackLayouts;
+
+        // WHAT THE NIGHT COST THAT THE CLUB CANNOT SEE (13 Oct 2026). Two
+        // ledgers that were being kept and read by nobody. Both are hooks
+        // because both live somewhere else - the write-ahead on Race
+        // Control, beside the thing that writes the intros, and the
+        // listening queue on the relay publisher - and an announcer page
+        // that knew how to reach either would be a second path between
+        // pages that already have one.
+        //
+        // Null-safe on the Race Control side because the pages are built in
+        // an order this file does not fix: a recap asked for before Race
+        // Control exists reads nothing rather than throwing.
+        announcer.IntrosWrittenAhead = () => _raceControlControl?.IntrosWrittenAhead();
+        announcer.ListenedAlong = () => _relayPublisher.Listening.Report();
+
+        // WHO RACED TONIGHT, for the picker - in the order they last
+        // raced, so the drivers from the main a club has just run are at
+        // the top rather than whoever is alphabetically first. Named as
+        // their results name them, because that is what the piece is
+        // written from and a picker that says something else is a picker
+        // that picks the wrong person.
+        commentary.DriversTonight = () =>
+        {
+            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (_rounds is null)
+            {
+                return Array.Empty<(string, string)>();
+            }
+
+            foreach (var (session, _) in TonightAtTheTrack
+                         .Races(_sessionHistory.All, id => _rounds.Get(id), DateTime.Now)
+                         .OrderByDescending(one => one.Session.StartedAtUtc))
+            {
+                foreach (var row in session.Results)
+                {
+                    if (string.IsNullOrWhiteSpace(row.Transponder) || GhostService.IsGhost(row.Transponder))
+                    {
+                        continue;
+                    }
+
+                    // Their profile's name where they have one, so the
+                    // picker and the piece agree even for a driver whose
+                    // result was saved under an older spelling.
+                    var named = _profiles.Get(row.Transponder)?.DriverName is { Length: > 0 } onFile
+                        ? onFile
+                        : row.DriverName;
+
+                    if (!string.IsNullOrWhiteSpace(named))
+                    {
+                        seen.TryAdd(row.Transponder, named.Trim());
+                    }
+                }
+            }
+
+            return seen.Select(one => (one.Key, one.Value)).ToList();
+        };
+
+        commentary.PlayADriversNight = announcer.PlayADriversNightAsync;
+
+        // And why the announcer said what it last said - see
+        // NightAccount.Proof.
+        commentary.ProofOfTheLastLine = announcer.TheProofOfTheLastLine;
+
+        // THE NIGHT BEFORE - see NightBefore, and WriteTheNightBeforeAsync
+        // below for why the fact-gathering is here rather than on the page.
+        commentary.WriteTheNightBefore = WriteTheNightBeforeAsync;
+    }
+
+    /// <summary>
+    /// Writes a preview of the race day that is set up, and saves it as a
+    /// text file the club can paste wherever they post things.
+    ///
+    /// HERE rather than on the Commentary page because a preview is built
+    /// from the programme, the seasons, the club's own history and its
+    /// track layouts - four stores that belong to this form. The page owns
+    /// a button and a label; this owns the answer.
+    ///
+    /// A FILE ALWAYS, AND THE CLUB'S PAGE IF IT ASKED (13 Oct 2026). The
+    /// file is the thing a club pastes into its own group, and it is
+    /// written whether or not the relay is involved. The publish is a
+    /// separate yes (AppSettings.PublishNightBeforeToTheRelay) because it
+    /// is a separate act: a club that has been pressing this button all
+    /// season for something to paste must not find that an update started
+    /// putting the same words on a public address.
+    ///
+    /// And the part nobody would think of until it bit them: something has
+    /// to take it DOWN, because a preview left up describes in the future
+    /// tense a meeting that finished hours ago. Two things do - this app
+    /// withdraws it when the first race is filed (WithdrawTheNightBefore),
+    /// and the document carries its own expiry for the evening the laptop
+    /// never comes back, which is the one this app cannot cover. See
+    /// NightBefore.Withdrawn and NightBefore.StandsFor.
+    ///
+    /// Returns a sentence either way, because the caller is a button.
+    /// </summary>
+    private async Task<string?> WriteTheNightBeforeAsync()
+    {
+        if (_commentary is null || !_commentary.IsAvailable)
+        {
+            return "The announcer's brain isn't set up on this PC yet, so there is nothing to write with.";
+        }
+
+        if (_rounds is null)
+        {
+            return "There is no programme on this PC to preview.";
+        }
+
+        var day = _raceEvents.Active;
+
+        // THE DAY THAT IS SET UP, not a guess at the next one. A race day
+        // exists once the club has opened it, and its first race time is
+        // the only time this preview will state - see NightBefore's note
+        // on times. Its date is asked for below.
+        if (day is null)
+        {
+            return "No race day is open, so there is no entry list to preview. Set the day up first.";
+        }
+
+        var toRun = _rounds.Unrecorded(_raceEvents.DayScope());
+
+        if (toRun.Count == 0)
+        {
+            return "Every race on the programme has already been run, so there is nothing to preview.";
+        }
+
+        // THE DATE IS ASKED, NOT TAKEN FROM THE DAY. StartedUtc is when the
+        // day was opened - the night before, for a preview written the
+        // night before - so it named the wrong day on a public page and
+        // set an expiry that had already passed. Nothing else on a race
+        // day says which date it is for. See NightBefore.DaysItCouldBeFor.
+        //
+        // Before anything is awaited, so the question is on this thread
+        // and the stores read below are read after it is answered.
+        var nowLocal = DateTime.Now;
+        var offered = NightBefore.DaysItCouldBeFor(nowLocal, day.FirstRaceLocalTime);
+
+        var picked = AppDialog.Choose(
+            this,
+            "Which day is this preview for? It says the date on the page, and HeatCaller only knows the race day "
+            + "is set up, not which day it will be run. If it is further off than these, write the preview nearer "
+            + "the time.",
+            NightBefore.Label,
+            MessageBoxIcon.Question,
+            NightBefore.DayCaption(offered[0], nowLocal),
+            NightBefore.DayCaption(offered[1], nowLocal),
+            "Not now");
+
+        if (picked < 0 || picked >= offered.Count)
+        {
+            return "Nothing was written.";
+        }
+
+        var whenLocal = offered[picked].Date
+            + (day.FirstRaceLocalTime ?? TimeSpan.Zero);
+
+        var entered = NightBefore.EnteredIn(toRun);
+
+        VenueRecord? venue = null;
+        TitleStakes? stakes = null;
+
+        // On this thread, where every one of these stores lives, and
+        // before anything is awaited - the rule the round intro's own
+        // readers follow. A reader that throws costs the preview that one
+        // fact and nothing else.
+        try
+        {
+            venue = CommentaryReaders.LayoutRecord(_trackLayouts, _sessionHistory, day.TrackLayoutName);
+
+            // AGAINST THE ENTRY LIST, which is the whole care needed here:
+            // the stakes name the drivers who can still win it, and
+            // "only Bill and Sam can win it" about a Sam who is not
+            // entered is a claim the meeting makes ridiculous. The reader
+            // takes the grid for exactly this reason.
+            stakes = CommentaryReaders.TitleOnTheLine(
+                toRun[0], entered, _seasonStore, _rounds, _raceEvents, _sessionHistory, _profiles);
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The preview goes without the record and the standings - they could not be worked out: {ex.Message}");
+        }
+
+        var facts = NightBefore.FactsFor(day.Name, whenLocal, Spoken(day.FirstRaceLocalTime), toRun, venue, stakes);
+
+        if (facts.Empty)
+        {
+            return "There was nothing in the programme worth previewing yet - add the entry lists first.";
+        }
+
+        var script = await _commentary.BuildNightBeforeAsync(facts).ConfigureAwait(true);
+
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return "The model did not write anything usable. Try again, or check the Connection card above.";
+        }
+
+        try
+        {
+            var folder = Rehearsal.DocumentsFolder("HeatCaller Previews");
+
+            Directory.CreateDirectory(folder);
+
+            var name = $"{whenLocal:yyyy-MM-dd} - {PlainFileName.SafePart(day.Name, "Race Day")} - preview.txt";
+            var path = Path.Combine(folder, name);
+
+            File.WriteAllText(path, script.Trim() + Environment.NewLine);
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] {NightBefore.Label}: {script.Trim()}");
+
+            // AFTER the file, and not instead of it: the file is the thing
+            // the club asked for and it is already on disk by the time
+            // anything touches the network.
+            var published = PublishTheNightBefore(day.Name, whenLocal, day.FirstRaceLocalTime, script);
+
+            return $"Saved to Documents\\HeatCaller Previews\\{name}{published} - and written out in the developer console.";
+        }
+        catch (Exception ex)
+        {
+            // The words are not lost: they went to the console above a
+            // moment ago either way.
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] {NightBefore.Label}: {script.Trim()}");
+
+            return $"The preview was written but could not be saved: {ex.Message}. It is in the developer console.";
+        }
+    }
+
+    /// <summary>
+    /// Puts the preview on the club's own page, if the club asked for
+    /// that.
+    ///
+    /// Returns what to add to the button's sentence, and empty when
+    /// nothing was published - a club that has not ticked the box should
+    /// read nothing about a relay.
+    /// </summary>
+    private string PublishTheNightBefore(
+        string? dayName,
+        DateTime whenLocal,
+        TimeSpan? firstRaceLocal,
+        string? script)
+    {
+        if (!_settings.PublishNightBeforeToTheRelay)
+        {
+            return string.Empty;
+        }
+
+        if (!_settings.RelayEnabled)
+        {
+            // Said rather than passed over. A club that ticked the box and
+            // has no club website switched on would otherwise press this
+            // every week and never wonder why nothing appears.
+            return ", but not to your club's page - the club website is switched off on the Club Website page";
+        }
+
+        // A preview whose own expiry has passed is never drawn, so the club
+        // is told rather than shown a page that stays empty.
+        if (NightBefore.UntilUtc(whenLocal, firstRaceLocal) <= DateTime.UtcNow)
+        {
+            return ", but not to your club's page - the meeting it is for is already over";
+        }
+
+        try
+        {
+            _relayPublisher.PublishSnapshot(
+                RelayChannel.Preview, NightBefore.Document(dayName, whenLocal, firstRaceLocal, script));
+
+            // THE DAY IT IS FOR, remembered now, so the withdrawal knows
+            // there is something of its own to take down - see
+            // WithdrawTheNightBefore for why a flag is not enough.
+            _nightBeforeOnThePage = _raceEvents.Active?.Id ?? string.Empty;
+
+            return " and onto your club's page";
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The preview could not be sent to the club's page: {ex.Message}");
+
+            return ", but it could not be sent to your club's page - the developer console says why";
+        }
+    }
+
+    /// <summary>
+    /// The race day whose preview is on the club's page, or null for none.
+    ///
+    /// THE DAY AND NOT A BOOLEAN, so that a preview written for next
+    /// Saturday is not taken down by tonight's first heat. A club that
+    /// writes the preview on Tuesday for Saturday and then runs a practice
+    /// evening on Wednesday would otherwise lose it.
+    /// </summary>
+    private string? _nightBeforeOnThePage;
+
+    /// <summary>
+    /// Takes the preview off the club's page, because the meeting it
+    /// previews has started.
+    ///
+    /// CALLED ON THE FIRST FILED RESULT OF THE DAY, which is the first
+    /// moment the app can be sure a meeting is actually under way rather
+    /// than being set up - a green flag can be a test, a programme can be
+    /// built and abandoned, but a filed session happened.
+    ///
+    /// Idempotent: it fires on every result and does nothing after the
+    /// first, so the relay is not sent a withdrawal per heat.
+    /// </summary>
+    private void WithdrawTheNightBefore()
+    {
+        if (_nightBeforeOnThePage is not { } forDay)
+        {
+            return;
+        }
+
+        // Only for the day it was written for. A preview for Saturday
+        // stands through Wednesday's practice.
+        if (!string.Equals(forDay, _raceEvents.Active?.Id ?? string.Empty, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // Cleared FIRST, so a publisher that throws does not leave this
+        // trying again on every heat of the evening. The preview has an
+        // expiry of its own for exactly this case.
+        _nightBeforeOnThePage = null;
+
+        try
+        {
+            _relayPublisher.PublishSnapshot(RelayChannel.Preview, NightBefore.WithdrawnDocument);
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The meeting has started, so the preview has come off your club's page.");
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The preview could not be taken off your club's page: {ex.Message}. It comes down by itself a few hours after the first race.");
+        }
+    }
+
+    /// <summary>
+    /// Takes the preview off the club's page because the club has unticked
+    /// putting it there.
+    ///
+    /// SENT WHETHER OR NOT THIS RUN PUBLISHED ONE. _nightBeforeOnThePage
+    /// lives in memory, so a preview published before the app was last
+    /// restarted is not in it - and the empty document costs nothing when
+    /// there is nothing up: the page draws nothing either way, and the
+    /// publisher drops it when the club website is off.
+    /// </summary>
+    private void TakeTheNightBeforeOffThePage()
+    {
+        _nightBeforeOnThePage = null;
+
+        try
+        {
+            _relayPublisher.PublishSnapshot(RelayChannel.Preview, NightBefore.WithdrawnDocument);
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The preview could not be taken off your club's page: {ex.Message}. It comes down by itself a few hours after the first race.");
+        }
+    }
+
+    /// <summary>
+    /// A first-race time as a club would say it, or empty where the day
+    /// has none set. Short time, so it reads "10:15" rather than
+    /// "10:15:00".
+    /// </summary>
+    private static string Spoken(TimeSpan? firstRace) =>
+        firstRace is { } at
+            ? DateTime.Today.Add(at).ToString("t", System.Globalization.CultureInfo.CurrentCulture)
+            : string.Empty;
+
+    /// <summary>
     /// Puts a club who has never been asked onto the show music that ships
     /// with the app - once, on the way up.
     ///

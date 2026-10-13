@@ -336,7 +336,10 @@ public static class CommentaryHistoryFacts
 
         if (outs >= 2)
         {
-            return new FactBlock(key, $"{name} hasn't finished either of the last {Spell(outs)} {Of(scope)}races.", theme);
+            // "Either" only fits two.
+            var which = outs == 2 ? "either" : "any";
+
+            return new FactBlock(key, $"{name} hasn't finished {which} of the last {Spell(outs)} {Of(scope)}races.", theme);
         }
 
         return null;

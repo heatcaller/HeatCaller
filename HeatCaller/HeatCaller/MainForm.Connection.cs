@@ -49,6 +49,16 @@ public partial class MainForm
             _connectingLine = false;
         }
 
+        // Overtaken on its way here: statuses from two threads can arrive
+        // out of order - a Connected posted just before a Disconnect landed
+        // after it and painted the light green again. Whatever the client
+        // is now has a status of its own still to come, so this one is
+        // dropped rather than drawn over it.
+        if (state != _decoderClient.State)
+        {
+            return;
+        }
+
         // The line's light for the line; the split loop's own for the split.
         switch (RoleOf(DecoderConnection.EasyLap))
         {
@@ -77,6 +87,12 @@ public partial class MainForm
         // window has a handle, and this is called from the decoder's
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnILapStatusChanged(state, message)); return; }
+
+        // Overtaken on its way here - see OnDecoderStatusChanged.
+        if (state != _ilapClient.State)
+        {
+            return;
+        }
 
         switch (RoleOf(DecoderConnection.ILap))
         {

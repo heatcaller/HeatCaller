@@ -71,6 +71,20 @@ public sealed class RcpSelection
 
     public bool Holds(RcpRoutePoint point) => _route.Contains(point);
 
+    // Forgetting a piece that has been taken off the plan. A selection is
+    // only valid for pieces still on it (see the class notes): one erased
+    // while picked would otherwise go on being moved, settled - clearing
+    // whatever real piece it landed on - and copied back. True when it was
+    // picked.
+
+    public bool Forget(RcpTile tile) => _tiles.Remove(tile);
+
+    public bool Forget(RcpWall wall) => _walls.Remove(wall);
+
+    public bool Forget(RcpCurve curve) => _curves.Remove(curve);
+
+    public bool Forget(RcpDecal decal) => _decals.Remove(decal);
+
     // --- Picking -------------------------------------------------------------
 
     /// <summary>
@@ -394,7 +408,7 @@ public sealed class RcpSelection
         foreach (var decal in _decals)
         {
             decal.Col = -decal.Col - 1;
-            decal.Turns = Unturned(decal.Turns);
+            decal.Turns = DecalMirroredLeftRight(decal);
         }
 
         foreach (var wall in _walls)
@@ -438,7 +452,7 @@ public sealed class RcpSelection
         foreach (var decal in _decals)
         {
             decal.Row = -decal.Row - 1;
-            decal.Turns = Unturned(decal.Turns);
+            decal.Turns = DecalMirroredTopBottom(decal);
         }
 
         foreach (var wall in _walls)
@@ -494,12 +508,51 @@ public sealed class RcpSelection
     /// Quarter turns under a mirror.
     ///
     /// A mirror is not a turn, so there is no turn that gives the mirror
-    /// image of a shape that has no mirror line of its own. Every marking
-    /// on a plan does have one - a chequered band, a grid box, a kerb, a
-    /// round post - so turning it the other way is the right answer for
-    /// all of them, and the nearest available answer for anything else.
+    /// image of a shape that has no mirror line of its own. For a shape
+    /// whose mirror line runs along the mirror's own at no turns, turning
+    /// it the other way is the right answer - and the nearest available
+    /// answer for anything else. Markings go through DecalMirroredLeftRight
+    /// and DecalMirroredTopBottom, as not all of them are that shape.
     /// </summary>
     private static int Unturned(int turns) => (4 - (turns % 4)) % 4;
+
+    /// <summary>
+    /// A marking's turns in a left-to-right mirror, by what it looks like
+    /// at no turns (RcpTrackPainter.DrawDecal turns it about the tile's
+    /// centre).
+    ///
+    /// Unturned is only right for a marking whose mirror line runs up and
+    /// down it at no turns - a kerb, and the bands, which have both. A post
+    /// is not a shape at all: its turns pick the corner of the tile its disc
+    /// sits on (0 top left, then clockwise), so a mirror swaps the corners -
+    /// it used to come out one tile along from the join it was pinning. A
+    /// grid box's mirror line runs across it, which needs half a turn more
+    /// than Unturned gives, or its stagger stays on the same side.
+    /// </summary>
+    private static int DecalMirroredLeftRight(RcpDecal decal)
+    {
+        var turns = ((decal.Turns % 4) + 4) % 4;
+
+        return decal.Kind switch
+        {
+            RcpDecalKind.Post => (5 - turns) % 4,
+            RcpDecalKind.GridBox => (6 - turns) % 4,
+            _ => Unturned(turns),
+        };
+    }
+
+    /// <summary>A marking's turns in a top-to-bottom mirror - see DecalMirroredLeftRight.</summary>
+    private static int DecalMirroredTopBottom(RcpDecal decal)
+    {
+        var turns = ((decal.Turns % 4) + 4) % 4;
+
+        return decal.Kind switch
+        {
+            RcpDecalKind.Post => 3 - turns,
+            RcpDecalKind.Kerb => (6 - turns) % 4,
+            _ => Unturned(turns),
+        };
+    }
 
     /// <summary>
     /// Slides the result back so the selection's top-left corner is where

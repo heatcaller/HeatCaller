@@ -117,7 +117,24 @@ internal static class NightMoments
     /// <param name="FigureMs">The margin, or the lap time - whichever the kind is about. Zero where there is no figure.</param>
     /// <param name="Places">Places made up, for a charge. Zero otherwise.</param>
     /// <param name="Beaten">Who they took the lead from, or whose record fell. Empty where nobody was.</param>
-    /// <param name="AtUtc">When the race was, so a night can be told from a season.</param>
+    /// <param name="AtUtc">When the race was, so a night can be told from a season. The flag where the result saved one, falling back to the green.</param>
+    /// <param name="GreenAtUtc">
+    /// When the race went green, which is a different question from AtUtc
+    /// above and is asked by exactly one caller.
+    ///
+    /// NightPromises needs to know whether a race had STARTED when the
+    /// broadcast pointed the room at somebody: a pace note called on lap
+    /// five - "Carl has just gone quickest" - must not be paid off by the
+    /// moment that says Carl set the fastest lap, because they are the same
+    /// lap and the announcer would be congratulating itself on reading out
+    /// its own line. AtUtc cannot answer it: it is the flag, so the race the
+    /// note was called during finished AFTER the note and looks like a later
+    /// race.
+    ///
+    /// DEFAULT MEANS UNKNOWN, and a promise is never paid off from a race
+    /// whose green flag is unknown - a hand-entered result with no start
+    /// time gets no callbacks rather than a guessed one.
+    /// </param>
     internal sealed record Moment(
         Kind What,
         string SessionId,
@@ -128,7 +145,8 @@ internal static class NightMoments
         long FigureMs,
         int Places,
         string Beaten,
-        DateTime AtUtc);
+        DateTime AtUtc,
+        DateTime GreenAtUtc = default);
 
     /// <summary>
     /// Every moment in one saved race.
@@ -158,8 +176,14 @@ internal static class NightMoments
         var label = (record.Label ?? string.Empty).Trim();
         var at = record.EndedAtUtc != default ? record.EndedAtUtc : record.StartedAtUtc;
 
+        // Never a disqualified driver. A DQ keeps its lap times (the timing
+        // saw them; ResultEditor only takes the laps to nought), so without
+        // this a driver thrown out at tech could still be credited with the
+        // last-lap lead or the fastest lap - which TonightAtTheTrack already
+        // refuses to give them.
         var scored = record.Results
             .Where(row => !string.IsNullOrWhiteSpace(row.Transponder) && !GhostService.IsGhost(row.Transponder))
+            .Where(row => !IsDisqualified(row))
             .ToList();
 
         if (scored.Count == 0)
@@ -177,7 +201,8 @@ internal static class NightMoments
                 : transponder;
 
         Moment Made(Kind what, string transponder, int lap = 0, long figure = 0, int places = 0, string beaten = "") =>
-            new(what, record.Id, label, transponder, Named(transponder), lap, figure, places, beaten, at);
+            new(what, record.Id, label, transponder, Named(transponder), lap, figure, places, beaten, at,
+                GreenAtUtc: record.StartedAtUtc);
 
         // ---------------------------------------------------------------
         //  The lead changing hands - RaceHighlights' own timeline
@@ -188,7 +213,15 @@ internal static class NightMoments
         // who was ahead after each one; a second walk would be a second
         // answer to the same question. The LAP is what tells a last-lap pass
         // from any other, which is why Mark carries one.
-        var marks = RaceHighlights.MarksFrom(record);
+        //
+        // The timeline is drawn WITHOUT the disqualified, not just filtered
+        // of them afterwards: a DQ'd car left on it would still be "ahead"
+        // of everybody, so the driver who really won would be read as taking
+        // the lead from a car that no longer counts, or never at all.
+        // MarksFrom reads nothing but Results, so a bare record carrying
+        // them is enough.
+        var timeline = record.Results.Where(row => !IsDisqualified(row)).ToList();
+        var marks = RaceHighlights.MarksFrom(new SessionRecord { Results = timeline });
 
         // ONLY THE DRIVERS WHO SCORED, which MarksFrom does not filter and
         // is right not to: its job is handing a driver the seconds of the
@@ -219,8 +252,8 @@ internal static class NightMoments
             // handed it to, and on the first change of the race, the driver
             // who led from the grid. That one is not on a mark at all - the
             // first leader is deliberately not a lead change - so it is read
-            // off the only other thing that knows: who led a lap first.
-            var from = held.Length > 0 ? held : LedFirst(scored, lead.Transponder);
+            // off the same timeline: whoever crossed the line first.
+            var from = held.Length > 0 ? held : LedFirst(timeline, scored, lead.Transponder);
 
             found.Add(Made(
                 lead.Lap >= mostLaps && mostLaps > 0 ? Kind.LastLapLead : Kind.LeadChange,
@@ -326,6 +359,10 @@ internal static class NightMoments
         return found;
     }
 
+    /// <summary>Whether the result was disqualified - ResultEditor's own reading of the outcome.</summary>
+    private static bool IsDisqualified(SessionResultEntry row) =>
+        ResultEditor.NormaliseOutcome(row.Outcome) == ResultEditor.Dq;
+
     /// <summary>
     /// Whether this layout's outright record was set during this race, and
     /// the moment if it was.
@@ -386,27 +423,50 @@ internal static class NightMoments
             FigureMs: layout.RecordLapMs,
             Places: 0,
             Beaten: string.Empty,
-            AtUtc: setAt);
+            AtUtc: setAt,
+            GreenAtUtc: green);
     }
 
     /// <summary>
     /// Who led the race before the first change of lead - the driver the
     /// first pass for the lead was made ON.
     ///
-    /// From LapsLed, which is the one figure a saved result keeps about the
-    /// running order, and the driver taking the lead is excluded so that a
-    /// driver who led most of the race is not named as the one they passed.
-    /// Empty where the result carries no laps led at all, which is every
-    /// race saved before that field existed.
+    /// The first car across the line, on the same timeline MarksFrom walks
+    /// and with its tie-break (the transponder): that is who it calls the
+    /// first leader. Not the driver with the most laps led, which names
+    /// whoever led LONGEST - in a race led by A, then B, then C for most of
+    /// it, that is C, who had not led yet when B took it.
+    ///
+    /// Empty where that car cannot be named - a ghost, the driver taking the
+    /// lead themselves - and where the result carries no laps led for them,
+    /// which is every race saved before that field existed: the first car
+    /// across always led lap one, so a nought there means the result cannot
+    /// vouch for the order.
     /// </summary>
-    private static string LedFirst(IReadOnlyList<SessionResultEntry> scored, string notThisOne) =>
-        scored
-            .Where(row => row.LapsLed > 0
-                          && !string.Equals(row.Transponder, notThisOne, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(row => row.LapsLed)
-            .ThenBy(row => row.Position)
-            .Select(row => row.Transponder)
-            .FirstOrDefault() ?? string.Empty;
+    private static string LedFirst(
+        IReadOnlyList<SessionResultEntry> timeline,
+        IReadOnlyList<SessionResultEntry> scored,
+        string notThisOne)
+    {
+        var first = timeline
+            .Where(row => !string.IsNullOrWhiteSpace(row.Transponder))
+            .Select(row => (Row: row, Times: RaceHighlights.CrossingTimesMs(row.LapTimesMs)))
+            .Where(one => one.Times.Count > 0)
+            .OrderBy(one => one.Times[0])
+            .ThenBy(one => one.Row.Transponder, StringComparer.OrdinalIgnoreCase)
+            .Select(one => one.Row.Transponder)
+            .FirstOrDefault();
+
+        if (first is null || string.Equals(first, notThisOne, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        return scored.FirstOrDefault(row =>
+                   row.LapsLed > 0 && string.Equals(row.Transponder, first, StringComparison.OrdinalIgnoreCase)) is { } led
+            ? led.Transponder
+            : string.Empty;
+    }
 
     /// <summary>
     /// The night's moments, strongest first, over the races handed in.

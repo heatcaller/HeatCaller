@@ -281,8 +281,23 @@ internal sealed class RoomVote
                 return;
             }
 
+            // FROM NO DAY TO A DAY IS ADOPTED, NOT CLEARED. The app puts
+            // this on no day when it starts with none open (which is what
+            // clears last week's), so anything held under no day was added
+            // since - tonight's vote, opened and voted on before the day
+            // was. Clearing it then wiped exactly what the night wanted.
+            var adopt = string.IsNullOrEmpty(_file.DayId) && day.Length > 0;
+
             _file.DayId = day;
-            _file.Current = null;
+
+            // Only one opened in the last day, for the reason ClubNotes.
+            // AdoptedWithin gives: a vote held under no day and never
+            // followed by one must not reach the next meeting.
+            if (!adopt
+                || (_file.Current is { } held && DateTime.UtcNow - held.OpenedUtc > ClubNotes.AdoptedWithin))
+            {
+                _file.Current = null;
+            }
 
             Save();
         }
@@ -433,6 +448,22 @@ internal sealed class RoomVote
             lock (_gate)
             {
                 return _file.Current?.RaceKey;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The open vote's own id, or null when none is open. New every time a
+    /// vote is opened, even on the same round - which is what tells the
+    /// relay that a vote reopened on the same race starts empty here too.
+    /// </summary>
+    internal string? OnPollId
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _file.Current?.Id;
             }
         }
     }

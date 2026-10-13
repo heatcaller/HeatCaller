@@ -50,8 +50,32 @@ public sealed class ILapClient : IDisposable
     private readonly object _captureLock = new();
     private readonly string _captureFolder;
 
-    /// <summary>1 while a connect is in flight on a thread of its own - see Connect.</summary>
+    /// <summary>1 while a connect is in flight on a thread of its own - see Connect. Guarded by _connectLock.</summary>
     private int _connecting;
+
+    /// <summary>The generation of the connect in flight, and its port - so a Connect can tell an overtaken one from the current one. Guarded by _connectLock.</summary>
+    private int _connectingGeneration;
+    private string _connectingPort = string.Empty;
+
+    /// <summary>
+    /// A Connect asked for while an overtaken connect was still inside the
+    /// serial stack, started as soon as that one comes out - see Connect.
+    /// Guarded by _connectLock.
+    /// </summary>
+    private (string PortName, int BaudRate)? _queuedConnect;
+
+    /// <summary>
+    /// Serialises the connect bookkeeping above, the generation bump in
+    /// Disconnect, and the "still current? then publish" step. Never held
+    /// across a serial call or a status event - only around the few fields.
+    /// </summary>
+    private readonly object _connectLock = new();
+
+    /// <summary>
+    /// Ports let go of on threads of their own and maybe not yet closed -
+    /// see Teardown. Guarded by itself.
+    /// </summary>
+    private readonly List<(string PortName, Thread Closer)> _closing = new();
 
     /// <summary>
     /// Bumped by every Connect and every Disconnect. A connect that comes
@@ -200,17 +224,58 @@ public sealed class ILapClient : IDisposable
             return;
         }
 
-        if (Interlocked.Exchange(ref _connecting, 1) == 1)
+        int generation;
+        string? busyPort = null;
+
+        lock (_connectLock)
         {
-            // One at a time. Two would open two ports and start two reader
-            // threads on one decoder. Nothing is said about it: the
-            // three-second tick would fill the console with it.
+            if (_connecting == 1)
+            {
+                // One at a time. Two would open two ports and start two
+                // reader threads on one decoder.
+                if (_connectingGeneration == Volatile.Read(ref _generation))
+                {
+                    // The one in flight is the current one. Nothing is said
+                    // about it: the three-second tick would fill the console
+                    // with it.
+                    return;
+                }
+
+                // The one in flight was overtaken by a Disconnect and is
+                // still inside the serial stack. This one used to be dropped
+                // without a word, leaving Connect greyed out with nothing
+                // connecting. It is kept instead, and started the moment
+                // the old one comes out - see ConnectCore's finally.
+                _queuedConnect = (portName, baudRate);
+                busyPort = _connectingPort;
+                generation = Volatile.Read(ref _generation);
+            }
+            else
+            {
+                _connecting = 1;
+                generation = Interlocked.Increment(ref _generation);
+                _connectingGeneration = generation;
+                _connectingPort = portName;
+            }
+        }
+
+        if (busyPort is not null)
+        {
+            // Connecting, so the buttons and the tick read it as under way.
+            // Only if nothing has happened since - a Disconnect, or the
+            // queued connect already started.
+            SetStateIfCurrent(generation, DecoderConnectionState.Connecting,
+                $"Waiting for the last attempt on {busyPort} to finish before opening {portName}... Press Disconnect to give up.");
             return;
         }
 
-        var generation = Interlocked.Increment(ref _generation);
+        StartConnect(portName, baudRate, generation);
+    }
 
-        SetState(DecoderConnectionState.Connecting, $"Opening {portName} at {baudRate} baud...");
+    /// <summary>Publishes Connecting and starts the connect thread, for an attempt already counted in under _connectLock.</summary>
+    private void StartConnect(string portName, int baudRate, int generation)
+    {
+        SetStateIfCurrent(generation, DecoderConnectionState.Connecting, $"Opening {portName} at {baudRate} baud...");
 
         new Thread(() => ConnectCore(portName, baudRate, generation))
         {
@@ -236,10 +301,7 @@ public sealed class ILapClient : IDisposable
             // overtaken: the Disconnect that overtook it has had the last
             // word, and an Error landing after it would turn the status
             // light red for a decoder nobody is trying to open.
-            if (Volatile.Read(ref _generation) == generation)
-            {
-                SetState(state, message);
-            }
+            SetStateIfCurrent(generation, state, message);
         }
 
         try
@@ -249,6 +311,13 @@ public sealed class ILapClient : IDisposable
             // already been published and this is still the same attempt, not
             // a disconnection.
             Teardown();
+
+            // A port let go of moments ago may still be closing on its own
+            // thread, and Windows refuses to open a COM port until it has.
+            // Waited for here, where waiting is allowed - only for this
+            // port, so a dead adapter that never closes holds up nothing
+            // but itself.
+            WaitForClosing(portName);
 
             SerialPort port;
 
@@ -316,15 +385,16 @@ public sealed class ILapClient : IDisposable
             // Looked at once more now the port IS the live one: a Disconnect
             // landing between the look above and this assignment would have
             // found nothing to close, and the reader would have started on a
-            // port nobody wanted.
-            if (Volatile.Read(ref _generation) != generation)
+            // port nobody wanted. The look and the publish are one step under
+            // _connectLock, which Disconnect's bump takes too: a Disconnect
+            // that finished in between used to be followed by Connected - a
+            // green light with no port and no reader.
+            if (!SetStateIfCurrent(generation, DecoderConnectionState.Connected,
+                    $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}."))
             {
                 Teardown();
                 return;
             }
-
-            SetState(DecoderConnectionState.Connected,
-                $"Connected to {portName}. Listening - every line the decoder sends is also captured to {Path.GetFileName(CapturePath)}.");
 
             new Thread(() => ReadLoop(port, portName))
             {
@@ -351,8 +421,71 @@ public sealed class ILapClient : IDisposable
             // that NEVER returns leaves this set and no further connect is
             // attempted - which is the right answer: the window is free
             // either way, and asking a wedged port again only wedges another
-            // thread behind the first.
-            Volatile.Write(ref _connecting, 0);
+            // thread behind the first. A connect asked for meanwhile is
+            // started now - see Connect - counted in under the same lock, so
+            // a Disconnect a moment later still overtakes it.
+            (string PortName, int BaudRate)? next;
+            var nextGeneration = 0;
+
+            lock (_connectLock)
+            {
+                next = _queuedConnect;
+                _queuedConnect = null;
+
+                if (next is { } starting)
+                {
+                    nextGeneration = Interlocked.Increment(ref _generation);
+                    _connectingGeneration = nextGeneration;
+                    _connectingPort = starting.PortName;
+                }
+                else
+                {
+                    _connecting = 0;
+                }
+            }
+
+            if (next is { } queued)
+            {
+                try
+                {
+                    StartConnect(queued.PortName, queued.BaudRate, nextGeneration);
+                }
+                catch
+                {
+                    // A subscriber threw while reporting it, or the thread
+                    // would not start. Nobody waits on this thread, and the
+                    // next Connect must not find one still in flight.
+                    lock (_connectLock)
+                    {
+                        if (_connectingGeneration == nextGeneration)
+                        {
+                            _connecting = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Waits for every port called <paramref name="portName"/> that is still
+    /// being let go of - see Teardown. On the connect thread only.
+    /// </summary>
+    private void WaitForClosing(string portName)
+    {
+        List<Thread> waits;
+
+        lock (_closing)
+        {
+            waits = _closing
+                .Where(c => string.Equals(c.PortName, portName, StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Closer)
+                .ToList();
+        }
+
+        foreach (var closer in waits)
+        {
+            closer.Join();
         }
     }
 
@@ -949,8 +1082,13 @@ public sealed class ILapClient : IDisposable
     public void Disconnect()
     {
         // Any connect still waiting on the serial stack is now working for a
-        // connection nobody wants - see ConnectCore.
-        Interlocked.Increment(ref _generation);
+        // connection nobody wants - see ConnectCore - and one queued behind
+        // it is not wanted either.
+        lock (_connectLock)
+        {
+            _queuedConnect = null;
+            Interlocked.Increment(ref _generation);
+        }
 
         Teardown();
 
@@ -965,6 +1103,14 @@ public sealed class ILapClient : IDisposable
     /// touching <see cref="State"/>. Its own method because a connect does
     /// this too, on its own thread, and must not publish Disconnected in the
     /// middle of connecting.
+    ///
+    /// The port is closed on a thread of its own. Disconnect is called from
+    /// the UI thread - the Disconnect button, a decoder switch, a restore,
+    /// closing the app - and SerialPort.Dispose() on a USB adapter that has
+    /// been pulled out is the unbounded hang in .NET that Connect was moved
+    /// off that thread for (see Connect). It froze the window; on close,
+    /// after HangWatchdog had stopped, the app just never exited. A connect
+    /// to the same port waits for the close - see WaitForClosing.
     /// </summary>
     private void Teardown()
     {
@@ -972,18 +1118,26 @@ public sealed class ILapClient : IDisposable
         // under it and does not report that as a read failure.
         _reading = false;
 
-        if (_port is not null)
-        {
-            try
-            {
-                _port.Dispose();
-            }
-            catch
-            {
-                // ignore - tearing down anyway
-            }
+        // Taken in one step, so a Disconnect and a connect tearing down at
+        // once cannot both close it.
+        var old = Interlocked.Exchange(ref _port, null);
 
-            _port = null;
+        if (old is not null)
+        {
+            var closer = new Thread(() => CloseQuietly(old))
+            {
+                IsBackground = true,
+                Name = "I-Lap close",
+            };
+
+            // Started inside the lock, so nothing can find it listed and not
+            // yet alive - pruned as finished, or joined before it started.
+            lock (_closing)
+            {
+                _closing.RemoveAll(c => !c.Closer.IsAlive);
+                closer.Start();
+                _closing.Add((old.PortName, closer));
+            }
         }
 
         StopCapture();
@@ -997,6 +1151,33 @@ public sealed class ILapClient : IDisposable
     private void SetState(DecoderConnectionState state, string message)
     {
         State = state;
+        RaiseStatus(state, message);
+    }
+
+    /// <summary>
+    /// Sets the state only if <paramref name="generation"/> is still the
+    /// current one, the look and the set in one step under _connectLock -
+    /// see ConnectCore. The event is raised after the lock is let go, since
+    /// a subscriber may take as long as it likes. True if it was published.
+    /// </summary>
+    private bool SetStateIfCurrent(int generation, DecoderConnectionState state, string message)
+    {
+        lock (_connectLock)
+        {
+            if (Volatile.Read(ref _generation) != generation)
+            {
+                return false;
+            }
+
+            State = state;
+        }
+
+        RaiseStatus(state, message);
+        return true;
+    }
+
+    private void RaiseStatus(DecoderConnectionState state, string message)
+    {
         StatusChanged?.Invoke(state, message);
         Log($"[status] {message}");
     }

@@ -22,6 +22,28 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
     private readonly ICommentaryBrain _first;
     private readonly ICommentaryBrain _second;
 
+    private static readonly AsyncLocal<bool> _relayOnly = new();
+
+    /// <summary>
+    /// True while the line being asked for is one the second brain must not
+    /// write - a colour or flourish segment, which CommentaryBudget says is
+    /// better unsaid than written by a small model on the race laptop (see
+    /// BrainFallback.None).
+    ///
+    /// Ambient rather than a parameter, so it reaches this class through
+    /// CommentaryService without every brain and every prompt builder
+    /// growing an argument only this one reads. An AsyncLocal, so it
+    /// belongs to the one segment's call and not to whatever else is
+    /// writing at the same moment - a race intro written while a cold open
+    /// is in flight still falls back. Set by CommentaryDirector around the
+    /// write and cleared after it.
+    /// </summary>
+    public static bool RelayOnly
+    {
+        get => _relayOnly.Value;
+        set => _relayOnly.Value = value;
+    }
+
     public FallbackCommentaryBrain(ICommentaryBrain first, ICommentaryBrain second)
     {
         _first = first;
@@ -66,6 +88,12 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
         // slower attempt at a line nobody is waiting for any more.
         if (ct.IsCancellationRequested)
         {
+            return null;
+        }
+
+        if (RelayOnly)
+        {
+            Say($"[brain] Not falling back to {_second.Describe} - this segment is left unsaid rather than written locally.");
             return null;
         }
 

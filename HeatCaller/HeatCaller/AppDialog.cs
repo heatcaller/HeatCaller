@@ -124,7 +124,17 @@ public static class AppDialog
     /// has to land on the one that changes nothing.
     /// </summary>
     /// <returns>The index in <paramref name="labels"/> of the button pressed; the last index if the window was closed without one.</returns>
-    public static int Choose(IWin32Window? owner, string text, string caption, MessageBoxIcon icon, params string[] labels)
+    public static int Choose(IWin32Window? owner, string text, string caption, MessageBoxIcon icon, params string[] labels) =>
+        Choose(owner, text, caption, icon, defaultIndex: 0, labels);
+
+    /// <summary>
+    /// Choose, with the button Enter presses (and the one focused when the
+    /// window opens) at <paramref name="defaultIndex"/> rather than the
+    /// first. For a question that pops up unasked while somebody may be
+    /// typing: a stray Enter has to land on the answer that is safe, which
+    /// is not always the first one.
+    /// </summary>
+    public static int Choose(IWin32Window? owner, string text, string caption, MessageBoxIcon icon, int defaultIndex, string[] labels)
     {
         if (labels is null || labels.Length == 0)
         {
@@ -141,7 +151,7 @@ public static class AppDialog
 
         try
         {
-            using var dialog = new DialogForm(text, caption, MessageBoxButtons.OK, icon, MessageBoxDefaultButton.Button1, labels);
+            using var dialog = new DialogForm(text, caption, MessageBoxButtons.OK, icon, DefaultButtonAt(defaultIndex), labels);
 
             var answer = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
 
@@ -163,13 +173,25 @@ public static class AppDialog
                 $"{(buttons == MessageBoxButtons.OK ? "OK" : CustomResultNames[Math.Min(i, CustomResultNames.Length - 1)])} = {l}"));
 
             var answer = owner is not null
-                ? MessageBox.Show(owner, spelled, caption, buttons, icon)
-                : MessageBox.Show(spelled, caption, buttons, icon);
+                ? MessageBox.Show(owner, spelled, caption, buttons, icon, DefaultButtonAt(defaultIndex))
+                : MessageBox.Show(spelled, caption, buttons, icon, DefaultButtonAt(defaultIndex));
 
             var picked = Array.IndexOf(CustomResults, answer);
             return picked >= 0 && picked <= last ? picked : last;
         }
     }
+
+    /// <summary>
+    /// The default button for Choose's <paramref name="index"/>. The window
+    /// only knows three (and clamps them to the buttons it has), so anything
+    /// else is the first, as it always was.
+    /// </summary>
+    internal static MessageBoxDefaultButton DefaultButtonAt(int index) => index switch
+    {
+        1 => MessageBoxDefaultButton.Button2,
+        2 => MessageBoxDefaultButton.Button3,
+        _ => MessageBoxDefaultButton.Button1,
+    };
 
     /// <summary>The results Choose's buttons carry, in order - see MakeButtons(string[]).</summary>
     private static readonly DialogResult[] CustomResults =

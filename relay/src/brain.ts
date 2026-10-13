@@ -291,13 +291,31 @@ export class BrainService {
       };
     }
 
+    // The slot is taken here, before anything below waits. Taken after the
+    // wait, every request that arrived together had read the same count
+    // and passed the check above, and the cap held nothing back.
+    this.inFlight.set(club, running + 1);
+
+    const release = () => {
+      const left = (this.inFlight.get(club) ?? 1) - 1;
+
+      if (left <= 0) {
+        this.inFlight.delete(club);
+      } else {
+        this.inFlight.set(club, left);
+      }
+    };
+
     // Spent before the model is asked, not after. Two requests arriving
     // together must not both read the same count, both pass, and both
     // spend - so the allowance moves first and is handed back below if
-    // nothing came of it.
+    // nothing came of it. It never throws - see reserve - so the returns
+    // below are every way out, and each gives the slot back.
     const reserved = await this.reserve(club, plan);
 
     if (reserved === "unreadable") {
+      release();
+
       return {
         ok: false,
         refusal: "busy",
@@ -307,6 +325,8 @@ export class BrainService {
     }
 
     if (reserved === "spent") {
+      release();
+
       return {
         ok: false,
         refusal: "allowance",
@@ -316,8 +336,6 @@ export class BrainService {
         usage: await this.usageFor(club, plan),
       };
     }
-
-    this.inFlight.set(club, running + 1);
 
     try {
       const words = Math.max(10, Math.min(maxWords, this.config.maxWords));
@@ -362,13 +380,7 @@ export class BrainService {
         usage: await this.usageFor(club, plan),
       };
     } finally {
-      const left = (this.inFlight.get(club) ?? 1) - 1;
-
-      if (left <= 0) {
-        this.inFlight.delete(club);
-      } else {
-        this.inFlight.set(club, left);
-      }
+      release();
     }
   }
 

@@ -170,6 +170,17 @@ public sealed class SponsorRotation
     private string _dayId = string.Empty;
     private int _said;
 
+    /// <summary>
+    /// The longest sponsor name that is spoken, and the box on the Sponsors
+    /// page is held to the same so what is typed is what is said. It was
+    /// CommentaryFacts.Clean's 40, which is sized for a driver's name and
+    /// chopped "Clarke and Sons Model Racing Supplies Limited" mid-word.
+    /// </summary>
+    internal const int MaxNameChars = 100;
+
+    /// <summary>The same for a tagline, which was cut at 60.</summary>
+    internal const int MaxTaglineChars = 160;
+
     /// <summary>How many reads each sponsor has had tonight - what the club shows them.</summary>
     public IReadOnlyDictionary<string, int> ReadsTonight => _reads;
 
@@ -197,7 +208,7 @@ public sealed class SponsorRotation
     {
         var usable = sponsors
             .Where(s => !string.IsNullOrWhiteSpace(s.SponsorId))
-            .Where(s => CommentaryFacts.Clean(s.Name).Length > 0)
+            .Where(s => SpokenName(s.Name).Length > 0)
             .ToList();
 
         if (usable.Count == 0)
@@ -344,7 +355,7 @@ public sealed class SponsorRotation
             return null;
         }
 
-        var name = CommentaryFacts.Clean(slot.Name);
+        var name = SpokenName(slot.Name);
         var lead = from == 0 ? Opening(name, moment, readsSoFar) : $"More from {name}.";
 
         return new SponsorRead(
@@ -361,16 +372,20 @@ public sealed class SponsorRotation
     ///
     /// Short on purpose. The copy is what was paid for and what the crowd
     /// is meant to remember; this only has to say whose words follow, and
-    /// anything longer is the app talking over its own advert. The ad-break
-    /// one names what just played, which is the only time in the evening
-    /// the crowd has already seen the sponsor's name on a screen.
+    /// anything longer is the app talking over its own advert.
+    ///
+    /// The ad-break one does NOT say "That was {name}", which it used to.
+    /// The rotation picks whose turn it is, not whose video just ran - a
+    /// video has no sponsor on it (see SponsorReport) - so it credited the
+    /// wrong sponsor for the advert the room had just watched, and a debt
+    /// kept over a recap said it minutes after any advert at all.
     /// </summary>
     private static string Opening(string name, SponsorMoment moment, int readsSoFar) => moment switch
     {
         SponsorMoment.Opening => $"A word from tonight's sponsor, {name}.",
         SponsorMoment.BeforeTheMain => $"Before the main, a word from {name}.",
         SponsorMoment.SignOff => $"Our thanks tonight to {name}.",
-        SponsorMoment.AfterTheAdvert => $"That was {name}.",
+        SponsorMoment.AfterTheAdvert => $"And now, a word from {name}.",
         _ => (readsSoFar % 2) == 0 ? $"A word from {name}." : $"And a word from {name}.",
     };
 
@@ -385,15 +400,16 @@ public sealed class SponsorRotation
     /// </summary>
     private static string Word(SponsorSlot slot, SponsorMoment moment, int readsSoFar)
     {
-        var name = CommentaryFacts.Clean(slot.Name);
-        var tagline = CommentaryFacts.CleanLong(slot.Tagline);
+        var name = SpokenName(slot.Name);
+        var tagline = CommentaryService.Field(slot.Tagline, MaxTaglineChars);
 
         var sentence = moment switch
         {
             SponsorMoment.Opening => $"Tonight's racing is brought to you by {name}.",
             SponsorMoment.BeforeTheMain => $"The main event, brought to you by {name}.",
             SponsorMoment.SignOff => $"Our thanks tonight to {name}.",
-            SponsorMoment.AfterTheAdvert => $"That was {name}.",
+            // Not "That was" - see Opening.
+            SponsorMoment.AfterTheAdvert => $"Tonight's racing is supported by {name}.",
             _ => (readsSoFar % 3) switch
             {
                 0 => $"Racing tonight is brought to you by {name}.",
@@ -408,6 +424,12 @@ public sealed class SponsorRotation
             ? $"{sentence} {tagline}"
             : sentence;
     }
+
+    /// <summary>
+    /// A sponsor's name, cleaned the way every typed field is (one line, no
+    /// brackets) but at the sponsor's own length rather than a driver's.
+    /// </summary>
+    private static string SpokenName(string? name) => CommentaryService.Field(name, MaxNameChars);
 
     private sealed record Saved(
         string DayId,

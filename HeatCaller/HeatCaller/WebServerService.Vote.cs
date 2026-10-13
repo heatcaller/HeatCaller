@@ -87,17 +87,61 @@ public sealed partial class WebServerService
             return;
         }
 
-        // NO TALLY GOES OUT WHILE IT IS OPEN, and that is deliberate.
-        // Showing the room what it is voting for turns a prediction into a
-        // bandwagon, and the announcer's line is only worth anything if
-        // the vote was each person's own guess.
-        WriteJson(context, JsonSerializer.Serialize(new
+        WriteJson(context, BuildVoteBallotJson(vote, ClientKey(context)));
+    }
+
+    /// <summary>
+    /// The ballot as one phone sees it.
+    ///
+    /// NO TALLY GOES OUT WHILE IT IS OPEN, and that is deliberate.
+    /// Showing the room what it is voting for turns a prediction into a
+    /// bandwagon, and the announcer's line is only worth anything if
+    /// the vote was each person's own guess.
+    ///
+    /// EACH DRIVER UNDER THE ROSTER'S OPAQUE ID, not their transponder.
+    /// This route needs no PIN, and a transponder beside a full name is the
+    /// mapping /api/state stopped handing out on 9 Oct - see RosterView and
+    /// AddFollowing. HandleRoomVote maps the id back.
+    ///
+    /// AND THIS PHONE'S OWN PICK, from the store. A new vote starts with
+    /// nobody's pick in it, and a page left open from the race before
+    /// would otherwise go on showing its old pick as though it counted.
+    /// </summary>
+    /// <param name="vote">Tonight's vote.</param>
+    /// <param name="voter">This phone, as ClientKey names it.</param>
+    internal string BuildVoteBallotJson(RoomVote vote, string voter)
+    {
+        var key = _rosterKey;
+        var picked = vote.PickOf(voter);
+
+        return JsonSerializer.Serialize(new
         {
             ok = true,
             open = vote.Taking,
             race = vote.OnRace ?? string.Empty,
-            drivers = vote.Options.Select(one => new { id = one.Id, name = one.Name }).ToArray(),
-        }));
+            drivers = vote.Options.Select(one => new { id = RosterId(key, one.Id), name = one.Name }).ToArray(),
+            pick = picked is { Length: > 0 } ? RosterId(key, picked) : null,
+        });
+    }
+
+    /// <summary>
+    /// The driver a phone tapped, back from the opaque id the ballot gave
+    /// it to the option's own id - or null when it matches nobody on the
+    /// ballot, which RoomVote.Cast then refuses as not on the grid.
+    /// </summary>
+    internal string? VoteOptionFor(RoomVote vote, string? servedId)
+    {
+        if (string.IsNullOrWhiteSpace(servedId))
+        {
+            return null;
+        }
+
+        var key = _rosterKey;
+        var asked = servedId.Trim();
+
+        return vote.Options
+            .FirstOrDefault(one => string.Equals(RosterId(key, one.Id), asked, StringComparison.Ordinal))
+            ?.Id;
     }
 
     /// <summary>
@@ -147,7 +191,14 @@ public sealed partial class WebServerService
         // person without asking anybody who they are. The same key the
         // rate limit uses - no name, no sign-in, nothing stored about
         // whoever it is beyond the fact that they have voted once.
-        if (vote.Cast(device, context.Request.QueryString["d"]) is { } why)
+        //
+        // The page sends the ballot's opaque id; Cast wants the option's
+        // own. One that matches nobody goes in as it came, so the phone is
+        // told the driver is not on the grid (or that voting has closed)
+        // rather than that its vote did not come through.
+        var served = context.Request.QueryString["d"];
+
+        if (vote.Cast(device, VoteOptionFor(vote, served) ?? served) is { } why)
         {
             context.Response.StatusCode = 400;
             WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = why }));
@@ -202,10 +253,16 @@ public sealed partial class WebServerService
         var msg = document.getElementById('msg');
         var mine = null;
         var open = true;
+        var shown = null;
 
         function draw(d) {
           race.textContent = d.race || 'Tonight';
           open = !!d.open;
+          // This phone's pick as the laptop holds it, not as this page
+          // remembers it: a new vote starts with nobody's pick in it, and a
+          // page left open from the race before must not go on showing one.
+          mine = d.pick || null;
+          var mineName = null;
           list.innerHTML = '';
           (d.drivers || []).forEach(function(driver){
             var b = document.createElement('button');
@@ -214,9 +271,16 @@ public sealed partial class WebServerService
             b.disabled = !open;
             b.addEventListener('click', function(){ cast(driver.id, driver.name); });
             list.appendChild(b);
+            if (driver.id === mine) { mineName = driver.name; }
           });
+          // Only rewritten when what it says has changed, so an error from
+          // the last tap is not wiped by the next redraw.
+          var now = (open ? 'open' : 'closed') + '|' + (mine || '') + '|' + (d.race || '');
+          if (now === shown) { return; }
+          shown = now;
           if (!open) { msg.textContent = mine ? 'Voting has closed. Your pick is in.' : 'Voting has closed.'; }
-          else if (!mine) { msg.textContent = 'Tap who you reckon wins.'; }
+          else if (mine) { msg.textContent = 'You have ' + (mineName || 'your pick') + '. Good luck.'; }
+          else { msg.textContent = 'Tap who you reckon wins.'; }
         }
 
         function ballot() {
@@ -224,11 +288,12 @@ public sealed partial class WebServerService
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(d){
               if (d && d.ok) { draw(d); return; }
+              shown = null;
               race.textContent = '';
               list.innerHTML = '';
               msg.textContent = 'No vote is running at the moment.';
             })
-            .catch(function(){ msg.textContent = 'Could not reach the laptop.'; });
+            .catch(function(){ shown = null; msg.textContent = 'Could not reach the laptop.'; });
         }
 
         function cast(id, name) {
@@ -257,7 +322,7 @@ public sealed partial class WebServerService
         // the race director has closed stops taking taps.
         setInterval(ballot, 5000);
         </script>
-        {{LookWatchScript}}
+        <script>{{LookWatchScript}}</script>
         </body></html>
         """;
     }

@@ -71,12 +71,20 @@ public sealed record VenueRecord(
 /// is how somebody would say it.
 /// </param>
 /// <param name="RacesOnLayout">How many races they have run on this layout. What makes the figure mean anything - see <see cref="CommentaryRaceFacts.LeastRacesForOwnBest"/>.</param>
+/// <param name="BeatenTonight">
+/// They have already gone quicker than <paramref name="BestSeconds"/> in a
+/// race on this layout tonight - the driver's own <see cref="VenueRecord.SetTonight"/>.
+/// The figure stays what it was before tonight; the builder refuses it,
+/// because "his quickest lap here is" a time the Big Screen has just shown
+/// him beating is false.
+/// </param>
 public sealed record DriverOnLayout(
     string DriverId,
     string Name,
     double BestSeconds,
     string BestSetDescribed,
-    int RacesOnLayout);
+    int RacesOnLayout,
+    bool BeatenTonight = false);
 
 /// <summary>
 /// What the club's whole filed history says about the layout a race is
@@ -148,13 +156,20 @@ public sealed record MainsOnLayout(
 /// </param>
 /// <param name="RacesSinceThatBig">How many of this class's races have run since that one. "The biggest since last week" is not a fact worth a sentence.</param>
 /// <param name="MainWinners">How many of this race's entries have won a main in this class at this club this calendar year.</param>
+/// <param name="BiggerTonight">
+/// A race in this class earlier tonight had more cars than this one.
+/// Tonight is skipped when looking for "the biggest since" (see
+/// CommentaryReaders.Field), so without this a 10-car heat an hour after a
+/// 12-car one would be called the biggest field since last week.
+/// </param>
 public sealed record FieldStrength(
     string ClassName,
     int Entries,
     int RacesCounted,
     string? BiggestSinceDescribed,
     int RacesSinceThatBig,
-    int MainWinners);
+    int MainWinners,
+    bool BiggerTonight = false);
 
 /// <summary>
 /// How the night has come to one driver: their middle flying lap in their
@@ -331,6 +346,23 @@ public sealed record RaceCar(
 /// positional, so a field inserted anywhere else would silently hand one
 /// record's value to another's parameter at every call site.
 /// </param>
+/// <param name="Stakes">
+/// WHAT IS STILL POSSIBLE IN THE CHAMPIONSHIP, over the rounds that
+/// remain - "only Bill and Sam can still win it", "nobody left can reach
+/// him". Proved by CommentaryReaders.TitleOnTheLine, and null for every
+/// season whose length the club has not typed. See TitleStakes and
+/// CommentaryStakesFacts.
+///
+/// LAST, so every caller written before 12 Oct 2026 still compiles and
+/// still means what it meant.
+///
+/// THIS WAS A SUMMARY INSIDE THE PARAMETER LIST until 13 Oct 2026, which
+/// is CS1587: a doc comment there is not on a language element, so the
+/// compiler drops it and none of the above reached the documentation or a
+/// tooltip. It read perfectly well in the file, which is exactly why it
+/// sat there for a month. Every other parameter here is documented with a
+/// param tag, and now so is this one.
+/// </param>
 public sealed record RaceScene(
     VenueRecord? Venue = null,
     FieldStrength? Field = null,
@@ -340,17 +372,6 @@ public sealed record RaceScene(
     RaceConditional? Conditional = null,
     IReadOnlyList<DriverAgainstPractice>? Practice = null,
     LayoutLegend? Legend = null,
-
-    /// <summary>
-    /// WHAT IS STILL POSSIBLE IN THE CHAMPIONSHIP, over the rounds that
-    /// remain - "only Bill and Sam can still win it", "nobody left can
-    /// reach him". Proved by CommentaryReaders.TitleOnTheLine, and null
-    /// for every season whose length the club has not typed. See
-    /// TitleStakes and CommentaryStakesFacts.
-    ///
-    /// LAST, so every caller written before 12 Oct 2026 still compiles
-    /// and still means what it meant.
-    /// </summary>
     TitleStakes? Stakes = null);
 
 /// <summary>
@@ -643,6 +664,13 @@ public static class CommentaryRaceFacts
             return null;
         }
 
+        // Said in the present tense, so a best already beaten tonight is
+        // not said at all - the reason LayoutRecord refuses SetTonight.
+        if (driver.BeatenTonight)
+        {
+            return null;
+        }
+
         if (driver.RacesOnLayout < LeastRacesForOwnBest)
         {
             return null;
@@ -731,7 +759,8 @@ public static class CommentaryRaceFacts
     /// <param name="key">Which night - see <see cref="ForIntro"/>.</param>
     public static FactBlock? Entry(FieldStrength field, string key)
     {
-        if (field.Entries < LeastEntries || field.RacesCounted < LeastRacesForField)
+        // A bigger field earlier tonight makes every "biggest" here false.
+        if (field.Entries < LeastEntries || field.RacesCounted < LeastRacesForField || field.BiggerTonight)
         {
             return null;
         }

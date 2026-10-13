@@ -284,7 +284,24 @@ public sealed partial class RelayPublisher
         CancellationToken token)
     {
         var open = enabled && vote.Taking;
+
+        // The label, for the page to show people.
         var race = vote.OnRace ?? string.Empty;
+
+        // AND THE ROUND'S OWN ID, which is what the relay decides identity
+        // on (13 Oct 2026). Only the label was sent before, so the relay
+        // was identifying a race the one way RoomVote.IsTheRace refuses to
+        // - and a club running two classes has two rounds both labelled
+        // "A-Main". That cost the Mod A-main's ballot opening with the
+        // Stock A-main's votes in it, and the per-ballot salt being reused
+        // across both, which is what makes two races correlatable by voter.
+        var raceKey = vote.OnRaceKey ?? string.Empty;
+
+        // THE POLL'S OWN ID, so the relay can tell a vote reopened on the
+        // same race from the same vote. The label cannot: reopening makes
+        // a new, empty poll here, and a relay deciding by the label kept
+        // the old votes and handed them back into the new one.
+        var ballot = vote.OnPollId ?? string.Empty;
 
         // Built rather than selected into a ternary: one branch would be
         // an array of an anonymous type and the other an array of object,
@@ -302,8 +319,18 @@ public sealed partial class RelayPublisher
 
         // THE RACE IS IN THE FINGERPRINT, so moving to the next race is
         // always a publish - which is what tells the relay to throw away
-        // the race before's votes.
-        var fingerprint = $"{enabled}|{open}|{race}|{string.Join(",", vote.Options.Select(one => one.Id))}";
+        // the race before's votes. And the poll's own id, for a vote
+        // reopened on the same race with the same grid.
+        //
+        // THE KEY AS WELL AS THE LABEL, and the key is the one that
+        // matters: two rounds labelled "A-Main" with the same drivers on
+        // the grid - one club, one driver, two cars, which is an ordinary
+        // evening - produced the same fingerprint, so the ballot was never
+        // republished at all and the relay was never told the race had
+        // moved. The label stays in it because a round renamed mid-evening
+        // has to reach the page.
+        var fingerprint =
+            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{string.Join(",", vote.Options.Select(one => one.Id))}";
 
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {
@@ -315,7 +342,7 @@ public sealed partial class RelayPublisher
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/vote/open");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
             request.Content = new StringContent(
-                JsonSerializer.Serialize(new { enabled, open, race, drivers }),
+                JsonSerializer.Serialize(new { enabled, open, race, raceKey, ballot, drivers }),
                 Encoding.UTF8,
                 "application/json");
 

@@ -177,9 +177,24 @@ public sealed class CommentaryService
     /// before a round intro is written, for the setting that keeps intros to
     /// mains and rivalries (27 Sep 2026). Matched exactly as the intro's own
     /// rivalry lines are, so "has a rivalry" here means the intro will have
-    /// one to lead with.
+    /// one to lead with - including the intro's cut to its first eight
+    /// drivers, or a rivalry between the ninth and tenth would let an
+    /// intro through that then has no rivalry in it.
     /// </summary>
-    public bool HasRivalryAmong(IEnumerable<string> transponders) => RivalryLinesFor(transponders).Count > 0;
+    public bool HasRivalryAmong(IEnumerable<string> transponders) => RivalryLinesFor(IntroGrid(transponders)).Count > 0;
+
+    /// <summary>
+    /// The drivers a round intro is written about: the first eight
+    /// transponders that are not blank. One place, so the names the facts
+    /// print, the rivalries they offer and HasRivalryAmong all mean the same
+    /// eight - a rivalry about drivers nine and ten reached the prompt
+    /// beside a driver list that did not have them in it.
+    /// </summary>
+    private static List<string> IntroGrid(IEnumerable<string> transponders) =>
+        transponders
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Take(8)
+            .ToList();
 
     /// <summary>Configured externally so the settings page can rebuild it without restarting anything.</summary>
     public ICommentaryBrain? Client { get; set; }
@@ -232,6 +247,48 @@ public sealed class CommentaryService
     }
 
     private const string SummaryKind = "Summary";
+
+    private const string IntroKind = "Intro";
+
+    /// <summary>
+    /// A round intro has been queued to the announcer, so it is the last
+    /// line - for an intro written ahead with remember: false, which was
+    /// not recorded when it was written. Saying it again for one that was
+    /// is harmless.
+    /// </summary>
+    public void IntroSpoken(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        LastLine = StripAudioTags(line);
+        LastLineKind = IntroKind;
+    }
+
+    /// <summary>
+    /// Takes back a line that was written but never spoken - a segment the
+    /// director dropped because it came back after its moment, or because
+    /// the segments were held while it was written. Recorded when it was
+    /// written, it stayed the last line and the Announcer page offered to
+    /// repeat over the PA a call nobody had heard. Only if it is still the
+    /// one held, so a later line is never cleared by an earlier one.
+    /// Compared without audio tags, because that is how it was stored.
+    /// </summary>
+    public void ForgetLine(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        if (string.Equals(LastLine, StripAudioTags(line), StringComparison.Ordinal))
+        {
+            LastLine = null;
+            LastLineKind = null;
+        }
+    }
 
     /// <summary>
     /// Lets go of the last race's recap as the next race finishes, so the
@@ -554,6 +611,19 @@ public sealed class CommentaryService
         TimeSpan.FromSeconds(Math.Max(60, Math.Max(1, _settings.CommentaryTimeoutSeconds) * 3));
 
     /// <summary>
+    /// The ceiling for the long pieces - the night's recap, one driver's
+    /// night and the night before - which run to hundreds of words rather
+    /// than one line. These fell back to the client's own timeout, which is
+    /// the live budget for talking points (20 s by default), and a small
+    /// local model needs most of a minute to write one: every press of the
+    /// button timed out and said the model had written nothing. Nobody is
+    /// waiting on a race for these, so the ceiling is only there so a
+    /// request cannot run for the rest of the evening.
+    /// </summary>
+    private TimeSpan LongPieceTimeout =>
+        TimeSpan.FromSeconds(Math.Max(180, BetweenRacesTimeout.TotalSeconds));
+
+    /// <summary>
     /// A short "coming up" line for a round that's about to run. Called
     /// between heats, so a few seconds of model latency is free.
     /// </summary>
@@ -592,6 +662,12 @@ public sealed class CommentaryService
     /// the intro carries neither. Called before the model is asked, on the
     /// calling thread.
     /// </param>
+    /// <param name="remember">
+    /// False for an intro written AHEAD, which is held rather than spoken:
+    /// recorded as the last line, the Announcer page's Repeat read the next
+    /// race's intro over the PA before that race had been called. The
+    /// caller records it with <see cref="IntroSpoken"/> once it is queued.
+    /// </param>
     public async Task<string?> BuildRoundIntroAsync(
         RoundDefinition round,
         CancellationToken ct = default,
@@ -600,17 +676,15 @@ public sealed class CommentaryService
         RaceForm? form = null,
         ChampionshipAtStake? stake = null,
         Action<PackedFacts>? historyPacked = null,
-        RaceScene? scene = null)
+        RaceScene? scene = null,
+        bool remember = true)
     {
         if (Client is null)
         {
             return null;
         }
 
-        var onTrack = round.AssignedTransponders
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Take(8)
-            .ToList();
+        var onTrack = IntroGrid(round.AssignedTransponders);
 
         var names = onTrack
             .Select(PromptName)
@@ -622,7 +696,8 @@ public sealed class CommentaryService
             return null;
         }
 
-        var rivalries = RivalryLinesFor(round.AssignedTransponders);
+        // For the same drivers named above, and no others - see IntroGrid.
+        var rivalries = RivalryLinesFor(onTrack);
 
         // For the same drivers named above, and no others.
         var details = DriverDetailLinesFor(onTrack);
@@ -1091,7 +1166,12 @@ public sealed class CommentaryService
             }
         }
 
-        return await RecordAndReturn("Intro", Task.FromResult(answer));
+        if (!remember)
+        {
+            return answer is null ? null : StripAudioTags(answer);
+        }
+
+        return await RecordAndReturn(IntroKind, Task.FromResult(answer));
     }
 
     /// <summary>
@@ -1410,6 +1490,19 @@ public sealed class CommentaryService
             }
         }
 
+        // A kept name written in capitals is shouting too. The names are
+        // taken out of the words checked above, so "Here comes ASHER!" found
+        // nothing to calm, TidyIntro threw away the respelled line, and the
+        // voice read the name in capitals. Only in capitals: a name the model
+        // wrote in lower case may be an ordinary word ("Sam will start"), and
+        // respelling those on every line would put "Will" mid-sentence.
+        if (kept.Any(k => text.Substring(k.Start, k.End - k.Start) is var span
+                          && AllCapitals(span)
+                          && !string.Equals(span, k.Name, StringComparison.Ordinal)))
+        {
+            shouted = true;
+        }
+
         if (!shouted && !stretched && kept.All(k => string.Equals(text.Substring(k.Start, k.End - k.Start), k.Name, StringComparison.Ordinal)))
         {
             return text;
@@ -1621,7 +1714,26 @@ public sealed class CommentaryService
     /// and the one that got there should not have to know whether another
     /// did first.
     /// </summary>
-    public void HistorySpoken(PackedFacts? history) => HistorySaid?.Mark(history);
+    public void HistorySpoken(PackedFacts? history)
+    {
+        if (HistorySaid is not { } said || history is null || history.Empty)
+        {
+            return;
+        }
+
+        said.Mark(history);
+        HistoryMarked?.Invoke();
+    }
+
+    /// <summary>
+    /// Told after <see cref="HistorySpoken"/> has marked a pack, so the
+    /// night's facts can be saved. Only the director's own segments used
+    /// to save them, so a night whose intros and recaps said the debuts and
+    /// no segment happened to follow lost them to a restart, and the mains
+    /// announced every debut again. Called on whatever thread spoke the
+    /// line; the handler moves to the UI thread itself.
+    /// </summary>
+    public Action? HistoryMarked { get; set; }
 
     /// <summary>
     /// Worked-out history packed for a prompt - capped, de-duplicated,
@@ -2989,7 +3101,97 @@ public sealed class CommentaryService
             body,
             maxTokens: MaxTokensForWordLimit(extra),
             temperature: Variety,
-            ct: ct));
+            ct: ct,
+            timeout: LongPieceTimeout));
+    }
+
+    /// <summary>
+    /// ONE DRIVER'S NIGHT, written for that driver (12 Oct 2026) - see
+    /// <see cref="DriverCut"/> for what it is and what it is not.
+    ///
+    /// The same shape as the night's recap above and for the same reasons:
+    /// the facts are handed in already packed, the word allowance is the
+    /// DIFFERENCE over the club's own per-line limit because
+    /// BuildSystemPrompt adds its argument rather than replacing it, and
+    /// the instruction does the rest.
+    ///
+    /// Null when there is no model, or when this driver's night came to
+    /// nothing worth a piece - a club with no results for them, or a
+    /// transponder that raced nowhere. A caller looping the entry list gets
+    /// a null for the drivers who were entered and did not run, which is
+    /// right: there is no piece to write.
+    /// </summary>
+    public async Task<string?> BuildDriverCutAsync(PackedFacts facts, CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty)
+        {
+            return null;
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + DriverCut.Instruction;
+
+        var extra = DriverCut.ExtraWordsOver(_settings.CommentaryMaxWords);
+
+        return await RecordAndReturn("Driver's night", Client.GenerateAsync(
+            BuildSystemPrompt(extra),
+            body,
+            maxTokens: MaxTokensForWordLimit(extra),
+            temperature: Variety,
+            ct: ct,
+            timeout: LongPieceTimeout));
+    }
+
+    /// <summary>
+    /// A MEETING THAT HAS NOT HAPPENED, previewed for the club's own page
+    /// (12 Oct 2026) - see <see cref="NightBefore"/>, which states at
+    /// length why this is the hardest of the three to write honestly.
+    ///
+    /// The same shape as the two above: the facts arrive already packed,
+    /// and the word allowance is the DIFFERENCE over the club's own
+    /// per-line limit because BuildSystemPrompt adds its argument rather
+    /// than replacing it.
+    ///
+    /// WHAT IS DIFFERENT, AND IT IS THE ONLY THING: every fact in the pack
+    /// describes an intention rather than an event. The recap and a
+    /// driver's piece are written from saved results; this is written from
+    /// an entry list, and an entry list is what the club MEANT to happen.
+    /// NightBefore.Instruction carries the clause that no other
+    /// instruction in this app needs - that all of it is a plan and must be
+    /// worded as one - and the facts are themselves worded as plans so a
+    /// model handed them cannot drift into the future tense on its own.
+    ///
+    /// Null when there is no model, or when the club's programme came to
+    /// nothing worth previewing: no races down to run, or a day with
+    /// nothing on it the public would come for. That is the right answer
+    /// rather than a thin preview - a club that posts "there is a race day
+    /// and we cannot tell you anything about it" has advertised nothing.
+    /// </summary>
+    public async Task<string?> BuildNightBeforeAsync(PackedFacts facts, CancellationToken ct = default)
+    {
+        if (Client is null || facts.Empty)
+        {
+            return null;
+        }
+
+        var body =
+            FactsOpen + "\n" +
+            facts.Text + "\n" +
+            FactsClose +
+            "\n\n" + NightBefore.Instruction;
+
+        var extra = NightBefore.ExtraWordsOver(_settings.CommentaryMaxWords);
+
+        return await RecordAndReturn("Night before", Client.GenerateAsync(
+            BuildSystemPrompt(extra),
+            body,
+            maxTokens: MaxTokensForWordLimit(extra),
+            temperature: Variety,
+            ct: ct,
+            timeout: LongPieceTimeout));
     }
 
     /// <summary>
@@ -3222,14 +3424,10 @@ public sealed class CommentaryService
         _ => kind.ToString(),
     };
 
-    /// <summary>
-    /// The car a driver actually ran in THIS session, falling back to their
-    /// current profile only when the session didn't record one.
-    ///
-    /// Preferring the session's own record matters for older races: someone
-    /// who has since changed cars should still be described with what they
-    /// drove on the day, not what's in their profile now.
-    /// </summary>
+    // CarFor's summary sat here, stranded above DescribeMargin by an edit
+    // that moved the method and left the comment - the third of the four
+    // orphans the 12 Oct 2026 bug hunt recorded. It has gone down onto
+    // CarFor, which had no summary of its own.
 
     /// <summary>
     /// A plain-language read on the winning margin, so the recap can be
@@ -3400,6 +3598,14 @@ public sealed class CommentaryService
     /// <summary>A driver's name as it may appear in a prompt. NameFor itself stays raw so callers can clean it once, at the point it goes into a prompt.</summary>
     private string PromptName(string transponder) => Field(NameFor(transponder));
 
+    /// <summary>
+    /// The car a driver actually ran in THIS session, falling back to their
+    /// current profile only when the session didn't record one.
+    ///
+    /// Preferring the session's own record matters for older races: someone
+    /// who has since changed cars should still be described with what they
+    /// drove on the day, not what's in their profile now.
+    /// </summary>
     private string CarFor(SessionResultEntry result)
     {
         if (!string.IsNullOrWhiteSpace(result.CarModel))

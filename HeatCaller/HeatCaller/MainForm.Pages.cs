@@ -1380,8 +1380,9 @@ public partial class MainForm
         // broadcast - quieter in practice and the heats, everything it held
         // back spent on the top main. Read fresh on each tick rather than
         // captured, so seeding the mains mid-evening re-sizes the rest of
-        // the night. See RaceStature.
-        announcer.RaceSize = () => RaceStature.Of(_activeRound, _rounds);
+        // the night. See RaceStature. Scoped to the open race day, so a
+        // round set up for another day is never tonight's last.
+        announcer.RaceSize = () => RaceStature.Of(_activeRound, _rounds, _raceEvents.ActiveRoundScope());
 
         WireCommentaryReaders(announcer.Director);
 
@@ -1435,6 +1436,11 @@ public partial class MainForm
         // screen plays them - see MainForm.Commentary.cs.
         WireShowMusic(announcer, commentary);
 
+        // A driver's own night, and the proof of a line. Its own method
+        // because it needs the stores, which WireShowMusic cannot see - see
+        // MainForm.Commentary.cs.
+        WireTheDriversNight(announcer, commentary);
+
         // Shout-outs from the club's web page switched OFF has to be SENT
         // to the relay rather than inferred from the polling stopping, or
         // the relay goes on taking strangers' messages for a club that
@@ -1444,6 +1450,28 @@ public partial class MainForm
 
         // And the same for the room's vote, for the same reason.
         commentary.VoteClosedOnTheRelay += () => _relayPublisher.CloseRoomVoteOnTheRelay();
+
+        // And listening along, which is the one of the three where leaving
+        // it to be inferred would leave the club's own voice - possibly a
+        // named member's cloned one - playing to anybody with the link.
+        // See RelayPublisher.CloseListeningOnTheRelay.
+        commentary.ListeningClosedOnTheRelay += () => _relayPublisher.CloseListeningOnTheRelay();
+
+        // And the night-before preview, which otherwise stays on the
+        // club's page after the club has unticked it. See
+        // TakeTheNightBeforeOffThePage.
+        commentary.NightBeforeClosedOnTheRelay += TakeTheNightBeforeOffThePage;
+
+        // THE ANNOUNCER'S HALF of listening along (13 Oct 2026). Two hooks
+        // rather than the audio service reaching for the publisher: it is
+        // told whether anybody may listen, so a club with this off pays
+        // nothing per line, and where to put a line once it is an mp3. The
+        // encoding happens in between, on a pool thread - see
+        // AnnouncementService.ListenAlong for why none of it may happen on
+        // the way to the speaker.
+        _announcer.ListenersWanted = () => _settings.ListenAlongOnTheRelay && _settings.RelayEnabled;
+        _announcer.SendToListeners = (said, mp3) =>
+            _relayPublisher.OfferToListeners(_raceEvents.Active?.Id, said, mp3, DateTime.UtcNow);
 
         // And a club who has never been asked is put onto the show music
         // that ships with the app - once, here, where the app is known to

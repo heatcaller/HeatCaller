@@ -71,6 +71,14 @@ internal sealed class ClubNotes
     internal const int MostChars = 200;
 
     /// <summary>
+    /// The longest a sender's name may be, the page's own maxlength and the
+    /// relay's NOTE_MAX_NAME. Held here too because the page's limit is
+    /// only the browser's: a request made without it reached the store,
+    /// the file and the window at any length.
+    /// </summary>
+    internal const int MostNameChars = 40;
+
+    /// <summary>
     /// The most of <see cref="MostNotes"/> that may come from the ROOM
     /// rather than from the race director's keyboard.
     ///
@@ -85,6 +93,17 @@ internal sealed class ClubNotes
     /// person can read and the file a size a disk does not notice.
     /// </summary>
     internal const int MostFromTheRoom = 12;
+
+    /// <summary>
+    /// How old a note held under no day can be and still be taken onto the
+    /// day when it opens - see NewMeeting.
+    ///
+    /// A DAY, because "added since" is only true for what was added since
+    /// the app last started with no day open. Notes typed with no day open
+    /// and then never followed by one - a night called off - would
+    /// otherwise wait under no day and be read out at the next meeting.
+    /// </summary>
+    internal static readonly TimeSpan AdoptedWithin = TimeSpan.FromDays(1);
 
     private sealed class NotesFile
     {
@@ -210,8 +229,25 @@ internal sealed class ClubNotes
                 return;
             }
 
+            // FROM NO DAY TO A DAY IS ADOPTED, NOT CLEARED. The app puts
+            // this on no day when it starts with none open (which is what
+            // clears last week's), so anything held under no day was added
+            // since - tonight's, typed or sent in before the day was
+            // opened. Clearing it then wiped exactly what the night wanted.
+            var adopt = string.IsNullOrEmpty(_file.DayId) && day.Length > 0;
+
             _file.DayId = day;
-            _file.Notes.Clear();
+
+            if (!adopt)
+            {
+                _file.Notes.Clear();
+            }
+            else
+            {
+                var now = DateTime.UtcNow;
+
+                _file.Notes.RemoveAll(one => now - one.AddedAtUtc > AdoptedWithin);
+            }
 
             Save();
         }
@@ -257,7 +293,7 @@ internal sealed class ClubNotes
             {
                 Id = Guid.NewGuid().ToString("N"),
                 Text = said,
-                From = Tidy(from),
+                From = TidyName(from),
                 AddedAtUtc = DateTime.UtcNow,
 
                 // TYPED BY THE RACE DIRECTOR, so approved. Anything arriving
@@ -333,7 +369,7 @@ internal sealed class ClubNotes
             {
                 Id = Guid.NewGuid().ToString("N"),
                 Text = said,
-                From = Tidy(from),
+                From = TidyName(from),
                 AddedAtUtc = DateTime.UtcNow,
                 FromTheRoom = true,
 
@@ -461,6 +497,34 @@ internal sealed class ClubNotes
         }
     }
 
+    /// <summary>
+    /// Whether tonight's list has room for another from the room.
+    ///
+    /// EXISTS SO THE RELAY CAN BE TOLD (13 Oct 2026). Both of
+    /// <see cref="AddFromTheRoom"/>'s refusals are asked here, in that
+    /// order, so the answer cannot drift from the thing it describes - and
+    /// it has to be both: the night's own cap on messages from the room
+    /// (<see cref="MostFromTheRoom"/>) is the one a busy evening reaches,
+    /// and the whole list's cap (<see cref="MostNotes"/>) is the one a
+    /// club that has typed a lot of its own reaches.
+    ///
+    /// Until this was sent, the relay knew only whether the club wanted
+    /// shout-outs at all - so it took a thirteenth, answered the sender
+    /// {"ok":true}, and the laptop refused it on arrival. The sender was
+    /// told it went through.
+    /// </summary>
+    internal bool NoRoomFromTheRoom
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _file.Notes.Count(one => !WasTyped(one)) >= MostFromTheRoom
+                       || _file.Notes.Count >= MostNotes;
+            }
+        }
+    }
+
     /// <summary>How many are waiting to be said, and how many are waiting to be approved - for a page to show.</summary>
     internal (int ToSay, int ToApprove, int Said) Counts()
     {
@@ -483,6 +547,27 @@ internal sealed class ClubNotes
         string.IsNullOrWhiteSpace(text)
             ? string.Empty
             : string.Join(" ", text.Split('\n', '\r').Select(part => part.Trim()).Where(part => part.Length > 0)).Trim();
+
+    /// <summary>A sender's name as it is stored: tidied, and held to <see cref="MostNameChars"/>.</summary>
+    private static string TidyName(string? from)
+    {
+        var name = Tidy(from);
+
+        if (name.Length <= MostNameChars)
+        {
+            return name;
+        }
+
+        var cut = MostNameChars;
+
+        // Never split a surrogate pair - half an emoji is invalid text.
+        if (char.IsHighSurrogate(name[cut - 1]))
+        {
+            cut--;
+        }
+
+        return name[..cut].TrimEnd();
+    }
 }
 
 /// <summary>

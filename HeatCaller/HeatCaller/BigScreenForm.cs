@@ -149,6 +149,14 @@ public sealed class BigScreenForm : Form
     private bool _adBreakHeld;
 
     /// <summary>
+    /// Whether a sponsor video is on screen that holds no ad break open -
+    /// silent, or with the music left up. Its end still owes the ad-break
+    /// read (see AdBreak.QuietVideoEnded), and this is how it is counted
+    /// exactly once, the way _adBreakHeld is.
+    /// </summary>
+    private bool _quietVideoShown;
+
+    /// <summary>
     /// Whether this window is carrying the after-race commercial break: the
     /// sponsors running one slide straight into the next, rather than taking
     /// a turn each with the standings.
@@ -1137,7 +1145,31 @@ public sealed class BigScreenForm : Form
         if (SponsorMedia.IsVideoName(fileName))
         {
             ShowSponsorVideo(path);
-            return;
+
+            // Playing, or handed back because the break went while it was
+            // starting - either way this slot is settled.
+            if ((_video is not null && _video.View.Visible) || !CommercialBreak.Running)
+            {
+                return;
+            }
+
+            // THE VIDEO COULD NOT PLAY - the player still starting up, a PC
+            // where it never will, or a file it turned away. The break's
+            // slot goes to the next still instead: the club's slides get
+            // the break rather than the standings sitting under it with
+            // nothing shown, at every break of the night.
+            if (NextStillSlide() is not { } instead)
+            {
+                return;
+            }
+
+            _sponsorIndex = instead;
+            path = _sponsors.ResolvePath(_sponsors.SlideFileNames[instead]);
+
+            if (path is null)
+            {
+                return;
+            }
         }
 
         if (!PutSponsorPictureUp(path))
@@ -1175,6 +1207,14 @@ public sealed class BigScreenForm : Form
             return null;
         }
 
+        // And none when video cannot play on this PC at all. Leading with one
+        // spent every break's first slot on nothing, all night, while the
+        // log said the break was leading with an advert.
+        if (VideoCannotPlayHere())
+        {
+            return null;
+        }
+
         var names = _sponsors.SlideFileNames;
 
         for (var step = 0; step < names.Count; step++)
@@ -1193,6 +1233,16 @@ public sealed class BigScreenForm : Form
 
         return null;
     }
+
+    /// <summary>
+    /// Whether the video player has finished starting up and turned out
+    /// not to work on this PC - natives missing, the wrong architecture, a
+    /// virus scanner in the plugin folder. Settled is asked first, so the
+    /// engine's lock is never waited on while it is still loading - see
+    /// SponsorVideoEngine.Settled.
+    /// </summary>
+    private bool VideoCannotPlayHere() =>
+        SponsorVideoEngine.Settled && (SponsorVideoEngine.Problem is not null || _video is { Available: false });
 
     /// <summary>
     /// The index of the next STILL slide at or after the current one,
@@ -1348,6 +1398,10 @@ public sealed class BigScreenForm : Form
             _adBreakHeld = true;
             AdBreak.Begin();
         }
+        else if (!_adBreakHeld)
+        {
+            _quietVideoShown = true;
+        }
 
         _grid.Visible = false;
         _attractBoard.Visible = false;
@@ -1468,6 +1522,12 @@ public sealed class BigScreenForm : Form
             _adBreakHeld = false;
             AdBreak.End();
         }
+
+        if (_quietVideoShown)
+        {
+            _quietVideoShown = false;
+            AdBreak.QuietVideoEnded();
+        }
     }
 
     private void ShowLeaderboardAgain()
@@ -1566,7 +1626,28 @@ public sealed class BigScreenForm : Form
         // for a missing file still had its turn - see _breakSlidesShown.
         _breakSlidesShown++;
 
+        // A VIDEO THAT HAS ENDED comes off the screen before the next slot
+        // is tried. If that slot cannot show anything - its file gone, a
+        // picture too big to read, a second video the player turns away -
+        // ShowNextSponsorSlide shows nothing and stops nothing, and the dead
+        // video was left "visible": black over the standings, the music
+        // muted, and the break held open because a video still looked to be
+        // playing. Only the view is hidden here, not the hold on the music:
+        // a following video keeps it, and anything else lets it go below.
+        if (_video is not null && _video.View.Visible)
+        {
+            _video.View.Visible = false;
+        }
+
         ShowNextSponsorSlide();
+
+        // Nothing took the screen: the standings, rather than nothing at
+        // all. This is also what stops the old video and brings the music
+        // back up - see ShowLeaderboardAgain.
+        if (!_picSponsor.Visible && !(_video is not null && _video.View.Visible))
+        {
+            ShowLeaderboardAgain();
+        }
     }
 
     /// <summary>
@@ -1782,6 +1863,22 @@ public sealed class BigScreenForm : Form
 
         if (!onBreak || !canCarryOne)
         {
+            // A RACE BEING CALLED ends a video too, whatever the break did
+            // about it. Letting an advert run on under the recap is one
+            // thing; under the staging calls, the countdown and the opening
+            // laps, with the standings hidden and the music muted, is
+            // another. The roll call stops one when it comes up, but a race
+            // with nobody on its roster (or practice) has no roll call.
+            // Asked on every tick, not only as the break ends, so a video
+            // still running past the recap is caught when the race is.
+            if (_showingSponsor
+                && _video is not null
+                && _video.View.Visible
+                && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+            {
+                ShowLeaderboardAgain();
+            }
+
             if (!_breakHasTheScreen)
             {
                 return;
@@ -1808,6 +1905,33 @@ public sealed class BigScreenForm : Form
         }
 
         if (_breakHasTheScreen)
+        {
+            return;
+        }
+
+        // A READ OWNS THE SCREEN, so the break waits for it (13 Oct 2026).
+        //
+        // The rotation already stood down for a read - SponsorTimer_Tick
+        // returns on SponsorOnAir.Showing, and UpdateSponsorRead's own
+        // summary says the rotation does - but a break STARTING did not.
+        // It went straight to ShowNextSponsorSlide below and put another
+        // sponsor's picture over the one whose read was being said. One
+        // sponsor's paid airtime carrying another sponsor's logo, which is
+        // the worst thing this window can do with a sponsor's money.
+        //
+        // RETURNED BEFORE _breakHasTheScreen IS SET, and that is the whole
+        // care in this fix. The obvious guard was to put !_showingRead
+        // into canCarryOne above - and that would have been wrong twice
+        // over: canCarryOne false falls into the hand-back branch, which
+        // calls ShowLeaderboardAgain and would take the READ'S OWN picture
+        // down, and it is also the only route to AdBreak.End and so to
+        // un-muting the club's music, which this file records going wrong
+        // twice before. Returning here instead leaves the break running,
+        // leaves SponsorScreenReady reported, leaves the music alone, and
+        // simply tries again on the next tick - by which time the read,
+        // which is seconds long against a break of about a minute, is
+        // over.
+        if (_showingRead)
         {
             return;
         }
@@ -1858,12 +1982,20 @@ public sealed class BigScreenForm : Form
         // came with had nothing in it either way - no video line, no
         // skipped line, nothing. Now it says what the break leads with and,
         // where that is not an advert, why not.
+        //
+        // From what is actually ON the screen now, not what was asked for:
+        // a video that would not play used to be logged as the break
+        // leading with it.
+        var ledWithVideo = !videoPlaying && _video is not null && _video.View.Visible;
+
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [sponsor] Commercial break on the Big Screen: "
             + (videoPlaying
                 ? "an advert is already playing and keeps the screen."
-                : haveAVideoToLeadWith
+                : ledWithVideo
                     ? "leading with a video advert."
+                    : haveAVideoToLeadWith
+                        ? "the video advert could not be played just now, so the break runs the slides instead."
                     : $"no video advert to lead with - {WhyNoVideo()} The break runs the slides instead."));
     }
 
@@ -1907,6 +2039,11 @@ public sealed class BigScreenForm : Form
             return $"all {Plural.Of(videos, "video slide")} the club has are missing their files.";
         }
 
+        if (VideoCannotPlayHere())
+        {
+            return "video adverts can't play on this PC.";
+        }
+
         return $"the club has {Plural.Of(videos, "video slide")} but none could be found just now.";
     }
 
@@ -1934,7 +2071,16 @@ public sealed class BigScreenForm : Form
             // Inside the SafeInvoke: the standings and the profiles belong
             // to the UI thread, and this event arrives on whichever thread
             // queued the line.
-            _sayingAbout = LowerThird.Line(LowerThird.NamesIn(text, WhoCouldBeNamed()));
+            //
+            // ONLY WHILE SOMETHING IS ON AIR. A race call between shows
+            // ("Hargrove takes the lead") used to be kept here too, and the
+            // next show opened with that driver on its band for the seconds
+            // of its opener - a name from the last race over this one. A
+            // show's own lines are queued after ShowOnAir.Begin, so they
+            // still get theirs.
+            _sayingAbout = ShowOnAir.Playing || _onAir.Visible
+                ? LowerThird.Line(LowerThird.NamesIn(text, WhoCouldBeNamed()))
+                : string.Empty;
         });
     }
 

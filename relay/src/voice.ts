@@ -61,6 +61,38 @@ export interface CatalogueVoice {
   readonly speed: number;
   /** ElevenLabs output_format, e.g. "mp3_44100_128". Blank leaves it to ElevenLabs. */
   readonly outputFormat: string;
+  /**
+   * This voice is a CLONE of a real person - a club's own announcer, who
+   * recorded half an hour once so the app would sound like the person the
+   * room already knows.
+   *
+   * IT CHANGES TWO THINGS, AND BOTH OF THEM ARE ABOUT WHOSE VOICE IT IS.
+   *
+   * A cloned voice is somebody's likeness. The club holds the recording
+   * and the consent; this relay holds a voice id and renders lines with
+   * it. Everything that would let that voice be heard by anyone the
+   * consent does not cover has to be off, and neither of the two was off
+   * by default - they were written for a catalogue of stock voices, where
+   * both are exactly right:
+   *
+   *   1. THE SHARED CACHE. A line with no name in it is kept once for
+   *      every club - "Green flag!" is the same words everywhere, and
+   *      rendering it a hundred times is a hundred times the bill. But
+   *      "the same words" is not "the same voice": in a cloned voice that
+   *      render is a recording of a named person, and serving it to
+   *      another club is handing out their likeness. See speak.
+   *
+   *   2. THE PUBLIC SAMPLE. /voice/sample/<id> needs no token at all and
+   *      is open to the internet on purpose - a stock sample is one
+   *      neutral line in a voice nobody owns, and somebody choosing a
+   *      voice should be able to hear it before they buy anything. A
+   *      cloned voice's sample is a real person's voice on an address
+   *      anyone can fetch. See samples and sample.
+   *
+   * Default false, so a catalogue written before this flag existed keeps
+   * behaving exactly as it did.
+   */
+  readonly cloned: boolean;
 }
 
 /** What one club may do with the HeatCaller voice. */
@@ -68,7 +100,7 @@ export interface VoicePlan {
   readonly enabled: boolean;
   /** Characters this club may send to ElevenLabs in a calendar month. Cache hits cost nothing and are not counted. */
   readonly monthlyChars: number;
-  /** Which catalogue ids this club may use. Empty means every voice in the catalogue. */
+  /** Which catalogue ids this club may use. Empty means every stock voice in the catalogue - a cloned one only ever when named. */
   readonly voices: readonly string[];
 }
 
@@ -132,7 +164,7 @@ export interface VoiceUsage {
 
 export interface VoiceCatalogueView {
   readonly enabled: boolean;
-  readonly voices: readonly { id: string; name: string; what: string; rev: string }[];
+  readonly voices: readonly { id: string; name: string; what: string; rev: string; cloned: boolean }[];
   readonly usage: VoiceUsage;
 }
 
@@ -427,15 +459,29 @@ export class VoiceService {
         name: voice.name,
         what: voice.what,
         rev: this.revs.get(voice.id) ?? "",
+
+        // TOLD TO THE CLUB WHOSE VOICE IT IS, which is not a leak: this
+        // route takes that club's own token, and the catalogue it answers
+        // with is already filtered to the voices that club may use. The
+        // app needs it so its own Voice Settings page can say what the
+        // club is choosing and ask about consent. Nothing tokenless ever
+        // carries this.
+        cloned: voice.cloned,
       })),
       usage,
     };
   }
 
-  /** The catalogue entries a club may use, in config order. */
+  /**
+   * The catalogue entries a club may use, in config order.
+   *
+   * An empty list is every STOCK voice, never a clone: a cloned voice is
+   * one club's announcer, and only the club whose list names it has the
+   * consent to make it say anything. See CatalogueVoice.cloned.
+   */
   private voicesFor(plan: VoicePlan): readonly CatalogueVoice[] {
     if (plan.voices.length === 0) {
-      return this.config.voices;
+      return this.config.voices.filter((voice) => !voice.cloned);
     }
 
     return this.config.voices.filter((voice) => plan.voices.includes(voice.id));
@@ -502,8 +548,29 @@ export class VoiceService {
       };
     }
 
+    // A CLONED VOICE IS NEVER KEPT ACROSS CLUBS, whatever the laptop
+    // said. See CatalogueVoice.cloned.
+    //
+    // The laptop decides `shared` by looking the words up among its own
+    // shipped templates - "Green flag!" is the same words at every club,
+    // so it is rendered once and kept for all of them. That is right for
+    // a stock voice and wrong for a clone, because the thing being kept
+    // is not the words, it is a recording of a named person saying them.
+    // One club's announcer would end up calling another club's flags.
+    //
+    // DECIDED HERE RATHER THAN ON THE LAPTOP, and that is the point: the
+    // laptop is not told which voices are clones of whom, and a rule that
+    // depends on a club's own app being up to date is a rule that leaks
+    // the first time somebody runs an old build. The relay knows, so the
+    // relay decides.
+    //
+    // It costs this club a little more - its own cache still works, so
+    // only the cross-club saving is lost - and it is the club whose voice
+    // it is, so it is the right club to pay.
+    const keepFor = shared && !voice.cloned;
+
     const key = cacheKey(voice, spoken);
-    const cached = await this.readCache(club, shared, key);
+    const cached = await this.readCache(club, keepFor, key);
 
     if (cached !== undefined) {
       // Free: nothing reached ElevenLabs, so nothing is counted. This is
@@ -596,7 +663,7 @@ export class VoiceService {
 
     // The characters are already counted (see reserve). A cache write that
     // fails costs the club nothing beyond rendering the line again.
-    await this.writeCache(club, shared, key, audio);
+    await this.writeCache(club, keepFor, key, audio);
 
     return { ok: true, audio, cached: false, usage };
   }
@@ -629,6 +696,14 @@ export class VoiceService {
     const listed: SampleListing[] = [];
 
     for (const voice of this.config.voices) {
+      // A CLONED VOICE IS NOT ADVERTISED. This list needs no token and is
+      // open to the internet, which is right for a stock voice and is a
+      // real person's name and voice for a clone. See
+      // CatalogueVoice.cloned.
+      if (voice.cloned) {
+        continue;
+      }
+
       if (await this.hasSample(voice)) {
         listed.push({ id: voice.id, name: voice.name });
       }
@@ -666,7 +741,14 @@ export class VoiceService {
   async sample(voiceId: string): Promise<SampleResult> {
     const voice = this.byId.get(voiceId);
 
-    if (voice === undefined) {
+    // THE SAME ANSWER AS A VOICE THAT DOES NOT EXIST, and that is
+    // deliberate rather than tidy. This route needs no token, so a
+    // refusal worded differently from a miss would tell anybody who asked
+    // which of a relay's voices are clones of somebody - which is a fact
+    // about a person, published to whoever wants it. Unknown and
+    // not-for-you look identical, the way an unknown club and a malformed
+    // one already do on this relay.
+    if (voice === undefined || voice.cloned) {
       return { ok: false, status: 404, message: "There is no sample of that voice." };
     }
 
@@ -1783,6 +1865,11 @@ export function readVoiceConfig(value: unknown, source: string): VoiceConfig {
       speakerBoost: voice["speakerBoost"] !== false,
       speed: number(voice["speed"], 1, 0.7, 1.2),
       outputFormat: text(voice["outputFormat"]),
+
+      // Opt IN, like every other thing on this relay that changes who can
+      // hear what. A catalogue that does not mention it gets the stock
+      // behaviour it was written for.
+      cloned: voice["cloned"] === true,
     });
   }
 

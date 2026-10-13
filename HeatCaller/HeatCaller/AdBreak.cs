@@ -150,6 +150,23 @@ internal static class AdBreak
     }
 
     /// <summary>
+    /// A sponsor video has finished that held no break open - one played
+    /// silent, or with "silence the music" unticked. Counted as a finished
+    /// break for <see cref="BreaksEnded"/> and nothing else: the ad-break
+    /// read is owed for the advert, whatever the club chose about the
+    /// music, and before this a club with either box off never got one.
+    /// It does not touch <see cref="_playing"/> and raises nothing, so it
+    /// cannot move the music.
+    /// </summary>
+    internal static void QuietVideoEnded()
+    {
+        lock (Gate)
+        {
+            _ended++;
+        }
+    }
+
+    /// <summary>
     /// Tells the handler, inside <see cref="Gate"/> - see the note there. A
     /// subscriber that throws is swallowed, exactly as AnnouncementService
     /// swallows its own: it must not take down the window that was starting

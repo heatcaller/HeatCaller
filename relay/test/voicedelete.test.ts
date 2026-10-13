@@ -30,6 +30,7 @@ const VOICE: CatalogueVoice = {
   speakerBoost: true,
   speed: 1,
   outputFormat: "",
+  cloned: false,
 };
 
 const PLAN: VoicePlan = { enabled: true, monthlyChars: 20, voices: [] };

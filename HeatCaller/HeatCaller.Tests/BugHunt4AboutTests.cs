@@ -159,9 +159,10 @@ public sealed class BugHunt4AboutTests
     [Fact]
     public void The_Kokoro_voice_model_is_marked_as_not_shipping_with_the_app()
     {
-        // The 310 MB model is downloaded from Voice Settings by a club that
-        // chooses the Kokoro voice (KokoroSpeech), so the installer does not
-        // carry it. Everything else on the list does.
+        // The name is from before the installer bundled the 310 MB model
+        // (PublishKokoroModel): it ships beside the exe now, so the model is
+        // marked as shipping like everything else, and nothing other than it
+        // may ever be marked as not shipping.
         var kokoro = ThirdPartyCatalog.Components.Single(component => component.Name == "Kokoro 82M");
 
         Assert.Equal("Apache-2.0", kokoro.License);

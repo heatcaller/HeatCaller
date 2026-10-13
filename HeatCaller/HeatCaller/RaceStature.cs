@@ -147,8 +147,16 @@ public readonly record struct RaceStature(RaceBilling Billing, bool LastOfTheNig
     /// read: this is asked on a half-second tick while a club edits the
     /// Program tab beside it, and a store caught mid-save must cost the
     /// night nothing worse than a flat cap.
+    ///
+    /// <paramref name="withinRoundIds"/> is the open race day's rounds
+    /// (RaceEventStore.ActiveRoundScope), or null for every round. The
+    /// round store holds every meeting's rounds, so without it a round set
+    /// up for tomorrow, or a stale one from an old meeting, could be "last".
     /// </summary>
-    internal static RaceStature Of(RoundDefinition? round, RoundDefinitionStore? programme)
+    internal static RaceStature Of(
+        RoundDefinition? round,
+        RoundDefinitionStore? programme,
+        IReadOnlySet<string>? withinRoundIds = null)
     {
         if (round is null)
         {
@@ -168,7 +176,7 @@ public readonly record struct RaceStature(RaceBilling Billing, bool LastOfTheNig
             _ => RaceBilling.Unknown,
         };
 
-        return new RaceStature(billing, IsLastOfTheNight(round, programme));
+        return new RaceStature(billing, IsLastOfTheNight(round, programme, withinRoundIds));
     }
 
     /// <summary>
@@ -179,7 +187,10 @@ public readonly record struct RaceStature(RaceBilling Billing, bool LastOfTheNig
     /// that session the climax of the night, and a club whose last entry is
     /// practice should still have its final main treated as the finale.
     /// </summary>
-    private static bool IsLastOfTheNight(RoundDefinition round, RoundDefinitionStore? programme)
+    private static bool IsLastOfTheNight(
+        RoundDefinition round,
+        RoundDefinitionStore? programme,
+        IReadOnlySet<string>? withinRoundIds)
     {
         if (programme is null || round.Kind == RoundKind.Practice)
         {
@@ -189,7 +200,8 @@ public readonly record struct RaceStature(RaceBilling Billing, bool LastOfTheNig
         try
         {
             var last = programme.All
-                .Where(one => one.Kind != RoundKind.Practice)
+                .Where(one => one.Kind != RoundKind.Practice
+                              && (withinRoundIds is null || withinRoundIds.Contains(one.Id)))
                 .OrderBy(one => one.Order)
                 .LastOrDefault();
 

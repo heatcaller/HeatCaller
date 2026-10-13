@@ -38,8 +38,8 @@ namespace HeatCaller;
 ///   A SPONSOR WITH NO READS IS IN THE REPORT. Leaving them out would be
 ///   the one thing a club must not do with a figure it is sending to
 ///   somebody who paid: the honest line is "no reads tonight", with the
-///   reason where the app knows it - switched off, no copy, nobody heard
-///   because the night ran short.
+///   reason where the app knows it - switched off for the night, reads
+///   switched off everywhere, or their turn had not come round.
 ///
 /// PLAIN TEXT, so a club can paste it into an email without anything in
 /// between. Not a PDF, not a web page: an email is what a club secretary
@@ -121,7 +121,7 @@ internal static class SponsorReport
 
         foreach (var sponsor in sold)
         {
-            text.AppendLine(LineFor(sponsor, counts, given, weights, running.Contains(sponsor)));
+            text.AppendLine(LineFor(sponsor, counts, given, weights, running.Contains(sponsor), placement));
         }
 
         text.AppendLine();
@@ -142,7 +142,8 @@ internal static class SponsorReport
         IReadOnlyDictionary<string, int> counts,
         int given,
         int weights,
-        bool inTheRotation)
+        bool inTheRotation,
+        SponsorPlacement placement)
     {
         var reads = Reads(counts, sponsor.Id);
         var name = sponsor.Name.Trim();
@@ -173,11 +174,15 @@ internal static class SponsorReport
             line.Append($" ({got:0}% of the evening's reads; they bought {bought:0}%)");
         }
 
-        if (reads == 0)
+        // ONE REASON for a zero, and not "nothing was typed for them": a
+        // sponsor with no copy still gets their turn as a one-line mention
+        // (SponsorRotation.Next), so the copy never decides a zero - their
+        // turn simply had not come round. And none at all when reads are
+        // switched off everywhere, which the line above the list has
+        // already said; a second reason under it contradicted it.
+        if (reads == 0 && placement != SponsorPlacement.Nowhere)
         {
-            line.Append(string.IsNullOrWhiteSpace(sponsor.SalesCopy)
-                ? " - nothing was typed for them to read"
-                : " - the night had no gap long enough for their turn");
+            line.Append(" - their turn had not come round when this report was made");
         }
 
         return line.ToString();
