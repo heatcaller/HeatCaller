@@ -101,6 +101,7 @@ public sealed class CommentaryDirector
         Budget = new CommentaryBudget(_clock);
         Battles = new BattleWatch(_clock);
         Pace = new PaceWatch();
+        Horizons = new RaceHorizon(_clock);
         Said = new SaidTonight();
         Sponsors = new SponsorRotation();
         Continuity = new ContinuityVoice();
@@ -132,6 +133,14 @@ public sealed class CommentaryDirector
 
     /// <summary>Watches the laps for a record falling.</summary>
     public PaceWatch Pace { get; }
+
+    /// <summary>
+    /// Watches what each gap is DOING and how much road is left - the
+    /// forward-looking half of the live commentary, which until 15 Oct
+    /// 2026 was built and fed by nothing. See RaceHorizon, and the
+    /// Horizon segment it feeds.
+    /// </summary>
+    public RaceHorizon Horizons { get; }
 
     /// <summary>What has been said tonight, so nothing is said twice.</summary>
     public SaidTonight Said { get; }
@@ -702,6 +711,7 @@ public sealed class CommentaryDirector
             // new night.
             Battles.Reset();
             Pace.Reset();
+            Horizons.Reset();
         }
 
         _dayKey = dayId ?? string.Empty;
@@ -798,18 +808,40 @@ public sealed class CommentaryDirector
 
         Battles.Reset();
         Pace.Reset();
+        Horizons.Reset();
     }
 
     /// <summary>The flag is out. Nothing in-race is worth saying from here.</summary>
     public void RaceFinished() => _racing = false;
 
     /// <summary>One tick of the running order - every adjacent pair, as the race stands. See BattleWatch.</summary>
-    public void Standings(IReadOnlyList<PairGap> pairs)
+    public void Standings(IReadOnlyList<PairGap> pairs) => Standings(pairs, 0, null);
+
+    /// <summary>
+    /// One tick of the running order, with what the horizon needs on top:
+    /// the leader's lap count and how much road is left.
+    ///
+    /// THE SAME PAIRS GO TO BOTH, on purpose. BattleWatch and RaceHorizon
+    /// read one tick feed so they can never disagree about who is in front
+    /// - see RaceHorizon's own note on it.
+    /// </summary>
+    /// <param name="leaderLaps">The leader's completed laps - the clock the horizon's rate is measured against.</param>
+    /// <param name="road">
+    /// Laps left and whether that is known or worked out - see
+    /// RaceHorizon.LapsLeftIn. Null when the race has neither a lap limit
+    /// nor a clock to estimate from, and then the horizon is told there is
+    /// no road and says nothing.
+    /// </param>
+    public void Standings(IReadOnlyList<PairGap> pairs, int leaderLaps, RoadLeft? road)
     {
-        if (_racing)
+        if (!_racing)
         {
-            Battles.Observe(pairs);
+            return;
         }
+
+        Battles.Observe(pairs);
+
+        Horizons.Observe(pairs, leaderLaps, road?.Laps ?? 0, road?.Estimated ?? false);
     }
 
     /// <summary>A lap has come in. See PaceWatch.</summary>
@@ -1584,6 +1616,14 @@ public sealed class CommentaryDirector
             .Where(spec => spec.Tier != SegmentTier.Essential)
             .Where(spec => InRace(spec.Kind) == _racing)
             .OrderBy(spec => spec.Tier)
+            // THE HORIZON GOES AFTER THE OTHER LIVE CALLS (15 Oct 2026),
+            // whatever its deadline says. It has the shortest life of the
+            // three, so it sorted first and took the slot every time it had
+            // something - and a record lap waiting behind it could run past
+            // its own deadline and be thrown away. A record falling or a
+            // fight being called is the thing happening; the horizon is the
+            // thing about to, and it waits for them.
+            .ThenBy(spec => spec.Kind == SegmentKind.Horizon)
             .ThenBy(spec => spec.NeedsBy)
             .Select(spec => spec.Kind);
 
@@ -1592,7 +1632,7 @@ public sealed class CommentaryDirector
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
     internal static bool InRace(SegmentKind kind) =>
-        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote;
+        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon;
 
     private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
     {
@@ -1768,6 +1808,7 @@ public sealed class CommentaryDirector
             var ticket = verdict.Ticket;
             var calling = _calling;
             var paceCalling = _paceCalling;
+            var horizonCalling = _horizonCalling;
             _marks.TryGetValue(kind, out var mark);
             SpokenSegment spokenLine = written;
 
@@ -1830,7 +1871,7 @@ public sealed class CommentaryDirector
                 // segment written and then dropped costs the night neither its
                 // facts nor its variety.
                 Said.Mark(pack);
-                Spent(kind, calling, paceCalling);
+                Spent(kind, calling, paceCalling, horizonCalling);
                 SaveOn(ui);
 
                 LastSaid = spokenLine;
@@ -1986,6 +2027,18 @@ public sealed class CommentaryDirector
 
                 return _calling is { } battle
                     ? new[] { CommentaryFacts.Battle(battle, names, _raceKey) }
+                    : Array.Empty<FactBlock>();
+            }
+
+            case SegmentKind.Horizon:
+            {
+                // Kept, for BattleWatch's reason: Spent has to cool THIS
+                // pair, not whatever Pick would answer by the time the line
+                // has been heard.
+                _horizonCalling = Horizons.Pick();
+
+                return _horizonCalling is { } horizon
+                    ? new[] { CommentaryFacts.Horizon(horizon, names, _raceKey) }
                     : Array.Empty<FactBlock>();
             }
 
@@ -2283,16 +2336,32 @@ public sealed class CommentaryDirector
     /// <summary>The fight this pass's battle facts were built from. See Candidates.</summary>
     private Battle? _calling;
 
+    /// <summary>The horizon this pass's facts were built from - see _calling, for the same reason.</summary>
+    private Horizon? _horizonCalling;
+
     /// <summary>
     /// What a segment has to do once its line has actually been said - for
     /// the fight and the pace note it was written about, taken when it was
     /// written, because by the time a held line is said the next pass may
     /// be calling on others. See TryAsync.
     /// </summary>
-    private void Spent(SegmentKind kind, Battle? calling, PaceNote? paceCalling)
+    private void Spent(SegmentKind kind, Battle? calling, PaceNote? paceCalling, Horizon? horizonCalling = null)
     {
         switch (kind)
         {
+            case SegmentKind.Horizon:
+            {
+                // Left alone for RaceHorizon's cooldown, so a gap coming
+                // down over six laps is pointed at once and then watched -
+                // the pay-off is the race itself, not five more lines.
+                if (horizonCalling is { } horizon)
+                {
+                    Horizons.Said(horizon);
+                }
+
+                break;
+            }
+
             case SegmentKind.BattleWatch:
             {
                 // Left alone for the cooldown, so two cars nose to tail

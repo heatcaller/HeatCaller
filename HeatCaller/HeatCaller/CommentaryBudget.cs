@@ -54,6 +54,11 @@ public enum SegmentKind
     ThisDayInHistory,
     SignOffNumbers,
     MidMeetingStandings,
+
+    // Appended rather than placed beside BattleWatch, though the saved
+    // state is by name: an int anywhere downstream would otherwise be
+    // re-labelled, and the end of the list costs nothing.
+    Horizon,
 }
 
 /// <summary>
@@ -345,6 +350,22 @@ public sealed class CommentaryBudget
             // Its gap is shorter than its life, so a record lap that lands
             // just after another line can still be said before it is stale.
             new(SegmentKind.PaceNote,           SegmentTier.Core, 1, true, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(25), 10, 5, "Record laps", "Calls a lap when a record falls - the race's, the night's or the layout's."),
+            // THE FORWARD-LOOKING ONE (15 Oct 2026) - what a gap is doing
+            // and how much road is left: "half a second to find, three laps
+            // to find it, taking two tenths a lap". See RaceHorizon.
+            //
+            // As short-lived as the battle watch and for the same reason -
+            // a rate read on lap six is wrong by lap nine - with a gap a
+            // little longer than its life, so it does not land on top of the
+            // battle call about the same two cars. Four a race at most, and
+            // RaceHorizon's own two-minute cooldown per pair keeps those
+            // four about different fights.
+            //
+            // ONE VOICE, NOT A TWO-HANDER. A second voice asked to react to
+            // "he has three laps to find half a second" reaches for "and
+            // he'll do it", which is the one sentence RaceHorizon exists
+            // never to say.
+            new(SegmentKind.Horizon,            SegmentTier.Core, 1, true, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30), 8,  4, "What's still to decide", "Points the room at a gap that is coming down - or going out - with the laps running out."),
             new(SegmentKind.ComingUpNext,       SegmentTier.Core, 1, true, TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(20), 12, 12, "Coming up next", "Says what is on next, in the gap between races."),
             new(SegmentKind.ChampionshipCheck,  SegmentTier.Core, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(20), 6,  1, "Championship check", "Where the season stands, after a class's last main.", true),
 

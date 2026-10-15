@@ -26,15 +26,29 @@ namespace HeatCaller.Tests;
 public sealed class PositionGapTests
 {
     [Fact]
-    public void A_gap_on_the_lead_lap_is_said_in_tenths()
+    public void A_gap_under_a_second_is_said_in_tenths()
     {
-        Assert.Equal("1.5 back", AnnouncementText.SpokenGap(new RaceGap(0, 1_523)));
+        Assert.Equal("three tenths back", AnnouncementText.SpokenGap(new RaceGap(0, 312)));
+        Assert.Equal("half a second back", AnnouncementText.SpokenGap(new RaceGap(0, 480)));
     }
 
     [Fact]
-    public void A_spoken_gap_is_rounded_to_the_nearest_tenth_rather_than_cut_short()
+    public void A_gap_over_a_second_is_said_the_way_a_commentator_says_it_and_not_as_a_decimal()
     {
-        Assert.Equal("2.4 back", AnnouncementText.SpokenGap(new RaceGap(0, 2_361)));
+        // "1.5 back" went to the voice as "one point five back" - the
+        // computer reading RaceNumbers exists to replace.
+        var said = AnnouncementText.SpokenGap(new RaceGap(0, 1_523));
+
+        Assert.Equal("a second and a half back", said);
+        Assert.DoesNotContain("1.5", said);
+        Assert.DoesNotContain("point", said);
+    }
+
+    [Fact]
+    public void A_spoken_gap_is_rounded_rather_than_cut_short()
+    {
+        Assert.Equal("seven tenths back", AnnouncementText.SpokenGap(new RaceGap(0, 660)));
+        Assert.Equal("two and a half seconds back", AnnouncementText.SpokenGap(new RaceGap(0, 2_361)));
     }
 
     [Fact]
@@ -63,7 +77,7 @@ public sealed class PositionGapTests
     [Fact]
     public void A_car_more_than_a_lap_down_is_given_the_number_of_laps()
     {
-        Assert.Equal("3 laps down", AnnouncementText.SpokenGap(new RaceGap(3, null)));
+        Assert.Equal("three laps down", AnnouncementText.SpokenGap(new RaceGap(3, null)));
     }
 
     [Fact]
@@ -83,7 +97,7 @@ public sealed class PositionGapTests
             ("Bill", new RaceGap(0, 1_500)),
         });
 
-        Assert.Equal("Bill 1.5 back", said);
+        Assert.Equal("Bill a second and a half back", said);
         Assert.DoesNotContain("Sam", said);
     }
 
@@ -98,7 +112,7 @@ public sealed class PositionGapTests
             ("Dana", new RaceGap(1, null)),
         });
 
-        Assert.Equal("Bill 1.5 back, Frank 2.3 back and Dana a lap down", said);
+        Assert.Equal("Bill a second and a half back, Frank two and a half seconds back and Dana a lap down", said);
     }
 
     [Fact]
@@ -111,7 +125,7 @@ public sealed class PositionGapTests
             ("Frank", new RaceGap(0, 2_300)),
         });
 
-        Assert.Equal("Frank 2.3 back", said);
+        Assert.Equal("Frank two and a half seconds back", said);
     }
 
     [Fact]
@@ -160,8 +174,9 @@ public sealed class PositionGapTests
     public void A_gap_is_written_the_same_way_on_a_comma_decimal_PC()
     {
         // Written "1,5" the voice reads it as "one, five" - the bug this
-        // app has already had in the fast-lap and commentary figures.
-        InCommaDecimal(() => Assert.Equal("1.5 back", AnnouncementText.SpokenGap(new RaceGap(0, 1_500))));
+        // app has already had in the fast-lap and commentary figures. All
+        // words now, so there is no decimal for a region to change.
+        InCommaDecimal(() => Assert.Equal("a second and a half back", AnnouncementText.SpokenGap(new RaceGap(0, 1_500))));
     }
 
     // --- Helpers --------------------------------------------------------------------

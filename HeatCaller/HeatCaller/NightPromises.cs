@@ -353,7 +353,23 @@ internal sealed class NightPromises
                 // A green flag of default is a result with no start time
                 // saved on it, and it gets no callback rather than a
                 // guessed one.
-                if (moment.GreenAtUtc == default || moment.GreenAtUtc <= promiseAtUtc)
+                //
+                // ONE EXCEPTION, AND ONLY ONE (15 Oct 2026): a HORIZON may
+                // be paid off by its own race's FINISH. A horizon is said
+                // during a race about something that race has still to
+                // decide - "three laps to find half a second" - and the
+                // only honest pay-off for it is how that race ended. The
+                // finish moments (the lead changing on the last lap, a
+                // photo finish) are at the flag, so they are after the
+                // horizon by construction - it is only ever said with road
+                // left - and the self-congratulation the rule above exists
+                // to stop cannot happen: the horizon pointed at a gap, and
+                // the moment is what the gap became. Every other moment in
+                // that race - a fastest lap, a lead change mid-race - may
+                // have been BEFORE the horizon, and stays out.
+                var laterRace = moment.GreenAtUtc != default && moment.GreenAtUtc > promiseAtUtc;
+
+                if (!laterRace && !PaidOffByItsOwnFinish(promise, moment, promiseAtUtc))
                 {
                     continue;
                 }
@@ -391,6 +407,19 @@ internal sealed class NightPromises
 
         return null;
     }
+
+    /// <summary>
+    /// Whether a moment from the race a promise was made DURING may pay it
+    /// off - true only for a horizon, only for a finish moment, and only
+    /// for a race whose flag fell after the promise was made. See the
+    /// exception in PayOff.
+    /// </summary>
+    private static bool PaidOffByItsOwnFinish(Promise promise, NightMoments.Moment moment, DateTime promiseAtUtc) =>
+        promise.From == SegmentKind.Horizon
+        && moment.What is NightMoments.Kind.LastLapLead or NightMoments.Kind.PhotoFinish
+        && moment.GreenAtUtc != default
+        && moment.GreenAtUtc <= promiseAtUtc
+        && moment.AtUtc > promiseAtUtc;
 
     /// <summary>
     /// Marks a promise paid - called when the callback has actually gone

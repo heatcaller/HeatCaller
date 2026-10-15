@@ -11,11 +11,6 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class AnnouncementService
 {
-    private static readonly string[] DigitWords =
-    {
-        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    };
-
     /// <summary>
     /// Formats a millisecond duration as speech text with an explicit
     /// "point" between the whole and fractional seconds, e.g. "5 point
@@ -28,19 +23,32 @@ public sealed partial class AnnouncementService
     /// Spelling them as words removes anything number-shaped for the
     /// engine to reinterpret.
     /// </summary>
-    private static string FormatSecondsForSpeech(long ms)
-    {
-        var totalCentiseconds = (long)Math.Round(ms / 10.0);
-        var whole = totalCentiseconds / 100;
-        var fraction = totalCentiseconds % 100;
-        // InvariantCulture and a bounds-checked lookup. Some cultures use
-        // non-ASCII digit shapes, which would make (c - '0') fall outside
-        // the array and throw from the middle of a race announcement.
-        var fractionDigits = fraction
-            .ToString("00", System.Globalization.CultureInfo.InvariantCulture)
-            .Select(ch => ch >= '0' && ch <= '9' ? DigitWords[ch - '0'] : ch.ToString());
-        return $"{whole} point {string.Join(" ", fractionDigits)} seconds";
-    }
+    /// <remarks>
+    /// MOVED TO RaceNumbers ON 14 OCT 2026, and the reading changed with
+    /// it: a lap time now comes back as "five oh six" rather than "5 point
+    /// zero six seconds", which is the sentence a club's own log showed
+    /// the announcer saying and which nobody who has called a race has
+    /// ever said.
+    ///
+    /// EVERY RULE THIS METHOD LEARNED IS KEPT, which is why it is a
+    /// delegation and not a replacement. The digits are still spelled as
+    /// words, for the reason the summary above records - ElevenLabs
+    /// re-collapsed "8 8" into "eighty-eight" some of the time and not
+    /// others - and the rounding is still to hundredths. What is new is
+    /// only the convention the words are arranged in, and the durations
+    /// that are NOT lap times (a sector, a session clock) still get the
+    /// explicit reading, through RaceNumbers.Plainly.
+    ///
+    /// DigitWords, the table this method spelled digits from, went on
+    /// 15 Oct 2026 with its last reader: the split-loop gap is now said
+    /// through RaceNumbers.GapSpoken as well ("two tenths up", not "point
+    /// two seconds").
+    ///
+    /// Still here, and still the funnel, so the one call site that wants a
+    /// lap time and the one that wants a sector both keep working - see
+    /// RaceNumbers for which is which.
+    /// </remarks>
+    private static string FormatSecondsForSpeech(long ms) => RaceNumbers.LapSpoken(ms);
 
     /// <summary>
     /// The same duration written for READING rather than speaking - "5.88s".
@@ -812,12 +820,18 @@ public sealed partial class AnnouncementService
     /// CheckCloseBattles. Accepted is not a promise it is heard: a flag can
     /// still clear it from the queue, as it always could.
     /// </summary>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null)
+    /// <param name="heldOver">
+    /// True when this is a call coming back from being kept for the end of
+    /// a line (see HeldOver) - already counted as offered, and not to be
+    /// kept a second time.
+    /// </param>
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false)
     {
         // A line about a ghost - its lap, its streak, the lead it took -
         // while ghosts are not announced (AnnounceGhostsProvider).
         if (MutedGhost(transponder))
         {
+            NoteKeptCallLost(heldOver);
             return false;
         }
 
@@ -828,14 +842,35 @@ public sealed partial class AnnouncementService
         if (_postRaceQuiet && !IsAllowedAfterRaceOver(type))
         {
             StatusMessage?.Invoke($"[voice] Dropped {type} - the race is over; only the wrap-up speaks now.");
+            NoteKeptCallLost(heldOver);
             return false;
         }
 
         var isPriority = IsPriorityAnnouncement(type);
 
-        if (_isVoiceSpeaking && !isPriority && !IsWorthWaitingFor(type))
+        // THE FIELD-WIDE PACING GATE AND THE COUNT (14 Oct 2026). This was
+        // a bare drop-while-speaking test, first come first served, and
+        // nothing anywhere counted what it threw away - about twenty lines
+        // out of one eight-lap demo with three cars in it. See
+        // AnnouncerDensity for why the club's per-driver cap could not
+        // reach this, AnnouncerLoad for why a fault that only ever wrote
+        // itself to the console went unreported, and
+        // RoutineCallGetsTheAir, which still makes exactly this test
+        // first and in the same words.
+        //
+        // The two lists are asked HERE rather than inside the gate, so
+        // everything the queue spares - an instruction, a race moment, the
+        // running order - never reaches a dial about taste at all.
+        //
+        // A routine call refused only because the speaker is busy may be
+        // KEPT for the end of the line (HeldOver) - and it comes back in
+        // through here, so every rule above still applies to it then.
+        if (!isPriority && !IsWorthWaitingFor(type)
+            && !RoutineCallGetsTheAir(
+                type,
+                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true),
+                alreadyCounted: heldOver))
         {
-            StatusMessage?.Invoke($"[voice] Dropped {type} announcement - still speaking the previous one.");
             return false;
         }
 
@@ -889,7 +924,13 @@ public sealed partial class AnnouncementService
                 }
             }
 
-            _voiceQueue.Add(new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
+            // A call kept for the end of the last line goes NEXT, not to the
+            // back: it was kept because it was the most important thing to
+            // say the moment the speaker was free, and behind a queue it
+            // would be said long after the moment it was about.
+            var at = heldOver ? 0 : _voiceQueue.Count;
+
+            _voiceQueue.Insert(at, new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
             {
                 try
                 {
@@ -1109,6 +1150,18 @@ public sealed partial class AnnouncementService
                 Interlocked.Decrement(ref _voiceInFlight);
                 _isVoiceSpeaking = false;
                 EndSpeaking();
+            }
+
+            // The line has ended, so the one call kept for its end - if a
+            // bigger one arrived while it was speaking - gets its turn.
+            // See HeldOver.
+            try
+            {
+                OfferTheHeldOverCall();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[voice queue] Couldn't offer the kept call: {ex.Message}");
             }
         }
     }

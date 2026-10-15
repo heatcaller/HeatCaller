@@ -548,6 +548,38 @@ public sealed class AppSettings
     public string CommentaryChatter { get; set; } = string.Empty;
 
     /// <summary>
+    /// How much room the announcer leaves between the calls it makes off
+    /// the timing loop - the key of one of
+    /// <see cref="HeatCaller.AnnouncerDensity.All"/>. Blank is Balanced.
+    ///
+    /// A SECOND DIAL, AND IT HAD TO BE. Asked for on 14 Oct 2026 with a
+    /// console log attached: an eight-lap demo with three cars in it threw
+    /// away about twenty lap calls, and the club had already turned
+    /// <see cref="CommentaryChatter"/> down looking for the control that
+    /// would stop it.
+    ///
+    /// That dial could not have stopped it. It decides WHICH calls are
+    /// eligible and how many ONE CAR may make on ONE lap - the batch its
+    /// cap is applied to is keyed by transponder - so three cars at a cap
+    /// of two are six calls a lap, ten cars are twenty, and every one of
+    /// them is inside the cap the club set. Nothing in the app had an
+    /// opinion about the field, and whatever arrived while the announcer
+    /// was mid-sentence was simply lost.
+    ///
+    /// So this one is about the FIELD: the shortest gap between one
+    /// routine call and the next, whoever they are about. The two are kept
+    /// apart rather than merged because they answer different questions -
+    /// how much to say, and how fast to say it - and a club that wants a
+    /// chatty evening at a civil pace has to be able to ask for both.
+    ///
+    /// BLANK IS NOT THE OLD BEHAVIOUR HERE, which is a departure from
+    /// every other dial in this layer. See AnnouncerDensity: "no change"
+    /// means the twenty lost lines above, and the old behaviour is still
+    /// on the dial as its last stop for a club that wants it.
+    /// </summary>
+    public string AnnouncerDensity { get; set; } = string.Empty;
+
+    /// <summary>
     /// Whether a phone on the club's own Wi-Fi may send the announcer a
     /// shout-out - see WebServerService.Notes.
     ///

@@ -660,7 +660,15 @@ public sealed partial class AnnouncementService
 
             _pendingBatchCancellation.Clear();
             _pendingPerLapBatches.Clear();
+
+            // And the field's calls waiting for their window - the same
+            // lap chatter, one step further on. See OfferToTheField.
+            BinTheFieldCallsUnderLock();
         }
+
+        // And the one call kept for the end of a line: what it was about
+        // is no longer the race. See HeldOver.
+        ForgetTheHeldOverCall(count: true);
 
         var wasSpeaking = StopCurrentPlayback();
 

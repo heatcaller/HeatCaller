@@ -606,7 +606,12 @@ public sealed partial class RaceControlControl : UserControl
                     // tells this row about it.
                     _announcer.Muted,
                     NotesWaitingForApproval(),
-                    VotesCastSoFar());
+                    VotesCastSoFar(),
+                    // How many of its own timing calls the announcer did
+                    // not get out this race. Read on the tick like the
+                    // rest - see AnnouncerStrip._load for the report that
+                    // put a number on this row.
+                    _announcer.Load);
             }
         };
         _clockRefreshTimer.Start();

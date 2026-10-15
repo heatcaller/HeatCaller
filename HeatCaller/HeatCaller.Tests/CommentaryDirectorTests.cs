@@ -554,4 +554,143 @@ public sealed class CommentaryDirectorTests : IDisposable
 
         Assert.Equal(spent, back.Budget.SpentTonight);
     }
+
+    // ------------------------------------------------------------------
+    // The horizon - what is still to be decided (15 Oct 2026)
+    // ------------------------------------------------------------------
+
+    /// <summary>A gap coming down two tenths a lap, with the laps running out.</summary>
+    private void AGapComingDown(bool estimated = false)
+    {
+        var gaps = new[] { 1.0, 0.8, 0.6 };
+
+        for (var lap = 0; lap < gaps.Length; lap++)
+        {
+            _rig.Director.Standings(
+                new[] { new PairGap("A", "B", 1, gaps[lap], 0) },
+                leaderLaps: 10 + lap,
+                new RoadLeft(5 - lap, estimated));
+
+            _rig.Clock.Advance(TimeSpan.FromSeconds(6));
+        }
+    }
+
+    [Fact]
+    public async Task A_gap_coming_down_with_laps_left_is_pointed_at()
+    {
+        AGapComingDown();
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Equal(SegmentKind.Horizon, said!.Kind);
+    }
+
+    [Fact]
+    public async Task The_horizon_is_the_facts_and_the_cooldown_once_it_is_said()
+    {
+        AGapComingDown();
+
+        Assert.NotNull(_rig.Director.Horizons.Pick());
+
+        await _rig.Director.NextAsync();
+
+        // Said, so the same pair is left alone for the cooldown - one gap
+        // coming down over six laps is one line, not six.
+        Assert.Null(_rig.Director.Horizons.Pick());
+        Assert.Equal(1, _rig.Director.Budget.SpentTonight);
+    }
+
+    [Fact]
+    public async Task With_no_road_left_nothing_is_said_about_the_future()
+    {
+        for (var lap = 0; lap < 3; lap++)
+        {
+            // A race with neither a lap limit nor a clock: no road, so no
+            // horizon, however fast the gap is coming down.
+            _rig.Director.Standings(new[] { new PairGap("A", "B", 1, 1.0 - (lap * 0.2), 0) }, 10 + lap, null);
+            _rig.Clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        Assert.Null(_rig.Director.Horizons.Pick());
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.True(said is null || said.Kind != SegmentKind.Horizon);
+    }
+
+    [Fact]
+    public void The_horizon_is_live_one_voice_and_short_lived()
+    {
+        var spec = CommentaryBudget.Spec(SegmentKind.Horizon);
+
+        Assert.True(CommentaryDirector.InRace(SegmentKind.Horizon));
+        Assert.Equal(SegmentTier.Core, spec.Tier);
+
+        // Never a two-hander: a second voice reacting to "three laps to
+        // find half a second" reaches for "and he'll do it".
+        Assert.False(spec.CanBeExchange);
+        Assert.True(spec.NeedsBy <= TimeSpan.FromSeconds(20), "a rate read on lap six is wrong by lap nine");
+    }
+
+    [Fact]
+    public void A_new_race_clears_the_horizon_with_the_other_detectors()
+    {
+        AGapComingDown();
+
+        _rig.Director.RaceStarted("heat-2", "Box Stock");
+
+        Assert.Equal(0, _rig.Director.Horizons.Watching);
+    }
+
+    [Fact]
+    public void The_horizon_s_facts_are_a_sum_and_never_a_forecast()
+    {
+        var horizon = new Horizon("A", "B", 1, 0.6, 0.2, 4, 0.8, HorizonKind.WithinReach, 3);
+
+        var fact = CommentaryFacts.Horizon(horizon, id => id == "A" ? "Sam" : "Bill", "heat-1");
+
+        Assert.Contains("Bill is 0.60s behind Sam, fighting for the lead", fact.Text);
+        Assert.Contains("if the rate holds", fact.Text);
+
+        foreach (var forecast in new[] { "will win", "will catch", "going to", "is set to" })
+        {
+            Assert.DoesNotContain(forecast, fact.Text, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Themed on the pair, which is what makes it a promise the night
+        // can come back to.
+        Assert.Equal(FactTheme.Rivalry("A", "B"), fact.Theme);
+    }
+
+    [Fact]
+    public void An_estimated_road_is_given_to_the_writer_as_one()
+    {
+        var horizon = new Horizon("A", "B", 2, 0.6, 0.2, 4, 0.8, HorizonKind.WithinReach, 3, Estimated: true);
+
+        var fact = CommentaryFacts.Horizon(horizon, id => id == "A" ? "Sam" : "Bill", "heat-1");
+
+        Assert.Contains("About 4 laps left, going by the clock.", fact.Text);
+        Assert.Contains("fighting for 2nd", fact.Text);
+    }
+
+    [Fact]
+    public async Task A_record_lap_is_said_before_a_horizon_that_is_ready_at_the_same_time()
+    {
+        // The horizon has the shortest life of the live calls, and sorted
+        // by deadline alone it took the slot every time - a record lap
+        // behind it could run out of time and be thrown away.
+        for (var i = 0; i < 4; i++)
+        {
+            _rig.Director.Lap($"warm-{i}", 20.0 + i);
+        }
+
+        _rig.Director.Lap("A", 12.0);
+        AGapComingDown();
+
+        var said = await _rig.Director.NextAsync();
+
+        Assert.NotNull(said);
+        Assert.Equal(SegmentKind.PaceNote, said!.Kind);
+    }
 }

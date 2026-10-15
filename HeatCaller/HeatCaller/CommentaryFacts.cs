@@ -788,6 +788,78 @@ public static class CommentaryFacts
             FactTheme.Rivalry(battle.AheadId, battle.BehindId));
     }
 
+    /// <summary>
+    /// A gap and where it is going, as RaceHorizon read it - the facts the
+    /// Horizon segment is written from.
+    ///
+    /// ARITHMETIC AND NOTHING ELSE, which is RaceHorizon's rule carried
+    /// into the words the model is handed. The gap, the rate per lap, the
+    /// laps left and what that rate over those laps adds up to - and, for a
+    /// gap the laps would cover, that it would cover it IF THE RATE HOLDS,
+    /// which is the sum stated rather than a claim made. Nothing here says
+    /// who will win, and the instruction for the segment says not to.
+    ///
+    /// An estimated road says so ("about four laps, going by the clock"),
+    /// so the model has no reason to be more definite than the race is.
+    ///
+    /// Keyed on the race and the pair, like a battle, and THEMED on the
+    /// pair - which is what makes it a promise: NightPromises reads the
+    /// theme back, and the pay-off is whatever the race then did to these
+    /// two. See NightPromises.PayOff for the one case where that pay-off
+    /// may come from the same race.
+    /// </summary>
+    public static FactBlock Horizon(Horizon horizon, Func<string, string?> nameFor, string raceKey)
+    {
+        var ahead = Clean(nameFor(horizon.AheadId));
+        var behind = Clean(nameFor(horizon.BehindId));
+
+        if (ahead.Length == 0)
+        {
+            ahead = "the car ahead";
+        }
+
+        if (behind.Length == 0)
+        {
+            behind = "the car behind";
+        }
+
+        var where = horizon.Position == 1 ? "the lead" : Ordinal(horizon.Position);
+        var rate = Math.Abs(horizon.PerLap);
+        var laps = horizon.Estimated
+            ? $"About {Plural.Of(horizon.LapsLeft, "lap")} left, going by the clock."
+            : $"{Plural.Of(horizon.LapsLeft, "lap")} left.";
+
+        var text = new StringBuilder();
+
+        text.Append($"{behind} is {Invariant(horizon.GapSeconds, "0.00")}s behind {ahead}, fighting for {where}. ");
+
+        switch (horizon.Kind)
+        {
+            case HorizonKind.WithinReach:
+                text.Append($"The gap is coming down by {Invariant(rate, "0.00")}s a lap. {laps} ");
+                text.Append($"At that rate the laps left add up to {Invariant(horizon.Buys, "0.00")}s - enough to cover the gap, if the rate holds.");
+                break;
+
+            case HorizonKind.Closing:
+                text.Append($"The gap is coming down by {Invariant(rate, "0.00")}s a lap. {laps} ");
+                text.Append($"At that rate the laps left add up to {Invariant(horizon.Buys, "0.00")}s - not yet enough to cover it.");
+                break;
+
+            case HorizonKind.SlippingAway:
+                text.Append($"The gap is going out by {Invariant(rate, "0.00")}s a lap. {laps}");
+                break;
+
+            default:
+                text.Append(laps);
+                break;
+        }
+
+        return new FactBlock(
+            $"horizon:{raceKey}:{Pair(horizon.AheadId, horizon.BehindId)}:{horizon.Kind}",
+            text.ToString().TrimEnd(),
+            FactTheme.Rivalry(horizon.AheadId, horizon.BehindId));
+    }
+
     /// <summary>A lap worth stopping for, as PaceWatch found it.</summary>
     public static FactBlock Pace(PaceNote note, Func<string, string?> nameFor, string raceKey)
     {

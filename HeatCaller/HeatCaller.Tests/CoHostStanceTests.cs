@@ -203,4 +203,65 @@ public sealed class CoHostStanceTests
     {
         Assert.Equal(CoHostStance.Describe(null), CoHostStance.Describe("a-stance-from-2027"));
     }
+
+    // ------------------------------------------------------------------
+    //  The analyst (14 Oct 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void The_catalogue_offers_a_job_and_not_only_a_disposition()
+    {
+        // THE AXIS THE FIRST SIX MISSED. Each of them gives the co-host
+        // somebody to root for or a temperament to have - the underdog,
+        // the sceptic, the archivist, the needler, the softie, the old
+        // hand - and a disposition is not a job. A broadcast pair is a
+        // caller and an ANALYST, and the second one was what a club with a
+        // second voice was still not getting.
+        var analyst = CoHostStance.For("analyst");
+
+        Assert.NotSame(CoHostStance.EvenHanded, analyst);
+        Assert.Equal("analyst", analyst.Key);
+        Assert.False(string.IsNullOrWhiteSpace(analyst.Brief));
+    }
+
+    [Fact]
+    public void The_analyst_is_told_to_explain_rather_than_to_report()
+    {
+        var brief = CoHostStance.For("analyst").Brief;
+
+        Assert.Contains("reason", brief, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("why", brief, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void The_analyst_is_told_that_no_reason_is_a_real_answer()
+    {
+        // THE SENTENCE THAT MAKES THE STANCE SAFE. An analyst that invents
+        // a reason is the worst failure available to this whole layer: it
+        // would be telling a room why a driver was slow, wrongly, about
+        // somebody standing in it. The same refusal NightPromises makes
+        // about what the voices said.
+        var brief = CoHostStance.For("analyst").Brief;
+
+        Assert.Contains("no reason", brief, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void The_analyst_carries_the_kindness_rule_like_every_other_stance_with_an_edge()
+    {
+        // It disagrees with A about causes, which is an edge, so the rule
+        // rides with it - see NeverCruel.
+        Assert.Contains(CoHostStance.NeverCruel, CoHostStance.BriefFor("analyst"));
+    }
+
+    [Fact]
+    public void The_analyst_is_offered_first_of_the_real_stances()
+    {
+        // It is the one that is useful to every club rather than to a club
+        // with a particular taste, so it sits where a club will read it
+        // first - directly after the plain one.
+        var firstReal = CoHostStance.All.First(one => one.Key.Length > 0);
+
+        Assert.Equal("analyst", firstReal.Key);
+    }
 }

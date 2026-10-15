@@ -211,7 +211,20 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        foreach (var candidate in candidates.OrderByDescending(c => c.Weight).Take(Math.Max(1, maxPerLap)))
+        var winners = candidates.OrderByDescending(c => c.Weight).Take(Math.Max(1, maxPerLap)).ToList();
+
+        // A car's VOICE calls go to the field rather than straight to the
+        // speaker, so the best call across every car crossing at once is
+        // the one that is said - see OfferToTheField. Sounds are not paced
+        // and go as they always did.
+        if (key.StartsWith("voice:", StringComparison.Ordinal))
+        {
+            OfferToTheField(winners);
+
+            return;
+        }
+
+        foreach (var candidate in winners)
         {
             candidate.Enqueue();
         }
@@ -261,7 +274,12 @@ public sealed partial class AnnouncementService
         8 => "eighth",
         9 => "ninth",
         10 => "tenth",
-        _ => $"P{position}",
+
+        // Past tenth a broadcast gives the place as a P - and SAID, so the
+        // digit becomes a word. "P11" handed to a voice comes out as
+        // "pee eleven" on one engine and "P, one one" on another. See
+        // RaceNumbers.PositionSpoken.
+        _ => RaceNumbers.PositionSpoken(position),
     };
 
     /// <summary>
@@ -414,7 +432,7 @@ public sealed partial class AnnouncementService
 
             if (vsLeader.LapsDown > 1)
             {
-                parts.Add($"then {name}, {vsLeader.LapsDown} laps down");
+                parts.Add($"then {name}, {RaceNumbers.Words(vsLeader.LapsDown)} laps down");
                 continue;
             }
 
@@ -426,10 +444,11 @@ public sealed partial class AnnouncementService
             }
             else if (gapMs is > 0)
             {
-                // InvariantCulture: on a comma-decimal PC the gap was
-                // written "1,5", which the voice reads as "one, five".
-                var gapText = (gapMs.Value / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
-                parts.Add($"{name} {gapText} back");
+                // "a second and a half back", not "1.5 back" - the gap the
+                // way it is called, in words, which also means a
+                // comma-decimal PC can no longer turn it into "one, five".
+                // See RaceNumbers.Behind.
+                parts.Add($"{name} {RaceNumbers.Behind(gapMs.Value / 1000.0)}");
             }
             else
             {
@@ -1459,6 +1478,25 @@ public sealed partial class AnnouncementService
                     () => EnqueueVoice(AnnouncementEventType.FastLap, standing, gate));
             }
         }
+
+        // THE RECORD, which until now nothing in the app ever looked at
+        // (15 Oct 2026). "Track record" and "On record pace" are two tick
+        // boxes on the Voice page with templates, weights and a written
+        // promise about when they fire, and NOTHING HAS EVER CALLED
+        // EITHER - see AnnouncementService.Records.cs, which is the caller
+        // NotifyRecordPace's own doc comment describes and nobody wrote.
+        //
+        // Here rather than in the gate.Fast block above, because a record
+        // lap is not necessarily a fast lap: gate.Fast is the decoder's
+        // view of this session, and the layout's all-time record is a
+        // different question that a first lap can answer.
+        //
+        // NOT through ConsiderPerLapAction either. The per-lap batch keeps
+        // the highest-weight candidates and drops the rest, and a record
+        // is the one thing in the set that must never lose a slot - which
+        // is the reasoning NotifyTrackRecord already gives for firing
+        // directly.
+        CheckTheRecord(transponder, standing, lapTimeMs);
 
         // The flying laps a best-consecutive qualifier is scored on. Only the
         // session's own lap times: the start lap has none, and the qualifying

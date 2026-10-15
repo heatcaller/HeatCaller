@@ -104,6 +104,17 @@ public sealed class CommentaryControl : UserControl
     private readonly ComboBox _cmbChatter = new();
     private readonly Label _lblChatter = new();
 
+    // --- And how fast it says it (14 Oct 2026) ---
+    //
+    // The dial above is HOW MUCH. This one is HOW FAST, and they had to be
+    // two controls: the chattiness dial scales a per-DRIVER cap, so three
+    // cars at a cap of two are six calls a lap and ten cars are twenty,
+    // every one of them inside the cap the club set. Nothing had an
+    // opinion about the field until this. See AnnouncerDensity, which has
+    // the console log the report came with.
+    private readonly ComboBox _cmbDensity = new();
+    private readonly Label _lblDensity = new();
+
     // --- Club notes (12 Oct 2026) ---
     //
     // The asides that are not about the racing, and the two ways the room
@@ -315,6 +326,9 @@ public sealed class CommentaryControl : UserControl
     private (Font Font, int Count, int Width)? _coHostStanceWidth;
     private (Font Font, int Count, int Width)? _exchangeTurnsWidth;
     private (Font Font, int Count, int Width)? _chatterWidth;
+
+    /// <summary>The pacing picker's measured width - see _chatterWidth.</summary>
+    private (Font Font, int Count, int Width)? _densityWidth;
 
     /// <summary>
     /// Raised when the club switches shout-outs from its web page OFF, so
@@ -1380,10 +1394,60 @@ public sealed class CommentaryControl : UserControl
 
         _lblChatter.Text = ShowChatter.Describe(_settings.CommentaryChatter);
 
+        // PACING, directly under chattiness because the two are read
+        // together and a club looking for one will find the other. Built
+        // the same way for the same reason - filled from the table, the
+        // handler attached after the club's own choice is selected, and
+        // the line beneath worked out from the real gaps rather than
+        // typed.
+        _cmbDensity.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbDensity.Items.Clear();
+
+        foreach (var level in AnnouncerDensity.All)
+        {
+            _cmbDensity.Items.Add(level.Name);
+        }
+
+        var densityNow = AnnouncerDensity.For(_settings.AnnouncerDensity);
+        var densityAt = 0;
+
+        for (var i = 0; i < AnnouncerDensity.All.Count; i++)
+        {
+            if (AnnouncerDensity.All[i].Key == densityNow.Key)
+            {
+                densityAt = i;
+                break;
+            }
+        }
+
+        _cmbDensity.SelectedIndex = densityAt;
+
+        _cmbDensity.SelectedIndexChanged += (_, _) =>
+        {
+            var at = _cmbDensity.SelectedIndex;
+
+            _settings.AnnouncerDensity = at >= 0 && at < AnnouncerDensity.All.Count
+                ? AnnouncerDensity.All[at].Key
+                : string.Empty;
+
+            _settings.Save();
+            _lblDensity.Text = AnnouncerDensity.Describe(_settings.AnnouncerDensity);
+        };
+
+        _lblDensity.Text = AnnouncerDensity.Describe(_settings.AnnouncerDensity);
+
         var chatterGrid = new FieldGrid();
 
         Stepped(chatterGrid.AddRow("How chatty:", Line(_cmbChatter)));
         chatterGrid.AddHint(_lblChatter);
+
+        Stepped(chatterGrid.AddRow("Pacing:", Line(_cmbDensity)));
+        chatterGrid.AddHint(_lblDensity);
+
+        chatterGrid.AddHint(Hint(
+            "Race Control shows how many of the announcer's own timing calls got out while a race is on - "
+            + "\"held\" is this dial leaving a gap on purpose, and \"lost\" is the announcer running out of "
+            + "room for them. The full count goes to the console at the end of every race."));
 
         var segments = new Section("Segments");
 
@@ -2188,6 +2252,10 @@ public sealed class CommentaryControl : UserControl
         // the default width, "Conversational - three turns" was cut off.
         Fit(_cmbExchangeTurns, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbExchangeTurns, ref _exchangeTurnsWidth)));
         Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
+        // The pacing dial beside it, sized the same way. Left out when the
+        // dial was added (14 Oct 2026), so it kept the default width and
+        // "Room to breathe" was cut off at every size the layout test checks.
+        Fit(_cmbDensity, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbDensity, ref _densityWidth)));
         Fit(_cmbHonoursVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
 
         foreach (var number in new[]
@@ -2377,6 +2445,7 @@ public sealed class CommentaryControl : UserControl
         _coHostVoiceWidth = null;
         _coHostStanceWidth = null;
         _chatterWidth = null;
+        _densityWidth = null;
         _honoursVoiceWidth = null;
         SizeFields();
     }

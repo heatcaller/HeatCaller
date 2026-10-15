@@ -1252,6 +1252,55 @@ public partial class MainForm : Form
         // See AnnouncementService.ChatterProvider.
         _announcer.ChatterProvider = () => _settings.CommentaryChatter;
 
+        // And how much ROOM it leaves between them, which is a different
+        // question from how many it makes - see AppSettings.AnnouncerDensity
+        // for the report that made it two dials instead of one. Asked on
+        // demand for the same reason as the chattiness dial beside it.
+        _announcer.DensityProvider = () => _settings.AnnouncerDensity;
+
+        // What the race in front of it is worth, so the gap is wide in
+        // practice and tight in the top main. The same expression the
+        // Announcer page's own RaceSize uses (see MainForm.Pages) rather
+        // than a second reading of the programme: two answers to "what is
+        // this race worth" is how the announcer ends up pacing a heat like
+        // a main.
+        _announcer.StatureProvider = () => RaceStature.Of(_activeRound, _rounds, _raceEvents.ActiveRoundScope());
+
+        // THE LAYOUT'S ALL-TIME RECORD, so the two record calls can fire
+        // at all - see AnnouncementService.Records.cs for the fact that
+        // nothing has ever called them.
+        //
+        // The layout is the one Race Control has selected, by name, which
+        // is how that page stores it (LastRaceControlTrackName) and how
+        // the Voice page's own description of these calls words it. Asked
+        // on demand, because a club changes the selected track between
+        // races and a record read once at start-up would be the previous
+        // track's for the rest of the night.
+        //
+        // Null for no selection, an unknown name, or a layout with no mark
+        // standing on it - never a guess, which is the rule
+        // NightMoments.ForRace states for the same figure.
+        _announcer.LayoutRecordProvider = () =>
+        {
+            var named = _settings.LastRaceControlTrackName;
+
+            if (string.IsNullOrWhiteSpace(named))
+            {
+                return null;
+            }
+
+            foreach (var layout in _trackLayouts.All)
+            {
+                if (layout.RecordLapMs > 0
+                    && string.Equals(layout.Name?.Trim(), named.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return (layout.RecordLapMs / 1000.0, layout.RecordHolderName ?? string.Empty);
+                }
+            }
+
+            return null;
+        };
+
         // Qualifying calls (provisional pole, improvements) fire only when
         // the session was started as a qualifier - asked on demand, same as
         // practice, so it can never go stale.

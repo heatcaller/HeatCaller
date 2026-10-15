@@ -155,6 +155,46 @@ public partial class AnnouncerControl
 
             _director = new CommentaryDirector(_commentary, _settings);
             _director.NameFor = NameFor;
+
+            // THE PACE DETECTOR'S HISTORY, WHICH WAS NEVER WIRED
+            // (15 Oct 2026). PaceWatch takes its history as three
+            // callbacks so the detector is a table test, and all three
+            // were assigned only in PaceWatchTests. So in the field it
+            // could report "fastest of the race so far" and nothing else,
+            // and the commentary could never say what a lap beat or who
+            // held it - the thing PaceWatch's own class comment calls the
+            // entire point of it.
+            //
+            // Both read on demand, like everything else this control hands
+            // over: a club changes the selected track between races, and
+            // tonight's races grow as the evening runs.
+            //
+            // The layout is the one Race Control has selected, by name -
+            // which is also what scopes the night's best, see
+            // PaceHistory.NightBestFor for why a lap on another layout is
+            // not a figure to compare against.
+            _director.Pace.LayoutRecord = () =>
+                PaceHistory.LayoutRecordFor(Layouts?.Invoke()?.All, _settings.LastRaceControlTrackName);
+
+            _director.Pace.NightBest = () =>
+                PaceHistory.NightBestFor(RacesTonight?.Invoke(), _settings.LastRaceControlTrackName);
+
+            // PersonalBestBefore IS DELIBERATELY LEFT UNSET, and that is a
+            // known gap rather than an oversight - see the ROADMAP's open
+            // issues.
+            //
+            // It wants a driver's best lap on this layout before tonight,
+            // and the only thing that knows is the whole session history
+            // (DriverStats walks it to build PersonalBests per layout).
+            // This callback is asked once per driver per lap, so on a
+            // ten-car track that is ten walks of every race ever run,
+            // every lap, on a page a club has already reported as slow.
+            //
+            // Unset, PaceWatch falls back to the driver's own best EARLIER
+            // IN THIS RACE, which its own comment allows for a driver with
+            // no history and which overclaims slightly for one with. That
+            // is the behaviour the app has always had; making it right
+            // needs a cheap per-driver index, not a callback.
             _director.Status += line => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
 
             // A SEGMENT IS SETTLED WHEN IT IS SAID, NOT WHEN IT IS WRITTEN
@@ -1087,7 +1127,11 @@ public partial class AnnouncerControl
         {
             var ordered = RacingField(_race.GetOrderedStandings());
 
-            director.Standings(PairsFrom(ordered));
+            // With what the horizon needs on top of the pairs: the leader's
+            // laps and how much road is left - exact under a lap limit,
+            // worked out from the clock in a timed race. See
+            // RaceHorizon.LapsLeftIn and RoadFor below.
+            director.Standings(PairsFrom(ordered), ordered.Count > 0 ? ordered[0].Laps : 0, RoadFor(ordered));
             FeedLaps(ordered);
         }
 
@@ -1219,6 +1263,52 @@ public partial class AnnouncerControl
         }
 
         return pairs;
+    }
+
+    /// <summary>
+    /// How much road the race in front of the announcer has left, for the
+    /// horizon - or null when neither a lap limit nor a clock says.
+    ///
+    /// The leader's pace is the middle of their last three PACE laps, the
+    /// same laps the session counts for best lap (IsPaceLap), so a start
+    /// lap or a lap through a crash recovery cannot shrink the estimate.
+    /// </summary>
+    private RoadLeft? RoadFor(IReadOnlyList<RacerStanding> ordered)
+    {
+        if (ordered.Count == 0)
+        {
+            return null;
+        }
+
+        var leader = ordered[0];
+
+        // Snapshotted, as FeedLaps does: the decoder's thread appends to it.
+        var laps = leader.LapTimesMs;
+        var count = laps.Count;
+        var pace = new List<double>(3);
+
+        for (var i = count - 1; i >= 0 && pace.Count < 3; i--)
+        {
+            if (i < laps.Count && IsPaceLap(leader, i))
+            {
+                pace.Insert(0, laps[i] / 1000.0);
+            }
+        }
+
+        // How far into the lap in progress the leader is: race time now,
+        // less race time at their last crossing (ElapsedMs carries their
+        // penalties, which are not track time).
+        var elapsed = _race.ElapsedRaceTime;
+        var crossedAt = TimeSpan.FromMilliseconds(Math.Max(0, leader.ElapsedMs - leader.PenaltyMs));
+        var since = elapsed > crossedAt ? elapsed - crossedAt : TimeSpan.Zero;
+
+        return RaceHorizon.LapsLeftIn(
+            _race.LapLimit,
+            leader.Laps,
+            _race.TimeLimit,
+            elapsed,
+            RaceHorizon.RecentPace(pace),
+            since);
     }
 
     /// <summary>

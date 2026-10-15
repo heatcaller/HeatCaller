@@ -198,8 +198,10 @@ internal static class AnnouncementText
     /// How far one car is behind the one in front of it, said rather than
     /// shown.
     ///
-    /// TENTHS, not the hundredths the leaderboard shows
-    /// (RaceGaps.Format). A figure on the board is read at a glance and a
+    /// IN WORDS AND IN TENTHS (15 Oct 2026: "three tenths back", "a second
+    /// and a half back" - see RaceNumbers.GapSpoken), not the hundredths
+    /// the leaderboard shows (RaceGaps.Format), and not "1.5 back" either,
+    /// which a voice read as "one point five back". A figure on the board is read at a glance and a
     /// hundredth can decide a qualifying order, so the board keeps them. A
     /// figure in the ear has to be spoken through: "two point three five"
     /// takes half again as long to say as "two point three", and the
@@ -233,7 +235,9 @@ internal static class AnnouncementText
 
         if (gap.LapsDown > 1)
         {
-            return $"{gap.LapsDown} laps down";
+            // In words, for the reason RaceNumbers gives: a digit is a
+            // number-shaped thing a voice engine may read its own way.
+            return $"{RaceNumbers.Words(gap.LapsDown)} laps down";
         }
 
         if (gap.GapMs is not { } ms)
@@ -253,14 +257,18 @@ internal static class AnnouncementText
             return "under a tenth";
         }
 
-        // InvariantCulture: on a comma-decimal PC the gap was written
-        // "1,5", which the voice reads as "one, five".
-        return (ms / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " back";
+        // SAID THE WAY A GAP IS CALLED (15 Oct 2026) - "a second and a
+        // half back", "three tenths back" - and not "1.5 back", which a
+        // voice reads as "one point five back". See RaceNumbers.GapSpoken,
+        // which also keeps the tenths this summary argues for, and is all
+        // words, so a comma-decimal PC cannot turn it into "one, five".
+        return RaceNumbers.GapSpoken(ms / 1000.0) + " back";
     }
 
     /// <summary>
-    /// The gaps down the order as the report says them - "Bill 1.5 back,
-    /// Frank 2.3 back and Dana a lap down".
+    /// The gaps down the order as the report says them - "Bill a second
+    /// and a half back, Frank two and a half seconds back and Dana a lap
+    /// down".
     ///
     /// <paramref name="order"/> runs from the LEADER down, and the leader is
     /// left out of what comes back. Nobody is in front of them, so they have

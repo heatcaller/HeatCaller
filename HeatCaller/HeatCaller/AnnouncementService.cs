@@ -1234,19 +1234,34 @@ public sealed partial class AnnouncementService
     /// was read out as a time - "2.4GHz" became "2 point four zero seconds
     /// GHz". Anything else - lap counts, positions, driver numbers, other
     /// decimals - is left alone.
+    ///
+    /// A GAP IS NOT A LAP TIME (15 Oct 2026). Every match used to be read
+    /// as a lap, so the model's "Bill is 0.3s behind" went out as "zero
+    /// point three zero seconds behind" - the computer reading at its most
+    /// obvious, and in the AI's lines, which are the ones meant to sound
+    /// most like a broadcast. A figure is now read as a GAP when it says
+    /// so: under a second (no lap is), or with a word beside it that only a
+    /// gap takes - "behind", "clear", "by", "within" and the rest of
+    /// <see cref="GapWordsAfter"/> and <see cref="GapWordsBefore"/>. Those
+    /// are said through RaceNumbers.MarginSpoken - "three tenths behind",
+    /// "won by four hundredths" - and everything else is still a lap time,
+    /// "a five oh six".
     /// </summary>
-    private static string SpellOutTimesForSpeech(string text) =>
+    internal static string SpellOutTimesForSpeech(string text) =>
         System.Text.RegularExpressions.Regex.Replace(
             text,
             // [0-9] rather than \d, which in .NET also matches other
             // scripts' digits that the parse below can't read. At most nine
-            // whole digits, so the millisecond sum can't overflow.
-            @"\b([0-9]{1,9})\.([0-9]{1,3})\s*(?:seconds?|secs?|s)\b",
+            // whole digits, so the millisecond sum can't overflow. The word
+            // either side is only LOOKED at - the lookbehind and lookahead
+            // capture it without consuming it, so it is left exactly as
+            // written.
+            @"(?<=\b(?<pre>[A-Za-z]+)\s+)?\b(?<whole>[0-9]{1,9})\.(?<frac>[0-9]{1,3})\s*(?:seconds?|secs?|s)\b(?=(?:\s+(?<post>[A-Za-z]+))?)",
             match =>
             {
                 // InvariantCulture: this is digit text pulled out of a
                 // regex, not a localised number.
-                if (!long.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None,
+                if (!long.TryParse(match.Groups["whole"].Value, System.Globalization.NumberStyles.None,
                         System.Globalization.CultureInfo.InvariantCulture, out var whole))
                 {
                     return match.Value;
@@ -1256,13 +1271,60 @@ public sealed partial class AnnouncementService
                 // "935" is 935 - then the SAME formatter the template lines
                 // use. Rounding the fraction on its own used to lose the
                 // carry: 6.995 came out as "6 point one zero zero".
-                var fractionMs = int.Parse(match.Groups[2].Value.PadRight(3, '0'),
+                var fractionMs = int.Parse(match.Groups["frac"].Value.PadRight(3, '0'),
                     System.Globalization.NumberStyles.None,
                     System.Globalization.CultureInfo.InvariantCulture);
 
-                return FormatSecondsForSpeech((whole * 1000) + fractionMs);
+                var ms = (whole * 1000) + fractionMs;
+
+                // Under a second it is a gap whatever is around it. Over a
+                // second only the words that cannot follow a lap make it
+                // one - "5.06s down from 5.2s" is a lap time going down.
+                var after = match.Groups["post"].Value;
+
+                var readsAsGap = whole == 0
+                    || (GapWordsAfter.Contains(after) && (whole < 1 || !LapCanBe(after)))
+                    || GapWordsBefore.Contains(match.Groups["pre"].Value);
+
+                return readsAsGap
+                    ? RaceNumbers.MarginSpoken(ms / 1000.0)
+                    : FormatSecondsForSpeech(ms);
             },
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Words that, straight AFTER a figure, make it a gap and not a lap:
+    /// "0.3s behind", "1.2 seconds clear", "half a second up the road".
+    /// </summary>
+    private static readonly HashSet<string> GapWordsAfter = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "behind", "back", "ahead", "clear", "adrift", "up", "down", "off", "faster", "slower", "quicker",
+        "apart", "between", "covering", "separating", "margin", "gap", "better", "worse",
+    };
+
+    /// <summary>
+    /// The gap words that can also follow a LAP TIME - "5.06s down from
+    /// 5.2s", "a 5.06 off the pace", "5.1s faster than last week". Under a
+    /// second they still mean a gap (no lap is that short); over it they
+    /// are left to read as a lap.
+    /// </summary>
+    private static bool LapCanBe(string after) =>
+        after.ToLowerInvariant() is "up" or "down" or "off" or "faster" or "slower" or "quicker" or "better" or "worse"
+            or "margin" or "gap" or "between" or "covering" or "separating";
+
+    /// <summary>
+    /// Words that, straight BEFORE a figure, make it a gap: "by 0.04s",
+    /// "within 0.3s", "just 0.2s".
+    ///
+    /// NOT "of" and NOT "under", which both look like gap words and are
+    /// far commoner in front of a lap: "a best lap of 5.06s", "the first
+    /// car under 5.5s". Read as gaps, those would come out as "a best lap
+    /// of five seconds" - a lap time rounded to the half second.
+    /// </summary>
+    private static readonly HashSet<string> GapWordsBefore = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "by", "within", "just", "only", "mere", "barely",
+    };
 
     public AnnouncementService(ProfileStore profiles, VoiceSettingsStore voiceStore, SoundEffectsStore soundStore, RivalryStore? rivalries = null)
     {

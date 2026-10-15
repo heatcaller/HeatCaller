@@ -4,6 +4,48 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The announcer can finally say what a lap beat, and who held it.** When a driver sets a quick one, the commentary could never tell you what it went faster than - only that it was the fastest of the race so far. The detector behind it takes its history as three questions it asks the app, and **two of the three were never hooked up to anything**: the layout's all-time record and the fastest lap of the night were both permanently blank. So *"that takes two tenths off Dave's mark from the second heat"* was a sentence the app was built to say and never could.
+
+  Both are now wired. **The night's best is counted per layout**, which matters for a club that moves the track between classes: a lap set on a different configuration is not something the lap in front of you can be compared to, and calling it "fastest of the night" would be wrong about something the room watched. **Demo races never hold it either** - a club with "save demo races to history" ticked would otherwise have an invented lap holding the night's best for every real race after it - and nor do ghosts.
+
+  **Known, and still open:** the third question - a driver's own best *before tonight* - is still blank, so "a personal best" means their best so far in that race rather than ever. Wiring it properly needs a cheap index rather than a question asked once per driver per lap; the roadmap has it.
+
+- **The track record is now actually announced when it falls.** *Track record* and *On record pace* have been tick boxes on the **Voice** page for as long as that page has existed - with their own templates, their own weight and a written description of exactly when they fire. **Nothing in HeatCaller has ever called either one.** They were two switches that did nothing, and the biggest live moment the app can detect - the all-time record for your track going - has never once been called over the PA.
+
+  Both now fire. *Track record* is on by default and needs nothing from you beyond having a layout selected in Race Control with a record standing on it. *On record pace* is **off** by default, like every voice line we add - tick it on the Voice page if you want the build-up as well as the record.
+
+  **The build-up call needs pace rather than one lap.** It fires when at least two of a driver's last three laps are within one and a half percent of the record - not on a single quick lap, which is usually a tow or a short cut. At most twice for a driver in a race: once when their pace reaches the record's doorstep, and once more if they go on to match it. Never before their third counted lap.
+
+  The console also gets a fuller line than the PA can carry - what the pace is against, who holds it and how much is still to find.
+
+  **Known, and not fixed by this:** the AI commentary's own record segment still cannot say *what* a lap beat or *who* held it. That is a separate gap - `PaceWatch`'s history is wired only in its tests - and it is written up in the roadmap.
+
+- **A second dial for the announcer: how much ROOM it leaves between calls.** On the **Commentary** page, under *How chatty*, there is now a *Pacing* dial - five stops from **Room to breathe** to **Wall to wall**. It sets the shortest gap the announcer will leave between one timing call and the next, whoever they are about, and it is wide in practice and tight in the top main so the night still has a shape.
+
+  **It exists because the chattiness dial could not have fixed this, and that was not obvious.** *How chatty* decides which calls are eligible and how many **one car** may make on **one lap**. Both of those are about a single driver, so three cars at a cap of two are six calls a lap and ten cars are twenty - and every one of them is inside the cap you set. Nothing in HeatCaller had an opinion about the field as a whole. Whatever arrived while the announcer was already mid-sentence was simply thrown away, first come first served, with no ranking at all: a change of lead could lose its place to somebody's lap time.
+
+  **Race Control now shows you how many calls are not getting out.** At the end of the announcer row: *14 held* in grey, or *3 lost* lit up. **Held** is this dial leaving a gap on purpose - that is it working. **Lost** is the announcer running out of room for them, and the answer to that is a *wider* gap rather than a quieter one, which is the opposite of what you would reach for. The full count goes to the console at the end of every race.
+
+  Those lines have always been written to the developer console and nothing else, which is why this went unreported for the whole life of the app - an eight-lap practice run with three cars in it was throwing away about twenty of them, and from the announcer row it just sounded busy.
+
+  **Nothing that matters can be held.** A flag, a countdown, a green, a grid call, a driver's release, the finish, a badge, the last lap, the final minute, a track record and the running order all go straight past it - and so does any call that clearly outweighs the one before it, so a change of lead is never the thing that gets held.
+
+  **This one does not default to "exactly as it was", unlike every other dial we ship.** "As it was" here means the twenty thrown-away lines above, and a room losing most of what the announcer tried to say is not a setting anybody chose. It starts on **Balanced**. The old behaviour is still on the dial as its last stop, **Wall to wall**, and the page says plainly what that costs.
+
+- **The announcer says numbers like a commentator instead of like a computer.** A lap is now *"a five-oh-six"*, not *"5 point zero six seconds"*. A time that lands on the second is *"five flat"*. A gap is *"half a second"*, *"a tenth"*, *"a second and a half"* - and two cars crossing together is *"nothing in it"* rather than *"nought point nought seconds"*. A position said out loud is *"P four"*.
+
+  It is the cheapest thing on the list of what makes an announcer sound like software, because it changes nothing about what HeatCaller knows - only how it reads it out. It was also sitting in a club's own console log, word for word, and nobody who has ever called a race has said that sentence.
+
+  **A lap over a minute, or under a second, goes back to the plain reading.** *"Sixty fifty"* reads as six thousand and fifty, and a lap that long is given in minutes by anybody saying it out loud; under a second is a decoder fault rather than a lap. Sector times and session clocks keep the plain reading too - the oh-six form is a convention about lap times specifically.
+
+  **The screens are unaffected.** They have always shown the numerals and still do.
+
+- **The second voice can now be given a job rather than just a temperament.** A new co-host stance on the **Commentary** page: **Explains why**. The existing six give the co-host somebody to root for or a mood to be in - the underdog, the sceptic, the one who remembers everything. This one makes it the analyst: the one who says what the lap times *mean* and why it would be happening, while the first voice says what happened.
+
+  **It will not invent a reason.** Where your results do not contain a cause, it says so instead of supplying one - which matters more here than for any other stance, because a made-up reason is HeatCaller telling a room why a driver was slow, wrongly, about somebody standing in it.
+
+  It is offered first of the stances, because it is the one that suits any club rather than one with a particular taste.
+
 - **Each driver can now be given their own night, at an address only their own badge opens.** On the **Club Website** page: *Give each driver their own night at a private address*. Every driver who raced gets a page of their own evening - their races, where they finished, how many they beat, their grid moves, their best laps and what the night's moments say they did. The address carries the twenty-character code already printed on their check-in badge, so there is nothing for them to sign up for, nothing for you to hand out that they do not already have, and no password to forget.
 
   **Off until you turn it on**, like every public route in HeatCaller. It is milder than most - it is text, and your results page already names everybody publicly - but it puts a named person's evening on the internet, and the shout-outs and the room's vote both ship off for less. An update does not get to decide that for your club.

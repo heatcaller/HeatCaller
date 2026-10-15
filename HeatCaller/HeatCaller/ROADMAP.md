@@ -2584,6 +2584,268 @@ not found; recorded in `DriversOwnClipTests` rather than worked around.
 
 ---
 
+## Sounding like a broadcast (14 Oct 2026)
+
+A brainstorm on what makes the announcer sound like software rather than
+like a broadcast, then the first five items of it. Grounded in a club's own
+console log from an eight-lap, three-car demo, which is where two of the
+five came from.
+
+### Done, and live
+
+**1. The pacing dial, and a count of what the announcer loses.**
+`AnnouncerDensity` (the dial, five stops), `AnnouncerLoad` (the count),
+`AnnouncementService.Density.cs` (the gate), the *Pacing* dial on the
+Commentary page, and the held/lost badge on Race Control's announcer row.
+
+The finding behind it is worth keeping, because it was not obvious and it
+cost a report from the floor that looked like the chattiness dial being
+broken. `ShowChatter` scales `VoiceProfile.MaxAnnouncementsPerLap`, and the
+batch that cap is applied to is keyed by **transponder**
+(`_pendingPerLapBatches`). So the cap is per-driver: three cars at a cap of
+two are six calls a lap, ten cars are twenty, and every one is inside the
+club's setting. Nothing had an opinion about the field. What then happened
+to those calls was a bare `_isVoiceSpeaking` test in `EnqueueVoiceWork` -
+first come, first served, no ranking - so a lead change could lose its slot
+to a lap time, and the ~20 `Dropped ... still speaking the previous one`
+lines went only to the console, which nobody reads on a race night.
+
+The dial defaults to **Balanced** rather than to the old behaviour, which is
+a deliberate departure from how every other dial in this layer ships. The
+reasoning is on `AnnouncerDensity`; the old behaviour is its last stop.
+
+**Across the field - DONE 15 Oct 2026.** Within one car the best call
+already won; across cars it was whoever crossed the loop first. Two pieces
+finish it:
+
+- **The look-ahead.** `AnnouncementService.OfferToTheField`. Each car's
+  per-lap voice winners go to a field pool for
+  `AnnouncerDensity.FieldWindow` (350 ms, not stretched by later arrivals)
+  and are offered to the gate biggest first, so the gap is spent on the
+  pass for the lead and the lap time from fifth is what gets held. Off at
+  Wall to wall, which still behaves exactly as before.
+- **The one call kept for the end of a line.** `HeldOver<T>`. A call
+  refused only because the speaker was busy, that clearly outweighs what
+  is being said (the same test as `WorthBreakingIn`), is kept in a single
+  slot and offered again the moment the line ends - through the whole of
+  `EnqueueVoiceWork`, so the post-race quiet, ghosts and the gap still
+  have their say, and at the FRONT of the queue rather than the back. One
+  slot, never a queue (a queue is the backlog the drop
+  rule exists to prevent); a bigger call replaces it; stale after
+  `AnnouncerDensity.HoldOverFor` (4 s) and dropped; a flag, the countdown
+  or a new race clears it. Counted so `AnnouncerLoad.Balances` still
+  holds: counted Offered once, then Accepted, Held or Dropped when it is
+  resolved. 9 tests in `HeldOverTests`.
+
+**2. Numbers said like a commentator.** `RaceNumbers`.
+`AnnouncementService.FormatSecondsForSpeech` is now a one-line delegation
+to it, so every spoken lap time follows. Every rule that method had learned
+is kept - digits spelled as words (ElevenLabs re-collapsed `"8 8"` into
+"eighty-eight" some of the time and not others), rounded to hundredths -
+and only the convention changed. A lap at or over a minute, or under a
+second, falls back to the plain reading, and so do sector times and session
+clocks.
+
+**And the rest of the figures - 15 Oct 2026.** Lap times were the only
+thing converted; these still read like a computer and now do not:
+
+- The running order's gaps: "Bill 1.5 back" (said "one point five back")
+  is now "Bill a second and a half back"; "3 laps down" is "three laps
+  down"; a place past tenth is "P eleven". `AnnouncementText.SpokenGap`
+  and `MaybeAnnouncePositions`, both through `RaceNumbers`.
+- The split-loop calls' `{gap}`: "point two seconds" is now "two tenths"
+  (`SplitExtras`). `DigitWords` went with its last reader.
+- The AI's own lines. `SpellOutTimesForSpeech` read every figure as a lap
+  time, so "Bill is 0.3s behind" went out as "zero point three zero
+  seconds behind". A figure is now read as a GAP when it says so - under a
+  second, or beside a word only a gap takes ("behind", "clear", "by",
+  "within") - through the new `RaceNumbers.MarginSpoken`, which counts
+  hundredths and thousandths rather than calling a four-hundredths win
+  "nothing". The model's system prompt now also tells it to write numbers
+  the way a commentator says them. 11 tests in `SpokenFiguresTests`.
+
+**5. A co-host with a job rather than a temperament.** A seventh
+`CoHostStance`: **Explains why**. The existing six are all dispositions;
+this is the analyst half of a broadcast pair. Its brief carries the refusal
+that makes it safe - where the facts hold no reason it says so rather than
+supplying one.
+
+### Done, and live - the record (15 Oct 2026)
+
+**4. The record watch - and the two announcements nobody ever called**
+(15 Oct 2026). `RecordWatch` is now wired, and wiring it turned up a
+bigger fault than the feature it was for.
+
+`NotifyTrackRecord` and `NotifyRecordPace` have existed for as long as the
+voice settings have: a tick box each on the Voice page, templates, weights,
+and a description promising exactly when they fire. **Neither was ever
+called by anything** - no caller in the app, none in the tests. So two
+switches did nothing, and the all-time record for the track going had never
+been announced.
+
+`NotifyRecordPace`'s own doc comment says why it had no guards of its own:
+*"the caller has already decided this is worth saying (once per driver per
+race, and not before their third counted lap)"*. That caller was never
+written, and those rules existed only in that sentence.
+`AnnouncementService.Records.cs` is now that caller and `RecordWatch` holds
+the rules.
+
+Two things worth keeping from doing it:
+
+- **The stored record does not move mid-race.** It is written when the
+  result is filed, so a driver two tenths under it beats the *stored*
+  figure again on every remaining lap. Without a once-per-driver guard the
+  first record of the night is announced eight times.
+- **The pace call keeps no guard at all, deliberately.** The first draft
+  marked the driver as called the moment the watch reported a threat -
+  before knowing the line was accepted. A pace call weighs 88, under
+  `AnnouncerDensity.Commanding`, so the new pacing gap can hold one; held,
+  it would have been marked said and never offered again. That is the fault
+  `CheckCloseBattles` records for itself. `RecordWatch`'s escalation is the
+  guard instead, which means at most two pace calls per driver per race -
+  and the Voice page's description was corrected to say so, because it had
+  been promising one.
+
+### Built and tested, not yet fed
+
+**The record watch's richer line.** `RecordWatch.Say` produces the full
+sentence - what the pace is against, who holds it, what is still to find -
+and only the console gets it today. The PA call uses the club's own
+template, which has just the lap time to work with. A written segment that
+can carry the whole sentence is still to come.
+
+`RecordWatch` itself watches each car's **rolling pace** against the layout
+record and escalates once through Closing, OnTheDoorstep and
+OneMoreLikeThat, with the arithmetic of what is still to find. Pace rather
+than one lap is the whole point of it: the Voice page's description used to
+promise a call for a **single** lap within two percent of the record, which
+is usually a tow or a short cut, so every level here needs at least two of
+the last three laps inside the band. `OnTheDoorstep` and
+`OneMoreLikeThat` are what fire the PA call; `Closing` is for the written
+segment, which can afford to be chattier.
+
+**3. Anticipation.** `RaceHorizon` + `RaceHorizonTests`. Takes the same
+`PairGap` tick feed `BattleWatch` does and reads what the gap is **doing**
+plus how much road is left: Closing, WithinReach, SlippingAway. Never
+predicts - `WithinReach` means only "this rate, over these laps, adds up to
+this gap", which is a sum and stays true if the next lap is a spin. That
+rule comes from `NightPromises`.
+
+**The horizon is WIRED - 15 Oct 2026.** Owned on `CommentaryDirector` as
+`Horizons` beside `Battles` and `Pace` (both `Reset()` sites), fed from a
+new `Standings(pairs, leaderLaps, road)` overload that hands the same pairs
+to both detectors, and spoken through a new `SegmentKind.Horizon` (Core,
+one voice - never a two-hander, because a second voice reacting to "three
+laps to find half a second" reaches for "and he'll do it"), with
+`CommentaryFacts.Horizon` and its own instruction in `CommentaryService`.
+The record watch's richer line is still unfed - see below.
+
+**The design question is DECIDED: both, with the estimate carried.**
+Running only on lap-limited races would have switched the horizon off for
+most club racing, which is timed. `RaceHorizon.LapsLeftIn` gives the road
+left exactly for a lap limit and estimates it from the clock and the
+leader's recent pace (`RecentPace`, the middle of their last three pace
+laps) for a timed race, counted from the leader's last crossing and
+rounded UP because the flag waits for the next crossing (so never nought
+while the race runs); with both limits, the nearer end wins. It is tried
+AFTER the battle and record-lap calls whatever its deadline, so it never
+costs a record lap its slot.
+`Horizon.Estimated` carries the estimate onto the record, `Say` softens it
+to "about three laps", and the facts the model is handed say "going by the
+clock". The sum stays a sum.
+
+**And the pay-off.** A horizon is a promise like any other segment about a
+named pair, with ONE exception to the green-flag rule in
+`NightPromises.PayOff`: a horizon may be paid off by its OWN race's finish
+(a last-lap lead change or a photo finish, both at the flag and so after
+the horizon by construction). Nothing else from that race - a fastest lap
+or a mid-race lead change could have come before it - and no other kind
+gets the exception.
+
+### The seam items 6 and 8 both need (15 Oct 2026)
+
+Both want the same thing the app has no public way to do: **play one clip,
+once, through the show's own output, on demand.**
+
+`ShowTreatment.MarkAsync` already does exactly this for a sting between two
+items of a block - load the clip, wrap it in a `SmoothGainSampleProvider`
+so a cancellation fades it rather than cutting it, play it at
+`Level(_settings.ShowStingLevel, 0.8f)`, hold for the shorter of the clip
+and `ShowBlock.LongestSting`. All of that is private, and `Play` and
+`Level` with it.
+
+The wrong fix is to copy it to the call sites. `RaceControlControl.AfterRace`
+would need its own `ShowMusic`, its own level clamp and its own
+fade-on-cancel, which is a second piece of audio logic that can drift from
+the first - the fault this codebase names repeatedly ("two detectors
+reading the same thing two ways is how they end up disagreeing").
+
+The right fix is one public method on `ShowTreatment`, which already owns
+show audio and already holds the `ShowMusic` instance:
+
+    internal Task MarkABoundaryAsync(ShowClip? clip, float level, CancellationToken ct)
+
+`MarkAsync` then calls it for the sting it plays today, so there is one
+implementation and the existing path is the one under test. The treatment
+is reachable from `AnnouncerControl.Director` (`_treatment`), which is what
+`AfterRace` would ask.
+
+With that in place:
+
+- **Item 8** is two calls in `HoldTheCommercialBreakAsync` - one after
+  `CommercialBreak.Begin()`, one on the way out where the ending is known -
+  plus `BreakTransition.ComingBack` spoken through the announcer.
+- **Item 6** is the same method pointed at a clip cut from the race
+  recording rather than from the club's music folder. `RaceHighlights`
+  already works out which seconds of the recording belong to which driver,
+  and `DriversOwnClip.Excerpt` already reads a bounded excerpt as an
+  `ISampleProvider` - so the replay is "find the moment, take twenty
+  seconds from it, mark it, play it". What it still needs deciding is
+  WHICH moment is worth replaying and how long after, which is a
+  `NightMoments.Rank` question and not an audio one.
+
+### Still on the list, from the same brainstorm
+
+6. **Audio replay** - replay a big call half a minute later from the
+   recording. Nothing in the app replays audio mid-race today, so this one
+   is real. See the shared seam below.
+7. **Duck, don't gate - ALREADY DONE** (found 15 Oct 2026, nothing built).
+   The bed already ducks rather than gating, and more thoroughly than the
+   brainstorm assumed: `_settings.ShowBedDuckPercent` is a club-settable
+   depth, `bedGain.Target = now ? bedLevel * duck : bedLevel` moves it on
+   `SpeakingChanged`, and `SmoothGainSampleProvider` glides it (0.5 s down,
+   0.8 s up) rather than stepping - written because a line dropped before
+   it spoke used to cut the music to a quarter and straight back. On top of
+   that the bed *lifts above* its base level in the gaps (`Lifted`,
+   `Swelled`), the opener has its own duck under the voice
+   (`OpenerUnderVoice`, `BedUnderOpener`), and the bed nudges up at a
+   two-voice handoff (`CommentaryExchange.HandoffNudge`). The item was
+   wrong; nothing to do.
+8. **Transitions - mostly already done, and the rest is one method.**
+   Both edges of a break are already marked IN WORDS, deliberately - read
+   `HoldTheCommercialBreakAsync`: "the teaser is the line INTO the break...
+   and the recap is the one coming back from it, which is what it already
+   says". So there is no missing welcome-back line in the ordinary case,
+   and adding one would be two returns for one break.
+
+   What was missing is the PUNCTUATION - a station marks a boundary with a
+   sound as well as a sentence - and the one genuinely uncovered case.
+   `BreakTransition` (built and tested, 15 Oct) is that decision: the
+   club's existing show sting marks the way in; coming back it marks
+   nothing when the recap or a grid call already does; and for the two
+   endings where the recap never arrived (`Ceiling`,
+   `EverySponsorShown`) the room is left hanging, so it gets a sting and a
+   line that promises nothing about a recap that may never come.
+
+   Not wired yet - see the shared seam below.
+9. Crowd ambience swelling on a pass (`AmbienceService`).
+10. Pronunciation overrides per driver (`RacingWordsForm`).
+11. A clock with stakes - "two minutes to go" (see the horizon question
+    above).
+12. Contractions and fragments in the model instructions.
+13. Delivery energy driven by `RaceStature`, not just segment count
+    (ElevenLabs stability and style).
+
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
 The entry item 10 asked for before this is started. Every figure and file
@@ -4204,6 +4466,32 @@ fits.
 ---
 
 ## Known open issues
+
+- **`PaceWatch`'s three history callbacks are never assigned in the app**
+  (found 14 Oct 2026; still open). The sibling fault - two record
+  announcements with no caller - was fixed on 15 Oct, see "Sounding like a
+  broadcast". This half is not. `LayoutRecord`, `NightBest` and
+  `PersonalBestBefore` are set **only in `PaceWatchTests`**; a grep of
+  every `.cs` in the app finds no assignment to any of them. So in the
+  field the detector can only ever report `SessionBest`, plus a
+  `PersonalBest` measured against the driver's own earlier laps **in the
+  same race** rather than their real personal best - which is a different
+  and weaker claim than the one the line makes.
+
+  That means the record-pace commentary has never once been able to say
+  what a lap beat or who held it, which is the thing `PaceWatch`'s own
+  class comment calls the entire point: *"a record is only a story if you
+  can say what it beat and who held it"*. It is the same fault this file
+  already recorded once for the close-battle and record-pace calls - dead
+  in the field while passing their own tests.
+
+  The fix is small and is wired where `NameFor` is
+  (`AnnouncerControl.Director.cs`, the `Director` getter):
+  `TrackLayout.RecordLapMs` and `RecordHolderName` give the layout record
+  directly. It needs the current layout, which that control reaches through
+  `Layouts`. `RecordWatch` needs exactly the same callback, so wire both at
+  once.
+
 
 From `website\KNOWN-ISSUES.md`, where the full wording lives. Rewritten
 10 Oct 2026, after five writers went through the code for the show round,

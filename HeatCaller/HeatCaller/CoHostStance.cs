@@ -98,6 +98,37 @@ internal static class CoHostStance
         EvenHanded,
 
         new Stance(
+            "analyst",
+            "Explains why",
+            "Not what happened - why it happened. The one who tells you what the lap times mean.",
+
+            // THE AXIS EVERY OTHER STANCE HERE MISSED (14 Oct 2026). Read
+            // the six below: each gives the co-host somebody to root for or
+            // a temperament to have - the underdog, the sceptic, the
+            // archivist, the needler, the softie, the old hand. Every one
+            // of them is a DISPOSITION, and a disposition is not a job.
+            //
+            // A broadcast pair is a caller and an ANALYST. The caller says
+            // what is happening; the analyst says what it means and why it
+            // would do that, and that second job is the one a club with a
+            // second voice was still not getting. "Carl is quicker through
+            // the infield" is a fact the app already has. "Carl is quicker
+            // through the infield, and that is where this layout decides
+            // itself" is the sentence a room stays quiet for.
+            //
+            // AND THE SENTENCE THAT MAKES IT SAFE is the third one. An
+            // analyst that invents a reason is the worst failure available
+            // to this whole layer: it would be telling a room why a driver
+            // was slow, wrongly, about somebody standing in it. So the
+            // brief says plainly that "nothing here says why" is a real
+            // answer - the same refusal NightPromises makes about what the
+            // voices said, and RecordWatch about what the next lap will do.
+            "B's job is the reason rather than the result. A says what happened; B says what it means and "
+            + "why it would do that, off the pattern in the facts above - the lap times, where a gap "
+            + "changed, a difference of class or setup. Where the facts hold no reason B says so instead of "
+            + "supplying one."),
+
+        new Stance(
             "underdog",
             "Backs the underdog",
             "Delighted by anyone beating a faster car, and never that impressed by the favourite winning.",

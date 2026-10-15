@@ -86,6 +86,24 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// </summary>
     private readonly Button _votes = new();
 
+    /// <summary>
+    /// How many of the announcer's own timing calls did not get said this
+    /// race - see <see cref="AnnouncerLoad"/>.
+    ///
+    /// ASKED FOR FROM THE FLOOR (14 Oct 2026), in these words: "I didn't
+    /// know how many are being dropped as I don't have a visual." They
+    /// were all in the console, which nobody reads on a race night, and
+    /// the person they would have told is standing at a microphone looking
+    /// at THIS row. From here the announcer sounded busy, which is exactly
+    /// what it sounds like when it is throwing most of its work away.
+    ///
+    /// LAST IN THE ROW on purpose. It is a plain label that sizes itself,
+    /// and the note on <see cref="_said"/> records what that did the last
+    /// time one was allowed to: it pushed every button along the row as it
+    /// grew. At the end of the flow it pushes nothing.
+    /// </summary>
+    private readonly Label _load = new();
+
     private bool _holding;
 
     public AnnouncerStrip()
@@ -132,6 +150,11 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         _votes.Margin = new Padding(0, 0, 0, 0);
         _votes.Click += (_, _) => VotesWanted?.Invoke();
 
+        _load.AutoSize = true;
+        _load.ForeColor = AppTheme.TextMuted;
+        _load.Margin = new Padding(10, 2, 0, 0);
+        _load.Tag = AppTheme.KeepBackColor;
+
         // Focus off after a click, for the reason the flag buttons do it:
         // a button that keeps focus keeps answering to Space and Enter, and
         // on this row that means a stray keypress puts the last segment out
@@ -145,6 +168,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         Controls.Add(_skip);
         Controls.Add(_notes);
         Controls.Add(_votes);
+        Controls.Add(_load);
     }
 
     /// <summary>
@@ -302,7 +326,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// everything else, because nothing else on this row is audible while
     /// it is true - see <see cref="MutedText"/>.
     /// </param>
-    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0)
+    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null)
     {
         if (director is null || !enabled)
         {
@@ -408,6 +432,34 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         }
 
         _votes.ForeColor = votesIn > 0 ? AppTheme.Accent : AppTheme.TextDark;
+
+        ShowTheLoad(load);
+    }
+
+    /// <summary>
+    /// The count of what the announcer did not say, or nothing at all when
+    /// there is nothing to say - see <see cref="_load"/> for the report
+    /// this answers.
+    ///
+    /// EMPTY RATHER THAN A NOUGHT, the rule the notes and votes counts
+    /// beside it go by: "0 lost" on a quiet practice session reads as a
+    /// fault, and this row does not get to spend space saying nothing
+    /// happened.
+    ///
+    /// LIT ONLY FOR LOST LINES. Held lines are the club's own pacing dial
+    /// doing its job, and a held count in the alarm colour is how a club
+    /// ends up turning the fix back off.
+    /// </summary>
+    private void ShowTheLoad(AnnouncerLoad? load)
+    {
+        var badge = load?.Badge ?? string.Empty;
+
+        if (!string.Equals(_load.Text, badge, StringComparison.Ordinal))
+        {
+            _load.Text = badge;
+        }
+
+        _load.ForeColor = load?.BadgeIsAWarning == true ? AppTheme.Accent : AppTheme.TextMuted;
     }
 
     /// <summary>

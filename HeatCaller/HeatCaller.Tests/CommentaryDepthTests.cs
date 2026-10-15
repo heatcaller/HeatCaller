@@ -865,10 +865,13 @@ public sealed class CommentaryDepthTests : IDisposable
             Assert.False(string.IsNullOrWhiteSpace(spec.Title), $"{kind} has no title");
             Assert.False(string.IsNullOrWhiteSpace(spec.What), $"{kind} has no description");
 
-            // The two live calls are deliberately not shows - a battle
-            // call is not a programme, so ShowBlock gives them no caption.
+            // The live calls are deliberately not shows - a battle call is
+            // not a programme, so ShowBlock gives them no caption. Asked of
+            // the director's own list rather than named here, so the third
+            // one (the horizon, 15 Oct 2026) did not need this test edited
+            // to be told it, and a fourth will not either.
             // Everything else a crowd can see named has to be named.
-            if (kind is SegmentKind.BattleWatch or SegmentKind.PaceNote)
+            if (CommentaryDirector.InRace(kind))
             {
                 continue;
             }

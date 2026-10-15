@@ -563,4 +563,86 @@ public sealed class NightPromisesTests
             new[] { Moment(NightMoments.Kind.LastLapLead, Sam, Green.AddMinutes(10)) },
             atAir.AddMinutes(14)));
     }
+
+    // ------------------------------------------------------------------
+    //  The horizon, and the one exception to the green-flag rule (15 Oct 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_horizon_is_paid_off_by_how_its_own_race_finished()
+    {
+        // "Dave has three laps to find half a second on Carl" at 19:05, and
+        // Dave takes the lead on the last lap - the only honest pay-off a
+        // horizon has, and it is in the same race.
+        var ledger = new NightPromises();
+
+        ledger.Note(SegmentKind.Horizon, Pack(FactTheme.Rivalry(Carl, Dave)), NameFor, bothVoices: false, Green.AddMinutes(5).ToLocalTime());
+
+        var block = ledger.PayOff(
+            new[] { Moment(NightMoments.Kind.LastLapLead, Dave, Green, beaten: "Carl Dodd") },
+            Green.AddMinutes(10).ToLocalTime());
+
+        Assert.NotNull(block);
+        Assert.Contains("Carl Dodd", block!.Text);
+        Assert.Contains("Dave Bellamy", block.Text);
+    }
+
+    [Fact]
+    public void A_horizon_is_paid_off_by_a_photo_finish_in_its_own_race()
+    {
+        var ledger = new NightPromises();
+
+        ledger.Note(SegmentKind.Horizon, Pack(FactTheme.Rivalry(Carl, Dave)), NameFor, bothVoices: false, Green.AddMinutes(5).ToLocalTime());
+
+        Assert.NotNull(ledger.PayOff(
+            new[] { Moment(NightMoments.Kind.PhotoFinish, Carl, Green, figureMs: 40) },
+            Green.AddMinutes(10).ToLocalTime()));
+    }
+
+    [Fact]
+    public void A_horizon_is_never_paid_off_by_something_that_may_have_come_before_it()
+    {
+        // The fastest lap and a lead change mid-race could have happened
+        // before the horizon went to air, and "earlier tonight we pointed
+        // at them, and since then..." would be the announcer telling the
+        // room something happened after it did.
+        var ledger = new NightPromises();
+
+        ledger.Note(SegmentKind.Horizon, Pack(FactTheme.Rivalry(Carl, Dave)), NameFor, bothVoices: false, Green.AddMinutes(5).ToLocalTime());
+
+        Assert.Null(ledger.PayOff(
+            new[]
+            {
+                Moment(NightMoments.Kind.FastestLap, Dave, Green),
+                Moment(NightMoments.Kind.LeadChange, Dave, Green, beaten: "Carl Dodd"),
+            },
+            Green.AddMinutes(10).ToLocalTime()));
+    }
+
+    [Fact]
+    public void Only_a_horizon_gets_the_exception()
+    {
+        // A battle call about the same two, in the same race, finishing
+        // the same way: still the green-flag rule, still no pay-off.
+        var ledger = new NightPromises();
+
+        ledger.Note(SegmentKind.BattleWatch, Pack(FactTheme.Rivalry(Carl, Dave)), NameFor, bothVoices: false, Green.AddMinutes(5).ToLocalTime());
+
+        Assert.Null(ledger.PayOff(
+            new[] { Moment(NightMoments.Kind.LastLapLead, Dave, Green, beaten: "Carl Dodd") },
+            Green.AddMinutes(10).ToLocalTime()));
+    }
+
+    [Fact]
+    public void A_horizon_said_after_the_flag_is_not_paid_off_by_that_finish()
+    {
+        // A finish can only pay off a horizon that went to air BEFORE it.
+        var ledger = new NightPromises();
+
+        ledger.Note(SegmentKind.Horizon, Pack(FactTheme.Rivalry(Carl, Dave)), NameFor, bothVoices: false, Green.AddMinutes(9).ToLocalTime());
+
+        Assert.Null(ledger.PayOff(
+            new[] { Moment(NightMoments.Kind.LastLapLead, Dave, Green, beaten: "Carl Dodd") },
+            Green.AddMinutes(12).ToLocalTime()));
+    }
 }

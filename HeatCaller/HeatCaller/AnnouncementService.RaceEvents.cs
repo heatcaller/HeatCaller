@@ -64,6 +64,16 @@ public sealed partial class AnnouncementService
         // left behind no longer applies.
         EndPostRaceQuiet("a new race is staging");
 
+        // Including how many calls the last race made and lost, and the
+        // pacing clock - see ResetAnnouncerLoad, which says what happens
+        // to a club that presses green from Idle without staging at all.
+        ResetAnnouncerLoad();
+
+        // And the record watch: "fastest of the race so far" means THIS
+        // race, and a driver who had the record called for them in the
+        // heat is eligible again in the main.
+        ResetRecordWatch();
+
         // A countdown abandoned for a fresh staging takes its ticks with it.
         CancelCountdownTicks();
 
@@ -203,17 +213,17 @@ public sealed partial class AnnouncementService
     public void NotifySplitRecordPace(RaceStanding standing, string split, long upMs) =>
         EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs));
 
-    /// <summary>{split} and {gap} - a gap to the tenth, said as "point two seconds".</summary>
+    /// <summary>{split} and {gap} - a gap to the tenth, said as "two tenths".</summary>
     private static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)
     {
-        // Tenths: a split time is good to a few hundredths, and "nought
-        // point two seconds" is what an announcer would say.
+        // Tenths: a split time is good to a few hundredths. SAID the way
+        // a gap is called (15 Oct 2026) - "two tenths up", "half a second
+        // up" - where it used to be "point two seconds", which is the
+        // computer reading RaceNumbers exists to replace. Never under a
+        // tenth: a split that came out at nought would read as "nothing
+        // up", and a call this fires on is at least a tenth by its rule.
         var tenths = Math.Max(1, (long)Math.Round(Math.Abs(upMs) / 100.0));
-        var whole = tenths / 10;
-        var fraction = DigitWords[tenths % 10];
-        var spoken = whole == 0
-            ? $"point {fraction} {(tenths == 1 ? "second" : "seconds")}"
-            : $"{whole} point {fraction} seconds";
+        var spoken = RaceNumbers.GapSpoken(tenths / 10.0);
 
         return new Dictionary<string, (string, string)>
         {
@@ -344,7 +354,15 @@ public sealed partial class AnnouncementService
 
             _pendingBatchCancellation.Clear();
             _pendingPerLapBatches.Clear();
+
+            // And the field's calls waiting for their window - the same
+            // lap chatter, one step further on. See OfferToTheField.
+            BinTheFieldCallsUnderLock();
         }
+
+        // And the one call kept for the end of a line: what it was about
+        // is no longer the race. See HeldOver.
+        ForgetTheHeldOverCall(count: true);
 
         var wasSpeaking = StopCurrentPlayback();
         var cutSound = StopPlayingSound();
@@ -784,6 +802,12 @@ public sealed partial class AnnouncementService
 
         _postRaceQuiet = true;
         StatusMessage?.Invoke("[voice] Race over - holding every voice line except the wrap-up until the next race.");
+
+        // AND WHAT THE RACE COST THE ANNOUNCER, on the record, once per
+        // race. The strip carries this live while the race is on; this is
+        // the line a club reads afterwards, which is the whole reason the
+        // count is sayable at all - see AnnouncerLoad.Report.
+        StatusMessage?.Invoke($"[voice] {Load.Report()}");
     }
 
     /// <summary>
